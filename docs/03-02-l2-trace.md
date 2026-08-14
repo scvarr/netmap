@@ -22,7 +22,8 @@
 
 - [[01-02-network-interface|01.2 NetworkInterface]];
 - [[01-03-l2|01.3 L2 — forwarding model]];
-- [[01-03-01-l2-binding-encapsulation|01.3.1 L2Binding и Encapsulation]].
+- [[01-03-01-l2-binding-encapsulation|01.3.1 L2Binding и Encapsulation]];
+- [[01-03-02-l2-operational-state|01.3.2 L2 Operational State]].
 
 ## Две разные операции
 
@@ -42,9 +43,25 @@ L2 Frame Trace
 
 ## L2 Reachability
 
-`L2 Reachability` отвечает:
+`L2 Reachability` является направленным запросом и отвечает:
 
-> существует ли допустимая L2-достижимость между исходной и целевой точкой?
+> существует ли допустимая L2-достижимость от исходной точки к целевой?
+
+В общем случае:
+
+```text
+reachable(A -> B)
+```
+
+не обязано означать:
+
+```text
+reachable(B -> A)
+```
+
+Это важно для асимметричных operational state, направленных bindings и переходных состояний LAG/LACP.
+
+Если пользовательскому представлению нужна симметричная L2-область, она должна строиться по политике взаимной достижимости, а не предполагать симметрию автоматически.
 
 Пример:
 
@@ -122,7 +139,7 @@ mode = configured
 mode = effective
 ```
 
-Накладывает на configured topology известное актуальное operational state.
+Накладывает на configured topology известное актуальное operational state согласно [[01-03-02-l2-operational-state|01.3.2 L2 Operational State]].
 
 Например:
 
@@ -1074,8 +1091,8 @@ known path:
 - точная API-модель `TraceRequest` и `TraceResult`;
 - формальная сущность coverage/completeness;
 - freshness policy для разных observed facts;
-- структура runtime LAG/LACP member state;
-- структура STP/RSTP/MSTP state;
+- exact member-selection policy для LAG frame trace;
+- protocol-specific LACP/STP evidence, если оно понадобится UI или диагностике;
 - точная FDB model и aging;
 - multicast forwarding;
 - ranking нескольких найденных paths;
