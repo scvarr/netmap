@@ -620,4 +620,4 @@ source policy
 - scope-specific fingerprinting;
 - historical reconstruction strategy.
 
-Следующая ветка: [[02-02-resolver-structures|02.2 Resolver structures]] — какие read models/indexes нужны каждому resolver и что имеет смысл строить заранее, а что лениво.
+Следующая ветка формализована в [[02-02-resolver-structures|02.2 Resolver structures]]: какие persistent indexes, view-scoped read models и query-scoped caches нужны каждому resolver.

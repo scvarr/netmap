@@ -899,4 +899,4 @@ Random traversal/selection не должен менять verdict.
 - [[02-04-projections-aggregation|02.4 Projections и aggregation]]
 - [[02-05-cache-invalidation|02.5 Cache и invalidation]]
 
-Следующий шаг — подробно зафиксировать `02.1`: что именно означает coherent `EvaluationView`, как выбираются configured/observed facts и почему completeness/freshness/source precedence должны быть частью query context.
+Следующий шаг после `EvaluationView` — [[02-02-resolver-structures|02.2 Resolver structures]]: минимальные persistent indexes, view-scoped read models и query-scoped memoization для каждого resolver.
