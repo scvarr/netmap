@@ -1038,6 +1038,8 @@ Recursive gateway lookup также не изменяет packet destination.
 
 ## Security не оценивается
 
+Security semantics определена отдельно в [[01-05-security-policy|01.5 Security Policy]]. Её вызовет будущий `Packet Flow Trace` в корректных processing points.
+
 Если L3 resolver нашёл путь:
 
 ```text

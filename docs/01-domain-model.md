@@ -9,7 +9,7 @@
 - [[01-02-network-interface|01.2 NetworkInterface — граница L1 и сетевых уровней]]
 - [[01-03-l2|01.3 L2 — forwarding model]]
 - [[01-04-l3|01.4 L3 — routing model]]
-- Security Policy — будет уточнено отдельно.
+- [[01-05-security-policy|01.5 Security Policy]]
 
 ## Общий принцип
 
@@ -40,3 +40,13 @@ IP-адрес назначается через `L3Binding` конкретном
 Выбранный L3 next hop затем разрешается в link-layer destination и передаётся существующему L2 resolver. Таким образом route не содержит магическую ссылку на «следующее устройство».
 
 Подробности: [[01-04-l3|01.4 L3 — routing model]].
+
+## Security Policy
+
+Security не встраивается в `Route` и не сводится к boolean `allowed` на L3 edge.
+
+Canonical security model описывает ordered policy evaluation над явным `PacketState` и явным локальным processing context. Применимость policy задаётся структурированными attachments/scopes, а vendor-specific ACL/zone/firewall syntax нормализуется адаптерами.
+
+`PERMIT` означает разрешение продолжить текущий security stage. `DROP`/`REJECT` останавливают packet. NAT остаётся отдельным packet transformation и не является security action.
+
+Подробности: [[01-05-security-policy|01.5 Security Policy]].
