@@ -10,6 +10,7 @@
     - [[01-03-01-l2-binding-encapsulation|01.3.1 L2Binding и Encapsulation]]
 - [[02-graph|02. Граф сети]]
 - [[03-tracing|03. Трассировка]]
+  - [[03-02-l2-trace|03.2 L2 Trace]]
 - [[04-data-sources|04. Источники данных]]
 - [[05-presentation|05. Представление]]
 - [[06-history|06. Хранение и история]]
