@@ -5,7 +5,14 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.errors import ModelError, ValidationError
-from app.models import Connection, ConnectionMember, ConnectionPoint, PhysicalObject
+from app.models import (
+    Connection,
+    ConnectionMember,
+    ConnectionPoint,
+    InterfacePhysicalBinding,
+    NetworkInterface,
+    PhysicalObject,
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +34,14 @@ class L1AdjacencyEdge:
     peer_member: int
     connection_id: uuid.UUID
     connection_member_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class PhysicalBindingRecord:
+    binding_id: uuid.UUID
+    interface_id: uuid.UUID
+    point_id: uuid.UUID
+    point_member: int
 
 
 class CanonicalRepository:
@@ -123,6 +138,87 @@ class CanonicalRepository:
         self.session.flush()
         return connection, stored_members
 
+    def add_network_interface(
+        self, interface_id: uuid.UUID | None = None
+    ) -> NetworkInterface:
+        interface = NetworkInterface(id=interface_id or uuid.uuid4())
+        self.session.add(interface)
+        self.session.flush()
+        return interface
+
+    def add_interface_physical_binding(
+        self,
+        interface_id: uuid.UUID,
+        point_id: uuid.UUID,
+        point_member: int,
+        binding_id: uuid.UUID | None = None,
+    ) -> InterfacePhysicalBinding:
+        if self.session.get(NetworkInterface, interface_id) is None:
+            raise ValidationError(
+                "NetworkInterface does not exist",
+                {"interface_id": str(interface_id)},
+            )
+        point = self.session.get(ConnectionPoint, point_id)
+        if point is None:
+            raise ValidationError(
+                "ConnectionPoint does not exist", {"point_id": str(point_id)}
+            )
+        self._validate_index(point_member, point, "point_member")
+        binding = InterfacePhysicalBinding(
+            id=binding_id or uuid.uuid4(),
+            interface_id=interface_id,
+            point_id=point_id,
+            point_member=point_member,
+        )
+        self.session.add(binding)
+        self.session.flush()
+        return binding
+
+    def validate_network_interface(self, interface_id: uuid.UUID) -> None:
+        if self.session.get(NetworkInterface, interface_id) is None:
+            raise ValidationError(
+                "NetworkInterface does not exist",
+                {"interface_id": str(interface_id)},
+            )
+
+    def get_physical_bindings_by_interface(
+        self, interface_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[PhysicalBindingRecord]]:
+        result = {interface_id: [] for interface_id in interface_ids}
+        if not interface_ids:
+            return result
+        rows = self.session.execute(
+            select(InterfacePhysicalBinding, ConnectionPoint.cardinality)
+            .join(ConnectionPoint, ConnectionPoint.id == InterfacePhysicalBinding.point_id)
+            .where(InterfacePhysicalBinding.interface_id.in_(interface_ids))
+        ).all()
+        for binding, cardinality in rows:
+            self._validate_stored_binding(binding, cardinality)
+            result[binding.interface_id].append(self._binding_record(binding))
+        return result
+
+    def get_interfaces_by_point_members(
+        self, addresses: list[PointMember]
+    ) -> dict[PointMember, list[PhysicalBindingRecord]]:
+        result = {address: [] for address in addresses}
+        if not addresses:
+            return result
+        conditions = [
+            (InterfacePhysicalBinding.point_id == address.point_id)
+            & (InterfacePhysicalBinding.point_member == address.member_index)
+            for address in addresses
+        ]
+        rows = self.session.execute(
+            select(InterfacePhysicalBinding, ConnectionPoint.cardinality)
+            .join(ConnectionPoint, ConnectionPoint.id == InterfacePhysicalBinding.point_id)
+            .where(or_(*conditions))
+        ).all()
+        for binding, cardinality in rows:
+            self._validate_stored_binding(binding, cardinality)
+            address = PointMember(binding.point_id, binding.point_member)
+            result[address].append(self._binding_record(binding))
+        return result
+
     def validate_point_member(self, address: PointMember) -> None:
         point = self.session.get(ConnectionPoint, address.point_id)
         if point is None:
@@ -210,6 +306,30 @@ class CanonicalRepository:
                     )
                 )
         return result
+
+    @staticmethod
+    def _binding_record(binding: InterfacePhysicalBinding) -> PhysicalBindingRecord:
+        return PhysicalBindingRecord(
+            binding_id=binding.id,
+            interface_id=binding.interface_id,
+            point_id=binding.point_id,
+            point_member=binding.point_member,
+        )
+
+    @staticmethod
+    def _validate_stored_binding(
+        binding: InterfacePhysicalBinding, cardinality: int
+    ) -> None:
+        if binding.point_member < 1 or binding.point_member > cardinality:
+            raise ModelError(
+                "InterfacePhysicalBinding refers to a member outside ConnectionPoint cardinality",
+                {
+                    "binding_id": str(binding.id),
+                    "point_id": str(binding.point_id),
+                    "point_member": binding.point_member,
+                    "cardinality": cardinality,
+                },
+            )
 
     @staticmethod
     def _validate_index(member_index: int, point: ConnectionPoint, field: str) -> None:

@@ -74,3 +74,30 @@ class ConnectionMember(Base):
     point_b_member: Mapped[int] = mapped_column(Integer, nullable=False)
     connection: Mapped[Connection] = relationship(back_populates="members")
 
+
+class NetworkInterface(Base):
+    __tablename__ = "network_interfaces"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    physical_bindings: Mapped[list["InterfacePhysicalBinding"]] = relationship(
+        back_populates="interface"
+    )
+
+
+class InterfacePhysicalBinding(Base):
+    __tablename__ = "interface_physical_bindings"
+    __table_args__ = (
+        CheckConstraint("point_member >= 1", name="point_member_positive"),
+        UniqueConstraint("point_id", "point_member", name="uq_physical_binding_point_member"),
+        Index("ix_physical_bindings_interface_id", "interface_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interface_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("network_interfaces.id", ondelete="RESTRICT"), nullable=False
+    )
+    point_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("connection_points.id", ondelete="RESTRICT"), nullable=False
+    )
+    point_member: Mapped[int] = mapped_column(Integer, nullable=False)
+    interface: Mapped[NetworkInterface] = relationship(back_populates="physical_bindings")

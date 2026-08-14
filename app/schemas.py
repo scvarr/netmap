@@ -22,7 +22,13 @@ class EvaluationView(BaseModel):
 
 class EvidenceRef(BaseModel):
     ref_type: Literal["CANONICAL_FACT"] = "CANONICAL_FACT"
-    entity_type: Literal["ConnectionPoint", "Connection", "ConnectionMember"]
+    entity_type: Literal[
+        "ConnectionPoint",
+        "Connection",
+        "ConnectionMember",
+        "NetworkInterface",
+        "InterfacePhysicalBinding",
+    ]
     entity_id: uuid.UUID
 
 
@@ -59,6 +65,62 @@ class TraceArtifact(BaseModel):
     edges: list[EvidenceEdge]
     evidence_refs: list[EvidenceRef]
     gaps: list[TraceGap]
+    warnings: list[dict[str, Any]]
+
+
+class InterfacePhysicalTraceQuery(BaseModel):
+    from_interface_id: uuid.UUID
+    to_interface_id: uuid.UUID
+
+
+class PhysicalBindingCandidate(BaseModel):
+    binding_id: uuid.UUID
+    interface_id: uuid.UUID
+    point: PointMemberAddress
+
+
+class InterfaceStatePayload(BaseModel):
+    interface_id: uuid.UUID
+
+
+class InterfaceTraceNode(BaseModel):
+    id: str
+    kind: Literal["STATE"] = "STATE"
+    layer: Literal["INTERFACE", "L1"]
+    payload: InterfaceStatePayload | PointMemberAddress
+    canonical_refs: list[EvidenceRef]
+
+
+class InterfaceTraceEdge(BaseModel):
+    id: str
+    from_node_id: str
+    to_node_id: str
+    transition_kind: Literal["INTERFACE_PHYSICAL_BIND", "L1_TRAVERSE"]
+    layer: Literal["BRIDGE", "L1"]
+    evidence_refs: list[EvidenceRef]
+
+
+class InterfaceTraceGap(BaseModel):
+    code: Literal[
+        "INTERFACE_PHYSICAL_BINDING_UNKNOWN",
+        "L1_TOPOLOGY_INCOMPLETE",
+    ]
+    node_id: str | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class InterfacePhysicalTraceArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: InterfacePhysicalTraceQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["interface-physical/1.0"] = "interface-physical/1.0"
+    verdict: Literal["REACHABLE", "UNKNOWN"]
+    source_binding_candidates: list[PhysicalBindingCandidate]
+    target_binding_candidates: list[PhysicalBindingCandidate]
+    nodes: list[InterfaceTraceNode]
+    edges: list[InterfaceTraceEdge]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[InterfaceTraceGap]
     warnings: list[dict[str, Any]]
 
 

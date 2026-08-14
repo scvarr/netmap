@@ -8,9 +8,17 @@ from sqlalchemy.orm import Session
 
 from app.database import get_session
 from app.errors import NetMapError, ValidationError
+from app.interface_resolver import InterfacePhysicalResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
-from app.schemas import ErrorResponse, EvaluationView, L1TraceQuery, TraceArtifact
+from app.schemas import (
+    ErrorResponse,
+    EvaluationView,
+    InterfacePhysicalTraceArtifact,
+    InterfacePhysicalTraceQuery,
+    L1TraceQuery,
+    TraceArtifact,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("netmap")
@@ -55,3 +63,16 @@ def trace_l1(
 ) -> TraceArtifact:
     repository = CanonicalRepository(session)
     return L1Resolver(repository).resolve(query, EvaluationView())
+
+
+@app.post(
+    "/v1/traces/interfaces/physical",
+    response_model=InterfacePhysicalTraceArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def trace_interface_physical(
+    query: InterfacePhysicalTraceQuery,
+    session: Session = Depends(get_session),
+) -> InterfacePhysicalTraceArtifact:
+    repository = CanonicalRepository(session)
+    return InterfacePhysicalResolver(repository).resolve(query, EvaluationView())

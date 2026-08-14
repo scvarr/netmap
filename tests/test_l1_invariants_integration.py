@@ -1,21 +1,10 @@
 import pytest
-from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.errors import ValidationError
 from app.models import Connection, ConnectionMember, ConnectionPoint, PhysicalObject
 from app.repository import CanonicalRepository, ConnectionMemberInput
-
-
-@pytest.fixture(autouse=True)
-def clean_database():
-    with SessionLocal.begin() as session:
-        session.execute(delete(ConnectionMember))
-        session.execute(delete(Connection))
-        session.execute(delete(ConnectionPoint))
-        session.execute(delete(PhysicalObject))
-    yield
 
 
 def create_points(cardinality: int = 2):

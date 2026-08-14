@@ -19,6 +19,7 @@ The backend applies Alembic migrations before starting and exposes:
 ```text
 GET  http://localhost:8000/health
 POST http://localhost:8000/v1/traces/l1
+POST http://localhost:8000/v1/traces/interfaces/physical
 ```
 
 Example query body:
@@ -61,3 +62,8 @@ Because this slice has no global topology completeness model, exhausting all
 known canonical L1 facts without reaching the target returns `UNKNOWN` with a
 typed `L1_TOPOLOGY_INCOMPLETE` gap, never `UNREACHABLE`. Corrupt canonical facts
 remain an HTTP `MODEL_ERROR`.
+
+The interface physical trace accepts `from_interface_id` and `to_interface_id`.
+It preserves every direct physical-binding candidate and proves a path through
+the existing L1 traversal. An interface without a known binding returns
+`UNKNOWN` with `INTERFACE_PHYSICAL_BINDING_UNKNOWN`.

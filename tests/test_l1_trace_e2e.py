@@ -2,24 +2,13 @@ import os
 
 import httpx
 import pytest
-from sqlalchemy import delete
 
 from app.database import SessionLocal
-from app.models import Connection, ConnectionMember, ConnectionPoint, PhysicalObject
+from app.models import Connection, ConnectionMember
 from app.repository import CanonicalRepository, ConnectionMemberInput
 
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8000")
-
-
-@pytest.fixture(autouse=True)
-def clean_database():
-    with SessionLocal.begin() as session:
-        session.execute(delete(ConnectionMember))
-        session.execute(delete(Connection))
-        session.execute(delete(ConnectionPoint))
-        session.execute(delete(PhysicalObject))
-    yield
 
 
 @pytest.fixture
