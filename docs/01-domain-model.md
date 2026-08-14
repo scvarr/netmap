@@ -7,7 +7,7 @@
 - [[01-01-l1|01.1 L1 — физическая модель]]
   - [[01-01-01-connections|01.1.1 Connection и cardinality]]
 - [[01-02-network-interface|01.2 NetworkInterface — граница L1 и сетевых уровней]]
-- L2 — будет уточнено отдельно.
+- [[01-03-l2|01.3 L2 — forwarding model]]
 - L3 — будет уточнено отдельно.
 - Security Policy — будет уточнено отдельно.
 
@@ -22,3 +22,11 @@
 `ConnectionPoint` и `NetworkInterface` являются разными сущностями. Первая описывает физическую точку соединения, вторая — логическую точку сетевой обработки. Их связывает явный `InterfacePhysicalBinding`.
 
 Составные логические интерфейсы не требуют специальных классов: базовая зависимость задаётся через `NetworkInterfaceRealization`. Подробности: [[01-02-network-interface|01.2 NetworkInterface]].
+
+## L2
+
+L2 не моделируется как глобальный список VLAN. Базовыми фактами являются локальные `L2ForwardingContext`, привязки интерфейсов к ним и внешнее представление Ethernet frame на интерфейсе.
+
+`VLAN ID` не является идентичностью L2-сети. Сквозной `L2ReachabilityDomain` является производным результатом анализа локальных forwarding context, L2 bindings, L1-топологии и текущего forwarding state.
+
+Подробности: [[01-03-l2|01.3 L2 — forwarding model]].
