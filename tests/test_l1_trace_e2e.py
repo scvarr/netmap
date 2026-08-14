@@ -238,3 +238,109 @@ def test_corrupt_connection_member_is_model_error_not_unknown():
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "MODEL_ERROR"
+
+
+def test_passive_pass_through_reuses_members_and_returns_all_evidence():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        endpoint_a_object = repository.add_physical_object()
+        passive_object = repository.add_physical_object()
+        endpoint_b_object = repository.add_physical_object()
+        endpoint_a = repository.add_connection_point(endpoint_a_object.id, cardinality=1)
+        passive_point_1 = repository.add_connection_point(passive_object.id, cardinality=1)
+        passive_point_2 = repository.add_connection_point(passive_object.id, cardinality=1)
+        endpoint_b = repository.add_connection_point(endpoint_b_object.id, cardinality=1)
+
+        expected_evidence_ids = set()
+        for point_a, point_b in (
+            (endpoint_a, passive_point_1),
+            (passive_point_1, passive_point_2),
+            (passive_point_2, endpoint_b),
+        ):
+            connection, members = repository.add_connection(
+                point_a.id,
+                point_b.id,
+                cardinality=1,
+                members=[
+                    ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)
+                ],
+            )
+            expected_evidence_ids.update(
+                {str(connection.id), str(members[0].id)}
+            )
+
+        endpoint_a_id = endpoint_a.id
+        endpoint_b_id = endpoint_b.id
+        passive_point_1_id = passive_point_1.id
+        passive_point_2_id = passive_point_2.id
+
+    response = httpx.post(
+        f"{BASE_URL}/v1/traces/l1",
+        json={
+            "from": {"point_id": str(endpoint_a_id), "member_index": 1},
+            "to": {"point_id": str(endpoint_b_id), "member_index": 1},
+        },
+        timeout=5,
+    )
+
+    assert response.status_code == 200
+    artifact = response.json()
+    assert artifact["verdict"] == "REACHABLE"
+    assert artifact["gaps"] == []
+    assert len(artifact["edges"]) == 3
+    assert [edge["from_node_id"] for edge in artifact["edges"]] == [
+        f"l1-state:{endpoint_a_id}:1",
+        f"l1-state:{passive_point_1_id}:1",
+        f"l1-state:{passive_point_2_id}:1",
+    ]
+    assert [edge["to_node_id"] for edge in artifact["edges"]] == [
+        f"l1-state:{passive_point_1_id}:1",
+        f"l1-state:{passive_point_2_id}:1",
+        f"l1-state:{endpoint_b_id}:1",
+    ]
+    assert {ref["entity_id"] for ref in artifact["evidence_refs"]} == expected_evidence_ids
+
+
+def test_corrupt_connection_cardinality_is_model_error_not_trace():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        object_a = repository.add_physical_object()
+        object_b = repository.add_physical_object()
+        point_a = repository.add_connection_point(object_a.id, cardinality=2)
+        point_b = repository.add_connection_point(object_b.id, cardinality=2)
+        connection = Connection(
+            point_a_id=point_a.id,
+            point_b_id=point_b.id,
+            cardinality=2,
+        )
+        session.add(connection)
+        session.flush()
+        session.add(
+            ConnectionMember(
+                connection_id=connection.id,
+                index=1,
+                point_a_member=1,
+                point_b_member=1,
+            )
+        )
+        source_id = point_a.id
+        target_id = point_b.id
+        connection_id = connection.id
+
+    response = httpx.post(
+        f"{BASE_URL}/v1/traces/l1",
+        json={
+            "from": {"point_id": str(source_id), "member_index": 1},
+            "to": {"point_id": str(target_id), "member_index": 1},
+        },
+        timeout=5,
+    )
+
+    assert response.status_code == 409
+    body = response.json()
+    assert body["error"]["code"] == "MODEL_ERROR"
+    assert body["error"]["details"] == {
+        "connection_id": str(connection_id),
+        "cardinality": 2,
+        "member_count": 1,
+    }

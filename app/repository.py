@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.errors import ModelError, ValidationError
@@ -140,6 +140,14 @@ class CanonicalRepository:
 
         point_a = aliased(ConnectionPoint)
         point_b = aliased(ConnectionPoint)
+        member_counts = (
+            select(
+                ConnectionMember.connection_id,
+                func.count(ConnectionMember.id).label("member_count"),
+            )
+            .group_by(ConnectionMember.connection_id)
+            .subquery()
+        )
         conditions = []
         for address in addresses:
             conditions.extend(
@@ -152,14 +160,30 @@ class CanonicalRepository:
             )
 
         rows = self.session.execute(
-            select(Connection, ConnectionMember, point_a.cardinality, point_b.cardinality)
+            select(
+                Connection,
+                ConnectionMember,
+                point_a.cardinality,
+                point_b.cardinality,
+                member_counts.c.member_count,
+            )
             .join(ConnectionMember, ConnectionMember.connection_id == Connection.id)
+            .join(member_counts, member_counts.c.connection_id == Connection.id)
             .join(point_a, point_a.id == Connection.point_a_id)
             .join(point_b, point_b.id == Connection.point_b_id)
             .where(or_(*conditions))
         ).all()
 
-        for connection, member, cardinality_a, cardinality_b in rows:
+        for connection, member, cardinality_a, cardinality_b, member_count in rows:
+            if connection.cardinality != member_count:
+                raise ModelError(
+                    "Connection cardinality does not equal its ConnectionMember count",
+                    {
+                        "connection_id": str(connection.id),
+                        "cardinality": connection.cardinality,
+                        "member_count": member_count,
+                    },
+                )
             if member.point_a_member > cardinality_a or member.point_b_member > cardinality_b:
                 raise ModelError(
                     "ConnectionMember refers to a member above ConnectionPoint cardinality",
@@ -198,4 +222,3 @@ class CanonicalRepository:
                     "cardinality": point.cardinality,
                 },
             )
-
