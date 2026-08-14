@@ -9,6 +9,7 @@
   - [[01-03-l2|01.3 L2 — forwarding model]]
     - [[01-03-01-l2-binding-encapsulation|01.3.1 L2Binding и Encapsulation]]
     - [[01-03-02-l2-operational-state|01.3.2 L2 Operational State]]
+    - [[01-03-03-mac-fdb|01.3.3 MAC и FDB]]
 - [[02-graph|02. Граф сети]]
 - [[03-tracing|03. Трассировка]]
   - [[03-02-l2-trace|03.2 L2 Trace]]

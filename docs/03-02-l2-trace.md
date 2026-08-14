@@ -23,7 +23,8 @@
 - [[01-02-network-interface|01.2 NetworkInterface]];
 - [[01-03-l2|01.3 L2 — forwarding model]];
 - [[01-03-01-l2-binding-encapsulation|01.3.1 L2Binding и Encapsulation]];
-- [[01-03-02-l2-operational-state|01.3.2 L2 Operational State]].
+- [[01-03-02-l2-operational-state|01.3.2 L2 Operational State]];
+- [[01-03-03-mac-fdb|01.3.3 MAC и FDB]].
 
 ## Две разные операции
 
@@ -366,27 +367,46 @@ Forwarding decision может использовать frame descriptor и FDB.
 
 Для broadcast или подтверждённого unknown unicast может быть создано несколько branches.
 
-## FDB completeness
+## FDB resolution
 
-Отсутствие MAC в полученном наборе FDB-записей ещё не означает `unknown unicast`.
+Точная модель MAC/FDB определена в [[01-03-03-mac-fdb|01.3.3 MAC и FDB]].
 
-Чтобы сделать такой вывод, engine должен знать, что snapshot FDB для соответствующего context достаточно полный и актуальный.
+Frame trace разрешает destination MAC **внутри текущего `L2ForwardingContext`**.
 
-Различаются:
+FDB target указывает на `L2Binding`, а не просто на `NetworkInterface`, потому что один interface может участвовать во множестве L2 context.
 
-```text
-MAC absent in complete/current FDB
-```
-
-и:
+Минимальные результаты resolution:
 
 ```text
-FDB data unavailable/incomplete/stale
+KNOWN
+ABSENT_CONFIRMED
+UNKNOWN
+CONFLICTING
 ```
 
-В первом случае допустима semantic unknown-unicast forwarding.
+### KNOWN
 
-Во втором точный frame trace должен сохранить `UNKNOWN`.
+Актуальные достоверные FDB facts дают один или несколько семантически допустимых egress bindings.
+
+Для обычного unicast обычно ожидается один effective target.
+
+### ABSENT_CONFIRMED
+
+MAC отсутствует в достаточно свежем и полном snapshot данного context.
+
+Только это состояние позволяет считать destination подтверждённым `unknown unicast` и применять соответствующую flooding semantics.
+
+### UNKNOWN
+
+FDB отсутствует, snapshot неполный, stale или coverage недостаточно определена.
+
+Отсутствие найденной записи в таком случае не означает unknown unicast.
+
+### CONFLICTING
+
+Достоверные источники дают несовместимые forwarding targets и конфликт нельзя разрешить.
+
+Exact frame trace сохраняет неопределённость и evidence конфликта.
 
 ## EGRESS_ENCODE
 
@@ -1093,7 +1113,7 @@ known path:
 - freshness policy для разных observed facts;
 - exact member-selection policy для LAG frame trace;
 - protocol-specific LACP/STP evidence, если оно понадобится UI или диагностике;
-- точная FDB model и aging;
+- расширенная MAC mobility/EVPN semantics;
 - multicast forwarding;
 - ranking нескольких найденных paths;
 - cache/invalidation derived reachability domains;
