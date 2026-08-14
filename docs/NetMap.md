@@ -12,6 +12,7 @@
     - [[01-03-03-mac-fdb|01.3.3 MAC и FDB]]
   - [[01-04-l3|01.4 L3 — routing model]]
   - [[01-05-security-policy|01.5 Security Policy]]
+  - [[01-06-nat|01.6 NAT — packet transformation]]
 - [[02-graph|02. Граф сети]]
 - [[03-tracing|03. Трассировка]]
   - [[03-02-l2-trace|03.2 L2 Trace]]

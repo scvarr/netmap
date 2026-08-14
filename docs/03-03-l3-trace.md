@@ -1022,6 +1022,8 @@ TTL/Hop Limit является реальным L3 packet state.
 
 ## Packet immutability на L3
 
+Изменение packet identity моделируется отдельно в [[01-06-nat|01.6 NAT — packet transformation]] и будет вызываться будущим `Packet Flow Trace`.
+
 До появления NAT базовая L3 state machine не меняет:
 
 ```text

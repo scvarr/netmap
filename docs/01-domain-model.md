@@ -10,6 +10,7 @@
 - [[01-03-l2|01.3 L2 — forwarding model]]
 - [[01-04-l3|01.4 L3 — routing model]]
 - [[01-05-security-policy|01.5 Security Policy]]
+- [[01-06-nat|01.6 NAT — packet transformation]]
 
 ## Общий принцип
 
@@ -50,3 +51,13 @@ Canonical security model описывает ordered policy evaluation над я�
 `PERMIT` означает разрешение продолжить текущий security stage. `DROP`/`REJECT` останавливают packet. NAT остаётся отдельным packet transformation и не является security action.
 
 Подробности: [[01-05-security-policy|01.5 Security Policy]].
+
+## NAT
+
+NAT моделируется как отдельная трансформация текущего `PacketState`, а не как `Route` и не как security action.
+
+Canonical NAT model выбирает applicable ordered rule над явным packet/context state и возвращает новый packet state либо множество допустимых transformed states. SNAT, DNAT, PAT, port forwarding, identity NAT и twice NAT являются производными формами общих field transformations.
+
+Полный порядок NAT относительно routing/security определяется будущим packet-processing pipeline.
+
+Подробности: [[01-06-nat|01.6 NAT — packet transformation]].

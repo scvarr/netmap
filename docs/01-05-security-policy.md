@@ -23,7 +23,7 @@
 
 Эта ветка намеренно **не моделирует vendor firewall engines как отдельные классы**.
 
-NAT и полный end-to-end packet-processing pipeline будут определены отдельно в `Packet Flow Trace`.
+NAT как отдельная packet transformation model определён в [[01-06-nat|01.6 NAT — packet transformation]]. Полный end-to-end processing order будет определён в `Packet Flow Trace`.
 
 Связанные заметки:
 
@@ -1853,7 +1853,6 @@ Derived result не становится independent source of truth.
 Следующие ветки намеренно откладываются:
 
 - exact `Packet Flow Trace` processing order;
-- NAT model и packet transformations;
 - platform-specific order DNAT/security/SNAT;
 - policy-based routing/redirect actions;
 - exact session/conntrack model;
