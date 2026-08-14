@@ -829,6 +829,125 @@ NetMap должен позволять:
 
 без необходимости пересоздавать объект или менять его identity.
 
+### Сетевые presets и canonical semantics
+
+**FIXED**
+
+Ручной UI должен позволять инженеру вводить привычные сетевые конструкции, не заставляя его вручную собирать внутренние canonical primitives.
+
+Типичные пользовательские операции могут выглядеть как:
+
+```text
+Access VLAN 100
+Trunk VLAN 100, 200
+SVI 100 + 192.168.100.1/24
+default route via 192.168.200.2
+forward rule PERMIT
+SNAT / masquerade
+```
+
+Такие конструкции являются UI presets / compound editing operations.
+
+Они не становятся упрощённой параллельной моделью и не заменяют canonical semantics.
+
+Например conceptual mapping может быть таким:
+
+```text
+Access VLAN
+    -> L2Binding + ingress/egress encapsulation rules
+
+Trunk VLAN set
+    -> несколько L2Binding + explicit encapsulation rules
+
+SVI
+    -> NetworkInterface
+    -> internal L2 attachment
+    -> L3Binding
+    -> InterfaceAddress
+
+route
+    -> RoutingTable / Route / RouteNextHop facts
+
+forward rule
+    -> SecurityPolicy / ordered rule / predicate / action
+
+SNAT
+    -> NAT policy/rule + packet transformation
+```
+
+Точный набор создаваемых canonical records определяется соответствующей domain model, а не строковым названием preset.
+
+### Preset не является source of truth
+
+**FIXED**
+
+Backend resolver не должен принимать решения по presentation-полям вроде:
+
+```text
+mode = access
+mode = trunk
+type = SVI
+type = SNAT
+device_type = L3 switch
+```
+
+если соответствующая forwarding semantics не представлена structured canonical facts.
+
+UI может показывать эти привычные обозначения как компактное представление уже нормализованных данных.
+
+По запросу пользователя должна быть доступна техническая детализация, показывающая normalized representation и supporting facts.
+
+Если реальная конфигурация не укладывается в простой preset, UI не должен искажать её ради сохранения формы. Сложные encapsulation, asymmetric ingress/egress, несколько routing tables, platform-specific processing order и другие случаи должны оставаться выразимыми через canonical model.
+
+### Устройство не имеет единственного network layer
+
+**FIXED**
+
+Один PhysicalObject может одновременно участвовать в нескольких projections.
+
+Например CORE может быть:
+
+```text
+L1
+    физическое устройство / порты / кабели
+
+L2
+    forwarding contexts / VLAN attachments
+
+L3
+    SVI / routing context / routes
+```
+
+UI не должен требовать выбрать для объекта одну взаимоисключающую фундаментальную роль:
+
+```text
+switch
+router
+firewall
+```
+
+Такие названия могут быть metadata/classification или UI preset, но доступные semantics определяются фактически заданными canonical facts.
+
+### Сетевая модель уточняется постепенно
+
+**FIXED**
+
+Физическую цепочку допустимо создать раньше L2/L3/Security/NAT configuration.
+
+Позднее пользователь может постепенно добавить:
+
+```text
+L2 attachments
+IP addresses
+routing
+security policy
+NAT
+```
+
+без пересоздания PhysicalObject, ConnectionPoint или NetworkInterface.
+
+Пассивные intermediate L1 objects могут быть collapsed в L2/L3 presentation, но supporting physical path должен оставаться доступен при раскрытии.
+
 ## Location как произвольное дерево местоположений
 
 **FIXED**
@@ -989,3 +1108,8 @@ UI должен позволять как минимум:
 32. Название, класс и смысл Location задаются aliases/metadata и не определяют его identity.
 33. Location можно создать без родителя и позднее встроить в дерево без изменения identity и ручной перепривязки размещённых объектов.
 34. Новый Location можно создать непосредственно из workflow назначения местоположения.
+35. Привычные сетевые конструкции (`access`, `trunk`, `SVI`, route, forward, SNAT) являются UI presets над explicit canonical semantics.
+36. Resolver не зависит от presentation-полей preset, если соответствующая semantics не представлена canonical facts.
+37. UI должен позволять раскрыть normalized representation сложной сетевой настройки.
+38. Один PhysicalObject может одновременно участвовать в L1/L2/L3/Security/NAT projections; единственная жёсткая network role не требуется.
+39. L2/L3/Security/NAT facts можно добавлять постепенно поверх ранее созданной физической модели без изменения identity существующих объектов.
