@@ -1,7 +1,7 @@
 # NetMap
 
-M1.1 implements one minimal configured L1 trace across a direct canonical
-`ConnectionMember` mapping.
+M1.1 implements configured L1 traversal across canonical `ConnectionMember`
+mappings, including multi-hop paths and cycle protection.
 
 ## Runtime
 
@@ -56,3 +56,8 @@ docker compose up -d --build
 
 An out-of-range point member uses the explicit API contract HTTP 422 with
 `error.code = VALIDATION_ERROR`; it is never represented as network `UNKNOWN`.
+
+Because this slice has no global topology completeness model, exhausting all
+known canonical L1 facts without reaching the target returns `UNKNOWN` with a
+typed `L1_TOPOLOGY_INCOMPLETE` gap, never `UNREACHABLE`. Corrupt canonical facts
+remain an HTTP `MODEL_ERROR`.

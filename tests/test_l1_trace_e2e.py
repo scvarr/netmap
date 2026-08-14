@@ -57,7 +57,7 @@ def test_direct_l1_trace_returns_transition_and_canonical_evidence(
     artifact = response.json()
     assert artifact["schema_version"] == 1
     assert artifact["evaluation_view"] == {"mode": "CONFIGURED"}
-    assert artifact["resolver_version"] == "l1-direct/1.0"
+    assert artifact["resolver_version"] == "l1-traversal/1.0"
     assert artifact["verdict"] == "REACHABLE"
     assert len(artifact["edges"]) == 1
     transition = artifact["edges"][0]
@@ -99,3 +99,142 @@ def test_member_above_cardinality_is_validation_error_not_unknown(
     assert body["error"]["details"]["member_index"] == 2
     assert body["error"]["details"]["cardinality"] == 1
 
+
+def test_multi_hop_trace_traverses_multiple_adjacency_edges():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        objects = [repository.add_physical_object() for _ in range(4)]
+        points = [
+            repository.add_connection_point(physical_object.id, cardinality=1)
+            for physical_object in objects
+        ]
+        first_connection, first_members = repository.add_connection(
+            points[0].id,
+            points[1].id,
+            cardinality=1,
+            members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+        )
+        repository.add_connection(
+            points[1].id,
+            points[3].id,
+            cardinality=1,
+            members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+        )
+        second_connection, second_members = repository.add_connection(
+            points[1].id,
+            points[2].id,
+            cardinality=1,
+            members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+        )
+        point_ids = [point.id for point in points]
+        expected_evidence_ids = {
+            str(first_connection.id),
+            str(first_members[0].id),
+            str(second_connection.id),
+            str(second_members[0].id),
+        }
+
+    response = httpx.post(
+        f"{BASE_URL}/v1/traces/l1",
+        json={
+            "from": {"point_id": str(point_ids[0]), "member_index": 1},
+            "to": {"point_id": str(point_ids[2]), "member_index": 1},
+        },
+        timeout=5,
+    )
+
+    assert response.status_code == 200
+    artifact = response.json()
+    assert artifact["verdict"] == "REACHABLE"
+    assert artifact["gaps"] == []
+    assert len(artifact["edges"]) == 2
+    assert artifact["edges"][0]["from_node_id"].endswith(f"{point_ids[0]}:1")
+    assert artifact["edges"][0]["to_node_id"].endswith(f"{point_ids[1]}:1")
+    assert artifact["edges"][1]["from_node_id"].endswith(f"{point_ids[1]}:1")
+    assert artifact["edges"][1]["to_node_id"].endswith(f"{point_ids[2]}:1")
+    assert {ref["entity_id"] for ref in artifact["evidence_refs"]} == expected_evidence_ids
+
+
+def test_cycle_terminates_and_missing_path_is_unknown_with_typed_gap():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        objects = [repository.add_physical_object() for _ in range(4)]
+        points = [
+            repository.add_connection_point(physical_object.id, cardinality=1)
+            for physical_object in objects
+        ]
+        for point_a, point_b in (
+            (points[0], points[1]),
+            (points[1], points[2]),
+            (points[2], points[0]),
+        ):
+            repository.add_connection(
+                point_a.id,
+                point_b.id,
+                cardinality=1,
+                members=[
+                    ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)
+                ],
+            )
+        source_id = points[0].id
+        isolated_target_id = points[3].id
+
+    response = httpx.post(
+        f"{BASE_URL}/v1/traces/l1",
+        json={
+            "from": {"point_id": str(source_id), "member_index": 1},
+            "to": {"point_id": str(isolated_target_id), "member_index": 1},
+        },
+        timeout=5,
+    )
+
+    assert response.status_code == 200
+    artifact = response.json()
+    assert artifact["verdict"] == "UNKNOWN"
+    assert artifact["verdict"] != "UNREACHABLE"
+    assert len(artifact["edges"]) == 2
+    assert artifact["gaps"] == [
+        {
+            "code": "L1_TOPOLOGY_INCOMPLETE",
+            "node_id": f"l1-state:{source_id}:1",
+            "evidence_refs": [],
+        }
+    ]
+
+
+def test_corrupt_connection_member_is_model_error_not_unknown():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        object_a = repository.add_physical_object()
+        object_b = repository.add_physical_object()
+        point_a = repository.add_connection_point(object_a.id, cardinality=1)
+        point_b = repository.add_connection_point(object_b.id, cardinality=1)
+        connection = Connection(
+            point_a_id=point_a.id,
+            point_b_id=point_b.id,
+            cardinality=1,
+        )
+        session.add(connection)
+        session.flush()
+        session.add(
+            ConnectionMember(
+                connection_id=connection.id,
+                index=1,
+                point_a_member=1,
+                point_b_member=2,
+            )
+        )
+        source_id = point_a.id
+        target_id = point_b.id
+
+    response = httpx.post(
+        f"{BASE_URL}/v1/traces/l1",
+        json={
+            "from": {"point_id": str(source_id), "member_index": 1},
+            "to": {"point_id": str(target_id), "member_index": 1},
+        },
+        timeout=5,
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "MODEL_ERROR"

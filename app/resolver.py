@@ -113,10 +113,6 @@ class L1Resolver:
         source = PointMember(query.from_.point_id, query.from_.member_index)
         states = [source]
         states.extend(step.target for step in steps)
-        if verdict == "UNKNOWN":
-            target = PointMember(query.to.point_id, query.to.member_index)
-            if target not in states:
-                states.append(target)
 
         nodes = [self._node(state, self._node_id(state)) for state in states]
         artifact_edges: list[EvidenceEdge] = []
