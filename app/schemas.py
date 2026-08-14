@@ -28,6 +28,7 @@ class EvidenceRef(BaseModel):
         "ConnectionMember",
         "NetworkInterface",
         "InterfacePhysicalBinding",
+        "NetworkInterfaceRealization",
     ]
     entity_id: uuid.UUID
 
@@ -73,10 +74,19 @@ class InterfacePhysicalTraceQuery(BaseModel):
     to_interface_id: uuid.UUID
 
 
+class RealizationCandidateStep(BaseModel):
+    realization_id: uuid.UUID
+    upper_interface_id: uuid.UUID
+    lower_interface_id: uuid.UUID
+
+
 class PhysicalBindingCandidate(BaseModel):
+    candidate_id: str
+    root_interface_id: uuid.UUID
     binding_id: uuid.UUID
     interface_id: uuid.UUID
     point: PointMemberAddress
+    realization_path: list[RealizationCandidateStep]
 
 
 class InterfaceStatePayload(BaseModel):
@@ -95,17 +105,31 @@ class InterfaceTraceEdge(BaseModel):
     id: str
     from_node_id: str
     to_node_id: str
-    transition_kind: Literal["INTERFACE_PHYSICAL_BIND", "L1_TRAVERSE"]
-    layer: Literal["BRIDGE", "L1"]
+    transition_kind: Literal[
+        "INTERFACE_REALIZATION_DOWN",
+        "INTERFACE_REALIZATION_UP",
+        "INTERFACE_PHYSICAL_BIND",
+        "L1_TRAVERSE",
+    ]
+    layer: Literal["INTERFACE", "BRIDGE", "L1"]
     evidence_refs: list[EvidenceRef]
 
 
 class InterfaceTraceGap(BaseModel):
     code: Literal[
         "INTERFACE_PHYSICAL_BINDING_UNKNOWN",
+        "INTERFACE_PHYSICAL_REALIZATION_UNKNOWN",
         "L1_TOPOLOGY_INCOMPLETE",
     ]
     node_id: str | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class InterfacePhysicalTraceBranch(BaseModel):
+    branch_id: str
+    source_candidate_id: str
+    target_candidate_id: str
+    edge_ids: list[str]
     evidence_refs: list[EvidenceRef]
 
 
@@ -113,10 +137,11 @@ class InterfacePhysicalTraceArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: InterfacePhysicalTraceQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["interface-physical/1.0"] = "interface-physical/1.0"
+    resolver_version: Literal["interface-physical/2.0"] = "interface-physical/2.0"
     verdict: Literal["REACHABLE", "UNKNOWN"]
     source_binding_candidates: list[PhysicalBindingCandidate]
     target_binding_candidates: list[PhysicalBindingCandidate]
+    branches: list[InterfacePhysicalTraceBranch]
     nodes: list[InterfaceTraceNode]
     edges: list[InterfaceTraceEdge]
     evidence_refs: list[EvidenceRef]

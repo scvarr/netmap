@@ -8,6 +8,7 @@ from app.models import (
     ConnectionPoint,
     InterfacePhysicalBinding,
     NetworkInterface,
+    NetworkInterfaceRealization,
     PhysicalObject,
 )
 
@@ -15,6 +16,7 @@ from app.models import (
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(NetworkInterfaceRealization))
         session.execute(delete(InterfacePhysicalBinding))
         session.execute(delete(NetworkInterface))
         session.execute(delete(ConnectionMember))

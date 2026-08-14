@@ -82,6 +82,14 @@ class NetworkInterface(Base):
     physical_bindings: Mapped[list["InterfacePhysicalBinding"]] = relationship(
         back_populates="interface"
     )
+    realizations_down: Mapped[list["NetworkInterfaceRealization"]] = relationship(
+        foreign_keys="NetworkInterfaceRealization.upper_interface_id",
+        back_populates="upper_interface",
+    )
+    realizations_up: Mapped[list["NetworkInterfaceRealization"]] = relationship(
+        foreign_keys="NetworkInterfaceRealization.lower_interface_id",
+        back_populates="lower_interface",
+    )
 
 
 class InterfacePhysicalBinding(Base):
@@ -101,3 +109,31 @@ class InterfacePhysicalBinding(Base):
     )
     point_member: Mapped[int] = mapped_column(Integer, nullable=False)
     interface: Mapped[NetworkInterface] = relationship(back_populates="physical_bindings")
+
+
+class NetworkInterfaceRealization(Base):
+    __tablename__ = "network_interface_realizations"
+    __table_args__ = (
+        CheckConstraint("upper_interface_id <> lower_interface_id", name="distinct_interfaces"),
+        UniqueConstraint(
+            "upper_interface_id",
+            "lower_interface_id",
+            name="uq_interface_realization_upper_lower",
+        ),
+        Index("ix_interface_realizations_upper_id", "upper_interface_id"),
+        Index("ix_interface_realizations_lower_id", "lower_interface_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    upper_interface_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("network_interfaces.id", ondelete="RESTRICT"), nullable=False
+    )
+    lower_interface_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("network_interfaces.id", ondelete="RESTRICT"), nullable=False
+    )
+    upper_interface: Mapped[NetworkInterface] = relationship(
+        foreign_keys=[upper_interface_id], back_populates="realizations_down"
+    )
+    lower_interface: Mapped[NetworkInterface] = relationship(
+        foreign_keys=[lower_interface_id], back_populates="realizations_up"
+    )

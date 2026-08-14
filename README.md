@@ -64,6 +64,9 @@ typed `L1_TOPOLOGY_INCOMPLETE` gap, never `UNREACHABLE`. Corrupt canonical facts
 remain an HTTP `MODEL_ERROR`.
 
 The interface physical trace accepts `from_interface_id` and `to_interface_id`.
-It preserves every direct physical-binding candidate and proves a path through
-the existing L1 traversal. An interface without a known binding returns
-`UNKNOWN` with `INTERFACE_PHYSICAL_BINDING_UNKNOWN`.
+It recursively expands `NetworkInterfaceRealization`, preserves every physical
+binding candidate, and returns every candidate pair with a proven L1 path as a
+separate branch. A direct binding is a zero-hop realization path. An interface
+without a known binding returns `UNKNOWN` with
+`INTERFACE_PHYSICAL_BINDING_UNKNOWN`; a realization graph with no physical leaf
+uses `INTERFACE_PHYSICAL_REALIZATION_UNKNOWN`.

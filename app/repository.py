@@ -11,6 +11,7 @@ from app.models import (
     ConnectionPoint,
     InterfacePhysicalBinding,
     NetworkInterface,
+    NetworkInterfaceRealization,
     PhysicalObject,
 )
 
@@ -42,6 +43,13 @@ class PhysicalBindingRecord:
     interface_id: uuid.UUID
     point_id: uuid.UUID
     point_member: int
+
+
+@dataclass(frozen=True)
+class RealizationRecord:
+    realization_id: uuid.UUID
+    upper_interface_id: uuid.UUID
+    lower_interface_id: uuid.UUID
 
 
 class CanonicalRepository:
@@ -146,6 +154,36 @@ class CanonicalRepository:
         self.session.flush()
         return interface
 
+    def add_network_interface_realization(
+        self,
+        upper_interface_id: uuid.UUID,
+        lower_interface_id: uuid.UUID,
+        realization_id: uuid.UUID | None = None,
+    ) -> NetworkInterfaceRealization:
+        self.validate_network_interface(upper_interface_id)
+        self.validate_network_interface(lower_interface_id)
+        if upper_interface_id == lower_interface_id:
+            raise ValidationError(
+                "NetworkInterface realization cannot reference itself",
+                {"interface_id": str(upper_interface_id)},
+            )
+        if self._realization_would_create_cycle(upper_interface_id, lower_interface_id):
+            raise ValidationError(
+                "NetworkInterface realization would create a cycle",
+                {
+                    "upper_interface_id": str(upper_interface_id),
+                    "lower_interface_id": str(lower_interface_id),
+                },
+            )
+        realization = NetworkInterfaceRealization(
+            id=realization_id or uuid.uuid4(),
+            upper_interface_id=upper_interface_id,
+            lower_interface_id=lower_interface_id,
+        )
+        self.session.add(realization)
+        self.session.flush()
+        return realization
+
     def add_interface_physical_binding(
         self,
         interface_id: uuid.UUID,
@@ -195,6 +233,40 @@ class CanonicalRepository:
         for binding, cardinality in rows:
             self._validate_stored_binding(binding, cardinality)
             result[binding.interface_id].append(self._binding_record(binding))
+        return result
+
+    def get_realizations_down(
+        self, upper_interface_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[RealizationRecord]]:
+        result = {interface_id: [] for interface_id in upper_interface_ids}
+        if not upper_interface_ids:
+            return result
+        realizations = self.session.scalars(
+            select(NetworkInterfaceRealization).where(
+                NetworkInterfaceRealization.upper_interface_id.in_(upper_interface_ids)
+            )
+        )
+        for realization in realizations:
+            result[realization.upper_interface_id].append(
+                self._realization_record(realization)
+            )
+        return result
+
+    def get_realizations_up(
+        self, lower_interface_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[RealizationRecord]]:
+        result = {interface_id: [] for interface_id in lower_interface_ids}
+        if not lower_interface_ids:
+            return result
+        realizations = self.session.scalars(
+            select(NetworkInterfaceRealization).where(
+                NetworkInterfaceRealization.lower_interface_id.in_(lower_interface_ids)
+            )
+        )
+        for realization in realizations:
+            result[realization.lower_interface_id].append(
+                self._realization_record(realization)
+            )
         return result
 
     def get_interfaces_by_point_members(
@@ -315,6 +387,35 @@ class CanonicalRepository:
             point_id=binding.point_id,
             point_member=binding.point_member,
         )
+
+    @staticmethod
+    def _realization_record(
+        realization: NetworkInterfaceRealization,
+    ) -> RealizationRecord:
+        return RealizationRecord(
+            realization_id=realization.id,
+            upper_interface_id=realization.upper_interface_id,
+            lower_interface_id=realization.lower_interface_id,
+        )
+
+    def _realization_would_create_cycle(
+        self, upper_interface_id: uuid.UUID, lower_interface_id: uuid.UUID
+    ) -> bool:
+        visited = {lower_interface_id}
+        frontier = [lower_interface_id]
+        while frontier:
+            realizations = self.get_realizations_down(frontier)
+            next_frontier: list[uuid.UUID] = []
+            for interface_id in frontier:
+                for realization in realizations[interface_id]:
+                    candidate = realization.lower_interface_id
+                    if candidate == upper_interface_id:
+                        return True
+                    if candidate not in visited:
+                        visited.add(candidate)
+                        next_frontier.append(candidate)
+            frontier = next_frontier
+        return False
 
     @staticmethod
     def _validate_stored_binding(
