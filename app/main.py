@@ -54,5 +54,4 @@ def trace_l1(
     query: L1TraceQuery, session: Session = Depends(get_session)
 ) -> TraceArtifact:
     repository = CanonicalRepository(session)
-    return L1Resolver(repository).resolve_direct(query, EvaluationView())
-
+    return L1Resolver(repository).resolve(query, EvaluationView())

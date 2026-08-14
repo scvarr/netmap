@@ -43,16 +43,22 @@ class EvidenceEdge(BaseModel):
     evidence_refs: list[EvidenceRef]
 
 
+class TraceGap(BaseModel):
+    code: Literal["L1_TOPOLOGY_INCOMPLETE"]
+    node_id: str | None = None
+    evidence_refs: list[EvidenceRef]
+
+
 class TraceArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: L1TraceQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["l1-direct/1.0"] = "l1-direct/1.0"
-    verdict: Literal["REACHABLE", "UNREACHABLE"]
+    resolver_version: Literal["l1-traversal/1.0"] = "l1-traversal/1.0"
+    verdict: Literal["REACHABLE", "UNREACHABLE", "UNKNOWN"]
     nodes: list[EvidenceNode]
     edges: list[EvidenceEdge]
     evidence_refs: list[EvidenceRef]
-    gaps: list[dict[str, Any]]
+    gaps: list[TraceGap]
     warnings: list[dict[str, Any]]
 
 
@@ -64,4 +70,3 @@ class ErrorBody(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorBody
-
