@@ -8,7 +8,7 @@
   - [[01-01-01-connections|01.1.1 Connection и cardinality]]
 - [[01-02-network-interface|01.2 NetworkInterface — граница L1 и сетевых уровней]]
 - [[01-03-l2|01.3 L2 — forwarding model]]
-- L3 — будет уточнено отдельно.
+- [[01-04-l3|01.4 L3 — routing model]]
 - Security Policy — будет уточнено отдельно.
 
 ## Общий принцип
@@ -30,3 +30,13 @@ L2 не моделируется как глобальный список VLAN. 
 `VLAN ID` не является идентичностью L2-сети. Сквозной `L2ReachabilityDomain` является производным результатом анализа локальных forwarding context, L2 bindings, L1-топологии и текущего forwarding state.
 
 Подробности: [[01-03-l2|01.3 L2 — forwarding model]].
+
+## L3
+
+L3 строится вокруг локального `RoutingContext`, а не глобального пространства IP-адресов. `VRF` является распространённой реализацией такого контекста, но не фундаментальным типом backend.
+
+IP-адрес назначается через `L3Binding` конкретному `NetworkInterface` внутри routing context. Маршрутизация описывается `RoutingTable`, `Route` и явными next-hop relations.
+
+Выбранный L3 next hop затем разрешается в link-layer destination и передаётся существующему L2 resolver. Таким образом route не содержит магическую ссылку на «следующее устройство».
+
+Подробности: [[01-04-l3|01.4 L3 — routing model]].
