@@ -1499,9 +1499,77 @@ eventually security/NAT
 
 Subnet/prefix остаётся адресным понятием, а не готовым reachability domain.
 
-## Связь с будущим Packet Flow Trace
+## Использование L3 resolver внутри Packet Flow Trace
 
-Будущий orchestrator сможет выполнять:
+Полный `L3 Trace` остаётся самостоятельным запросом, но [[03-04-packet-flow-trace|03.4 Packet Flow Trace]] не обязан вызывать его как один неделимый monolithic step.
+
+Для platform-specific processing order L3 semantics разбивается на reusable suboperations:
+
+```text
+ROUTE_DECISION
+    table selection
+    route lookup
+    recursive next-hop resolution
+    ->
+    LOCAL / DISCARD / FORWARD
+
+ADJACENCY_L2
+    resolved FORWARD decision
+    +
+    current PacketState
+    ->
+    neighbor target
+    ->
+    L2 delivery
+```
+
+Это позволяет вставить между route decision и actual egress:
+
+```text
+security
+NAT
+other future packet-processing stages
+```
+
+не дублируя routing algorithm.
+
+`ROUTE_DECISION` должен сохранять evidence, **над какой версией `PacketState` он был вычислен**.
+
+Если packet позднее изменён NAT, selected route не пересчитывается автоматически. Повторный route lookup происходит только если `PacketProcessingPlan` явно содержит новый routing stage.
+
+Это принципиально: порядок обработки определяет platform semantics, а не интуитивное правило NetMap.
+
+Для direct egress route forwarding decision должен хранить достаточно semantic information, чтобы последующий adjacency resolver мог определить link-layer target.
+
+Концептуально:
+
+```text
+ResolvedForwardingDecision
+    route_id
+    egress_l3_binding_id
+    adjacency_mode
+    gateway_address?
+    basis_packet_state_id
+```
+
+`adjacency_mode` минимум различает:
+
+```text
+GATEWAY
+DIRECT_DESTINATION
+```
+
+При `GATEWAY` neighbor target фиксирован route next-hop gateway.
+
+При `DIRECT_DESTINATION` neighbor target определяется из **текущего `PacketState.destination_ip` в момент adjacency stage**.
+
+Это позволяет корректно выразить platform pipeline, где destination translation происходит после route selection, но до neighbor resolution.
+
+Подробный orchestrator: [[03-04-packet-flow-trace|03.4 Packet Flow Trace]].
+
+## Связь с Packet Flow Trace
+
+Packet Flow orchestrator сможет выполнять:
 
 ```text
 source packet

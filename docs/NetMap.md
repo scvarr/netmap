@@ -17,6 +17,7 @@
 - [[03-tracing|03. Трассировка]]
   - [[03-02-l2-trace|03.2 L2 Trace]]
   - [[03-03-l3-trace|03.3 L3 Trace]]
+  - [[03-04-packet-flow-trace|03.4 Packet Flow Trace]]
 - [[04-data-sources|04. Источники данных]]
 - [[05-presentation|05. Представление]]
 - [[06-history|06. Хранение и история]]
