@@ -7,6 +7,7 @@
     - [[01-01-01-connections|01.1.1 Connection и cardinality]]
   - [[01-02-network-interface|01.2 NetworkInterface — граница L1 и сетевых уровней]]
   - [[01-03-l2|01.3 L2 — forwarding model]]
+    - [[01-03-01-l2-binding-encapsulation|01.3.1 L2Binding и Encapsulation]]
 - [[02-graph|02. Граф сети]]
 - [[03-tracing|03. Трассировка]]
 - [[04-data-sources|04. Источники данных]]
