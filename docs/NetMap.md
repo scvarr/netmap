@@ -4,6 +4,8 @@
 
 - [[01-domain-model|01. Предметная модель]]
   - [[01-01-l1|01.1 L1 — физическая модель]]
+    - [[01-01-01-connections|01.1.1 Connection и cardinality]]
+  - [[01-02-network-interface|01.2 NetworkInterface — граница L1 и сетевых уровней]]
 - [[02-graph|02. Граф сети]]
 - [[03-tracing|03. Трассировка]]
 - [[04-data-sources|04. Источники данных]]
