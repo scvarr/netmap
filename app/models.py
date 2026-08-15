@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -90,6 +90,7 @@ class NetworkInterface(Base):
         foreign_keys="NetworkInterfaceRealization.lower_interface_id",
         back_populates="lower_interface",
     )
+    l2_bindings: Mapped[list["L2Binding"]] = relationship(back_populates="interface")
 
 
 class InterfacePhysicalBinding(Base):
@@ -137,3 +138,68 @@ class NetworkInterfaceRealization(Base):
     lower_interface: Mapped[NetworkInterface] = relationship(
         foreign_keys=[lower_interface_id], back_populates="realizations_up"
     )
+
+
+class L2ForwardingContext(Base):
+    __tablename__ = "l2_forwarding_contexts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    bindings: Mapped[list["L2Binding"]] = relationship(back_populates="forwarding_context")
+
+
+class L2Binding(Base):
+    __tablename__ = "l2_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "interface_id", "forwarding_context_id", name="uq_l2_bindings_interface_context"
+        ),
+        Index("ix_l2_bindings_interface_id", "interface_id"),
+        Index("ix_l2_bindings_context_id", "forwarding_context_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interface_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("network_interfaces.id", ondelete="RESTRICT"), nullable=False
+    )
+    forwarding_context_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("l2_forwarding_contexts.id", ondelete="RESTRICT"), nullable=False
+    )
+    interface: Mapped[NetworkInterface] = relationship(back_populates="l2_bindings")
+    forwarding_context: Mapped[L2ForwardingContext] = relationship(back_populates="bindings")
+    ingress_rules: Mapped[list["L2IngressRule"]] = relationship(
+        back_populates="binding", cascade="all, delete-orphan"
+    )
+    egress_rule: Mapped["L2EgressRule | None"] = relationship(
+        back_populates="binding", cascade="all, delete-orphan"
+    )
+
+
+class L2IngressRule(Base):
+    __tablename__ = "l2_ingress_rules"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(exact_stack) = 'array'", name="exact_stack_array"),
+        Index("ix_l2_ingress_rules_binding_id", "binding_id"),
+        Index("ix_l2_ingress_rules_exact_stack", "exact_stack", postgresql_using="hash"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    binding_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("l2_bindings.id", ondelete="CASCADE"), nullable=False
+    )
+    exact_stack: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    binding: Mapped[L2Binding] = relationship(back_populates="ingress_rules")
+
+
+class L2EgressRule(Base):
+    __tablename__ = "l2_egress_rules"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(emit_stack) = 'array'", name="emit_stack_array"),
+        UniqueConstraint("binding_id", name="uq_l2_egress_rules_binding"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    binding_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("l2_bindings.id", ondelete="CASCADE"), nullable=False
+    )
+    emit_stack: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
+    binding: Mapped[L2Binding] = relationship(back_populates="egress_rule")

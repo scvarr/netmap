@@ -13,6 +13,10 @@ from app.models import (
     NetworkInterface,
     NetworkInterfaceRealization,
     PhysicalObject,
+    L2Binding,
+    L2EgressRule,
+    L2ForwardingContext,
+    L2IngressRule,
 )
 
 
@@ -52,8 +56,34 @@ class RealizationRecord:
     lower_interface_id: uuid.UUID
 
 
+EncapsulationKey = tuple[tuple[str, int], ...]
+
+
+@dataclass(frozen=True)
+class L2BindingRecord:
+    binding_id: uuid.UUID
+    interface_id: uuid.UUID
+    forwarding_context_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class L2IngressCandidate:
+    rule_id: uuid.UUID
+    binding_id: uuid.UUID
+    interface_id: uuid.UUID
+    forwarding_context_id: uuid.UUID
+    exact_stack: EncapsulationKey
+
+
+@dataclass(frozen=True)
+class L2EgressRuleRecord:
+    rule_id: uuid.UUID
+    binding_id: uuid.UUID
+    emit_stack: EncapsulationKey
+
+
 class CanonicalRepository:
-    """Canonical reads and fixture writes needed by the M1.1 L1 slice."""
+    """Canonical read boundary and minimal fixture writes for implemented slices."""
 
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -153,6 +183,67 @@ class CanonicalRepository:
         self.session.add(interface)
         self.session.flush()
         return interface
+
+    def add_l2_forwarding_context(
+        self, context_id: uuid.UUID | None = None
+    ) -> L2ForwardingContext:
+        context = L2ForwardingContext(id=context_id or uuid.uuid4())
+        self.session.add(context)
+        self.session.flush()
+        return context
+
+    def add_l2_binding(
+        self,
+        interface_id: uuid.UUID,
+        forwarding_context_id: uuid.UUID,
+        binding_id: uuid.UUID | None = None,
+    ) -> L2Binding:
+        self.validate_network_interface(interface_id)
+        if self.session.get(L2ForwardingContext, forwarding_context_id) is None:
+            raise ValidationError(
+                "L2ForwardingContext does not exist",
+                {"forwarding_context_id": str(forwarding_context_id)},
+            )
+        binding = L2Binding(
+            id=binding_id or uuid.uuid4(),
+            interface_id=interface_id,
+            forwarding_context_id=forwarding_context_id,
+        )
+        self.session.add(binding)
+        self.session.flush()
+        return binding
+
+    def add_l2_ingress_rule(
+        self,
+        binding_id: uuid.UUID,
+        exact_stack: list[dict[str, object]],
+        rule_id: uuid.UUID | None = None,
+    ) -> L2IngressRule:
+        if self.session.get(L2Binding, binding_id) is None:
+            raise ValidationError("L2Binding does not exist", {"binding_id": str(binding_id)})
+        stored_stack = self._stack_json(exact_stack, model_error=False)
+        rule = L2IngressRule(
+            id=rule_id or uuid.uuid4(), binding_id=binding_id, exact_stack=stored_stack
+        )
+        self.session.add(rule)
+        self.session.flush()
+        return rule
+
+    def add_l2_egress_rule(
+        self,
+        binding_id: uuid.UUID,
+        emit_stack: list[dict[str, object]],
+        rule_id: uuid.UUID | None = None,
+    ) -> L2EgressRule:
+        if self.session.get(L2Binding, binding_id) is None:
+            raise ValidationError("L2Binding does not exist", {"binding_id": str(binding_id)})
+        stored_stack = self._stack_json(emit_stack, model_error=False)
+        rule = L2EgressRule(
+            id=rule_id or uuid.uuid4(), binding_id=binding_id, emit_stack=stored_stack
+        )
+        self.session.add(rule)
+        self.session.flush()
+        return rule
 
     def add_network_interface_realization(
         self,
@@ -291,6 +382,71 @@ class CanonicalRepository:
             result[address].append(self._binding_record(binding))
         return result
 
+    def get_l2_bindings_by_interface(
+        self, interface_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[L2BindingRecord]]:
+        result = {interface_id: [] for interface_id in interface_ids}
+        if not interface_ids:
+            return result
+        for binding in self.session.scalars(
+            select(L2Binding).where(L2Binding.interface_id.in_(interface_ids))
+        ):
+            result[binding.interface_id].append(self._l2_binding_record(binding))
+        return result
+
+    def get_l2_bindings_by_context(
+        self, context_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[L2BindingRecord]]:
+        result = {context_id: [] for context_id in context_ids}
+        if not context_ids:
+            return result
+        for binding in self.session.scalars(
+            select(L2Binding).where(L2Binding.forwarding_context_id.in_(context_ids))
+        ):
+            result[binding.forwarding_context_id].append(self._l2_binding_record(binding))
+        return result
+
+    def get_l2_ingress_exact(
+        self, interface_id: uuid.UUID, stack: list[dict[str, object]]
+    ) -> list[L2IngressCandidate]:
+        canonical_stack = self._stack_json(stack, model_error=False)
+        rows = self.session.execute(
+            select(L2IngressRule, L2Binding)
+            .join(L2Binding, L2Binding.id == L2IngressRule.binding_id)
+            .where(
+                L2Binding.interface_id == interface_id,
+                L2IngressRule.exact_stack == canonical_stack,
+            )
+        ).all()
+        return [
+            L2IngressCandidate(
+                rule_id=rule.id,
+                binding_id=binding.id,
+                interface_id=binding.interface_id,
+                forwarding_context_id=binding.forwarding_context_id,
+                exact_stack=self._stack_key(rule.exact_stack, rule.id, "exact_stack"),
+            )
+            for rule, binding in rows
+        ]
+
+    def get_l2_egress_rules(
+        self, binding_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[L2EgressRuleRecord]]:
+        result = {binding_id: [] for binding_id in binding_ids}
+        if not binding_ids:
+            return result
+        for rule in self.session.scalars(
+            select(L2EgressRule).where(L2EgressRule.binding_id.in_(binding_ids))
+        ):
+            result[rule.binding_id].append(
+                L2EgressRuleRecord(
+                    rule_id=rule.id,
+                    binding_id=rule.binding_id,
+                    emit_stack=self._stack_key(rule.emit_stack, rule.id, "emit_stack"),
+                )
+            )
+        return result
+
     def validate_point_member(self, address: PointMember) -> None:
         point = self.session.get(ConnectionPoint, address.point_id)
         if point is None:
@@ -397,6 +553,53 @@ class CanonicalRepository:
             upper_interface_id=realization.upper_interface_id,
             lower_interface_id=realization.lower_interface_id,
         )
+
+    @staticmethod
+    def _l2_binding_record(binding: L2Binding) -> L2BindingRecord:
+        return L2BindingRecord(
+            binding_id=binding.id,
+            interface_id=binding.interface_id,
+            forwarding_context_id=binding.forwarding_context_id,
+        )
+
+    @classmethod
+    def _stack_json(
+        cls, stack: object, *, model_error: bool
+    ) -> list[dict[str, object]]:
+        key = cls._validate_stack(stack, model_error=model_error)
+        return [{"kind": kind, "value": value} for kind, value in key]
+
+    @classmethod
+    def _stack_key(
+        cls, stack: object, entity_id: uuid.UUID, field: str
+    ) -> EncapsulationKey:
+        try:
+            return cls._validate_stack(stack, model_error=True)
+        except ModelError as exc:
+            exc.details.update({"entity_id": str(entity_id), "field": field})
+            raise
+
+    @staticmethod
+    def _validate_stack(stack: object, *, model_error: bool) -> EncapsulationKey:
+        error_type = ModelError if model_error else ValidationError
+        if not isinstance(stack, list):
+            raise error_type("EncapsulationStack must be an ordered array")
+        labels: list[tuple[str, int]] = []
+        for position, label in enumerate(stack):
+            if (
+                not isinstance(label, dict)
+                or set(label) != {"kind", "value"}
+                or not isinstance(label.get("kind"), str)
+                or not label["kind"]
+                or not isinstance(label.get("value"), int)
+                or isinstance(label.get("value"), bool)
+            ):
+                raise error_type(
+                    "EncapsulationStack label must contain exactly kind:string and value:integer",
+                    {"position": position},
+                )
+            labels.append((label["kind"], label["value"]))
+        return tuple(labels)
 
     def _realization_would_create_cycle(
         self, upper_interface_id: uuid.UUID, lower_interface_id: uuid.UUID

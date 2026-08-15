@@ -29,6 +29,10 @@ class EvidenceRef(BaseModel):
         "NetworkInterface",
         "InterfacePhysicalBinding",
         "NetworkInterfaceRealization",
+        "L2ForwardingContext",
+        "L2Binding",
+        "L2IngressRule",
+        "L2EgressRule",
     ]
     entity_id: uuid.UUID
 
@@ -146,6 +150,82 @@ class InterfacePhysicalTraceArtifact(BaseModel):
     edges: list[InterfaceTraceEdge]
     evidence_refs: list[EvidenceRef]
     gaps: list[InterfaceTraceGap]
+    warnings: list[dict[str, Any]]
+
+
+class EncapsulationLabel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: str = Field(min_length=1)
+    value: int
+
+
+class L2BoundaryQuery(BaseModel):
+    interface_id: uuid.UUID
+    encapsulation_stack: list[EncapsulationLabel]
+
+
+class L2ReachabilityQuery(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    from_: L2BoundaryQuery = Field(alias="from")
+    to: L2BoundaryQuery
+
+
+class L2BoundaryPayload(BaseModel):
+    interface_id: uuid.UUID
+    direction: Literal["INGRESS", "EGRESS"]
+    encapsulation_stack: list[EncapsulationLabel]
+
+
+class L2ContextPayload(BaseModel):
+    forwarding_context_id: uuid.UUID
+
+
+class L2BindingPayload(BaseModel):
+    binding_id: uuid.UUID
+    interface_id: uuid.UUID
+    forwarding_context_id: uuid.UUID
+
+
+class L2TraceNode(BaseModel):
+    id: str
+    kind: Literal["STATE"] = "STATE"
+    layer: Literal["L2"] = "L2"
+    payload: L2BoundaryPayload | L2ContextPayload | L2BindingPayload
+    canonical_refs: list[EvidenceRef]
+
+
+class L2TraceEdge(BaseModel):
+    id: str
+    from_node_id: str
+    to_node_id: str
+    transition_kind: Literal["INGRESS_DECODE", "LOCAL_FORWARD", "EGRESS_ENCODE"]
+    layer: Literal["L2"] = "L2"
+    evidence_refs: list[EvidenceRef]
+
+
+class L2TraceGap(BaseModel):
+    code: Literal[
+        "L2_INGRESS_RULE_UNKNOWN",
+        "L2_INGRESS_AMBIGUOUS",
+        "L2_EGRESS_RULE_UNKNOWN",
+        "L2_TARGET_CONTEXT_PATH_UNKNOWN",
+    ]
+    node_id: str | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class L2ReachabilityTraceArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: L2ReachabilityQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["l2-local-configured/1.0"] = "l2-local-configured/1.0"
+    verdict: Literal["REACHABLE", "UNKNOWN"]
+    nodes: list[L2TraceNode]
+    edges: list[L2TraceEdge]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[L2TraceGap]
     warnings: list[dict[str, Any]]
 
 

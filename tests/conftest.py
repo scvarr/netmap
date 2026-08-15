@@ -10,12 +10,20 @@ from app.models import (
     NetworkInterface,
     NetworkInterfaceRealization,
     PhysicalObject,
+    L2Binding,
+    L2EgressRule,
+    L2ForwardingContext,
+    L2IngressRule,
 )
 
 
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(L2EgressRule))
+        session.execute(delete(L2IngressRule))
+        session.execute(delete(L2Binding))
+        session.execute(delete(L2ForwardingContext))
         session.execute(delete(NetworkInterfaceRealization))
         session.execute(delete(InterfacePhysicalBinding))
         session.execute(delete(NetworkInterface))

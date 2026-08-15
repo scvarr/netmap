@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.database import get_session
 from app.errors import NetMapError, ValidationError
 from app.interface_resolver import InterfacePhysicalResolver
+from app.l2_resolver import L2ReachabilityResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.schemas import (
@@ -17,6 +18,8 @@ from app.schemas import (
     InterfacePhysicalTraceArtifact,
     InterfacePhysicalTraceQuery,
     L1TraceQuery,
+    L2ReachabilityQuery,
+    L2ReachabilityTraceArtifact,
     TraceArtifact,
 )
 
@@ -76,3 +79,16 @@ def trace_interface_physical(
 ) -> InterfacePhysicalTraceArtifact:
     repository = CanonicalRepository(session)
     return InterfacePhysicalResolver(repository).resolve(query, EvaluationView())
+
+
+@app.post(
+    "/v1/traces/l2/reachability",
+    response_model=L2ReachabilityTraceArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def trace_l2_reachability(
+    query: L2ReachabilityQuery,
+    session: Session = Depends(get_session),
+) -> L2ReachabilityTraceArtifact:
+    repository = CanonicalRepository(session)
+    return L2ReachabilityResolver(repository).resolve(query, EvaluationView())
