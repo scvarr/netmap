@@ -1,6 +1,6 @@
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from app.errors import ModelError
 from app.repository import (
@@ -31,6 +31,30 @@ StackKey = tuple[tuple[str, int], ...]
 
 
 @dataclass(frozen=True)
+class BoundaryState:
+    interface_id: uuid.UUID
+    direction: Literal["INGRESS", "EGRESS"]
+    encapsulation_stack: StackKey
+
+
+@dataclass(frozen=True)
+class ContextState:
+    forwarding_context_id: uuid.UUID
+    ingress_binding_id: uuid.UUID
+
+
+SemanticState = BoundaryState | ContextState
+
+
+@dataclass(frozen=True)
+class TraversalFrame:
+    state: SemanticState
+    node_id: str
+    edge_ids: tuple[str, ...]
+    ancestry: frozenset[SemanticState]
+
+
+@dataclass(frozen=True)
 class PhysicalCandidate:
     binding: PhysicalBindingRecord
     realization_path: tuple[RealizationRecord, ...]
@@ -49,7 +73,7 @@ class RemotePhysicalCandidate:
 
 
 class L2ReachabilityResolver:
-    VERSION = "l2-configured-one-hop/2.0"
+    VERSION = "l2-configured-multihop/3.0"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
@@ -58,60 +82,131 @@ class L2ReachabilityResolver:
         self.gaps: list[L2TraceGap] = []
         self.branches: list[L2ReachabilityTraceBranch] = []
         self._sequence = 0
+        self._last_state_node_id: str | None = None
 
     def resolve(
         self, query: L2ReachabilityQuery, view: EvaluationView
     ) -> L2ReachabilityTraceArtifact:
         self.repository.validate_network_interface(query.from_.interface_id)
         self.repository.validate_network_interface(query.to.interface_id)
-        source_ref = self._ref("NetworkInterface", query.from_.interface_id)
-        source_node = self._boundary_node(
-            query.from_.interface_id,
-            "INGRESS",
-            self._stack_key(query.from_.encapsulation_stack),
-            "source",
-            [source_ref],
+        source_state = BoundaryState(
+            interface_id=query.from_.interface_id,
+            direction="INGRESS",
+            encapsulation_stack=self._stack_key(query.from_.encapsulation_stack),
         )
+        source_node = self._boundary_node(source_state, "source", [])
         self._put_node(source_node)
+        frontier = [TraversalFrame(source_state, source_node.id, (), frozenset())]
+        target_state = BoundaryState(
+            interface_id=query.to.interface_id,
+            direction="EGRESS",
+            encapsulation_stack=self._stack_key(query.to.encapsulation_stack),
+        )
+
+        while frontier:
+            frame = frontier.pop()
+            self._last_state_node_id = frame.node_id
+            if frame.state in frame.ancestry:
+                continue
+            if frame.state == target_state:
+                self._add_branch(list(frame.edge_ids))
+                continue
+            ancestry = frame.ancestry | {frame.state}
+            if isinstance(frame.state, ContextState):
+                frontier.extend(self._expand_context(frame, ancestry, target_state))
+            elif frame.state.direction == "INGRESS":
+                next_frame = self._expand_ingress(frame, ancestry)
+                if next_frame is not None:
+                    frontier.append(next_frame)
+            else:
+                frontier.extend(self._expand_egress(frame, ancestry, view))
+
+        if not self.branches and not self.gaps:
+            self._gap(
+                "L2_TARGET_CONTEXT_PATH_UNKNOWN",
+                self._last_state_node_id or source_node.id,
+                [
+                    self._ref("NetworkInterface", query.from_.interface_id),
+                    self._ref("NetworkInterface", query.to.interface_id),
+                ],
+            )
+        return self._artifact(query, view)
+
+    def _expand_ingress(
+        self,
+        frame: TraversalFrame,
+        ancestry: frozenset[SemanticState],
+    ) -> TraversalFrame | None:
+        state = frame.state
+        assert isinstance(state, BoundaryState) and state.direction == "INGRESS"
         ingress = self.repository.get_l2_ingress_exact(
-            query.from_.interface_id, self._stack_json(query.from_.encapsulation_stack)
+            state.interface_id, self._stack_key_json(state.encapsulation_stack)
         )
         if not ingress:
-            self._gap("L2_INGRESS_RULE_UNKNOWN", source_node.id, [source_ref])
-            return self._artifact(query, view)
-
-        source_ingress = self._unique_ingress(query.from_.interface_id, ingress, source_node.id)
-        if source_ingress is None:
-            return self._artifact(query, view)
-        source_binding_id, source_context_id, ingress_refs = source_ingress
-        source_node.canonical_refs = ingress_refs
-        context_node = self._context_node(source_context_id, "source")
+            self._gap(
+                "L2_INGRESS_RULE_UNKNOWN",
+                frame.node_id,
+                [self._ref("NetworkInterface", state.interface_id)],
+            )
+            return None
+        resolved = self._unique_ingress(state.interface_id, ingress, frame.node_id)
+        if resolved is None:
+            return None
+        binding_id, context_id, ingress_refs = resolved
+        context_state = ContextState(context_id, binding_id)
+        context_node = self._context_node(context_state, self._prefix("context"))
         self._put_node(context_node)
         ingress_edge = self._edge(
-            "source-ingress",
-            source_node.id,
+            self._prefix("ingress-decode"),
+            frame.node_id,
             context_node.id,
             "INGRESS_DECODE",
             "L2",
             ingress_refs,
         )
-
-        source_bindings = self.repository.get_l2_bindings_by_context([source_context_id])[
-            source_context_id
-        ]
-        rules_by_binding = self.repository.get_l2_egress_rules(
-            [binding.binding_id for binding in source_bindings]
+        return TraversalFrame(
+            context_state,
+            context_node.id,
+            (*frame.edge_ids, ingress_edge.id),
+            ancestry,
         )
-        for binding in source_bindings:
-            if binding.binding_id == source_binding_id:
-                continue
-            rules = rules_by_binding[binding.binding_id]
+
+    def _expand_context(
+        self,
+        frame: TraversalFrame,
+        ancestry: frozenset[SemanticState],
+        target_state: BoundaryState,
+    ) -> list[TraversalFrame]:
+        state = frame.state
+        assert isinstance(state, ContextState)
+        bindings = self.repository.get_l2_bindings_by_context(
+            [state.forwarding_context_id]
+        )[state.forwarding_context_id]
+        egress_bindings = [
+            binding for binding in bindings if binding.binding_id != state.ingress_binding_id
+        ]
+        if not egress_bindings:
+            self._gap(
+                "L2_TARGET_CONTEXT_PATH_UNKNOWN",
+                frame.node_id,
+                [
+                    self._ref("L2ForwardingContext", state.forwarding_context_id),
+                    self._ref("L2Binding", state.ingress_binding_id),
+                ],
+            )
+            return []
+        rules_by_binding = self.repository.get_l2_egress_rules(
+            [binding.binding_id for binding in egress_bindings]
+        )
+        result: list[TraversalFrame] = []
+        for binding in egress_bindings:
             binding_refs = self._binding_refs(binding)
+            rules = rules_by_binding[binding.binding_id]
             if not rules:
                 self._gap(
                     "L2_EGRESS_RULE_UNKNOWN",
-                    context_node.id,
-                    self._dedupe(ingress_refs + binding_refs),
+                    frame.node_id,
+                    binding_refs,
                 )
                 continue
             if len(rules) > 1:
@@ -121,247 +216,134 @@ class L2ReachabilityResolver:
                 )
             rule = rules[0]
             rule_ref = self._ref("L2EgressRule", rule.rule_id)
-            prefix = self._prefix("source-egress")
+            prefix = self._prefix("local")
             binding_node = self._binding_node(binding, prefix)
             self._put_node(binding_node)
             local_edge = self._edge(
-                f"{prefix}:local-forward",
-                context_node.id,
+                f"{prefix}:forward",
+                frame.node_id,
                 binding_node.id,
                 "LOCAL_FORWARD",
                 "L2",
                 binding_refs,
             )
-            egress_node = self._boundary_node(
-                binding.interface_id,
-                "EGRESS",
-                rule.emit_stack,
-                f"{prefix}:boundary",
+            boundary_state = BoundaryState(
+                binding.interface_id, "EGRESS", rule.emit_stack
+            )
+            boundary_node = self._boundary_node(
+                boundary_state,
+                f"{prefix}:egress",
                 self._dedupe(binding_refs + [rule_ref]),
             )
-            self._put_node(egress_node)
+            self._put_node(boundary_node)
             encode_edge = self._edge(
-                f"{prefix}:egress-encode",
+                f"{prefix}:encode",
                 binding_node.id,
-                egress_node.id,
+                boundary_node.id,
                 "EGRESS_ENCODE",
                 "L2",
                 self._dedupe(binding_refs + [rule_ref]),
             )
-            base_edges = [ingress_edge.id, local_edge.id, encode_edge.id]
-            if binding.interface_id == query.to.interface_id:
-                if rule.emit_stack == self._stack_key(query.to.encapsulation_stack):
-                    self._add_branch(base_edges)
-                else:
-                    self._gap(
-                        "L2_TARGET_CONTEXT_PATH_UNKNOWN",
-                        binding_node.id,
-                        self._dedupe(binding_refs + [rule_ref]),
-                    )
-                continue
+            edge_ids = (*frame.edge_ids, local_edge.id, encode_edge.id)
+            if (
+                boundary_state.interface_id == target_state.interface_id
+                and boundary_state != target_state
+            ):
+                self._gap(
+                    "L2_TARGET_CONTEXT_PATH_UNKNOWN",
+                    boundary_node.id,
+                    self._dedupe(binding_refs + [rule_ref]),
+                )
+            result.append(
+                TraversalFrame(
+                    boundary_state,
+                    boundary_node.id,
+                    edge_ids,
+                    ancestry,
+                )
+            )
+        return result
 
-            physical_candidates, realization_facts = self._resolve_down(binding.interface_id)
-            if not physical_candidates:
-                refs = binding_refs + [rule_ref]
-                for realization in realization_facts:
-                    refs.extend(self._realization_refs(realization))
+    def _expand_egress(
+        self,
+        frame: TraversalFrame,
+        ancestry: frozenset[SemanticState],
+        view: EvaluationView,
+    ) -> list[TraversalFrame]:
+        state = frame.state
+        assert isinstance(state, BoundaryState) and state.direction == "EGRESS"
+        physical_candidates, realization_facts = self._resolve_down(state.interface_id)
+        if not physical_candidates:
+            refs = [self._ref("NetworkInterface", state.interface_id)]
+            for realization in realization_facts:
+                refs.extend(self._realization_refs(realization))
+            self._gap(
+                "L2_PHYSICAL_TRANSPORT_UNKNOWN",
+                frame.node_id,
+                self._dedupe(refs),
+            )
+            return []
+
+        result: list[TraversalFrame] = []
+        for physical in physical_candidates:
+            down_node_id, down_edge_ids = self._render_down(
+                frame.node_id, state.encapsulation_stack, physical
+            )
+            remotes = self._remote_physical_endpoints(physical.binding, view)
+            if not remotes:
                 self._gap(
                     "L2_PHYSICAL_TRANSPORT_UNKNOWN",
-                    egress_node.id,
-                    self._dedupe(refs),
+                    down_node_id,
+                    self._physical_refs(physical.binding),
                 )
                 continue
-            for physical in physical_candidates:
-                down_node_id, down_edge_ids = self._render_down(
-                    prefix, egress_node.id, rule.emit_stack, physical
+            for remote in remotes:
+                prefix = self._prefix("physical")
+                remote_state = BoundaryState(
+                    remote.binding.interface_id,
+                    "INGRESS",
+                    state.encapsulation_stack,
                 )
-                remotes = self._remote_physical_endpoints(physical.binding, view)
-                if not remotes:
-                    self._gap(
-                        "L2_PHYSICAL_TRANSPORT_UNKNOWN",
-                        down_node_id,
-                        self._dedupe(
-                            binding_refs
-                            + [rule_ref]
-                            + self._physical_refs(physical.binding)
-                        ),
-                    )
-                    continue
-                for remote in remotes:
-                    transport_prefix = self._prefix("physical")
-                    remote_node = self._boundary_node(
-                        remote.binding.interface_id,
-                        "INGRESS",
-                        rule.emit_stack,
-                        f"{transport_prefix}:remote-lower",
-                        self._physical_refs(remote.binding),
-                    )
-                    self._put_node(remote_node)
-                    transport_refs = self._dedupe(
-                        self._physical_refs(physical.binding)
-                        + self._physical_refs(remote.binding)
-                        + list(remote.l1_artifact.evidence_refs)
-                    )
-                    transport_edge = self._edge(
-                        f"{transport_prefix}:transport",
-                        down_node_id,
+                remote_node = self._boundary_node(
+                    remote_state,
+                    f"{prefix}:remote-lower",
+                    self._physical_refs(remote.binding),
+                )
+                self._put_node(remote_node)
+                transport_refs = self._dedupe(
+                    self._physical_refs(physical.binding)
+                    + self._physical_refs(remote.binding)
+                    + list(remote.l1_artifact.evidence_refs)
+                )
+                transport_edge = self._edge(
+                    f"{prefix}:transport",
+                    down_node_id,
+                    remote_node.id,
+                    "PHYSICAL_TRANSPORT",
+                    "L1",
+                    transport_refs,
+                )
+                for upper in self._resolve_up(remote.binding.interface_id):
+                    ingress_state, ingress_node_id, up_edge_ids = self._render_up(
+                        prefix,
+                        remote_state,
                         remote_node.id,
-                        "PHYSICAL_TRANSPORT",
-                        "L1",
-                        transport_refs,
+                        upper,
                     )
-                    for upper in self._resolve_up(remote.binding.interface_id):
-                        ingress_node_id, up_edge_ids = self._render_up(
-                            transport_prefix,
-                            remote_node.id,
-                            rule.emit_stack,
-                            upper,
-                        )
-                        self._remote_ingress_and_target(
-                            query,
-                            upper.interface_id,
-                            rule.emit_stack,
+                    result.append(
+                        TraversalFrame(
+                            ingress_state,
                             ingress_node_id,
-                            base_edges
-                            + down_edge_ids
-                            + [transport_edge.id]
-                            + up_edge_ids,
+                            (
+                                *frame.edge_ids,
+                                *down_edge_ids,
+                                transport_edge.id,
+                                *up_edge_ids,
+                            ),
+                            ancestry,
                         )
-
-        if not self.branches and not self.gaps:
-            self._gap(
-                "L2_TARGET_CONTEXT_PATH_UNKNOWN",
-                context_node.id,
-                self._dedupe(
-                    ingress_refs + [self._ref("NetworkInterface", query.to.interface_id)]
-                ),
-            )
-        return self._artifact(query, view)
-
-    def _remote_ingress_and_target(
-        self,
-        query: L2ReachabilityQuery,
-        interface_id: uuid.UUID,
-        stack: StackKey,
-        ingress_node_id: str,
-        path_edge_ids: list[str],
-    ) -> None:
-        ingress = self.repository.get_l2_ingress_exact(
-            interface_id, self._stack_key_json(stack)
-        )
-        if not ingress:
-            self._gap(
-                "L2_INGRESS_RULE_UNKNOWN",
-                ingress_node_id,
-                [self._ref("NetworkInterface", interface_id)],
-            )
-            return
-        resolved = self._unique_ingress(interface_id, ingress, ingress_node_id)
-        if resolved is None:
-            return
-        _, context_id, ingress_refs = resolved
-        prefix = self._prefix("remote-ingress")
-        context_node = self._context_node(context_id, prefix)
-        self._put_node(context_node)
-        ingress_edge = self._edge(
-            f"{prefix}:ingress-decode",
-            ingress_node_id,
-            context_node.id,
-            "INGRESS_DECODE",
-            "L2",
-            ingress_refs,
-        )
-        self._finish_target(
-            query,
-            context_id,
-            context_node.id,
-            path_edge_ids + [ingress_edge.id],
-            ingress_refs,
-        )
-
-    def _finish_target(
-        self,
-        query: L2ReachabilityQuery,
-        context_id: uuid.UUID,
-        context_node_id: str,
-        path_edge_ids: list[str],
-        path_refs: list[EvidenceRef],
-    ) -> None:
-        target_bindings = [
-            binding
-            for binding in self.repository.get_l2_bindings_by_interface(
-                [query.to.interface_id]
-            )[query.to.interface_id]
-            if binding.forwarding_context_id == context_id
-        ]
-        if not target_bindings:
-            self._gap(
-                "L2_TARGET_CONTEXT_PATH_UNKNOWN",
-                context_node_id,
-                self._dedupe(
-                    path_refs + [self._ref("NetworkInterface", query.to.interface_id)]
-                ),
-            )
-            return
-        if len(target_bindings) > 1:
-            raise ModelError(
-                "Multiple L2Bindings exist for one interface and forwarding context",
-                {
-                    "interface_id": str(query.to.interface_id),
-                    "forwarding_context_id": str(context_id),
-                },
-            )
-        binding = target_bindings[0]
-        rules = self.repository.get_l2_egress_rules([binding.binding_id])[binding.binding_id]
-        if not rules:
-            self._gap(
-                "L2_EGRESS_RULE_UNKNOWN",
-                context_node_id,
-                self._dedupe(path_refs + self._binding_refs(binding)),
-            )
-            return
-        if len(rules) > 1:
-            raise ModelError(
-                "Multiple effective L2EgressRules exist for one binding",
-                {"binding_id": str(binding.binding_id)},
-            )
-        rule = rules[0]
-        rule_ref = self._ref("L2EgressRule", rule.rule_id)
-        if rule.emit_stack != self._stack_key(query.to.encapsulation_stack):
-            self._gap(
-                "L2_TARGET_CONTEXT_PATH_UNKNOWN",
-                context_node_id,
-                self._dedupe(path_refs + self._binding_refs(binding) + [rule_ref]),
-            )
-            return
-        prefix = self._prefix("target")
-        binding_node = self._binding_node(binding, prefix)
-        self._put_node(binding_node)
-        local_edge = self._edge(
-            f"{prefix}:local-forward",
-            context_node_id,
-            binding_node.id,
-            "LOCAL_FORWARD",
-            "L2",
-            self._binding_refs(binding),
-        )
-        target_node = self._boundary_node(
-            query.to.interface_id,
-            "EGRESS",
-            rule.emit_stack,
-            f"{prefix}:boundary",
-            self._dedupe(self._binding_refs(binding) + [rule_ref]),
-        )
-        self._put_node(target_node)
-        encode_edge = self._edge(
-            f"{prefix}:egress-encode",
-            binding_node.id,
-            target_node.id,
-            "EGRESS_ENCODE",
-            "L2",
-            self._dedupe(self._binding_refs(binding) + [rule_ref]),
-        )
-        self._add_branch(path_edge_ids + [local_edge.id, encode_edge.id])
+                    )
+        return result
 
     def _resolve_down(
         self, root_interface_id: uuid.UUID
@@ -374,10 +356,10 @@ class L2ReachabilityResolver:
             path: tuple[RealizationRecord, ...],
             ancestry: frozenset[uuid.UUID],
         ) -> None:
-            for binding in self.repository.get_physical_bindings_by_interface([interface_id])[
+            bindings = self.repository.get_physical_bindings_by_interface([interface_id])[
                 interface_id
-            ]:
-                candidates.append(PhysicalCandidate(binding, path))
+            ]
+            candidates.extend(PhysicalCandidate(binding, path) for binding in bindings)
             for realization in self.repository.get_realizations_down([interface_id])[
                 interface_id
             ]:
@@ -462,24 +444,23 @@ class L2ReachabilityResolver:
 
     def _render_down(
         self,
-        prefix: str,
         root_node_id: str,
         stack: StackKey,
         candidate: PhysicalCandidate,
     ) -> tuple[str, list[str]]:
         current_node_id = root_node_id
         edge_ids: list[str] = []
+        prefix = self._prefix("down")
         for index, realization in enumerate(candidate.realization_path):
+            state = BoundaryState(realization.lower_interface_id, "EGRESS", stack)
             node = self._boundary_node(
-                realization.lower_interface_id,
-                "EGRESS",
-                stack,
-                f"{prefix}:down:{index}:{realization.realization_id}",
+                state,
+                f"{prefix}:{index}:{realization.realization_id}",
                 self._realization_refs(realization),
             )
             self._put_node(node)
             edge = self._edge(
-                f"{prefix}:realization-down:{index}:{realization.realization_id}",
+                f"{prefix}:{index}:{realization.realization_id}",
                 current_node_id,
                 node.id,
                 "REALIZATION_DOWN",
@@ -493,23 +474,27 @@ class L2ReachabilityResolver:
     def _render_up(
         self,
         prefix: str,
+        root_state: BoundaryState,
         root_node_id: str,
-        stack: StackKey,
         candidate: UpperCandidate,
-    ) -> tuple[str, list[str]]:
+    ) -> tuple[BoundaryState, str, list[str]]:
+        current_state = root_state
         current_node_id = root_node_id
         edge_ids: list[str] = []
         for index, realization in enumerate(candidate.realization_path):
-            node = self._boundary_node(
+            current_state = BoundaryState(
                 realization.upper_interface_id,
                 "INGRESS",
-                stack,
+                root_state.encapsulation_stack,
+            )
+            node = self._boundary_node(
+                current_state,
                 f"{prefix}:up:{index}:{realization.realization_id}",
                 self._realization_refs(realization),
             )
             self._put_node(node)
             edge = self._edge(
-                f"{prefix}:realization-up:{index}:{realization.realization_id}",
+                f"{prefix}:up:{index}:{realization.realization_id}",
                 current_node_id,
                 node.id,
                 "REALIZATION_UP",
@@ -518,7 +503,7 @@ class L2ReachabilityResolver:
             )
             current_node_id = node.id
             edge_ids.append(edge.id)
-        return current_node_id, edge_ids
+        return current_state, current_node_id, edge_ids
 
     def _unique_ingress(self, interface_id, ingress, node_id):
         by_context: dict[uuid.UUID, set[uuid.UUID]] = {}
@@ -605,12 +590,21 @@ class L2ReachabilityResolver:
     def _put_node(self, node: L2TraceNode) -> None:
         self.nodes[node.id] = node
 
-    def _context_node(self, context_id: uuid.UUID, suffix: str) -> L2TraceNode:
-        ref = self._ref("L2ForwardingContext", context_id)
+    def _context_node(self, state: ContextState, suffix: str) -> L2TraceNode:
+        refs = [
+            self._ref("L2ForwardingContext", state.forwarding_context_id),
+            self._ref("L2Binding", state.ingress_binding_id),
+        ]
         return L2TraceNode(
-            id=f"l2-context:{context_id}:{suffix}",
-            payload=L2ContextPayload(forwarding_context_id=context_id),
-            canonical_refs=[ref],
+            id=(
+                f"l2-context:{state.forwarding_context_id}:"
+                f"{state.ingress_binding_id}:{suffix}"
+            ),
+            payload=L2ContextPayload(
+                forwarding_context_id=state.forwarding_context_id,
+                ingress_binding_id=state.ingress_binding_id,
+            ),
+            canonical_refs=refs,
         )
 
     def _binding_node(self, binding: L2BindingRecord, suffix: str) -> L2TraceNode:
@@ -624,18 +618,21 @@ class L2ReachabilityResolver:
             canonical_refs=self._binding_refs(binding),
         )
 
-    def _boundary_node(self, interface_id, direction, stack, suffix, refs) -> L2TraceNode:
+    def _boundary_node(
+        self, state: BoundaryState, suffix: str, refs: list[EvidenceRef]
+    ) -> L2TraceNode:
         return L2TraceNode(
-            id=f"l2-boundary:{direction.lower()}:{interface_id}:{suffix}",
+            id=f"l2-boundary:{state.direction.lower()}:{state.interface_id}:{suffix}",
             payload=L2BoundaryPayload(
-                interface_id=interface_id,
-                direction=direction,
+                interface_id=state.interface_id,
+                direction=state.direction,
                 encapsulation_stack=[
-                    EncapsulationLabel(kind=kind, value=value) for kind, value in stack
+                    EncapsulationLabel(kind=kind, value=value)
+                    for kind, value in state.encapsulation_stack
                 ],
             ),
             canonical_refs=self._dedupe(
-                [self._ref("NetworkInterface", interface_id)] + refs
+                [self._ref("NetworkInterface", state.interface_id)] + refs
             ),
         )
 
@@ -669,10 +666,6 @@ class L2ReachabilityResolver:
                 "lower_interface_id": str(realization.lower_interface_id),
             },
         )
-
-    @staticmethod
-    def _stack_json(stack: list[EncapsulationLabel]) -> list[dict[str, object]]:
-        return [label.model_dump() for label in stack]
 
     @staticmethod
     def _stack_key(stack: list[EncapsulationLabel]) -> StackKey:

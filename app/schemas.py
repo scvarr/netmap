@@ -180,6 +180,7 @@ class L2BoundaryPayload(BaseModel):
 
 class L2ContextPayload(BaseModel):
     forwarding_context_id: uuid.UUID
+    ingress_binding_id: uuid.UUID
 
 
 class L2BindingPayload(BaseModel):
@@ -234,8 +235,8 @@ class L2ReachabilityTraceArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: L2ReachabilityQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["l2-configured-one-hop/2.0"] = (
-        "l2-configured-one-hop/2.0"
+    resolver_version: Literal["l2-configured-multihop/3.0"] = (
+        "l2-configured-multihop/3.0"
     )
     verdict: Literal["REACHABLE", "UNKNOWN"]
     branches: list[L2ReachabilityTraceBranch] = Field(default_factory=list)
