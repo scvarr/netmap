@@ -200,8 +200,15 @@ class L2TraceEdge(BaseModel):
     id: str
     from_node_id: str
     to_node_id: str
-    transition_kind: Literal["INGRESS_DECODE", "LOCAL_FORWARD", "EGRESS_ENCODE"]
-    layer: Literal["L2"] = "L2"
+    transition_kind: Literal[
+        "INGRESS_DECODE",
+        "LOCAL_FORWARD",
+        "EGRESS_ENCODE",
+        "REALIZATION_DOWN",
+        "PHYSICAL_TRANSPORT",
+        "REALIZATION_UP",
+    ]
+    layer: Literal["L2", "INTERFACE", "L1"] = "L2"
     evidence_refs: list[EvidenceRef]
 
 
@@ -211,8 +218,15 @@ class L2TraceGap(BaseModel):
         "L2_INGRESS_AMBIGUOUS",
         "L2_EGRESS_RULE_UNKNOWN",
         "L2_TARGET_CONTEXT_PATH_UNKNOWN",
+        "L2_PHYSICAL_TRANSPORT_UNKNOWN",
     ]
     node_id: str | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class L2ReachabilityTraceBranch(BaseModel):
+    branch_id: str
+    edge_ids: list[str]
     evidence_refs: list[EvidenceRef]
 
 
@@ -220,8 +234,11 @@ class L2ReachabilityTraceArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: L2ReachabilityQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["l2-local-configured/1.0"] = "l2-local-configured/1.0"
+    resolver_version: Literal["l2-configured-one-hop/2.0"] = (
+        "l2-configured-one-hop/2.0"
+    )
     verdict: Literal["REACHABLE", "UNKNOWN"]
+    branches: list[L2ReachabilityTraceBranch] = Field(default_factory=list)
     nodes: list[L2TraceNode]
     edges: list[L2TraceEdge]
     evidence_refs: list[EvidenceRef]

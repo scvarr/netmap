@@ -5,7 +5,7 @@ import pytest
 
 from app.database import SessionLocal
 from app.models import L2EgressRule
-from app.repository import CanonicalRepository
+from app.repository import CanonicalRepository, ConnectionMemberInput
 
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8000")
@@ -185,3 +185,255 @@ def test_corrupted_canonical_encapsulation_stack_is_model_error():
 
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "MODEL_ERROR"
+
+
+def configured_one_hop(
+    *,
+    wire_stack=None,
+    target_stack=None,
+    passive=False,
+    realization=False,
+    branches=1,
+    remote_match=True,
+    remote_ambiguous=False,
+    target_in_remote_context=True,
+    source_egress=True,
+    physical=True,
+):
+    wire_stack = wire_stack if wire_stack is not None else stack(("dot1q", 100))
+    target_stack = target_stack if target_stack is not None else []
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        source = repository.add_network_interface()
+        source_uplink = repository.add_network_interface()
+        remote_uplink = repository.add_network_interface()
+        target = repository.add_network_interface()
+        source_context = repository.add_l2_forwarding_context()
+        remote_context = repository.add_l2_forwarding_context()
+        target_context = (
+            remote_context
+            if target_in_remote_context
+            else repository.add_l2_forwarding_context()
+        )
+        source_binding = repository.add_l2_binding(source.id, source_context.id)
+        source_uplink_binding = repository.add_l2_binding(
+            source_uplink.id, source_context.id
+        )
+        remote_uplink_binding = repository.add_l2_binding(
+            remote_uplink.id, remote_context.id
+        )
+        target_binding = repository.add_l2_binding(target.id, target_context.id)
+        repository.add_l2_ingress_rule(source_binding.id, [])
+        source_egress_rule = (
+            repository.add_l2_egress_rule(source_uplink_binding.id, wire_stack)
+            if source_egress
+            else None
+        )
+        repository.add_l2_ingress_rule(
+            remote_uplink_binding.id,
+            wire_stack if remote_match else stack(("dot1q", 999)),
+        )
+        if remote_ambiguous:
+            ambiguous_context = repository.add_l2_forwarding_context()
+            ambiguous_binding = repository.add_l2_binding(
+                remote_uplink.id, ambiguous_context.id
+            )
+            repository.add_l2_ingress_rule(ambiguous_binding.id, wire_stack)
+        repository.add_l2_egress_rule(target_binding.id, target_stack)
+
+        realization_ids = []
+        physical_binding_ids = []
+        connection_ids = []
+        member_ids = []
+        for _ in range(branches):
+            source_physical = (
+                repository.add_network_interface() if realization else source_uplink
+            )
+            remote_physical = (
+                repository.add_network_interface() if realization else remote_uplink
+            )
+            if realization:
+                realization_ids.extend(
+                    [
+                        repository.add_network_interface_realization(
+                            source_uplink.id, source_physical.id
+                        ).id,
+                        repository.add_network_interface_realization(
+                            remote_uplink.id, remote_physical.id
+                        ).id,
+                    ]
+                )
+            if not physical:
+                continue
+            left_object = repository.add_physical_object()
+            right_object = repository.add_physical_object()
+            left = repository.add_connection_point(left_object.id, 1)
+            right = repository.add_connection_point(right_object.id, 1)
+            physical_binding_ids.extend(
+                [
+                    repository.add_interface_physical_binding(
+                        source_physical.id, left.id, 1
+                    ).id,
+                    repository.add_interface_physical_binding(
+                        remote_physical.id, right.id, 1
+                    ).id,
+                ]
+            )
+            points = [left]
+            if passive:
+                for _ in range(2):
+                    passive_object = repository.add_physical_object()
+                    points.append(repository.add_connection_point(passive_object.id, 1))
+            points.append(right)
+            for point_a, point_b in zip(points, points[1:]):
+                connection, members = repository.add_connection(
+                    point_a.id,
+                    point_b.id,
+                    cardinality=1,
+                    members=[
+                        ConnectionMemberInput(
+                            index=1, point_a_member=1, point_b_member=1
+                        )
+                    ],
+                )
+                connection_ids.append(connection.id)
+                member_ids.append(members[0].id)
+        return {
+            "source": source.id,
+            "target": target.id,
+            "source_context": source_context.id,
+            "remote_context": remote_context.id,
+            "source_binding": source_binding.id,
+            "source_uplink_binding": source_uplink_binding.id,
+            "remote_uplink_binding": remote_uplink_binding.id,
+            "target_binding": target_binding.id,
+            "source_egress_rule": source_egress_rule.id if source_egress_rule else None,
+            "realizations": realization_ids,
+            "physical_bindings": physical_binding_ids,
+            "connections": connection_ids,
+            "members": member_ids,
+        }
+
+
+def test_configured_l2_reachability_across_one_physical_hop():
+    facts = configured_one_hop()
+
+    response = trace(facts["source"], [], facts["target"], [])
+
+    assert response.status_code == 200
+    artifact = response.json()
+    assert artifact["verdict"] == "REACHABLE"
+    assert len(artifact["branches"]) == 1
+    kinds = [
+        next(edge for edge in artifact["edges"] if edge["id"] == edge_id)[
+            "transition_kind"
+        ]
+        for edge_id in artifact["branches"][0]["edge_ids"]
+    ]
+    assert kinds == [
+        "INGRESS_DECODE",
+        "LOCAL_FORWARD",
+        "EGRESS_ENCODE",
+        "PHYSICAL_TRANSPORT",
+        "INGRESS_DECODE",
+        "LOCAL_FORWARD",
+        "EGRESS_ENCODE",
+    ]
+    branch_types = {
+        ref["entity_type"] for ref in artifact["branches"][0]["evidence_refs"]
+    }
+    assert {
+        "NetworkInterface",
+        "L2ForwardingContext",
+        "L2Binding",
+        "L2IngressRule",
+        "L2EgressRule",
+        "InterfacePhysicalBinding",
+        "Connection",
+        "ConnectionMember",
+    } <= branch_types
+    assert "NetworkInterfaceRealization" not in branch_types
+
+
+def test_passive_l1_preserves_ordered_stack_and_target_can_translate():
+    wire = stack(("dot1ad", 500), ("dot1q", 100))
+    target_stack = stack(("dot1q", 200))
+    facts = configured_one_hop(
+        wire_stack=wire, target_stack=target_stack, passive=True
+    )
+
+    artifact = trace(facts["source"], [], facts["target"], target_stack).json()
+
+    assert artifact["verdict"] == "REACHABLE"
+    physical_edge = next(
+        edge for edge in artifact["edges"] if edge["transition_kind"] == "PHYSICAL_TRANSPORT"
+    )
+    nodes = {node["id"]: node for node in artifact["nodes"]}
+    assert nodes[physical_edge["from_node_id"]]["payload"]["encapsulation_stack"] == wire
+    assert nodes[physical_edge["to_node_id"]]["payload"]["encapsulation_stack"] == wire
+    assert len(
+        [
+            ref
+            for ref in physical_edge["evidence_refs"]
+            if ref["entity_type"] == "Connection"
+        ]
+    ) == 3
+
+
+@pytest.mark.parametrize(
+    ("options", "gap"),
+    [
+        ({"remote_match": False}, "L2_INGRESS_RULE_UNKNOWN"),
+        ({"remote_ambiguous": True}, "L2_INGRESS_AMBIGUOUS"),
+        ({"source_egress": False}, "L2_EGRESS_RULE_UNKNOWN"),
+        ({"physical": False}, "L2_PHYSICAL_TRANSPORT_UNKNOWN"),
+        (
+            {"target_in_remote_context": False},
+            "L2_TARGET_CONTEXT_PATH_UNKNOWN",
+        ),
+    ],
+)
+def test_one_hop_incomplete_branches_are_unknown(options, gap):
+    facts = configured_one_hop(**options)
+
+    artifact = trace(facts["source"], [], facts["target"], []).json()
+
+    assert artifact["verdict"] == "UNKNOWN"
+    assert gap in {item["code"] for item in artifact["gaps"]}
+
+
+def test_realization_down_transport_up_is_reachable_with_evidence():
+    facts = configured_one_hop(realization=True)
+
+    artifact = trace(facts["source"], [], facts["target"], []).json()
+
+    assert artifact["verdict"] == "REACHABLE"
+    branch = artifact["branches"][0]
+    edges = {edge["id"]: edge for edge in artifact["edges"]}
+    assert [edges[edge_id]["transition_kind"] for edge_id in branch["edge_ids"]].count(
+        "REALIZATION_DOWN"
+    ) == 1
+    assert [edges[edge_id]["transition_kind"] for edge_id in branch["edge_ids"]].count(
+        "REALIZATION_UP"
+    ) == 1
+    assert {
+        ref["entity_id"]
+        for ref in branch["evidence_refs"]
+        if ref["entity_type"] == "NetworkInterfaceRealization"
+    } == {str(value) for value in facts["realizations"]}
+
+
+def test_branching_realization_and_physical_candidates_preserves_all_proofs():
+    facts = configured_one_hop(realization=True, branches=2)
+
+    artifact = trace(facts["source"], [], facts["target"], []).json()
+
+    assert artifact["verdict"] == "REACHABLE"
+    assert len(artifact["branches"]) == 2
+    used_connections = {
+        ref["entity_id"]
+        for branch in artifact["branches"]
+        for ref in branch["evidence_refs"]
+        if ref["entity_type"] == "Connection"
+    }
+    assert used_connections == {str(value) for value in facts["connections"]}
