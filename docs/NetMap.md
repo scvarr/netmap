@@ -27,6 +27,7 @@
 - [[04-data-sources|04. Источники данных]]
 - [[05-presentation|05. Представление]]
 - [[06-history|06. Хранение и история]]
+- [[07-workspaces|07. Workspace и canonical isolation]]
 
 ## Базовые принципы
 

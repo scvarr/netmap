@@ -12,6 +12,25 @@
 
 Это основа воспроизводимости, configured/effective/historical analysis и корректной работы с асинхронными источниками.
 
+## Workspace boundary
+
+`EvaluationView` создаётся **после** выбора `NetworkWorkspace`.
+
+```text
+NetworkWorkspace
+    -> workspace-scoped canonical repository
+    -> EvaluationView
+    -> resolver
+```
+
+`EvaluationView` не является механизмом выбора или объединения независимых canonical models.
+
+Один resolved view не должен одновременно читать facts из нескольких workspace.
+
+Workspace identity находится на application/repository boundary; внутри выбранного workspace resolver может продолжать использовать обычные canonical IDs.
+
+Подробности: [[07-workspaces|07. Workspace и canonical isolation]].
+
 ## Canonical facts
 
 Canonical означает:

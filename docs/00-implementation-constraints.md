@@ -167,6 +167,30 @@ PacketFlowResolver
 
 Разделение на network services производится только при измеренной operational необходимости.
 
+## Workspace boundary
+
+NetMap должен поддерживать несколько независимых canonical network models через application-level `NetworkWorkspace`.
+
+Workspace не является частью L1/L2/L3 resolver semantics.
+
+Предпочтительная boundary:
+
+```text
+request/job
+    -> auth/access check
+    -> workspace-scoped Session/CanonicalRepository
+    -> EvaluationView
+    -> resolver
+```
+
+Не следует заранее добавлять `workspace_id` во все domain tables или передавать user/owner в resolver только ради workspace support.
+
+До отдельного workspace milestone существующая single-schema database считается implicit default workspace.
+
+Новые implementation decisions не должны необратимо предполагать, что canonical store всегда единственный глобальный namespace.
+
+Подробности: [[07-workspaces|07. Workspace и canonical isolation]].
+
 ## Reproducible build
 
 Docker images должны собираться из repository source.

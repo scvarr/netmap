@@ -135,10 +135,13 @@ message broker
 Любой cross-query semantic cache key минимум включает:
 
 ```text
+workspace identity / cache namespace
 EvaluationView fingerprint/revision
 compiler/resolver version
 entity/scope key
 ```
+
+Даже если canonical IDs совпадают между forked workspaces, cached result одного workspace не может использоваться другим.
 
 Для query result также:
 
