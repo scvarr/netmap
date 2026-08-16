@@ -2,7 +2,6 @@ import uuid
 from dataclasses import dataclass
 
 from app.errors import ModelError, ValidationError
-from app.packet_predicates import PacketPredicateEvaluationContext, evaluate_predicate
 from app.repository import (
     CanonicalRepository,
     RoutingPolicyRecord,
@@ -10,6 +9,10 @@ from app.repository import (
     RoutingTableRecord,
 )
 from app.routing_policy_actions import RoutingTableSelection
+from app.routing_policy_predicates import (
+    RoutingPolicyPredicateEvaluationContext,
+    evaluate_routing_policy_predicate,
+)
 from app.schemas import (
     EvaluationView,
     EvidenceRef,
@@ -33,7 +36,7 @@ class _Branch:
 
 
 class ConfiguredRoutingPolicyResolver:
-    VERSION = "routing-policy-configured/1.0"
+    VERSION = "routing-policy-configured/1.1"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
@@ -46,14 +49,24 @@ class ConfiguredRoutingPolicyResolver:
             raise ValidationError(
                 "packet_state.destination_ip is required for RoutingPolicy evaluation"
             )
-        self.repository.validate_routing_context(query.routing_context_id)
+        self.repository.validate_routing_policy_evaluation_context(
+            routing_context_id=query.routing_context_id,
+            ingress_network_interface_id=query.ingress_network_interface_id,
+            ingress_l3_binding_id=query.ingress_l3_binding_id,
+        )
         policy = self.repository.get_routing_policy(query.policy_id)
         address_family = "IPv4" if destination_ip.version == 4 else "IPv6"
         policy_ref = self._ref("RoutingPolicy", policy.routing_policy_id)
         tables = {table.table_id: table for table in policy.routing_tables}
         logical = self._evaluate_rules(
             policy,
-            PacketPredicateEvaluationContext(packet_state=query.packet_state),
+            RoutingPolicyPredicateEvaluationContext(
+                packet_state=query.packet_state,
+                routing_context_id=query.routing_context_id,
+                traffic_class=query.traffic_class,
+                ingress_network_interface_id=query.ingress_network_interface_id,
+                ingress_l3_binding_id=query.ingress_l3_binding_id,
+            ),
             query.routing_context_id,
             address_family,
             tables,
@@ -120,7 +133,7 @@ class ConfiguredRoutingPolicyResolver:
     def _evaluate_rules(
         self,
         policy: RoutingPolicyRecord,
-        predicate_context: PacketPredicateEvaluationContext,
+        predicate_context: RoutingPolicyPredicateEvaluationContext,
         routing_context_id: uuid.UUID,
         address_family: str,
         tables: dict[uuid.UUID, RoutingTableRecord],
@@ -143,11 +156,19 @@ class ConfiguredRoutingPolicyResolver:
             ]
 
         rule = policy.rules[index]
-        predicate_result = evaluate_predicate(rule.predicate, predicate_context)
+        predicate_evaluation = evaluate_routing_policy_predicate(
+            rule.predicate, predicate_context
+        )
+        predicate_result = predicate_evaluation.result
         rule_ref = self._ref("RoutingPolicyRule", rule.routing_policy_rule_id)
-        next_evidence = evidence + (rule_ref,)
+        predicate_refs = tuple(
+            self._ref(entity_type, entity_id)
+            for entity_type, entity_id in predicate_evaluation.canonical_refs
+        )
+        step_refs = tuple(self._dedupe([rule_ref, *predicate_refs]))
+        next_evidence = evidence + step_refs
         if predicate_result == "TRUE":
-            step = self._step(rule, "TRUE", "MATCH", rule_ref)
+            step = self._step(rule, "TRUE", "MATCH", step_refs)
             return [
                 self._terminal(
                     policy,
@@ -161,7 +182,7 @@ class ConfiguredRoutingPolicyResolver:
                 )
             ]
         if predicate_result == "FALSE":
-            step = self._step(rule, "FALSE", "NO_MATCH", rule_ref)
+            step = self._step(rule, "FALSE", "NO_MATCH", step_refs)
             return self._evaluate_rules(
                 policy,
                 predicate_context,
@@ -173,7 +194,7 @@ class ConfiguredRoutingPolicyResolver:
                 next_evidence,
             )
 
-        match_step = self._step(rule, "UNKNOWN", "MATCH", rule_ref)
+        match_step = self._step(rule, "UNKNOWN", "MATCH", step_refs)
         no_match_step = match_step.model_copy(
             update={"branch_assumption": "NO_MATCH"}
         )
@@ -251,14 +272,14 @@ class ConfiguredRoutingPolicyResolver:
         rule: RoutingPolicyRuleRecord,
         predicate_result: str,
         branch_assumption: str,
-        rule_ref: EvidenceRef,
+        evidence_refs: tuple[EvidenceRef, ...],
     ) -> RoutingPolicyRuleEvaluationStep:
         return RoutingPolicyRuleEvaluationStep(
             rule_id=rule.routing_policy_rule_id,
             order_key=rule.order_key,
             predicate_result=predicate_result,  # type: ignore[arg-type]
             branch_assumption=branch_assumption,  # type: ignore[arg-type]
-            evidence_refs=[rule_ref],
+            evidence_refs=list(evidence_refs),
         )
 
     @staticmethod

@@ -381,7 +381,6 @@ def test_missing_routing_table_is_rejected_on_write():
     "predicate",
     [
         {"op": "CONNECTION_STATE_IN", "values": ["NEW"]},
-        {"op": "TRAFFIC_CLASS_IN", "values": ["TRANSIT"]},
         {"op": "ROUTING_CONTEXT_IN", "values": [str(uuid.uuid4())]},
         {"op": "INGRESS_NETWORK_INTERFACE_IN", "values": [str(uuid.uuid4())]},
         {"op": "INGRESS_L3_BINDING_IN", "values": [str(uuid.uuid4())]},

@@ -540,7 +540,9 @@ class CanonicalRepository:
                 {"routing_policy_id": str(policy_id), "order_key": order_key},
             )
         normalized_predicate = normalize_routing_policy_predicate(
-            predicate, model_error=False
+            predicate,
+            model_error=False,
+            entity_exists=self._processing_scope_entity_exists,
         )
         normalized_action = normalize_routing_table_selection(
             action,
@@ -1183,6 +1185,34 @@ class CanonicalRepository:
     def validate_routing_context(self, routing_context_id: uuid.UUID) -> None:
         self._require_routing_context(routing_context_id)
 
+    def validate_routing_policy_evaluation_context(
+        self,
+        *,
+        routing_context_id: uuid.UUID,
+        ingress_network_interface_id: uuid.UUID | None,
+        ingress_l3_binding_id: uuid.UUID | None,
+    ) -> None:
+        self.validate_processing_evaluation_context(
+            routing_context_id=routing_context_id,
+            ingress_network_interface_id=ingress_network_interface_id,
+            egress_network_interface_id=None,
+            ingress_l3_binding_id=ingress_l3_binding_id,
+            egress_l3_binding_id=None,
+        )
+        if ingress_l3_binding_id is None:
+            return
+        binding = self.session.get(L3Binding, ingress_l3_binding_id)
+        assert binding is not None
+        if binding.routing_context_id != routing_context_id:
+            raise ValidationError(
+                "Ingress L3Binding does not belong to the current RoutingContext",
+                {
+                    "routing_context_id": str(routing_context_id),
+                    "ingress_l3_binding_id": str(ingress_l3_binding_id),
+                    "binding_routing_context_id": str(binding.routing_context_id),
+                },
+            )
+
     def get_routing_policy(self, policy_id: uuid.UUID) -> RoutingPolicyRecord:
         policy = self.session.get(RoutingPolicy, policy_id)
         if policy is None:
@@ -1232,6 +1262,7 @@ class CanonicalRepository:
             predicate = normalize_routing_policy_predicate(
                 rule.predicate,
                 model_error=True,
+                entity_exists=self._processing_scope_entity_exists,
                 details=details,
             )
             action = normalize_routing_table_selection(

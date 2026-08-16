@@ -544,9 +544,14 @@ class RoutingTableSelection(BaseModel):
 
 
 class RoutingPolicyEvaluationQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     policy_id: uuid.UUID
     routing_context_id: uuid.UUID
     packet_state: PacketState
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"] | None = None
+    ingress_network_interface_id: uuid.UUID | None = None
+    ingress_l3_binding_id: uuid.UUID | None = None
 
 
 class RoutingPolicyRuleEvaluationStep(BaseModel):
@@ -579,8 +584,8 @@ class RoutingPolicyEvaluationArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: RoutingPolicyEvaluationQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["routing-policy-configured/1.0"] = (
-        "routing-policy-configured/1.0"
+    resolver_version: Literal["routing-policy-configured/1.1"] = (
+        "routing-policy-configured/1.1"
     )
     result: Literal["TABLE_SELECTED", "TABLE_SELECTION_UNKNOWN"]
     policy_id: uuid.UUID
