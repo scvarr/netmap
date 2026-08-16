@@ -4,6 +4,7 @@ from pathlib import Path
 from app import models
 from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
+from app.nat_resolver import ConfiguredNATPolicyResolver
 from app.repository import CanonicalRepository
 from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolver
@@ -26,6 +27,7 @@ def test_adjacency_lookup_uses_only_injected_repository_session():
         StructuralAdjacencyResolver,
         StructuralAdjacencyProofResolver,
         ConfiguredL3ReachabilityResolver,
+        ConfiguredNATPolicyResolver,
         ConfiguredSecurityPolicyResolver,
         ConfiguredSecurityEvaluationResolver,
     ):

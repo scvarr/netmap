@@ -14,6 +14,8 @@ from app.models import (
     InterfacePhysicalBinding,
     NetworkInterface,
     NetworkInterfaceRealization,
+    NATPolicy,
+    NATRule,
     PhysicalObject,
     L2Binding,
     L2EgressRule,
@@ -28,7 +30,8 @@ from app.models import (
     SecurityPolicyAttachment,
     SecurityRule,
 )
-from app.security_predicates import Predicate, normalize_predicate
+from app.nat_transforms import NATTransform, normalize_nat_transform
+from app.packet_predicates import Predicate, normalize_predicate
 from app.security_scopes import SecurityScope, normalize_security_scope
 
 
@@ -184,6 +187,23 @@ class SecurityPolicyAttachmentRecord:
     policy_id: uuid.UUID
     stage_order: int
     scope: SecurityScope
+
+
+@dataclass(frozen=True)
+class NATRuleRecord:
+    nat_rule_id: uuid.UUID
+    policy_id: uuid.UUID
+    order_key: int
+    predicate: Predicate
+    transform: NATTransform
+
+
+@dataclass(frozen=True)
+class NATPolicyRecord:
+    nat_policy_id: uuid.UUID
+    default_transform: NATTransform
+    configured_completeness: str
+    rules: tuple[NATRuleRecord, ...]
 
 
 class CanonicalRepository:
@@ -602,6 +622,68 @@ class CanonicalRepository:
         self.session.add(attachment)
         self.session.flush()
         return attachment
+
+    def add_nat_policy(
+        self,
+        default_transform: object,
+        configured_completeness: str,
+        policy_id: uuid.UUID | None = None,
+    ) -> NATPolicy:
+        self._validate_nat_completeness(
+            configured_completeness, model_error=False
+        )
+        normalized = normalize_nat_transform(
+            default_transform, model_error=False
+        )
+        policy = NATPolicy(
+            id=policy_id or uuid.uuid4(),
+            default_transform=normalized,
+            configured_completeness=configured_completeness,
+        )
+        self.session.add(policy)
+        self.session.flush()
+        return policy
+
+    def add_nat_rule(
+        self,
+        policy_id: uuid.UUID,
+        order_key: int,
+        predicate: object,
+        transform: object,
+        rule_id: uuid.UUID | None = None,
+    ) -> NATRule:
+        if self.session.get(NATPolicy, policy_id) is None:
+            raise ValidationError(
+                "NATPolicy does not exist", {"nat_policy_id": str(policy_id)}
+            )
+        if not isinstance(order_key, int) or isinstance(order_key, bool):
+            raise ValidationError("NATRule order_key must be an integer")
+        if self.session.scalar(
+            select(NATRule.id).where(
+                NATRule.policy_id == policy_id,
+                NATRule.order_key == order_key,
+            )
+        ) is not None:
+            raise ValidationError(
+                "NATRule order_key must be unique within NATPolicy",
+                {"nat_policy_id": str(policy_id), "order_key": order_key},
+            )
+        normalized_predicate = normalize_predicate(
+            predicate, model_error=False
+        )
+        normalized_transform = normalize_nat_transform(
+            transform, model_error=False
+        )
+        rule = NATRule(
+            id=rule_id or uuid.uuid4(),
+            policy_id=policy_id,
+            order_key=order_key,
+            predicate=normalized_predicate,
+            transform=normalized_transform,
+        )
+        self.session.add(rule)
+        self.session.flush()
+        return rule
 
     def add_network_interface_realization(
         self,
@@ -1119,6 +1201,68 @@ class CanonicalRepository:
             )
         return tuple(records)
 
+    def get_nat_policy(self, policy_id: uuid.UUID) -> NATPolicyRecord:
+        policy = self.session.get(NATPolicy, policy_id)
+        if policy is None:
+            raise ValidationError(
+                "NATPolicy does not exist", {"nat_policy_id": str(policy_id)}
+            )
+        details = {"nat_policy_id": str(policy.id)}
+        self._validate_nat_completeness(
+            policy.configured_completeness, model_error=True
+        )
+        default_transform = normalize_nat_transform(
+            policy.default_transform,
+            model_error=True,
+            details=details,
+        )
+        rules = list(
+            self.session.scalars(
+                select(NATRule)
+                .where(NATRule.policy_id == policy_id)
+                .order_by(NATRule.order_key)
+            )
+        )
+        order_keys: set[int] = set()
+        records: list[NATRuleRecord] = []
+        for rule in rules:
+            rule_details = {"nat_rule_id": str(rule.id)}
+            if not isinstance(rule.order_key, int) or isinstance(
+                rule.order_key, bool
+            ):
+                raise ModelError("NATRule order_key is invalid", rule_details)
+            if rule.order_key in order_keys:
+                raise ModelError(
+                    "NATRule order_key is duplicated within NATPolicy",
+                    {**details, "order_key": rule.order_key},
+                )
+            order_keys.add(rule.order_key)
+            predicate = normalize_predicate(
+                rule.predicate,
+                model_error=True,
+                details={"nat_rule_id": str(rule.id)},
+            )
+            transform = normalize_nat_transform(
+                rule.transform,
+                model_error=True,
+                details=rule_details,
+            )
+            records.append(
+                NATRuleRecord(
+                    nat_rule_id=rule.id,
+                    policy_id=rule.policy_id,
+                    order_key=rule.order_key,
+                    predicate=predicate,
+                    transform=transform,
+                )
+            )
+        return NATPolicyRecord(
+            nat_policy_id=policy.id,
+            default_transform=default_transform,
+            configured_completeness=policy.configured_completeness,
+            rules=tuple(records),
+        )
+
     def validate_security_evaluation_context(
         self,
         *,
@@ -1516,6 +1660,17 @@ class CanonicalRepository:
             error_type = ModelError if model_error else ValidationError
             raise error_type(
                 "SecurityPolicy configured completeness is invalid",
+                {"configured_completeness": completeness},
+            )
+
+    @staticmethod
+    def _validate_nat_completeness(
+        completeness: object, *, model_error: bool
+    ) -> None:
+        if completeness not in {"COMPLETE", "PARTIAL", "UNKNOWN"}:
+            error_type = ModelError if model_error else ValidationError
+            raise error_type(
+                "NATPolicy configured completeness is invalid",
                 {"configured_completeness": completeness},
             )
 

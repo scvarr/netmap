@@ -14,6 +14,7 @@ from app.l2_resolver import L2ReachabilityResolver
 from app.l3_resolver import SelectedTableRouteDecisionResolver
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.next_hop_resolver import SelectedTableNextHopResolver
+from app.nat_resolver import ConfiguredNATPolicyResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.security_resolver import ConfiguredSecurityPolicyResolver
@@ -32,6 +33,8 @@ from app.schemas import (
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
     NextHopResolutionQuery,
+    NATPolicyEvaluationArtifact,
+    NATPolicyEvaluationQuery,
     RouteDecisionArtifact,
     RouteDecisionQuery,
     SecurityPolicyEvaluationArtifact,
@@ -212,5 +215,20 @@ def evaluate_security_stages(
 ) -> SecurityEvaluationArtifact:
     repository = CanonicalRepository(session)
     return ConfiguredSecurityEvaluationResolver(repository).resolve(
+        query, EvaluationView()
+    )
+
+
+@app.post(
+    "/v1/traces/nat/policy-evaluation",
+    response_model=NATPolicyEvaluationArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def evaluate_nat_policy(
+    query: NATPolicyEvaluationQuery,
+    session: Session = Depends(get_session),
+) -> NATPolicyEvaluationArtifact:
+    repository = CanonicalRepository(session)
+    return ConfiguredNATPolicyResolver(repository).resolve(
         query, EvaluationView()
     )

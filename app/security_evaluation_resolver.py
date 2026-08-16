@@ -11,7 +11,7 @@ from app.schemas import (
     SecurityPolicyEvaluationQuery,
     SecurityStageEvaluationGap,
 )
-from app.security_predicates import SecurityPredicateEvaluationContext
+from app.packet_predicates import PacketPredicateEvaluationContext
 from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.security_scopes import SCOPE_ENTITY_TYPES
 
@@ -70,7 +70,7 @@ class ConfiguredSecurityEvaluationResolver:
                         packet_state=context.packet_state,
                     ),
                     view,
-                    SecurityPredicateEvaluationContext(
+                    PacketPredicateEvaluationContext(
                         packet_state=context.packet_state,
                         connection_state=context.connection_state,
                     ),

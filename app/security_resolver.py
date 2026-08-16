@@ -11,8 +11,8 @@ from app.schemas import (
     SecurityPolicyEvaluationQuery,
     SecurityRuleEvaluationStep,
 )
-from app.security_predicates import (
-    SecurityPredicateEvaluationContext,
+from app.packet_predicates import (
+    PacketPredicateEvaluationContext,
     evaluate_predicate,
 )
 
@@ -38,14 +38,14 @@ class ConfiguredSecurityPolicyResolver:
         return self.resolve_with_predicate_context(
             query,
             view,
-            SecurityPredicateEvaluationContext(packet_state=query.packet_state),
+            PacketPredicateEvaluationContext(packet_state=query.packet_state),
         )
 
     def resolve_with_predicate_context(
         self,
         query: SecurityPolicyEvaluationQuery,
         view: EvaluationView,
-        predicate_context: SecurityPredicateEvaluationContext,
+        predicate_context: PacketPredicateEvaluationContext,
     ) -> SecurityPolicyEvaluationArtifact:
         policy = self.repository.get_security_policy(query.policy_id)
         policy_ref = self._ref("SecurityPolicy", policy.security_policy_id)
@@ -93,7 +93,7 @@ class ConfiguredSecurityPolicyResolver:
     def _evaluate_rules(
         self,
         policy: SecurityPolicyRecord,
-        predicate_context: SecurityPredicateEvaluationContext,
+        predicate_context: PacketPredicateEvaluationContext,
         index: int,
         steps: tuple[SecurityRuleEvaluationStep, ...],
         evidence: tuple[EvidenceRef, ...],

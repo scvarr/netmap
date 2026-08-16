@@ -43,6 +43,8 @@ class EvidenceRef(BaseModel):
         "SecurityPolicy",
         "SecurityRule",
         "SecurityPolicyAttachment",
+        "NATPolicy",
+        "NATRule",
     ]
     entity_id: uuid.UUID
 
@@ -644,6 +646,53 @@ class SecurityEvaluationArtifact(BaseModel):
     attachment_evaluations: list[SecurityAttachmentEvaluation]
     evidence_refs: list[EvidenceRef]
     gaps: list[SecurityStageEvaluationGap]
+    warnings: list[dict[str, Any]]
+
+
+class NATPolicyEvaluationQuery(BaseModel):
+    policy_id: uuid.UUID
+    packet_state: PacketState
+
+
+class NATRuleEvaluationStep(BaseModel):
+    rule_id: uuid.UUID
+    order_key: int
+    predicate_result: Literal["TRUE", "FALSE", "UNKNOWN"]
+    branch_assumption: Literal["MATCH", "NO_MATCH"]
+    evidence_refs: list[EvidenceRef]
+
+
+class NATPolicyEvaluationBranch(BaseModel):
+    branch_id: str
+    steps: list[NATRuleEvaluationStep]
+    terminal_source: Literal["RULE", "DEFAULT"]
+    terminal_rule_id: uuid.UUID | None = None
+    selected_transform: dict[str, Any]
+    packet_before: PacketState
+    packet_after: PacketState
+    evidence_refs: list[EvidenceRef]
+
+
+class NATPolicyEvaluationGap(BaseModel):
+    code: Literal["NAT_POLICY_INCOMPLETE", "NAT_TRANSLATION_UNKNOWN"]
+    evidence_refs: list[EvidenceRef]
+
+
+class NATPolicyEvaluationArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: NATPolicyEvaluationQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["nat-configured-policy/1.0"] = (
+        "nat-configured-policy/1.0"
+    )
+    result: Literal["IDENTITY", "TRANSFORMED_EXACT", "UNKNOWN"]
+    policy_id: uuid.UUID
+    configured_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"]
+    packet_before: PacketState
+    packet_after: PacketState | None = None
+    branches: list[NATPolicyEvaluationBranch]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[NATPolicyEvaluationGap]
     warnings: list[dict[str, Any]]
 
 

@@ -10,6 +10,8 @@ from app.models import (
     InterfacePhysicalBinding,
     NetworkInterface,
     NetworkInterfaceRealization,
+    NATPolicy,
+    NATRule,
     PhysicalObject,
     L2Binding,
     L2EgressRule,
@@ -29,6 +31,8 @@ from app.models import (
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(NATRule))
+        session.execute(delete(NATPolicy))
         session.execute(delete(SecurityPolicyAttachment))
         session.execute(delete(SecurityRule))
         session.execute(delete(SecurityPolicy))

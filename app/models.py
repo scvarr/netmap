@@ -403,3 +403,49 @@ class SecurityPolicyAttachment(Base):
     stage_order: Mapped[int] = mapped_column(Integer, nullable=False)
     scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     policy: Mapped[SecurityPolicy] = relationship(back_populates="attachments")
+
+
+class NATPolicy(Base):
+    __tablename__ = "nat_policies"
+    __table_args__ = (
+        CheckConstraint(
+            "jsonb_typeof(default_transform) = 'object'",
+            name="default_transform_object",
+        ),
+        CheckConstraint(
+            "configured_completeness IN ('COMPLETE', 'PARTIAL', 'UNKNOWN')",
+            name="configured_completeness_valid",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    default_transform: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False
+    )
+    configured_completeness: Mapped[str] = mapped_column(String(8), nullable=False)
+    rules: Mapped[list["NATRule"]] = relationship(
+        back_populates="policy", cascade="all, delete-orphan"
+    )
+
+
+class NATRule(Base):
+    __tablename__ = "nat_rules"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(predicate) = 'object'", name="predicate_object"),
+        CheckConstraint("jsonb_typeof(transform) = 'object'", name="transform_object"),
+        UniqueConstraint("policy_id", "order_key", name="uq_nat_rules_policy_order"),
+        Index("ix_nat_rules_policy_id", "policy_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    policy_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("nat_policies.id", ondelete="CASCADE"), nullable=False
+    )
+    order_key: Mapped[int] = mapped_column(Integer, nullable=False)
+    predicate: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    transform: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    policy: Mapped[NATPolicy] = relationship(back_populates="rules")
