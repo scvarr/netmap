@@ -238,6 +238,30 @@ class L3Binding(Base):
     route_next_hops: Mapped[list["RouteNextHop"]] = relationship(
         back_populates="egress_l3_binding"
     )
+    interface_addresses: Mapped[list["InterfaceAddress"]] = relationship(
+        back_populates="l3_binding", cascade="all, delete-orphan"
+    )
+
+
+class InterfaceAddress(Base):
+    __tablename__ = "interface_addresses"
+    __table_args__ = (
+        CheckConstraint(
+            "(family(address) = 4 AND prefix_length BETWEEN 0 AND 32) OR "
+            "(family(address) = 6 AND prefix_length BETWEEN 0 AND 128)",
+            name="prefix_length_matches_family",
+        ),
+        Index("ix_interface_addresses_l3_binding_id", "l3_binding_id"),
+        Index("ix_interface_addresses_address", "address"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    l3_binding_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("l3_bindings.id", ondelete="CASCADE"), nullable=False
+    )
+    address: Mapped[str] = mapped_column(INET, nullable=False)
+    prefix_length: Mapped[int] = mapped_column(Integer, nullable=False)
+    l3_binding: Mapped[L3Binding] = relationship(back_populates="interface_addresses")
 
 
 class RoutingTable(Base):

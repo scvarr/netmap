@@ -6,6 +6,7 @@ from app.models import (
     Connection,
     ConnectionMember,
     ConnectionPoint,
+    InterfaceAddress,
     InterfacePhysicalBinding,
     NetworkInterface,
     NetworkInterfaceRealization,
@@ -25,6 +26,7 @@ from app.models import (
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(InterfaceAddress))
         session.execute(delete(RouteNextHop))
         session.execute(delete(Route))
         session.execute(delete(RoutingTable))

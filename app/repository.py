@@ -10,6 +10,7 @@ from app.models import (
     Connection,
     ConnectionMember,
     ConnectionPoint,
+    InterfaceAddress,
     InterfacePhysicalBinding,
     NetworkInterface,
     NetworkInterfaceRealization,
@@ -128,6 +129,24 @@ class RouteRecord:
 class SelectedRoutingTable:
     table: RoutingTableRecord
     routes: tuple[RouteRecord, ...]
+
+
+@dataclass(frozen=True)
+class InterfaceAddressRecord:
+    interface_address_id: uuid.UUID
+    l3_binding_id: uuid.UUID
+    network_interface_id: uuid.UUID
+    routing_context_id: uuid.UUID
+    address: IPAddressValue
+    prefix_length: int
+
+
+@dataclass(frozen=True)
+class AdjacencyIdentityView:
+    egress_l3_binding_id: uuid.UUID
+    egress_network_interface_id: uuid.UUID
+    routing_context_id: uuid.UUID
+    candidates: tuple[InterfaceAddressRecord, ...]
 
 
 class CanonicalRepository:
@@ -317,6 +336,33 @@ class CanonicalRepository:
         self.session.add(binding)
         self.session.flush()
         return binding
+
+    def add_interface_address(
+        self,
+        l3_binding_id: uuid.UUID,
+        address: str,
+        prefix_length: int,
+        interface_address_id: uuid.UUID | None = None,
+    ) -> InterfaceAddress:
+        if self.session.get(L3Binding, l3_binding_id) is None:
+            raise ValidationError(
+                "L3Binding does not exist", {"l3_binding_id": str(l3_binding_id)}
+            )
+        normalized = self._parse_interface_address(
+            address,
+            prefix_length,
+            model_error=False,
+            interface_address_id=interface_address_id,
+        )
+        assignment = InterfaceAddress(
+            id=interface_address_id or uuid.uuid4(),
+            l3_binding_id=l3_binding_id,
+            address=str(normalized),
+            prefix_length=prefix_length,
+        )
+        self.session.add(assignment)
+        self.session.flush()
+        return assignment
 
     def add_routing_table(
         self,
@@ -630,6 +676,102 @@ class CanonicalRepository:
                 )
             )
         return result
+
+    def addresses_by_l3_binding(
+        self, l3_binding_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[InterfaceAddressRecord]]:
+        result = {binding_id: [] for binding_id in l3_binding_ids}
+        if not l3_binding_ids:
+            return result
+        bindings = {
+            binding.id: binding
+            for binding in self.session.scalars(
+                select(L3Binding).where(L3Binding.id.in_(l3_binding_ids))
+            )
+        }
+        missing = [binding_id for binding_id in l3_binding_ids if binding_id not in bindings]
+        if missing:
+            raise ValidationError(
+                "L3Binding does not exist", {"l3_binding_ids": [str(item) for item in missing]}
+            )
+        for binding in bindings.values():
+            if self.session.get(NetworkInterface, binding.interface_id) is None:
+                raise ModelError(
+                    "L3Binding refers to a missing NetworkInterface",
+                    {"l3_binding_id": str(binding.id)},
+                )
+            if self.session.get(RoutingContext, binding.routing_context_id) is None:
+                raise ModelError(
+                    "L3Binding refers to a missing RoutingContext",
+                    {"l3_binding_id": str(binding.id)},
+                )
+        for assignment in self.session.scalars(
+            select(InterfaceAddress).where(
+                InterfaceAddress.l3_binding_id.in_(l3_binding_ids)
+            )
+        ):
+            binding = bindings[assignment.l3_binding_id]
+            address = self._parse_interface_address(
+                assignment.address,
+                assignment.prefix_length,
+                model_error=True,
+                interface_address_id=assignment.id,
+            )
+            result[binding.id].append(
+                InterfaceAddressRecord(
+                    interface_address_id=assignment.id,
+                    l3_binding_id=binding.id,
+                    network_interface_id=binding.interface_id,
+                    routing_context_id=binding.routing_context_id,
+                    address=address,
+                    prefix_length=assignment.prefix_length,
+                )
+            )
+        return result
+
+    def get_adjacency_identity_candidates(
+        self,
+        egress_l3_binding_id: uuid.UUID,
+        neighbor_target_ip: IPAddressValue,
+    ) -> AdjacencyIdentityView:
+        source = self.session.get(L3Binding, egress_l3_binding_id)
+        if source is None:
+            raise ValidationError(
+                "L3Binding does not exist",
+                {"egress_l3_binding_id": str(egress_l3_binding_id)},
+            )
+        if self.session.get(NetworkInterface, source.interface_id) is None:
+            raise ModelError(
+                "Egress L3Binding refers to a missing NetworkInterface",
+                {"egress_l3_binding_id": str(source.id)},
+            )
+        if self.session.get(RoutingContext, source.routing_context_id) is None:
+            raise ModelError(
+                "Egress L3Binding refers to a missing RoutingContext",
+                {"egress_l3_binding_id": str(source.id)},
+            )
+        scoped_bindings = list(
+            self.session.scalars(
+                select(L3Binding).where(
+                    L3Binding.routing_context_id == source.routing_context_id
+                )
+            )
+        )
+        addresses = self.addresses_by_l3_binding(
+            [binding.id for binding in scoped_bindings]
+        )
+        candidates = tuple(
+            assignment
+            for binding in scoped_bindings
+            for assignment in addresses[binding.id]
+            if assignment.address == neighbor_target_ip
+        )
+        return AdjacencyIdentityView(
+            egress_l3_binding_id=source.id,
+            egress_network_interface_id=source.interface_id,
+            routing_context_id=source.routing_context_id,
+            candidates=candidates,
+        )
 
     def get_selected_routing_table(
         self, routing_context_id: uuid.UUID, routing_table_id: uuid.UUID
@@ -1048,6 +1190,49 @@ class CanonicalRepository:
                     "configured_completeness": table.configured_completeness,
                 },
             )
+
+    @staticmethod
+    def _parse_interface_address(
+        address: object,
+        prefix_length: object,
+        *,
+        model_error: bool,
+        interface_address_id: uuid.UUID | None,
+    ) -> IPAddressValue:
+        error_type = ModelError if model_error else ValidationError
+        details = (
+            {"interface_address_id": str(interface_address_id)}
+            if interface_address_id
+            else {}
+        )
+        try:
+            normalized = ip_address(str(address))
+        except ValueError as exc:
+            raise error_type("InterfaceAddress address is invalid", details) from exc
+        if model_error and str(address) != str(normalized):
+            raise ModelError(
+                "InterfaceAddress address is not canonical",
+                {
+                    **details,
+                    "address": str(address),
+                    "canonical_address": str(normalized),
+                },
+            )
+        maximum = 32 if normalized.version == 4 else 128
+        if (
+            not isinstance(prefix_length, int)
+            or isinstance(prefix_length, bool)
+            or not 0 <= prefix_length <= maximum
+        ):
+            raise error_type(
+                "InterfaceAddress prefix_length is invalid for address family",
+                {
+                    **details,
+                    "address_family": "IPv4" if normalized.version == 4 else "IPv6",
+                    "prefix_length": prefix_length,
+                },
+            )
+        return normalized
 
     @staticmethod
     def _parse_prefix(

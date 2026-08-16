@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.database import get_session
 from app.errors import NetMapError, ValidationError
 from app.interface_resolver import InterfacePhysicalResolver
@@ -15,6 +16,8 @@ from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.schemas import (
+    AdjacencyCandidatesArtifact,
+    AdjacencyCandidatesQuery,
     ErrorResponse,
     EvaluationView,
     InterfacePhysicalTraceArtifact,
@@ -126,3 +129,16 @@ def trace_l3_next_hop_resolution(
 ) -> NextHopResolutionArtifact:
     repository = CanonicalRepository(session)
     return SelectedTableNextHopResolver(repository).resolve(query, EvaluationView())
+
+
+@app.post(
+    "/v1/traces/l3/adjacency-candidates",
+    response_model=AdjacencyCandidatesArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def trace_l3_adjacency_candidates(
+    query: AdjacencyCandidatesQuery,
+    session: Session = Depends(get_session),
+) -> AdjacencyCandidatesArtifact:
+    repository = CanonicalRepository(session)
+    return StructuralAdjacencyResolver(repository).resolve(query, EvaluationView())

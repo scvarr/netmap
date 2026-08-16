@@ -35,6 +35,7 @@ class EvidenceRef(BaseModel):
         "L2EgressRule",
         "RoutingContext",
         "L3Binding",
+        "InterfaceAddress",
         "RoutingTable",
         "Route",
         "RouteNextHop",
@@ -367,6 +368,38 @@ class NextHopResolutionArtifact(BaseModel):
     ]
     branches: list[NextHopResolutionBranch]
     evidence_refs: list[EvidenceRef]
+    warnings: list[dict[str, Any]]
+
+
+class AdjacencyCandidatesQuery(BaseModel):
+    egress_l3_binding_id: uuid.UUID
+    neighbor_target_ip: IPvAnyAddress
+
+
+class AdjacencyCandidate(BaseModel):
+    interface_address_id: uuid.UUID
+    target_l3_binding_id: uuid.UUID
+    target_network_interface_id: uuid.UUID
+    ip_address: IPvAnyAddress
+
+
+class AdjacencyCandidatesGap(BaseModel):
+    code: Literal["INTERFACE_ADDRESS_UNKNOWN"]
+    evidence_refs: list[EvidenceRef]
+
+
+class AdjacencyCandidatesArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: AdjacencyCandidatesQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["l3-structural-adjacency-candidates/1.0"] = (
+        "l3-structural-adjacency-candidates/1.0"
+    )
+    result: Literal["CANDIDATES_FOUND", "UNKNOWN"]
+    routing_context_id: uuid.UUID
+    candidates: list[AdjacencyCandidate]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[AdjacencyCandidatesGap]
     warnings: list[dict[str, Any]]
 
 
