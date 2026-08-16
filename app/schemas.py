@@ -295,6 +295,81 @@ class RouteDecisionArtifact(BaseModel):
     warnings: list[dict[str, Any]]
 
 
+class NextHopResolutionQuery(BaseModel):
+    routing_context_id: uuid.UUID
+    routing_table_id: uuid.UUID
+    destination_ip: IPvAnyAddress
+
+
+class L3LookupState(BaseModel):
+    routing_context_id: uuid.UUID
+    routing_table_id: uuid.UUID
+    lookup_address: IPvAnyAddress
+    original_destination: IPvAnyAddress
+    purpose: Literal["PACKET_DESTINATION", "NEXT_HOP_RESOLUTION"]
+    egress_constraint: uuid.UUID | None = None
+
+
+class L3LookupStep(BaseModel):
+    state: L3LookupState
+    route_decision_result: Literal[
+        "FORWARD",
+        "LOCAL",
+        "DISCARD",
+        "NO_ROUTE",
+        "UNKNOWN",
+        "CONFLICTING",
+        "LOOP_DETECTED",
+    ]
+    selected_route_id: uuid.UUID | None = None
+    selected_route_next_hop_id: uuid.UUID | None = None
+    gateway_address: IPvAnyAddress | None = None
+    egress_l3_binding_id: uuid.UUID | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class DirectEgressState(BaseModel):
+    egress_l3_binding_id: uuid.UUID
+    neighbor_target_ip: IPvAnyAddress
+    original_destination: IPvAnyAddress
+
+
+class NextHopResolutionBranch(BaseModel):
+    outcome: Literal[
+        "RESOLVED",
+        "LOCAL_TERMINAL",
+        "DISCARD",
+        "NO_ROUTE",
+        "UNKNOWN",
+        "CONFLICTING",
+        "LOOP_DETECTED",
+    ]
+    lookup_steps: list[L3LookupStep]
+    direct_egress: DirectEgressState | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class NextHopResolutionArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: NextHopResolutionQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["l3-selected-table-next-hop-resolution/1.0"] = (
+        "l3-selected-table-next-hop-resolution/1.0"
+    )
+    result: Literal[
+        "RESOLVED",
+        "LOCAL_TERMINAL",
+        "DISCARD",
+        "NO_ROUTE",
+        "UNKNOWN",
+        "CONFLICTING",
+        "LOOP_DETECTED",
+    ]
+    branches: list[NextHopResolutionBranch]
+    evidence_refs: list[EvidenceRef]
+    warnings: list[dict[str, Any]]
+
+
 class ErrorBody(BaseModel):
     code: Literal["VALIDATION_ERROR", "MODEL_ERROR"]
     message: str

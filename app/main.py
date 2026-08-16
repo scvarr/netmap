@@ -11,6 +11,7 @@ from app.errors import NetMapError, ValidationError
 from app.interface_resolver import InterfacePhysicalResolver
 from app.l2_resolver import L2ReachabilityResolver
 from app.l3_resolver import SelectedTableRouteDecisionResolver
+from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.schemas import (
@@ -21,6 +22,8 @@ from app.schemas import (
     L1TraceQuery,
     L2ReachabilityQuery,
     L2ReachabilityTraceArtifact,
+    NextHopResolutionArtifact,
+    NextHopResolutionQuery,
     RouteDecisionArtifact,
     RouteDecisionQuery,
     TraceArtifact,
@@ -110,3 +113,16 @@ def trace_l3_route_decision(
     return SelectedTableRouteDecisionResolver(repository).resolve(
         query, EvaluationView()
     )
+
+
+@app.post(
+    "/v1/traces/l3/next-hop-resolution",
+    response_model=NextHopResolutionArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def trace_l3_next_hop_resolution(
+    query: NextHopResolutionQuery,
+    session: Session = Depends(get_session),
+) -> NextHopResolutionArtifact:
+    repository = CanonicalRepository(session)
+    return SelectedTableNextHopResolver(repository).resolve(query, EvaluationView())
