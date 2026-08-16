@@ -56,10 +56,8 @@ def make_two_router_path(destination="203.0.113.9"):
         origin_interface, origin = bind_interface(repository, r1)
         r1_egress_interface, r1_egress = bind_interface(repository, r1)
 
-        gateway_interface = repository.add_network_interface()
-        gateway_identity = repository.add_l3_binding(gateway_interface.id, r1.id)
-        gateway_ingress = repository.add_l3_binding(gateway_interface.id, r2.id)
-        repository.add_interface_address(gateway_identity.id, "192.0.2.2", 24)
+        gateway_interface, gateway_ingress = bind_interface(repository, r2)
+        repository.add_interface_address(gateway_ingress.id, "192.0.2.2", 24)
         attach_l2(repository, r1_egress_interface, gateway_interface)
         repository.add_route(
             t1.id,
@@ -90,6 +88,7 @@ def make_two_router_path(destination="203.0.113.9"):
             "contexts": (r1.id, r2.id),
             "tables": (t1.id, t2.id),
             "gateway_ingress": gateway_ingress.id,
+            "gateway_interface": gateway_interface.id,
             "target": target.id,
             "target_address": target_address.id,
             "destination": destination,
@@ -133,9 +132,8 @@ def test_target_reached_on_first_handoff_needs_no_target_host_selection():
         _origin_interface, origin = bind_interface(repository, source_context)
         egress_interface, egress = bind_interface(repository, source_context)
         target_interface, target_identity = bind_interface(
-            repository, source_context
+            repository, host_context
         )
-        repository.add_l3_binding(target_interface.id, host_context.id)
         repository.add_interface_address(
             target_identity.id, "192.0.2.9", 24
         )
@@ -263,6 +261,42 @@ def test_missing_second_router_selection_preserves_first_hop():
     )
     assert len(unknown["hops"]) == 2
     assert unknown["hops"][0]["structural_adjacency"]["result"] == "REACHABLE"
+
+
+def test_handoff_does_not_guess_another_binding_on_reached_interface():
+    path = make_two_router_path()
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        unrelated_context, unrelated_table = add_context(repository)
+        unrelated_binding = repository.add_l3_binding(
+            path["gateway_interface"], unrelated_context.id
+        )
+        repository.add_route(
+            unrelated_table.id, path["destination"] + "/32", "LOCAL"
+        )
+
+    body = reachability(
+        path["origin"],
+        path["destination"],
+        [
+            (path["contexts"][0], path["tables"][0]),
+            (unrelated_context.id, unrelated_table.id),
+        ],
+    ).json()
+
+    assert body["verdict"] == "UNKNOWN"
+    branch = next(
+        item for item in body["branches"]
+        if item["termination"] == "TABLE_SELECTION_UNKNOWN"
+    )
+    assert branch["hops"][0]["reached_l3_binding_id"] == str(
+        path["gateway_ingress"]
+    )
+    assert str(unrelated_binding.id) not in {
+        hop["reached_l3_binding_id"]
+        for item in body["branches"]
+        for hop in item["hops"]
+    }
 
 
 def test_table_selection_must_belong_to_declared_context():
@@ -436,9 +470,10 @@ def test_duplicate_neighbor_keeps_reachable_and_unknown_branches():
     path = make_two_router_path()
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
+        unrelated_context = repository.add_routing_context()
         unknown_interface = repository.add_network_interface()
         unknown_binding = repository.add_l3_binding(
-            unknown_interface.id, path["contexts"][0]
+            unknown_interface.id, unrelated_context.id
         )
         repository.add_interface_address(unknown_binding.id, "192.0.2.2", 24)
 
@@ -466,10 +501,8 @@ def test_three_router_chain_is_reachable():
         _origin_interface, origin = bind_interface(repository, r1)
 
         egress1_interface, egress1 = bind_interface(repository, r1)
-        link12 = repository.add_network_interface()
-        link12_identity = repository.add_l3_binding(link12.id, r1.id)
-        repository.add_l3_binding(link12.id, r2.id)
-        repository.add_interface_address(link12_identity.id, "192.0.2.2", 30)
+        link12, link12_ingress = bind_interface(repository, r2)
+        repository.add_interface_address(link12_ingress.id, "192.0.2.2", 30)
         attach_l2(repository, egress1_interface, link12)
         repository.add_route(
             t1.id,
@@ -479,10 +512,8 @@ def test_three_router_chain_is_reachable():
         )
 
         egress2_interface, egress2 = bind_interface(repository, r2)
-        link23 = repository.add_network_interface()
-        link23_identity = repository.add_l3_binding(link23.id, r2.id)
-        repository.add_l3_binding(link23.id, r3.id)
-        repository.add_interface_address(link23_identity.id, "198.51.100.2", 30)
+        link23, link23_ingress = bind_interface(repository, r3)
+        repository.add_interface_address(link23_ingress.id, "198.51.100.2", 30)
         attach_l2(repository, egress2_interface, link23)
         repository.add_route(
             t2.id,
@@ -530,10 +561,10 @@ def make_ecmp_outcomes(second_outcome="NO_ROUTE"):
         next_hops = []
         for address, target_context in (("192.0.2.2", r2), ("198.51.100.2", r3)):
             egress_interface, egress = bind_interface(repository, r1)
-            gateway_interface = repository.add_network_interface()
-            identity = repository.add_l3_binding(gateway_interface.id, r1.id)
-            repository.add_l3_binding(gateway_interface.id, target_context.id)
-            repository.add_interface_address(identity.id, address, 30)
+            gateway_interface, gateway_ingress = bind_interface(
+                repository, target_context
+            )
+            repository.add_interface_address(gateway_ingress.id, address, 30)
             attach_l2(repository, egress_interface, gateway_interface)
             next_hops.append(RouteNextHopInput(address, egress.id))
         repository.add_route(t1.id, "0.0.0.0/0", "FORWARD", next_hops)
@@ -618,10 +649,8 @@ def test_inter_router_forwarding_loop_is_known_unreachable():
         _origin_interface, origin = bind_interface(repository, r1)
 
         egress1_interface, egress1 = bind_interface(repository, r1)
-        to_r2 = repository.add_network_interface()
-        to_r2_identity = repository.add_l3_binding(to_r2.id, r1.id)
-        repository.add_l3_binding(to_r2.id, r2.id)
-        repository.add_interface_address(to_r2_identity.id, "192.0.2.2", 30)
+        to_r2, to_r2_ingress = bind_interface(repository, r2)
+        repository.add_interface_address(to_r2_ingress.id, "192.0.2.2", 30)
         attach_l2(repository, egress1_interface, to_r2)
         repository.add_route(
             t1.id,
@@ -631,10 +660,8 @@ def test_inter_router_forwarding_loop_is_known_unreachable():
         )
 
         egress2_interface, egress2 = bind_interface(repository, r2)
-        to_r1 = repository.add_network_interface()
-        to_r1_identity = repository.add_l3_binding(to_r1.id, r2.id)
-        repository.add_l3_binding(to_r1.id, r1.id)
-        repository.add_interface_address(to_r1_identity.id, "198.51.100.1", 30)
+        to_r1, to_r1_ingress = bind_interface(repository, r1)
+        repository.add_interface_address(to_r1_ingress.id, "198.51.100.1", 30)
         attach_l2(repository, egress2_interface, to_r1)
         repository.add_route(
             t2.id,

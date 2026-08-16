@@ -757,20 +757,21 @@ class CanonicalRepository:
                 "Egress L3Binding refers to a missing RoutingContext",
                 {"egress_l3_binding_id": str(source.id)},
             )
-        scoped_bindings = list(
-            self.session.scalars(
-                select(L3Binding).where(
-                    L3Binding.routing_context_id == source.routing_context_id
-                )
+        visible_assignments = list(
+            self.session.scalars(select(InterfaceAddress))
+        )
+        visible_binding_ids = list(
+            dict.fromkeys(
+                assignment.l3_binding_id for assignment in visible_assignments
             )
         )
         addresses = self.addresses_by_l3_binding(
-            [binding.id for binding in scoped_bindings]
+            visible_binding_ids
         )
         candidates = tuple(
             assignment
-            for binding in scoped_bindings
-            for assignment in addresses[binding.id]
+            for binding_id in visible_binding_ids
+            for assignment in addresses[binding_id]
             if assignment.address == neighbor_target_ip
         )
         return AdjacencyIdentityView(
@@ -802,21 +803,6 @@ class CanonicalRepository:
             l3_binding_id=binding.id,
             network_interface_id=binding.interface_id,
             routing_context_id=binding.routing_context_id,
-        )
-
-    def get_l3_binding_attachments_by_interface(
-        self, network_interface_id: uuid.UUID
-    ) -> tuple[L3BindingAttachmentRecord, ...]:
-        self.validate_network_interface(network_interface_id)
-        bindings = list(
-            self.session.scalars(
-                select(L3Binding).where(
-                    L3Binding.interface_id == network_interface_id
-                )
-            )
-        )
-        return tuple(
-            self.get_l3_binding_attachment(binding.id) for binding in bindings
         )
 
     def get_selected_routing_table(

@@ -315,50 +315,34 @@ class ConfiguredL3ReachabilityResolver:
                 )
                 continue
 
-            # InterfaceAddress identity remains scoped to the sender's routing
-            # context (M4.3).  A receiving NetworkInterface may additionally be
-            # attached to one or more local processing contexts.  Preserve all
-            # such explicit L3Binding handoffs instead of guessing one.
-            attachments = self.repository.get_l3_binding_attachments_by_interface(
-                candidate.target_network_interface_id
+            attachment = self.repository.get_l3_binding_attachment(
+                candidate.target_l3_binding_id
             )
-            processing_attachments = tuple(
-                attachment
-                for attachment in attachments
-                if attachment.l3_binding_id != candidate.target_l3_binding_id
+            hop = base_hop.model_copy(
+                update={
+                    "structural_adjacency": adjacency,
+                    "adjacency_candidate": candidate_result,
+                    "l2_branch_id": l2_branch.branch_id,
+                    "reached_l3_binding_id": attachment.l3_binding_id,
+                    "next_routing_context_id": attachment.routing_context_id,
+                    "evidence_refs": path_refs,
+                }
             )
-            if not processing_attachments:
-                processing_attachments = attachments
-            for attachment in processing_attachments:
-                handoff_refs = self._dedupe(
-                    path_refs
-                    + [self._ref("L3Binding", attachment.l3_binding_id)]
+            next_state = L3RoutingState(
+                routing_context_id=attachment.routing_context_id,
+                ingress_l3_binding_id=attachment.l3_binding_id,
+                destination_ip=state.destination_ip,
+            )
+            results.extend(
+                self._walk(
+                    next_state,
+                    selections,
+                    view,
+                    hops + (hop,),
+                    evidence + tuple(path_refs),
+                    visited,
                 )
-                hop = base_hop.model_copy(
-                    update={
-                        "structural_adjacency": adjacency,
-                        "adjacency_candidate": candidate_result,
-                        "l2_branch_id": l2_branch.branch_id,
-                        "reached_l3_binding_id": attachment.l3_binding_id,
-                        "next_routing_context_id": attachment.routing_context_id,
-                        "evidence_refs": handoff_refs,
-                    }
-                )
-                next_state = L3RoutingState(
-                    routing_context_id=attachment.routing_context_id,
-                    ingress_l3_binding_id=attachment.l3_binding_id,
-                    destination_ip=state.destination_ip,
-                )
-                results.extend(
-                    self._walk(
-                        next_state,
-                        selections,
-                        view,
-                        hops + (hop,),
-                        evidence + tuple(handoff_refs),
-                        visited,
-                    )
-                )
+            )
 
         # A reachable proof may coexist with incomplete alternative L2 facts.
         # Preserve that uncertainty as its own relevant branch.

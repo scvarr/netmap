@@ -74,6 +74,28 @@ def test_ipv4_exact_address_returns_structural_candidate():
     assert evidence_types(artifact).isdisjoint({"Route", "RouteNextHop"})
 
 
+def test_exact_candidate_can_belong_only_to_receiving_routing_context():
+    source_context_id, source_bindings = context_with_bindings(count=1)
+    receiving_context_id, receiving_bindings = context_with_bindings(count=1)
+    source_id = source_bindings[0][0]
+    receiving_id = receiving_bindings[0][0]
+    address_id = add_address(receiving_id, "192.0.2.2", 24)
+
+    artifact = adjacency(source_id, "192.0.2.2").json()
+
+    assert artifact["result"] == "CANDIDATES_FOUND"
+    assert artifact["routing_context_id"] == str(source_context_id)
+    assert artifact["candidates"] == [
+        {
+            "interface_address_id": str(address_id),
+            "target_l3_binding_id": str(receiving_id),
+            "target_network_interface_id": str(receiving_bindings[0][1]),
+            "ip_address": "192.0.2.2",
+        }
+    ]
+    assert receiving_context_id != source_context_id
+
+
 def test_ipv6_equivalent_text_is_canonicalized_for_exact_lookup():
     _context_id, bindings = context_with_bindings()
     source_id = bindings[0][0]
@@ -97,7 +119,7 @@ def test_interface_prefix_membership_is_not_an_identity_match():
     assert artifact["candidates"] == []
 
 
-def test_same_ip_in_another_routing_context_is_excluded():
+def test_same_ip_in_another_routing_context_is_also_a_candidate():
     _context_id, bindings = context_with_bindings()
     source_id = bindings[0][0]
     add_address(bindings[1][0], "192.0.2.1", 24)
@@ -106,9 +128,12 @@ def test_same_ip_in_another_routing_context_is_excluded():
 
     artifact = adjacency(source_id, "192.0.2.1").json()
 
-    assert len(artifact["candidates"]) == 1
-    assert artifact["candidates"][0]["target_l3_binding_id"] == str(bindings[1][0])
-    assert str(other_address_id) not in {
+    assert len(artifact["candidates"]) == 2
+    assert {item["target_l3_binding_id"] for item in artifact["candidates"]} == {
+        str(bindings[1][0]),
+        str(other_bindings[0][0]),
+    }
+    assert str(other_address_id) in {
         ref["entity_id"] for ref in artifact["evidence_refs"]
     }
 

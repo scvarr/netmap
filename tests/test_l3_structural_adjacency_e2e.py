@@ -34,9 +34,10 @@ def l3_identities(target_count=1, address="192.0.2.1"):
         )
         targets = []
         for _ in range(target_count):
+            target_routing_context = repository.add_routing_context()
             target_interface = repository.add_network_interface()
             target_l3 = repository.add_l3_binding(
-                target_interface.id, routing_context.id
+                target_interface.id, target_routing_context.id
             )
             interface_address = repository.add_interface_address(
                 target_l3.id, address, 24
