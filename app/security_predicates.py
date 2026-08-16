@@ -1,12 +1,20 @@
+from dataclasses import dataclass
 from ipaddress import ip_address, ip_network
 from typing import Literal
 
 from app.errors import ModelError, ValidationError
-from app.schemas import PacketState
+from app.schemas import ConnectionState, PacketState
 
 
 TruthValue = Literal["TRUE", "FALSE", "UNKNOWN"]
 Predicate = dict[str, object]
+
+
+@dataclass(frozen=True)
+class SecurityPredicateEvaluationContext:
+    packet_state: PacketState
+    connection_state: ConnectionState | None = None
+
 
 _VALUE_LIMITS = {
     "IP_PROTOCOL_IN": 255,
@@ -26,6 +34,9 @@ _VALUE_FIELDS = {
     "ICMP_TYPE_IN": "icmp_type",
     "ICMP_CODE_IN": "icmp_code",
 }
+_CONCRETE_CONNECTION_STATES = tuple(
+    state.value for state in ConnectionState if state is not ConnectionState.UNKNOWN
+)
 
 
 def normalize_predicate(
@@ -101,6 +112,27 @@ def normalize_predicate(
                         f"{path}.values[{index}]",
                     )
             return {"op": op, "values": list(values)}
+        if op == "CONNECTION_STATE_IN":
+            if set(value) != {"op", "values"} or not isinstance(
+                value.get("values"), list
+            ):
+                fail("CONNECTION_STATE_IN predicate requires a values array", path)
+            values = value["values"]
+            if not values:
+                fail("CONNECTION_STATE_IN values must be non-empty", f"{path}.values")
+            if any(
+                not isinstance(item, str)
+                or item not in _CONCRETE_CONNECTION_STATES
+                for item in values
+            ):
+                fail(
+                    "CONNECTION_STATE_IN value must be a concrete ConnectionState",
+                    f"{path}.values",
+                )
+            normalized_values = [
+                state for state in _CONCRETE_CONNECTION_STATES if state in values
+            ]
+            return {"op": op, "values": normalized_values}
         if op in _RANGE_FIELDS:
             if set(value) != {"op", "ranges"} or not isinstance(
                 value.get("ranges"), list
@@ -136,18 +168,20 @@ def normalize_predicate(
     return normalized
 
 
-def evaluate_predicate(predicate: Predicate, packet: PacketState) -> TruthValue:
+def evaluate_predicate(
+    predicate: Predicate, context: SecurityPredicateEvaluationContext
+) -> TruthValue:
     op = predicate["op"]
     if op in {"TRUE", "FALSE"}:
         return op  # type: ignore[return-value]
     if op == "NOT":
-        result = evaluate_predicate(predicate["child"], packet)  # type: ignore[arg-type]
+        result = evaluate_predicate(predicate["child"], context)  # type: ignore[arg-type]
         return {"TRUE": "FALSE", "FALSE": "TRUE", "UNKNOWN": "UNKNOWN"}[
             result
         ]  # type: ignore[return-value]
     if op == "ALL":
         results = [
-            evaluate_predicate(child, packet)
+            evaluate_predicate(child, context)
             for child in predicate["children"]  # type: ignore[union-attr]
         ]
         if "FALSE" in results:
@@ -157,7 +191,7 @@ def evaluate_predicate(predicate: Predicate, packet: PacketState) -> TruthValue:
         return "TRUE"
     if op == "ANY":
         results = [
-            evaluate_predicate(child, packet)
+            evaluate_predicate(child, context)
             for child in predicate["children"]  # type: ignore[union-attr]
         ]
         if "TRUE" in results:
@@ -166,7 +200,7 @@ def evaluate_predicate(predicate: Predicate, packet: PacketState) -> TruthValue:
             return "UNKNOWN"
         return "FALSE"
     if op in _IP_FIELDS:
-        packet_value = getattr(packet, _IP_FIELDS[op])
+        packet_value = getattr(context.packet_state, _IP_FIELDS[op])
         if packet_value is None:
             return "UNKNOWN"
         address = ip_address(str(packet_value))
@@ -176,12 +210,12 @@ def evaluate_predicate(predicate: Predicate, packet: PacketState) -> TruthValue:
                 return "TRUE"
         return "FALSE"
     if op in _VALUE_FIELDS:
-        packet_value = getattr(packet, _VALUE_FIELDS[op])
+        packet_value = getattr(context.packet_state, _VALUE_FIELDS[op])
         if packet_value is None:
             return "UNKNOWN"
         return "TRUE" if packet_value in predicate["values"] else "FALSE"  # type: ignore[operator]
     if op in _RANGE_FIELDS:
-        packet_value = getattr(packet, _RANGE_FIELDS[op])
+        packet_value = getattr(context.packet_state, _RANGE_FIELDS[op])
         if packet_value is None:
             return "UNKNOWN"
         return (
@@ -190,6 +224,15 @@ def evaluate_predicate(predicate: Predicate, packet: PacketState) -> TruthValue:
                 item["start"] <= packet_value <= item["end"]
                 for item in predicate["ranges"]  # type: ignore[union-attr]
             )
+            else "FALSE"
+        )
+    if op == "CONNECTION_STATE_IN":
+        connection_state = context.connection_state
+        if connection_state is None or connection_state is ConnectionState.UNKNOWN:
+            return "UNKNOWN"
+        return (
+            "TRUE"
+            if connection_state in predicate["values"]  # type: ignore[operator]
             else "FALSE"
         )
     raise AssertionError(f"validated predicate has unsupported op {op}")

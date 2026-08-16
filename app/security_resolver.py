@@ -11,7 +11,10 @@ from app.schemas import (
     SecurityPolicyEvaluationQuery,
     SecurityRuleEvaluationStep,
 )
-from app.security_predicates import evaluate_predicate
+from app.security_predicates import (
+    SecurityPredicateEvaluationContext,
+    evaluate_predicate,
+)
 
 
 @dataclass(frozen=True)
@@ -32,9 +35,23 @@ class ConfiguredSecurityPolicyResolver:
     def resolve(
         self, query: SecurityPolicyEvaluationQuery, view: EvaluationView
     ) -> SecurityPolicyEvaluationArtifact:
+        return self.resolve_with_predicate_context(
+            query,
+            view,
+            SecurityPredicateEvaluationContext(packet_state=query.packet_state),
+        )
+
+    def resolve_with_predicate_context(
+        self,
+        query: SecurityPolicyEvaluationQuery,
+        view: EvaluationView,
+        predicate_context: SecurityPredicateEvaluationContext,
+    ) -> SecurityPolicyEvaluationArtifact:
         policy = self.repository.get_security_policy(query.policy_id)
         policy_ref = self._ref("SecurityPolicy", policy.security_policy_id)
-        logical = self._evaluate_rules(policy, query, 0, (), (policy_ref,))
+        logical = self._evaluate_rules(
+            policy, predicate_context, 0, (), (policy_ref,)
+        )
         branches = [
             SecurityEvaluationBranch(
                 branch_id=f"security-branch-{index}",
@@ -76,7 +93,7 @@ class ConfiguredSecurityPolicyResolver:
     def _evaluate_rules(
         self,
         policy: SecurityPolicyRecord,
-        query: SecurityPolicyEvaluationQuery,
+        predicate_context: SecurityPredicateEvaluationContext,
         index: int,
         steps: tuple[SecurityRuleEvaluationStep, ...],
         evidence: tuple[EvidenceRef, ...],
@@ -93,7 +110,7 @@ class ConfiguredSecurityPolicyResolver:
             ]
 
         rule = policy.rules[index]
-        result = evaluate_predicate(rule.predicate, query.packet_state)
+        result = evaluate_predicate(rule.predicate, predicate_context)
         rule_ref = self._ref("SecurityRule", rule.security_rule_id)
         next_evidence = evidence + (rule_ref,)
         if result == "TRUE":
@@ -121,7 +138,11 @@ class ConfiguredSecurityPolicyResolver:
                 evidence_refs=[rule_ref],
             )
             return self._evaluate_rules(
-                policy, query, index + 1, steps + (step,), next_evidence
+                policy,
+                predicate_context,
+                index + 1,
+                steps + (step,),
+                next_evidence,
             )
 
         match_step = SecurityRuleEvaluationStep(
@@ -143,7 +164,7 @@ class ConfiguredSecurityPolicyResolver:
             ),
             *self._evaluate_rules(
                 policy,
-                query,
+                predicate_context,
                 index + 1,
                 steps + (no_match_step,),
                 next_evidence,

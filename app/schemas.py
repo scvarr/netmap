@@ -1,4 +1,5 @@
 import uuid
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress
@@ -529,6 +530,14 @@ class PacketState(BaseModel):
     icmp_code: int | None = Field(default=None, ge=0, le=255)
 
 
+class ConnectionState(StrEnum):
+    NEW = "NEW"
+    ESTABLISHED = "ESTABLISHED"
+    RELATED = "RELATED"
+    INVALID = "INVALID"
+    UNKNOWN = "UNKNOWN"
+
+
 class SecurityPolicyEvaluationQuery(BaseModel):
     policy_id: uuid.UUID
     packet_state: PacketState
@@ -583,6 +592,7 @@ class SecurityEvaluationContext(BaseModel):
     egress_network_interface_id: uuid.UUID | None = None
     ingress_l3_binding_id: uuid.UUID | None = None
     egress_l3_binding_id: uuid.UUID | None = None
+    connection_state: ConnectionState | None = None
 
 
 class SecurityEvaluationQuery(BaseModel):

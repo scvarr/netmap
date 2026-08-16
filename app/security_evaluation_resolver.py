@@ -11,6 +11,7 @@ from app.schemas import (
     SecurityPolicyEvaluationQuery,
     SecurityStageEvaluationGap,
 )
+from app.security_predicates import SecurityPredicateEvaluationContext
 from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.security_scopes import SCOPE_ENTITY_TYPES
 
@@ -63,12 +64,16 @@ class ConfiguredSecurityEvaluationResolver:
             attachment_refs = self._dedupe([attachment_ref, *scope_refs])
             policy_evaluation = None
             if applicability != "FALSE":
-                policy_evaluation = self.policy_resolver.resolve(
+                policy_evaluation = self.policy_resolver.resolve_with_predicate_context(
                     SecurityPolicyEvaluationQuery(
                         policy_id=attachment.policy_id,
                         packet_state=context.packet_state,
                     ),
                     view,
+                    SecurityPredicateEvaluationContext(
+                        packet_state=context.packet_state,
+                        connection_state=context.connection_state,
+                    ),
                 )
                 attachment_refs = self._dedupe(
                     [*attachment_refs, *policy_evaluation.evidence_refs]
