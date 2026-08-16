@@ -13,20 +13,11 @@ from app.schemas import (
 )
 from app.packet_predicates import PacketPredicateEvaluationContext
 from app.security_resolver import ConfiguredSecurityPolicyResolver
-from app.security_scopes import SCOPE_ENTITY_TYPES
+from app.processing_scopes import evaluate_processing_scope
 
 
 class ConfiguredSecurityEvaluationResolver:
     VERSION = "security-configured-stages/1.0"
-
-    _CONTEXT_FIELDS = {
-        "traffic_classes": "traffic_class",
-        "routing_context_ids": "routing_context_id",
-        "ingress_network_interface_ids": "ingress_network_interface_id",
-        "egress_network_interface_ids": "egress_network_interface_id",
-        "ingress_l3_binding_ids": "ingress_l3_binding_id",
-        "egress_l3_binding_ids": "egress_l3_binding_id",
-    }
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
@@ -156,19 +147,12 @@ class ConfiguredSecurityEvaluationResolver:
         attachment: SecurityPolicyAttachmentRecord,
         context: SecurityEvaluationContext,
     ) -> tuple[str, list[EvidenceRef]]:
-        has_unknown = False
-        refs: list[EvidenceRef] = []
-        for dimension, allowed in attachment.scope.items():
-            runtime_value = getattr(context, self._CONTEXT_FIELDS[dimension])
-            if runtime_value is None:
-                has_unknown = True
-                continue
-            value = str(runtime_value)
-            if dimension in SCOPE_ENTITY_TYPES:
-                refs.append(self._ref(SCOPE_ENTITY_TYPES[dimension], runtime_value))
-            if value not in allowed:
-                return "FALSE", self._dedupe(refs)
-        return ("UNKNOWN" if has_unknown else "TRUE"), self._dedupe(refs)
+        evaluation = evaluate_processing_scope(attachment.scope, context)
+        refs = [
+            self._ref(entity_type, entity_id)
+            for entity_type, entity_id in evaluation.canonical_refs
+        ]
+        return evaluation.applicability, self._dedupe(refs)
 
     @staticmethod
     def _ref(entity_type: str, entity_id: uuid.UUID) -> EvidenceRef:

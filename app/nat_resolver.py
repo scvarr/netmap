@@ -38,11 +38,20 @@ class ConfiguredNATPolicyResolver:
     def resolve(
         self, query: NATPolicyEvaluationQuery, view: EvaluationView
     ) -> NATPolicyEvaluationArtifact:
+        return self.resolve_with_predicate_context(
+            query,
+            view,
+            PacketPredicateEvaluationContext(packet_state=query.packet_state),
+        )
+
+    def resolve_with_predicate_context(
+        self,
+        query: NATPolicyEvaluationQuery,
+        view: EvaluationView,
+        predicate_context: PacketPredicateEvaluationContext,
+    ) -> NATPolicyEvaluationArtifact:
         policy = self.repository.get_nat_policy(query.policy_id)
         policy_ref = self._ref("NATPolicy", policy.nat_policy_id)
-        predicate_context = PacketPredicateEvaluationContext(
-            packet_state=query.packet_state
-        )
         logical = self._evaluate_rules(
             policy,
             predicate_context,

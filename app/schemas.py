@@ -45,6 +45,7 @@ class EvidenceRef(BaseModel):
         "SecurityPolicyAttachment",
         "NATPolicy",
         "NATRule",
+        "NATPolicyAttachment",
     ]
     entity_id: uuid.UUID
 
@@ -693,6 +694,91 @@ class NATPolicyEvaluationArtifact(BaseModel):
     branches: list[NATPolicyEvaluationBranch]
     evidence_refs: list[EvidenceRef]
     gaps: list[NATPolicyEvaluationGap]
+    warnings: list[dict[str, Any]]
+
+
+class NATEvaluationContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    packet_state: PacketState
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    routing_context_id: uuid.UUID | None = None
+    ingress_network_interface_id: uuid.UUID | None = None
+    egress_network_interface_id: uuid.UUID | None = None
+    ingress_l3_binding_id: uuid.UUID | None = None
+    egress_l3_binding_id: uuid.UUID | None = None
+    connection_state: ConnectionState | None = None
+
+
+class NATEvaluationQuery(BaseModel):
+    context: NATEvaluationContext
+    configured_attachment_completeness: Literal[
+        "COMPLETE", "PARTIAL", "UNKNOWN"
+    ]
+
+
+class NATStageExecution(BaseModel):
+    attachment_id: uuid.UUID
+    policy_id: uuid.UUID
+    local_stage_order: int
+    applicability: Literal["TRUE", "FALSE", "UNKNOWN"]
+    branch_assumption: Literal["APPLY", "SKIP"]
+    executed: bool
+    policy_evaluation: NATPolicyEvaluationArtifact | None = None
+    packet_before: PacketState
+    packet_after: PacketState | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class NATExecutionBranch(BaseModel):
+    branch_id: str
+    initial_packet: PacketState
+    stage_executions: list[NATStageExecution]
+    final_packet: PacketState | None = None
+    termination: Literal[
+        "COMPLETED",
+        "NAT_POLICY_EVALUATION_UNKNOWN",
+        "NAT_STAGE_ORDER_AMBIGUOUS",
+    ]
+    evidence_refs: list[EvidenceRef]
+
+
+class NATEvaluationGap(BaseModel):
+    code: Literal[
+        "NAT_ATTACHMENT_COVERAGE_INCOMPLETE",
+        "NAT_ATTACHMENT_APPLICABILITY_UNKNOWN",
+        "NAT_POLICY_EVALUATION_UNKNOWN",
+        "NAT_STAGE_ORDER_AMBIGUOUS",
+        "NAT_TRANSLATION_UNKNOWN",
+    ]
+    attachment_id: uuid.UUID | None = None
+    competing_attachment_ids: list[uuid.UUID] = Field(default_factory=list)
+    evidence_refs: list[EvidenceRef]
+
+
+class NATEvaluationArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: NATEvaluationQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["nat-configured-stages/1.0"] = (
+        "nat-configured-stages/1.0"
+    )
+    context: NATEvaluationContext
+    configured_attachment_completeness: Literal[
+        "COMPLETE", "PARTIAL", "UNKNOWN"
+    ]
+    result: Literal["IDENTITY", "TRANSFORMED_EXACT", "UNKNOWN"]
+    reason: Literal[
+        "NO_NAT_POLICY_APPLICABLE",
+        "NAT_STAGES_IDENTITY",
+        "NAT_STAGES_TRANSFORMED",
+        "NAT_UNCERTAINTY",
+    ]
+    packet_before: PacketState
+    packet_after: PacketState | None = None
+    branches: list[NATExecutionBranch]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[NATEvaluationGap]
     warnings: list[dict[str, Any]]
 
 

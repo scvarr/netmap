@@ -15,6 +15,7 @@ from app.models import (
     NetworkInterface,
     NetworkInterfaceRealization,
     NATPolicy,
+    NATPolicyAttachment,
     NATRule,
     PhysicalObject,
     L2Binding,
@@ -32,6 +33,7 @@ from app.models import (
 )
 from app.nat_transforms import NATTransform, normalize_nat_transform
 from app.packet_predicates import Predicate, normalize_predicate
+from app.processing_scopes import ProcessingScope, normalize_processing_scope
 from app.security_scopes import SecurityScope, normalize_security_scope
 
 
@@ -204,6 +206,14 @@ class NATPolicyRecord:
     default_transform: NATTransform
     configured_completeness: str
     rules: tuple[NATRuleRecord, ...]
+
+
+@dataclass(frozen=True)
+class NATPolicyAttachmentRecord:
+    attachment_id: uuid.UUID
+    policy_id: uuid.UUID
+    local_stage_order: int
+    scope: ProcessingScope
 
 
 class CanonicalRepository:
@@ -611,7 +621,7 @@ class CanonicalRepository:
         normalized = normalize_security_scope(
             scope,
             model_error=False,
-            entity_exists=self._security_scope_entity_exists,
+            entity_exists=self._processing_scope_entity_exists,
         )
         attachment = SecurityPolicyAttachment(
             id=attachment_id or uuid.uuid4(),
@@ -684,6 +694,39 @@ class CanonicalRepository:
         self.session.add(rule)
         self.session.flush()
         return rule
+
+    def add_nat_policy_attachment(
+        self,
+        policy_id: uuid.UUID,
+        local_stage_order: int,
+        scope: object,
+        attachment_id: uuid.UUID | None = None,
+    ) -> NATPolicyAttachment:
+        if self.session.get(NATPolicy, policy_id) is None:
+            raise ValidationError(
+                "NATPolicy does not exist", {"nat_policy_id": str(policy_id)}
+            )
+        if not isinstance(local_stage_order, int) or isinstance(
+            local_stage_order, bool
+        ):
+            raise ValidationError(
+                "NATPolicyAttachment local_stage_order must be an integer"
+            )
+        normalized = normalize_processing_scope(
+            scope,
+            model_error=False,
+            entity_exists=self._processing_scope_entity_exists,
+            attachment_type="NATPolicyAttachment",
+        )
+        attachment = NATPolicyAttachment(
+            id=attachment_id or uuid.uuid4(),
+            policy_id=policy_id,
+            local_stage_order=local_stage_order,
+            scope=normalized,
+        )
+        self.session.add(attachment)
+        self.session.flush()
+        return attachment
 
     def add_network_interface_realization(
         self,
@@ -1188,7 +1231,7 @@ class CanonicalRepository:
             scope = normalize_security_scope(
                 attachment.scope,
                 model_error=True,
-                entity_exists=self._security_scope_entity_exists,
+                entity_exists=self._processing_scope_entity_exists,
                 details=details,
             )
             records.append(
@@ -1263,7 +1306,64 @@ class CanonicalRepository:
             rules=tuple(records),
         )
 
+    def get_nat_policy_attachments(
+        self,
+    ) -> tuple[NATPolicyAttachmentRecord, ...]:
+        attachments = list(
+            self.session.scalars(
+                select(NATPolicyAttachment).order_by(
+                    NATPolicyAttachment.local_stage_order
+                )
+            )
+        )
+        records: list[NATPolicyAttachmentRecord] = []
+        for attachment in attachments:
+            details = {"nat_policy_attachment_id": str(attachment.id)}
+            if self.session.get(NATPolicy, attachment.policy_id) is None:
+                raise ModelError(
+                    "NATPolicyAttachment refers to a missing NATPolicy", details
+                )
+            if not isinstance(attachment.local_stage_order, int) or isinstance(
+                attachment.local_stage_order, bool
+            ):
+                raise ModelError(
+                    "NATPolicyAttachment local_stage_order is invalid", details
+                )
+            scope = normalize_processing_scope(
+                attachment.scope,
+                model_error=True,
+                entity_exists=self._processing_scope_entity_exists,
+                attachment_type="NATPolicyAttachment",
+                details=details,
+            )
+            records.append(
+                NATPolicyAttachmentRecord(
+                    attachment_id=attachment.id,
+                    policy_id=attachment.policy_id,
+                    local_stage_order=attachment.local_stage_order,
+                    scope=scope,
+                )
+            )
+        return tuple(records)
+
     def validate_security_evaluation_context(
+        self,
+        *,
+        routing_context_id: uuid.UUID | None,
+        ingress_network_interface_id: uuid.UUID | None,
+        egress_network_interface_id: uuid.UUID | None,
+        ingress_l3_binding_id: uuid.UUID | None,
+        egress_l3_binding_id: uuid.UUID | None,
+    ) -> None:
+        self.validate_processing_evaluation_context(
+            routing_context_id=routing_context_id,
+            ingress_network_interface_id=ingress_network_interface_id,
+            egress_network_interface_id=egress_network_interface_id,
+            ingress_l3_binding_id=ingress_l3_binding_id,
+            egress_l3_binding_id=egress_l3_binding_id,
+        )
+
+    def validate_processing_evaluation_context(
         self,
         *,
         routing_context_id: uuid.UUID | None,
@@ -1674,7 +1774,7 @@ class CanonicalRepository:
                 {"configured_completeness": completeness},
             )
 
-    def _security_scope_entity_exists(
+    def _processing_scope_entity_exists(
         self, entity_type: str, entity_id: uuid.UUID
     ) -> bool:
         model = {

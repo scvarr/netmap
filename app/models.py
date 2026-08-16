@@ -428,6 +428,9 @@ class NATPolicy(Base):
     rules: Mapped[list["NATRule"]] = relationship(
         back_populates="policy", cascade="all, delete-orphan"
     )
+    attachments: Mapped[list["NATPolicyAttachment"]] = relationship(
+        back_populates="policy", cascade="all, delete-orphan"
+    )
 
 
 class NATRule(Base):
@@ -449,3 +452,22 @@ class NATRule(Base):
     predicate: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     transform: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     policy: Mapped[NATPolicy] = relationship(back_populates="rules")
+
+
+class NATPolicyAttachment(Base):
+    __tablename__ = "nat_policy_attachments"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(scope) = 'object'", name="scope_object"),
+        Index("ix_nat_policy_attachments_policy_id", "policy_id"),
+        Index("ix_nat_policy_attachments_local_stage_order", "local_stage_order"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    policy_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("nat_policies.id", ondelete="CASCADE"), nullable=False
+    )
+    local_stage_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    policy: Mapped[NATPolicy] = relationship(back_populates="attachments")
