@@ -14,7 +14,11 @@ from app.models import (
     NATPolicyAttachment,
     NATPool,
     NATRule,
+    PacketProcessingPlan,
     PhysicalObject,
+    ProcessingEntryPoint,
+    ProcessingStage,
+    ProcessingTransition,
     L2Binding,
     L2EgressRule,
     L2ForwardingContext,
@@ -35,6 +39,10 @@ from app.models import (
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(ProcessingEntryPoint))
+        session.execute(delete(ProcessingTransition))
+        session.execute(delete(ProcessingStage))
+        session.execute(delete(PacketProcessingPlan))
         session.execute(delete(RoutingPolicyRule))
         session.execute(delete(RoutingPolicy))
         session.execute(delete(NATPolicyAttachment))

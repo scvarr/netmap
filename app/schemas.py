@@ -49,6 +49,10 @@ class EvidenceRef(BaseModel):
         "NATRule",
         "NATPolicyAttachment",
         "NATPool",
+        "PacketProcessingPlan",
+        "ProcessingStage",
+        "ProcessingTransition",
+        "ProcessingEntryPoint",
     ]
     entity_id: uuid.UUID
 
@@ -541,6 +545,52 @@ class RoutingTableSelection(BaseModel):
 
     op: Literal["SELECT_TABLE"]
     routing_table_id: uuid.UUID
+
+
+class PacketProcessingPlanValidationQuery(BaseModel):
+    plan_id: uuid.UUID
+
+
+class ProcessingStageArtifact(BaseModel):
+    stage_id: uuid.UUID
+    kind: Literal[
+        "ROUTING_POLICY",
+        "ROUTE_DECISION",
+        "SECURITY",
+        "NAT",
+        "TERMINATE",
+    ]
+    payload: dict[str, str]
+
+
+class ProcessingTransitionArtifact(BaseModel):
+    transition_id: uuid.UUID
+    from_stage_id: uuid.UUID
+    outcome: str
+    to_stage_id: uuid.UUID
+
+
+class ProcessingEntryPointArtifact(BaseModel):
+    entry_point_id: uuid.UUID
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    stage_id: uuid.UUID
+
+
+class PacketProcessingPlanValidationArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: PacketProcessingPlanValidationQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["packet-processing-plan-validation/1.0"] = (
+        "packet-processing-plan-validation/1.0"
+    )
+    result: Literal["VALID"] = "VALID"
+    plan_id: uuid.UUID
+    configured_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"]
+    entry_points: list[ProcessingEntryPointArtifact]
+    stages: list[ProcessingStageArtifact]
+    transitions: list[ProcessingTransitionArtifact]
+    evidence_refs: list[EvidenceRef]
+    warnings: list[dict[str, Any]]
 
 
 class RoutingPolicyEvaluationQuery(BaseModel):

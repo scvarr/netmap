@@ -18,7 +18,11 @@ from app.models import (
     NATPolicyAttachment,
     NATPool,
     NATRule,
+    PacketProcessingPlan,
     PhysicalObject,
+    ProcessingEntryPoint,
+    ProcessingStage,
+    ProcessingTransition,
     L2Binding,
     L2EgressRule,
     L2ForwardingContext,
@@ -36,7 +40,20 @@ from app.models import (
 )
 from app.nat_transforms import NATTransform, normalize_nat_transform
 from app.nat_pools import NATPoolRangeSet, normalize_nat_pool_ranges
+from app.packet_processing_plan import (
+    PacketProcessingPlanRecord,
+    ProcessingEntryPointRecord,
+    ProcessingStageRecord,
+    ProcessingTransitionRecord,
+    validate_packet_processing_plan_graph,
+)
 from app.packet_predicates import Predicate, normalize_predicate
+from app.processing_stage_payloads import (
+    STAGE_OUTCOMES,
+    SUPPORTED_STAGE_KINDS,
+    normalize_processing_stage_payload,
+    processing_stage_payload_reference,
+)
 from app.processing_scopes import ProcessingScope, normalize_processing_scope
 from app.routing_policy_actions import (
     RoutingTableSelection,
@@ -488,6 +505,190 @@ class CanonicalRepository:
         self.session.add(table)
         self.session.flush()
         return table
+
+    def add_packet_processing_plan(
+        self,
+        configured_completeness: str,
+        plan_id: uuid.UUID | None = None,
+    ) -> PacketProcessingPlan:
+        self._validate_packet_processing_plan_completeness(
+            configured_completeness, model_error=False
+        )
+        resolved_id = plan_id or uuid.uuid4()
+        if self.session.get(PacketProcessingPlan, resolved_id) is not None:
+            raise ValidationError(
+                "PacketProcessingPlan ID already exists",
+                {"packet_processing_plan_id": str(resolved_id)},
+            )
+        plan = PacketProcessingPlan(
+            id=resolved_id,
+            configured_completeness=configured_completeness,
+        )
+        self.session.add(plan)
+        self.session.flush()
+        return plan
+
+    def add_processing_stage(
+        self,
+        plan_id: uuid.UUID,
+        kind: str,
+        payload: object,
+        stage_id: uuid.UUID | None = None,
+    ) -> ProcessingStage:
+        self._require_packet_processing_plan(plan_id)
+        resolved_id = stage_id or uuid.uuid4()
+        if self.session.get(ProcessingStage, resolved_id) is not None:
+            raise ValidationError(
+                "ProcessingStage ID already exists",
+                {"processing_stage_id": str(resolved_id)},
+            )
+        normalized = normalize_processing_stage_payload(
+            kind,
+            payload,
+            model_error=False,
+            reference_exists=self._processing_plan_reference_exists,
+            details={"packet_processing_plan_id": str(plan_id)},
+        )
+        stage = ProcessingStage(
+            id=resolved_id,
+            plan_id=plan_id,
+            kind=kind,
+            payload=normalized,
+        )
+        self.session.add(stage)
+        self.session.flush()
+        return stage
+
+    def add_processing_transition(
+        self,
+        plan_id: uuid.UUID,
+        from_stage_id: uuid.UUID,
+        outcome: str,
+        to_stage_id: uuid.UUID,
+        transition_id: uuid.UUID | None = None,
+    ) -> ProcessingTransition:
+        self._require_packet_processing_plan(plan_id)
+        source = self.session.get(ProcessingStage, from_stage_id)
+        target = self.session.get(ProcessingStage, to_stage_id)
+        if source is None:
+            raise ValidationError(
+                "ProcessingTransition source stage does not exist",
+                {"from_stage_id": str(from_stage_id)},
+            )
+        if target is None:
+            raise ValidationError(
+                "ProcessingTransition target stage does not exist",
+                {"to_stage_id": str(to_stage_id)},
+            )
+        if source.plan_id != plan_id or target.plan_id != plan_id:
+            raise ValidationError(
+                "ProcessingTransition stages must belong to its PacketProcessingPlan",
+                {
+                    "packet_processing_plan_id": str(plan_id),
+                    "from_stage_plan_id": str(source.plan_id),
+                    "to_stage_plan_id": str(target.plan_id),
+                },
+            )
+        if source.kind not in SUPPORTED_STAGE_KINDS:
+            raise ValidationError(
+                "ProcessingTransition source stage kind is unsupported",
+                {"kind": source.kind},
+            )
+        if outcome not in STAGE_OUTCOMES[source.kind]:
+            raise ValidationError(
+                "ProcessingTransition outcome is invalid for source stage kind",
+                {"stage_kind": source.kind, "outcome": outcome},
+            )
+        if self.session.scalar(
+            select(ProcessingTransition.id).where(
+                ProcessingTransition.from_stage_id == from_stage_id,
+                ProcessingTransition.outcome == outcome,
+            )
+        ) is not None:
+            raise ValidationError(
+                "ProcessingTransition outcome must be unique for source stage",
+                {"from_stage_id": str(from_stage_id), "outcome": outcome},
+            )
+        resolved_id = transition_id or uuid.uuid4()
+        if self.session.get(ProcessingTransition, resolved_id) is not None:
+            raise ValidationError(
+                "ProcessingTransition ID already exists",
+                {"processing_transition_id": str(resolved_id)},
+            )
+        if self._processing_path_exists(plan_id, to_stage_id, from_stage_id):
+            raise ValidationError(
+                "ProcessingTransition would create a cycle",
+                {
+                    "from_stage_id": str(from_stage_id),
+                    "to_stage_id": str(to_stage_id),
+                },
+            )
+        transition = ProcessingTransition(
+            id=resolved_id,
+            plan_id=plan_id,
+            from_stage_id=from_stage_id,
+            outcome=outcome,
+            to_stage_id=to_stage_id,
+        )
+        self.session.add(transition)
+        self.session.flush()
+        return transition
+
+    def add_processing_entry_point(
+        self,
+        plan_id: uuid.UUID,
+        traffic_class: str,
+        stage_id: uuid.UUID,
+        entry_point_id: uuid.UUID | None = None,
+    ) -> ProcessingEntryPoint:
+        self._require_packet_processing_plan(plan_id)
+        if traffic_class not in {"TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"}:
+            raise ValidationError(
+                "ProcessingEntryPoint traffic_class is invalid",
+                {"traffic_class": traffic_class},
+            )
+        stage = self.session.get(ProcessingStage, stage_id)
+        if stage is None:
+            raise ValidationError(
+                "ProcessingEntryPoint stage does not exist",
+                {"stage_id": str(stage_id)},
+            )
+        if stage.plan_id != plan_id:
+            raise ValidationError(
+                "ProcessingEntryPoint stage must belong to its PacketProcessingPlan",
+                {
+                    "packet_processing_plan_id": str(plan_id),
+                    "stage_plan_id": str(stage.plan_id),
+                },
+            )
+        if self.session.scalar(
+            select(ProcessingEntryPoint.id).where(
+                ProcessingEntryPoint.plan_id == plan_id,
+                ProcessingEntryPoint.traffic_class == traffic_class,
+            )
+        ) is not None:
+            raise ValidationError(
+                "ProcessingEntryPoint traffic class must be unique within plan",
+                {
+                    "packet_processing_plan_id": str(plan_id),
+                    "traffic_class": traffic_class,
+                },
+            )
+        resolved_id = entry_point_id or uuid.uuid4()
+        if self.session.get(ProcessingEntryPoint, resolved_id) is not None:
+            raise ValidationError(
+                "ProcessingEntryPoint ID already exists",
+                {"processing_entry_point_id": str(resolved_id)},
+            )
+        entry = ProcessingEntryPoint(
+            id=resolved_id,
+            plan_id=plan_id,
+            traffic_class=traffic_class,
+            stage_id=stage_id,
+        )
+        self.session.add(entry)
+        self.session.flush()
+        return entry
 
     def add_routing_policy(
         self,
@@ -1184,6 +1385,16 @@ class CanonicalRepository:
 
     def validate_routing_context(self, routing_context_id: uuid.UUID) -> None:
         self._require_routing_context(routing_context_id)
+
+    def get_packet_processing_plan(
+        self, plan_id: uuid.UUID
+    ) -> PacketProcessingPlanRecord:
+        return self._load_packet_processing_plan(plan_id, model_error=True)
+
+    def validate_packet_processing_plan(
+        self, plan_id: uuid.UUID
+    ) -> PacketProcessingPlanRecord:
+        return self._load_packet_processing_plan(plan_id, model_error=False)
 
     def validate_routing_policy_evaluation_context(
         self,
@@ -2085,6 +2296,155 @@ class CanonicalRepository:
                 "RoutingPolicy configured completeness is invalid",
                 {"configured_completeness": completeness},
             )
+
+    @staticmethod
+    def _validate_packet_processing_plan_completeness(
+        completeness: object, *, model_error: bool
+    ) -> None:
+        if completeness not in {"COMPLETE", "PARTIAL", "UNKNOWN"}:
+            error_type = ModelError if model_error else ValidationError
+            raise error_type(
+                "PacketProcessingPlan configured completeness is invalid",
+                {"configured_completeness": completeness},
+            )
+
+    def _require_packet_processing_plan(
+        self, plan_id: uuid.UUID
+    ) -> PacketProcessingPlan:
+        plan = self.session.get(PacketProcessingPlan, plan_id)
+        if plan is None:
+            raise ValidationError(
+                "PacketProcessingPlan does not exist",
+                {"packet_processing_plan_id": str(plan_id)},
+            )
+        return plan
+
+    def _load_packet_processing_plan(
+        self, plan_id: uuid.UUID, *, model_error: bool
+    ) -> PacketProcessingPlanRecord:
+        plan = self._require_packet_processing_plan(plan_id)
+        self._validate_packet_processing_plan_completeness(
+            plan.configured_completeness, model_error=model_error
+        )
+        stages: list[ProcessingStageRecord] = []
+        for stage in self.session.scalars(
+            select(ProcessingStage)
+            .where(ProcessingStage.plan_id == plan_id)
+            .order_by(ProcessingStage.id)
+        ):
+            details = {
+                "packet_processing_plan_id": str(plan_id),
+                "processing_stage_id": str(stage.id),
+            }
+            payload = normalize_processing_stage_payload(
+                stage.kind,
+                stage.payload,
+                model_error=model_error,
+                reference_exists=self._processing_plan_reference_exists,
+                details=details,
+            )
+            stages.append(
+                ProcessingStageRecord(
+                    stage_id=stage.id,
+                    plan_id=stage.plan_id,
+                    kind=stage.kind,
+                    payload=payload,
+                    payload_reference=processing_stage_payload_reference(
+                        stage.kind, payload
+                    ),
+                )
+            )
+        transitions = tuple(
+            ProcessingTransitionRecord(
+                transition_id=transition.id,
+                plan_id=transition.plan_id,
+                from_stage_id=transition.from_stage_id,
+                outcome=transition.outcome,
+                to_stage_id=transition.to_stage_id,
+            )
+            for transition in self.session.scalars(
+                select(ProcessingTransition)
+                .where(ProcessingTransition.plan_id == plan_id)
+                .order_by(
+                    ProcessingTransition.from_stage_id,
+                    ProcessingTransition.outcome,
+                    ProcessingTransition.id,
+                )
+            )
+        )
+        entries: list[ProcessingEntryPointRecord] = []
+        for entry in self.session.scalars(
+            select(ProcessingEntryPoint)
+            .where(ProcessingEntryPoint.plan_id == plan_id)
+            .order_by(ProcessingEntryPoint.traffic_class, ProcessingEntryPoint.id)
+        ):
+            if entry.traffic_class not in {
+                "TRANSIT",
+                "LOCAL_INPUT",
+                "LOCAL_OUTPUT",
+            }:
+                error_type = ModelError if model_error else ValidationError
+                raise error_type(
+                    "ProcessingEntryPoint traffic_class is invalid",
+                    {
+                        "packet_processing_plan_id": str(plan_id),
+                        "processing_entry_point_id": str(entry.id),
+                        "traffic_class": entry.traffic_class,
+                    },
+                )
+            entries.append(
+                ProcessingEntryPointRecord(
+                    entry_point_id=entry.id,
+                    plan_id=entry.plan_id,
+                    traffic_class=entry.traffic_class,
+                    stage_id=entry.stage_id,
+                )
+            )
+        record = PacketProcessingPlanRecord(
+            plan_id=plan.id,
+            configured_completeness=plan.configured_completeness,
+            entry_points=tuple(entries),
+            stages=tuple(stages),
+            transitions=transitions,
+        )
+        validate_packet_processing_plan_graph(record, model_error=model_error)
+        return record
+
+    def _processing_plan_reference_exists(
+        self, entity_type: str, entity_id: uuid.UUID
+    ) -> bool:
+        model = {
+            "RoutingPolicy": RoutingPolicy,
+            "SecurityPolicyAttachment": SecurityPolicyAttachment,
+            "NATPolicyAttachment": NATPolicyAttachment,
+        }[entity_type]
+        return self.session.get(model, entity_id) is not None
+
+    def _processing_path_exists(
+        self,
+        plan_id: uuid.UUID,
+        start_stage_id: uuid.UUID,
+        target_stage_id: uuid.UUID,
+    ) -> bool:
+        adjacency: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for source_id, destination_id in self.session.execute(
+            select(
+                ProcessingTransition.from_stage_id,
+                ProcessingTransition.to_stage_id,
+            ).where(ProcessingTransition.plan_id == plan_id)
+        ):
+            adjacency.setdefault(source_id, []).append(destination_id)
+        pending = [start_stage_id]
+        visited: set[uuid.UUID] = set()
+        while pending:
+            current = pending.pop()
+            if current == target_stage_id:
+                return True
+            if current in visited:
+                continue
+            visited.add(current)
+            pending.extend(adjacency.get(current, ()))
+        return False
 
     def _processing_scope_entity_exists(
         self, entity_type: str, entity_id: uuid.UUID

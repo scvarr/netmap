@@ -547,3 +547,87 @@ class NATPolicyAttachment(Base):
     local_stage_order: Mapped[int] = mapped_column(Integer, nullable=False)
     scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     policy: Mapped[NATPolicy] = relationship(back_populates="attachments")
+
+
+class PacketProcessingPlan(Base):
+    __tablename__ = "packet_processing_plans"
+    __table_args__ = (
+        CheckConstraint(
+            "configured_completeness IN ('COMPLETE', 'PARTIAL', 'UNKNOWN')",
+            name="configured_completeness_valid",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    configured_completeness: Mapped[str] = mapped_column(String(8), nullable=False)
+
+
+class ProcessingStage(Base):
+    __tablename__ = "processing_stages"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(payload) = 'object'", name="payload_object"),
+        Index("ix_processing_stages_plan_id", "plan_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("packet_processing_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    payload: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class ProcessingTransition(Base):
+    __tablename__ = "processing_transitions"
+    __table_args__ = (
+        UniqueConstraint(
+            "from_stage_id",
+            "outcome",
+            name="uq_processing_transitions_stage_outcome",
+        ),
+        Index("ix_processing_transitions_plan_id", "plan_id"),
+        Index("ix_processing_transitions_from_stage_id", "from_stage_id"),
+        Index("ix_processing_transitions_to_stage_id", "to_stage_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("packet_processing_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    from_stage_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("processing_stages.id", ondelete="CASCADE"), nullable=False
+    )
+    outcome: Mapped[str] = mapped_column(String(23), nullable=False)
+    to_stage_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("processing_stages.id", ondelete="CASCADE"), nullable=False
+    )
+
+
+class ProcessingEntryPoint(Base):
+    __tablename__ = "processing_entry_points"
+    __table_args__ = (
+        UniqueConstraint(
+            "plan_id",
+            "traffic_class",
+            name="uq_processing_entry_points_plan_traffic_class",
+        ),
+        Index("ix_processing_entry_points_plan_id", "plan_id"),
+        Index("ix_processing_entry_points_stage_id", "stage_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("packet_processing_plans.id", ondelete="CASCADE"), nullable=False
+    )
+    traffic_class: Mapped[str] = mapped_column(String(12), nullable=False)
+    stage_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("processing_stages.id", ondelete="CASCADE"), nullable=False
+    )

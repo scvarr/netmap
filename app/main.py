@@ -16,6 +16,7 @@ from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.nat_resolver import ConfiguredNATPolicyResolver
 from app.nat_evaluation_resolver import ConfiguredNATEvaluationResolver
+from app.packet_processing_plan_resolver import PacketProcessingPlanValidationResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
@@ -37,6 +38,8 @@ from app.schemas import (
     NextHopResolutionQuery,
     NATPolicyEvaluationArtifact,
     NATPolicyEvaluationQuery,
+    PacketProcessingPlanValidationArtifact,
+    PacketProcessingPlanValidationQuery,
     NATEvaluationArtifact,
     NATEvaluationQuery,
     RouteDecisionArtifact,
@@ -84,6 +87,21 @@ async def request_validation_error_handler(
 def health(session: Session = Depends(get_session)) -> dict[str, str]:
     session.execute(text("SELECT 1"))
     return {"status": "ok"}
+
+
+@app.post(
+    "/v1/traces/packet-processing/plan-validation",
+    response_model=PacketProcessingPlanValidationArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def validate_packet_processing_plan(
+    query: PacketProcessingPlanValidationQuery,
+    session: Session = Depends(get_session),
+) -> PacketProcessingPlanValidationArtifact:
+    repository = CanonicalRepository(session)
+    return PacketProcessingPlanValidationResolver(repository).resolve(
+        query, EvaluationView()
+    )
 
 
 @app.post(
