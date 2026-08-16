@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import dataclass
+from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_address, ip_network
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, aliased
@@ -17,6 +18,11 @@ from app.models import (
     L2EgressRule,
     L2ForwardingContext,
     L2IngressRule,
+    L3Binding,
+    Route,
+    RouteNextHop,
+    RoutingContext,
+    RoutingTable,
 )
 
 
@@ -80,6 +86,48 @@ class L2EgressRuleRecord:
     rule_id: uuid.UUID
     binding_id: uuid.UUID
     emit_stack: EncapsulationKey
+
+
+IPAddressValue = IPv4Address | IPv6Address
+IPNetworkValue = IPv4Network | IPv6Network
+
+
+@dataclass(frozen=True)
+class RouteNextHopInput:
+    gateway_address: str | None = None
+    egress_l3_binding_id: uuid.UUID | None = None
+    next_hop_id: uuid.UUID | None = None
+
+
+@dataclass(frozen=True)
+class RoutingTableRecord:
+    table_id: uuid.UUID
+    routing_context_id: uuid.UUID
+    address_family: str
+    configured_completeness: str
+
+
+@dataclass(frozen=True)
+class RouteNextHopRecord:
+    next_hop_id: uuid.UUID
+    route_id: uuid.UUID
+    gateway_address: IPAddressValue | None
+    egress_l3_binding_id: uuid.UUID | None
+
+
+@dataclass(frozen=True)
+class RouteRecord:
+    route_id: uuid.UUID
+    routing_table_id: uuid.UUID
+    destination_prefix: IPNetworkValue
+    disposition: str
+    next_hops: tuple[RouteNextHopRecord, ...]
+
+
+@dataclass(frozen=True)
+class SelectedRoutingTable:
+    table: RoutingTableRecord
+    routes: tuple[RouteRecord, ...]
 
 
 class CanonicalRepository:
@@ -244,6 +292,142 @@ class CanonicalRepository:
         self.session.add(rule)
         self.session.flush()
         return rule
+
+    def add_routing_context(
+        self, context_id: uuid.UUID | None = None
+    ) -> RoutingContext:
+        context = RoutingContext(id=context_id or uuid.uuid4())
+        self.session.add(context)
+        self.session.flush()
+        return context
+
+    def add_l3_binding(
+        self,
+        interface_id: uuid.UUID,
+        routing_context_id: uuid.UUID,
+        binding_id: uuid.UUID | None = None,
+    ) -> L3Binding:
+        self.validate_network_interface(interface_id)
+        self._require_routing_context(routing_context_id)
+        binding = L3Binding(
+            id=binding_id or uuid.uuid4(),
+            interface_id=interface_id,
+            routing_context_id=routing_context_id,
+        )
+        self.session.add(binding)
+        self.session.flush()
+        return binding
+
+    def add_routing_table(
+        self,
+        routing_context_id: uuid.UUID,
+        address_family: str,
+        configured_completeness: str,
+        table_id: uuid.UUID | None = None,
+    ) -> RoutingTable:
+        self._require_routing_context(routing_context_id)
+        if address_family not in {"IPv4", "IPv6"}:
+            raise ValidationError(
+                "RoutingTable address_family must be IPv4 or IPv6",
+                {"address_family": address_family},
+            )
+        if configured_completeness not in {"COMPLETE", "PARTIAL", "UNKNOWN"}:
+            raise ValidationError(
+                "RoutingTable configured_completeness is invalid",
+                {"configured_completeness": configured_completeness},
+            )
+        table = RoutingTable(
+            id=table_id or uuid.uuid4(),
+            routing_context_id=routing_context_id,
+            address_family=address_family,
+            configured_completeness=configured_completeness,
+        )
+        self.session.add(table)
+        self.session.flush()
+        return table
+
+    def add_route(
+        self,
+        routing_table_id: uuid.UUID,
+        destination_prefix: str,
+        disposition: str,
+        next_hops: list[RouteNextHopInput] | None = None,
+        route_id: uuid.UUID | None = None,
+    ) -> Route:
+        table = self._require_routing_table(routing_table_id)
+        if disposition not in {"FORWARD", "LOCAL", "DISCARD"}:
+            raise ValidationError(
+                "Route disposition is invalid", {"disposition": disposition}
+            )
+        normalized_prefix = self._parse_prefix(
+            destination_prefix, model_error=False, entity_id=route_id
+        )
+        self._validate_family(
+            table.address_family,
+            normalized_prefix.version,
+            model_error=False,
+            details={"routing_table_id": str(table.id)},
+        )
+        provided_next_hops = next_hops or []
+        if disposition == "FORWARD" and not provided_next_hops:
+            raise ValidationError("FORWARD Route must have at least one RouteNextHop")
+        if disposition != "FORWARD" and provided_next_hops:
+            raise ValidationError(
+                "Only FORWARD Route may have RouteNextHop records",
+                {"disposition": disposition},
+            )
+        stored_route_id = route_id or uuid.uuid4()
+        validated_next_hops = [
+            self._validate_next_hop_input(table, item, stored_route_id)
+            for item in provided_next_hops
+        ]
+        route = Route(
+            id=stored_route_id,
+            routing_table_id=routing_table_id,
+            destination_prefix=str(normalized_prefix),
+            disposition=disposition,
+        )
+        self.session.add(route)
+        self.session.flush()
+        for next_hop_input, gateway in validated_next_hops:
+            self.session.add(
+                RouteNextHop(
+                    id=next_hop_input.next_hop_id or uuid.uuid4(),
+                    route_id=route.id,
+                    gateway_address=gateway,
+                    egress_l3_binding_id=next_hop_input.egress_l3_binding_id,
+                )
+            )
+        self.session.flush()
+        return route
+
+    def add_route_next_hop(
+        self,
+        route_id: uuid.UUID,
+        gateway_address: str | None = None,
+        egress_l3_binding_id: uuid.UUID | None = None,
+        next_hop_id: uuid.UUID | None = None,
+    ) -> RouteNextHop:
+        route = self.session.get(Route, route_id)
+        if route is None:
+            raise ValidationError("Route does not exist", {"route_id": str(route_id)})
+        if route.disposition != "FORWARD":
+            raise ValidationError(
+                "Only FORWARD Route may have RouteNextHop records",
+                {"route_id": str(route_id), "disposition": route.disposition},
+            )
+        table = self._require_routing_table(route.routing_table_id)
+        next_hop = self._add_route_next_hop(
+            route,
+            table,
+            RouteNextHopInput(
+                gateway_address=gateway_address,
+                egress_l3_binding_id=egress_l3_binding_id,
+                next_hop_id=next_hop_id,
+            ),
+        )
+        self.session.flush()
+        return next_hop
 
     def add_network_interface_realization(
         self,
@@ -447,6 +631,100 @@ class CanonicalRepository:
             )
         return result
 
+    def get_selected_routing_table(
+        self, routing_context_id: uuid.UUID, routing_table_id: uuid.UUID
+    ) -> SelectedRoutingTable:
+        self._require_routing_context(routing_context_id)
+        table = self.session.get(RoutingTable, routing_table_id)
+        if table is None:
+            raise ValidationError(
+                "RoutingTable does not exist",
+                {"routing_table_id": str(routing_table_id)},
+            )
+        if table.routing_context_id != routing_context_id:
+            raise ValidationError(
+                "RoutingTable does not belong to the requested RoutingContext",
+                {
+                    "routing_context_id": str(routing_context_id),
+                    "routing_table_id": str(routing_table_id),
+                    "table_routing_context_id": str(table.routing_context_id),
+                },
+            )
+        self._validate_stored_routing_table(table)
+        routes = list(
+            self.session.scalars(
+                select(Route).where(Route.routing_table_id == routing_table_id)
+            )
+        )
+        next_hops_by_route: dict[uuid.UUID, list[RouteNextHop]] = {
+            route.id: [] for route in routes
+        }
+        if routes:
+            for next_hop in self.session.scalars(
+                select(RouteNextHop).where(
+                    RouteNextHop.route_id.in_([route.id for route in routes])
+                )
+            ):
+                next_hops_by_route[next_hop.route_id].append(next_hop)
+
+        records: list[RouteRecord] = []
+        for route in routes:
+            prefix = self._parse_prefix(
+                route.destination_prefix,
+                model_error=True,
+                entity_id=route.id,
+            )
+            self._validate_family(
+                table.address_family,
+                prefix.version,
+                model_error=True,
+                details={
+                    "routing_table_id": str(table.id),
+                    "route_id": str(route.id),
+                },
+            )
+            if route.disposition not in {"FORWARD", "LOCAL", "DISCARD"}:
+                raise ModelError(
+                    "Route has an invalid disposition",
+                    {"route_id": str(route.id), "disposition": route.disposition},
+                )
+            stored_next_hops = next_hops_by_route[route.id]
+            if route.disposition == "FORWARD" and not stored_next_hops:
+                raise ModelError(
+                    "FORWARD Route has no RouteNextHop",
+                    {"route_id": str(route.id)},
+                )
+            if route.disposition != "FORWARD" and stored_next_hops:
+                raise ModelError(
+                    "Non-FORWARD Route has RouteNextHop records",
+                    {
+                        "route_id": str(route.id),
+                        "disposition": route.disposition,
+                    },
+                )
+            next_hop_records = tuple(
+                self._validate_stored_next_hop(next_hop, route, table)
+                for next_hop in stored_next_hops
+            )
+            records.append(
+                RouteRecord(
+                    route_id=route.id,
+                    routing_table_id=route.routing_table_id,
+                    destination_prefix=prefix,
+                    disposition=route.disposition,
+                    next_hops=next_hop_records,
+                )
+            )
+        return SelectedRoutingTable(
+            table=RoutingTableRecord(
+                table_id=table.id,
+                routing_context_id=table.routing_context_id,
+                address_family=table.address_family,
+                configured_completeness=table.configured_completeness,
+            ),
+            routes=tuple(records),
+        )
+
     def validate_point_member(self, address: PointMember) -> None:
         point = self.session.get(ConnectionPoint, address.point_id)
         if point is None:
@@ -619,6 +897,196 @@ class CanonicalRepository:
                         next_frontier.append(candidate)
             frontier = next_frontier
         return False
+
+    def _require_routing_context(self, context_id: uuid.UUID) -> RoutingContext:
+        context = self.session.get(RoutingContext, context_id)
+        if context is None:
+            raise ValidationError(
+                "RoutingContext does not exist",
+                {"routing_context_id": str(context_id)},
+            )
+        return context
+
+    def _require_routing_table(self, table_id: uuid.UUID) -> RoutingTable:
+        table = self.session.get(RoutingTable, table_id)
+        if table is None:
+            raise ValidationError(
+                "RoutingTable does not exist", {"routing_table_id": str(table_id)}
+            )
+        return table
+
+    def _add_route_next_hop(
+        self,
+        route: Route,
+        table: RoutingTable,
+        next_hop_input: RouteNextHopInput,
+    ) -> RouteNextHop:
+        next_hop_input, gateway = self._validate_next_hop_input(
+            table, next_hop_input, route.id
+        )
+        next_hop = RouteNextHop(
+            id=next_hop_input.next_hop_id or uuid.uuid4(),
+            route_id=route.id,
+            gateway_address=gateway,
+            egress_l3_binding_id=next_hop_input.egress_l3_binding_id,
+        )
+        self.session.add(next_hop)
+        return next_hop
+
+    def _validate_next_hop_input(
+        self,
+        table: RoutingTable,
+        next_hop_input: RouteNextHopInput,
+        route_id: uuid.UUID,
+    ) -> tuple[RouteNextHopInput, str | None]:
+        if next_hop_input.gateway_address is None and next_hop_input.egress_l3_binding_id is None:
+            raise ValidationError(
+                "RouteNextHop requires gateway_address and/or egress_l3_binding_id",
+                {"route_id": str(route_id)},
+            )
+        gateway: IPAddressValue | None = None
+        if next_hop_input.gateway_address is not None:
+            try:
+                gateway = ip_address(next_hop_input.gateway_address)
+            except ValueError as exc:
+                raise ValidationError(
+                    "RouteNextHop gateway_address is invalid",
+                    {"gateway_address": next_hop_input.gateway_address},
+                ) from exc
+            self._validate_family(
+                table.address_family,
+                gateway.version,
+                model_error=False,
+                details={"route_id": str(route_id)},
+            )
+        if next_hop_input.egress_l3_binding_id is not None:
+            binding = self.session.get(L3Binding, next_hop_input.egress_l3_binding_id)
+            if binding is None:
+                raise ValidationError(
+                    "L3Binding does not exist",
+                    {
+                        "egress_l3_binding_id": str(
+                            next_hop_input.egress_l3_binding_id
+                        )
+                    },
+                )
+            if binding.routing_context_id != table.routing_context_id:
+                raise ValidationError(
+                    "RouteNextHop egress L3Binding belongs to another RoutingContext",
+                    {
+                        "route_id": str(route_id),
+                        "egress_l3_binding_id": str(binding.id),
+                        "table_routing_context_id": str(table.routing_context_id),
+                        "binding_routing_context_id": str(binding.routing_context_id),
+                    },
+                )
+        return next_hop_input, str(gateway) if gateway is not None else None
+
+    def _validate_stored_next_hop(
+        self, next_hop: RouteNextHop, route: Route, table: RoutingTable
+    ) -> RouteNextHopRecord:
+        if next_hop.gateway_address is None and next_hop.egress_l3_binding_id is None:
+            raise ModelError(
+                "RouteNextHop has neither gateway nor egress L3Binding",
+                {"route_next_hop_id": str(next_hop.id)},
+            )
+        gateway: IPAddressValue | None = None
+        if next_hop.gateway_address is not None:
+            try:
+                gateway = ip_address(str(next_hop.gateway_address))
+            except ValueError as exc:
+                raise ModelError(
+                    "RouteNextHop has an invalid gateway address",
+                    {"route_next_hop_id": str(next_hop.id)},
+                ) from exc
+            self._validate_family(
+                table.address_family,
+                gateway.version,
+                model_error=True,
+                details={
+                    "route_id": str(route.id),
+                    "route_next_hop_id": str(next_hop.id),
+                },
+            )
+        if next_hop.egress_l3_binding_id is not None:
+            binding = self.session.get(L3Binding, next_hop.egress_l3_binding_id)
+            if binding is None:
+                raise ModelError(
+                    "RouteNextHop refers to a missing L3Binding",
+                    {"route_next_hop_id": str(next_hop.id)},
+                )
+            if binding.routing_context_id != table.routing_context_id:
+                raise ModelError(
+                    "RouteNextHop egress L3Binding belongs to another RoutingContext",
+                    {
+                        "route_id": str(route.id),
+                        "route_next_hop_id": str(next_hop.id),
+                        "egress_l3_binding_id": str(binding.id),
+                        "table_routing_context_id": str(table.routing_context_id),
+                        "binding_routing_context_id": str(binding.routing_context_id),
+                    },
+                )
+        return RouteNextHopRecord(
+            next_hop_id=next_hop.id,
+            route_id=next_hop.route_id,
+            gateway_address=gateway,
+            egress_l3_binding_id=next_hop.egress_l3_binding_id,
+        )
+
+    @staticmethod
+    def _validate_stored_routing_table(table: RoutingTable) -> None:
+        if table.address_family not in {"IPv4", "IPv6"}:
+            raise ModelError(
+                "RoutingTable has an invalid address family",
+                {"routing_table_id": str(table.id), "address_family": table.address_family},
+            )
+        if table.configured_completeness not in {"COMPLETE", "PARTIAL", "UNKNOWN"}:
+            raise ModelError(
+                "RoutingTable has invalid configured completeness",
+                {
+                    "routing_table_id": str(table.id),
+                    "configured_completeness": table.configured_completeness,
+                },
+            )
+
+    @staticmethod
+    def _parse_prefix(
+        prefix: object, *, model_error: bool, entity_id: uuid.UUID | None
+    ) -> IPNetworkValue:
+        error_type = ModelError if model_error else ValidationError
+        try:
+            normalized = ip_network(str(prefix), strict=False)
+        except ValueError as exc:
+            raise error_type(
+                "Route destination_prefix is invalid",
+                {"route_id": str(entity_id)} if entity_id else {},
+            ) from exc
+        if model_error and str(prefix) != str(normalized):
+            raise ModelError(
+                "Route destination_prefix is not canonical",
+                {
+                    "route_id": str(entity_id),
+                    "destination_prefix": str(prefix),
+                    "canonical_prefix": str(normalized),
+                },
+            )
+        return normalized
+
+    @staticmethod
+    def _validate_family(
+        table_family: str,
+        value_version: int,
+        *,
+        model_error: bool,
+        details: dict[str, str],
+    ) -> None:
+        expected = "IPv4" if value_version == 4 else "IPv6"
+        if table_family != expected:
+            error_type = ModelError if model_error else ValidationError
+            raise error_type(
+                "Address family does not match RoutingTable",
+                {**details, "table_address_family": table_family, "value_family": expected},
+            )
 
     @staticmethod
     def _validate_stored_binding(

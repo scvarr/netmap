@@ -1,7 +1,7 @@
 import uuid
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy.dialects.postgresql import CIDR, INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -91,6 +91,7 @@ class NetworkInterface(Base):
         back_populates="lower_interface",
     )
     l2_bindings: Mapped[list["L2Binding"]] = relationship(back_populates="interface")
+    l3_bindings: Mapped[list["L3Binding"]] = relationship(back_populates="interface")
 
 
 class InterfacePhysicalBinding(Base):
@@ -203,3 +204,110 @@ class L2EgressRule(Base):
     )
     emit_stack: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False)
     binding: Mapped[L2Binding] = relationship(back_populates="egress_rule")
+
+
+class RoutingContext(Base):
+    __tablename__ = "routing_contexts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    l3_bindings: Mapped[list["L3Binding"]] = relationship(back_populates="routing_context")
+    routing_tables: Mapped[list["RoutingTable"]] = relationship(
+        back_populates="routing_context"
+    )
+
+
+class L3Binding(Base):
+    __tablename__ = "l3_bindings"
+    __table_args__ = (
+        UniqueConstraint(
+            "interface_id", "routing_context_id", name="uq_l3_bindings_interface_context"
+        ),
+        Index("ix_l3_bindings_interface_id", "interface_id"),
+        Index("ix_l3_bindings_context_id", "routing_context_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interface_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("network_interfaces.id", ondelete="RESTRICT"), nullable=False
+    )
+    routing_context_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("routing_contexts.id", ondelete="RESTRICT"), nullable=False
+    )
+    interface: Mapped[NetworkInterface] = relationship(back_populates="l3_bindings")
+    routing_context: Mapped[RoutingContext] = relationship(back_populates="l3_bindings")
+    route_next_hops: Mapped[list["RouteNextHop"]] = relationship(
+        back_populates="egress_l3_binding"
+    )
+
+
+class RoutingTable(Base):
+    __tablename__ = "routing_tables"
+    __table_args__ = (
+        CheckConstraint(
+            "address_family IN ('IPv4', 'IPv6')", name="address_family_valid"
+        ),
+        CheckConstraint(
+            "configured_completeness IN ('COMPLETE', 'PARTIAL', 'UNKNOWN')",
+            name="configured_completeness_valid",
+        ),
+        Index("ix_routing_tables_context_id", "routing_context_id"),
+        Index("ix_routing_tables_context_family", "routing_context_id", "address_family"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    routing_context_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("routing_contexts.id", ondelete="RESTRICT"), nullable=False
+    )
+    address_family: Mapped[str] = mapped_column(String(4), nullable=False)
+    configured_completeness: Mapped[str] = mapped_column(String(8), nullable=False)
+    routing_context: Mapped[RoutingContext] = relationship(back_populates="routing_tables")
+    routes: Mapped[list["Route"]] = relationship(
+        back_populates="routing_table", cascade="all, delete-orphan"
+    )
+
+
+class Route(Base):
+    __tablename__ = "routes"
+    __table_args__ = (
+        CheckConstraint(
+            "disposition IN ('FORWARD', 'LOCAL', 'DISCARD')", name="disposition_valid"
+        ),
+        Index("ix_routes_table_id", "routing_table_id"),
+        Index("ix_routes_destination_prefix", "destination_prefix"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    routing_table_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("routing_tables.id", ondelete="CASCADE"), nullable=False
+    )
+    destination_prefix: Mapped[str] = mapped_column(CIDR, nullable=False)
+    disposition: Mapped[str] = mapped_column(String(7), nullable=False)
+    routing_table: Mapped[RoutingTable] = relationship(back_populates="routes")
+    next_hops: Mapped[list["RouteNextHop"]] = relationship(
+        back_populates="route", cascade="all, delete-orphan"
+    )
+
+
+class RouteNextHop(Base):
+    __tablename__ = "route_next_hops"
+    __table_args__ = (
+        CheckConstraint(
+            "gateway_address IS NOT NULL OR egress_l3_binding_id IS NOT NULL",
+            name="gateway_or_egress_required",
+        ),
+        Index("ix_route_next_hops_route_id", "route_id"),
+        Index("ix_route_next_hops_egress_binding_id", "egress_l3_binding_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    route_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("routes.id", ondelete="CASCADE"), nullable=False
+    )
+    gateway_address: Mapped[str | None] = mapped_column(INET, nullable=True)
+    egress_l3_binding_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("l3_bindings.id", ondelete="RESTRICT"), nullable=True
+    )
+    route: Mapped[Route] = relationship(back_populates="next_hops")
+    egress_l3_binding: Mapped[L3Binding | None] = relationship(
+        back_populates="route_next_hops"
+    )

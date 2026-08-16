@@ -14,12 +14,22 @@ from app.models import (
     L2EgressRule,
     L2ForwardingContext,
     L2IngressRule,
+    L3Binding,
+    Route,
+    RouteNextHop,
+    RoutingContext,
+    RoutingTable,
 )
 
 
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(RouteNextHop))
+        session.execute(delete(Route))
+        session.execute(delete(RoutingTable))
+        session.execute(delete(L3Binding))
+        session.execute(delete(RoutingContext))
         session.execute(delete(L2EgressRule))
         session.execute(delete(L2IngressRule))
         session.execute(delete(L2Binding))

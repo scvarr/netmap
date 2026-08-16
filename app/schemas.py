@@ -1,7 +1,7 @@
 import uuid
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress
 
 
 class PointMemberAddress(BaseModel):
@@ -33,6 +33,11 @@ class EvidenceRef(BaseModel):
         "L2Binding",
         "L2IngressRule",
         "L2EgressRule",
+        "RoutingContext",
+        "L3Binding",
+        "RoutingTable",
+        "Route",
+        "RouteNextHop",
     ]
     entity_id: uuid.UUID
 
@@ -244,6 +249,49 @@ class L2ReachabilityTraceArtifact(BaseModel):
     edges: list[L2TraceEdge]
     evidence_refs: list[EvidenceRef]
     gaps: list[L2TraceGap]
+    warnings: list[dict[str, Any]]
+
+
+class RouteDecisionQuery(BaseModel):
+    routing_context_id: uuid.UUID
+    routing_table_id: uuid.UUID
+    destination_ip: IPvAnyAddress
+
+
+class RouteDecisionBasis(BaseModel):
+    routing_context_id: uuid.UUID
+    routing_table_id: uuid.UUID
+    destination_ip: IPvAnyAddress
+    address_family: Literal["IPv4", "IPv6"]
+    configured_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"]
+
+
+class RouteNextHopCandidate(BaseModel):
+    route_next_hop_id: uuid.UUID
+    gateway_address: IPvAnyAddress | None = None
+    egress_l3_binding_id: uuid.UUID | None = None
+
+
+class RouteDecisionGap(BaseModel):
+    code: Literal["ROUTING_TABLE_INCOMPLETE", "ROUTE_CONFLICTING"]
+    evidence_refs: list[EvidenceRef]
+
+
+class RouteDecisionArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: RouteDecisionQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["l3-selected-table-route-decision/1.0"] = (
+        "l3-selected-table-route-decision/1.0"
+    )
+    result: Literal[
+        "FORWARD", "LOCAL", "DISCARD", "NO_ROUTE", "UNKNOWN", "CONFLICTING"
+    ]
+    decision_basis: RouteDecisionBasis
+    selected_route_id: uuid.UUID | None = None
+    next_hop_candidates: list[RouteNextHopCandidate]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[RouteDecisionGap]
     warnings: list[dict[str, Any]]
 
 
