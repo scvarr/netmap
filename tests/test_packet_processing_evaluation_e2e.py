@@ -202,27 +202,21 @@ def test_incomplete_plan_returns_unknown_without_execution(completeness):
     }
 
 
-@pytest.mark.parametrize("kind", ["SECURITY", "NAT"])
-def test_complete_security_or_nat_plan_is_rejected_by_executor(kind):
+@pytest.mark.parametrize("kind", ["NAT"])
+def test_complete_unsupported_plan_is_rejected_by_executor(kind):
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
         context = repository.add_routing_context()
         plan = repository.add_packet_processing_plan("COMPLETE")
-        if kind == "SECURITY":
-            policy = repository.add_security_policy("PERMIT", "COMPLETE")
-            attachment = repository.add_security_policy_attachment(policy.id, 10, {})
-            payload = {"attachment_id": str(attachment.id)}
-            outcomes = ("PASS", "BLOCKED", "UNKNOWN")
-        else:
-            policy = repository.add_nat_policy({"op": "IDENTITY"}, "COMPLETE")
-            attachment = repository.add_nat_policy_attachment(policy.id, 10, {})
-            payload = {"attachment_id": str(attachment.id)}
-            outcomes = (
-                "IDENTITY",
-                "TRANSFORMED_EXACT",
-                "TRANSFORMED_CONSTRAINED",
-                "UNKNOWN",
-            )
+        policy = repository.add_nat_policy({"op": "IDENTITY"}, "COMPLETE")
+        attachment = repository.add_nat_policy_attachment(policy.id, 10, {})
+        payload = {"attachment_id": str(attachment.id)}
+        outcomes = (
+            "IDENTITY",
+            "TRANSFORMED_EXACT",
+            "TRANSFORMED_CONSTRAINED",
+            "UNKNOWN",
+        )
         stage = repository.add_processing_stage(plan.id, kind, payload)
         terminal = add_terminal(repository, plan.id, "UNKNOWN")
         repository.add_processing_entry_point(plan.id, "TRANSIT", stage.id)

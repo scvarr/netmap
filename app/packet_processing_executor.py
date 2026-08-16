@@ -10,7 +10,9 @@ from app.packet_processing_plan import (
 )
 from app.repository import CanonicalRepository
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
+from app.security_attachment_resolver import ConfiguredSecurityAttachmentResolver
 from app.schemas import (
+    ConnectionState,
     DirectEgressState,
     EvaluationView,
     EvidenceRef,
@@ -25,6 +27,8 @@ from app.schemas import (
     PacketProcessingStageExecution,
     PacketState,
     RoutingPolicyEvaluationQuery,
+    SecurityAttachmentStageArtifact,
+    SecurityEvaluationContext,
 )
 
 
@@ -37,7 +41,12 @@ _NEXT_HOP_OUTCOMES = {
     "CONFLICTING": "CONFLICTING",
     "LOOP_DETECTED": "UNKNOWN",
 }
-_EXECUTABLE_STAGE_KINDS = {"ROUTING_POLICY", "ROUTE_DECISION", "TERMINATE"}
+_EXECUTABLE_STAGE_KINDS = {
+    "ROUTING_POLICY",
+    "ROUTE_DECISION",
+    "SECURITY",
+    "TERMINATE",
+}
 
 
 @dataclass(frozen=True)
@@ -52,6 +61,7 @@ class FlowExecutionState:
     current_route_resolution_branch: NextHopResolutionBranch | None
     direct_egress: DirectEgressState | None
     current_stage_id: uuid.UUID
+    connection_state: ConnectionState | None = None
 
 
 @dataclass(frozen=True)
@@ -64,12 +74,13 @@ class _ExecutionBranch:
 
 
 class PacketProcessingPlanExecutor:
-    VERSION = "packet-processing-routing-only/1.0"
+    VERSION = "packet-processing-routing-security/1.1"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
         self.routing_policy = ConfiguredRoutingPolicyResolver(repository)
         self.next_hop = SelectedTableNextHopResolver(repository)
+        self.security_attachment = ConfiguredSecurityAttachmentResolver(repository)
 
     def resolve(
         self,
@@ -156,6 +167,7 @@ class PacketProcessingPlanExecutor:
             current_route_resolution_branch=None,
             direct_egress=None,
             current_stage_id=entry.stage_id,
+            connection_state=query.connection_state,
         )
         completed = self._execute(
             plan,
@@ -279,6 +291,77 @@ class PacketProcessingPlanExecutor:
                 transition,
                 refs,
                 routing_policy_evaluation=policy_artifact,
+            )
+            return self._execute(
+                plan,
+                stages,
+                transitions,
+                initial,
+                next_state,
+                executions + (execution,),
+                tuple(self._dedupe([*evidence, *refs])),
+                view,
+            )
+
+        if stage.kind == "SECURITY":
+            egress_l3_binding_id = (
+                state.direct_egress.egress_l3_binding_id
+                if state.direct_egress is not None
+                else None
+            )
+            egress_network_interface_id = None
+            if egress_l3_binding_id is not None:
+                egress_attachment = self.repository.get_l3_binding_attachment(
+                    egress_l3_binding_id
+                )
+                egress_network_interface_id = (
+                    egress_attachment.network_interface_id
+                )
+            security_artifact = self.security_attachment.resolve(
+                uuid.UUID(stage.payload["attachment_id"]),
+                SecurityEvaluationContext(
+                    packet_state=state.current_packet_state,
+                    traffic_class=state.traffic_class,  # type: ignore[arg-type]
+                    routing_context_id=state.routing_context_id,
+                    ingress_network_interface_id=(
+                        state.ingress_network_interface_id
+                    ),
+                    egress_network_interface_id=egress_network_interface_id,
+                    ingress_l3_binding_id=state.ingress_l3_binding_id,
+                    egress_l3_binding_id=egress_l3_binding_id,
+                    connection_state=state.connection_state,  # type: ignore[arg-type]
+                ),
+                view,
+            )
+            outcome = security_artifact.result
+            transition = self._transition(stage, outcome, transitions)
+            next_state = replace(state, current_stage_id=transition.to_stage_id)
+            refs = self._dedupe(
+                [
+                    stage_ref,
+                    *security_artifact.evidence_refs,
+                    self._ref("ProcessingTransition", transition.transition_id),
+                ]
+            )
+            gaps = []
+            if outcome == "UNKNOWN":
+                gaps.append(
+                    PacketProcessingExecutionGap(
+                        code="SECURITY_STAGE_UNKNOWN",
+                        stage_id=stage.stage_id,
+                        evidence_refs=security_artifact.evidence_refs,
+                    )
+                )
+            execution = self._stage_execution(
+                stage,
+                state,
+                state,
+                outcome,
+                transition,
+                refs,
+                direct_egress=state.direct_egress,
+                security_attachment_evaluation=security_artifact,
+                gaps=gaps,
             )
             return self._execute(
                 plan,
@@ -426,6 +509,7 @@ class PacketProcessingPlanExecutor:
         next_hop_resolution: NextHopResolutionArtifact | None = None,
         selected_next_hop_branch_index: int | None = None,
         direct_egress: DirectEgressState | None = None,
+        security_attachment_evaluation: SecurityAttachmentStageArtifact | None = None,
         gaps: list[PacketProcessingExecutionGap] | None = None,
     ) -> PacketProcessingStageExecution:
         return PacketProcessingStageExecution(
@@ -444,6 +528,7 @@ class PacketProcessingPlanExecutor:
             next_hop_resolution=next_hop_resolution,
             selected_next_hop_branch_index=selected_next_hop_branch_index,
             direct_egress=direct_egress,
+            security_attachment_evaluation=security_attachment_evaluation,
             evidence_refs=evidence_refs,
             gaps=gaps or [],
         )
@@ -457,6 +542,7 @@ class PacketProcessingPlanExecutor:
             traffic_class=state.traffic_class,  # type: ignore[arg-type]
             ingress_network_interface_id=state.ingress_network_interface_id,
             ingress_l3_binding_id=state.ingress_l3_binding_id,
+            connection_state=state.connection_state,  # type: ignore[arg-type]
             selected_routing_table_id=state.selected_routing_table_id,
             current_route_resolution_branch=state.current_route_resolution_branch,
             direct_egress=state.direct_egress,

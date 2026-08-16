@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import uuid
 from enum import StrEnum
 from typing import Any, Literal
@@ -658,6 +660,7 @@ class PacketProcessingEvaluationQuery(BaseModel):
     packet_state: PacketState
     ingress_network_interface_id: uuid.UUID | None = None
     ingress_l3_binding_id: uuid.UUID | None = None
+    connection_state: ConnectionState | None = None
 
 
 class PacketProcessingFlowState(BaseModel):
@@ -669,6 +672,7 @@ class PacketProcessingFlowState(BaseModel):
     traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
     ingress_network_interface_id: uuid.UUID | None = None
     ingress_l3_binding_id: uuid.UUID | None = None
+    connection_state: ConnectionState | None = None
     selected_routing_table_id: uuid.UUID | None = None
     current_route_resolution_branch: NextHopResolutionBranch | None = None
     direct_egress: DirectEgressState | None = None
@@ -680,6 +684,7 @@ class PacketProcessingExecutionGap(BaseModel):
         "PROCESSING_PLAN_INCOMPLETE",
         "STAGE_PRECONDITION_UNKNOWN",
         "NEXT_HOP_RESOLUTION_LOOP",
+        "SECURITY_STAGE_UNKNOWN",
     ]
     stage_id: uuid.UUID | None = None
     evidence_refs: list[EvidenceRef]
@@ -687,7 +692,9 @@ class PacketProcessingExecutionGap(BaseModel):
 
 class PacketProcessingStageExecution(BaseModel):
     stage_id: uuid.UUID
-    stage_kind: Literal["ROUTING_POLICY", "ROUTE_DECISION", "TERMINATE"]
+    stage_kind: Literal[
+        "ROUTING_POLICY", "ROUTE_DECISION", "SECURITY", "TERMINATE"
+    ]
     packet_before: PacketState
     packet_after: PacketState
     traffic_class_before: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
@@ -701,6 +708,7 @@ class PacketProcessingStageExecution(BaseModel):
     next_hop_resolution: NextHopResolutionArtifact | None = None
     selected_next_hop_branch_index: int | None = None
     direct_egress: DirectEgressState | None = None
+    security_attachment_evaluation: SecurityAttachmentStageArtifact | None = None
     evidence_refs: list[EvidenceRef]
     gaps: list[PacketProcessingExecutionGap]
 
@@ -723,8 +731,8 @@ class PacketProcessingEvaluationArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: PacketProcessingEvaluationQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["packet-processing-routing-only/1.0"] = (
-        "packet-processing-routing-only/1.0"
+    resolver_version: Literal["packet-processing-routing-security/1.1"] = (
+        "packet-processing-routing-security/1.1"
     )
     result: Literal[
         "CONTINUE_TO_NEXT_HOP",
@@ -790,6 +798,41 @@ class SecurityPolicyEvaluationArtifact(BaseModel):
     branches: list[SecurityEvaluationBranch]
     evidence_refs: list[EvidenceRef]
     gaps: list[SecurityEvaluationGap]
+    warnings: list[dict[str, Any]]
+
+
+class SecurityAttachmentStageGap(BaseModel):
+    code: Literal[
+        "SECURITY_ATTACHMENT_APPLICABILITY_UNKNOWN",
+        "SECURITY_POLICY_EVALUATION_UNKNOWN",
+    ]
+    evidence_refs: list[EvidenceRef]
+
+
+class SecurityAttachmentStageArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    evaluation_view: EvaluationView
+    resolver_version: Literal["security-configured-attachment/1.0"] = (
+        "security-configured-attachment/1.0"
+    )
+    context: SecurityEvaluationContext
+    attachment_id: uuid.UUID
+    policy_id: uuid.UUID
+    stage_order: int
+    scope: dict[str, list[str]]
+    applicability: Literal["TRUE", "FALSE", "UNKNOWN"]
+    result: Literal["PASS", "BLOCKED", "UNKNOWN"]
+    reason: Literal[
+        "ATTACHMENT_NOT_APPLICABLE",
+        "POLICY_PERMIT",
+        "POLICY_DROP",
+        "POLICY_REJECT",
+        "ATTACHMENT_APPLICABILITY_COLLAPSED_PERMIT",
+        "SECURITY_UNCERTAINTY",
+    ]
+    policy_evaluation: SecurityPolicyEvaluationArtifact | None = None
+    evidence_refs: list[EvidenceRef]
+    gaps: list[SecurityAttachmentStageGap]
     warnings: list[dict[str, Any]]
 
 

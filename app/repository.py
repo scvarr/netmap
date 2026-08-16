@@ -1671,35 +1671,51 @@ class CanonicalRepository:
                 )
             )
         )
-        records: list[SecurityPolicyAttachmentRecord] = []
-        for attachment in attachments:
-            details = {"security_policy_attachment_id": str(attachment.id)}
-            if self.session.get(SecurityPolicy, attachment.policy_id) is None:
-                raise ModelError(
-                    "SecurityPolicyAttachment refers to a missing SecurityPolicy",
-                    details,
-                )
-            if not isinstance(attachment.stage_order, int) or isinstance(
-                attachment.stage_order, bool
-            ):
-                raise ModelError(
-                    "SecurityPolicyAttachment stage_order is invalid", details
-                )
-            scope = normalize_security_scope(
-                attachment.scope,
-                model_error=True,
-                entity_exists=self._processing_scope_entity_exists,
-                details=details,
+        return tuple(
+            self._security_policy_attachment_record(attachment)
+            for attachment in attachments
+        )
+
+    def get_security_policy_attachment(
+        self, attachment_id: uuid.UUID
+    ) -> SecurityPolicyAttachmentRecord:
+        attachment = self.session.get(
+            SecurityPolicyAttachment, attachment_id, populate_existing=True
+        )
+        if attachment is None:
+            raise ValidationError(
+                "SecurityPolicyAttachment does not exist",
+                {"security_policy_attachment_id": str(attachment_id)},
             )
-            records.append(
-                SecurityPolicyAttachmentRecord(
-                    attachment_id=attachment.id,
-                    policy_id=attachment.policy_id,
-                    stage_order=attachment.stage_order,
-                    scope=scope,
-                )
+        return self._security_policy_attachment_record(attachment)
+
+    def _security_policy_attachment_record(
+        self, attachment: SecurityPolicyAttachment
+    ) -> SecurityPolicyAttachmentRecord:
+        details = {"security_policy_attachment_id": str(attachment.id)}
+        if self.session.get(SecurityPolicy, attachment.policy_id) is None:
+            raise ModelError(
+                "SecurityPolicyAttachment refers to a missing SecurityPolicy",
+                details,
             )
-        return tuple(records)
+        if not isinstance(attachment.stage_order, int) or isinstance(
+            attachment.stage_order, bool
+        ):
+            raise ModelError(
+                "SecurityPolicyAttachment stage_order is invalid", details
+            )
+        scope = normalize_security_scope(
+            attachment.scope,
+            model_error=True,
+            entity_exists=self._processing_scope_entity_exists,
+            details=details,
+        )
+        return SecurityPolicyAttachmentRecord(
+            attachment_id=attachment.id,
+            policy_id=attachment.policy_id,
+            stage_order=attachment.stage_order,
+            scope=scope,
+        )
 
     def get_nat_policy(self, policy_id: uuid.UUID) -> NATPolicyRecord:
         policy = self.session.get(NATPolicy, policy_id)
