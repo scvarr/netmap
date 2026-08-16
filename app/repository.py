@@ -24,7 +24,10 @@ from app.models import (
     RouteNextHop,
     RoutingContext,
     RoutingTable,
+    SecurityPolicy,
+    SecurityRule,
 )
+from app.security_predicates import Predicate, normalize_predicate
 
 
 @dataclass(frozen=True)
@@ -154,6 +157,23 @@ class L3BindingAttachmentRecord:
     l3_binding_id: uuid.UUID
     network_interface_id: uuid.UUID
     routing_context_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class SecurityRuleRecord:
+    security_rule_id: uuid.UUID
+    policy_id: uuid.UUID
+    order_key: int
+    predicate: Predicate
+    action: str
+
+
+@dataclass(frozen=True)
+class SecurityPolicyRecord:
+    security_policy_id: uuid.UUID
+    default_action: str
+    configured_completeness: str
+    rules: tuple[SecurityRuleRecord, ...]
 
 
 class CanonicalRepository:
@@ -481,6 +501,66 @@ class CanonicalRepository:
         )
         self.session.flush()
         return next_hop
+
+    def add_security_policy(
+        self,
+        default_action: str,
+        configured_completeness: str,
+        policy_id: uuid.UUID | None = None,
+    ) -> SecurityPolicy:
+        self._validate_security_action(default_action, model_error=False)
+        self._validate_security_completeness(
+            configured_completeness, model_error=False
+        )
+        policy = SecurityPolicy(
+            id=policy_id or uuid.uuid4(),
+            default_action=default_action,
+            configured_completeness=configured_completeness,
+        )
+        self.session.add(policy)
+        self.session.flush()
+        return policy
+
+    def add_security_rule(
+        self,
+        policy_id: uuid.UUID,
+        order_key: int,
+        predicate: object,
+        action: str,
+        rule_id: uuid.UUID | None = None,
+    ) -> SecurityRule:
+        if self.session.get(SecurityPolicy, policy_id) is None:
+            raise ValidationError(
+                "SecurityPolicy does not exist",
+                {"security_policy_id": str(policy_id)},
+            )
+        if not isinstance(order_key, int) or isinstance(order_key, bool):
+            raise ValidationError("SecurityRule order_key must be an integer")
+        if self.session.scalar(
+            select(SecurityRule.id).where(
+                SecurityRule.policy_id == policy_id,
+                SecurityRule.order_key == order_key,
+            )
+        ) is not None:
+            raise ValidationError(
+                "SecurityRule order_key must be unique within SecurityPolicy",
+                {
+                    "security_policy_id": str(policy_id),
+                    "order_key": order_key,
+                },
+            )
+        self._validate_security_action(action, model_error=False)
+        normalized = normalize_predicate(predicate, model_error=False)
+        rule = SecurityRule(
+            id=rule_id or uuid.uuid4(),
+            policy_id=policy_id,
+            order_key=order_key,
+            predicate=normalized,
+            action=action,
+        )
+        self.session.add(rule)
+        self.session.flush()
+        return rule
 
     def add_network_interface_realization(
         self,
@@ -899,6 +979,65 @@ class CanonicalRepository:
             routes=tuple(records),
         )
 
+    def get_security_policy(
+        self, policy_id: uuid.UUID
+    ) -> SecurityPolicyRecord:
+        policy = self.session.get(SecurityPolicy, policy_id)
+        if policy is None:
+            raise ValidationError(
+                "SecurityPolicy does not exist",
+                {"security_policy_id": str(policy_id)},
+            )
+        self._validate_security_action(policy.default_action, model_error=True)
+        self._validate_security_completeness(
+            policy.configured_completeness, model_error=True
+        )
+        rules = list(
+            self.session.scalars(
+                select(SecurityRule)
+                .where(SecurityRule.policy_id == policy_id)
+                .order_by(SecurityRule.order_key)
+            )
+        )
+        order_keys: set[int] = set()
+        records: list[SecurityRuleRecord] = []
+        for rule in rules:
+            if not isinstance(rule.order_key, int) or isinstance(rule.order_key, bool):
+                raise ModelError(
+                    "SecurityRule order_key is invalid",
+                    {"security_rule_id": str(rule.id)},
+                )
+            if rule.order_key in order_keys:
+                raise ModelError(
+                    "SecurityRule order_key is duplicated within SecurityPolicy",
+                    {
+                        "security_policy_id": str(policy.id),
+                        "order_key": rule.order_key,
+                    },
+                )
+            order_keys.add(rule.order_key)
+            self._validate_security_action(rule.action, model_error=True)
+            predicate = normalize_predicate(
+                rule.predicate,
+                model_error=True,
+                details={"security_rule_id": str(rule.id)},
+            )
+            records.append(
+                SecurityRuleRecord(
+                    security_rule_id=rule.id,
+                    policy_id=rule.policy_id,
+                    order_key=rule.order_key,
+                    predicate=predicate,
+                    action=rule.action,
+                )
+            )
+        return SecurityPolicyRecord(
+            security_policy_id=policy.id,
+            default_action=policy.default_action,
+            configured_completeness=policy.configured_completeness,
+            rules=tuple(records),
+        )
+
     def validate_point_member(self, address: PointMember) -> None:
         point = self.session.get(ConnectionPoint, address.point_id)
         if point is None:
@@ -1223,6 +1362,24 @@ class CanonicalRepository:
                 },
             )
 
+    @staticmethod
+    def _validate_security_action(action: object, *, model_error: bool) -> None:
+        if action not in {"PERMIT", "DROP", "REJECT"}:
+            error_type = ModelError if model_error else ValidationError
+            raise error_type(
+                "Security action is invalid", {"action": action}
+            )
+
+    @staticmethod
+    def _validate_security_completeness(
+        completeness: object, *, model_error: bool
+    ) -> None:
+        if completeness not in {"COMPLETE", "PARTIAL", "UNKNOWN"}:
+            error_type = ModelError if model_error else ValidationError
+            raise error_type(
+                "SecurityPolicy configured completeness is invalid",
+                {"configured_completeness": completeness},
+            )
     @staticmethod
     def _parse_interface_address(
         address: object,

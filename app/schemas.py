@@ -39,6 +39,8 @@ class EvidenceRef(BaseModel):
         "RoutingTable",
         "Route",
         "RouteNextHop",
+        "SecurityPolicy",
+        "SecurityRule",
     ]
     entity_id: uuid.UUID
 
@@ -511,6 +513,62 @@ class L3ReachabilityArtifact(BaseModel):
     verdict: Literal["REACHABLE", "UNREACHABLE", "UNKNOWN"]
     branches: list[L3ReachabilityBranch]
     evidence_refs: list[EvidenceRef]
+    warnings: list[dict[str, Any]]
+
+
+class PacketState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_ip: IPvAnyAddress | None = None
+    destination_ip: IPvAnyAddress | None = None
+    ip_protocol: int | None = Field(default=None, ge=0, le=255)
+    source_port: int | None = Field(default=None, ge=0, le=65535)
+    destination_port: int | None = Field(default=None, ge=0, le=65535)
+    icmp_type: int | None = Field(default=None, ge=0, le=255)
+    icmp_code: int | None = Field(default=None, ge=0, le=255)
+
+
+class SecurityPolicyEvaluationQuery(BaseModel):
+    policy_id: uuid.UUID
+    packet_state: PacketState
+
+
+class SecurityRuleEvaluationStep(BaseModel):
+    rule_id: uuid.UUID
+    order_key: int
+    predicate_result: Literal["TRUE", "FALSE", "UNKNOWN"]
+    branch_assumption: Literal["MATCH", "NO_MATCH"]
+    evidence_refs: list[EvidenceRef]
+
+
+class SecurityEvaluationBranch(BaseModel):
+    branch_id: str
+    steps: list[SecurityRuleEvaluationStep]
+    terminal_action: Literal["PERMIT", "DROP", "REJECT"]
+    terminal_source: Literal["RULE", "DEFAULT"]
+    terminal_rule_id: uuid.UUID | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class SecurityEvaluationGap(BaseModel):
+    code: Literal["SECURITY_POLICY_INCOMPLETE"]
+    evidence_refs: list[EvidenceRef]
+
+
+class SecurityPolicyEvaluationArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: SecurityPolicyEvaluationQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["security-configured-policy/1.0"] = (
+        "security-configured-policy/1.0"
+    )
+    result: Literal["PERMIT", "DROP", "REJECT", "UNKNOWN"]
+    policy_id: uuid.UUID
+    default_action: Literal["PERMIT", "DROP", "REJECT"]
+    configured_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"]
+    branches: list[SecurityEvaluationBranch]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[SecurityEvaluationGap]
     warnings: list[dict[str, Any]]
 
 

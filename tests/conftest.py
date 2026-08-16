@@ -20,12 +20,16 @@ from app.models import (
     RouteNextHop,
     RoutingContext,
     RoutingTable,
+    SecurityPolicy,
+    SecurityRule,
 )
 
 
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(SecurityRule))
+        session.execute(delete(SecurityPolicy))
         session.execute(delete(InterfaceAddress))
         session.execute(delete(RouteNextHop))
         session.execute(delete(Route))

@@ -5,6 +5,7 @@ from app import models
 from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.repository import CanonicalRepository
+from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.structural_adjacency_resolver import StructuralAdjacencyProofResolver
 
 
@@ -24,10 +25,13 @@ def test_adjacency_lookup_uses_only_injected_repository_session():
         StructuralAdjacencyResolver,
         StructuralAdjacencyProofResolver,
         ConfiguredL3ReachabilityResolver,
+        ConfiguredSecurityPolicyResolver,
     ):
         source = inspect.getsource(resolver)
         assert "SessionLocal" not in source
         assert "create_engine" not in source
+        assert "workspace" not in source.lower()
+        assert "cache" not in source.lower()
 
 
 def test_canonical_code_and_migrations_do_not_qualify_public_schema():

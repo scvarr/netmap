@@ -16,6 +16,7 @@ from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
+from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
@@ -32,6 +33,8 @@ from app.schemas import (
     NextHopResolutionQuery,
     RouteDecisionArtifact,
     RouteDecisionQuery,
+    SecurityPolicyEvaluationArtifact,
+    SecurityPolicyEvaluationQuery,
     StructuralAdjacencyArtifact,
     StructuralAdjacencyQuery,
     TraceArtifact,
@@ -176,5 +179,20 @@ def trace_l3_reachability(
 ) -> L3ReachabilityArtifact:
     repository = CanonicalRepository(session)
     return ConfiguredL3ReachabilityResolver(repository).resolve(
+        query, EvaluationView()
+    )
+
+
+@app.post(
+    "/v1/traces/security/policy-evaluation",
+    response_model=SecurityPolicyEvaluationArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def evaluate_security_policy(
+    query: SecurityPolicyEvaluationQuery,
+    session: Session = Depends(get_session),
+) -> SecurityPolicyEvaluationArtifact:
+    repository = CanonicalRepository(session)
+    return ConfiguredSecurityPolicyResolver(repository).resolve(
         query, EvaluationView()
     )

@@ -335,3 +335,49 @@ class RouteNextHop(Base):
     egress_l3_binding: Mapped[L3Binding | None] = relationship(
         back_populates="route_next_hops"
     )
+
+
+class SecurityPolicy(Base):
+    __tablename__ = "security_policies"
+    __table_args__ = (
+        CheckConstraint(
+            "default_action IN ('PERMIT', 'DROP', 'REJECT')",
+            name="default_action_valid",
+        ),
+        CheckConstraint(
+            "configured_completeness IN ('COMPLETE', 'PARTIAL', 'UNKNOWN')",
+            name="configured_completeness_valid",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    default_action: Mapped[str] = mapped_column(String(6), nullable=False)
+    configured_completeness: Mapped[str] = mapped_column(String(8), nullable=False)
+    rules: Mapped[list["SecurityRule"]] = relationship(
+        back_populates="policy", cascade="all, delete-orphan"
+    )
+
+
+class SecurityRule(Base):
+    __tablename__ = "security_rules"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(predicate) = 'object'", name="predicate_object"),
+        CheckConstraint(
+            "action IN ('PERMIT', 'DROP', 'REJECT')", name="action_valid"
+        ),
+        UniqueConstraint("policy_id", "order_key", name="uq_security_rules_policy_order"),
+        Index("ix_security_rules_policy_id", "policy_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    policy_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("security_policies.id", ondelete="CASCADE"), nullable=False
+    )
+    order_key: Mapped[int] = mapped_column(Integer, nullable=False)
+    predicate: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    action: Mapped[str] = mapped_column(String(6), nullable=False)
+    policy: Mapped[SecurityPolicy] = relationship(back_populates="rules")
