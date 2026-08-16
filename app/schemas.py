@@ -667,7 +667,9 @@ class PacketProcessingFlowState(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     original_packet_state: PacketState
-    current_packet_state: PacketState
+    current_packet_state: PacketState | None = None
+    current_packet_constraint: NATPacketConstraint | None = None
+    current_packet_unknown: bool = False
     routing_context_id: uuid.UUID
     traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
     ingress_network_interface_id: uuid.UUID | None = None
@@ -678,6 +680,19 @@ class PacketProcessingFlowState(BaseModel):
     direct_egress: DirectEgressState | None = None
     current_stage_id: uuid.UUID
 
+    @model_validator(mode="after")
+    def validate_packet_value(self) -> "PacketProcessingFlowState":
+        active = sum(
+            (
+                self.current_packet_state is not None,
+                self.current_packet_constraint is not None,
+                self.current_packet_unknown,
+            )
+        )
+        if active != 1:
+            raise ValueError("Flow state requires exactly one current packet value")
+        return self
+
 
 class PacketProcessingExecutionGap(BaseModel):
     code: Literal[
@@ -685,6 +700,9 @@ class PacketProcessingExecutionGap(BaseModel):
         "STAGE_PRECONDITION_UNKNOWN",
         "NEXT_HOP_RESOLUTION_LOOP",
         "SECURITY_STAGE_UNKNOWN",
+        "NAT_STAGE_UNKNOWN",
+        "PACKET_CONSTRAINT_UNSUPPORTED",
+        "PACKET_STATE_UNKNOWN",
     ]
     stage_id: uuid.UUID | None = None
     evidence_refs: list[EvidenceRef]
@@ -693,10 +711,14 @@ class PacketProcessingExecutionGap(BaseModel):
 class PacketProcessingStageExecution(BaseModel):
     stage_id: uuid.UUID
     stage_kind: Literal[
-        "ROUTING_POLICY", "ROUTE_DECISION", "SECURITY", "TERMINATE"
+        "ROUTING_POLICY", "ROUTE_DECISION", "SECURITY", "NAT", "TERMINATE"
     ]
-    packet_before: PacketState
-    packet_after: PacketState
+    packet_before: PacketState | None = None
+    packet_before_constraint: NATPacketConstraint | None = None
+    packet_before_unknown: bool = False
+    packet_after: PacketState | None = None
+    packet_after_constraint: NATPacketConstraint | None = None
+    packet_after_unknown: bool = False
     traffic_class_before: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
     traffic_class_after: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
     selected_routing_table_id_before: uuid.UUID | None = None
@@ -709,8 +731,29 @@ class PacketProcessingStageExecution(BaseModel):
     selected_next_hop_branch_index: int | None = None
     direct_egress: DirectEgressState | None = None
     security_attachment_evaluation: SecurityAttachmentStageArtifact | None = None
+    nat_attachment_evaluation: NATAttachmentStageArtifact | None = None
     evidence_refs: list[EvidenceRef]
     gaps: list[PacketProcessingExecutionGap]
+
+    @model_validator(mode="after")
+    def validate_packet_values(self) -> "PacketProcessingStageExecution":
+        before_active = sum(
+            (
+                self.packet_before is not None,
+                self.packet_before_constraint is not None,
+                self.packet_before_unknown,
+            )
+        )
+        after_active = sum(
+            (
+                self.packet_after is not None,
+                self.packet_after_constraint is not None,
+                self.packet_after_unknown,
+            )
+        )
+        if before_active != 1 or after_active != 1:
+            raise ValueError("Stage execution requires one before/after packet value")
+        return self
 
 
 class PacketProcessingExecutionBranch(BaseModel):
@@ -731,8 +774,8 @@ class PacketProcessingEvaluationArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: PacketProcessingEvaluationQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["packet-processing-routing-security/1.1"] = (
-        "packet-processing-routing-security/1.1"
+    resolver_version: Literal["packet-processing-routing-security-nat/1.2"] = (
+        "packet-processing-routing-security-nat/1.2"
     )
     result: Literal[
         "CONTINUE_TO_NEXT_HOP",
@@ -1020,6 +1063,61 @@ class NATPolicyEvaluationArtifact(BaseModel):
     evidence_refs: list[EvidenceRef]
     gaps: list[NATPolicyEvaluationGap]
     warnings: list[dict[str, Any]]
+
+
+class NATAttachmentStageGap(BaseModel):
+    code: Literal[
+        "NAT_ATTACHMENT_APPLICABILITY_UNKNOWN",
+        "NAT_POLICY_EVALUATION_UNKNOWN",
+        "NAT_TRANSLATION_UNKNOWN",
+    ]
+    evidence_refs: list[EvidenceRef]
+
+
+class NATAttachmentStageArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    evaluation_view: EvaluationView
+    resolver_version: Literal["nat-configured-attachment/1.0"] = (
+        "nat-configured-attachment/1.0"
+    )
+    context: NATEvaluationContext
+    attachment_id: uuid.UUID
+    policy_id: uuid.UUID
+    local_stage_order: int
+    scope: dict[str, list[str]]
+    applicability: Literal["TRUE", "FALSE", "UNKNOWN"]
+    result: Literal[
+        "IDENTITY", "TRANSFORMED_EXACT", "TRANSFORMED_CONSTRAINED", "UNKNOWN"
+    ]
+    reason: Literal[
+        "ATTACHMENT_NOT_APPLICABLE",
+        "POLICY_IDENTITY",
+        "POLICY_TRANSFORMED_EXACT",
+        "POLICY_TRANSFORMED_CONSTRAINED",
+        "ATTACHMENT_APPLICABILITY_COLLAPSED_IDENTITY",
+        "NAT_UNCERTAINTY",
+    ]
+    packet_before: PacketState
+    packet_after: PacketState | None = None
+    packet_after_constraint: NATPacketConstraint | None = None
+    policy_evaluation: NATPolicyEvaluationArtifact | None = None
+    evidence_refs: list[EvidenceRef]
+    gaps: list[NATAttachmentStageGap]
+    warnings: list[dict[str, Any]]
+
+    @model_validator(mode="after")
+    def validate_output(self) -> "NATAttachmentStageArtifact":
+        if self.result in {"IDENTITY", "TRANSFORMED_EXACT"}:
+            if self.packet_after is None or self.packet_after_constraint is not None:
+                raise ValueError("Exact NAT stage result requires only packet_after")
+        elif self.result == "TRANSFORMED_CONSTRAINED":
+            if self.packet_after is not None or self.packet_after_constraint is None:
+                raise ValueError("Constrained NAT stage requires only constraint output")
+        elif self.packet_after is not None or self.packet_after_constraint is not None:
+            raise ValueError("Unknown NAT stage must not expose an output representative")
+        if self.result == "IDENTITY" and self.packet_after != self.packet_before:
+            raise ValueError("Identity NAT stage must preserve packet")
+        return self
 
 
 class NATEvaluationContext(BaseModel):

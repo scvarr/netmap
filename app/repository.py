@@ -1818,35 +1818,51 @@ class CanonicalRepository:
                 )
             )
         )
-        records: list[NATPolicyAttachmentRecord] = []
-        for attachment in attachments:
-            details = {"nat_policy_attachment_id": str(attachment.id)}
-            if self.session.get(NATPolicy, attachment.policy_id) is None:
-                raise ModelError(
-                    "NATPolicyAttachment refers to a missing NATPolicy", details
-                )
-            if not isinstance(attachment.local_stage_order, int) or isinstance(
-                attachment.local_stage_order, bool
-            ):
-                raise ModelError(
-                    "NATPolicyAttachment local_stage_order is invalid", details
-                )
-            scope = normalize_processing_scope(
-                attachment.scope,
-                model_error=True,
-                entity_exists=self._processing_scope_entity_exists,
-                attachment_type="NATPolicyAttachment",
-                details=details,
+        return tuple(
+            self._nat_policy_attachment_record(attachment)
+            for attachment in attachments
+        )
+
+    def get_nat_policy_attachment(
+        self, attachment_id: uuid.UUID
+    ) -> NATPolicyAttachmentRecord:
+        attachment = self.session.get(
+            NATPolicyAttachment, attachment_id, populate_existing=True
+        )
+        if attachment is None:
+            raise ValidationError(
+                "NATPolicyAttachment does not exist",
+                {"nat_policy_attachment_id": str(attachment_id)},
             )
-            records.append(
-                NATPolicyAttachmentRecord(
-                    attachment_id=attachment.id,
-                    policy_id=attachment.policy_id,
-                    local_stage_order=attachment.local_stage_order,
-                    scope=scope,
-                )
+        return self._nat_policy_attachment_record(attachment)
+
+    def _nat_policy_attachment_record(
+        self, attachment: NATPolicyAttachment
+    ) -> NATPolicyAttachmentRecord:
+        details = {"nat_policy_attachment_id": str(attachment.id)}
+        if self.session.get(NATPolicy, attachment.policy_id) is None:
+            raise ModelError(
+                "NATPolicyAttachment refers to a missing NATPolicy", details
             )
-        return tuple(records)
+        if not isinstance(attachment.local_stage_order, int) or isinstance(
+            attachment.local_stage_order, bool
+        ):
+            raise ModelError(
+                "NATPolicyAttachment local_stage_order is invalid", details
+            )
+        scope = normalize_processing_scope(
+            attachment.scope,
+            model_error=True,
+            entity_exists=self._processing_scope_entity_exists,
+            attachment_type="NATPolicyAttachment",
+            details=details,
+        )
+        return NATPolicyAttachmentRecord(
+            attachment_id=attachment.id,
+            policy_id=attachment.policy_id,
+            local_stage_order=attachment.local_stage_order,
+            scope=scope,
+        )
 
     def validate_security_evaluation_context(
         self,

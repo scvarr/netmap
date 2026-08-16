@@ -575,7 +575,7 @@ def test_ecmp_branches_evaluate_security_with_branch_local_egress():
     assert artifact["result"] == "UNKNOWN"
 
 
-def test_nat_plan_remains_unsupported():
+def test_nat_identity_stage_is_compatible_with_security_executor_regression():
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
         context = repository.add_routing_context()
@@ -593,5 +593,10 @@ def test_nat_plan_remains_unsupported():
 
     response = evaluate(plan_id, context_id)
 
-    assert response.status_code == 422
-    assert response.json()["error"]["details"]["stage_kind"] == "NAT"
+    assert response.status_code == 200
+    nat = next(
+        item
+        for item in response.json()["branches"][0]["stage_executions"]
+        if item["stage_kind"] == "NAT"
+    )
+    assert nat["stage_outcome"] == "IDENTITY"

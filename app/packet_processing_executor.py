@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass, replace
 
 from app.errors import ModelError, ValidationError
+from app.nat_attachment_resolver import ConfiguredNATAttachmentResolver
 from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.packet_processing_plan import (
     PacketProcessingPlanRecord,
@@ -16,6 +17,9 @@ from app.schemas import (
     DirectEgressState,
     EvaluationView,
     EvidenceRef,
+    NATAttachmentStageArtifact,
+    NATEvaluationContext,
+    NATPacketConstraint,
     NextHopResolutionArtifact,
     NextHopResolutionBranch,
     NextHopResolutionQuery,
@@ -45,14 +49,17 @@ _EXECUTABLE_STAGE_KINDS = {
     "ROUTING_POLICY",
     "ROUTE_DECISION",
     "SECURITY",
+    "NAT",
     "TERMINATE",
 }
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class FlowExecutionState:
     original_packet_state: PacketState
-    current_packet_state: PacketState
+    current_packet_state: PacketState | None
+    current_packet_constraint: NATPacketConstraint | None = None
+    current_packet_unknown: bool = False
     routing_context_id: uuid.UUID
     traffic_class: str
     ingress_network_interface_id: uuid.UUID | None
@@ -62,6 +69,17 @@ class FlowExecutionState:
     direct_egress: DirectEgressState | None
     current_stage_id: uuid.UUID
     connection_state: ConnectionState | None = None
+
+    def __post_init__(self) -> None:
+        active = sum(
+            (
+                self.current_packet_state is not None,
+                self.current_packet_constraint is not None,
+                self.current_packet_unknown,
+            )
+        )
+        if active != 1:
+            raise ValueError("FlowExecutionState requires one current packet value")
 
 
 @dataclass(frozen=True)
@@ -74,13 +92,14 @@ class _ExecutionBranch:
 
 
 class PacketProcessingPlanExecutor:
-    VERSION = "packet-processing-routing-security/1.1"
+    VERSION = "packet-processing-routing-security-nat/1.2"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
         self.routing_policy = ConfiguredRoutingPolicyResolver(repository)
         self.next_hop = SelectedTableNextHopResolver(repository)
         self.security_attachment = ConfiguredSecurityAttachmentResolver(repository)
+        self.nat_attachment = ConfiguredNATAttachmentResolver(repository)
 
     def resolve(
         self,
@@ -159,6 +178,8 @@ class PacketProcessingPlanExecutor:
         initial = FlowExecutionState(
             original_packet_state=query.packet_state,
             current_packet_state=query.packet_state,
+            current_packet_constraint=None,
+            current_packet_unknown=False,
             routing_context_id=query.routing_context_id,
             traffic_class=query.traffic_class,
             ingress_network_interface_id=query.ingress_network_interface_id,
@@ -255,7 +276,22 @@ class PacketProcessingPlanExecutor:
                 )
             ]
 
+        if state.current_packet_state is None:
+            return self._execute_nonexact(
+                plan,
+                stages,
+                transitions,
+                initial,
+                state,
+                executions,
+                evidence,
+                view,
+                stage,
+                stage_ref,
+            )
+
         if stage.kind == "ROUTING_POLICY":
+            assert state.current_packet_state is not None
             policy_artifact = self.routing_policy.resolve(
                 RoutingPolicyEvaluationQuery(
                     policy_id=uuid.UUID(stage.payload["policy_id"]),
@@ -304,19 +340,10 @@ class PacketProcessingPlanExecutor:
             )
 
         if stage.kind == "SECURITY":
-            egress_l3_binding_id = (
-                state.direct_egress.egress_l3_binding_id
-                if state.direct_egress is not None
-                else None
+            assert state.current_packet_state is not None
+            egress_l3_binding_id, egress_network_interface_id = (
+                self._egress_context(state)
             )
-            egress_network_interface_id = None
-            if egress_l3_binding_id is not None:
-                egress_attachment = self.repository.get_l3_binding_attachment(
-                    egress_l3_binding_id
-                )
-                egress_network_interface_id = (
-                    egress_attachment.network_interface_id
-                )
             security_artifact = self.security_attachment.resolve(
                 uuid.UUID(stage.payload["attachment_id"]),
                 SecurityEvaluationContext(
@@ -361,6 +388,87 @@ class PacketProcessingPlanExecutor:
                 refs,
                 direct_egress=state.direct_egress,
                 security_attachment_evaluation=security_artifact,
+                gaps=gaps,
+            )
+            return self._execute(
+                plan,
+                stages,
+                transitions,
+                initial,
+                next_state,
+                executions + (execution,),
+                tuple(self._dedupe([*evidence, *refs])),
+                view,
+            )
+
+        if stage.kind == "NAT":
+            assert state.current_packet_state is not None
+            egress_l3_binding_id, egress_network_interface_id = (
+                self._egress_context(state)
+            )
+            nat_artifact = self.nat_attachment.resolve(
+                uuid.UUID(stage.payload["attachment_id"]),
+                NATEvaluationContext(
+                    packet_state=state.current_packet_state,
+                    traffic_class=state.traffic_class,  # type: ignore[arg-type]
+                    routing_context_id=state.routing_context_id,
+                    ingress_network_interface_id=state.ingress_network_interface_id,
+                    egress_network_interface_id=egress_network_interface_id,
+                    ingress_l3_binding_id=state.ingress_l3_binding_id,
+                    egress_l3_binding_id=egress_l3_binding_id,
+                    connection_state=state.connection_state,
+                ),
+                view,
+            )
+            outcome = nat_artifact.result
+            transition = self._transition(stage, outcome, transitions)
+            if outcome in {"IDENTITY", "TRANSFORMED_EXACT"}:
+                updated = replace(
+                    state,
+                    current_packet_state=nat_artifact.packet_after,
+                    current_packet_constraint=None,
+                    current_packet_unknown=False,
+                )
+            elif outcome == "TRANSFORMED_CONSTRAINED":
+                updated = replace(
+                    state,
+                    current_packet_state=None,
+                    current_packet_constraint=nat_artifact.packet_after_constraint,
+                    current_packet_unknown=False,
+                )
+            else:
+                updated = replace(
+                    state,
+                    current_packet_state=None,
+                    current_packet_constraint=None,
+                    current_packet_unknown=True,
+                )
+            next_state = replace(updated, current_stage_id=transition.to_stage_id)
+            refs = self._dedupe(
+                [
+                    stage_ref,
+                    *nat_artifact.evidence_refs,
+                    self._ref("ProcessingTransition", transition.transition_id),
+                ]
+            )
+            gaps = []
+            if outcome == "UNKNOWN":
+                gaps.append(
+                    PacketProcessingExecutionGap(
+                        code="NAT_STAGE_UNKNOWN",
+                        stage_id=stage.stage_id,
+                        evidence_refs=nat_artifact.evidence_refs,
+                    )
+                )
+            execution = self._stage_execution(
+                stage,
+                state,
+                updated,
+                outcome,
+                transition,
+                refs,
+                direct_egress=state.direct_egress,
+                nat_attachment_evaluation=nat_artifact,
                 gaps=gaps,
             )
             return self._execute(
@@ -482,6 +590,96 @@ class PacketProcessingPlanExecutor:
             )
         return results
 
+    def _execute_nonexact(
+        self,
+        plan: PacketProcessingPlanRecord,
+        stages: dict[uuid.UUID, ProcessingStageRecord],
+        transitions: dict[tuple[uuid.UUID, str], ProcessingTransitionRecord],
+        initial: FlowExecutionState,
+        state: FlowExecutionState,
+        executions: tuple[PacketProcessingStageExecution, ...],
+        evidence: tuple[EvidenceRef, ...],
+        view: EvaluationView,
+        stage: ProcessingStageRecord,
+        stage_ref: EvidenceRef,
+    ) -> list[_ExecutionBranch]:
+        outcome = {
+            "ROUTING_POLICY": "TABLE_SELECTION_UNKNOWN",
+            "ROUTE_DECISION": "UNKNOWN",
+            "SECURITY": "UNKNOWN",
+            "NAT": "UNKNOWN",
+        }[stage.kind]
+        if stage.kind == "ROUTING_POLICY":
+            updated = replace(state, selected_routing_table_id=None)
+        elif stage.kind == "ROUTE_DECISION":
+            updated = replace(
+                state,
+                current_route_resolution_branch=None,
+                direct_egress=None,
+            )
+        else:
+            updated = state
+        transition = self._transition(stage, outcome, transitions)
+        next_state = replace(updated, current_stage_id=transition.to_stage_id)
+        refs = self._dedupe(
+            [stage_ref, self._ref("ProcessingTransition", transition.transition_id)]
+        )
+        packet_gap = PacketProcessingExecutionGap(
+            code=(
+                "PACKET_CONSTRAINT_UNSUPPORTED"
+                if state.current_packet_constraint is not None
+                else "PACKET_STATE_UNKNOWN"
+            ),
+            stage_id=stage.stage_id,
+            evidence_refs=[stage_ref],
+        )
+        gaps = [packet_gap]
+        if stage.kind == "SECURITY":
+            gaps.append(
+                PacketProcessingExecutionGap(
+                    code="SECURITY_STAGE_UNKNOWN",
+                    stage_id=stage.stage_id,
+                    evidence_refs=[stage_ref],
+                )
+            )
+        elif stage.kind == "NAT":
+            gaps.append(
+                PacketProcessingExecutionGap(
+                    code="NAT_STAGE_UNKNOWN",
+                    stage_id=stage.stage_id,
+                    evidence_refs=[stage_ref],
+                )
+            )
+        execution = self._stage_execution(
+            stage,
+            state,
+            updated,
+            outcome,
+            transition,
+            refs,
+            direct_egress=updated.direct_egress,
+            gaps=gaps,
+        )
+        return self._execute(
+            plan,
+            stages,
+            transitions,
+            initial,
+            next_state,
+            executions + (execution,),
+            tuple(self._dedupe([*evidence, *refs])),
+            view,
+        )
+
+    def _egress_context(
+        self, state: FlowExecutionState
+    ) -> tuple[uuid.UUID | None, uuid.UUID | None]:
+        if state.direct_egress is None:
+            return None, None
+        binding_id = state.direct_egress.egress_l3_binding_id
+        attachment = self.repository.get_l3_binding_attachment(binding_id)
+        return binding_id, attachment.network_interface_id
+
     @staticmethod
     def _transition(
         stage: ProcessingStageRecord,
@@ -510,13 +708,18 @@ class PacketProcessingPlanExecutor:
         selected_next_hop_branch_index: int | None = None,
         direct_egress: DirectEgressState | None = None,
         security_attachment_evaluation: SecurityAttachmentStageArtifact | None = None,
+        nat_attachment_evaluation: NATAttachmentStageArtifact | None = None,
         gaps: list[PacketProcessingExecutionGap] | None = None,
     ) -> PacketProcessingStageExecution:
         return PacketProcessingStageExecution(
             stage_id=stage.stage_id,
             stage_kind=stage.kind,  # type: ignore[arg-type]
             packet_before=before.current_packet_state,
+            packet_before_constraint=before.current_packet_constraint,
+            packet_before_unknown=before.current_packet_unknown,
             packet_after=after.current_packet_state,
+            packet_after_constraint=after.current_packet_constraint,
+            packet_after_unknown=after.current_packet_unknown,
             traffic_class_before=before.traffic_class,  # type: ignore[arg-type]
             traffic_class_after=after.traffic_class,  # type: ignore[arg-type]
             selected_routing_table_id_before=before.selected_routing_table_id,
@@ -529,6 +732,7 @@ class PacketProcessingPlanExecutor:
             selected_next_hop_branch_index=selected_next_hop_branch_index,
             direct_egress=direct_egress,
             security_attachment_evaluation=security_attachment_evaluation,
+            nat_attachment_evaluation=nat_attachment_evaluation,
             evidence_refs=evidence_refs,
             gaps=gaps or [],
         )
@@ -538,6 +742,8 @@ class PacketProcessingPlanExecutor:
         return PacketProcessingFlowState(
             original_packet_state=state.original_packet_state,
             current_packet_state=state.current_packet_state,
+            current_packet_constraint=state.current_packet_constraint,
+            current_packet_unknown=state.current_packet_unknown,
             routing_context_id=state.routing_context_id,
             traffic_class=state.traffic_class,  # type: ignore[arg-type]
             ingress_network_interface_id=state.ingress_network_interface_id,
@@ -576,3 +782,6 @@ class PacketProcessingPlanExecutor:
                 seen.add(key)
                 result.append(gap)
         return result
+    NATAttachmentStageArtifact,
+    NATEvaluationContext,
+    NATPacketConstraint,

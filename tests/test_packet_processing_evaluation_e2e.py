@@ -203,7 +203,7 @@ def test_incomplete_plan_returns_unknown_without_execution(completeness):
 
 
 @pytest.mark.parametrize("kind", ["NAT"])
-def test_complete_unsupported_plan_is_rejected_by_executor(kind):
+def test_complete_nat_plan_is_executable(kind):
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
         context = repository.add_routing_context()
@@ -228,11 +228,15 @@ def test_complete_unsupported_plan_is_rejected_by_executor(kind):
 
     response = evaluate(plan_id, context_id)
 
-    assert response.status_code == 422
-    details = response.json()["error"]["details"]
-    assert details["reason"] == "PACKET_PROCESSING_STAGE_UNSUPPORTED_BY_EXECUTOR"
-    assert details["processing_stage_id"] == str(stage_id)
-    assert details["stage_kind"] == kind
+    assert response.status_code == 200
+    artifact = response.json()
+    nat = next(
+        item
+        for item in artifact["branches"][0]["stage_executions"]
+        if item["stage_kind"] == "NAT"
+    )
+    assert nat["stage_id"] == str(stage_id)
+    assert nat["stage_outcome"] == "IDENTITY"
 
 
 def test_policy_selected_table_is_stored_and_transition_is_explicit():
