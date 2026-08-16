@@ -452,6 +452,68 @@ class StructuralAdjacencyArtifact(BaseModel):
     warnings: list[dict[str, Any]]
 
 
+class L3ReachabilityTableSelection(BaseModel):
+    routing_context_id: uuid.UUID
+    routing_table_id: uuid.UUID
+
+
+class L3ReachabilityQuery(BaseModel):
+    origin_l3_binding_id: uuid.UUID
+    destination_ip: IPvAnyAddress
+    table_selections: list[L3ReachabilityTableSelection]
+
+
+class L3RoutingState(BaseModel):
+    routing_context_id: uuid.UUID
+    ingress_l3_binding_id: uuid.UUID | None = None
+    destination_ip: IPvAnyAddress
+
+
+class L3ReachabilityHop(BaseModel):
+    routing_state: L3RoutingState
+    selected_routing_table_id: uuid.UUID | None = None
+    next_hop_resolution: NextHopResolutionArtifact | None = None
+    next_hop_branch: NextHopResolutionBranch | None = None
+    structural_adjacency: StructuralAdjacencyArtifact | None = None
+    adjacency_candidate: StructuralAdjacencyCandidateResult | None = None
+    l2_branch_id: str | None = None
+    reached_l3_binding_id: uuid.UUID | None = None
+    next_routing_context_id: uuid.UUID | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class L3ReachabilityBranch(BaseModel):
+    branch_id: str
+    termination: Literal[
+        "TARGET_REACHED",
+        "LOCAL_DELIVERY",
+        "TABLE_SELECTION_UNKNOWN",
+        "ROUTE_DISCARD",
+        "NO_ROUTE",
+        "ROUTE_UNKNOWN",
+        "ROUTE_CONFLICTING",
+        "NEXT_HOP_UNRESOLVED",
+        "LOOP_DETECTED",
+        "STRUCTURAL_ADJACENCY_UNKNOWN",
+        "FORWARDING_LOOP",
+    ]
+    hops: list[L3ReachabilityHop]
+    evidence_refs: list[EvidenceRef]
+
+
+class L3ReachabilityArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: L3ReachabilityQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["l3-configured-multirouter/1.0"] = (
+        "l3-configured-multirouter/1.0"
+    )
+    verdict: Literal["REACHABLE", "UNREACHABLE", "UNKNOWN"]
+    branches: list[L3ReachabilityBranch]
+    evidence_refs: list[EvidenceRef]
+    warnings: list[dict[str, Any]]
+
+
 class ErrorBody(BaseModel):
     code: Literal["VALIDATION_ERROR", "MODEL_ERROR"]
     message: str

@@ -12,6 +12,7 @@ from app.errors import NetMapError, ValidationError
 from app.interface_resolver import InterfacePhysicalResolver
 from app.l2_resolver import L2ReachabilityResolver
 from app.l3_resolver import SelectedTableRouteDecisionResolver
+from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
@@ -25,6 +26,8 @@ from app.schemas import (
     L1TraceQuery,
     L2ReachabilityQuery,
     L2ReachabilityTraceArtifact,
+    L3ReachabilityArtifact,
+    L3ReachabilityQuery,
     NextHopResolutionArtifact,
     NextHopResolutionQuery,
     RouteDecisionArtifact,
@@ -158,5 +161,20 @@ def trace_l3_structural_adjacency(
 ) -> StructuralAdjacencyArtifact:
     repository = CanonicalRepository(session)
     return StructuralAdjacencyProofResolver(repository).resolve(
+        query, EvaluationView()
+    )
+
+
+@app.post(
+    "/v1/traces/l3/reachability",
+    response_model=L3ReachabilityArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def trace_l3_reachability(
+    query: L3ReachabilityQuery,
+    session: Session = Depends(get_session),
+) -> L3ReachabilityArtifact:
+    repository = CanonicalRepository(session)
+    return ConfiguredL3ReachabilityResolver(repository).resolve(
         query, EvaluationView()
     )

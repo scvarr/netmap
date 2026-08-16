@@ -804,6 +804,21 @@ class CanonicalRepository:
             routing_context_id=binding.routing_context_id,
         )
 
+    def get_l3_binding_attachments_by_interface(
+        self, network_interface_id: uuid.UUID
+    ) -> tuple[L3BindingAttachmentRecord, ...]:
+        self.validate_network_interface(network_interface_id)
+        bindings = list(
+            self.session.scalars(
+                select(L3Binding).where(
+                    L3Binding.interface_id == network_interface_id
+                )
+            )
+        )
+        return tuple(
+            self.get_l3_binding_attachment(binding.id) for binding in bindings
+        )
+
     def get_selected_routing_table(
         self, routing_context_id: uuid.UUID, routing_table_id: uuid.UUID
     ) -> SelectedRoutingTable:
