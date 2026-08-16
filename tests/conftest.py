@@ -21,6 +21,7 @@ from app.models import (
     RoutingContext,
     RoutingTable,
     SecurityPolicy,
+    SecurityPolicyAttachment,
     SecurityRule,
 )
 
@@ -28,6 +29,7 @@ from app.models import (
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(SecurityPolicyAttachment))
         session.execute(delete(SecurityRule))
         session.execute(delete(SecurityPolicy))
         session.execute(delete(InterfaceAddress))

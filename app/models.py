@@ -358,6 +358,9 @@ class SecurityPolicy(Base):
     rules: Mapped[list["SecurityRule"]] = relationship(
         back_populates="policy", cascade="all, delete-orphan"
     )
+    attachments: Mapped[list["SecurityPolicyAttachment"]] = relationship(
+        back_populates="policy", cascade="all, delete-orphan"
+    )
 
 
 class SecurityRule(Base):
@@ -381,3 +384,22 @@ class SecurityRule(Base):
     predicate: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
     action: Mapped[str] = mapped_column(String(6), nullable=False)
     policy: Mapped[SecurityPolicy] = relationship(back_populates="rules")
+
+
+class SecurityPolicyAttachment(Base):
+    __tablename__ = "security_policy_attachments"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(scope) = 'object'", name="scope_object"),
+        Index("ix_security_policy_attachments_policy_id", "policy_id"),
+        Index("ix_security_policy_attachments_stage_order", "stage_order"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    policy_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("security_policies.id", ondelete="CASCADE"), nullable=False
+    )
+    stage_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    policy: Mapped[SecurityPolicy] = relationship(back_populates="attachments")

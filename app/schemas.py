@@ -41,6 +41,7 @@ class EvidenceRef(BaseModel):
         "RouteNextHop",
         "SecurityPolicy",
         "SecurityRule",
+        "SecurityPolicyAttachment",
     ]
     entity_id: uuid.UUID
 
@@ -517,7 +518,7 @@ class L3ReachabilityArtifact(BaseModel):
 
 
 class PacketState(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     source_ip: IPvAnyAddress | None = None
     destination_ip: IPvAnyAddress | None = None
@@ -569,6 +570,70 @@ class SecurityPolicyEvaluationArtifact(BaseModel):
     branches: list[SecurityEvaluationBranch]
     evidence_refs: list[EvidenceRef]
     gaps: list[SecurityEvaluationGap]
+    warnings: list[dict[str, Any]]
+
+
+class SecurityEvaluationContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    packet_state: PacketState
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    routing_context_id: uuid.UUID | None = None
+    ingress_network_interface_id: uuid.UUID | None = None
+    egress_network_interface_id: uuid.UUID | None = None
+    ingress_l3_binding_id: uuid.UUID | None = None
+    egress_l3_binding_id: uuid.UUID | None = None
+
+
+class SecurityEvaluationQuery(BaseModel):
+    context: SecurityEvaluationContext
+    configured_attachment_completeness: Literal[
+        "COMPLETE", "PARTIAL", "UNKNOWN"
+    ]
+
+
+class SecurityAttachmentEvaluation(BaseModel):
+    attachment_id: uuid.UUID
+    policy_id: uuid.UUID
+    stage_order: int
+    scope: dict[str, list[str]]
+    applicability: Literal["TRUE", "FALSE", "UNKNOWN"]
+    policy_evaluation: SecurityPolicyEvaluationArtifact | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class SecurityStageEvaluationGap(BaseModel):
+    code: Literal[
+        "SECURITY_ATTACHMENT_COVERAGE_INCOMPLETE",
+        "SECURITY_ATTACHMENT_APPLICABILITY_UNKNOWN",
+        "SECURITY_POLICY_EVALUATION_UNKNOWN",
+    ]
+    attachment_id: uuid.UUID | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class SecurityEvaluationArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: SecurityEvaluationQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["security-configured-stages/1.0"] = (
+        "security-configured-stages/1.0"
+    )
+    context: SecurityEvaluationContext
+    configured_attachment_completeness: Literal[
+        "COMPLETE", "PARTIAL", "UNKNOWN"
+    ]
+    result: Literal["PASS", "BLOCKED", "UNKNOWN"]
+    reason: Literal[
+        "NO_POLICY_APPLICABLE",
+        "ALL_APPLICABLE_POLICIES_PERMIT",
+        "POLICY_DROP",
+        "POLICY_REJECT",
+        "SECURITY_UNCERTAINTY",
+    ]
+    attachment_evaluations: list[SecurityAttachmentEvaluation]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[SecurityStageEvaluationGap]
     warnings: list[dict[str, Any]]
 
 

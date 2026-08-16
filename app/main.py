@@ -17,6 +17,7 @@ from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.security_resolver import ConfiguredSecurityPolicyResolver
+from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolver
 from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
@@ -35,6 +36,8 @@ from app.schemas import (
     RouteDecisionQuery,
     SecurityPolicyEvaluationArtifact,
     SecurityPolicyEvaluationQuery,
+    SecurityEvaluationArtifact,
+    SecurityEvaluationQuery,
     StructuralAdjacencyArtifact,
     StructuralAdjacencyQuery,
     TraceArtifact,
@@ -194,5 +197,20 @@ def evaluate_security_policy(
 ) -> SecurityPolicyEvaluationArtifact:
     repository = CanonicalRepository(session)
     return ConfiguredSecurityPolicyResolver(repository).resolve(
+        query, EvaluationView()
+    )
+
+
+@app.post(
+    "/v1/traces/security/evaluation",
+    response_model=SecurityEvaluationArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def evaluate_security_stages(
+    query: SecurityEvaluationQuery,
+    session: Session = Depends(get_session),
+) -> SecurityEvaluationArtifact:
+    repository = CanonicalRepository(session)
+    return ConfiguredSecurityEvaluationResolver(repository).resolve(
         query, EvaluationView()
     )

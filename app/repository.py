@@ -25,9 +25,11 @@ from app.models import (
     RoutingContext,
     RoutingTable,
     SecurityPolicy,
+    SecurityPolicyAttachment,
     SecurityRule,
 )
 from app.security_predicates import Predicate, normalize_predicate
+from app.security_scopes import SecurityScope, normalize_security_scope
 
 
 @dataclass(frozen=True)
@@ -174,6 +176,14 @@ class SecurityPolicyRecord:
     default_action: str
     configured_completeness: str
     rules: tuple[SecurityRuleRecord, ...]
+
+
+@dataclass(frozen=True)
+class SecurityPolicyAttachmentRecord:
+    attachment_id: uuid.UUID
+    policy_id: uuid.UUID
+    stage_order: int
+    scope: SecurityScope
 
 
 class CanonicalRepository:
@@ -561,6 +571,37 @@ class CanonicalRepository:
         self.session.add(rule)
         self.session.flush()
         return rule
+
+    def add_security_policy_attachment(
+        self,
+        policy_id: uuid.UUID,
+        stage_order: int,
+        scope: object,
+        attachment_id: uuid.UUID | None = None,
+    ) -> SecurityPolicyAttachment:
+        if self.session.get(SecurityPolicy, policy_id) is None:
+            raise ValidationError(
+                "SecurityPolicy does not exist",
+                {"security_policy_id": str(policy_id)},
+            )
+        if not isinstance(stage_order, int) or isinstance(stage_order, bool):
+            raise ValidationError(
+                "SecurityPolicyAttachment stage_order must be an integer"
+            )
+        normalized = normalize_security_scope(
+            scope,
+            model_error=False,
+            entity_exists=self._security_scope_entity_exists,
+        )
+        attachment = SecurityPolicyAttachment(
+            id=attachment_id or uuid.uuid4(),
+            policy_id=policy_id,
+            stage_order=stage_order,
+            scope=normalized,
+        )
+        self.session.add(attachment)
+        self.session.flush()
+        return attachment
 
     def add_network_interface_realization(
         self,
@@ -1038,6 +1079,103 @@ class CanonicalRepository:
             rules=tuple(records),
         )
 
+    def get_security_policy_attachments(
+        self,
+    ) -> tuple[SecurityPolicyAttachmentRecord, ...]:
+        attachments = list(
+            self.session.scalars(
+                select(SecurityPolicyAttachment).order_by(
+                    SecurityPolicyAttachment.stage_order
+                )
+            )
+        )
+        records: list[SecurityPolicyAttachmentRecord] = []
+        for attachment in attachments:
+            details = {"security_policy_attachment_id": str(attachment.id)}
+            if self.session.get(SecurityPolicy, attachment.policy_id) is None:
+                raise ModelError(
+                    "SecurityPolicyAttachment refers to a missing SecurityPolicy",
+                    details,
+                )
+            if not isinstance(attachment.stage_order, int) or isinstance(
+                attachment.stage_order, bool
+            ):
+                raise ModelError(
+                    "SecurityPolicyAttachment stage_order is invalid", details
+                )
+            scope = normalize_security_scope(
+                attachment.scope,
+                model_error=True,
+                entity_exists=self._security_scope_entity_exists,
+                details=details,
+            )
+            records.append(
+                SecurityPolicyAttachmentRecord(
+                    attachment_id=attachment.id,
+                    policy_id=attachment.policy_id,
+                    stage_order=attachment.stage_order,
+                    scope=scope,
+                )
+            )
+        return tuple(records)
+
+    def validate_security_evaluation_context(
+        self,
+        *,
+        routing_context_id: uuid.UUID | None,
+        ingress_network_interface_id: uuid.UUID | None,
+        egress_network_interface_id: uuid.UUID | None,
+        ingress_l3_binding_id: uuid.UUID | None,
+        egress_l3_binding_id: uuid.UUID | None,
+    ) -> None:
+        if routing_context_id is not None and self.session.get(
+            RoutingContext, routing_context_id
+        ) is None:
+            raise ValidationError(
+                "RoutingContext does not exist",
+                {"routing_context_id": str(routing_context_id)},
+            )
+        for field, interface_id in (
+            ("ingress_network_interface_id", ingress_network_interface_id),
+            ("egress_network_interface_id", egress_network_interface_id),
+        ):
+            if interface_id is not None and self.session.get(
+                NetworkInterface, interface_id
+            ) is None:
+                raise ValidationError(
+                    "NetworkInterface does not exist", {field: str(interface_id)}
+                )
+        for direction, binding_id, interface_id in (
+            ("ingress", ingress_l3_binding_id, ingress_network_interface_id),
+            ("egress", egress_l3_binding_id, egress_network_interface_id),
+        ):
+            if binding_id is None:
+                continue
+            binding = self.session.get(L3Binding, binding_id)
+            if binding is None:
+                raise ValidationError(
+                    "L3Binding does not exist",
+                    {f"{direction}_l3_binding_id": str(binding_id)},
+                )
+            if self.session.get(NetworkInterface, binding.interface_id) is None:
+                raise ModelError(
+                    "L3Binding refers to a missing NetworkInterface",
+                    {"l3_binding_id": str(binding.id)},
+                )
+            if self.session.get(RoutingContext, binding.routing_context_id) is None:
+                raise ModelError(
+                    "L3Binding refers to a missing RoutingContext",
+                    {"l3_binding_id": str(binding.id)},
+                )
+            if interface_id is not None and binding.interface_id != interface_id:
+                raise ValidationError(
+                    "L3Binding does not belong to the supplied NetworkInterface",
+                    {
+                        f"{direction}_l3_binding_id": str(binding_id),
+                        f"{direction}_network_interface_id": str(interface_id),
+                    },
+                )
+
     def validate_point_member(self, address: PointMember) -> None:
         point = self.session.get(ConnectionPoint, address.point_id)
         if point is None:
@@ -1380,6 +1518,17 @@ class CanonicalRepository:
                 "SecurityPolicy configured completeness is invalid",
                 {"configured_completeness": completeness},
             )
+
+    def _security_scope_entity_exists(
+        self, entity_type: str, entity_id: uuid.UUID
+    ) -> bool:
+        model = {
+            "RoutingContext": RoutingContext,
+            "NetworkInterface": NetworkInterface,
+            "L3Binding": L3Binding,
+        }[entity_type]
+        return self.session.get(model, entity_id) is not None
+
     @staticmethod
     def _parse_interface_address(
         address: object,

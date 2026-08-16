@@ -6,6 +6,7 @@ from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.repository import CanonicalRepository
 from app.security_resolver import ConfiguredSecurityPolicyResolver
+from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolver
 from app.structural_adjacency_resolver import StructuralAdjacencyProofResolver
 
 
@@ -26,6 +27,7 @@ def test_adjacency_lookup_uses_only_injected_repository_session():
         StructuralAdjacencyProofResolver,
         ConfiguredL3ReachabilityResolver,
         ConfiguredSecurityPolicyResolver,
+        ConfiguredSecurityEvaluationResolver,
     ):
         source = inspect.getsource(resolver)
         assert "SessionLocal" not in source
