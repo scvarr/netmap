@@ -11,6 +11,7 @@
 - [[01-04-l3|01.4 L3 — routing model]]
 - [[01-05-security-policy|01.5 Security Policy]]
 - [[01-06-nat|01.6 NAT — packet transformation]]
+- [[01-07-policy-routing|01.7 Policy Routing]]
 
 ## Общий принцип
 
@@ -41,6 +42,8 @@ IP-адрес назначается через `L3Binding` конкретном
 Выбранный L3 next hop затем разрешается в link-layer destination и передаётся существующему L2 resolver. Таким образом route не содержит магическую ссылку на «следующее устройство».
 
 Подробности: [[01-04-l3|01.4 L3 — routing model]].
+
+Выбор routing table, transient local mark и границы `PACKET_MARK -> ROUTING_POLICY -> ROUTE_DECISION` определены отдельно в [[01-07-policy-routing|01.7 Policy Routing]].
 
 ## Security Policy
 

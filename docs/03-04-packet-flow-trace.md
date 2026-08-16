@@ -9,6 +9,7 @@
 Она композиционно объединяет уже определённые primitives и resolvers:
 
 - [[01-04-l3|L3 routing model]];
+- [[01-07-policy-routing|Policy Routing]];
 - [[03-03-l3-trace|L3 resolver]];
 - [[01-05-security-policy|Security Policy]];
 - [[01-06-nat|NAT]];
@@ -321,9 +322,11 @@ reason = PROCESSING_ENTRY_UNKNOWN
 Минимальное ядро:
 
 ```text
+PACKET_MARK
+ROUTING_POLICY
+ROUTE_DECISION
 SECURITY
 NAT
-ROUTE_DECISION
 ADJACENCY_L2
 LOCAL_DELIVERY
 TERMINATE
@@ -332,8 +335,6 @@ TERMINATE
 Позднее могут появиться:
 
 ```text
-ROUTING_POLICY
-PACKET_MARK
 TUNNEL_ENCAPSULATION
 TUNNEL_DECAPSULATION
 MPLS
@@ -341,6 +342,47 @@ SERVICE_CHAIN
 ```
 
 Но core не добавляет их заранее.
+
+`PACKET_MARK`, `ROUTING_POLICY` и `ROUTE_DECISION` являются distinct current stage kinds. Их contract определён в [[01-07-policy-routing|01.7 Policy Routing]].
+
+## PACKET_MARK stage
+
+Stage получает:
+
+```text
+current PacketState
+current LocalProcessingState
+current local context
+```
+
+и возвращает:
+
+```text
+same PacketState
+new LocalProcessingState
+```
+
+`PACKET_MARK` не выбирает table, не выполняет route lookup и не является NAT. Его result/evidence explicit; hidden global fwmark запрещён.
+
+## ROUTING_POLICY stage
+
+Stage получает:
+
+```text
+current PacketState
+current LocalProcessingState
+current local context
+```
+
+и производит:
+
+```text
+selected_routing_table_id
+```
+
+либо typed uncertainty/conflict.
+
+`ROUTING_POLICY` не производит `Route` или next hop. Selected table сохраняется в `FlowExecutionState` и затем является input `ROUTE_DECISION`.
 
 ## SECURITY stage
 
@@ -404,20 +446,21 @@ UNKNOWN
 CONFLICTING
 ```
 
-Exact/constrained transform создаёт новый immutable `PacketState`.
+`IDENTITY` сохраняет exact current `PacketState`. `TRANSFORMED_EXACT` создаёт новый exact immutable `PacketState`. `TRANSFORMED_CONSTRAINED` создаёт отдельный `NATPacketConstraint`/symbolic packet result, а не fake exact `PacketState`.
 
-Plan execution продолжает работу уже с ним.
+Если следующая stage не умеет reasoning над constraint, packet-flow branch становится `UNKNOWN`. Representative address/port выбирать запрещено.
 
 ## ROUTE_DECISION stage
 
 Stage вызывает L3 route-decision subresolver.
 
-Он выполняет:
+Selected `RoutingTable` уже должна присутствовать в `FlowExecutionState`.
+
+Stage выполняет:
 
 ```text
-table selection
-route lookup
-recursive next-hop resolution
+route lookup in selected RoutingTable
+recursive next-hop resolution in SAME selected RoutingTable
 ```
 
 но **не выполняет сразу L2 handoff**.
@@ -440,6 +483,8 @@ ResolvedForwardingDecision
 ```
 
 с selected route/egress/adjacency semantics.
+
+`ROUTE_DECISION` не запускает `ROUTING_POLICY`, не выбирает table по имени/default/min-ID и не выполняет hidden reselection. Если selected table отсутствует, `TABLE_SELECTION_UNKNOWN` возникает до route lookup.
 
 ## Route decision хранит basis packet
 
@@ -510,6 +555,18 @@ ports
 ```
 
 TTL/Hop Limit processing рассматривается как forwarding side effect и уточняется отдельно.
+
+## Recursive lookup не является packet reprocessing
+
+Gateway recursion — внутренняя работа одного `ROUTE_DECISION`:
+
+```text
+lookup destination D in selected table T
+    -> gateway G
+lookup G in SAME table T
+```
+
+Она меняет internal `lookup_address`, но не создаёт новый `PacketState` и не запускает `PACKET_MARK`, `ROUTING_POLICY`, Security, NAT или plan entry. `original_destination` и `selected_routing_table_id` сохраняются на всей recursion chain.
 
 ## LOCAL outcome
 
@@ -671,7 +728,7 @@ L3Binding / routing context
 
 Current packet state сохраняется.
 
-Local route decision/egress state предыдущего hop очищается.
+Создаётся новый local execution context. Local route decision, selected table, egress state и local-only mark предыдущего hop очищаются.
 
 ## FlowExecutionState
 
@@ -680,15 +737,17 @@ Runtime orchestrator state концептуально:
 ```text
 FlowExecutionState
     original_packet_state
-    current_packet_state
+    current_packet_state / current_packet_constraint?
     packet_lineage
 
-    routing_context_id?
+    routing_context_id
     traffic_class
 
     ingress_l3_binding_id?
     ingress_network_interface_id?
 
+    local_processing_state
+    selected_routing_table_id?
     current_route_decision?
     egress_l3_binding_id?
 
@@ -700,6 +759,8 @@ FlowExecutionState
 ```
 
 Не все поля всегда заполнены.
+
+`selected_routing_table_id` является execution-local state. Он не process-global и не наследуется автоматически следующим processing node.
 
 ## Original и current packet
 
@@ -925,6 +986,8 @@ simple-host
 ```text
 TRANSIT entry
     |
+ROUTING_POLICY
+    |
 ROUTE_DECISION
     |
     +-- FORWARD -> ADJACENCY_L2 -> next point
@@ -942,6 +1005,8 @@ ROUTE_DECISION
 
 ```text
 LOCAL_OUTPUT
+    |
+ROUTING_POLICY
     |
 ROUTE_DECISION
     |
@@ -1158,6 +1223,18 @@ ROUTE_DECISION
 
 просто присутствует новый stage.
 
+Этот второй `ROUTE_DECISION` использует текущий `selected_routing_table_id`; он не запускает policy selection автоматически.
+
+Если platform после NAT должна повторно выбрать table, plan обязан явно содержать:
+
+```text
+NAT
+    ->
+ROUTING_POLICY
+    ->
+ROUTE_DECISION
+```
+
 Если route lookup выполняется дважды:
 
 ```text
@@ -1190,11 +1267,15 @@ traffic_class = TRANSIT or LOCAL_INPUT candidate
 
 ```text
 previous route decision
+previous selected routing table
 previous egress binding
 previous local policy stage position
+previous local-only mark
 ```
 
 не переносятся.
+
+Current wire-visible `PacketState` переносится. Если platform имеет explicit mechanism переноса local metadata, он моделируется отдельной semantics; local mark молча не наследуется.
 
 ## Определение TRANSIT vs LOCAL_INPUT
 
@@ -1397,14 +1478,16 @@ UNKNOWN
 
 потому что фактический packet может попасть на B.
 
-## Symbolic PacketState
+## Constrained packet result
 
-`TRANSFORMED_CONSTRAINED` может создавать:
+`TRANSFORMED_CONSTRAINED` создаёт отдельный `NATPacketConstraint`/symbolic packet result:
 
 ```text
 source_ip ∈ POOL_A
 source_port ∈ range
 ```
+
+Это не exact `PacketState`. Constrained field нельзя подменять representative address/port, а `packet_base` не делает constrained translated field точным.
 
 Flow engine может сохранять symbolic constraints.
 
@@ -2093,7 +2176,10 @@ S10 ingress-security
 S20 destination-NAT
     |
     v
-S30 route-decision
+S25 routing-policy
+    |
+    v
+S30 route-decision in selected table
     |
     +-- LOCAL --> S70 local-input-security --> LOCAL_DELIVERY
     |
@@ -2119,6 +2205,8 @@ Route discard/no-route из S30 — к соответствующему terminal
 ```text
 ENTRY TRANSIT
     |
+ROUTING_POLICY
+    |
 ROUTE_DECISION
     |
     +-- LOCAL --> LOCAL_DELIVERY
@@ -2135,11 +2223,15 @@ LOCAL_OUTPUT
     |
 outbound-security
     |
+ROUTING_POLICY
+    |
 route-decision
     |
 adjacency-L2
 
 TRANSIT/arrival
+    |
+ROUTING_POLICY
     |
 route-decision
     |
@@ -2163,7 +2255,11 @@ S10 DNAT
 P1:
 dst = 10.5.10.8
 
+S15 ROUTING_POLICY(P1)
+    -> selected table T
+
 S20 ROUTE_DECISION(P1)
+    in table T
     ->
 SERVERS
 ```
@@ -2175,7 +2271,8 @@ Trace ясно показывает, почему internal route выбран п
 Если platform semantics:
 
 ```text
-S10 ROUTE_DECISION(P0)
+S05 ROUTING_POLICY(P0) -> selected table T
+S10 ROUTE_DECISION(P0, table T)
 S20 DNAT -> P1
 S30 ADJACENCY_L2
 ```
@@ -2441,6 +2538,21 @@ src IP + dst IP
 
 недостаточно.
 
+## Workspace boundary
+
+Packet-flow, policy-routing и plan execution работают внутри уже выбранного workspace:
+
+```text
+request/job
+    -> auth/access check
+    -> workspace selection
+    -> workspace-scoped Session/CanonicalRepository
+    -> EvaluationView
+    -> resolver/orchestrator
+```
+
+Plan/policy resolvers не знают user/owner и не используют process-global current workspace. `workspace_id` не становится полем routing-policy domain только ради isolation; canonical facts поступают через уже scoped repository.
+
 ## Инварианты
 
 1. Packet Flow Trace является orchestrator, а не новым независимым forwarding layer.
@@ -2449,43 +2561,49 @@ src IP + dst IP
 4. Processing plan является control-flow graph, а не обязательным плоским списком.
 5. Security/NAT policy сохраняют свой внутренний ordered first-match semantics.
 6. Plan stage является typed semantic operation.
-7. Минимальные stage kinds: `SECURITY`, `NAT`, `ROUTE_DECISION`, `ADJACENCY_L2`, `LOCAL_DELIVERY`.
+7. Минимальные stage kinds: `PACKET_MARK`, `ROUTING_POLICY`, `ROUTE_DECISION`, `SECURITY`, `NAT`, `ADJACENCY_L2`, `LOCAL_DELIVERY`, `TERMINATE`.
 8. Plan applicability задаётся explicit attachment/scope.
 9. Traffic class минимум: `LOCAL_OUTPUT`, `TRANSIT`, `LOCAL_INPUT`.
 10. Plan имеет explicit entry points.
 11. Отсутствие plan без completeness не означает simple forwarding.
 12. Generic router/host behavior должен быть explicit reusable plan, а не hidden fallback.
 13. Security stage оценивает current PacketState.
-14. NAT stage создаёт новую immutable PacketState version.
-15. Route decision хранит `basis_packet_state`.
-16. NAT после route decision не вызывает hidden reroute.
-17. Repeat route lookup выполняется только explicit routing stage.
-18. Route decision и adjacency/L2 являются разными reusable suboperations.
-19. `DIRECT_DESTINATION` adjacency использует current packet destination в момент L2 handoff.
-20. `GATEWAY` adjacency использует selected gateway.
-21. Successful L2 handoff переносит current PacketState на следующий processing point.
-22. Previous local route/egress stage state не переносится на следующий hop.
-23. Packet lineage обязана сохранять original/current/before/after transformations.
-24. Каждый stage возвращает explicit result/evidence.
-25. `DELIVERED` означает network delivery, а не application success.
-26. Explicit endpoint target может быть независим от original public/NAT destination.
-27. End-to-end verdict: `DELIVERED`, `NOT_DELIVERED`, `UNKNOWN`.
-28. `NOT_DELIVERED` требует exhaustive known-negative relevant branches.
-29. `UNKNOWN` не превращается в negative из-за отсутствия данных.
-30. `EXACT` и `POSSIBLE` являются разными query semantics.
-31. Exact nondeterministic selection нельзя угадывать.
-32. Symbolic/constrained PacketState может продолжать analysis, если downstream semantics не требует exact value.
-33. Reverse flow анализируется отдельно.
-34. Diagnostic flow trace не мутирует persistent FDB/neighbor/session/NAT state.
-35. What-if state может быть только ephemeral.
-36. Generated reject/ICMP packets являются отдельными child flows.
-37. Processing plan имеет provenance/version/completeness.
-38. Version-sensitive platform plan нельзя применять к неизвестной version без uncertainty.
-39. Partial processing graph не доказывает exact end-to-end path.
-40. Adapter обязан нормализовать vendor pipeline без скрытого пропуска значимых stages.
-41. Trace evidence должно позволять восстановить, какой PacketState видел каждый rule/route stage.
-42. Layer subresults сохраняются и не стираются overall verdict.
-43. Trace result является derived data и не становится independent source of truth.
+14. `IDENTITY` сохраняет exact PacketState, `TRANSFORMED_EXACT` создаёт новый exact PacketState, а `TRANSFORMED_CONSTRAINED` создаёт отдельный constraint.
+15. `PACKET_MARK` не мутирует PacketState и изменяет только explicit `LocalProcessingState`.
+16. `ROUTING_POLICY` выбирает table, но не ищет route/next hop.
+17. Route decision хранит `basis_packet_state` и `selected_routing_table_id`.
+18. `ROUTE_DECISION` не выбирает table и не перезапускает `ROUTING_POLICY`.
+19. NAT после route decision не вызывает hidden reroute.
+20. Repeat route lookup выполняется только explicit routing stage; policy reselection требует explicit `ROUTING_POLICY` stage.
+21. Route decision и adjacency/L2 являются разными reusable suboperations.
+22. `DIRECT_DESTINATION` adjacency использует current packet destination в момент L2 handoff.
+23. `GATEWAY` adjacency использует selected gateway.
+24. Successful L2 handoff переносит current PacketState на следующий processing point.
+25. Previous route decision, selected table, egress state и local mark не переносятся на следующий hop.
+26. Packet lineage обязана сохранять original/current/before/after transformations.
+27. Каждый stage возвращает explicit result/evidence.
+28. `DELIVERED` означает network delivery, а не application success.
+29. Explicit endpoint target может быть независим от original public/NAT destination.
+30. End-to-end verdict: `DELIVERED`, `NOT_DELIVERED`, `UNKNOWN`.
+31. `NOT_DELIVERED` требует exhaustive known-negative relevant branches.
+32. `UNKNOWN` не превращается в negative из-за отсутствия данных.
+33. `EXACT` и `POSSIBLE` являются разными query semantics.
+34. Exact nondeterministic selection нельзя угадывать.
+35. `NATPacketConstraint` не является fake exact PacketState и может продолжать analysis только если downstream stage поддерживает constraint reasoning.
+36. Reverse flow анализируется отдельно.
+37. Diagnostic flow trace не мутирует persistent FDB/neighbor/session/NAT state.
+38. What-if state может быть только ephemeral.
+39. Generated reject/ICMP packets являются отдельными child flows.
+40. Processing plan имеет provenance/version/completeness.
+41. Version-sensitive platform plan нельзя применять к неизвестной version без uncertainty.
+42. Partial processing graph не доказывает exact end-to-end path.
+43. Adapter обязан нормализовать vendor pipeline без скрытого пропуска значимых stages.
+44. Trace evidence должно позволять восстановить, какой PacketState видел каждый rule/route stage.
+45. Layer subresults сохраняются и не стираются overall verdict.
+46. Trace result является derived data и не становится independent source of truth.
+47. Recursive gateway lookup сохраняет selected table и не является новым packet-processing pass.
+48. Local mark не является PacketState field или автоматически переносимой wire property.
+49. Workspace selection выполняется выше repository/resolver boundary.
 
 ## Открытые вопросы
 
@@ -2496,7 +2614,7 @@ src IP + dst IP
 - exact shared `PacketPredicate` implementation;
 - concrete DB schema для polymorphic stage payloads;
 - platform adapter format;
-- routing-policy/PBR stages;
+- concrete persistence/resolver implementation согласованных routing-policy stages;
 - exact TTL/fragment/MTU processing placement;
 - tunnel/MPLS encapsulation stages;
 - session fast-path model;

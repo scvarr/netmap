@@ -109,12 +109,13 @@ PacketState
 DSCP
 IPv6 flow label
 fragment state
-mark/tag
 application identity
 user identity
 ```
 
 Но они не должны появляться в core заранее без сценария.
+
+Local mark/fwmark принципиально не входит в `PacketState`. Это transient `LocalProcessingState`, определённый в [[01-07-policy-routing|01.7 Policy Routing]]. Если platform переносит значение через wire-visible поле вроде DSCP, моделируется именно соответствующее packet field.
 
 ## Почему PacketState отдельный объект
 
@@ -754,7 +755,7 @@ ALERT
 
 Если они не меняют packet forwarding, adapter может сохранить их как rule side effects/evidence.
 
-Если tag/mark позднее влияет на routing/security, он становится structured PacketState/processing transformation.
+Если local tag/mark позднее влияет на routing/security, он становится typed `LocalProcessingState` и изменяется explicit processing operation. Только protocol-visible значение может стать соответствующим `PacketState` field.
 
 ## NAT не SecurityRule action
 
@@ -1037,7 +1038,7 @@ UNKNOWN
 UNKNOWN
 ```
 
-Security-only stages сами packet не мутируют, но будущий NAT/mark/route processing делает placement критичным.
+Security-only stages сами packet не мутируют, но NAT и explicit `PACKET_MARK`/`ROUTING_POLICY`/`ROUTE_DECISION` stages делают placement критичным.
 
 Полный processing order будет принадлежать `Packet Flow Trace`.
 

@@ -8,7 +8,7 @@
 
 - разницу между `L3 Reachability` и `IP Packet Trace`;
 - нормализацию origin и destination;
-- routing-context и routing-table selection;
+- routing-context normalization и explicit selected-table boundary;
 - route lookup и longest-prefix match;
 - configured/effective routing views;
 - recursive next-hop resolution;
@@ -25,6 +25,7 @@ NAT и firewall/security processing этой state machine не выполняю
 Связанные заметки:
 
 - [[01-04-l3|01.4 L3 — routing model]];
+- [[01-07-policy-routing|01.7 Policy Routing]];
 - [[03-02-l2-trace|03.2 L2 Trace]];
 - [[01-03-03-mac-fdb|01.3.3 MAC и FDB]];
 - [[01-03-02-l2-operational-state|01.3.2 L2 Operational State]].
@@ -89,10 +90,11 @@ destination_port
 DSCP
 flow_label
 ttl / hop_limit
-marks
 ```
 
 только когда эти поля реально участвуют в routing, ECMP, security или NAT semantics.
+
+Local mark/fwmark не является packet descriptor field. Он принадлежит transient `LocalProcessingState` и участвует в отдельном `PACKET_MARK -> ROUTING_POLICY` processing contract.
 
 Packet trace может требовать:
 
@@ -130,6 +132,7 @@ Reverse path является отдельным запросом.
 L3TraceRequest
     origin
     destination_ip
+    table_selections?
     mode
     trace_kind
     packet_descriptor?
@@ -151,6 +154,8 @@ packet
 ```
 
 Точная API-схема будет определена при реализации.
+
+`table_selections` conceptually позволяет standalone configured query получить explicit already-selected `RoutingTable` для каждого traversed `RoutingContext`. Packet-flow execution вместо этого получает selection из preceding `ROUTING_POLICY` stage. Ни один вариант не делегирует выбор table самому `ROUTE_DECISION`.
 
 ## Origin
 
@@ -241,6 +246,7 @@ Route lookup вынесен в отдельное semantic state:
 ```text
 LookupState
     routing_context_id
+    routing_table_id
     lookup_address
     original_destination
     egress_constraint?
@@ -267,6 +273,8 @@ original_destination
 ```text
 lookup_address
 ```
+
+`routing_table_id` сохраняется на всей recursion chain.
 
 ## Почему это важно
 
@@ -295,34 +303,26 @@ destination_ip = 203.0.113.7
 
 Это было бы NAT-подобным изменением и разрушило бы дальнейшую packet semantics.
 
-## TABLE_SELECT
+## Selected-table boundary
 
-Первый routing transition:
+Standalone L3 route lookup начинается с уже выбранной `RoutingTable`.
 
-```text
-RoutingState / LookupState
-        |
-        | TABLE_SELECT
-        v
-RoutingTable
-```
-
-Routing context может иметь несколько tables одной address family.
-
-Если известна одна explicit primary/default table:
+Table selection находится выше selected-table L3 resolver и определена отдельно в [[01-07-policy-routing|01.7 Policy Routing]]:
 
 ```text
-selected
+PACKET_MARK
+    ->
+ROUTING_POLICY
+    -> selected RoutingTable
+    ->
+ROUTE_DECISION
 ```
 
-Если table selection требует policy routing, а policy resolver ещё не моделирован:
+Для существующего configured backend selected table может быть explicit input caller/query.
 
-```text
-UNKNOWN
-reason = TABLE_SELECTION_UNKNOWN
-```
+Если packet-flow layer не может выбрать table, `TABLE_SELECTION_UNKNOWN` возникает **до** `ROUTE_DECISION`.
 
-Backend не должен выбирать table по имени `main`, номеру или минимальному ID без explicit semantic fact.
+`ROUTE_DECISION` не выбирает table по имени `main`, номеру, минимальному ID, display alias или insertion order. Explicit primary/default table может быть evidence table-selection stage, но не hidden fallback route resolver.
 
 ## Effective query-scoped lookup
 
@@ -609,7 +609,7 @@ lookup_address := G
 purpose := NEXT_HOP_RESOLUTION
 ```
 
-и выполняется новый route lookup в том же routing context/lookup policy.
+и выполняется новый route lookup в том же routing context и той же selected `RoutingTable`.
 
 ## Multi-level recursion
 
@@ -659,6 +659,7 @@ Visited key минимум включает:
 
 ```text
 routing_context
+routing_table_id
 lookup_address
 egress_constraint
 purpose
@@ -981,8 +982,7 @@ reason = MISSING_L3_HANDOFF
 
 ```text
 RoutingContext A
-    |
-TABLE_SELECT
+    + selected RoutingTable
     |
 ROUTE_LOOKUP
     |
@@ -1002,6 +1002,8 @@ RoutingContext B
 ```
 
 Этот цикл повторяется до terminal state.
+
+Для каждого нового routing context table снова должна быть выбрана higher-level caller/`ROUTING_POLICY`. Table предыдущего processing node не наследуется.
 
 ## TTL / Hop Limit
 
@@ -1438,7 +1440,7 @@ UNREACHABLE
 termination = ROUTE_DISCARD
 ```
 
-Если альтернативного route/branch нет и table selection подтверждён:
+Если альтернативного route/branch нет и selected table подтверждена:
 
 ```text
 UNREACHABLE
@@ -1507,9 +1509,9 @@ Subnet/prefix остаётся адресным понятием, а не гот
 
 ```text
 ROUTE_DECISION
-    table selection
-    route lookup
-    recursive next-hop resolution
+    selected RoutingTable as input
+    route lookup in selected table
+    recursive next-hop resolution in SAME table
     ->
     LOCAL / DISCARD / FORWARD
 
@@ -1535,7 +1537,13 @@ other future packet-processing stages
 
 `ROUTE_DECISION` должен сохранять evidence, **над какой версией `PacketState` он был вычислен**.
 
+Он также сохраняет `routing_table_id`, уже выбранный caller/`ROUTING_POLICY`. Table selection не является внутренним transition этого resolver.
+
 Если packet позднее изменён NAT, selected route не пересчитывается автоматически. Повторный route lookup происходит только если `PacketProcessingPlan` явно содержит новый routing stage.
+
+Повторный `ROUTE_DECISION` использует текущую selected table. Если platform должна повторно выполнить policy selection, plan обязан явно разместить новый `ROUTING_POLICY` перед ним.
+
+Recursive lookup gateway address является внутренней работой одного `ROUTE_DECISION`, а не packet reprocessing. Он не создаёт новый `PacketState` и не запускает `PACKET_MARK`, `ROUTING_POLICY`, Security, NAT или entry point packet-processing plan.
 
 Это принципиально: порядок обработки определяет platform semantics, а не интуитивное правило NetMap.
 
@@ -1606,7 +1614,7 @@ primitives.
 4. Host forwarding использует ту же routing model; default gateway не выводится скрытой эвристикой.
 5. Routing state сохраняет original packet destination при recursive next-hop resolution.
 6. Recursive lookup меняет `lookup_address`, а не packet destination.
-7. Routing table selection является отдельной semantic operation.
+7. Routing table selection является отдельной higher-level semantic operation до `ROUTE_DECISION`.
 8. Несколько tables без known selection policy не разрешаются произвольным выбором.
 9. Partial routing table может быть недостаточна даже при наличии matching route из-за неизвестного more-specific prefix.
 10. Authoritative query-scoped FIB lookup может заменить requirement полного table snapshot.
@@ -1634,13 +1642,16 @@ primitives.
 32. Search limit не является доказательством unreachable.
 33. Routing snapshots и other operational facts имеют temporal semantics.
 34. L3 reachability не следует сводить к статическому глобальному connected-component domain.
+35. `LookupState` содержит explicit `routing_table_id`.
+36. Recursive next-hop resolution сохраняет selected table и не вызывает `ROUTING_POLICY`.
+37. `ROUTE_DECISION` никогда скрыто не выбирает table.
 
 ## Открытые вопросы
 
 Следующие ветки остаются намеренно отдельными:
 
 - точная API-схема `L3TraceRequest`/result;
-- routing policy / multiple table selection;
+- concrete implementation согласованной routing-policy semantics;
 - exact ECMP hashing;
 - active ARP/NDP simulation/probing;
 - proxy ARP / proxy NDP;
