@@ -23,6 +23,8 @@ from app.models import (
     Route,
     RouteNextHop,
     RoutingContext,
+    RoutingPolicy,
+    RoutingPolicyRule,
     RoutingTable,
     SecurityPolicy,
     SecurityPolicyAttachment,
@@ -33,6 +35,8 @@ from app.models import (
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(RoutingPolicyRule))
+        session.execute(delete(RoutingPolicy))
         session.execute(delete(NATPolicyAttachment))
         session.execute(delete(NATRule))
         session.execute(delete(NATPolicy))

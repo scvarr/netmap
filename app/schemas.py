@@ -38,6 +38,8 @@ class EvidenceRef(BaseModel):
         "L3Binding",
         "InterfaceAddress",
         "RoutingTable",
+        "RoutingPolicy",
+        "RoutingPolicyRule",
         "Route",
         "RouteNextHop",
         "SecurityPolicy",
@@ -532,6 +534,64 @@ class PacketState(BaseModel):
     destination_port: int | None = Field(default=None, ge=0, le=65535)
     icmp_type: int | None = Field(default=None, ge=0, le=255)
     icmp_code: int | None = Field(default=None, ge=0, le=255)
+
+
+class RoutingTableSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    op: Literal["SELECT_TABLE"]
+    routing_table_id: uuid.UUID
+
+
+class RoutingPolicyEvaluationQuery(BaseModel):
+    policy_id: uuid.UUID
+    routing_context_id: uuid.UUID
+    packet_state: PacketState
+
+
+class RoutingPolicyRuleEvaluationStep(BaseModel):
+    rule_id: uuid.UUID
+    order_key: int
+    predicate_result: Literal["TRUE", "FALSE", "UNKNOWN"]
+    branch_assumption: Literal["MATCH", "NO_MATCH"]
+    evidence_refs: list[EvidenceRef]
+
+
+class RoutingPolicyEvaluationBranch(BaseModel):
+    branch_id: str
+    steps: list[RoutingPolicyRuleEvaluationStep]
+    terminal_source: Literal["RULE", "DEFAULT"]
+    terminal_rule_id: uuid.UUID | None = None
+    selection: RoutingTableSelection
+    selected_routing_table_id: uuid.UUID
+    evidence_refs: list[EvidenceRef]
+
+
+class RoutingPolicyEvaluationGap(BaseModel):
+    code: Literal[
+        "ROUTING_POLICY_INCOMPLETE",
+        "ROUTING_TABLE_SELECTION_UNKNOWN",
+    ]
+    evidence_refs: list[EvidenceRef]
+
+
+class RoutingPolicyEvaluationArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: RoutingPolicyEvaluationQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["routing-policy-configured/1.0"] = (
+        "routing-policy-configured/1.0"
+    )
+    result: Literal["TABLE_SELECTED", "TABLE_SELECTION_UNKNOWN"]
+    policy_id: uuid.UUID
+    configured_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"]
+    routing_context_id: uuid.UUID
+    address_family: Literal["IPv4", "IPv6"]
+    selected_routing_table_id: uuid.UUID | None = None
+    branches: list[RoutingPolicyEvaluationBranch]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[RoutingPolicyEvaluationGap]
+    warnings: list[dict[str, Any]]
 
 
 class ConnectionState(StrEnum):

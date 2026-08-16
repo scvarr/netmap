@@ -27,6 +27,8 @@ from app.models import (
     Route,
     RouteNextHop,
     RoutingContext,
+    RoutingPolicy,
+    RoutingPolicyRule,
     RoutingTable,
     SecurityPolicy,
     SecurityPolicyAttachment,
@@ -36,6 +38,11 @@ from app.nat_transforms import NATTransform, normalize_nat_transform
 from app.nat_pools import NATPoolRangeSet, normalize_nat_pool_ranges
 from app.packet_predicates import Predicate, normalize_predicate
 from app.processing_scopes import ProcessingScope, normalize_processing_scope
+from app.routing_policy_actions import (
+    RoutingTableSelection,
+    normalize_routing_table_selection,
+)
+from app.routing_policy_predicates import normalize_routing_policy_predicate
 from app.security_scopes import SecurityScope, normalize_security_scope
 
 
@@ -141,6 +148,24 @@ class RouteRecord:
 class SelectedRoutingTable:
     table: RoutingTableRecord
     routes: tuple[RouteRecord, ...]
+
+
+@dataclass(frozen=True)
+class RoutingPolicyRuleRecord:
+    routing_policy_rule_id: uuid.UUID
+    policy_id: uuid.UUID
+    order_key: int
+    predicate: Predicate
+    action: RoutingTableSelection
+
+
+@dataclass(frozen=True)
+class RoutingPolicyRecord:
+    routing_policy_id: uuid.UUID
+    default_selection: RoutingTableSelection
+    configured_completeness: str
+    rules: tuple[RoutingPolicyRuleRecord, ...]
+    routing_tables: tuple[RoutingTableRecord, ...]
 
 
 @dataclass(frozen=True)
@@ -463,6 +488,77 @@ class CanonicalRepository:
         self.session.add(table)
         self.session.flush()
         return table
+
+    def add_routing_policy(
+        self,
+        default_selection: object,
+        configured_completeness: str,
+        policy_id: uuid.UUID | None = None,
+    ) -> RoutingPolicy:
+        self._validate_routing_policy_completeness(
+            configured_completeness, model_error=False
+        )
+        normalized = normalize_routing_table_selection(
+            default_selection,
+            model_error=False,
+            table_lookup=lambda table_id: self._get_routing_table_record(
+                table_id, missing_model_error=False
+            ),
+        )
+        policy = RoutingPolicy(
+            id=policy_id or uuid.uuid4(),
+            default_selection=normalized,
+            configured_completeness=configured_completeness,
+        )
+        self.session.add(policy)
+        self.session.flush()
+        return policy
+
+    def add_routing_policy_rule(
+        self,
+        policy_id: uuid.UUID,
+        order_key: int,
+        predicate: object,
+        action: object,
+        rule_id: uuid.UUID | None = None,
+    ) -> RoutingPolicyRule:
+        if self.session.get(RoutingPolicy, policy_id) is None:
+            raise ValidationError(
+                "RoutingPolicy does not exist",
+                {"routing_policy_id": str(policy_id)},
+            )
+        if not isinstance(order_key, int) or isinstance(order_key, bool):
+            raise ValidationError("RoutingPolicyRule order_key must be an integer")
+        if self.session.scalar(
+            select(RoutingPolicyRule.id).where(
+                RoutingPolicyRule.policy_id == policy_id,
+                RoutingPolicyRule.order_key == order_key,
+            )
+        ) is not None:
+            raise ValidationError(
+                "RoutingPolicyRule order_key must be unique within RoutingPolicy",
+                {"routing_policy_id": str(policy_id), "order_key": order_key},
+            )
+        normalized_predicate = normalize_routing_policy_predicate(
+            predicate, model_error=False
+        )
+        normalized_action = normalize_routing_table_selection(
+            action,
+            model_error=False,
+            table_lookup=lambda table_id: self._get_routing_table_record(
+                table_id, missing_model_error=False
+            ),
+        )
+        rule = RoutingPolicyRule(
+            id=rule_id or uuid.uuid4(),
+            policy_id=policy_id,
+            order_key=order_key,
+            predicate=normalized_predicate,
+            action=normalized_action,
+        )
+        self.session.add(rule)
+        self.session.flush()
+        return rule
 
     def add_route(
         self,
@@ -1084,6 +1180,92 @@ class CanonicalRepository:
             routing_context_id=binding.routing_context_id,
         )
 
+    def validate_routing_context(self, routing_context_id: uuid.UUID) -> None:
+        self._require_routing_context(routing_context_id)
+
+    def get_routing_policy(self, policy_id: uuid.UUID) -> RoutingPolicyRecord:
+        policy = self.session.get(RoutingPolicy, policy_id)
+        if policy is None:
+            raise ValidationError(
+                "RoutingPolicy does not exist",
+                {"routing_policy_id": str(policy_id)},
+            )
+        policy_details = {"routing_policy_id": str(policy.id)}
+        self._validate_routing_policy_completeness(
+            policy.configured_completeness, model_error=True
+        )
+        default_selection = normalize_routing_table_selection(
+            policy.default_selection,
+            model_error=True,
+            table_lookup=lambda table_id: self._get_routing_table_record(
+                table_id, missing_model_error=True
+            ),
+            details={**policy_details, "selection_source": "DEFAULT"},
+        )
+        rules = list(
+            self.session.scalars(
+                select(RoutingPolicyRule)
+                .where(RoutingPolicyRule.policy_id == policy_id)
+                .order_by(RoutingPolicyRule.order_key)
+            )
+        )
+        order_keys: set[int] = set()
+        records: list[RoutingPolicyRuleRecord] = []
+        table_ids: list[uuid.UUID] = [
+            uuid.UUID(default_selection["routing_table_id"])
+        ]
+        for rule in rules:
+            details = {
+                "routing_policy_id": str(policy.id),
+                "routing_policy_rule_id": str(rule.id),
+            }
+            if not isinstance(rule.order_key, int) or isinstance(
+                rule.order_key, bool
+            ):
+                raise ModelError("RoutingPolicyRule order_key is invalid", details)
+            if rule.order_key in order_keys:
+                raise ModelError(
+                    "RoutingPolicyRule order_key is duplicated within RoutingPolicy",
+                    {**policy_details, "order_key": rule.order_key},
+                )
+            order_keys.add(rule.order_key)
+            predicate = normalize_routing_policy_predicate(
+                rule.predicate,
+                model_error=True,
+                details=details,
+            )
+            action = normalize_routing_table_selection(
+                rule.action,
+                model_error=True,
+                table_lookup=lambda table_id: self._get_routing_table_record(
+                    table_id, missing_model_error=True
+                ),
+                details=details,
+            )
+            table_ids.append(uuid.UUID(action["routing_table_id"]))
+            records.append(
+                RoutingPolicyRuleRecord(
+                    routing_policy_rule_id=rule.id,
+                    policy_id=rule.policy_id,
+                    order_key=rule.order_key,
+                    predicate=predicate,
+                    action=action,
+                )
+            )
+        unique_table_ids = list(dict.fromkeys(table_ids))
+        return RoutingPolicyRecord(
+            routing_policy_id=policy.id,
+            default_selection=default_selection,
+            configured_completeness=policy.configured_completeness,
+            rules=tuple(records),
+            routing_tables=tuple(
+                self._get_routing_table_record(
+                    table_id, missing_model_error=True
+                )
+                for table_id in unique_table_ids
+            ),
+        )
+
     def get_selected_routing_table(
         self, routing_context_id: uuid.UUID, routing_table_id: uuid.UUID
     ) -> SelectedRoutingTable:
@@ -1672,6 +1854,32 @@ class CanonicalRepository:
             )
         return table
 
+    def _get_routing_table_record(
+        self, table_id: uuid.UUID, *, missing_model_error: bool
+    ) -> RoutingTableRecord:
+        table = self.session.get(RoutingTable, table_id)
+        if table is None:
+            error_type = ModelError if missing_model_error else ValidationError
+            raise error_type(
+                "RoutingTable does not exist",
+                {"routing_table_id": str(table_id)},
+            )
+        self._validate_stored_routing_table(table)
+        if self.session.get(RoutingContext, table.routing_context_id) is None:
+            raise ModelError(
+                "RoutingTable refers to a missing RoutingContext",
+                {
+                    "routing_table_id": str(table.id),
+                    "routing_context_id": str(table.routing_context_id),
+                },
+            )
+        return RoutingTableRecord(
+            table_id=table.id,
+            routing_context_id=table.routing_context_id,
+            address_family=table.address_family,
+            configured_completeness=table.configured_completeness,
+        )
+
     def _add_route_next_hop(
         self,
         route: Route,
@@ -1833,6 +2041,17 @@ class CanonicalRepository:
             error_type = ModelError if model_error else ValidationError
             raise error_type(
                 "NATPolicy configured completeness is invalid",
+                {"configured_completeness": completeness},
+            )
+
+    @staticmethod
+    def _validate_routing_policy_completeness(
+        completeness: object, *, model_error: bool
+    ) -> None:
+        if completeness not in {"COMPLETE", "PARTIAL", "UNKNOWN"}:
+            error_type = ModelError if model_error else ValidationError
+            raise error_type(
+                "RoutingPolicy configured completeness is invalid",
                 {"configured_completeness": completeness},
             )
 

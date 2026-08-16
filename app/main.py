@@ -18,6 +18,7 @@ from app.nat_resolver import ConfiguredNATPolicyResolver
 from app.nat_evaluation_resolver import ConfiguredNATEvaluationResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
+from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
 from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolver
 from app.schemas import (
@@ -40,6 +41,8 @@ from app.schemas import (
     NATEvaluationQuery,
     RouteDecisionArtifact,
     RouteDecisionQuery,
+    RoutingPolicyEvaluationArtifact,
+    RoutingPolicyEvaluationQuery,
     SecurityPolicyEvaluationArtifact,
     SecurityPolicyEvaluationQuery,
     SecurityEvaluationArtifact,
@@ -188,6 +191,21 @@ def trace_l3_reachability(
 ) -> L3ReachabilityArtifact:
     repository = CanonicalRepository(session)
     return ConfiguredL3ReachabilityResolver(repository).resolve(
+        query, EvaluationView()
+    )
+
+
+@app.post(
+    "/v1/traces/routing/policy-evaluation",
+    response_model=RoutingPolicyEvaluationArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def evaluate_routing_policy(
+    query: RoutingPolicyEvaluationQuery,
+    session: Session = Depends(get_session),
+) -> RoutingPolicyEvaluationArtifact:
+    repository = CanonicalRepository(session)
+    return ConfiguredRoutingPolicyResolver(repository).resolve(
         query, EvaluationView()
     )
 

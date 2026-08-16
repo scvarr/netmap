@@ -290,6 +290,54 @@ class RoutingTable(Base):
     )
 
 
+class RoutingPolicy(Base):
+    __tablename__ = "routing_policies"
+    __table_args__ = (
+        CheckConstraint(
+            "jsonb_typeof(default_selection) = 'object'",
+            name="default_selection_object",
+        ),
+        CheckConstraint(
+            "configured_completeness IN ('COMPLETE', 'PARTIAL', 'UNKNOWN')",
+            name="configured_completeness_valid",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    default_selection: Mapped[dict[str, object]] = mapped_column(
+        JSONB, nullable=False
+    )
+    configured_completeness: Mapped[str] = mapped_column(String(8), nullable=False)
+    rules: Mapped[list["RoutingPolicyRule"]] = relationship(
+        back_populates="policy", cascade="all, delete-orphan"
+    )
+
+
+class RoutingPolicyRule(Base):
+    __tablename__ = "routing_policy_rules"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(predicate) = 'object'", name="predicate_object"),
+        CheckConstraint("jsonb_typeof(action) = 'object'", name="action_object"),
+        UniqueConstraint(
+            "policy_id", "order_key", name="uq_routing_policy_rules_policy_order"
+        ),
+        Index("ix_routing_policy_rules_policy_id", "policy_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    policy_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("routing_policies.id", ondelete="CASCADE"), nullable=False
+    )
+    order_key: Mapped[int] = mapped_column(Integer, nullable=False)
+    predicate: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    action: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+    policy: Mapped[RoutingPolicy] = relationship(back_populates="rules")
+
+
 class Route(Base):
     __tablename__ = "routes"
     __table_args__ = (
