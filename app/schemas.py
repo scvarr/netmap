@@ -2,7 +2,7 @@ import uuid
 from enum import StrEnum
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress
+from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, model_validator
 
 
 class PointMemberAddress(BaseModel):
@@ -46,6 +46,7 @@ class EvidenceRef(BaseModel):
         "NATPolicy",
         "NATRule",
         "NATPolicyAttachment",
+        "NATPool",
     ]
     entity_id: uuid.UUID
 
@@ -655,6 +656,73 @@ class NATPolicyEvaluationQuery(BaseModel):
     packet_state: PacketState
 
 
+class NATIPAddressRange(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    start: IPvAnyAddress
+    end: IPvAnyAddress
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "NATIPAddressRange":
+        if self.start.version != self.end.version or int(self.start) > int(self.end):
+            raise ValueError("NAT IP constraint range is invalid")
+        return self
+
+
+class NATPortRange(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    start: int = Field(ge=0, le=65535, strict=True)
+    end: int = Field(ge=0, le=65535, strict=True)
+
+    @model_validator(mode="after")
+    def validate_range(self) -> "NATPortRange":
+        if self.start > self.end:
+            raise ValueError("NAT port constraint range is invalid")
+        return self
+
+
+class NATPacketConstraint(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    packet_base: PacketState
+    source_ip_ranges: list[NATIPAddressRange] | None = None
+    destination_ip_ranges: list[NATIPAddressRange] | None = None
+    source_port_ranges: list[NATPortRange] | None = None
+    destination_port_ranges: list[NATPortRange] | None = None
+
+    @model_validator(mode="after")
+    def validate_has_constraint(self) -> "NATPacketConstraint":
+        if not any(
+            (
+                self.source_ip_ranges,
+                self.destination_ip_ranges,
+                self.source_port_ranges,
+                self.destination_port_ranges,
+            )
+        ):
+            raise ValueError("NATPacketConstraint requires a constrained field")
+        return self
+
+
+class NATTransformApplication(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    result: Literal["IDENTITY", "TRANSFORMED_EXACT", "TRANSFORMED_CONSTRAINED"]
+    packet_after: PacketState | None = None
+    packet_after_constraint: NATPacketConstraint | None = None
+    nat_pool_ids: list[uuid.UUID] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_output_shape(self) -> "NATTransformApplication":
+        if self.result == "TRANSFORMED_CONSTRAINED":
+            if self.packet_after is not None or self.packet_after_constraint is None:
+                raise ValueError("Constrained NAT application requires only a constraint")
+        elif self.packet_after is None or self.packet_after_constraint is not None:
+            raise ValueError("Exact NAT application requires only packet_after")
+        return self
+
+
 class NATRuleEvaluationStep(BaseModel):
     rule_id: uuid.UUID
     order_key: int
@@ -669,8 +737,12 @@ class NATPolicyEvaluationBranch(BaseModel):
     terminal_source: Literal["RULE", "DEFAULT"]
     terminal_rule_id: uuid.UUID | None = None
     selected_transform: dict[str, Any]
+    transform_result: Literal[
+        "IDENTITY", "TRANSFORMED_EXACT", "TRANSFORMED_CONSTRAINED"
+    ]
     packet_before: PacketState
-    packet_after: PacketState
+    packet_after: PacketState | None = None
+    packet_after_constraint: NATPacketConstraint | None = None
     evidence_refs: list[EvidenceRef]
 
 
@@ -686,11 +758,14 @@ class NATPolicyEvaluationArtifact(BaseModel):
     resolver_version: Literal["nat-configured-policy/1.0"] = (
         "nat-configured-policy/1.0"
     )
-    result: Literal["IDENTITY", "TRANSFORMED_EXACT", "UNKNOWN"]
+    result: Literal[
+        "IDENTITY", "TRANSFORMED_EXACT", "TRANSFORMED_CONSTRAINED", "UNKNOWN"
+    ]
     policy_id: uuid.UUID
     configured_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"]
     packet_before: PacketState
     packet_after: PacketState | None = None
+    packet_after_constraint: NATPacketConstraint | None = None
     branches: list[NATPolicyEvaluationBranch]
     evidence_refs: list[EvidenceRef]
     gaps: list[NATPolicyEvaluationGap]
@@ -727,6 +802,7 @@ class NATStageExecution(BaseModel):
     policy_evaluation: NATPolicyEvaluationArtifact | None = None
     packet_before: PacketState
     packet_after: PacketState | None = None
+    packet_after_constraint: NATPacketConstraint | None = None
     evidence_refs: list[EvidenceRef]
 
 
@@ -739,6 +815,7 @@ class NATExecutionBranch(BaseModel):
         "COMPLETED",
         "NAT_POLICY_EVALUATION_UNKNOWN",
         "NAT_STAGE_ORDER_AMBIGUOUS",
+        "NAT_CONSTRAINED_OUTPUT",
     ]
     evidence_refs: list[EvidenceRef]
 
@@ -750,6 +827,7 @@ class NATEvaluationGap(BaseModel):
         "NAT_POLICY_EVALUATION_UNKNOWN",
         "NAT_STAGE_ORDER_AMBIGUOUS",
         "NAT_TRANSLATION_UNKNOWN",
+        "NAT_CONSTRAINED_OUTPUT",
     ]
     attachment_id: uuid.UUID | None = None
     competing_attachment_ids: list[uuid.UUID] = Field(default_factory=list)

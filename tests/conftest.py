@@ -12,6 +12,7 @@ from app.models import (
     NetworkInterfaceRealization,
     NATPolicy,
     NATPolicyAttachment,
+    NATPool,
     NATRule,
     PhysicalObject,
     L2Binding,
@@ -35,6 +36,7 @@ def clean_database():
         session.execute(delete(NATPolicyAttachment))
         session.execute(delete(NATRule))
         session.execute(delete(NATPolicy))
+        session.execute(delete(NATPool))
         session.execute(delete(SecurityPolicyAttachment))
         session.execute(delete(SecurityRule))
         session.execute(delete(SecurityPolicy))

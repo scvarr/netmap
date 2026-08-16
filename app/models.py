@@ -433,6 +433,34 @@ class NATPolicy(Base):
     )
 
 
+class NATPool(Base):
+    __tablename__ = "nat_pools"
+    __table_args__ = (
+        CheckConstraint(
+            "jsonb_typeof(address_ranges) = 'array'",
+            name="address_ranges_array",
+        ),
+        CheckConstraint(
+            "jsonb_typeof(port_ranges) = 'array'",
+            name="port_ranges_array",
+        ),
+        CheckConstraint(
+            "jsonb_array_length(address_ranges) + jsonb_array_length(port_ranges) > 0",
+            name="ranges_not_empty",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    address_ranges: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False
+    )
+    port_ranges: Mapped[list[dict[str, object]]] = mapped_column(
+        JSONB, nullable=False
+    )
+
+
 class NATRule(Base):
     __tablename__ = "nat_rules"
     __table_args__ = (

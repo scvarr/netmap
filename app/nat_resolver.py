@@ -14,7 +14,9 @@ from app.schemas import (
     NATPolicyEvaluationBranch,
     NATPolicyEvaluationGap,
     NATPolicyEvaluationQuery,
+    NATPacketConstraint,
     NATRuleEvaluationStep,
+    NATTransformApplication,
     PacketState,
 )
 
@@ -25,7 +27,7 @@ class _Branch:
     terminal_source: str
     terminal_rule_id: uuid.UUID | None
     selected_transform: NATTransform
-    packet_after: PacketState
+    application: NATTransformApplication
     evidence_refs: tuple[EvidenceRef, ...]
 
 
@@ -67,8 +69,10 @@ class ConfiguredNATPolicyResolver:
                 terminal_source=branch.terminal_source,  # type: ignore[arg-type]
                 terminal_rule_id=branch.terminal_rule_id,
                 selected_transform=branch.selected_transform,
+                transform_result=branch.application.result,
                 packet_before=query.packet_state,
-                packet_after=branch.packet_after,
+                packet_after=branch.application.packet_after,
+                packet_after_constraint=branch.application.packet_after_constraint,
                 evidence_refs=list(branch.evidence_refs),
             )
             for index, branch in enumerate(logical, start=1)
@@ -77,15 +81,13 @@ class ConfiguredNATPolicyResolver:
         if policy.configured_completeness != "COMPLETE":
             result = "UNKNOWN"
             packet_after = None
+            packet_after_constraint = None
             gaps = [
                 NATPolicyEvaluationGap(
                     code="NAT_POLICY_INCOMPLETE", evidence_refs=[policy_ref]
                 )
             ]
         else:
-            packet_outputs = {
-                self._packet_key(branch.packet_after) for branch in logical
-            }
             all_identity = all(
                 branch.selected_transform["op"] == "IDENTITY"
                 for branch in logical
@@ -93,14 +95,40 @@ class ConfiguredNATPolicyResolver:
             if all_identity:
                 result = "IDENTITY"
                 packet_after = query.packet_state
+                packet_after_constraint = None
                 gaps = []
-            elif len(packet_outputs) == 1:
+            elif all(
+                branch.application.packet_after is not None for branch in logical
+            ) and len(
+                {
+                    self._packet_key(branch.application.packet_after)
+                    for branch in logical
+                    if branch.application.packet_after is not None
+                }
+            ) == 1:
                 result = "TRANSFORMED_EXACT"
-                packet_after = logical[0].packet_after
+                packet_after = logical[0].application.packet_after
+                packet_after_constraint = None
+                gaps = []
+            elif all(
+                branch.application.result == "TRANSFORMED_CONSTRAINED"
+                for branch in logical
+            ) and len(
+                {
+                    self._constraint_key(branch.application.packet_after_constraint)
+                    for branch in logical
+                }
+            ) == 1:
+                result = "TRANSFORMED_CONSTRAINED"
+                packet_after = None
+                packet_after_constraint = (
+                    logical[0].application.packet_after_constraint
+                )
                 gaps = []
             else:
                 result = "UNKNOWN"
                 packet_after = None
+                packet_after_constraint = None
                 gaps = [
                     NATPolicyEvaluationGap(
                         code="NAT_TRANSLATION_UNKNOWN",
@@ -122,6 +150,7 @@ class ConfiguredNATPolicyResolver:
             configured_completeness=policy.configured_completeness,  # type: ignore[arg-type]
             packet_before=query.packet_state,
             packet_after=packet_after,
+            packet_after_constraint=packet_after_constraint,
             branches=branches,
             evidence_refs=self._dedupe(
                 [ref for branch in branches for ref in branch.evidence_refs]
@@ -140,16 +169,27 @@ class ConfiguredNATPolicyResolver:
         evidence: tuple[EvidenceRef, ...],
     ) -> list[_Branch]:
         if index == len(policy.rules):
+            application = self._apply_transform(
+                policy.default_transform, packet_before
+            )
             return [
                 _Branch(
                     steps=steps,
                     terminal_source="DEFAULT",
                     terminal_rule_id=None,
                     selected_transform=policy.default_transform,
-                    packet_after=apply_nat_transform(
-                        policy.default_transform, packet_before
+                    application=application,
+                    evidence_refs=tuple(
+                        self._dedupe(
+                            [
+                                *evidence,
+                                *(
+                                    self._ref("NATPool", pool_id)
+                                    for pool_id in application.nat_pool_ids
+                                ),
+                            ]
+                        )
                     ),
-                    evidence_refs=tuple(self._dedupe(list(evidence))),
                 )
             ]
 
@@ -219,27 +259,51 @@ class ConfiguredNATPolicyResolver:
             evidence_refs=[rule_ref],
         )
 
-    @classmethod
     def _rule_terminal(
-        cls,
+        self,
         rule_id: uuid.UUID,
         transform: NATTransform,
         packet_before: PacketState,
         steps: tuple[NATRuleEvaluationStep, ...],
         evidence: tuple[EvidenceRef, ...],
     ) -> _Branch:
+        application = self._apply_transform(transform, packet_before)
         return _Branch(
             steps=steps,
             terminal_source="RULE",
             terminal_rule_id=rule_id,
             selected_transform=transform,
-            packet_after=apply_nat_transform(transform, packet_before),
-            evidence_refs=tuple(cls._dedupe(list(evidence))),
+            application=application,
+            evidence_refs=tuple(
+                self._dedupe(
+                    [
+                        *evidence,
+                        *(
+                            self._ref("NATPool", pool_id)
+                            for pool_id in application.nat_pool_ids
+                        ),
+                    ]
+                )
+            ),
+        )
+
+    def _apply_transform(
+        self, transform: NATTransform, packet_before: PacketState
+    ) -> NATTransformApplication:
+        return apply_nat_transform(
+            transform,
+            packet_before,
+            pool_lookup=self.repository.get_nat_pool,
         )
 
     @staticmethod
     def _packet_key(packet: PacketState) -> str:
         return packet.model_dump_json()
+
+    @staticmethod
+    def _constraint_key(constraint: NATPacketConstraint | None) -> str:
+        assert constraint is not None
+        return constraint.model_dump_json()
 
     @staticmethod
     def _ref(entity_type: str, entity_id: uuid.UUID) -> EvidenceRef:

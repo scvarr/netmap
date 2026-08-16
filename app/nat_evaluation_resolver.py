@@ -284,6 +284,7 @@ class ConfiguredNATEvaluationResolver:
                 policy_evaluation=policy_evaluation,
                 packet_before=execution.current_packet,
                 packet_after=policy_evaluation.packet_after,
+                packet_after_constraint=policy_evaluation.packet_after_constraint,
                 evidence_refs=stage_evidence,
             )
             evidence = tuple(self._dedupe([*base_evidence, *stage_evidence]))
@@ -302,6 +303,23 @@ class ConfiguredNATEvaluationResolver:
                         termination="NAT_POLICY_EVALUATION_UNKNOWN",
                         evidence_refs=evidence,
                         had_transform=execution.had_transform,
+                    )
+                )
+            elif policy_evaluation.result == "TRANSFORMED_CONSTRAINED":
+                gaps.append(
+                    NATEvaluationGap(
+                        code="NAT_CONSTRAINED_OUTPUT",
+                        attachment_id=attachment.record.attachment_id,
+                        evidence_refs=stage_evidence,
+                    )
+                )
+                results.append(
+                    _Execution(
+                        current_packet=None,
+                        stage_executions=base_stages + (stage,),
+                        termination="NAT_CONSTRAINED_OUTPUT",
+                        evidence_refs=evidence,
+                        had_transform=True,
                     )
                 )
             else:

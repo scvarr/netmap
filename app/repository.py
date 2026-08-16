@@ -16,6 +16,7 @@ from app.models import (
     NetworkInterfaceRealization,
     NATPolicy,
     NATPolicyAttachment,
+    NATPool,
     NATRule,
     PhysicalObject,
     L2Binding,
@@ -32,6 +33,7 @@ from app.models import (
     SecurityRule,
 )
 from app.nat_transforms import NATTransform, normalize_nat_transform
+from app.nat_pools import NATPoolRangeSet, normalize_nat_pool_ranges
 from app.packet_predicates import Predicate, normalize_predicate
 from app.processing_scopes import ProcessingScope, normalize_processing_scope
 from app.security_scopes import SecurityScope, normalize_security_scope
@@ -214,6 +216,9 @@ class NATPolicyAttachmentRecord:
     policy_id: uuid.UUID
     local_stage_order: int
     scope: ProcessingScope
+
+
+NATPoolRecord = NATPoolRangeSet
 
 
 class CanonicalRepository:
@@ -643,7 +648,11 @@ class CanonicalRepository:
             configured_completeness, model_error=False
         )
         normalized = normalize_nat_transform(
-            default_transform, model_error=False
+            default_transform,
+            model_error=False,
+            pool_lookup=lambda pool_id: self._get_nat_pool_record(
+                pool_id, missing_model_error=False
+            ),
         )
         policy = NATPolicy(
             id=policy_id or uuid.uuid4(),
@@ -682,7 +691,11 @@ class CanonicalRepository:
             predicate, model_error=False
         )
         normalized_transform = normalize_nat_transform(
-            transform, model_error=False
+            transform,
+            model_error=False,
+            pool_lookup=lambda pool_id: self._get_nat_pool_record(
+                pool_id, missing_model_error=False
+            ),
         )
         rule = NATRule(
             id=rule_id or uuid.uuid4(),
@@ -694,6 +707,26 @@ class CanonicalRepository:
         self.session.add(rule)
         self.session.flush()
         return rule
+
+    def add_nat_pool(
+        self,
+        address_ranges: object | None = None,
+        port_ranges: object | None = None,
+        pool_id: uuid.UUID | None = None,
+    ) -> NATPool:
+        normalized_addresses, normalized_ports = normalize_nat_pool_ranges(
+            [] if address_ranges is None else address_ranges,
+            [] if port_ranges is None else port_ranges,
+            model_error=False,
+        )
+        pool = NATPool(
+            id=pool_id or uuid.uuid4(),
+            address_ranges=normalized_addresses,
+            port_ranges=normalized_ports,
+        )
+        self.session.add(pool)
+        self.session.flush()
+        return pool
 
     def add_nat_policy_attachment(
         self,
@@ -1257,6 +1290,9 @@ class CanonicalRepository:
         default_transform = normalize_nat_transform(
             policy.default_transform,
             model_error=True,
+            pool_lookup=lambda pool_id: self._get_nat_pool_record(
+                pool_id, missing_model_error=True
+            ),
             details=details,
         )
         rules = list(
@@ -1288,6 +1324,9 @@ class CanonicalRepository:
             transform = normalize_nat_transform(
                 rule.transform,
                 model_error=True,
+                pool_lookup=lambda pool_id: self._get_nat_pool_record(
+                    pool_id, missing_model_error=True
+                ),
                 details=rule_details,
             )
             records.append(
@@ -1304,6 +1343,29 @@ class CanonicalRepository:
             default_transform=default_transform,
             configured_completeness=policy.configured_completeness,
             rules=tuple(records),
+        )
+
+    def get_nat_pool(self, pool_id: uuid.UUID) -> NATPoolRecord:
+        return self._get_nat_pool_record(pool_id, missing_model_error=False)
+
+    def _get_nat_pool_record(
+        self, pool_id: uuid.UUID, *, missing_model_error: bool
+    ) -> NATPoolRecord:
+        pool = self.session.get(NATPool, pool_id)
+        if pool is None:
+            error_type = ModelError if missing_model_error else ValidationError
+            raise error_type("NATPool does not exist", {"nat_pool_id": str(pool_id)})
+        details = {"nat_pool_id": str(pool.id)}
+        address_ranges, port_ranges = normalize_nat_pool_ranges(
+            pool.address_ranges,
+            pool.port_ranges,
+            model_error=True,
+            details=details,
+        )
+        return NATPoolRecord(
+            pool_id=pool.id,
+            address_ranges=tuple(address_ranges),
+            port_ranges=tuple(port_ranges),
         )
 
     def get_nat_policy_attachments(
