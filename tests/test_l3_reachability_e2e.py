@@ -124,6 +124,62 @@ def test_one_router_direct_destination_is_target_reached():
     assert hop["structural_adjacency"]["result"] == "REACHABLE"
 
 
+def test_recursive_gateway_resolution_reaches_remote_router_and_target():
+    destination = "203.0.113.9"
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        r1, t1 = add_context(repository)
+        r2, t2 = add_context(repository)
+        _origin_interface, origin = bind_interface(repository, r1)
+        r1_egress_interface, r1_egress = bind_interface(repository, r1)
+        gateway_interface, gateway_ingress = bind_interface(repository, r2)
+        repository.add_interface_address(gateway_ingress.id, "192.0.2.2", 30)
+        attach_l2(repository, r1_egress_interface, gateway_interface)
+        repository.add_route(
+            t1.id,
+            "203.0.113.0/24",
+            "FORWARD",
+            [RouteNextHopInput(gateway_address="192.0.2.2")],
+        )
+        repository.add_route(
+            t1.id,
+            "192.0.2.2/32",
+            "FORWARD",
+            [RouteNextHopInput(egress_l3_binding_id=r1_egress.id)],
+        )
+
+        r2_egress_interface, r2_egress = bind_interface(repository, r2)
+        target_interface, target = bind_interface(repository, r2)
+        repository.add_interface_address(target.id, destination, 24)
+        attach_l2(repository, r2_egress_interface, target_interface)
+        repository.add_route(
+            t2.id,
+            "203.0.113.0/24",
+            "FORWARD",
+            [RouteNextHopInput(egress_l3_binding_id=r2_egress.id)],
+        )
+
+    body = reachability(
+        origin.id,
+        destination,
+        [(r1.id, t1.id), (r2.id, t2.id)],
+    ).json()
+
+    assert body["verdict"] == "REACHABLE"
+    reached = next(
+        branch
+        for branch in body["branches"]
+        if branch["termination"] == "TARGET_REACHED"
+    )
+    first_direct = reached["hops"][0]["next_hop_branch"]["direct_egress"]
+    assert first_direct["adjacency_mode"] == "GATEWAY"
+    assert first_direct["gateway_address"] == "192.0.2.2"
+    assert first_direct["original_destination"] == destination
+    assert reached["hops"][0]["reached_l3_binding_id"] == str(
+        gateway_ingress.id
+    )
+
+
 def test_target_reached_on_first_handoff_needs_no_target_host_selection():
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)

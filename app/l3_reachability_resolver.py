@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass
 
 from app.errors import ValidationError
+from app.forwarding_adjacency import derive_adjacency_target
 from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.repository import CanonicalRepository
 from app.schemas import (
@@ -31,7 +32,7 @@ class _TraversalBranch:
 
 
 class ConfiguredL3ReachabilityResolver:
-    VERSION = "l3-configured-multirouter/1.0"
+    VERSION = "l3-configured-multirouter/1.1"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
@@ -202,7 +203,9 @@ class ConfiguredL3ReachabilityResolver:
             adjacency = self.adjacency.resolve(
                 StructuralAdjacencyQuery(
                     egress_l3_binding_id=direct.egress_l3_binding_id,
-                    neighbor_target_ip=direct.neighbor_target_ip,
+                    neighbor_target_ip=derive_adjacency_target(
+                        direct, state.destination_ip
+                    ),
                 ),
                 view,
             )

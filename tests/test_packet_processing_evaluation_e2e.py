@@ -474,7 +474,8 @@ def test_recursive_gateway_resolution_uses_same_selected_table_and_preserves_egr
     assert execution["stage_outcome"] == "FORWARD"
     assert execution["direct_egress"] == {
         "egress_l3_binding_id": str(binding_id),
-        "neighbor_target_ip": "192.0.2.2",
+        "adjacency_mode": "GATEWAY",
+        "gateway_address": "192.0.2.2",
         "original_destination": "203.0.113.8",
     }
     assert {step["state"]["routing_table_id"] for step in nested_branch["lookup_steps"]} == {
@@ -581,7 +582,7 @@ def test_mixed_resolved_unknown_next_hops_remain_separate_and_aggregate_unknown(
                             lookup_steps=[],
                             direct_egress=DirectEgressState(
                                 egress_l3_binding_id=binding_id,
-                                neighbor_target_ip="203.0.113.8",
+                                adjacency_mode="DIRECT_DESTINATION",
                                 original_destination="203.0.113.8",
                             ),
                             evidence_refs=[],

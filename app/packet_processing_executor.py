@@ -92,7 +92,7 @@ class _ExecutionBranch:
 
 
 class PacketProcessingPlanExecutor:
-    VERSION = "packet-processing-routing-security-nat/1.2"
+    VERSION = "packet-processing-routing-security-nat/1.3"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository

@@ -7,9 +7,15 @@ from sqlalchemy import text
 
 from app.database import SessionLocal
 from app.errors import ModelError
+from app.forwarding_adjacency import derive_adjacency_target
 from app.nat_attachment_resolver import ConfiguredNATAttachmentResolver
 from app.repository import CanonicalRepository, RouteNextHopInput
-from app.schemas import EvaluationView, NATEvaluationContext, PacketState
+from app.schemas import (
+    DirectEgressState,
+    EvaluationView,
+    NATEvaluationContext,
+    PacketState,
+)
 
 
 BASE_URL = os.environ.get("TEST_BASE_URL", "http://127.0.0.1:8000")
@@ -495,13 +501,25 @@ def test_nat_before_routing_policy_and_route_both_see_translated_packet():
     assert route_execution["selected_routing_table_id_before"] == str(table_id)
 
 
-def build_route_nat_plan(repository, *, reroute=False, reselect=False):
+def build_route_nat_plan(
+    repository, *, reroute=False, reselect=False, first_gateway=None
+):
     context = repository.add_routing_context()
     table_a = repository.add_routing_table(context.id, "IPv4", "COMPLETE")
     table_b = repository.add_routing_table(context.id, "IPv4", "COMPLETE")
     interfaces = [repository.add_network_interface() for _ in range(2)]
     bindings = [repository.add_l3_binding(item.id, context.id) for item in interfaces]
-    repository.add_route(table_a.id, "203.0.113.0/24", "FORWARD", [RouteNextHopInput(egress_l3_binding_id=bindings[0].id)])
+    repository.add_route(
+        table_a.id,
+        "203.0.113.0/24",
+        "FORWARD",
+        [
+            RouteNextHopInput(
+                gateway_address=first_gateway,
+                egress_l3_binding_id=bindings[0].id,
+            )
+        ],
+    )
     repository.add_route((table_b if reselect else table_a).id, "198.51.100.0/24", "FORWARD", [RouteNextHopInput(egress_l3_binding_id=bindings[1].id)])
     policy_a = repository.add_routing_policy({"op": "SELECT_TABLE", "routing_table_id": str(table_a.id)}, "COMPLETE")
     policy_b = repository.add_routing_policy({"op": "SELECT_TABLE", "routing_table_id": str(table_b.id)}, "COMPLETE")
@@ -547,14 +565,52 @@ def test_nat_after_route_requires_explicit_reroute_or_policy_reselection(reroute
     assert route_executions[0]["next_hop_resolution"]["query"]["destination_ip"] == "203.0.113.8"
     if not reroute:
         assert final["direct_egress"]["egress_l3_binding_id"] == binding_ids[0]
+        assert final["direct_egress"]["adjacency_mode"] == "DIRECT_DESTINATION"
+        assert final["direct_egress"]["gateway_address"] is None
+        decision = DirectEgressState.model_validate(final["direct_egress"])
+        assert str(
+            derive_adjacency_target(
+                decision,
+                PacketState.model_validate(final["current_packet_state"]).destination_ip,
+            )
+        ) == "198.51.100.8"
         assert final["selected_routing_table_id"] == str(table_a.id)
     else:
         assert route_executions[1]["next_hop_resolution"]["query"]["destination_ip"] == "198.51.100.8"
         expected_table = table_b.id if reselect else table_a.id
         assert route_executions[1]["selected_routing_table_id_before"] == str(expected_table)
         assert final["direct_egress"]["egress_l3_binding_id"] == binding_ids[1]
+        assert final["direct_egress"]["adjacency_mode"] == "DIRECT_DESTINATION"
     policy_executions = [item for item in artifact["branches"][0]["stage_executions"] if item["stage_kind"] == "ROUTING_POLICY"]
     assert len(policy_executions) == (2 if reselect else 1)
+
+
+def test_nat_after_gateway_route_preserves_gateway_adjacency_target():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan, context, table_a, _table_b, bindings = build_route_nat_plan(
+            repository, first_gateway="192.0.2.1"
+        )
+        plan_id, context_id = plan.id, context.id
+
+    artifact = evaluate(plan_id, context_id).json()
+    final = artifact["branches"][0]["final_state"]
+    decision = DirectEgressState.model_validate(final["direct_egress"])
+
+    assert final["current_packet_state"]["destination_ip"] == "198.51.100.8"
+    assert final["direct_egress"] == {
+        "egress_l3_binding_id": str(bindings[0].id),
+        "adjacency_mode": "GATEWAY",
+        "gateway_address": "192.0.2.1",
+        "original_destination": "203.0.113.8",
+    }
+    assert str(
+        derive_adjacency_target(
+            decision,
+            PacketState.model_validate(final["current_packet_state"]).destination_ip,
+        )
+    ) == "192.0.2.1"
+    assert final["selected_routing_table_id"] == str(table_a.id)
 
 
 def test_nat_then_security_sees_translated_packet_and_reverse_order_sees_original():

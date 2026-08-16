@@ -358,9 +358,25 @@ class L3LookupStep(BaseModel):
 
 
 class DirectEgressState(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     egress_l3_binding_id: uuid.UUID
-    neighbor_target_ip: IPvAnyAddress
+    adjacency_mode: Literal["GATEWAY", "DIRECT_DESTINATION"]
+    gateway_address: IPvAnyAddress | None = None
     original_destination: IPvAnyAddress
+
+    @model_validator(mode="after")
+    def validate_adjacency_target(self) -> "DirectEgressState":
+        if self.adjacency_mode == "GATEWAY" and self.gateway_address is None:
+            raise ValueError("GATEWAY direct egress requires gateway_address")
+        if (
+            self.adjacency_mode == "DIRECT_DESTINATION"
+            and self.gateway_address is not None
+        ):
+            raise ValueError(
+                "DIRECT_DESTINATION direct egress forbids gateway_address"
+            )
+        return self
 
 
 class NextHopResolutionBranch(BaseModel):
@@ -382,8 +398,8 @@ class NextHopResolutionArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: NextHopResolutionQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["l3-selected-table-next-hop-resolution/1.0"] = (
-        "l3-selected-table-next-hop-resolution/1.0"
+    resolver_version: Literal["l3-selected-table-next-hop-resolution/1.1"] = (
+        "l3-selected-table-next-hop-resolution/1.1"
     )
     result: Literal[
         "RESOLVED",
@@ -521,8 +537,8 @@ class L3ReachabilityArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: L3ReachabilityQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["l3-configured-multirouter/1.0"] = (
-        "l3-configured-multirouter/1.0"
+    resolver_version: Literal["l3-configured-multirouter/1.1"] = (
+        "l3-configured-multirouter/1.1"
     )
     verdict: Literal["REACHABLE", "UNREACHABLE", "UNKNOWN"]
     branches: list[L3ReachabilityBranch]
@@ -774,8 +790,8 @@ class PacketProcessingEvaluationArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: PacketProcessingEvaluationQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["packet-processing-routing-security-nat/1.2"] = (
-        "packet-processing-routing-security-nat/1.2"
+    resolver_version: Literal["packet-processing-routing-security-nat/1.3"] = (
+        "packet-processing-routing-security-nat/1.3"
     )
     result: Literal[
         "CONTINUE_TO_NEXT_HOP",

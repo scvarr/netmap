@@ -52,7 +52,7 @@ def branch_refs(branch):
     return {(ref["entity_type"], ref["entity_id"]) for ref in branch["evidence_refs"]}
 
 
-def test_interface_only_resolves_destination_as_neighbor():
+def test_interface_only_defers_direct_destination_adjacency():
     context_id, table_id, binding_id = configured_table()
     route_id = add_forward(
         table_id,
@@ -68,7 +68,8 @@ def test_interface_only_resolves_destination_as_neighbor():
     assert branch["outcome"] == "RESOLVED"
     assert branch["direct_egress"] == {
         "egress_l3_binding_id": str(binding_id),
-        "neighbor_target_ip": "203.0.113.9",
+        "adjacency_mode": "DIRECT_DESTINATION",
+        "gateway_address": None,
         "original_destination": "203.0.113.9",
     }
     assert ("Route", str(route_id)) in branch_refs(branch)
@@ -90,7 +91,8 @@ def test_gateway_and_interface_is_direct_without_recursive_lookup():
     branch = artifact["branches"][0]
     assert len(branch["lookup_steps"]) == 1
     assert branch["direct_egress"]["egress_l3_binding_id"] == str(binding_id)
-    assert branch["direct_egress"]["neighbor_target_ip"] == "192.0.2.1"
+    assert branch["direct_egress"]["adjacency_mode"] == "GATEWAY"
+    assert branch["direct_egress"]["gateway_address"] == "192.0.2.1"
 
 
 def test_gateway_only_recurses_once_in_selected_table():
@@ -112,7 +114,8 @@ def test_gateway_only_recurses_once_in_selected_table():
         "198.51.100.7",
         "192.0.2.1",
     ]
-    assert branch["direct_egress"]["neighbor_target_ip"] == "192.0.2.1"
+    assert branch["direct_egress"]["adjacency_mode"] == "GATEWAY"
+    assert branch["direct_egress"]["gateway_address"] == "192.0.2.1"
 
 
 def test_multi_level_recursion_preserves_original_destination():
@@ -146,7 +149,8 @@ def test_multi_level_recursion_preserves_original_destination():
     assert {step["state"]["routing_table_id"] for step in branch["lookup_steps"]} == {
         str(table_id)
     }
-    assert branch["direct_egress"]["neighbor_target_ip"] == "192.0.2.2"
+    assert branch["direct_egress"]["adjacency_mode"] == "GATEWAY"
+    assert branch["direct_egress"]["gateway_address"] == "192.0.2.2"
 
 
 def test_recursion_never_switches_to_another_table():
@@ -323,9 +327,13 @@ def test_recursive_ecmp_branches_to_all_resolved_candidates():
     assert len(artifact["branches"]) == 2
     assert all(len(branch["lookup_steps"]) == 2 for branch in artifact["branches"])
     assert {
-        branch["direct_egress"]["neighbor_target_ip"]
+        branch["direct_egress"]["gateway_address"]
         for branch in artifact["branches"]
     } == {"192.0.2.1", "192.0.2.2"}
+    assert {
+        branch["direct_egress"]["adjacency_mode"]
+        for branch in artifact["branches"]
+    } == {"GATEWAY"}
 
 
 def test_resolved_and_unresolved_ecmp_branches_are_both_preserved():

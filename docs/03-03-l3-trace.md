@@ -556,7 +556,11 @@ Resolver должен получить:
 ```text
 DirectEgressState
     egress_l3_binding_id
-    neighbor_target_ip
+    adjacency_mode
+        GATEWAY
+        DIRECT_DESTINATION
+    gateway_address?
+    original_destination
 ```
 
 ## Interface-only route
@@ -570,12 +574,17 @@ out Eth1
 то:
 
 ```text
-neighbor_target_ip = lookup_address
+purpose = PACKET_DESTINATION
+    -> adjacency_mode = DIRECT_DESTINATION
+
+purpose = NEXT_HOP_RESOLUTION
+    -> adjacency_mode = GATEWAY
+    -> gateway_address = lookup_address
 ```
 
-Для primary packet lookup это обычно original destination.
-
-Для recursive lookup это текущий gateway address.
+Для primary packet lookup concrete neighbor target намеренно вычисляется позднее
+из текущего `PacketState.destination_ip`. Для recursive lookup terminal
+interface-only route сохраняет текущий gateway как `gateway_address`.
 
 ## Gateway + interface
 
@@ -589,7 +598,8 @@ via G out Eth1
 
 ```text
 egress = Eth1 L3Binding
-neighbor_target = G
+adjacency_mode = GATEWAY
+gateway_address = G
 ```
 
 Recursion для выбора interface не нужна, если semantic route уже задаёт достаточный direct scope.
@@ -635,7 +645,8 @@ lookup G2
     |
 DirectEgress(
     Eth1,
-    neighbor_target = G2
+    adjacency_mode = GATEWAY,
+    gateway_address = G2
 )
 ```
 

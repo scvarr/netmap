@@ -22,7 +22,7 @@ LookupKey = tuple[uuid.UUID, uuid.UUID, str, uuid.UUID | None, str]
 
 
 class SelectedTableNextHopResolver:
-    VERSION = "l3-selected-table-next-hop-resolution/1.0"
+    VERSION = "l3-selected-table-next-hop-resolution/1.1"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.route_decision = SelectedTableRouteDecisionResolver(repository)
@@ -115,14 +115,23 @@ class SelectedTableNextHopResolver:
             branch_steps = steps + [step]
             branch_evidence = evidence + candidate_refs
             if candidate.egress_l3_binding_id is not None:
-                neighbor_target = candidate.gateway_address or state.lookup_address
+                if candidate.gateway_address is not None:
+                    adjacency_mode = "GATEWAY"
+                    gateway_address = candidate.gateway_address
+                elif state.purpose == "NEXT_HOP_RESOLUTION":
+                    adjacency_mode = "GATEWAY"
+                    gateway_address = state.lookup_address
+                else:
+                    adjacency_mode = "DIRECT_DESTINATION"
+                    gateway_address = None
                 branches.append(
                     NextHopResolutionBranch(
                         outcome="RESOLVED",
                         lookup_steps=branch_steps,
                         direct_egress=DirectEgressState(
                             egress_l3_binding_id=candidate.egress_l3_binding_id,
-                            neighbor_target_ip=neighbor_target,
+                            adjacency_mode=adjacency_mode,
+                            gateway_address=gateway_address,
                             original_destination=state.original_destination,
                         ),
                         evidence_refs=self._dedupe(branch_evidence),
