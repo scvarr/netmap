@@ -649,6 +649,98 @@ class RoutingPolicyEvaluationArtifact(BaseModel):
     warnings: list[dict[str, Any]]
 
 
+class PacketProcessingEvaluationQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    plan_id: uuid.UUID
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    routing_context_id: uuid.UUID
+    packet_state: PacketState
+    ingress_network_interface_id: uuid.UUID | None = None
+    ingress_l3_binding_id: uuid.UUID | None = None
+
+
+class PacketProcessingFlowState(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    original_packet_state: PacketState
+    current_packet_state: PacketState
+    routing_context_id: uuid.UUID
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    ingress_network_interface_id: uuid.UUID | None = None
+    ingress_l3_binding_id: uuid.UUID | None = None
+    selected_routing_table_id: uuid.UUID | None = None
+    current_route_resolution_branch: NextHopResolutionBranch | None = None
+    direct_egress: DirectEgressState | None = None
+    current_stage_id: uuid.UUID
+
+
+class PacketProcessingExecutionGap(BaseModel):
+    code: Literal[
+        "PROCESSING_PLAN_INCOMPLETE",
+        "STAGE_PRECONDITION_UNKNOWN",
+        "NEXT_HOP_RESOLUTION_LOOP",
+    ]
+    stage_id: uuid.UUID | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class PacketProcessingStageExecution(BaseModel):
+    stage_id: uuid.UUID
+    stage_kind: Literal["ROUTING_POLICY", "ROUTE_DECISION", "TERMINATE"]
+    packet_before: PacketState
+    packet_after: PacketState
+    traffic_class_before: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    traffic_class_after: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    selected_routing_table_id_before: uuid.UUID | None = None
+    selected_routing_table_id_after: uuid.UUID | None = None
+    stage_outcome: str
+    transition_id: uuid.UUID | None = None
+    next_stage_id: uuid.UUID | None = None
+    routing_policy_evaluation: RoutingPolicyEvaluationArtifact | None = None
+    next_hop_resolution: NextHopResolutionArtifact | None = None
+    selected_next_hop_branch_index: int | None = None
+    direct_egress: DirectEgressState | None = None
+    evidence_refs: list[EvidenceRef]
+    gaps: list[PacketProcessingExecutionGap]
+
+
+class PacketProcessingExecutionBranch(BaseModel):
+    branch_id: str
+    initial_state: PacketProcessingFlowState
+    stage_executions: list[PacketProcessingStageExecution]
+    final_state: PacketProcessingFlowState
+    terminal_outcome: Literal[
+        "CONTINUE_TO_NEXT_HOP",
+        "NETWORK_DELIVERY",
+        "NOT_DELIVERED",
+        "UNKNOWN",
+    ]
+    evidence_refs: list[EvidenceRef]
+
+
+class PacketProcessingEvaluationArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: PacketProcessingEvaluationQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["packet-processing-routing-only/1.0"] = (
+        "packet-processing-routing-only/1.0"
+    )
+    result: Literal[
+        "CONTINUE_TO_NEXT_HOP",
+        "NETWORK_DELIVERY",
+        "NOT_DELIVERED",
+        "UNKNOWN",
+    ]
+    plan_id: uuid.UUID
+    configured_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"]
+    original_packet_state: PacketState
+    branches: list[PacketProcessingExecutionBranch]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[PacketProcessingExecutionGap]
+    warnings: list[dict[str, Any]]
+
+
 class ConnectionState(StrEnum):
     NEW = "NEW"
     ESTABLISHED = "ESTABLISHED"

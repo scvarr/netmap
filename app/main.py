@@ -17,6 +17,7 @@ from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.nat_resolver import ConfiguredNATPolicyResolver
 from app.nat_evaluation_resolver import ConfiguredNATEvaluationResolver
 from app.packet_processing_plan_resolver import PacketProcessingPlanValidationResolver
+from app.packet_processing_executor import PacketProcessingPlanExecutor
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
@@ -40,6 +41,8 @@ from app.schemas import (
     NATPolicyEvaluationQuery,
     PacketProcessingPlanValidationArtifact,
     PacketProcessingPlanValidationQuery,
+    PacketProcessingEvaluationArtifact,
+    PacketProcessingEvaluationQuery,
     NATEvaluationArtifact,
     NATEvaluationQuery,
     RouteDecisionArtifact,
@@ -102,6 +105,19 @@ def validate_packet_processing_plan(
     return PacketProcessingPlanValidationResolver(repository).resolve(
         query, EvaluationView()
     )
+
+
+@app.post(
+    "/v1/traces/packet-processing/evaluation",
+    response_model=PacketProcessingEvaluationArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def evaluate_packet_processing_plan(
+    query: PacketProcessingEvaluationQuery,
+    session: Session = Depends(get_session),
+) -> PacketProcessingEvaluationArtifact:
+    repository = CanonicalRepository(session)
+    return PacketProcessingPlanExecutor(repository).resolve(query, EvaluationView())
 
 
 @app.post(
