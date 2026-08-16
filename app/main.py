@@ -29,8 +29,11 @@ from app.schemas import (
     NextHopResolutionQuery,
     RouteDecisionArtifact,
     RouteDecisionQuery,
+    StructuralAdjacencyArtifact,
+    StructuralAdjacencyQuery,
     TraceArtifact,
 )
+from app.structural_adjacency_resolver import StructuralAdjacencyProofResolver
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("netmap")
@@ -142,3 +145,18 @@ def trace_l3_adjacency_candidates(
 ) -> AdjacencyCandidatesArtifact:
     repository = CanonicalRepository(session)
     return StructuralAdjacencyResolver(repository).resolve(query, EvaluationView())
+
+
+@app.post(
+    "/v1/traces/l3/structural-adjacency",
+    response_model=StructuralAdjacencyArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def trace_l3_structural_adjacency(
+    query: StructuralAdjacencyQuery,
+    session: Session = Depends(get_session),
+) -> StructuralAdjacencyArtifact:
+    repository = CanonicalRepository(session)
+    return StructuralAdjacencyProofResolver(repository).resolve(
+        query, EvaluationView()
+    )

@@ -184,6 +184,11 @@ class L2BoundaryPayload(BaseModel):
     encapsulation_stack: list[EncapsulationLabel]
 
 
+class L2InternalInterfacePayload(BaseModel):
+    interface_id: uuid.UUID
+    direction: Literal["INGRESS", "EGRESS"]
+
+
 class L2ContextPayload(BaseModel):
     forwarding_context_id: uuid.UUID
     ingress_binding_id: uuid.UUID
@@ -199,7 +204,12 @@ class L2TraceNode(BaseModel):
     id: str
     kind: Literal["STATE"] = "STATE"
     layer: Literal["L2"] = "L2"
-    payload: L2BoundaryPayload | L2ContextPayload | L2BindingPayload
+    payload: (
+        L2BoundaryPayload
+        | L2InternalInterfacePayload
+        | L2ContextPayload
+        | L2BindingPayload
+    )
     canonical_refs: list[EvidenceRef]
 
 
@@ -214,6 +224,7 @@ class L2TraceEdge(BaseModel):
         "REALIZATION_DOWN",
         "PHYSICAL_TRANSPORT",
         "REALIZATION_UP",
+        "INTERNAL_ATTACH",
     ]
     layer: Literal["L2", "INTERFACE", "L1"] = "L2"
     evidence_refs: list[EvidenceRef]
@@ -226,6 +237,7 @@ class L2TraceGap(BaseModel):
         "L2_EGRESS_RULE_UNKNOWN",
         "L2_TARGET_CONTEXT_PATH_UNKNOWN",
         "L2_PHYSICAL_TRANSPORT_UNKNOWN",
+        "L2_INTERNAL_ATTACHMENT_UNKNOWN",
     ]
     node_id: str | None = None
     evidence_refs: list[EvidenceRef]
@@ -400,6 +412,43 @@ class AdjacencyCandidatesArtifact(BaseModel):
     candidates: list[AdjacencyCandidate]
     evidence_refs: list[EvidenceRef]
     gaps: list[AdjacencyCandidatesGap]
+    warnings: list[dict[str, Any]]
+
+
+class StructuralAdjacencyQuery(BaseModel):
+    egress_l3_binding_id: uuid.UUID
+    neighbor_target_ip: IPvAnyAddress
+
+
+class StructuralL2TraversalArtifact(BaseModel):
+    verdict: Literal["REACHABLE", "UNKNOWN"]
+    source: L2InternalInterfacePayload
+    target: L2InternalInterfacePayload
+    branches: list[L2ReachabilityTraceBranch]
+    nodes: list[L2TraceNode]
+    edges: list[L2TraceEdge]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[L2TraceGap]
+
+
+class StructuralAdjacencyCandidateResult(BaseModel):
+    identity_candidate: AdjacencyCandidate
+    result: Literal["REACHABLE", "UNKNOWN"]
+    l2_traversal: StructuralL2TraversalArtifact
+    evidence_refs: list[EvidenceRef]
+
+
+class StructuralAdjacencyArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: StructuralAdjacencyQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["l3-structural-adjacency-proof/1.0"] = (
+        "l3-structural-adjacency-proof/1.0"
+    )
+    result: Literal["REACHABLE", "UNKNOWN"]
+    identity_resolution: AdjacencyCandidatesArtifact
+    candidate_results: list[StructuralAdjacencyCandidateResult]
+    evidence_refs: list[EvidenceRef]
     warnings: list[dict[str, Any]]
 
 

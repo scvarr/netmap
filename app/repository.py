@@ -149,6 +149,13 @@ class AdjacencyIdentityView:
     candidates: tuple[InterfaceAddressRecord, ...]
 
 
+@dataclass(frozen=True)
+class L3BindingAttachmentRecord:
+    l3_binding_id: uuid.UUID
+    network_interface_id: uuid.UUID
+    routing_context_id: uuid.UUID
+
+
 class CanonicalRepository:
     """Canonical read boundary and minimal fixture writes for implemented slices."""
 
@@ -771,6 +778,30 @@ class CanonicalRepository:
             egress_network_interface_id=source.interface_id,
             routing_context_id=source.routing_context_id,
             candidates=candidates,
+        )
+
+    def get_l3_binding_attachment(
+        self, l3_binding_id: uuid.UUID
+    ) -> L3BindingAttachmentRecord:
+        binding = self.session.get(L3Binding, l3_binding_id)
+        if binding is None:
+            raise ValidationError(
+                "L3Binding does not exist", {"l3_binding_id": str(l3_binding_id)}
+            )
+        if self.session.get(NetworkInterface, binding.interface_id) is None:
+            raise ModelError(
+                "L3Binding refers to a missing NetworkInterface",
+                {"l3_binding_id": str(binding.id)},
+            )
+        if self.session.get(RoutingContext, binding.routing_context_id) is None:
+            raise ModelError(
+                "L3Binding refers to a missing RoutingContext",
+                {"l3_binding_id": str(binding.id)},
+            )
+        return L3BindingAttachmentRecord(
+            l3_binding_id=binding.id,
+            network_interface_id=binding.interface_id,
+            routing_context_id=binding.routing_context_id,
         )
 
     def get_selected_routing_table(

@@ -19,6 +19,7 @@ from app.schemas import (
     L2BindingPayload,
     L2BoundaryPayload,
     L2ContextPayload,
+    L2InternalInterfacePayload,
     L2ReachabilityQuery,
     L2ReachabilityTraceArtifact,
     L2ReachabilityTraceBranch,
@@ -43,7 +44,13 @@ class ContextState:
     ingress_binding_id: uuid.UUID
 
 
-SemanticState = BoundaryState | ContextState
+@dataclass(frozen=True)
+class InternalInterfaceState:
+    interface_id: uuid.UUID
+    direction: Literal["INGRESS", "EGRESS"]
+
+
+SemanticState = BoundaryState | ContextState | InternalInterfaceState
 
 
 @dataclass(frozen=True)
@@ -72,6 +79,18 @@ class RemotePhysicalCandidate:
     l1_artifact: Any
 
 
+@dataclass(frozen=True)
+class L2TraversalResult:
+    verdict: Literal["REACHABLE", "UNKNOWN"]
+    source: SemanticState
+    target: SemanticState
+    branches: list[L2ReachabilityTraceBranch]
+    nodes: list[L2TraceNode]
+    edges: list[L2TraceEdge]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[L2TraceGap]
+
+
 class L2ReachabilityResolver:
     VERSION = "l2-configured-multihop/3.0"
 
@@ -87,6 +106,7 @@ class L2ReachabilityResolver:
     def resolve(
         self, query: L2ReachabilityQuery, view: EvaluationView
     ) -> L2ReachabilityTraceArtifact:
+        self._reset()
         self.repository.validate_network_interface(query.from_.interface_id)
         self.repository.validate_network_interface(query.to.interface_id)
         source_state = BoundaryState(
@@ -94,14 +114,64 @@ class L2ReachabilityResolver:
             direction="INGRESS",
             encapsulation_stack=self._stack_key(query.from_.encapsulation_stack),
         )
-        source_node = self._boundary_node(source_state, "source", [])
-        self._put_node(source_node)
-        frontier = [TraversalFrame(source_state, source_node.id, (), frozenset())]
         target_state = BoundaryState(
             interface_id=query.to.interface_id,
             direction="EGRESS",
             encapsulation_stack=self._stack_key(query.to.encapsulation_stack),
         )
+        self._traverse(
+            source_state,
+            target_state,
+            view,
+            [
+                self._ref("NetworkInterface", query.from_.interface_id),
+                self._ref("NetworkInterface", query.to.interface_id),
+            ],
+        )
+        return self._artifact(query, view)
+
+    def resolve_internal(
+        self,
+        source_interface_id: uuid.UUID,
+        target_interface_id: uuid.UUID,
+        view: EvaluationView,
+    ) -> L2TraversalResult:
+        self._reset()
+        self.repository.validate_network_interface(source_interface_id)
+        self.repository.validate_network_interface(target_interface_id)
+        source_state = InternalInterfaceState(source_interface_id, "INGRESS")
+        target_state = InternalInterfaceState(target_interface_id, "EGRESS")
+        self._traverse(
+            source_state,
+            target_state,
+            view,
+            [
+                self._ref("NetworkInterface", source_interface_id),
+                self._ref("NetworkInterface", target_interface_id),
+            ],
+        )
+        refs = self._collect_evidence()
+        return L2TraversalResult(
+            verdict="REACHABLE" if self.branches else "UNKNOWN",
+            source=source_state,
+            target=target_state,
+            branches=list(self.branches),
+            nodes=list(self.nodes.values()),
+            edges=list(self.edges.values()),
+            evidence_refs=refs,
+            gaps=list(self.gaps),
+        )
+
+    def _traverse(
+        self,
+        source_state: SemanticState,
+        target_state: SemanticState,
+        view: EvaluationView,
+        fallback_refs: list[EvidenceRef],
+    ) -> None:
+        source_node = self._state_node(source_state, "source", [])
+        self._put_node(source_node)
+        frontier = [TraversalFrame(source_state, source_node.id, (), frozenset())]
 
         while frontier:
             frame = frontier.pop()
@@ -114,6 +184,9 @@ class L2ReachabilityResolver:
             ancestry = frame.ancestry | {frame.state}
             if isinstance(frame.state, ContextState):
                 frontier.extend(self._expand_context(frame, ancestry, target_state))
+            elif isinstance(frame.state, InternalInterfaceState):
+                if frame.state.direction == "INGRESS":
+                    frontier.extend(self._expand_internal_ingress(frame, ancestry))
             elif frame.state.direction == "INGRESS":
                 next_frame = self._expand_ingress(frame, ancestry)
                 if next_frame is not None:
@@ -125,12 +198,16 @@ class L2ReachabilityResolver:
             self._gap(
                 "L2_TARGET_CONTEXT_PATH_UNKNOWN",
                 self._last_state_node_id or source_node.id,
-                [
-                    self._ref("NetworkInterface", query.from_.interface_id),
-                    self._ref("NetworkInterface", query.to.interface_id),
-                ],
+                fallback_refs,
             )
-        return self._artifact(query, view)
+
+    def _reset(self) -> None:
+        self.nodes.clear()
+        self.edges.clear()
+        self.gaps.clear()
+        self.branches.clear()
+        self._sequence = 0
+        self._last_state_node_id = None
 
     def _expand_ingress(
         self,
@@ -171,34 +248,114 @@ class L2ReachabilityResolver:
             ancestry,
         )
 
+    def _expand_internal_ingress(
+        self,
+        frame: TraversalFrame,
+        ancestry: frozenset[SemanticState],
+    ) -> list[TraversalFrame]:
+        state = frame.state
+        assert isinstance(state, InternalInterfaceState) and state.direction == "INGRESS"
+        bindings = self.repository.get_l2_bindings_by_interface([state.interface_id])[
+            state.interface_id
+        ]
+        if not bindings:
+            self._gap(
+                "L2_INTERNAL_ATTACHMENT_UNKNOWN",
+                frame.node_id,
+                [self._ref("NetworkInterface", state.interface_id)],
+            )
+            return []
+        result: list[TraversalFrame] = []
+        for binding in bindings:
+            context_state = ContextState(
+                binding.forwarding_context_id, binding.binding_id
+            )
+            prefix = self._prefix("internal-ingress")
+            context_node = self._context_node(context_state, prefix)
+            self._put_node(context_node)
+            refs = self._binding_refs(binding)
+            edge = self._edge(
+                prefix,
+                frame.node_id,
+                context_node.id,
+                "INTERNAL_ATTACH",
+                "L2",
+                refs,
+            )
+            result.append(
+                TraversalFrame(
+                    context_state,
+                    context_node.id,
+                    (*frame.edge_ids, edge.id),
+                    ancestry,
+                )
+            )
+        return result
+
     def _expand_context(
         self,
         frame: TraversalFrame,
         ancestry: frozenset[SemanticState],
-        target_state: BoundaryState,
+        target_state: SemanticState,
     ) -> list[TraversalFrame]:
         state = frame.state
         assert isinstance(state, ContextState)
         bindings = self.repository.get_l2_bindings_by_context(
             [state.forwarding_context_id]
         )[state.forwarding_context_id]
+        result: list[TraversalFrame] = []
+        internal_target_bindings: list[L2BindingRecord] = []
+        if isinstance(target_state, InternalInterfaceState):
+            internal_target_bindings = [
+                binding
+                for binding in bindings
+                if binding.interface_id == target_state.interface_id
+            ]
+            for binding in internal_target_bindings:
+                prefix = self._prefix("internal-egress")
+                target_node = self._internal_node(
+                    target_state, prefix, self._binding_refs(binding)
+                )
+                self._put_node(target_node)
+                edge = self._edge(
+                    prefix,
+                    frame.node_id,
+                    target_node.id,
+                    "INTERNAL_ATTACH",
+                    "L2",
+                    self._binding_refs(binding),
+                )
+                result.append(
+                    TraversalFrame(
+                        target_state,
+                        target_node.id,
+                        (*frame.edge_ids, edge.id),
+                        ancestry,
+                    )
+                )
+        internal_target_ids = {
+            binding.binding_id for binding in internal_target_bindings
+        }
         egress_bindings = [
-            binding for binding in bindings if binding.binding_id != state.ingress_binding_id
+            binding
+            for binding in bindings
+            if binding.binding_id != state.ingress_binding_id
+            and binding.binding_id not in internal_target_ids
         ]
         if not egress_bindings:
-            self._gap(
-                "L2_TARGET_CONTEXT_PATH_UNKNOWN",
-                frame.node_id,
-                [
-                    self._ref("L2ForwardingContext", state.forwarding_context_id),
-                    self._ref("L2Binding", state.ingress_binding_id),
-                ],
-            )
-            return []
+            if not result:
+                self._gap(
+                    "L2_TARGET_CONTEXT_PATH_UNKNOWN",
+                    frame.node_id,
+                    [
+                        self._ref("L2ForwardingContext", state.forwarding_context_id),
+                        self._ref("L2Binding", state.ingress_binding_id),
+                    ],
+                )
+            return result
         rules_by_binding = self.repository.get_l2_egress_rules(
             [binding.binding_id for binding in egress_bindings]
         )
-        result: list[TraversalFrame] = []
         for binding in egress_bindings:
             binding_refs = self._binding_refs(binding)
             rules = rules_by_binding[binding.binding_id]
@@ -246,7 +403,8 @@ class L2ReachabilityResolver:
             )
             edge_ids = (*frame.edge_ids, local_edge.id, encode_edge.id)
             if (
-                boundary_state.interface_id == target_state.interface_id
+                isinstance(target_state, BoundaryState)
+                and boundary_state.interface_id == target_state.interface_id
                 and boundary_state != target_state
             ):
                 self._gap(
@@ -538,10 +696,7 @@ class L2ReachabilityResolver:
         return binding_id, context_id, refs
 
     def _artifact(self, query, view) -> L2ReachabilityTraceArtifact:
-        refs = self._dedupe(
-            [ref for edge in self.edges.values() for ref in edge.evidence_refs]
-            + [ref for gap in self.gaps for ref in gap.evidence_refs]
-        )
+        refs = self._collect_evidence()
         return L2ReachabilityTraceArtifact(
             query=query,
             evaluation_view=view,
@@ -552,6 +707,12 @@ class L2ReachabilityResolver:
             evidence_refs=refs,
             gaps=self.gaps,
             warnings=[],
+        )
+
+    def _collect_evidence(self) -> list[EvidenceRef]:
+        return self._dedupe(
+            [ref for edge in self.edges.values() for ref in edge.evidence_refs]
+            + [ref for gap in self.gaps for ref in gap.evidence_refs]
         )
 
     def _add_branch(self, edge_ids: list[str]) -> None:
@@ -590,6 +751,15 @@ class L2ReachabilityResolver:
     def _put_node(self, node: L2TraceNode) -> None:
         self.nodes[node.id] = node
 
+    def _state_node(
+        self, state: SemanticState, suffix: str, refs: list[EvidenceRef]
+    ) -> L2TraceNode:
+        if isinstance(state, BoundaryState):
+            return self._boundary_node(state, suffix, refs)
+        if isinstance(state, InternalInterfaceState):
+            return self._internal_node(state, suffix, refs)
+        return self._context_node(state, suffix)
+
     def _context_node(self, state: ContextState, suffix: str) -> L2TraceNode:
         refs = [
             self._ref("L2ForwardingContext", state.forwarding_context_id),
@@ -616,6 +786,23 @@ class L2ReachabilityResolver:
                 forwarding_context_id=binding.forwarding_context_id,
             ),
             canonical_refs=self._binding_refs(binding),
+        )
+
+    def _internal_node(
+        self,
+        state: InternalInterfaceState,
+        suffix: str,
+        refs: list[EvidenceRef],
+    ) -> L2TraceNode:
+        return L2TraceNode(
+            id=f"l2-internal:{state.direction.lower()}:{state.interface_id}:{suffix}",
+            payload=L2InternalInterfacePayload(
+                interface_id=state.interface_id,
+                direction=state.direction,
+            ),
+            canonical_refs=self._dedupe(
+                [self._ref("NetworkInterface", state.interface_id)] + refs
+            ),
         )
 
     def _boundary_node(
