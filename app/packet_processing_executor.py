@@ -32,6 +32,7 @@ from app.schemas import (
     PacketProcessingExecutionGap,
     PacketProcessingFlowState,
     PacketProcessingHandoff,
+    PacketProcessingLocalDelivery,
     PacketProcessingStageExecution,
     PacketState,
     RoutingPolicyEvaluationQuery,
@@ -57,6 +58,7 @@ _EXECUTABLE_STAGE_KINDS = {
     "SECURITY",
     "NAT",
     "ADJACENCY_L2",
+    "LOCAL_DELIVERY",
     "TERMINATE",
 }
 
@@ -99,7 +101,7 @@ class _ExecutionBranch:
 
 
 class PacketProcessingPlanExecutor:
-    VERSION = "packet-processing-routing-security-nat-adjacency/1.4"
+    VERSION = "packet-processing-full-local/1.5"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
@@ -283,6 +285,20 @@ class PacketProcessingPlanExecutor:
                     ),
                 )
             ]
+
+        if stage.kind == "LOCAL_DELIVERY":
+            return self._execute_local_delivery(
+                plan,
+                stages,
+                transitions,
+                initial,
+                state,
+                executions,
+                evidence,
+                view,
+                stage,
+                stage_ref,
+            )
 
         if state.current_packet_state is None:
             return self._execute_nonexact(
@@ -611,6 +627,69 @@ class PacketProcessingPlanExecutor:
                 )
             )
         return results
+
+    def _execute_local_delivery(
+        self,
+        plan: PacketProcessingPlanRecord,
+        stages: dict[uuid.UUID, ProcessingStageRecord],
+        transitions: dict[tuple[uuid.UUID, str], ProcessingTransitionRecord],
+        initial: FlowExecutionState,
+        state: FlowExecutionState,
+        executions: tuple[PacketProcessingStageExecution, ...],
+        evidence: tuple[EvidenceRef, ...],
+        view: EvaluationView,
+        stage: ProcessingStageRecord,
+        stage_ref: EvidenceRef,
+    ) -> list[_ExecutionBranch]:
+        delivered = state.traffic_class == "LOCAL_INPUT"
+        outcome = "DELIVERED" if delivered else "UNKNOWN"
+        transition = self._transition(stage, outcome, transitions)
+        next_state = replace(state, current_stage_id=transition.to_stage_id)
+        refs = self._dedupe(
+            [stage_ref, self._ref("ProcessingTransition", transition.transition_id)]
+        )
+        gaps = []
+        if not delivered:
+            gaps.append(
+                PacketProcessingExecutionGap(
+                    code="STAGE_PRECONDITION_UNKNOWN",
+                    stage_id=stage.stage_id,
+                    evidence_refs=[stage_ref],
+                )
+            )
+        local_delivery = PacketProcessingLocalDelivery(
+            result=outcome,  # type: ignore[arg-type]
+            routing_context_id=state.routing_context_id,
+            traffic_class=state.traffic_class,  # type: ignore[arg-type]
+            ingress_network_interface_id=state.ingress_network_interface_id,
+            ingress_l3_binding_id=state.ingress_l3_binding_id,
+            reason=(
+                "LOCAL_INPUT_CONTEXT"
+                if delivered
+                else "STAGE_PRECONDITION_UNKNOWN"
+            ),
+        )
+        execution = self._stage_execution(
+            stage,
+            state,
+            state,
+            outcome,
+            transition,
+            refs,
+            direct_egress=state.direct_egress,
+            local_delivery=local_delivery,
+            gaps=gaps,
+        )
+        return self._execute(
+            plan,
+            stages,
+            transitions,
+            initial,
+            next_state,
+            executions + (execution,),
+            tuple(self._dedupe([*evidence, *refs])),
+            view,
+        )
 
     def _execute_adjacency(
         self,
@@ -1001,6 +1080,7 @@ class PacketProcessingPlanExecutor:
         selected_adjacency_candidate: AdjacencyCandidate | None = None,
         selected_l2_branch_id: str | None = None,
         handoff: PacketProcessingHandoff | None = None,
+        local_delivery: PacketProcessingLocalDelivery | None = None,
         gaps: list[PacketProcessingExecutionGap] | None = None,
     ) -> PacketProcessingStageExecution:
         return PacketProcessingStageExecution(
@@ -1030,6 +1110,7 @@ class PacketProcessingPlanExecutor:
             selected_adjacency_candidate=selected_adjacency_candidate,
             selected_l2_branch_id=selected_l2_branch_id,
             handoff=handoff,
+            local_delivery=local_delivery,
             evidence_refs=evidence_refs,
             gaps=gaps or [],
         )

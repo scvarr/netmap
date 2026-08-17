@@ -100,6 +100,7 @@ def test_invalid_plan_completeness_is_rejected():
         ("SECURITY", {"attachment_id": "{reference}"}, 1),
         ("NAT", {"attachment_id": "{reference}"}, 2),
         ("ADJACENCY_L2", {}, None),
+        ("LOCAL_DELIVERY", {}, None),
         ("TERMINATE", {"outcome": "UNKNOWN"}, None),
     ],
 )
@@ -116,7 +117,7 @@ def test_supported_stage_kinds_and_payloads(kind, payload, reference_index):
     assert stage.payload == payload
 
 
-@pytest.mark.parametrize("kind", ["PACKET_MARK", "LOCAL_DELIVERY"])
+@pytest.mark.parametrize("kind", ["PACKET_MARK"])
 def test_unsupported_stage_kinds_are_rejected(kind):
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
@@ -175,6 +176,7 @@ def test_dangling_stage_payload_reference_is_rejected(kind, payload):
         ("SECURITY", {"policy_id": str(uuid.uuid4())}),
         ("NAT", {"attachment_id": "invalid"}),
         ("ADJACENCY_L2", {"neighbor_target_ip": "192.0.2.1"}),
+        ("LOCAL_DELIVERY", {"target": "forbidden"}),
         ("TERMINATE", {"outcome": "PERMIT"}),
     ],
 )
@@ -243,6 +245,9 @@ def test_complete_adjacency_plan_requires_and_accepts_all_outcomes():
         terminal = repository.add_processing_stage(
             plan.id, "TERMINATE", {"outcome": "UNKNOWN"}
         )
+        proceed = repository.add_processing_stage(
+            plan.id, "TERMINATE", {"outcome": "CONTINUE_TO_NEXT_HOP"}
+        )
         repository.add_processing_entry_point(plan.id, "TRANSIT", adjacency.id)
         for outcome in (
             "NEXT_PROCESSING_POINT",
@@ -251,7 +256,12 @@ def test_complete_adjacency_plan_requires_and_accepts_all_outcomes():
             "UNKNOWN",
         ):
             repository.add_processing_transition(
-                plan.id, adjacency.id, outcome, terminal.id
+                plan.id,
+                adjacency.id,
+                outcome,
+                (proceed if outcome in {
+                    "NEXT_PROCESSING_POINT", "TARGET_ATTACHMENT_REACHED"
+                } else terminal).id,
             )
         plan_id = plan.id
 
@@ -333,6 +343,173 @@ def test_stored_adjacency_payload_corruption_is_model_error():
                 "WHERE id = :stage_id"
             ),
             {"stage_id": adjacency.id},
+        )
+        plan_id = plan.id
+
+    assert validate_api(plan_id).status_code == 409
+
+
+def test_complete_local_delivery_requires_both_outcomes_and_validates():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("COMPLETE")
+        local = repository.add_processing_stage(plan.id, "LOCAL_DELIVERY", {})
+        delivered = repository.add_processing_stage(
+            plan.id, "TERMINATE", {"outcome": "NETWORK_DELIVERY"}
+        )
+        unknown = repository.add_processing_stage(
+            plan.id, "TERMINATE", {"outcome": "UNKNOWN"}
+        )
+        repository.add_processing_entry_point(plan.id, "LOCAL_INPUT", local.id)
+        repository.add_processing_transition(
+            plan.id, local.id, "DELIVERED", delivered.id
+        )
+        repository.add_processing_transition(
+            plan.id, local.id, "UNKNOWN", unknown.id
+        )
+        plan_id = plan.id
+
+    artifact = validate_api(plan_id).json()
+    assert artifact["result"] == "VALID"
+    assert {edge["outcome"] for edge in artifact["transitions"]} == {
+        "DELIVERED",
+        "UNKNOWN",
+    }
+
+
+def test_complete_local_delivery_missing_outcome_is_model_error_but_partial_is_valid():
+    ids = []
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        for completeness in ("COMPLETE", "PARTIAL"):
+            plan = repository.add_packet_processing_plan(completeness)
+            local = repository.add_processing_stage(plan.id, "LOCAL_DELIVERY", {})
+            delivered = repository.add_processing_stage(
+                plan.id, "TERMINATE", {"outcome": "NETWORK_DELIVERY"}
+            )
+            repository.add_processing_entry_point(
+                plan.id, "LOCAL_INPUT", local.id
+            )
+            repository.add_processing_transition(
+                plan.id, local.id, "DELIVERED", delivered.id
+            )
+            ids.append(plan.id)
+
+    assert validate_api(ids[0]).status_code == 409
+    assert validate_api(ids[1]).json()["result"] == "VALID"
+
+
+@pytest.mark.parametrize(
+    "terminal_outcome",
+    ["CONTINUE_TO_NEXT_HOP", "NOT_DELIVERED", "UNKNOWN"],
+)
+def test_local_delivery_delivered_rejects_incompatible_terminal(terminal_outcome):
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("PARTIAL")
+        local = repository.add_processing_stage(plan.id, "LOCAL_DELIVERY", {})
+        terminal = repository.add_processing_stage(
+            plan.id, "TERMINATE", {"outcome": terminal_outcome}
+        )
+        with pytest.raises(ValidationError):
+            repository.add_processing_transition(
+                plan.id, local.id, "DELIVERED", terminal.id
+            )
+
+
+def test_local_delivery_delivered_rejects_nonterminal_and_invalid_outcome():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("PARTIAL")
+        local = repository.add_processing_stage(plan.id, "LOCAL_DELIVERY", {})
+        route = repository.add_processing_stage(plan.id, "ROUTE_DECISION", {})
+        with pytest.raises(ValidationError):
+            repository.add_processing_transition(
+                plan.id, local.id, "DELIVERED", route.id
+            )
+        with pytest.raises(ValidationError):
+            repository.add_processing_transition(
+                plan.id, local.id, "PASS", route.id
+            )
+
+
+def test_stored_incompatible_local_delivery_terminal_is_model_error():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("PARTIAL")
+        local = repository.add_processing_stage(plan.id, "LOCAL_DELIVERY", {})
+        terminal = repository.add_processing_stage(
+            plan.id, "TERMINATE", {"outcome": "UNKNOWN"}
+        )
+        repository.add_processing_entry_point(plan.id, "LOCAL_INPUT", local.id)
+        session.add(
+            ProcessingTransition(
+                plan_id=plan.id,
+                from_stage_id=local.id,
+                outcome="DELIVERED",
+                to_stage_id=terminal.id,
+            )
+        )
+        plan_id = plan.id
+
+    assert validate_api(plan_id).status_code == 409
+
+
+def test_stored_local_delivery_payload_corruption_is_model_error():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("PARTIAL")
+        local = repository.add_processing_stage(plan.id, "LOCAL_DELIVERY", {})
+        repository.add_processing_entry_point(plan.id, "LOCAL_INPUT", local.id)
+        session.execute(
+            text(
+                "UPDATE processing_stages "
+                "SET payload = '{\"target\": \"forbidden\"}'::jsonb "
+                "WHERE id = :stage_id"
+            ),
+            {"stage_id": local.id},
+        )
+        plan_id = plan.id
+
+    assert validate_api(plan_id).status_code == 409
+
+
+@pytest.mark.parametrize("terminal_outcome", ["NETWORK_DELIVERY", "UNKNOWN"])
+@pytest.mark.parametrize(
+    "adjacency_outcome", ["NEXT_PROCESSING_POINT", "TARGET_ATTACHMENT_REACHED"]
+)
+def test_adjacency_success_rejects_non_continue_terminal(
+    adjacency_outcome, terminal_outcome
+):
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("PARTIAL")
+        adjacency = repository.add_processing_stage(plan.id, "ADJACENCY_L2", {})
+        terminal = repository.add_processing_stage(
+            plan.id, "TERMINATE", {"outcome": terminal_outcome}
+        )
+        with pytest.raises(ValidationError):
+            repository.add_processing_transition(
+                plan.id, adjacency.id, adjacency_outcome, terminal.id
+            )
+
+
+def test_stored_incompatible_adjacency_terminal_is_model_error():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("PARTIAL")
+        adjacency = repository.add_processing_stage(plan.id, "ADJACENCY_L2", {})
+        terminal = repository.add_processing_stage(
+            plan.id, "TERMINATE", {"outcome": "NETWORK_DELIVERY"}
+        )
+        repository.add_processing_entry_point(plan.id, "TRANSIT", adjacency.id)
+        session.add(
+            ProcessingTransition(
+                plan_id=plan.id,
+                from_stage_id=adjacency.id,
+                outcome="TARGET_ATTACHMENT_REACHED",
+                to_stage_id=terminal.id,
+            )
         )
         plan_id = plan.id
 

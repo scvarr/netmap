@@ -721,6 +721,35 @@ L2/L1 evidence path
 
 а не просто boolean.
 
+Оба successful outcome завершают **текущий local plan** только через explicit:
+
+```text
+ADJACENCY_L2
+    -- NEXT_PROCESSING_POINT / TARGET_ATTACHMENT_REACHED -->
+TERMINATE { outcome = CONTINUE_TO_NEXT_HOP }
+```
+
+Здесь `CONTINUE_TO_NEXT_HOP` означает продолжение execution в новом local
+processing context, а не обязательное продолжение IP forwarding. Future
+multi-hop orchestrator после этого terminal выполняет plan selection для уже
+сформированного receiving context.
+
+`NEXT_PROCESSING_POINT` создаёт receiving context с
+`traffic_class = TRANSIT`. `TARGET_ATTACHMENT_REACHED` создаёт receiving
+context с `traffic_class = LOCAL_INPUT`. В обоих случаях сохраняются receiving
+`RoutingContext`, `NetworkInterface`, `L3Binding` и current packet value.
+
+Критически:
+
+```text
+TARGET_ATTACHMENT_REACHED != NETWORK_DELIVERY
+```
+
+Он доказывает L2 arrival к attachment текущего direct destination, но local
+Security/NAT processing ещё может заблокировать или изменить packet. Только
+последующий `LOCAL_DELIVERY` в выбранном `LOCAL_INPUT` plan подтверждает передачу
+в local network stack.
+
 ## Next processing point
 
 После arrival на receiving interface orchestrator определяет:
@@ -882,7 +911,46 @@ UNKNOWN
 
 Это **network-layer delivery**, а не доказательство работающего сервиса.
 
-Если request имеет explicit endpoint target, resolver дополнительно проверяет target predicate.
+Stage имеет canonical empty payload:
+
+```json
+{}
+```
+
+и outcomes:
+
+```text
+DELIVERED
+UNKNOWN
+```
+
+`LOCAL_DELIVERY` требует `traffic_class = LOCAL_INPUT`. В этом context результат
+`DELIVERED` доказан независимо от того, представлен текущий packet как exact
+`PacketState`, `NATPacketConstraint` или unknown packet value: uncertainty
+конкретных полей packet не отменяет уже explicit control-flow handoff в local
+stack. Packet value, routing state и ingress identity stage не мутирует.
+
+При `TRANSIT` или `LOCAL_OUTPUT` stage возвращает `UNKNOWN` с
+`STAGE_PRECONDITION_UNKNOWN`; traffic class не исправляется эвристически.
+
+Canonical success edge имеет единственную совместимую terminal semantics:
+
+```text
+LOCAL_DELIVERY
+    -- DELIVERED -->
+TERMINATE { outcome = NETWORK_DELIVERY }
+```
+
+`DELIVERED` не может вести к Security, NAT, route decision или другому
+non-terminal stage. Вся local network-layer processing располагается до
+`LOCAL_DELIVERY`.
+
+В текущем executable slice нет `delivery_target`: `DELIVERED` означает только,
+что packet передан local network stack текущего processing context. Повторный
+route lookup, InterfaceAddress identity lookup, adjacency, L2/L1 и service
+health здесь не выполняются.
+
+Explicit endpoint target остаётся будущим расширением resolver/query contract.
 
 ## Target semantics
 
@@ -2596,28 +2664,31 @@ Plan/policy resolvers не знают user/owner и не используют pr
 21. Route decision и adjacency/L2 являются разными reusable suboperations.
 22. `DIRECT_DESTINATION` adjacency использует current packet destination в момент L2 handoff.
 23. `GATEWAY` adjacency использует selected gateway.
-24. Successful L2 handoff переносит current PacketState на следующий processing point.
+24. Successful `ADJACENCY_L2` handoff переносит current packet value на следующий processing point и завершает текущий local plan через `CONTINUE_TO_NEXT_HOP`.
 25. Previous route decision, selected table, egress state и local mark не переносятся на следующий hop.
 26. Packet lineage обязана сохранять original/current/before/after transformations.
 27. Каждый stage возвращает explicit result/evidence.
-28. `DELIVERED` означает network delivery, а не application success.
-29. Explicit endpoint target может быть независим от original public/NAT destination.
-30. End-to-end verdict: `DELIVERED`, `NOT_DELIVERED`, `UNKNOWN`.
-31. `NOT_DELIVERED` требует exhaustive known-negative relevant branches.
-32. `UNKNOWN` не превращается в negative из-за отсутствия данных.
-33. `EXACT` и `POSSIBLE` являются разными query semantics.
-34. Exact nondeterministic selection нельзя угадывать.
-35. `NATPacketConstraint` не является fake exact PacketState и может продолжать analysis только если downstream stage поддерживает constraint reasoning.
-36. Reverse flow анализируется отдельно.
-37. Diagnostic flow trace не мутирует persistent FDB/neighbor/session/NAT state.
-38. What-if state может быть только ephemeral.
-39. Generated reject/ICMP packets являются отдельными child flows.
-40. Processing plan имеет provenance/version/completeness.
-41. Version-sensitive platform plan нельзя применять к неизвестной version без uncertainty.
-42. Partial processing graph не доказывает exact end-to-end path.
-43. Adapter обязан нормализовать vendor pipeline без скрытого пропуска значимых stages.
-44. Trace evidence должно позволять восстановить, какой PacketState видел каждый rule/route stage.
-45. Layer subresults сохраняются и не стираются overall verdict.
+28. `NEXT_PROCESSING_POINT` создаёт `TRANSIT` context, а `TARGET_ATTACHMENT_REACHED` — `LOCAL_INPUT`; последний сам по себе не является network delivery.
+29. `LOCAL_DELIVERY` подтверждает передачу в local network stack только для `LOCAL_INPUT`, не требует exact packet value и не мутирует packet/routing state.
+30. `LOCAL_DELIVERY DELIVERED` явно ведёт только в `TERMINATE NETWORK_DELIVERY`.
+31. `DELIVERED` означает network delivery, а не application success.
+32. Explicit endpoint target может быть независим от original public/NAT destination.
+33. End-to-end verdict: `DELIVERED`, `NOT_DELIVERED`, `UNKNOWN`.
+34. `NOT_DELIVERED` требует exhaustive known-negative relevant branches.
+35. `UNKNOWN` не превращается в negative из-за отсутствия данных.
+36. `EXACT` и `POSSIBLE` являются разными query semantics.
+37. Exact nondeterministic selection нельзя угадывать.
+38. `NATPacketConstraint` не является fake exact PacketState и может продолжать analysis только если downstream stage поддерживает constraint reasoning.
+39. Reverse flow анализируется отдельно.
+40. Diagnostic flow trace не мутирует persistent FDB/neighbor/session/NAT state.
+41. What-if state может быть только ephemeral.
+42. Generated reject/ICMP packets являются отдельными child flows.
+43. Processing plan имеет provenance/version/completeness.
+44. Version-sensitive platform plan нельзя применять к неизвестной version без uncertainty.
+45. Partial processing graph не доказывает exact end-to-end path.
+46. Adapter обязан нормализовать vendor pipeline без скрытого пропуска значимых stages.
+47. Trace evidence должно позволять восстановить, какой PacketState видел каждый rule/route stage.
+48. Layer subresults сохраняются и не стираются overall verdict.
 46. Trace result является derived data и не становится independent source of truth.
 47. Recursive gateway lookup сохраняет selected table и не является новым packet-processing pass.
 48. Local mark не является PacketState field или автоматически переносимой wire property.

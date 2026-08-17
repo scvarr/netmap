@@ -48,6 +48,7 @@ from app.packet_processing_plan import (
     ProcessingStageRecord,
     ProcessingTransitionRecord,
     validate_packet_processing_plan_graph,
+    validate_terminal_transition_semantics,
 )
 from app.packet_processing_plan_attachments import (
     PacketProcessingPlanAttachmentRecord,
@@ -606,20 +607,18 @@ class CanonicalRepository:
                 "ProcessingTransition outcome is invalid for source stage kind",
                 {"stage_kind": source.kind, "outcome": outcome},
             )
-        if (
-            source.kind == "ADJACENCY_L2"
-            and outcome
-            in {"NEXT_PROCESSING_POINT", "TARGET_ATTACHMENT_REACHED"}
-            and target.kind != "TERMINATE"
-        ):
-            raise ValidationError(
-                "Successful ADJACENCY_L2 transition must target TERMINATE",
-                {
-                    "outcome": outcome,
-                    "to_stage_id": str(target.id),
-                    "to_stage_kind": target.kind,
-                },
-            )
+        validate_terminal_transition_semantics(
+            source_kind=source.kind,
+            outcome=outcome,
+            target_kind=target.kind,
+            target_payload=target.payload,
+            model_error=False,
+            details={
+                "packet_processing_plan_id": str(plan_id),
+                "from_stage_id": str(source.id),
+                "to_stage_id": str(target.id),
+            },
+        )
         if self.session.scalar(
             select(ProcessingTransition.id).where(
                 ProcessingTransition.from_stage_id == from_stage_id,

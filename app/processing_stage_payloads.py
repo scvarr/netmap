@@ -13,6 +13,7 @@ SUPPORTED_STAGE_KINDS = (
     "SECURITY",
     "NAT",
     "ADJACENCY_L2",
+    "LOCAL_DELIVERY",
     "TERMINATE",
 )
 
@@ -39,6 +40,7 @@ STAGE_OUTCOMES: dict[str, tuple[str, ...]] = {
         "L2_UNREACHABLE",
         "UNKNOWN",
     ),
+    "LOCAL_DELIVERY": ("DELIVERED", "UNKNOWN"),
     "TERMINATE": (),
 }
 
@@ -68,13 +70,13 @@ def normalize_processing_stage_payload(
     context = details or {}
     if kind not in SUPPORTED_STAGE_KINDS:
         raise error_type(
-            "ProcessingStage kind is unsupported in M8.1",
+            "ProcessingStage kind is unsupported by the canonical plan schema",
             {**context, "kind": kind},
         )
     if not isinstance(payload, dict):
         raise error_type("ProcessingStage payload must be an object", context)
 
-    if kind in {"ROUTE_DECISION", "ADJACENCY_L2"}:
+    if kind in {"ROUTE_DECISION", "ADJACENCY_L2", "LOCAL_DELIVERY"}:
         if payload:
             raise error_type(
                 f"{kind} payload must be empty",

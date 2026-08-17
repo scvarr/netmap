@@ -579,6 +579,7 @@ class ProcessingStageArtifact(BaseModel):
         "SECURITY",
         "NAT",
         "ADJACENCY_L2",
+        "LOCAL_DELIVERY",
         "TERMINATE",
     ]
     payload: dict[str, str]
@@ -786,6 +787,17 @@ class PacketProcessingHandoff(BaseModel):
     receiving_routing_context_id: uuid.UUID
 
 
+class PacketProcessingLocalDelivery(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    result: Literal["DELIVERED", "UNKNOWN"]
+    routing_context_id: uuid.UUID
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    ingress_network_interface_id: uuid.UUID | None = None
+    ingress_l3_binding_id: uuid.UUID | None = None
+    reason: Literal["LOCAL_INPUT_CONTEXT", "STAGE_PRECONDITION_UNKNOWN"]
+
+
 class PacketProcessingStageExecution(BaseModel):
     stage_id: uuid.UUID
     stage_kind: Literal[
@@ -794,6 +806,7 @@ class PacketProcessingStageExecution(BaseModel):
         "SECURITY",
         "NAT",
         "ADJACENCY_L2",
+        "LOCAL_DELIVERY",
         "TERMINATE",
     ]
     packet_before: PacketState | None = None
@@ -820,6 +833,7 @@ class PacketProcessingStageExecution(BaseModel):
     selected_adjacency_candidate: AdjacencyCandidate | None = None
     selected_l2_branch_id: str | None = None
     handoff: PacketProcessingHandoff | None = None
+    local_delivery: PacketProcessingLocalDelivery | None = None
     evidence_refs: list[EvidenceRef]
     gaps: list[PacketProcessingExecutionGap]
 
@@ -862,10 +876,8 @@ class PacketProcessingEvaluationArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: PacketProcessingEvaluationQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal[
-        "packet-processing-routing-security-nat-adjacency/1.4"
-    ] = (
-        "packet-processing-routing-security-nat-adjacency/1.4"
+    resolver_version: Literal["packet-processing-full-local/1.5"] = (
+        "packet-processing-full-local/1.5"
     )
     result: Literal[
         "CONTINUE_TO_NEXT_HOP",

@@ -40,6 +40,45 @@ class PacketProcessingPlanRecord:
     transitions: tuple[ProcessingTransitionRecord, ...]
 
 
+def validate_terminal_transition_semantics(
+    *,
+    source_kind: str,
+    outcome: str,
+    target_kind: str,
+    target_payload: ProcessingStagePayload,
+    model_error: bool,
+    details: dict[str, object] | None = None,
+) -> None:
+    expected_terminal_outcome = None
+    if source_kind == "ADJACENCY_L2" and outcome in {
+        "NEXT_PROCESSING_POINT",
+        "TARGET_ATTACHMENT_REACHED",
+    }:
+        expected_terminal_outcome = "CONTINUE_TO_NEXT_HOP"
+    elif source_kind == "LOCAL_DELIVERY" and outcome == "DELIVERED":
+        expected_terminal_outcome = "NETWORK_DELIVERY"
+    if expected_terminal_outcome is None:
+        return
+    if (
+        target_kind == "TERMINATE"
+        and target_payload.get("outcome") == expected_terminal_outcome
+    ):
+        return
+    error_type = ModelError if model_error else ValidationError
+    raise error_type(
+        f"{source_kind} {outcome} transition must target "
+        f"TERMINATE {expected_terminal_outcome}",
+        {
+            **(details or {}),
+            "source_stage_kind": source_kind,
+            "outcome": outcome,
+            "to_stage_kind": target_kind,
+            "to_stage_terminal_outcome": target_payload.get("outcome"),
+            "required_terminal_outcome": expected_terminal_outcome,
+        },
+    )
+
+
 def validate_packet_processing_plan_graph(
     plan: PacketProcessingPlanRecord, *, model_error: bool
 ) -> None:
@@ -107,19 +146,18 @@ def validate_packet_processing_plan_graph(
                 from_stage_id=str(source.stage_id),
                 outcome=transition.outcome,
             )
-        if (
-            source.kind == "ADJACENCY_L2"
-            and transition.outcome
-            in {"NEXT_PROCESSING_POINT", "TARGET_ATTACHMENT_REACHED"}
-            and target.kind != "TERMINATE"
-        ):
-            fail(
-                "Successful ADJACENCY_L2 transition must target TERMINATE",
-                processing_transition_id=str(transition.transition_id),
-                outcome=transition.outcome,
-                to_stage_id=str(target.stage_id),
-                to_stage_kind=target.kind,
-            )
+        validate_terminal_transition_semantics(
+            source_kind=source.kind,
+            outcome=transition.outcome,
+            target_kind=target.kind,
+            target_payload=target.payload,
+            model_error=model_error,
+            details={
+                "packet_processing_plan_id": str(plan.plan_id),
+                "processing_transition_id": str(transition.transition_id),
+                "to_stage_id": str(target.stage_id),
+            },
+        )
         outgoing[source.stage_id][transition.outcome] = target.stage_id
 
     for stage in plan.stages:

@@ -46,7 +46,7 @@ def add_route_transitions(repository, plan_id, route, adjacency, terminals):
 def add_adjacency_transitions(repository, plan_id, adjacency, terminals):
     for outcome, target in (
         ("NEXT_PROCESSING_POINT", terminals["continue"]),
-        ("TARGET_ATTACHMENT_REACHED", terminals["delivery"]),
+        ("TARGET_ATTACHMENT_REACHED", terminals["continue"]),
         ("L2_UNREACHABLE", terminals["negative"]),
         ("UNKNOWN", terminals["unknown"]),
     ):
@@ -241,7 +241,7 @@ def test_direct_adjacency_handoff_reaches_target_and_resets_local_routing_state(
         ids["plan"], ids["source_context"]
     ).json()
 
-    assert artifact["result"] == "NETWORK_DELIVERY"
+    assert artifact["result"] == "CONTINUE_TO_NEXT_HOP"
     assert len(artifact["branches"]) == 1
     branch = artifact["branches"][0]
     adjacency = stage_execution(branch, "ADJACENCY_L2")
@@ -308,7 +308,7 @@ def test_dnat_changes_direct_adjacency_target_without_hidden_reroute():
     branch = artifact["branches"][0]
     adjacency = stage_execution(branch, "ADJACENCY_L2")
 
-    assert artifact["result"] == "NETWORK_DELIVERY"
+    assert artifact["result"] == "CONTINUE_TO_NEXT_HOP"
     assert adjacency["adjacency_target_ip"] == "198.51.100.9"
     assert adjacency["packet_before"]["destination_ip"] == "198.51.100.9"
     assert len(
@@ -372,7 +372,6 @@ def test_adjacency_without_forwarding_decision_follows_unknown_transition():
         adjacency = repository.add_processing_stage(plan.id, "ADJACENCY_L2", {})
         terminals = {
             "continue": add_terminal(repository, plan.id, "CONTINUE_TO_NEXT_HOP"),
-            "delivery": add_terminal(repository, plan.id, "NETWORK_DELIVERY"),
             "negative": add_terminal(repository, plan.id, "NOT_DELIVERED"),
             "unknown": add_terminal(repository, plan.id, "UNKNOWN"),
         }
@@ -470,7 +469,7 @@ def test_multiple_l2_paths_create_distinct_packet_processing_branches():
 
     artifact = evaluate(plan_id, context_id).json()
 
-    assert artifact["result"] == "NETWORK_DELIVERY"
+    assert artifact["result"] == "CONTINUE_TO_NEXT_HOP"
     assert len(artifact["branches"]) == 2
     assert len(
         {
