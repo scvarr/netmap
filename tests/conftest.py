@@ -15,6 +15,8 @@ from app.models import (
     NATPool,
     NATRule,
     PacketProcessingPlan,
+    PacketProcessingPlanAttachment,
+    PacketProcessingPlanAttachmentSet,
     PhysicalObject,
     ProcessingEntryPoint,
     ProcessingStage,
@@ -39,6 +41,8 @@ from app.models import (
 @pytest.fixture(autouse=True)
 def clean_database():
     with SessionLocal.begin() as session:
+        session.execute(delete(PacketProcessingPlanAttachment))
+        session.execute(delete(PacketProcessingPlanAttachmentSet))
         session.execute(delete(ProcessingEntryPoint))
         session.execute(delete(ProcessingTransition))
         session.execute(delete(ProcessingStage))

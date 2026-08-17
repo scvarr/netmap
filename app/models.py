@@ -631,3 +631,53 @@ class ProcessingEntryPoint(Base):
     stage_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("processing_stages.id", ondelete="CASCADE"), nullable=False
     )
+
+
+class PacketProcessingPlanAttachmentSet(Base):
+    __tablename__ = "packet_processing_plan_attachment_sets"
+    __table_args__ = (
+        CheckConstraint(
+            "traffic_class IN ('TRANSIT', 'LOCAL_INPUT', 'LOCAL_OUTPUT')",
+            name="traffic_class_valid",
+        ),
+        CheckConstraint(
+            "configured_completeness IN ('COMPLETE', 'PARTIAL', 'UNKNOWN')",
+            name="configured_completeness_valid",
+        ),
+        UniqueConstraint(
+            "routing_context_id",
+            "traffic_class",
+            name="uq_plan_attachment_sets_context_traffic_class",
+        ),
+        Index("ix_plan_attachment_sets_routing_context_id", "routing_context_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    routing_context_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("routing_contexts.id", ondelete="RESTRICT"), nullable=False
+    )
+    traffic_class: Mapped[str] = mapped_column(String(12), nullable=False)
+    configured_completeness: Mapped[str] = mapped_column(String(8), nullable=False)
+
+
+class PacketProcessingPlanAttachment(Base):
+    __tablename__ = "packet_processing_plan_attachments"
+    __table_args__ = (
+        CheckConstraint("jsonb_typeof(scope) = 'object'", name="scope_object"),
+        Index("ix_plan_attachments_attachment_set_id", "attachment_set_id"),
+        Index("ix_plan_attachments_plan_id", "plan_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    attachment_set_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("packet_processing_plan_attachment_sets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    plan_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("packet_processing_plans.id", ondelete="RESTRICT"), nullable=False
+    )
+    scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)

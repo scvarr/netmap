@@ -55,6 +55,8 @@ class EvidenceRef(BaseModel):
         "ProcessingStage",
         "ProcessingTransition",
         "ProcessingEntryPoint",
+        "PacketProcessingPlanAttachmentSet",
+        "PacketProcessingPlanAttachment",
     ]
     entity_id: uuid.UUID
 
@@ -609,6 +611,55 @@ class PacketProcessingPlanValidationArtifact(BaseModel):
     stages: list[ProcessingStageArtifact]
     transitions: list[ProcessingTransitionArtifact]
     evidence_refs: list[EvidenceRef]
+    warnings: list[dict[str, Any]]
+
+
+class PacketProcessingPlanSelectionQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    routing_context_id: uuid.UUID
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    ingress_network_interface_id: uuid.UUID | None = None
+    ingress_l3_binding_id: uuid.UUID | None = None
+
+
+class PacketProcessingPlanAttachmentEvaluation(BaseModel):
+    attachment_id: uuid.UUID
+    plan_id: uuid.UUID
+    scope: dict[str, list[str]]
+    applicability: Literal["TRUE", "FALSE", "UNKNOWN"]
+    evidence_refs: list[EvidenceRef]
+
+
+class PacketProcessingPlanSelectionGap(BaseModel):
+    code: Literal[
+        "PLAN_ATTACHMENT_SET_UNKNOWN",
+        "PLAN_ATTACHMENT_COVERAGE_INCOMPLETE",
+        "PLAN_ATTACHMENT_APPLICABILITY_UNKNOWN",
+        "PLAN_SELECTION_CONFLICT",
+    ]
+    evidence_refs: list[EvidenceRef]
+
+
+class PacketProcessingPlanSelectionArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: PacketProcessingPlanSelectionQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["packet-processing-plan-selection/1.0"] = (
+        "packet-processing-plan-selection/1.0"
+    )
+    result: Literal[
+        "PLAN_SELECTED", "NO_PLAN_CONFIRMED", "UNKNOWN", "CONFLICTING"
+    ]
+    attachment_set_id: uuid.UUID | None = None
+    configured_completeness: Literal["COMPLETE", "PARTIAL", "UNKNOWN"] | None = None
+    selected_plan_id: uuid.UUID | None = None
+    selected_plan_configured_completeness: Literal[
+        "COMPLETE", "PARTIAL", "UNKNOWN"
+    ] | None = None
+    attachment_evaluations: list[PacketProcessingPlanAttachmentEvaluation]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[PacketProcessingPlanSelectionGap]
     warnings: list[dict[str, Any]]
 
 

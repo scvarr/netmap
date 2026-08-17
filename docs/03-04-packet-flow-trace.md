@@ -245,30 +245,35 @@ plan: basic-router-v1
 
 Identity plan не зависит от display name устройства.
 
-## PacketProcessingPlanAttachment
+## PacketProcessingPlanAttachmentSet и PacketProcessingPlanAttachment
 
-Plan applicability задаётся явным attachment:
+Configured selection coverage задаётся отдельным canonical set:
 
 ```text
+PacketProcessingPlanAttachmentSet
+    routing_context_id
+    traffic_class
+    configured_completeness
+
 PacketProcessingPlanAttachment
+    attachment_set_id
     plan_id
     scope
 ```
 
-Scope минимум может учитывать:
+`AttachmentSet` фиксирует selection domain `(RoutingContext, TrafficClass)` и
+сохраняет completeness даже при нуле attachment rows. Поэтому только `COMPLETE`
+пустой set может доказать `NO_PLAN_CONFIRMED`; отсутствие set означает `UNKNOWN`.
+
+Attachment scope в первой concrete representation уточняет только ingress:
 
 ```text
-traffic_class
-routing_context
-ingress L3Binding / interface
-origin/local-output context
+{}
+ingress_network_interface_ids
+ingress_l3_binding_ids
 ```
 
-Для обычного router forwarding часто достаточно:
-
-```text
-routing_context + traffic_class
-```
+Traffic class и routing context не дублируются внутри attachment scope.
 
 ## Traffic class
 
@@ -948,7 +953,6 @@ PacketProcessingPlanAttachment
 routing context
 traffic class
 ingress scope
-platform semantics
 ```
 
 Минимальные results:
@@ -959,6 +963,20 @@ NO_PLAN_CONFIRMED
 UNKNOWN
 CONFLICTING
 ```
+
+Selection не является ordered/first-match policy. Все attachments requested set
+оцениваются через three-valued ingress-scope applicability:
+
+- несколько `TRUE`, указывающих один plan, схлопываются в `PLAN_SELECTED`;
+- разные plans среди `TRUE` дают `CONFLICTING`;
+- при `PARTIAL`/`UNKNOWN` coverage результат `UNKNOWN`, если definite conflict уже
+  не доказан;
+- `TRUE P` вместе с `UNKNOWN P` в complete set остаётся `PLAN_SELECTED P`;
+- `TRUE P` вместе с `UNKNOWN Q` даёт `UNKNOWN`;
+- complete set без `TRUE` и `UNKNOWN` даёт `NO_PLAN_CONFIRMED`.
+
+Selector только выбирает plan. Он не запускает plan и не выполняет multi-hop
+PacketFlow orchestration.
 
 ## NO_PLAN_CONFIRMED
 

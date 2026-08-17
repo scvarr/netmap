@@ -19,6 +19,8 @@ from app.models import (
     NATPool,
     NATRule,
     PacketProcessingPlan,
+    PacketProcessingPlanAttachment,
+    PacketProcessingPlanAttachmentSet,
     PhysicalObject,
     ProcessingEntryPoint,
     ProcessingStage,
@@ -46,6 +48,11 @@ from app.packet_processing_plan import (
     ProcessingStageRecord,
     ProcessingTransitionRecord,
     validate_packet_processing_plan_graph,
+)
+from app.packet_processing_plan_attachments import (
+    PacketProcessingPlanAttachmentRecord,
+    PacketProcessingPlanAttachmentSetRecord,
+    normalize_packet_processing_plan_attachment_scope,
 )
 from app.packet_predicates import Predicate, normalize_predicate
 from app.processing_stage_payloads import (
@@ -703,6 +710,74 @@ class CanonicalRepository:
         self.session.add(entry)
         self.session.flush()
         return entry
+
+    def add_packet_processing_plan_attachment_set(
+        self,
+        routing_context_id: uuid.UUID,
+        traffic_class: str,
+        configured_completeness: str,
+        attachment_set_id: uuid.UUID | None = None,
+    ) -> PacketProcessingPlanAttachmentSet:
+        self._require_routing_context(routing_context_id)
+        self._validate_plan_attachment_set_values(
+            traffic_class, configured_completeness, model_error=False
+        )
+        if self.session.scalar(
+            select(PacketProcessingPlanAttachmentSet.id).where(
+                PacketProcessingPlanAttachmentSet.routing_context_id == routing_context_id,
+                PacketProcessingPlanAttachmentSet.traffic_class == traffic_class,
+            )
+        ) is not None:
+            raise ValidationError(
+                "PacketProcessingPlanAttachmentSet selection domain must be unique",
+                {"routing_context_id": str(routing_context_id), "traffic_class": traffic_class},
+            )
+        item = PacketProcessingPlanAttachmentSet(
+            id=attachment_set_id or uuid.uuid4(),
+            routing_context_id=routing_context_id,
+            traffic_class=traffic_class,
+            configured_completeness=configured_completeness,
+        )
+        self.session.add(item)
+        self.session.flush()
+        return item
+
+    def add_packet_processing_plan_attachment(
+        self,
+        attachment_set_id: uuid.UUID,
+        plan_id: uuid.UUID,
+        scope: object,
+        attachment_id: uuid.UUID | None = None,
+    ) -> PacketProcessingPlanAttachment:
+        attachment_set = self.session.get(PacketProcessingPlanAttachmentSet, attachment_set_id)
+        if attachment_set is None:
+            raise ValidationError(
+                "PacketProcessingPlanAttachmentSet does not exist",
+                {"attachment_set_id": str(attachment_set_id)},
+            )
+        plan = self.validate_packet_processing_plan(plan_id)
+        if attachment_set.traffic_class not in {
+            entry.traffic_class for entry in plan.entry_points
+        }:
+            raise ValidationError(
+                "Attached PacketProcessingPlan lacks the required traffic-class entry",
+                {"plan_id": str(plan_id), "traffic_class": attachment_set.traffic_class},
+            )
+        normalized = normalize_packet_processing_plan_attachment_scope(
+            scope,
+            model_error=False,
+            entity_exists=self._processing_scope_entity_exists,
+            details={"attachment_set_id": str(attachment_set_id)},
+        )
+        item = PacketProcessingPlanAttachment(
+            id=attachment_id or uuid.uuid4(),
+            attachment_set_id=attachment_set_id,
+            plan_id=plan_id,
+            scope=normalized,
+        )
+        self.session.add(item)
+        self.session.flush()
+        return item
 
     def add_routing_policy(
         self,
@@ -1404,6 +1479,73 @@ class CanonicalRepository:
         self, plan_id: uuid.UUID
     ) -> PacketProcessingPlanRecord:
         return self._load_packet_processing_plan(plan_id, model_error=True)
+
+    def get_packet_processing_plan_attachment_set(
+        self, routing_context_id: uuid.UUID, traffic_class: str
+    ) -> PacketProcessingPlanAttachmentSetRecord | None:
+        attachment_set = self.session.scalar(
+            select(PacketProcessingPlanAttachmentSet)
+            .where(
+                PacketProcessingPlanAttachmentSet.routing_context_id == routing_context_id,
+                PacketProcessingPlanAttachmentSet.traffic_class == traffic_class,
+            )
+            .execution_options(populate_existing=True)
+        )
+        if attachment_set is None:
+            return None
+        self._validate_plan_attachment_set_values(
+            attachment_set.traffic_class,
+            attachment_set.configured_completeness,
+            model_error=True,
+        )
+        if self.session.get(RoutingContext, attachment_set.routing_context_id) is None:
+            raise ModelError(
+                "PacketProcessingPlanAttachmentSet refers to a missing RoutingContext",
+                {"attachment_set_id": str(attachment_set.id)},
+            )
+        attachments: list[PacketProcessingPlanAttachmentRecord] = []
+        for attachment in self.session.scalars(
+            select(PacketProcessingPlanAttachment)
+            .where(PacketProcessingPlanAttachment.attachment_set_id == attachment_set.id)
+            .order_by(PacketProcessingPlanAttachment.id)
+            .execution_options(populate_existing=True)
+        ):
+            details = {"attachment_id": str(attachment.id)}
+            if self.session.get(PacketProcessingPlan, attachment.plan_id) is None:
+                raise ModelError(
+                    "PacketProcessingPlanAttachment refers to a missing PacketProcessingPlan",
+                    details,
+                )
+            plan = self._load_packet_processing_plan(attachment.plan_id, model_error=True)
+            if attachment_set.traffic_class not in {
+                entry.traffic_class for entry in plan.entry_points
+            }:
+                raise ModelError(
+                    "Attached PacketProcessingPlan lacks the required traffic-class entry",
+                    {**details, "traffic_class": attachment_set.traffic_class},
+                )
+            scope = normalize_packet_processing_plan_attachment_scope(
+                attachment.scope,
+                model_error=True,
+                entity_exists=self._processing_scope_entity_exists,
+                details=details,
+            )
+            attachments.append(
+                PacketProcessingPlanAttachmentRecord(
+                    attachment_id=attachment.id,
+                    attachment_set_id=attachment.attachment_set_id,
+                    plan_id=attachment.plan_id,
+                    plan_configured_completeness=plan.configured_completeness,
+                    scope=scope,
+                )
+            )
+        return PacketProcessingPlanAttachmentSetRecord(
+            attachment_set_id=attachment_set.id,
+            routing_context_id=attachment_set.routing_context_id,
+            traffic_class=attachment_set.traffic_class,
+            configured_completeness=attachment_set.configured_completeness,
+            attachments=tuple(attachments),
+        )
 
     def validate_packet_processing_plan(
         self, plan_id: uuid.UUID
@@ -2351,6 +2493,22 @@ class CanonicalRepository:
             error_type = ModelError if model_error else ValidationError
             raise error_type(
                 "PacketProcessingPlan configured completeness is invalid",
+                {"configured_completeness": completeness},
+            )
+
+    @staticmethod
+    def _validate_plan_attachment_set_values(
+        traffic_class: object, completeness: object, *, model_error: bool
+    ) -> None:
+        error_type = ModelError if model_error else ValidationError
+        if traffic_class not in {"TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"}:
+            raise error_type(
+                "PacketProcessingPlanAttachmentSet traffic_class is invalid",
+                {"traffic_class": traffic_class},
+            )
+        if completeness not in {"COMPLETE", "PARTIAL", "UNKNOWN"}:
+            raise error_type(
+                "PacketProcessingPlanAttachmentSet configured completeness is invalid",
                 {"configured_completeness": completeness},
             )
 
