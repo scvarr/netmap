@@ -599,6 +599,20 @@ class CanonicalRepository:
                 "ProcessingTransition outcome is invalid for source stage kind",
                 {"stage_kind": source.kind, "outcome": outcome},
             )
+        if (
+            source.kind == "ADJACENCY_L2"
+            and outcome
+            in {"NEXT_PROCESSING_POINT", "TARGET_ATTACHMENT_REACHED"}
+            and target.kind != "TERMINATE"
+        ):
+            raise ValidationError(
+                "Successful ADJACENCY_L2 transition must target TERMINATE",
+                {
+                    "outcome": outcome,
+                    "to_stage_id": str(target.id),
+                    "to_stage_kind": target.kind,
+                },
+            )
         if self.session.scalar(
             select(ProcessingTransition.id).where(
                 ProcessingTransition.from_stage_id == from_stage_id,

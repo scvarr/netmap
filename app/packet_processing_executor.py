@@ -2,6 +2,7 @@ import uuid
 from dataclasses import dataclass, replace
 
 from app.errors import ModelError, ValidationError
+from app.forwarding_adjacency import derive_adjacency_target
 from app.nat_attachment_resolver import ConfiguredNATAttachmentResolver
 from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.packet_processing_plan import (
@@ -12,7 +13,9 @@ from app.packet_processing_plan import (
 from app.repository import CanonicalRepository
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
 from app.security_attachment_resolver import ConfiguredSecurityAttachmentResolver
+from app.structural_adjacency_resolver import StructuralAdjacencyProofResolver
 from app.schemas import (
+    AdjacencyCandidate,
     ConnectionState,
     DirectEgressState,
     EvaluationView,
@@ -28,11 +31,14 @@ from app.schemas import (
     PacketProcessingExecutionBranch,
     PacketProcessingExecutionGap,
     PacketProcessingFlowState,
+    PacketProcessingHandoff,
     PacketProcessingStageExecution,
     PacketState,
     RoutingPolicyEvaluationQuery,
     SecurityAttachmentStageArtifact,
     SecurityEvaluationContext,
+    StructuralAdjacencyArtifact,
+    StructuralAdjacencyQuery,
 )
 
 
@@ -50,6 +56,7 @@ _EXECUTABLE_STAGE_KINDS = {
     "ROUTE_DECISION",
     "SECURITY",
     "NAT",
+    "ADJACENCY_L2",
     "TERMINATE",
 }
 
@@ -92,7 +99,7 @@ class _ExecutionBranch:
 
 
 class PacketProcessingPlanExecutor:
-    VERSION = "packet-processing-routing-security-nat/1.3"
+    VERSION = "packet-processing-routing-security-nat-adjacency/1.4"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
@@ -100,6 +107,7 @@ class PacketProcessingPlanExecutor:
         self.next_hop = SelectedTableNextHopResolver(repository)
         self.security_attachment = ConfiguredSecurityAttachmentResolver(repository)
         self.nat_attachment = ConfiguredNATAttachmentResolver(repository)
+        self.structural_adjacency = StructuralAdjacencyProofResolver(repository)
 
     def resolve(
         self,
@@ -278,6 +286,20 @@ class PacketProcessingPlanExecutor:
 
         if state.current_packet_state is None:
             return self._execute_nonexact(
+                plan,
+                stages,
+                transitions,
+                initial,
+                state,
+                executions,
+                evidence,
+                view,
+                stage,
+                stage_ref,
+            )
+
+        if stage.kind == "ADJACENCY_L2":
+            return self._execute_adjacency(
                 plan,
                 stages,
                 transitions,
@@ -590,6 +612,270 @@ class PacketProcessingPlanExecutor:
             )
         return results
 
+    def _execute_adjacency(
+        self,
+        plan: PacketProcessingPlanRecord,
+        stages: dict[uuid.UUID, ProcessingStageRecord],
+        transitions: dict[tuple[uuid.UUID, str], ProcessingTransitionRecord],
+        initial: FlowExecutionState,
+        state: FlowExecutionState,
+        executions: tuple[PacketProcessingStageExecution, ...],
+        evidence: tuple[EvidenceRef, ...],
+        view: EvaluationView,
+        stage: ProcessingStageRecord,
+        stage_ref: EvidenceRef,
+    ) -> list[_ExecutionBranch]:
+        assert state.current_packet_state is not None
+        direct = state.direct_egress
+        if direct is None or (
+            direct.adjacency_mode == "DIRECT_DESTINATION"
+            and state.current_packet_state.destination_ip is None
+        ):
+            return self._continue_adjacency_unknown(
+                plan,
+                stages,
+                transitions,
+                initial,
+                state,
+                executions,
+                evidence,
+                view,
+                stage,
+                stage_ref,
+                gap_code="STAGE_PRECONDITION_UNKNOWN",
+                evidence_refs=[stage_ref],
+            )
+
+        target_ip = derive_adjacency_target(
+            direct, state.current_packet_state.destination_ip
+        )
+        adjacency = self.structural_adjacency.resolve(
+            StructuralAdjacencyQuery(
+                egress_l3_binding_id=direct.egress_l3_binding_id,
+                neighbor_target_ip=target_ip,
+            ),
+            view,
+        )
+        if not adjacency.candidate_results:
+            return self._continue_adjacency_unknown(
+                plan,
+                stages,
+                transitions,
+                initial,
+                state,
+                executions,
+                evidence,
+                view,
+                stage,
+                stage_ref,
+                gap_code="STRUCTURAL_ADJACENCY_UNKNOWN",
+                evidence_refs=adjacency.identity_resolution.evidence_refs,
+                adjacency_target_ip=target_ip,
+                structural_adjacency_evaluation=adjacency,
+            )
+
+        results: list[_ExecutionBranch] = []
+        for candidate_result in adjacency.candidate_results:
+            candidate = candidate_result.identity_candidate
+            receiving = self.repository.get_l3_binding_attachment(
+                candidate.target_l3_binding_id
+            )
+            if receiving.network_interface_id != candidate.target_network_interface_id:
+                raise ModelError(
+                    "Structural adjacency candidate target attachment is inconsistent",
+                    {
+                        "interface_address_id": str(candidate.interface_address_id),
+                        "target_l3_binding_id": str(candidate.target_l3_binding_id),
+                        "candidate_network_interface_id": str(
+                            candidate.target_network_interface_id
+                        ),
+                        "binding_network_interface_id": str(
+                            receiving.network_interface_id
+                        ),
+                    },
+                )
+            identity_refs = self._adjacency_identity_refs(direct, candidate)
+            if candidate_result.result == "REACHABLE":
+                for l2_branch in candidate_result.l2_traversal.branches:
+                    outcome = (
+                        "NEXT_PROCESSING_POINT"
+                        if direct.adjacency_mode == "GATEWAY"
+                        else "TARGET_ATTACHMENT_REACHED"
+                    )
+                    transition = self._transition(stage, outcome, transitions)
+                    updated = replace(
+                        state,
+                        routing_context_id=receiving.routing_context_id,
+                        traffic_class=(
+                            "TRANSIT"
+                            if outcome == "NEXT_PROCESSING_POINT"
+                            else "LOCAL_INPUT"
+                        ),
+                        ingress_network_interface_id=receiving.network_interface_id,
+                        ingress_l3_binding_id=receiving.l3_binding_id,
+                        selected_routing_table_id=None,
+                        current_route_resolution_branch=None,
+                        direct_egress=None,
+                    )
+                    next_state = replace(
+                        updated, current_stage_id=transition.to_stage_id
+                    )
+                    refs = self._dedupe(
+                        [
+                            stage_ref,
+                            *identity_refs,
+                            *l2_branch.evidence_refs,
+                            self._ref(
+                                "ProcessingTransition", transition.transition_id
+                            ),
+                        ]
+                    )
+                    handoff = PacketProcessingHandoff(
+                        outcome=outcome,  # type: ignore[arg-type]
+                        receiving_network_interface_id=(
+                            receiving.network_interface_id
+                        ),
+                        receiving_l3_binding_id=receiving.l3_binding_id,
+                        receiving_routing_context_id=receiving.routing_context_id,
+                    )
+                    execution = self._stage_execution(
+                        stage,
+                        state,
+                        updated,
+                        outcome,
+                        transition,
+                        refs,
+                        direct_egress=direct,
+                        adjacency_target_ip=target_ip,
+                        structural_adjacency_evaluation=adjacency,
+                        selected_adjacency_candidate=candidate,
+                        selected_l2_branch_id=l2_branch.branch_id,
+                        handoff=handoff,
+                    )
+                    results.extend(
+                        self._execute(
+                            plan,
+                            stages,
+                            transitions,
+                            initial,
+                            next_state,
+                            executions + (execution,),
+                            tuple(self._dedupe([*evidence, *refs])),
+                            view,
+                        )
+                    )
+
+            if (
+                candidate_result.result == "UNKNOWN"
+                or candidate_result.l2_traversal.gaps
+            ):
+                gap_refs = self._dedupe(
+                    [
+                        *identity_refs,
+                        *[
+                            ref
+                            for gap in candidate_result.l2_traversal.gaps
+                            for ref in gap.evidence_refs
+                        ],
+                    ]
+                )
+                results.extend(
+                    self._continue_adjacency_unknown(
+                        plan,
+                        stages,
+                        transitions,
+                        initial,
+                        state,
+                        executions,
+                        evidence,
+                        view,
+                        stage,
+                        stage_ref,
+                        gap_code="STRUCTURAL_ADJACENCY_UNKNOWN",
+                        evidence_refs=gap_refs,
+                        adjacency_target_ip=target_ip,
+                        structural_adjacency_evaluation=adjacency,
+                        selected_adjacency_candidate=candidate,
+                    )
+                )
+        return results
+
+    def _continue_adjacency_unknown(
+        self,
+        plan: PacketProcessingPlanRecord,
+        stages: dict[uuid.UUID, ProcessingStageRecord],
+        transitions: dict[tuple[uuid.UUID, str], ProcessingTransitionRecord],
+        initial: FlowExecutionState,
+        state: FlowExecutionState,
+        executions: tuple[PacketProcessingStageExecution, ...],
+        evidence: tuple[EvidenceRef, ...],
+        view: EvaluationView,
+        stage: ProcessingStageRecord,
+        stage_ref: EvidenceRef,
+        *,
+        gap_code: str,
+        evidence_refs: list[EvidenceRef],
+        adjacency_target_ip=None,
+        structural_adjacency_evaluation: StructuralAdjacencyArtifact | None = None,
+        selected_adjacency_candidate: AdjacencyCandidate | None = None,
+    ) -> list[_ExecutionBranch]:
+        transition = self._transition(stage, "UNKNOWN", transitions)
+        next_state = replace(state, current_stage_id=transition.to_stage_id)
+        refs = self._dedupe(
+            [
+                stage_ref,
+                *evidence_refs,
+                self._ref("ProcessingTransition", transition.transition_id),
+            ]
+        )
+        gap = PacketProcessingExecutionGap(
+            code=gap_code,  # type: ignore[arg-type]
+            stage_id=stage.stage_id,
+            evidence_refs=self._dedupe(evidence_refs or [stage_ref]),
+        )
+        execution = self._stage_execution(
+            stage,
+            state,
+            state,
+            "UNKNOWN",
+            transition,
+            refs,
+            direct_egress=state.direct_egress,
+            adjacency_target_ip=adjacency_target_ip,
+            structural_adjacency_evaluation=structural_adjacency_evaluation,
+            selected_adjacency_candidate=selected_adjacency_candidate,
+            gaps=[gap],
+        )
+        return self._execute(
+            plan,
+            stages,
+            transitions,
+            initial,
+            next_state,
+            executions + (execution,),
+            tuple(self._dedupe([*evidence, *refs])),
+            view,
+        )
+
+    def _adjacency_identity_refs(
+        self, direct: DirectEgressState, candidate: AdjacencyCandidate
+    ) -> list[EvidenceRef]:
+        source = self.repository.get_l3_binding_attachment(
+            direct.egress_l3_binding_id
+        )
+        return self._dedupe(
+            [
+                self._ref("L3Binding", source.l3_binding_id),
+                self._ref("NetworkInterface", source.network_interface_id),
+                self._ref("RoutingContext", source.routing_context_id),
+                self._ref("InterfaceAddress", candidate.interface_address_id),
+                self._ref("L3Binding", candidate.target_l3_binding_id),
+                self._ref(
+                    "NetworkInterface", candidate.target_network_interface_id
+                ),
+            ]
+        )
+
     def _execute_nonexact(
         self,
         plan: PacketProcessingPlanRecord,
@@ -608,6 +894,7 @@ class PacketProcessingPlanExecutor:
             "ROUTE_DECISION": "UNKNOWN",
             "SECURITY": "UNKNOWN",
             "NAT": "UNKNOWN",
+            "ADJACENCY_L2": "UNKNOWN",
         }[stage.kind]
         if stage.kind == "ROUTING_POLICY":
             updated = replace(state, selected_routing_table_id=None)
@@ -709,6 +996,11 @@ class PacketProcessingPlanExecutor:
         direct_egress: DirectEgressState | None = None,
         security_attachment_evaluation: SecurityAttachmentStageArtifact | None = None,
         nat_attachment_evaluation: NATAttachmentStageArtifact | None = None,
+        adjacency_target_ip=None,
+        structural_adjacency_evaluation: StructuralAdjacencyArtifact | None = None,
+        selected_adjacency_candidate: AdjacencyCandidate | None = None,
+        selected_l2_branch_id: str | None = None,
+        handoff: PacketProcessingHandoff | None = None,
         gaps: list[PacketProcessingExecutionGap] | None = None,
     ) -> PacketProcessingStageExecution:
         return PacketProcessingStageExecution(
@@ -733,6 +1025,11 @@ class PacketProcessingPlanExecutor:
             direct_egress=direct_egress,
             security_attachment_evaluation=security_attachment_evaluation,
             nat_attachment_evaluation=nat_attachment_evaluation,
+            adjacency_target_ip=adjacency_target_ip,
+            structural_adjacency_evaluation=structural_adjacency_evaluation,
+            selected_adjacency_candidate=selected_adjacency_candidate,
+            selected_l2_branch_id=selected_l2_branch_id,
+            handoff=handoff,
             evidence_refs=evidence_refs,
             gaps=gaps or [],
         )

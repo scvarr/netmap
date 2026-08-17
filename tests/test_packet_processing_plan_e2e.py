@@ -99,6 +99,7 @@ def test_invalid_plan_completeness_is_rejected():
         ("ROUTE_DECISION", {}, None),
         ("SECURITY", {"attachment_id": "{reference}"}, 1),
         ("NAT", {"attachment_id": "{reference}"}, 2),
+        ("ADJACENCY_L2", {}, None),
         ("TERMINATE", {"outcome": "UNKNOWN"}, None),
     ],
 )
@@ -115,7 +116,7 @@ def test_supported_stage_kinds_and_payloads(kind, payload, reference_index):
     assert stage.payload == payload
 
 
-@pytest.mark.parametrize("kind", ["PACKET_MARK", "ADJACENCY_L2", "LOCAL_DELIVERY"])
+@pytest.mark.parametrize("kind", ["PACKET_MARK", "LOCAL_DELIVERY"])
 def test_unsupported_stage_kinds_are_rejected(kind):
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
@@ -173,6 +174,7 @@ def test_dangling_stage_payload_reference_is_rejected(kind, payload):
         ("ROUTE_DECISION", {"table_id": str(uuid.uuid4())}),
         ("SECURITY", {"policy_id": str(uuid.uuid4())}),
         ("NAT", {"attachment_id": "invalid"}),
+        ("ADJACENCY_L2", {"neighbor_target_ip": "192.0.2.1"}),
         ("TERMINATE", {"outcome": "PERMIT"}),
     ],
 )
@@ -231,6 +233,110 @@ def test_routing_plan_persists_and_validates_without_execution():
     assert len(artifact["stages"]) == 6
     assert len(artifact["transitions"]) == 8
     assert "Route" not in {ref["entity_type"] for ref in artifact["evidence_refs"]}
+
+
+def test_complete_adjacency_plan_requires_and_accepts_all_outcomes():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("COMPLETE")
+        adjacency = repository.add_processing_stage(plan.id, "ADJACENCY_L2", {})
+        terminal = repository.add_processing_stage(
+            plan.id, "TERMINATE", {"outcome": "UNKNOWN"}
+        )
+        repository.add_processing_entry_point(plan.id, "TRANSIT", adjacency.id)
+        for outcome in (
+            "NEXT_PROCESSING_POINT",
+            "TARGET_ATTACHMENT_REACHED",
+            "L2_UNREACHABLE",
+            "UNKNOWN",
+        ):
+            repository.add_processing_transition(
+                plan.id, adjacency.id, outcome, terminal.id
+            )
+        plan_id = plan.id
+
+    artifact = validate_api(plan_id).json()
+
+    assert artifact["result"] == "VALID"
+    assert {
+        transition["outcome"] for transition in artifact["transitions"]
+    } == {
+        "NEXT_PROCESSING_POINT",
+        "TARGET_ATTACHMENT_REACHED",
+        "L2_UNREACHABLE",
+        "UNKNOWN",
+    }
+
+
+def test_complete_adjacency_plan_missing_outcome_is_rejected():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("COMPLETE")
+        adjacency = repository.add_processing_stage(plan.id, "ADJACENCY_L2", {})
+        terminal = repository.add_processing_stage(
+            plan.id, "TERMINATE", {"outcome": "UNKNOWN"}
+        )
+        repository.add_processing_entry_point(plan.id, "TRANSIT", adjacency.id)
+        repository.add_processing_transition(
+            plan.id, adjacency.id, "UNKNOWN", terminal.id
+        )
+        plan_id = plan.id
+
+    assert validate_api(plan_id).status_code == 409
+
+
+@pytest.mark.parametrize(
+    "outcome", ["NEXT_PROCESSING_POINT", "TARGET_ATTACHMENT_REACHED"]
+)
+def test_successful_adjacency_transition_requires_terminal_target(outcome):
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("PARTIAL")
+        adjacency = repository.add_processing_stage(plan.id, "ADJACENCY_L2", {})
+        route = repository.add_processing_stage(plan.id, "ROUTE_DECISION", {})
+        with pytest.raises(ValidationError):
+            repository.add_processing_transition(
+                plan.id, adjacency.id, outcome, route.id
+            )
+
+
+def test_stored_successful_adjacency_transition_to_nonterminal_is_model_error():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("PARTIAL")
+        adjacency = repository.add_processing_stage(plan.id, "ADJACENCY_L2", {})
+        route = repository.add_processing_stage(plan.id, "ROUTE_DECISION", {})
+        repository.add_processing_entry_point(plan.id, "TRANSIT", adjacency.id)
+        session.add(
+            ProcessingTransition(
+                plan_id=plan.id,
+                from_stage_id=adjacency.id,
+                outcome="NEXT_PROCESSING_POINT",
+                to_stage_id=route.id,
+            )
+        )
+        plan_id = plan.id
+
+    assert validate_api(plan_id).status_code == 409
+
+
+def test_stored_adjacency_payload_corruption_is_model_error():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        plan = repository.add_packet_processing_plan("PARTIAL")
+        adjacency = repository.add_processing_stage(plan.id, "ADJACENCY_L2", {})
+        repository.add_processing_entry_point(plan.id, "TRANSIT", adjacency.id)
+        session.execute(
+            text(
+                "UPDATE processing_stages "
+                "SET payload = '{\"target\": \"forbidden\"}'::jsonb "
+                "WHERE id = :stage_id"
+            ),
+            {"stage_id": adjacency.id},
+        )
+        plan_id = plan.id
+
+    assert validate_api(plan_id).status_code == 409
 
 
 def test_security_nat_plan_persists_and_validates_without_execution():

@@ -12,6 +12,7 @@ SUPPORTED_STAGE_KINDS = (
     "ROUTE_DECISION",
     "SECURITY",
     "NAT",
+    "ADJACENCY_L2",
     "TERMINATE",
 )
 
@@ -30,6 +31,12 @@ STAGE_OUTCOMES: dict[str, tuple[str, ...]] = {
         "IDENTITY",
         "TRANSFORMED_EXACT",
         "TRANSFORMED_CONSTRAINED",
+        "UNKNOWN",
+    ),
+    "ADJACENCY_L2": (
+        "NEXT_PROCESSING_POINT",
+        "TARGET_ATTACHMENT_REACHED",
+        "L2_UNREACHABLE",
         "UNKNOWN",
     ),
     "TERMINATE": (),
@@ -67,10 +74,10 @@ def normalize_processing_stage_payload(
     if not isinstance(payload, dict):
         raise error_type("ProcessingStage payload must be an object", context)
 
-    if kind == "ROUTE_DECISION":
+    if kind in {"ROUTE_DECISION", "ADJACENCY_L2"}:
         if payload:
             raise error_type(
-                "ROUTE_DECISION payload must be empty",
+                f"{kind} payload must be empty",
                 {**context, "payload_keys": sorted(str(key) for key in payload)},
             )
         return {}

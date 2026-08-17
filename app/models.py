@@ -603,7 +603,7 @@ class ProcessingTransition(Base):
     from_stage_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("processing_stages.id", ondelete="CASCADE"), nullable=False
     )
-    outcome: Mapped[str] = mapped_column(String(23), nullable=False)
+    outcome: Mapped[str] = mapped_column(String(32), nullable=False)
     to_stage_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("processing_stages.id", ondelete="CASCADE"), nullable=False
     )

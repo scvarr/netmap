@@ -107,6 +107,19 @@ def validate_packet_processing_plan_graph(
                 from_stage_id=str(source.stage_id),
                 outcome=transition.outcome,
             )
+        if (
+            source.kind == "ADJACENCY_L2"
+            and transition.outcome
+            in {"NEXT_PROCESSING_POINT", "TARGET_ATTACHMENT_REACHED"}
+            and target.kind != "TERMINATE"
+        ):
+            fail(
+                "Successful ADJACENCY_L2 transition must target TERMINATE",
+                processing_transition_id=str(transition.transition_id),
+                outcome=transition.outcome,
+                to_stage_id=str(target.stage_id),
+                to_stage_kind=target.kind,
+            )
         outgoing[source.stage_id][transition.outcome] = target.stage_id
 
     for stage in plan.stages:

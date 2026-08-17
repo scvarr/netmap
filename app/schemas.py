@@ -576,6 +576,7 @@ class ProcessingStageArtifact(BaseModel):
         "ROUTE_DECISION",
         "SECURITY",
         "NAT",
+        "ADJACENCY_L2",
         "TERMINATE",
     ]
     payload: dict[str, str]
@@ -719,15 +720,30 @@ class PacketProcessingExecutionGap(BaseModel):
         "NAT_STAGE_UNKNOWN",
         "PACKET_CONSTRAINT_UNSUPPORTED",
         "PACKET_STATE_UNKNOWN",
+        "STRUCTURAL_ADJACENCY_UNKNOWN",
     ]
     stage_id: uuid.UUID | None = None
     evidence_refs: list[EvidenceRef]
 
 
+class PacketProcessingHandoff(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    outcome: Literal["NEXT_PROCESSING_POINT", "TARGET_ATTACHMENT_REACHED"]
+    receiving_network_interface_id: uuid.UUID
+    receiving_l3_binding_id: uuid.UUID
+    receiving_routing_context_id: uuid.UUID
+
+
 class PacketProcessingStageExecution(BaseModel):
     stage_id: uuid.UUID
     stage_kind: Literal[
-        "ROUTING_POLICY", "ROUTE_DECISION", "SECURITY", "NAT", "TERMINATE"
+        "ROUTING_POLICY",
+        "ROUTE_DECISION",
+        "SECURITY",
+        "NAT",
+        "ADJACENCY_L2",
+        "TERMINATE",
     ]
     packet_before: PacketState | None = None
     packet_before_constraint: NATPacketConstraint | None = None
@@ -748,6 +764,11 @@ class PacketProcessingStageExecution(BaseModel):
     direct_egress: DirectEgressState | None = None
     security_attachment_evaluation: SecurityAttachmentStageArtifact | None = None
     nat_attachment_evaluation: NATAttachmentStageArtifact | None = None
+    adjacency_target_ip: IPvAnyAddress | None = None
+    structural_adjacency_evaluation: StructuralAdjacencyArtifact | None = None
+    selected_adjacency_candidate: AdjacencyCandidate | None = None
+    selected_l2_branch_id: str | None = None
+    handoff: PacketProcessingHandoff | None = None
     evidence_refs: list[EvidenceRef]
     gaps: list[PacketProcessingExecutionGap]
 
@@ -790,8 +811,10 @@ class PacketProcessingEvaluationArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: PacketProcessingEvaluationQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["packet-processing-routing-security-nat/1.3"] = (
-        "packet-processing-routing-security-nat/1.3"
+    resolver_version: Literal[
+        "packet-processing-routing-security-nat-adjacency/1.4"
+    ] = (
+        "packet-processing-routing-security-nat-adjacency/1.4"
     )
     result: Literal[
         "CONTINUE_TO_NEXT_HOP",
