@@ -894,6 +894,91 @@ class PacketProcessingEvaluationArtifact(BaseModel):
     warnings: list[dict[str, Any]]
 
 
+class PacketFlowEvaluationQuery(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    routing_context_id: uuid.UUID
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    packet_state: PacketState
+    ingress_network_interface_id: uuid.UUID | None = None
+    ingress_l3_binding_id: uuid.UUID | None = None
+    connection_state: ConnectionState | None = None
+    analysis_mode: Literal["EXACT"] = "EXACT"
+    max_processing_points: int = Field(default=32, ge=1, le=256)
+
+
+class PacketFlowContext(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    packet_state: PacketState
+    routing_context_id: uuid.UUID
+    traffic_class: Literal["TRANSIT", "LOCAL_INPUT", "LOCAL_OUTPUT"]
+    ingress_network_interface_id: uuid.UUID | None = None
+    ingress_l3_binding_id: uuid.UUID | None = None
+    connection_state: ConnectionState | None = None
+
+
+class PacketFlowGap(BaseModel):
+    code: Literal[
+        "PLAN_SELECTION_UNRESOLVED",
+        "NO_PROCESSING_PLAN_APPLICABLE",
+        "PROCESSING_HANDOFF_UNKNOWN",
+        "PROCESSING_HANDOFF_PACKET_UNKNOWN",
+        "PACKET_FLOW_LOOP_DETECTED",
+        "PACKET_FLOW_SEARCH_LIMIT",
+    ]
+    local_step_sequence: int | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class PacketFlowLocalStep(BaseModel):
+    sequence: int
+    context_before: PacketFlowContext
+    plan_selection: PacketProcessingPlanSelectionArtifact
+    selected_plan_id: uuid.UUID | None = None
+    packet_processing_evaluation: PacketProcessingEvaluationArtifact | None = None
+    selected_execution_branch_id: str | None = None
+    context_after: PacketFlowContext | None = None
+    handoff: PacketProcessingHandoff | None = None
+    evidence_refs: list[EvidenceRef]
+
+
+class PacketFlowExecutionBranch(BaseModel):
+    branch_id: str
+    local_steps: list[PacketFlowLocalStep]
+    verdict: Literal["DELIVERED", "NOT_DELIVERED", "UNKNOWN"]
+    termination_reason: Literal[
+        "NETWORK_DELIVERY",
+        "NOT_DELIVERED",
+        "LOCAL_EXECUTION_UNKNOWN",
+        "PLAN_SELECTION_UNKNOWN",
+        "PLAN_SELECTION_CONFLICTING",
+        "NO_PROCESSING_PLAN_APPLICABLE",
+        "PROCESSING_HANDOFF_UNKNOWN",
+        "PROCESSING_HANDOFF_PACKET_UNKNOWN",
+        "PACKET_FLOW_LOOP_DETECTED",
+        "PACKET_FLOW_SEARCH_LIMIT",
+    ]
+    final_context: PacketFlowContext | None = None
+    evidence_refs: list[EvidenceRef]
+    gaps: list[PacketFlowGap]
+
+
+class PacketFlowEvaluationArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: PacketFlowEvaluationQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["packet-flow-configured/1.0"] = (
+        "packet-flow-configured/1.0"
+    )
+    result: Literal["DELIVERED", "NOT_DELIVERED", "UNKNOWN"]
+    original_packet_state: PacketState
+    branches: list[PacketFlowExecutionBranch]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[PacketFlowGap]
+    warnings: list[dict[str, Any]]
+
+
 class ConnectionState(StrEnum):
     NEW = "NEW"
     ESTABLISHED = "ESTABLISHED"

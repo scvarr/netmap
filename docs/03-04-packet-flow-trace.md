@@ -952,6 +952,86 @@ health здесь не выполняются.
 
 Explicit endpoint target остаётся будущим расширением resolver/query contract.
 
+## Первый configured Packet Flow orchestrator
+
+Первый executable end-to-end slice доступен как:
+
+```text
+POST /v1/traces/packet-flow/evaluation
+```
+
+Он поддерживает только explicit `analysis_mode = EXACT` и композиционно
+использует уже существующие primitives:
+
+```text
+PacketProcessingPlan selector
+    -> selected local PacketProcessingPlan executor
+    -> branch-local terminal
+    -> при CONTINUE_TO_NEXT_HOP новый selector/executor cycle
+```
+
+Initial plan ID не является входом Packet Flow query. Plan выбирается canonical
+selector для initial `(RoutingContext, traffic_class, ingress)` и заново
+выбирается после каждого successful handoff. `NO_PLAN_CONFIRMED` не включает
+hidden basic-router, pass-through или auto-delivery behavior: без explicit
+applicable normalized plan end-to-end branch остаётся `UNKNOWN`.
+
+Orchestrator разворачивает каждую `PacketProcessingEvaluationArtifact.branches`
+отдельно. Aggregate result локального executor не используется как основание
+для продолжения: sibling branches `CONTINUE`, `NOT_DELIVERED` и `UNKNOWN`
+сохраняют собственные path/evidence.
+
+`CONTINUE_TO_NEXT_HOP` является только внутренней границей local executions и
+никогда не возвращается как final Packet Flow verdict. Для продолжения branch
+обязан содержать ровно один согласованный `PacketProcessingHandoff`; receiving
+context, ingress interface/binding и traffic class сверяются с branch final
+state. Отсутствующий handoff или non-exact packet на handoff даёт typed
+orchestration `UNKNOWN`, без representative packet и без повторного старого
+plan.
+
+Через handoff переносится именно current exact `PacketState`, включая результат
+предыдущего exact NAT, а не original packet. Selected table, route-resolution
+branch и direct egress остаются local executor state и не передаются в новый
+query. `ConnectionState` также local: initial value видит только первый
+processing point, после L2 handoff следующий executor получает
+`connection_state = null`. Исторический local artifact при этом сохраняет
+исходный connection-state evidence.
+
+Loop detection ancestry-local и branch-local. Semantic key включает минимум:
+
+```text
+RoutingContext
+traffic_class
+ingress NetworkInterface/L3Binding
+все exact PacketState fields
+connection_state
+```
+
+Одинаковый router с другим translated packet или ingress не схлопывается.
+Повтор полного key завершает только текущую branch как
+`PACKET_FLOW_LOOP_DETECTED`. `max_processing_points` ограничивает число local
+contexts (default 32, диапазон 1..256) и даёт `PACKET_FLOW_SEARCH_LIMIT`;
+доказанный loop проверяется раньше limit.
+
+EXACT aggregation консервативна:
+
+```text
+all DELIVERED       -> DELIVERED
+all NOT_DELIVERED   -> NOT_DELIVERED
+любая смесь outcomes -> UNKNOWN
+```
+
+Следовательно, существование одной delivered branch не доказывает EXACT
+delivery. Семантика «существует возможный путь» относится к будущему
+`POSSIBLE` mode.
+
+Каждая end-to-end branch хранит ordered local steps: boundary context, полный
+plan-selection artifact, selected plan, полный local evaluation artifact,
+конкретный `selected_execution_branch_id`, handoff/context-after и только
+branch-relevant evidence. Один `EvaluationView` и один workspace-scoped
+`CanonicalRepository` используются на всей query; HTTP self-calls, новые
+sessions, trace persistence и cross-query cache отсутствуют.
+
 ## Target semantics
 
 Trace request может иметь:
