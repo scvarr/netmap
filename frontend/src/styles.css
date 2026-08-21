@@ -162,6 +162,21 @@ button { font: inherit; }
 .interface-card__metrics strong { color: #d7e8e4; }
 .interface-card__physical { margin-top: 11px; color: #9eb2b0; font-size: 10px; line-height: 1.5; }
 .interface-card__physical p { margin: 5px 0; }
+.connect-interface { margin-top: 12px; }
+.connect-interface__trigger { padding: 6px 10px; border: 1px solid #3a7968; border-radius: 6px; color: #bdebdc; background: #123129; cursor: pointer; font-size: 10px; font-weight: 700; }
+.connect-interface__form { margin-top: 9px; padding: 11px; border: 1px solid #315256; border-radius: 8px; background: #091719; }
+.connect-interface__form > strong { color: #dcebe8; font-size: 11px; }
+.connect-interface__form label { display: block; margin-top: 10px; }
+.connect-interface__form label > span { display: block; margin-bottom: 5px; color: #91a5a5; font-size: 9px; }
+.connect-interface__form select, .connect-interface__form input { width: 100%; padding: 8px 9px; border: 1px solid #2a4448; border-radius: 6px; color: #e7f4f1; background: #081315; outline: none; }
+.connect-interface__form select:focus, .connect-interface__form input:focus { border-color: #55e5b5; }
+.connect-interface__target-error, .connect-interface__error { margin: 8px 0 0; color: #e0aaa5; font-size: 10px; }
+.connect-interface__target-error p { margin: 0 0 6px; }
+.connect-interface__target-error button { padding: 4px 7px; border: 1px solid #72504b; border-radius: 5px; color: #f1d3ce; background: #291816; cursor: pointer; }
+.connect-interface__actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 11px; }
+.connect-interface__actions button { padding: 6px 9px; border: 1px solid #315256; border-radius: 6px; color: #cce0dc; background: #13282b; cursor: pointer; font-size: 10px; }
+.connect-interface__actions button[type="submit"] { border-color: #3a7968; color: #dff7ef; background: #15372f; }
+.connect-interface__actions button:disabled { cursor: not-allowed; opacity: .45; }
 .interface-technical-details { margin-top: 12px; border-top: 1px solid #223538; }
 .interface-technical-details summary { padding-top: 10px; color: #728789; cursor: pointer; font-size: 9px; }
 .interface-technical-details h4 { margin: 14px 0 7px; color: #728789; font-size: 9px; text-transform: uppercase; }

@@ -7,12 +7,21 @@ import type {
 import type { ProjectionSourceRef, TopologyProjectionNode } from '../topology/types';
 import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
 import { CreateDeviceInterface } from './CreateDeviceInterface';
+import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
+import { displayNodeLabel } from '../topology/presentation';
+import {
+  ConnectPhysicalInterface,
+  type PhysicalLinkTargetDevice,
+} from './ConnectPhysicalInterface';
 
 interface DeviceInterfacesSectionProps {
   node: TopologyProjectionNode;
   dataSource: DeviceDetailsDataSource;
   writeDataSource?: DeviceInterfaceWriteDataSource;
   onInterfaceCreated?: (physicalObjectId: string) => void;
+  topologyNodes?: TopologyProjectionNode[];
+  physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
+  onPhysicalLinkCreated?: (physicalObjectId: string) => void;
 }
 
 type DetailsState =
@@ -66,7 +75,19 @@ const InterfaceTechnicalDetails = ({ item }: { item: DeviceInterfaceDetails }) =
   </details>
 );
 
-const InterfaceCard = ({ item }: { item: DeviceInterfaceDetails }) => (
+const InterfaceCard = ({
+  item,
+  targetDevices,
+  detailsDataSource,
+  physicalLinkWriteDataSource,
+  onConnected,
+}: {
+  item: DeviceInterfaceDetails;
+  targetDevices: PhysicalLinkTargetDevice[];
+  detailsDataSource: DeviceDetailsDataSource;
+  physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
+  onConnected: () => void;
+}) => (
   <article className="interface-card">
     <h4>{displayInterfaceLabel(item)}</h4>
     <div className="interface-card__addresses">
@@ -105,6 +126,15 @@ const InterfaceCard = ({ item }: { item: DeviceInterfaceDetails }) => (
         <p className="muted">Сведения о физической реализации не заданы.</p>
       )}
     </div>
+    {item.direct_physical_bindings.length === 0 && physicalLinkWriteDataSource && (
+      <ConnectPhysicalInterface
+        sourceInterface={item}
+        targetDevices={targetDevices}
+        detailsDataSource={detailsDataSource}
+        writeDataSource={physicalLinkWriteDataSource}
+        onConnected={onConnected}
+      />
+    )}
     <InterfaceTechnicalDetails item={item} />
   </article>
 );
@@ -121,6 +151,9 @@ export function DeviceInterfacesSection({
   dataSource,
   writeDataSource,
   onInterfaceCreated,
+  topologyNodes = [],
+  physicalLinkWriteDataSource,
+  onPhysicalLinkCreated,
 }: DeviceInterfacesSectionProps) {
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
@@ -129,6 +162,12 @@ export function DeviceInterfacesSection({
       ? { kind: 'loading' }
       : { kind: 'unavailable', message: 'Детали интерфейсов недоступны: нет однозначной ссылки на PhysicalObject.' }
   ));
+  const targetDevices = topologyNodes.flatMap((candidate) => {
+    const candidateId = physicalObjectIdentity(candidate);
+    return candidateId && candidateId !== physicalObjectId
+      ? [{ physicalObjectId: candidateId, label: displayNodeLabel(candidate) }]
+      : [];
+  });
 
   useEffect(() => {
     if (!physicalObjectId) {
@@ -181,7 +220,17 @@ export function DeviceInterfacesSection({
       {state.kind === 'loaded' && (
         state.document.interfaces.length
           ? <div className="interface-list">{state.document.interfaces.map((item) => (
-            <InterfaceCard key={item.interface_ref.entity_id} item={item} />
+            <InterfaceCard
+              key={item.interface_ref.entity_id}
+              item={item}
+              targetDevices={targetDevices}
+              detailsDataSource={dataSource}
+              physicalLinkWriteDataSource={physicalLinkWriteDataSource}
+              onConnected={() => {
+                setRetryKey((key) => key + 1);
+                if (physicalObjectId) onPhysicalLinkCreated?.(physicalObjectId);
+              }}
+            />
           ))}</div>
           : <p className="device-details-state">У устройства нет owned interfaces.</p>
       )}

@@ -293,3 +293,29 @@ physical/realization binding, L2/L3 facts или IP. Совпадающие disp
 UI запускает operation из секции интерфейсов выбранного device inspector. После
 success он обновляет Device Details и DEVICE projection из backend, сохраняя
 выбранным тот же PhysicalObject; optimistic/fake interface не создаётся.
+
+## W.3 — первое физическое соединение интерфейсов
+
+**FIXED**
+
+Public user-intent operation:
+
+```text
+POST /v1/topology/physical-links
+    source_interface_id
+    target_interface_id
+    cable_display_name?
+    -> 201 PhysicalConnectionCreationDocument
+```
+
+Bounded operation принимает два разных существующих `NetworkInterface` с
+явными physical owners и без direct `InterfacePhysicalBinding`. Одна transaction
+создаёт для каждого интерфейса атомарную device `ConnectionPoint`, две конечные
+точки cable `PhysicalObject`, обе direct bindings и три `Connection`, каждый с
+единственным явным `ConnectionMember` `1↔1`. Optional имя кабеля хранится как
+существующий `alias.display` PhysicalObject metadata.
+
+`PhysicalLink` не становится canonical entity. Operation не создаёт
+realization, L2/L3/IP или другие network facts. После success UI заново загружает
+Device Details и DEVICE projection; edge появляется только как derived backend
+projection над созданным L1 path.

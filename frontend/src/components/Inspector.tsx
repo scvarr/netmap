@@ -13,6 +13,7 @@ import type {
 } from '../topology/types';
 import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
+import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
 import { DeviceInterfacesSection } from './DeviceInterfacesSection';
 
 interface InspectorProps {
@@ -21,6 +22,8 @@ interface InspectorProps {
   deviceDetailsDataSource: DeviceDetailsDataSource;
   deviceInterfaceWriteDataSource?: DeviceInterfaceWriteDataSource;
   onInterfaceCreated?: (physicalObjectId: string) => void;
+  physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
+  onPhysicalLinkCreated?: (physicalObjectId: string) => void;
   onSelectNode: (node: TopologyProjectionNode) => void;
   onClose: () => void;
 }
@@ -97,6 +100,8 @@ export function Inspector({
   deviceDetailsDataSource,
   deviceInterfaceWriteDataSource,
   onInterfaceCreated,
+  physicalLinkWriteDataSource,
+  onPhysicalLinkCreated,
   onSelectNode,
   onClose,
 }: InspectorProps) {
@@ -157,6 +162,9 @@ export function Inspector({
           dataSource={deviceDetailsDataSource}
           writeDataSource={deviceInterfaceWriteDataSource}
           onInterfaceCreated={onInterfaceCreated}
+          topologyNodes={document?.nodes ?? []}
+          physicalLinkWriteDataSource={physicalLinkWriteDataSource}
+          onPhysicalLinkCreated={onPhysicalLinkCreated}
         />
         <TechnicalDetails selection={selection} />
       </aside>

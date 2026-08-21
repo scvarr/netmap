@@ -23,6 +23,7 @@ from app.packet_processing_plan_resolver import PacketProcessingPlanValidationRe
 from app.packet_processing_plan_selection_resolver import PacketProcessingPlanSelectionResolver
 from app.packet_processing_executor import PacketProcessingPlanExecutor
 from app.packet_flow_resolver import ConfiguredPacketFlowResolver
+from app.physical_connections import PhysicalConnectionCatalog
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
@@ -33,6 +34,7 @@ from app.schemas import (
     AdjacencyCandidatesQuery,
     CreateDeviceInterfaceRequest,
     CreateNetworkDeviceRequest,
+    CreatePhysicalLinkRequest,
     DeviceDetailsDocument,
     ErrorResponse,
     EvaluationView,
@@ -55,6 +57,7 @@ from app.schemas import (
     PacketProcessingEvaluationQuery,
     PacketFlowEvaluationArtifact,
     PacketFlowEvaluationQuery,
+    PhysicalConnectionCreationDocument,
     NATEvaluationArtifact,
     NATEvaluationQuery,
     RouteDecisionArtifact,
@@ -178,6 +181,47 @@ def create_device_interface(
         )
         return ConfiguredDeviceDetailsResolver(CanonicalRepository(session)).resolve(
             physical_object_id
+        )
+
+
+@app.post(
+    "/v1/topology/physical-links",
+    response_model=PhysicalConnectionCreationDocument,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def create_physical_link(
+    query: CreatePhysicalLinkRequest,
+    session: Session = Depends(get_session),
+) -> PhysicalConnectionCreationDocument:
+    with session.begin():
+        created = PhysicalConnectionCatalog(session).create_atomic_link(
+            query.source_interface_id,
+            query.target_interface_id,
+            query.cable_display_name,
+        )
+
+        def ref(entity_type: str, entity_id: uuid.UUID) -> dict[str, object]:
+            return {
+                "ref_type": "CANONICAL_FACT",
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+            }
+
+        return PhysicalConnectionCreationDocument(
+            source_interface_ref=ref("NetworkInterface", created.source_interface_id),
+            target_interface_ref=ref("NetworkInterface", created.target_interface_id),
+            cable_ref=ref("PhysicalObject", created.cable_id),
+            source_binding_ref=ref(
+                "InterfacePhysicalBinding", created.source_binding_id
+            ),
+            target_binding_ref=ref(
+                "InterfacePhysicalBinding", created.target_binding_id
+            ),
+            connection_refs=[
+                ref("Connection", connection_id)
+                for connection_id in created.connection_ids
+            ],
         )
 
 

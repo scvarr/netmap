@@ -10,9 +10,14 @@ import type {
 import type {
   DeviceDetailsDataSource,
   DeviceDetailsDocument,
+  DeviceInterfaceDetails,
 } from './topology/deviceDetailsTypes';
 import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
 import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
+import type {
+  PhysicalConnectionCreationDocument,
+  PhysicalLinkWriteDataSource,
+} from './topology/physicalLinkWriteTypes';
 
 vi.mock('./components/HealthIndicator', () => ({
   HealthIndicator: () => <div>Backend доступен</div>,
@@ -317,5 +322,124 @@ describe('App projection states', () => {
     expect(screen.getByRole('heading', { name: 'CORE-B' })).toBeInTheDocument();
     expect(loadProjection).toHaveBeenCalledTimes(2);
     expect(createDeviceInterface).toHaveBeenCalledWith(deviceId, { display_name: 'eth1' });
+  });
+
+  it('creates a physical link, refreshes the projection, and keeps the source selected', async () => {
+    const coreId = '00000000-0000-0000-0000-000000000101';
+    const fwId = '00000000-0000-0000-0000-000000000102';
+    const coreInterfaceId = '00000000-0000-0000-0000-000000000201';
+    const fwInterfaceId = '00000000-0000-0000-0000-000000000202';
+    const nodes = [{
+      id: 'projection-core', kind: 'NETWORK_DEVICE', label: 'CORE', status: 'CONFIGURED',
+      source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: coreId }],
+      attributes: { owned_interface_count: 1 },
+    }, {
+      id: 'projection-fw', kind: 'NETWORK_DEVICE', label: 'FW', status: 'CONFIGURED',
+      source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: fwId }],
+      attributes: { owned_interface_count: 1 },
+    }];
+    const isolated: TopologyProjectionDocument = { ...document, nodes, edges: [] };
+    const linked: TopologyProjectionDocument = {
+      ...isolated,
+      edges: [{
+        id: 'projection-core-fw',
+        from_node_id: nodes[0].id,
+        to_node_id: nodes[1].id,
+        kind: 'L2_DEVICE_LINK',
+        aggregate: true,
+        status: 'CONFIGURED',
+        source_refs: [],
+        attributes: { supporting_path_count: 1, supporting_interface_pair_count: 1 },
+      }],
+    };
+    const interfaceDetails = (
+      interfaceId: string,
+      label: string,
+      bound = false,
+    ): DeviceInterfaceDetails => ({
+      interface_ref: {
+        ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: interfaceId,
+      },
+      label,
+      addresses: [],
+      l2_binding_count: 0,
+      l3_binding_count: 0,
+      direct_physical_bindings: bound ? [{
+        connection_point_ref: {
+          ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: `${interfaceId}-point`,
+        },
+        member_index: 1,
+        source_refs: [],
+      }] : [],
+      realization_down_count: 0,
+      realization_up_count: 0,
+      source_refs: [],
+    });
+    let created = false;
+    const detailsSource: DeviceDetailsDataSource = {
+      loadDeviceDetails: vi.fn((id) => Promise.resolve({
+        schema_version: '1.0',
+        device: {
+          source_ref: {
+            ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id,
+          },
+          label: id === coreId ? 'CORE' : 'FW',
+        },
+        interfaces: [id === coreId
+          ? interfaceDetails(coreInterfaceId, 'eth0', created)
+          : interfaceDetails(fwInterfaceId, 'eth0')],
+        gaps: [], warnings: [],
+      } satisfies DeviceDetailsDocument)),
+    };
+    const creation: PhysicalConnectionCreationDocument = {
+      schema_version: '1.0',
+      source_interface_ref: interfaceDetails(coreInterfaceId, 'eth0').interface_ref,
+      target_interface_ref: interfaceDetails(fwInterfaceId, 'eth0').interface_ref,
+      cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'cable-id' },
+      source_binding_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'InterfacePhysicalBinding', entity_id: 'source-binding' },
+      target_binding_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'InterfacePhysicalBinding', entity_id: 'target-binding' },
+      connection_refs: ['1', '2', '3'].map((id) => ({
+        ref_type: 'CANONICAL_FACT', entity_type: 'Connection', entity_id: id,
+      })),
+    };
+    const createPhysicalLink = vi.fn().mockImplementation(() => {
+      created = true;
+      return Promise.resolve(creation);
+    });
+    const physicalWriteSource: PhysicalLinkWriteDataSource = { createPhysicalLink };
+    const loadProjection = vi.fn()
+      .mockResolvedValueOnce(isolated)
+      .mockResolvedValueOnce(linked);
+    render(
+      <App
+        dataSource={{ loadProjection }}
+        deviceDetailsDataSource={detailsSource}
+        physicalLinkWriteDataSource={physicalWriteSource}
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать узел' }));
+    await screen.findByRole('heading', { name: 'eth0' });
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), fwId);
+    await screen.findByRole('option', { name: 'eth0' });
+    await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), fwInterfaceId);
+    await userEvent.type(screen.getByLabelText('Кабель'), 'CORE-FW-01');
+    await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
+
+    expect(await screen.findByRole('heading', { name: 'CORE' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Соседние устройства 1' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText('FW', { selector: '.neighbor-list strong' })).toBeInTheDocument();
+    expect(
+      await screen.findByText('Прямых физических привязок:', { exact: false }),
+    ).toHaveTextContent('Прямых физических привязок: 1');
+    expect(loadProjection).toHaveBeenCalledTimes(2);
+    expect(createPhysicalLink).toHaveBeenCalledWith({
+      source_interface_id: coreInterfaceId,
+      target_interface_id: fwInterfaceId,
+      cable_display_name: 'CORE-FW-01',
+    });
   });
 });

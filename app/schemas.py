@@ -152,6 +152,26 @@ class CreateDeviceInterfaceRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
 
 
+class CreatePhysicalLinkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    source_interface_id: uuid.UUID
+    target_interface_id: uuid.UUID
+    cable_display_name: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class PhysicalConnectionCreationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    source_interface_ref: ProjectionSourceRef
+    target_interface_ref: ProjectionSourceRef
+    cable_ref: ProjectionSourceRef
+    source_binding_ref: ProjectionSourceRef
+    target_binding_ref: ProjectionSourceRef
+    connection_refs: list[ProjectionSourceRef] = Field(min_length=3, max_length=3)
+
+
 class EvidenceRef(BaseModel):
     ref_type: Literal["CANONICAL_FACT"] = "CANONICAL_FACT"
     entity_type: Literal[
