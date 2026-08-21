@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import {
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
   ReactFlow,
+  useReactFlow,
   type EdgeMouseHandler,
   type NodeMouseHandler,
 } from '@xyflow/react';
@@ -23,6 +24,14 @@ const nodeTypes = { device: DeviceNode };
 
 export function TopologyCanvas({ document, selection, onSelectionChange }: TopologyCanvasProps) {
   const projection = useMemo(() => toFlowProjection(document), [document]);
+  const { fitView } = useReactFlow();
+  const selectedNodeId = selection?.type === 'node' ? selection.item.id : null;
+
+  useEffect(() => {
+    if (!selectedNodeId || !projection.nodes.some((node) => node.id === selectedNodeId)) return;
+    void fitView({ nodes: [{ id: selectedNodeId }], duration: 300, maxZoom: 1.1, padding: 0.8 });
+  }, [fitView, projection.nodes, selectedNodeId]);
+
   const nodes = projection.nodes.map((node) => ({
     ...node,
     selected: selection?.type === 'node' && selection.item.id === node.id,

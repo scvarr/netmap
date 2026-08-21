@@ -81,11 +81,27 @@ button { font: inherit; }
 .inspector h3 { display: flex; justify-content: space-between; margin: 25px 0 10px; color: #7f9495; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
 .inspector h3 span { color: #55e5b5; }
 .inspector__close { position: absolute; top: 15px; right: 15px; width: 30px; height: 30px; border: 0; border-radius: 7px; color: #97aaab; background: #142427; cursor: pointer; font-size: 19px; }
+.inspector__status { display: flex; align-items: center; gap: 7px; margin: -12px 0 20px; color: #91d9c1; font-size: 12px; }
+.inspector__status i { width: 7px; height: 7px; border-radius: 50%; background: #55e5b5; box-shadow: 0 0 9px rgba(85, 229, 181, .45); }
 .inspector__facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .inspector__facts div { padding: 10px; border: 1px solid #213438; border-radius: 8px; background: #0c191c; }
 .inspector__facts span { display: block; margin-bottom: 5px; color: #667d80; font: 700 8px ui-monospace, "Cascadia Code", monospace; text-transform: uppercase; }
 .inspector__facts strong { font: 700 10px ui-monospace, "Cascadia Code", monospace; overflow-wrap: anywhere; }
 .status-text { color: #55e5b5; }
+.neighbor-list { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.neighbor-list button { width: 100%; padding: 11px 12px; border: 1px solid #294145; border-radius: 9px; color: #dcebe8; background: #0d1c1f; cursor: pointer; text-align: left; transition: border-color .15s, background .15s; }
+.neighbor-list button:hover, .neighbor-list button:focus-visible { border-color: #55e5b5; background: #112629; outline: none; }
+.neighbor-list strong { display: block; font-size: 12px; }
+.neighbor-link__counts { display: block; margin-top: 5px; color: #799092; font-size: 9px; line-height: 1.45; }
+.aggregate-explanation { margin: 14px 0 0; padding: 12px; border-left: 2px solid #55e5b5; border-radius: 0 7px 7px 0; color: #9db1b0; background: #0c191c; font-size: 11px; line-height: 1.55; }
+.edge-endpoints div { display: flex; align-items: center; gap: 7px; }
+.edge-endpoints button { flex: 1; min-width: 0; padding: 9px 8px; border: 1px solid #315057; border-radius: 8px; color: #cfe1de; background: #102124; cursor: pointer; overflow-wrap: anywhere; font-size: 10px; }
+.edge-endpoints button:hover, .edge-endpoints button:focus-visible { border-color: #55e5b5; outline: none; }
+.edge-endpoints span { color: #55e5b5; }
+.technical-details { margin-top: 25px; border-top: 1px solid #213438; }
+.technical-details summary { padding: 15px 0 4px; color: #8ca0a1; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.technical-details[open] summary { color: #c1d2cf; }
+.technical-details__facts { margin-top: 12px; }
 .attribute-list { margin: 0; }
 .attribute-list div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid #1b2a2d; font-size: 11px; }
 .attribute-list dt { color: #718789; }

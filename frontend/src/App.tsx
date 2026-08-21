@@ -88,7 +88,12 @@ export function App({ dataSource }: AppProps) {
               </ReactFlowProvider>
             )}
           </section>
-          <Inspector selection={selection} onClose={() => setSelection(null)} />
+          <Inspector
+            document={document}
+            selection={selection}
+            onSelectNode={(node) => setSelection({ type: 'node', item: node })}
+            onClose={() => setSelection(null)}
+          />
         </div>
       </section>
     </main>

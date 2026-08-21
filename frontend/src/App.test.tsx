@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -46,7 +46,17 @@ const document: TopologyProjectionDocument = {
       entity_type: 'NetworkInterfacePhysicalOwner',
       entity_id: '00000000-0000-0000-0000-000000000001',
     }],
-    attributes: { interface_count: 2 },
+    attributes: { label_source: 'TECHNICAL_FALLBACK', owned_interface_count: 2 },
+  }, {
+    id: 'projection-device-b',
+    kind: 'NETWORK_DEVICE',
+    label: 'CORE-B',
+    source_refs: [{
+      ref_type: 'CANONICAL_FACT',
+      entity_type: 'PhysicalObject',
+      entity_id: '00000000-0000-0000-0000-000000000003',
+    }],
+    attributes: { owned_interface_count: 1 },
   }],
   edges: [{
     id: 'projection-edge-a-b',
@@ -59,7 +69,7 @@ const document: TopologyProjectionDocument = {
       entity_type: 'Connection',
       entity_id: '00000000-0000-0000-0000-000000000002',
     }],
-    attributes: { path_count: 1 },
+    attributes: { supporting_path_count: 1, supporting_interface_pair_count: 1 },
   }],
   gaps: [],
   warnings: [],
@@ -70,6 +80,15 @@ const dataSourceFor = (result: TopologyProjectionDocument = document): TopologyD
 });
 
 describe('App projection states', () => {
+  it('renders loading state while the projection request is pending', () => {
+    const pending: TopologyDataSource = {
+      loadProjection: vi.fn(() => new Promise<TopologyProjectionDocument>(() => undefined)),
+    };
+    render(<App dataSource={pending} />);
+
+    expect(screen.getByText('Загружаем topology projection')).toBeInTheDocument();
+  });
+
   it('displays topology nodes from an API projection document', async () => {
     render(<App dataSource={dataSourceFor()} />);
 
@@ -120,8 +139,10 @@ describe('App projection states', () => {
     render(<App dataSource={dataSourceFor()} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Выбрать узел' }));
 
-    expect(screen.getByRole('heading', { name: 'PhysicalObject abcdef12' })).toBeInTheDocument();
-    expect(screen.getByText('NetworkInterfacePhysicalOwner')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Устройство abcdef12' })).toBeInTheDocument();
+    const details = screen.getByText('Технические детали').closest('details')!;
+    await userEvent.click(within(details).getByText('Технические детали'));
+    expect(within(details).getByText('NetworkInterfacePhysicalOwner')).toBeInTheDocument();
   });
 
   it('keeps edge selection and inspector source refs working', async () => {
@@ -129,9 +150,11 @@ describe('App projection states', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Выбрать связь' }));
 
     expect(screen.getByRole('heading', {
-      name: 'projection-device-a → projection-device-b',
+      name: 'Устройство abcdef12 ↔ CORE-B',
     })).toBeInTheDocument();
-    expect(screen.getByText('Connection')).toBeInTheDocument();
+    const details = screen.getByText('Технические детали').closest('details')!;
+    await userEvent.click(within(details).getByText('Технические детали'));
+    expect(within(details).getByText('Connection')).toBeInTheDocument();
     expect(screen.getByText('Да')).toBeInTheDocument();
   });
 });
