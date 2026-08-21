@@ -1,0 +1,124 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiTopologyDataSource } from './apiTopologyDataSource';
+import type { TopologyProjectionDocument, TopologyProjectionRequest } from './types';
+
+const request: TopologyProjectionRequest = {
+  layer: 'L2',
+  detail_level: 'DEVICE',
+  scope: { include_location_subtrees: [], include_entities: [] },
+  grouping: { basis: 'owner' },
+  filters: { status: 'configured' },
+};
+
+const document: TopologyProjectionDocument = {
+  schema_version: '1.0',
+  layer: 'L2',
+  detail_level: 'DEVICE',
+  nodes: [{
+    id: 'device-a',
+    kind: 'NETWORK_DEVICE',
+    label: 'PhysicalObject abcdef12',
+    source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: '00000000-0000-0000-0000-000000000001' }],
+    attributes: {},
+  }],
+  edges: [],
+  gaps: [],
+  warnings: [],
+};
+
+const jsonResponse = (body: unknown, init?: ResponseInit) => new Response(JSON.stringify(body), {
+  status: 200,
+  headers: { 'Content-Type': 'application/json' },
+  ...init,
+});
+
+describe('ApiTopologyDataSource', () => {
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('sends POST to the public same-origin projection URL', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(document));
+
+    await new ApiTopologyDataSource().loadProjection(request);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/topology/projection', expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('sends the exact projection request body without frontend fields', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(document));
+
+    await new ApiTopologyDataSource().loadProjection(request);
+
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(init.body))).toEqual(request);
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json' });
+  });
+
+  it('returns a valid projection document', async () => {
+    fetchMock.mockResolvedValue(jsonResponse(document));
+    await expect(new ApiTopologyDataSource().loadProjection(request)).resolves.toEqual(document);
+  });
+
+  it('accepts an empty projection document', async () => {
+    const empty = { ...document, nodes: [], edges: [] };
+    fetchMock.mockResolvedValue(jsonResponse(empty));
+    await expect(new ApiTopologyDataSource().loadProjection(request)).resolves.toEqual(empty);
+  });
+
+  it('preserves backend gaps and warnings', async () => {
+    const noted = { ...document, gaps: ['NETWORK_INTERFACE_OWNER_UNKNOWN'], warnings: ['Partial projection'] };
+    fetchMock.mockResolvedValue(jsonResponse(noted));
+    await expect(new ApiTopologyDataSource().loadProjection(request)).resolves.toMatchObject({
+      gaps: ['NETWORK_INTERFACE_OWNER_UNKNOWN'],
+      warnings: ['Partial projection'],
+    });
+  });
+
+  it('turns a backend 422 ErrorResponse into a readable Error', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({
+      error: { code: 'VALIDATION_ERROR', message: 'Topology projection layer is not supported', details: {} },
+    }, { status: 422 }));
+    await expect(new ApiTopologyDataSource().loadProjection(request)).rejects.toThrow(
+      'VALIDATION_ERROR: Topology projection layer is not supported',
+    );
+  });
+
+  it('handles a backend 409 ErrorResponse', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({
+      error: { code: 'MODEL_ERROR', message: 'Projection data conflicts', details: { reason: 'CONFLICT' } },
+    }, { status: 409 }));
+    await expect(new ApiTopologyDataSource().loadProjection(request)).rejects.toThrow(
+      'MODEL_ERROR: Projection data conflicts',
+    );
+  });
+
+  it('rejects a malformed successful DTO', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({
+      ...document,
+      nodes: [{ ...document.nodes[0], id: 42 }],
+    }));
+    await expect(new ApiTopologyDataSource().loadProjection(request)).rejects.toThrow(
+      'Malformed topology projection response: nodes[0].id must be a string.',
+    );
+  });
+
+  it('propagates a network fetch failure', async () => {
+    const failure = new TypeError('Failed to fetch');
+    fetchMock.mockRejectedValue(failure);
+    await expect(new ApiTopologyDataSource().loadProjection(request)).rejects.toBe(failure);
+  });
+
+  it('does not fall back to fixture data after an API error', async () => {
+    fetchMock.mockResolvedValue(new Response('Bad gateway', { status: 502, statusText: 'Bad Gateway' }));
+    await expect(new ApiTopologyDataSource().loadProjection(request)).rejects.toThrow(
+      'HTTP 502 Bad Gateway while loading topology projection.',
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});

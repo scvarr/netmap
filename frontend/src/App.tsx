@@ -54,7 +54,7 @@ export function App({ dataSource }: AppProps) {
           <strong>Default workspace</strong>
         </div>
         <div className="topbar__actions">
-          <span className="fixture-badge">Fixture data</span>
+          <span className="projection-badge">Настроенная проекция</span>
           <HealthIndicator />
         </div>
       </header>
@@ -67,7 +67,15 @@ export function App({ dataSource }: AppProps) {
             <span><strong>{document?.edges.length ?? '—'}</strong> связей</span>
           </div>
         </div>
-        {document?.warnings.map((warning) => <div className="projection-note" key={warning}>{warning}</div>)}
+        {document?.warnings.map((warning, index) => (
+          <div className="projection-note" key={`warning-${index}-${warning}`}>{warning}</div>
+        ))}
+        {document?.gaps.map((gap, index) => (
+          <div className="projection-note projection-note--gap" key={`gap-${index}-${gap}`}>
+            <span className="projection-note__kind">Пробел проекции</span>
+            {gap}
+          </div>
+        ))}
 
         <div className="workspace__body">
           <section className="canvas-panel">
