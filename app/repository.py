@@ -1446,6 +1446,31 @@ class CanonicalRepository:
             result[binding.interface_id].append(self._l2_binding_record(binding))
         return result
 
+    def get_l3_bindings_by_interface(
+        self, interface_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, list[L3BindingAttachmentRecord]]:
+        result = {interface_id: [] for interface_id in interface_ids}
+        if not interface_ids:
+            return result
+        for binding in self.session.scalars(
+            select(L3Binding)
+            .where(L3Binding.interface_id.in_(interface_ids))
+            .order_by(L3Binding.interface_id, L3Binding.id)
+        ):
+            if self.session.get(RoutingContext, binding.routing_context_id) is None:
+                raise ModelError(
+                    "L3Binding refers to a missing RoutingContext",
+                    {"l3_binding_id": str(binding.id)},
+                )
+            result[binding.interface_id].append(
+                L3BindingAttachmentRecord(
+                    l3_binding_id=binding.id,
+                    network_interface_id=binding.interface_id,
+                    routing_context_id=binding.routing_context_id,
+                )
+            )
+        return result
+
     def get_l2_bindings_by_context(
         self, context_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, list[L2BindingRecord]]:

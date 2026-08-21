@@ -1,4 +1,5 @@
 import logging
+import uuid
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.database import get_session
+from app.device_details_resolver import ConfiguredDeviceDetailsResolver
 from app.errors import NetMapError, ValidationError
 from app.interface_resolver import InterfacePhysicalResolver
 from app.l2_resolver import L2ReachabilityResolver
@@ -28,6 +30,7 @@ from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolve
 from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
+    DeviceDetailsDocument,
     ErrorResponse,
     EvaluationView,
     InterfacePhysicalTraceArtifact,
@@ -114,6 +117,21 @@ def project_topology(
     repository = CanonicalRepository(session)
     return ConfiguredTopologyProjectionResolver(repository).resolve(
         query, EvaluationView()
+    )
+
+
+@app.get(
+    "/v1/topology/devices/{physical_object_id}",
+    response_model=DeviceDetailsDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def get_device_details(
+    physical_object_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> DeviceDetailsDocument:
+    return ConfiguredDeviceDetailsResolver(CanonicalRepository(session)).resolve(
+        physical_object_id
     )
 
 

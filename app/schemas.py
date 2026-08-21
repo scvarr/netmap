@@ -84,6 +84,55 @@ class TopologyProjectionDocument(BaseModel):
     warnings: list[str]
 
 
+class InterfaceAddressDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    address: IPvAnyAddress
+    prefix_length: int = Field(ge=0, le=128)
+    source_refs: list[ProjectionSourceRef]
+
+
+class InterfacePhysicalBindingDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    connection_point_ref: ProjectionSourceRef
+    member_index: int = Field(ge=1)
+    source_refs: list[ProjectionSourceRef]
+
+
+class DeviceInterfaceDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    interface_ref: ProjectionSourceRef
+    label: str = Field(min_length=1)
+    label_source: Literal["TECHNICAL_FALLBACK"] | None = None
+    addresses: list[InterfaceAddressDetails]
+    l2_binding_count: int = Field(ge=0)
+    l3_binding_count: int = Field(ge=0)
+    direct_physical_bindings: list[InterfacePhysicalBindingDetails]
+    realization_down_count: int = Field(ge=0)
+    realization_up_count: int = Field(ge=0)
+    source_refs: list[ProjectionSourceRef]
+
+
+class DeviceDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_ref: ProjectionSourceRef
+    label: str = Field(min_length=1)
+    label_source: Literal["TECHNICAL_FALLBACK"] | None = None
+
+
+class DeviceDetailsDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    device: DeviceDetails
+    interfaces: list[DeviceInterfaceDetails]
+    gaps: list[str]
+    warnings: list[str]
+
+
 class EvidenceRef(BaseModel):
     ref_type: Literal["CANONICAL_FACT"] = "CANONICAL_FACT"
     entity_type: Literal[

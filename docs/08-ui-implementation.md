@@ -205,6 +205,42 @@ Frontend остаётся Docker-first. После появления frontend c
 10. Есть базовые frontend tests для data-source/DTO mapping и inspector interaction.
 11. UI milestone не меняет `app/**` или `alembic/**`.
 
-## Следующий slice
+## B.UI.2 — public device details read model
 
-После U.1 предпочтительный U.2 — Location hierarchy / nested-area view на тех же projection/source-ref principles.
+`GET /v1/topology/devices/{physical_object_id}` возвращает bounded
+`DeviceDetailsDocument` для inspector выбранного DEVICE projection node. Документ
+содержит устройство, его интерфейсы по явным
+`NetworkInterfacePhysicalOwner`, адреса через `L3Binding`/`InterfaceAddress`,
+числа L2/L3 bindings и направлений `NetworkInterfaceRealization`, а также только
+фактически существующие direct `InterfacePhysicalBinding`.
+
+```text
+DeviceDetailsDocument
+    schema_version
+    device: DeviceDetails
+    interfaces: DeviceInterfaceDetails[]
+    gaps[]
+    warnings[]
+
+DeviceDetails
+    source_ref
+    label
+    label_source?
+
+DeviceInterfaceDetails
+    interface_ref
+    label
+    label_source?
+    addresses: InterfaceAddressDetails[]
+    l2_binding_count
+    l3_binding_count
+    direct_physical_bindings: InterfacePhysicalBindingDetails[]
+    realization_down_count
+    realization_up_count
+    source_refs[]
+```
+
+Это presentation read-model: canonical source refs сохраняются, но frontend не
+должен самостоятельно join-ить raw domain tables. Технические labels помечаются
+`TECHNICAL_FALLBACK`. Endpoint не вводит aliases, workspace semantics или новые
+network/core relations; до workspace API он читает implicit default workspace.
