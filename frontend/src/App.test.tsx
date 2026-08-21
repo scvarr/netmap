@@ -7,6 +7,7 @@ import type {
   TopologyProjectionDocument,
   TopologySelection,
 } from './topology/types';
+import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
 
 vi.mock('./components/HealthIndicator', () => ({
   HealthIndicator: () => <div>Backend доступен</div>,
@@ -22,6 +23,11 @@ vi.mock('./components/TopologyCanvas', () => ({
       {document.nodes[0] && (
         <button onClick={() => onSelectionChange({ type: 'node', item: document.nodes[0] })}>
           Выбрать узел
+        </button>
+      )}
+      {document.nodes[1] && (
+        <button onClick={() => onSelectionChange({ type: 'node', item: document.nodes[1] })}>
+          Выбрать CORE-B
         </button>
       )}
       {document.edges[0] && (
@@ -79,18 +85,26 @@ const dataSourceFor = (result: TopologyProjectionDocument = document): TopologyD
   loadProjection: vi.fn().mockResolvedValue(result),
 });
 
+const deviceDetailsDataSource: DeviceDetailsDataSource = {
+  loadDeviceDetails: vi.fn().mockResolvedValue({
+    schema_version: '1.0',
+    device: { source_ref: document.nodes[1].source_refs[0], label: 'CORE-B' },
+    interfaces: [], gaps: [], warnings: [],
+  }),
+};
+
 describe('App projection states', () => {
   it('renders loading state while the projection request is pending', () => {
     const pending: TopologyDataSource = {
       loadProjection: vi.fn(() => new Promise<TopologyProjectionDocument>(() => undefined)),
     };
-    render(<App dataSource={pending} />);
+    render(<App dataSource={pending} deviceDetailsDataSource={deviceDetailsDataSource} />);
 
     expect(screen.getByText('Загружаем topology projection')).toBeInTheDocument();
   });
 
   it('displays topology nodes from an API projection document', async () => {
-    render(<App dataSource={dataSourceFor()} />);
+    render(<App dataSource={dataSourceFor()} deviceDetailsDataSource={deviceDetailsDataSource} />);
 
     expect(await screen.findByText('PhysicalObject abcdef12')).toBeInTheDocument();
     expect(screen.getByText('Настроенная проекция')).toBeInTheDocument();
@@ -98,7 +112,7 @@ describe('App projection states', () => {
   });
 
   it('renders the empty state from an empty API document', async () => {
-    render(<App dataSource={dataSourceFor({ ...document, nodes: [], edges: [] })} />);
+    render(<App dataSource={dataSourceFor({ ...document, nodes: [], edges: [] })} deviceDetailsDataSource={deviceDetailsDataSource} />);
     expect(await screen.findByText('В этом scope пока пусто')).toBeInTheDocument();
   });
 
@@ -106,7 +120,7 @@ describe('App projection states', () => {
     const dataSource: TopologyDataSource = {
       loadProjection: vi.fn().mockRejectedValue(new Error('VALIDATION_ERROR: Unsupported layer')),
     };
-    render(<App dataSource={dataSource} />);
+    render(<App dataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} />);
     expect(await screen.findByText('VALIDATION_ERROR: Unsupported layer')).toBeInTheDocument();
   });
 
@@ -114,7 +128,7 @@ describe('App projection states', () => {
     const loadProjection = vi.fn()
       .mockRejectedValueOnce(new Error('backend unavailable'))
       .mockResolvedValueOnce({ ...document, nodes: [], edges: [] });
-    render(<App dataSource={{ loadProjection }} />);
+    render(<App dataSource={{ loadProjection }} deviceDetailsDataSource={deviceDetailsDataSource} />);
 
     expect(await screen.findByText('backend unavailable')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
@@ -128,7 +142,7 @@ describe('App projection states', () => {
       ...document,
       gaps: ['NETWORK_INTERFACE_OWNER_UNKNOWN'],
       warnings: ['Projection is partial'],
-    })} />);
+    })} deviceDetailsDataSource={deviceDetailsDataSource} />);
 
     expect(await screen.findByText('NETWORK_INTERFACE_OWNER_UNKNOWN')).toBeInTheDocument();
     expect(screen.getByText('Пробел проекции')).toBeInTheDocument();
@@ -136,7 +150,7 @@ describe('App projection states', () => {
   });
 
   it('keeps node selection and inspector source refs working', async () => {
-    render(<App dataSource={dataSourceFor()} />);
+    render(<App dataSource={dataSourceFor()} deviceDetailsDataSource={deviceDetailsDataSource} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Выбрать узел' }));
 
     expect(screen.getByRole('heading', { name: 'Устройство abcdef12' })).toBeInTheDocument();
@@ -146,7 +160,7 @@ describe('App projection states', () => {
   });
 
   it('keeps edge selection and inspector source refs working', async () => {
-    render(<App dataSource={dataSourceFor()} />);
+    render(<App dataSource={dataSourceFor()} deviceDetailsDataSource={deviceDetailsDataSource} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Выбрать связь' }));
 
     expect(screen.getByRole('heading', {
@@ -156,5 +170,18 @@ describe('App projection states', () => {
     await userEvent.click(within(details).getByText('Технические детали'));
     expect(within(details).getByText('Connection')).toBeInTheDocument();
     expect(screen.getByText('Да')).toBeInTheDocument();
+  });
+
+  it('keeps topology visible when the selected device details request fails', async () => {
+    const failingDetails: DeviceDetailsDataSource = {
+      loadDeviceDetails: vi.fn().mockRejectedValue(new Error('details unavailable')),
+    };
+    render(<App dataSource={dataSourceFor()} deviceDetailsDataSource={failingDetails} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать CORE-B' }));
+
+    expect(await screen.findByText(/details unavailable/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Логическая схема сети')).toBeInTheDocument();
+    expect(screen.getAllByText('CORE-B').length).toBeGreaterThan(0);
   });
 });

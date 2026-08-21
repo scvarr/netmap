@@ -11,10 +11,13 @@ import type {
   TopologyProjectionNode,
   TopologySelection,
 } from '../topology/types';
+import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
+import { DeviceInterfacesSection } from './DeviceInterfacesSection';
 
 interface InspectorProps {
   document: TopologyProjectionDocument | null;
   selection: TopologySelection;
+  deviceDetailsDataSource: DeviceDetailsDataSource;
   onSelectNode: (node: TopologyProjectionNode) => void;
   onClose: () => void;
 }
@@ -85,7 +88,13 @@ const TechnicalDetails = ({ selection }: { selection: Exclude<TopologySelection,
   );
 };
 
-export function Inspector({ document, selection, onSelectNode, onClose }: InspectorProps) {
+export function Inspector({
+  document,
+  selection,
+  deviceDetailsDataSource,
+  onSelectNode,
+  onClose,
+}: InspectorProps) {
   if (!selection) {
     return (
       <aside className="inspector inspector--empty" aria-label="Инспектор">
@@ -137,6 +146,11 @@ export function Inspector({ document, selection, onSelectNode, onClose }: Inspec
             </ul>
           ) : <p className="muted">В текущей проекции соседей нет.</p>}
         </section>
+        <DeviceInterfacesSection
+          key={node.id}
+          node={node}
+          dataSource={deviceDetailsDataSource}
+        />
         <TechnicalDetails selection={selection} />
       </aside>
     );

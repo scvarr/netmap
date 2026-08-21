@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import type { TopologyProjectionDocument } from '../topology/types';
+import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import { Inspector } from './Inspector';
 
 const document: TopologyProjectionDocument = {
@@ -58,11 +59,19 @@ const document: TopologyProjectionDocument = {
 const renderInspector = (
   selection: Parameters<typeof Inspector>[0]['selection'],
   onSelectNode = vi.fn(),
+  deviceDetailsDataSource: DeviceDetailsDataSource = {
+    loadDeviceDetails: vi.fn().mockResolvedValue({
+      schema_version: '1.0',
+      device: { source_ref: document.nodes[0].source_refs[0], label: 'CORE-A' },
+      interfaces: [], gaps: [], warnings: [],
+    }),
+  },
 ) => {
   render(
     <Inspector
       document={document}
       selection={selection}
+      deviceDetailsDataSource={deviceDetailsDataSource}
       onSelectNode={onSelectNode}
       onClose={() => undefined}
     />,
@@ -89,6 +98,31 @@ describe('Inspector', () => {
     await userEvent.click(screen.getByRole('button', { name: /Устройство abcdef12/ }));
 
     expect(onSelectNode).toHaveBeenCalledWith(document.nodes[1]);
+  });
+
+  it('loads node details by its PhysicalObject source ref', async () => {
+    const loadDeviceDetails = vi.fn().mockResolvedValue({
+      schema_version: '1.0', device: { source_ref: document.nodes[0].source_refs[0], label: 'CORE-A' },
+      interfaces: [], gaps: [], warnings: [],
+    });
+    renderInspector(
+      { type: 'node', item: document.nodes[0] },
+      vi.fn(),
+      { loadDeviceDetails },
+    );
+
+    expect(loadDeviceDetails).toHaveBeenCalledWith('po-core-a');
+  });
+
+  it('does not load device details for edge selection', () => {
+    const loadDeviceDetails = vi.fn();
+    renderInspector(
+      { type: 'edge', item: document.edges[0] },
+      vi.fn(),
+      { loadDeviceDetails },
+    );
+
+    expect(loadDeviceDetails).not.toHaveBeenCalled();
   });
 
   it('uses human endpoint labels and explains aggregate supporting data', () => {
@@ -134,6 +168,7 @@ describe('Inspector', () => {
       <Inspector
         document={document}
         selection={{ type: 'edge', item: document.edges[0] }}
+        deviceDetailsDataSource={{ loadDeviceDetails: vi.fn() }}
         onSelectNode={() => undefined}
         onClose={onClose}
       />,

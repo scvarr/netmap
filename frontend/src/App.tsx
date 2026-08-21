@@ -10,6 +10,7 @@ import type {
   TopologyProjectionRequest,
   TopologySelection,
 } from './topology/types';
+import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
 
 const DEFAULT_REQUEST: TopologyProjectionRequest = {
   layer: 'L2',
@@ -19,9 +20,10 @@ const DEFAULT_REQUEST: TopologyProjectionRequest = {
 
 interface AppProps {
   dataSource: TopologyDataSource;
+  deviceDetailsDataSource: DeviceDetailsDataSource;
 }
 
-export function App({ dataSource }: AppProps) {
+export function App({ dataSource, deviceDetailsDataSource }: AppProps) {
   const [document, setDocument] = useState<TopologyProjectionDocument | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +93,7 @@ export function App({ dataSource }: AppProps) {
           <Inspector
             document={document}
             selection={selection}
+            deviceDetailsDataSource={deviceDetailsDataSource}
             onSelectNode={(node) => setSelection({ type: 'node', item: node })}
             onClose={() => setSelection(null)}
           />
