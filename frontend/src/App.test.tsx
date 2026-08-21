@@ -7,7 +7,11 @@ import type {
   TopologyProjectionDocument,
   TopologySelection,
 } from './topology/types';
-import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
+import type {
+  DeviceDetailsDataSource,
+  DeviceDetailsDocument,
+} from './topology/deviceDetailsTypes';
+import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
 
 vi.mock('./components/HealthIndicator', () => ({
   HealthIndicator: () => <div>Backend доступен</div>,
@@ -183,5 +187,76 @@ describe('App projection states', () => {
     expect(await screen.findByText(/details unavailable/)).toBeInTheDocument();
     expect(screen.getByLabelText('Логическая схема сети')).toBeInTheDocument();
     expect(screen.getAllByText('CORE-B').length).toBeGreaterThan(0);
+  });
+
+  it('refreshes the projection and selects the canonical node after create', async () => {
+    const newDeviceId = '00000000-0000-0000-0000-000000000010';
+    const newInterfaceId = '00000000-0000-0000-0000-000000000011';
+    const created: DeviceDetailsDocument = {
+      schema_version: '1.0',
+      device: {
+        source_ref: {
+          ref_type: 'CANONICAL_FACT',
+          entity_type: 'PhysicalObject',
+          entity_id: newDeviceId,
+        },
+        label: 'CORE-NEW',
+      },
+      interfaces: [{
+        interface_ref: {
+          ref_type: 'CANONICAL_FACT',
+          entity_type: 'NetworkInterface',
+          entity_id: newInterfaceId,
+        },
+        label: 'eth0',
+        addresses: [],
+        l2_binding_count: 0,
+        l3_binding_count: 0,
+        direct_physical_bindings: [],
+        realization_down_count: 0,
+        realization_up_count: 0,
+        source_refs: [],
+      }],
+      gaps: [],
+      warnings: [],
+    };
+    const refreshed: TopologyProjectionDocument = {
+      ...document,
+      nodes: [{
+        id: 'projection-device-new',
+        kind: 'NETWORK_DEVICE',
+        label: 'CORE-NEW',
+        source_refs: [created.device.source_ref],
+        attributes: { label_source: 'ALIAS_DISPLAY', owned_interface_count: 1 },
+        status: 'CONFIGURED',
+      }],
+      edges: [],
+    };
+    const loadProjection = vi.fn()
+      .mockResolvedValueOnce({ ...document, nodes: [], edges: [] })
+      .mockResolvedValueOnce(refreshed);
+    const createNetworkDevice = vi.fn().mockResolvedValue(created);
+    const writeSource: DeviceWriteDataSource = { createNetworkDevice };
+    const detailsSource: DeviceDetailsDataSource = {
+      loadDeviceDetails: vi.fn().mockResolvedValue(created),
+    };
+    render(
+      <App
+        dataSource={{ loadProjection }}
+        deviceDetailsDataSource={detailsSource}
+        deviceWriteDataSource={writeSource}
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: '+ Добавить' }));
+    await userEvent.type(screen.getByLabelText('Название устройства'), 'CORE-NEW');
+    await userEvent.type(screen.getByLabelText('Первый интерфейс'), 'eth0');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+
+    expect(await screen.findByRole('heading', { name: 'CORE-NEW' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'eth0' })).toBeInTheDocument();
+    expect(loadProjection).toHaveBeenCalledTimes(2);
+    expect(createNetworkDevice).toHaveBeenCalledTimes(1);
+    expect(detailsSource.loadDeviceDetails).toHaveBeenCalledWith(newDeviceId);
   });
 });

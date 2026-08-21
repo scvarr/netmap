@@ -133,6 +133,19 @@ class DeviceDetailsDocument(BaseModel):
     warnings: list[str]
 
 
+class CreateNetworkInterfaceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_name: str = Field(min_length=1, max_length=255)
+
+
+class CreateNetworkDeviceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_name: str = Field(min_length=1, max_length=255)
+    initial_interface: CreateNetworkInterfaceRequest
+
+
 class EvidenceRef(BaseModel):
     ref_type: Literal["CANONICAL_FACT"] = "CANONICAL_FACT"
     entity_type: Literal[

@@ -120,6 +120,36 @@ class NetworkInterfacePhysicalOwner(Base):
     )
 
 
+class EntityMetadata(Base):
+    """Bounded metadata materialization for display aliases."""
+
+    __tablename__ = "entity_metadata"
+    __table_args__ = (
+        CheckConstraint(
+            "(physical_object_id IS NOT NULL) <> (network_interface_id IS NOT NULL)",
+            name="exactly_one_entity",
+        ),
+        CheckConstraint("key = 'alias.display'", name="display_alias_only"),
+        CheckConstraint("char_length(btrim(value)) > 0", name="value_not_blank"),
+        UniqueConstraint(
+            "physical_object_id", "key", name="uq_entity_metadata_physical_object_key"
+        ),
+        UniqueConstraint(
+            "network_interface_id", "key", name="uq_entity_metadata_network_interface_key"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    physical_object_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("physical_objects.id", ondelete="CASCADE"), nullable=True
+    )
+    network_interface_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("network_interfaces.id", ondelete="CASCADE"), nullable=True
+    )
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
 class InterfacePhysicalBinding(Base):
     __tablename__ = "interface_physical_bindings"
     __table_args__ = (

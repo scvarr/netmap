@@ -63,6 +63,10 @@ alias.display = "Ethernet1/1"
 alias.short = "Eth1/1"
 ```
 
+Текущий public write subset materialize `alias.display` для
+`NetworkInterface`. Alias влияет только на presentation label и не изменяет
+stable interface ID, owner relation или forwarding semantics.
+
 ## Физическая привязка
 
 Связь `NetworkInterface` с L1 задаётся явно и не выводится из совпадения имён.

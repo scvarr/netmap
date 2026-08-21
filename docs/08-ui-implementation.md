@@ -242,5 +242,31 @@ DeviceInterfaceDetails
 
 Это presentation read-model: canonical source refs сохраняются, но frontend не
 должен самостоятельно join-ить raw domain tables. Технические labels помечаются
-`TECHNICAL_FALLBACK`. Endpoint не вводит aliases, workspace semantics или новые
-network/core relations; до workspace API он читает implicit default workspace.
+`TECHNICAL_FALLBACK`; существующий `alias.display` используется как primary
+label без изменения canonical identity. Endpoint не вводит workspace semantics
+или новые network/core relations; до workspace API он читает implicit default
+workspace.
+
+## W.1 — первое canonical создание устройства
+
+**FIXED**
+
+Public operation:
+
+```text
+POST /v1/topology/devices
+    CreateNetworkDeviceRequest
+        display_name
+        initial_interface.display_name
+    -> 201 DeviceDetailsDocument
+```
+
+Одна transaction атомарно создаёт `PhysicalObject`, его `alias.display`, первый
+`NetworkInterface`, его `alias.display` и `NetworkInterfacePhysicalOwner`.
+Operation не создаёт `ConnectionPoint`, physical binding, L2/L3 facts или IP.
+
+UI вызывает только этот public endpoint. После success он заново загружает
+обычную DEVICE projection, выбирает созданный node по canonical PhysicalObject
+source ref и показывает его через общий Device Details inspector. Созданный
+node не является optimistic/fake presentation object и после browser reload
+снова приходит из canonical backend.

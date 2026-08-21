@@ -49,11 +49,26 @@ button { font: inherit; }
 .workspace { height: calc(100vh - 72px); padding: 24px 28px 28px; display: flex; flex-direction: column; gap: 14px; }
 .workspace__heading { display: flex; align-items: flex-end; justify-content: space-between; }
 .workspace h1 { margin: 5px 0 0; font-size: clamp(24px, 2.2vw, 34px); letter-spacing: -.045em; }
+.workspace__heading-actions { display: flex; align-items: center; gap: 20px; }
 .workspace__stats { display: flex; gap: 28px; color: #809395; font-size: 12px; }
 .workspace__stats strong { color: #d8e7e4; font: 700 16px ui-monospace, "Cascadia Code", monospace; margin-right: 4px; }
 .projection-note { padding: 8px 12px; border: 1px solid #3b3c2d; border-radius: 8px; background: #181911; color: #c3bd83; font-size: 11px; }
 .projection-note--gap { display: flex; gap: 10px; border-color: #594437; background: #1d1612; color: #d9aa8c; }
 .projection-note__kind { color: #f0c4a8; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.create-device { position: relative; z-index: 10; }
+.create-device__trigger, .create-device__submit { padding: 9px 14px; border: 1px solid #3a7968; border-radius: 8px; color: #dff7ef; background: #15372f; cursor: pointer; font-weight: 700; }
+.create-device__trigger:hover, .create-device__trigger:focus-visible, .create-device__submit:hover:not(:disabled), .create-device__submit:focus-visible { border-color: #55e5b5; outline: none; background: #19483d; }
+.create-device__form { position: absolute; top: calc(100% + 10px); right: 0; width: min(360px, calc(100vw - 40px)); padding: 18px; border: 1px solid #315256; border-radius: 12px; background: #0c191c; box-shadow: 0 20px 55px rgba(0, 0, 0, .48); }
+.create-device__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 15px; }
+.create-device__heading h2 { margin: 4px 0 0; font-size: 17px; }
+.create-device__heading > button { border: 0; color: #91a4a5; background: transparent; cursor: pointer; font-size: 20px; }
+.create-device__form label { display: block; margin-top: 12px; }
+.create-device__form label > span { display: block; margin-bottom: 6px; color: #91a5a5; font-size: 11px; }
+.create-device__form input { width: 100%; padding: 10px 11px; border: 1px solid #2a4448; border-radius: 7px; color: #e7f4f1; background: #081315; outline: none; }
+.create-device__form input:focus { border-color: #55e5b5; box-shadow: 0 0 0 2px rgba(85, 229, 181, .1); }
+.create-device__submit { width: 100%; margin-top: 16px; }
+.create-device__submit:disabled { cursor: not-allowed; opacity: .45; }
+.create-device__error { margin: 12px 0 0; padding: 9px 10px; border: 1px solid #5b3936; border-radius: 7px; color: #e0aaa5; background: #251614; font-size: 10px; line-height: 1.5; }
 .workspace__body { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; }
 .canvas-panel, .inspector { border: 1px solid #203135; border-radius: 14px; background: #0a1518; overflow: hidden; }
 .canvas-panel { position: relative; min-height: 420px; }
@@ -161,5 +176,6 @@ button { font: inherit; }
   .projection-badge { display: none; }
   .workspace { padding: 14px; }
   .workspace__heading { align-items: flex-start; }
+  .workspace__heading-actions { align-items: flex-end; flex-direction: column-reverse; gap: 10px; }
   .workspace__stats { flex-direction: column; gap: 2px; }
 }

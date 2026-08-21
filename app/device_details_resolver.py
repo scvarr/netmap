@@ -1,5 +1,6 @@
 import uuid
 
+from app.device_catalog import DeviceCatalog
 from app.repository import CanonicalRepository
 from app.schemas import (
     DeviceDetails,
@@ -17,6 +18,10 @@ class ConfiguredDeviceDetailsResolver:
 
     def resolve(self, physical_object_id: uuid.UUID) -> DeviceDetailsDocument:
         self.repository.require_physical_objects([physical_object_id])
+        catalog = DeviceCatalog(self.repository.session)
+        device_alias = catalog.physical_object_display_aliases([physical_object_id]).get(
+            physical_object_id
+        )
         owners = tuple(
             owner
             for owner in self.repository.get_network_interface_physical_owners()
@@ -24,6 +29,7 @@ class ConfiguredDeviceDetailsResolver:
         )
         owners = tuple(sorted(owners, key=lambda owner: str(owner.interface_id)))
         interface_ids = [owner.interface_id for owner in owners]
+        interface_aliases = catalog.network_interface_display_aliases(interface_ids)
 
         l2_by_interface = self.repository.get_l2_bindings_by_interface(interface_ids)
         l3_by_interface = self.repository.get_l3_bindings_by_interface(interface_ids)
@@ -42,6 +48,7 @@ class ConfiguredDeviceDetailsResolver:
         interfaces: list[DeviceInterfaceDetails] = []
         for owner in owners:
             interface_id = owner.interface_id
+            interface_alias = interface_aliases.get(interface_id)
             l2_bindings = sorted(
                 l2_by_interface[interface_id], key=lambda binding: str(binding.binding_id)
             )
@@ -80,6 +87,11 @@ class ConfiguredDeviceDetailsResolver:
                 self._ref("NetworkInterface", interface_id),
                 self._ref("NetworkInterfacePhysicalOwner", owner.owner_relation_id),
                 *(
+                    [self._ref("EntityMetadata", interface_alias.metadata_id)]
+                    if interface_alias is not None
+                    else []
+                ),
+                *(
                     self._ref("L2Binding", binding.binding_id)
                     for binding in l2_bindings
                 ),
@@ -99,8 +111,14 @@ class ConfiguredDeviceDetailsResolver:
             interfaces.append(
                 DeviceInterfaceDetails(
                     interface_ref=self._ref("NetworkInterface", interface_id),
-                    label=f"NetworkInterface {str(interface_id)[:8]}",
-                    label_source="TECHNICAL_FALLBACK",
+                    label=(
+                        interface_alias.value
+                        if interface_alias is not None
+                        else f"NetworkInterface {str(interface_id)[:8]}"
+                    ),
+                    label_source=(
+                        None if interface_alias is not None else "TECHNICAL_FALLBACK"
+                    ),
                     addresses=[
                         InterfaceAddressDetails(
                             address=address.address,
@@ -140,8 +158,14 @@ class ConfiguredDeviceDetailsResolver:
         return DeviceDetailsDocument(
             device=DeviceDetails(
                 source_ref=self._ref("PhysicalObject", physical_object_id),
-                label=f"PhysicalObject {str(physical_object_id)[:8]}",
-                label_source="TECHNICAL_FALLBACK",
+                label=(
+                    device_alias.value
+                    if device_alias is not None
+                    else f"PhysicalObject {str(physical_object_id)[:8]}"
+                ),
+                label_source=(
+                    None if device_alias is not None else "TECHNICAL_FALLBACK"
+                ),
             ),
             interfaces=interfaces,
             gaps=[],

@@ -1,6 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
+from app.device_catalog import DeviceCatalog, DisplayAliasRecord
 from app.errors import ModelError, ValidationError
 from app.repository import (
     CanonicalRepository,
@@ -82,8 +83,16 @@ class ConfiguredTopologyProjectionResolver:
         else:
             selected_object_ids = set(owners_by_object)
 
+        display_aliases = DeviceCatalog(
+            self.repository.session
+        ).physical_object_display_aliases(list(selected_object_ids))
+
         nodes = [
-            self._node(object_id, owners_by_object[object_id])
+            self._node(
+                object_id,
+                owners_by_object[object_id],
+                display_aliases.get(object_id),
+            )
             for object_id in sorted(selected_object_ids, key=self._node_id)
         ]
 
@@ -264,8 +273,11 @@ class ConfiguredTopologyProjectionResolver:
         self,
         physical_object_id: uuid.UUID,
         owners: list[NetworkInterfacePhysicalOwnerRecord],
+        display_alias: DisplayAliasRecord | None,
     ) -> TopologyProjectionNode:
         refs = [self._ref("PhysicalObject", physical_object_id)]
+        if display_alias is not None:
+            refs.append(self._ref("EntityMetadata", display_alias.metadata_id))
         for owner in sorted(owners, key=lambda value: str(value.interface_id)):
             refs.extend(
                 [
@@ -278,10 +290,16 @@ class ConfiguredTopologyProjectionResolver:
         return TopologyProjectionNode(
             id=self._node_id(physical_object_id),
             kind="NETWORK_DEVICE",
-            label=f"PhysicalObject {str(physical_object_id)[:8]}",
+            label=(
+                display_alias.value
+                if display_alias is not None
+                else f"PhysicalObject {str(physical_object_id)[:8]}"
+            ),
             source_refs=self._dedupe_refs(refs),
             attributes={
-                "label_source": "TECHNICAL_FALLBACK",
+                "label_source": (
+                    "ALIAS_DISPLAY" if display_alias is not None else "TECHNICAL_FALLBACK"
+                ),
                 "owned_interface_count": len(owners),
             },
             status="CONFIGURED",

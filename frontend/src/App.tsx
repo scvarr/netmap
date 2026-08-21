@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { HealthIndicator } from './components/HealthIndicator';
 import { Inspector } from './components/Inspector';
+import { CreateNetworkDevice } from './components/CreateNetworkDevice';
 import { TopologyCanvas } from './components/TopologyCanvas';
 import { ViewState } from './components/ViewState';
 import type {
@@ -11,6 +12,7 @@ import type {
   TopologySelection,
 } from './topology/types';
 import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
+import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
 
 const DEFAULT_REQUEST: TopologyProjectionRequest = {
   layer: 'L2',
@@ -21,20 +23,30 @@ const DEFAULT_REQUEST: TopologyProjectionRequest = {
 interface AppProps {
   dataSource: TopologyDataSource;
   deviceDetailsDataSource: DeviceDetailsDataSource;
+  deviceWriteDataSource?: DeviceWriteDataSource;
 }
 
-export function App({ dataSource, deviceDetailsDataSource }: AppProps) {
+export function App({ dataSource, deviceDetailsDataSource, deviceWriteDataSource }: AppProps) {
   const [document, setDocument] = useState<TopologyProjectionDocument | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (selectPhysicalObjectId?: string) => {
     setLoading(true);
     setError(null);
     try {
-      setDocument(await dataSource.loadProjection(DEFAULT_REQUEST));
+      const nextDocument = await dataSource.loadProjection(DEFAULT_REQUEST);
+      setDocument(nextDocument);
+      if (selectPhysicalObjectId) {
+        const matches = nextDocument.nodes.filter((node) => node.source_refs.some((ref) => (
+          ref.ref_type === 'CANONICAL_FACT'
+          && ref.entity_type === 'PhysicalObject'
+          && ref.entity_id === selectPhysicalObjectId
+        )));
+        setSelection(matches.length === 1 ? { type: 'node', item: matches[0] } : null);
+      }
     } catch (reason) {
       setDocument(null);
       setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
@@ -64,9 +76,19 @@ export function App({ dataSource, deviceDetailsDataSource }: AppProps) {
       <section className="workspace">
         <div className="workspace__heading">
           <div><span className="eyebrow">L2 · Device view</span><h1>Логическая топология</h1></div>
-          <div className="workspace__stats">
-            <span><strong>{document?.nodes.length ?? '—'}</strong> устройств</span>
-            <span><strong>{document?.edges.length ?? '—'}</strong> связей</span>
+          <div className="workspace__heading-actions">
+            <div className="workspace__stats">
+              <span><strong>{document?.nodes.length ?? '—'}</strong> устройств</span>
+              <span><strong>{document?.edges.length ?? '—'}</strong> связей</span>
+            </div>
+            {deviceWriteDataSource && (
+              <CreateNetworkDevice
+                dataSource={deviceWriteDataSource}
+                onCreated={(created) => {
+                  void load(created.device.source_ref.entity_id);
+                }}
+              />
+            )}
           </div>
         </div>
         {document?.warnings.map((warning, index) => (

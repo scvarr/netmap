@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.database import get_session
+from app.device_catalog import DeviceCatalog
 from app.device_details_resolver import ConfiguredDeviceDetailsResolver
 from app.errors import NetMapError, ValidationError
 from app.interface_resolver import InterfacePhysicalResolver
@@ -30,6 +31,7 @@ from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolve
 from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
+    CreateNetworkDeviceRequest,
     DeviceDetailsDocument,
     ErrorResponse,
     EvaluationView,
@@ -133,6 +135,27 @@ def get_device_details(
     return ConfiguredDeviceDetailsResolver(CanonicalRepository(session)).resolve(
         physical_object_id
     )
+
+
+@app.post(
+    "/v1/topology/devices",
+    response_model=DeviceDetailsDocument,
+    response_model_exclude_none=True,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def create_network_device(
+    query: CreateNetworkDeviceRequest,
+    session: Session = Depends(get_session),
+) -> DeviceDetailsDocument:
+    with session.begin():
+        created = DeviceCatalog(session).create_network_device(
+            query.display_name,
+            query.initial_interface.display_name,
+        )
+        return ConfiguredDeviceDetailsResolver(CanonicalRepository(session)).resolve(
+            created.physical_object_id
+        )
 
 
 @app.post(
