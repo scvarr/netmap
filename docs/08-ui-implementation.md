@@ -270,3 +270,26 @@ UI вызывает только этот public endpoint. После success о
 source ref и показывает его через общий Device Details inspector. Созданный
 node не является optimistic/fake presentation object и после browser reload
 снова приходит из canonical backend.
+
+## W.2 — добавление NetworkInterface устройству
+
+**FIXED**
+
+Public operation:
+
+```text
+POST /v1/topology/devices/{physical_object_id}/interfaces
+    CreateDeviceInterfaceRequest
+        display_name
+    -> 201 DeviceDetailsDocument
+```
+
+Одна transaction проверяет существование `PhysicalObject` и атомарно создаёт
+только `NetworkInterface`, его `alias.display` и
+`NetworkInterfacePhysicalOwner`. Operation не создаёт `ConnectionPoint`,
+physical/realization binding, L2/L3 facts или IP. Совпадающие display names не
+являются canonical uniqueness constraint.
+
+UI запускает operation из секции интерфейсов выбранного device inspector. После
+success он обновляет Device Details и DEVICE projection из backend, сохраняя
+выбранным тот же PhysicalObject; optimistic/fake interface не создаётся.

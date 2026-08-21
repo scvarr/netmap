@@ -6,6 +6,7 @@ import type {
   DeviceDetailsDocument,
 } from '../topology/deviceDetailsTypes';
 import type { TopologyProjectionNode } from '../topology/types';
+import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
 import { DeviceInterfacesSection } from './DeviceInterfacesSection';
 
 const node = (id: string, refs = [{
@@ -161,5 +162,52 @@ describe('DeviceInterfacesSection', () => {
     }));
     expect(screen.queryByRole('heading', { name: 'STALE-A' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'WAN-B' })).toBeInTheDocument();
+  });
+
+  it('renders the authoritative create response without a fake interface', async () => {
+    const updated = {
+      ...details(),
+      interfaces: [
+        ...details().interfaces,
+        {
+          ...details().interfaces[0],
+          interface_ref: {
+            ref_type: 'CANONICAL_FACT' as const,
+            entity_type: 'NetworkInterface',
+            entity_id: 'interface-eth1',
+          },
+          label: 'eth1',
+          label_source: undefined,
+          addresses: [],
+          l2_binding_count: 0,
+          l3_binding_count: 0,
+          direct_physical_bindings: [],
+          realization_down_count: 0,
+          realization_up_count: 0,
+          source_refs: [],
+        },
+      ],
+    } satisfies DeviceDetailsDocument;
+    const createDeviceInterface = vi.fn().mockResolvedValue(updated);
+    const writeDataSource: DeviceInterfaceWriteDataSource = { createDeviceInterface };
+    const onInterfaceCreated = vi.fn();
+    render(
+      <DeviceInterfacesSection
+        node={node('device-a')}
+        dataSource={sourceFor()}
+        writeDataSource={writeDataSource}
+        onInterfaceCreated={onInterfaceCreated}
+      />,
+    );
+
+    await screen.findByRole('heading', { name: 'Интерфейс abcdef12' });
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить интерфейс' }));
+    await userEvent.type(screen.getByLabelText('Название'), 'eth1');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+
+    const eth1 = await screen.findByRole('heading', { name: 'eth1' });
+    expect(within(eth1.closest('article')!).getByText('IP-адреса не назначены')).toBeInTheDocument();
+    expect(createDeviceInterface).toHaveBeenCalledWith('device-a', { display_name: 'eth1' });
+    expect(onInterfaceCreated).toHaveBeenCalledWith('device-a');
   });
 });

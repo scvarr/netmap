@@ -5,10 +5,14 @@ import type {
   DeviceInterfaceDetails,
 } from '../topology/deviceDetailsTypes';
 import type { ProjectionSourceRef, TopologyProjectionNode } from '../topology/types';
+import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
+import { CreateDeviceInterface } from './CreateDeviceInterface';
 
 interface DeviceInterfacesSectionProps {
   node: TopologyProjectionNode;
   dataSource: DeviceDetailsDataSource;
+  writeDataSource?: DeviceInterfaceWriteDataSource;
+  onInterfaceCreated?: (physicalObjectId: string) => void;
 }
 
 type DetailsState =
@@ -112,7 +116,12 @@ const physicalObjectIdentity = (node: TopologyProjectionNode): string | null => 
   return refs.length === 1 ? refs[0].entity_id : null;
 };
 
-export function DeviceInterfacesSection({ node, dataSource }: DeviceInterfacesSectionProps) {
+export function DeviceInterfacesSection({
+  node,
+  dataSource,
+  writeDataSource,
+  onInterfaceCreated,
+}: DeviceInterfacesSectionProps) {
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
   const [state, setState] = useState<DetailsState>(() => (
@@ -148,7 +157,19 @@ export function DeviceInterfacesSection({ node, dataSource }: DeviceInterfacesSe
 
   return (
     <section className="device-interfaces" aria-labelledby="device-interfaces-heading">
-      <h3 id="device-interfaces-heading">Интерфейсы</h3>
+      <div className="device-interfaces__heading">
+        <h3 id="device-interfaces-heading">Интерфейсы</h3>
+        {physicalObjectId && writeDataSource && (
+          <CreateDeviceInterface
+            physicalObjectId={physicalObjectId}
+            dataSource={writeDataSource}
+            onCreated={(document) => {
+              setState({ kind: 'loaded', document });
+              onInterfaceCreated?.(physicalObjectId);
+            }}
+          />
+        )}
+      </div>
       {state.kind === 'loading' && <p className="device-details-state">Загружаем интерфейсы…</p>}
       {state.kind === 'unavailable' && <p className="device-details-state">{state.message}</p>}
       {state.kind === 'error' && (

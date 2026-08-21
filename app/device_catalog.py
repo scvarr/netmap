@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.errors import ValidationError
 from app.models import EntityMetadata, NetworkInterface, PhysicalObject
 from app.repository import CanonicalRepository
 
@@ -24,6 +25,13 @@ class CreatedNetworkDevice:
     network_interface_id: uuid.UUID
     owner_relation_id: uuid.UUID
     physical_object_alias_id: uuid.UUID
+    network_interface_alias_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class CreatedDeviceInterface:
+    network_interface_id: uuid.UUID
+    owner_relation_id: uuid.UUID
     network_interface_alias_id: uuid.UUID
 
 
@@ -58,6 +66,32 @@ class DeviceCatalog:
             network_interface_id=network_interface.id,
             owner_relation_id=owner.id,
             physical_object_alias_id=physical_alias.id,
+            network_interface_alias_id=interface_alias.id,
+        )
+
+    def create_device_interface(
+        self,
+        physical_object_id: uuid.UUID,
+        display_name: str,
+    ) -> CreatedDeviceInterface:
+        repository = CanonicalRepository(self.session)
+        if self.session.get(PhysicalObject, physical_object_id) is None:
+            raise ValidationError(
+                "PhysicalObject does not exist",
+                {"physical_object_id": str(physical_object_id)},
+            )
+        network_interface = repository.add_network_interface()
+        interface_alias = self._add_display_alias(
+            network_interface_id=network_interface.id,
+            value=display_name,
+        )
+        owner = repository.add_network_interface_physical_owner(
+            network_interface.id,
+            physical_object_id,
+        )
+        return CreatedDeviceInterface(
+            network_interface_id=network_interface.id,
+            owner_relation_id=owner.id,
             network_interface_alias_id=interface_alias.id,
         )
 

@@ -12,6 +12,7 @@ import type {
   DeviceDetailsDocument,
 } from './topology/deviceDetailsTypes';
 import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
+import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
 
 vi.mock('./components/HealthIndicator', () => ({
   HealthIndicator: () => <div>Backend доступен</div>,
@@ -258,5 +259,63 @@ describe('App projection states', () => {
     expect(loadProjection).toHaveBeenCalledTimes(2);
     expect(createNetworkDevice).toHaveBeenCalledTimes(1);
     expect(detailsSource.loadDeviceDetails).toHaveBeenCalledWith(newDeviceId);
+  });
+
+  it('refreshes projection after interface create and keeps the same device selected', async () => {
+    const deviceId = document.nodes[1].source_refs[0].entity_id;
+    const initialDetails: DeviceDetailsDocument = {
+      schema_version: '1.0',
+      device: { source_ref: document.nodes[1].source_refs[0], label: 'CORE-B' },
+      interfaces: [{
+        interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: 'eth0-id' },
+        label: 'eth0', addresses: [], l2_binding_count: 0, l3_binding_count: 0,
+        direct_physical_bindings: [], realization_down_count: 0, realization_up_count: 0,
+        source_refs: [],
+      }], gaps: [], warnings: [],
+    };
+    const updatedDetails: DeviceDetailsDocument = {
+      ...initialDetails,
+      interfaces: [
+        ...initialDetails.interfaces,
+        {
+          ...initialDetails.interfaces[0],
+          interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: 'eth1-id' },
+          label: 'eth1',
+        },
+      ],
+    };
+    const refreshed: TopologyProjectionDocument = {
+      ...document,
+      nodes: document.nodes.map((item) => item.id === document.nodes[1].id
+        ? { ...item, attributes: { ...item.attributes, owned_interface_count: 2 } }
+        : item),
+    };
+    const loadProjection = vi.fn()
+      .mockResolvedValueOnce(document)
+      .mockResolvedValueOnce(refreshed);
+    const detailsSource: DeviceDetailsDataSource = {
+      loadDeviceDetails: vi.fn().mockResolvedValue(initialDetails),
+    };
+    const createDeviceInterface = vi.fn().mockResolvedValue(updatedDetails);
+    const interfaceWriteSource: DeviceInterfaceWriteDataSource = { createDeviceInterface };
+    render(
+      <App
+        dataSource={{ loadProjection }}
+        deviceDetailsDataSource={detailsSource}
+        deviceInterfaceWriteDataSource={interfaceWriteSource}
+      />,
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать CORE-B' }));
+    await screen.findByRole('heading', { name: 'eth0' });
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить интерфейс' }));
+    await userEvent.type(screen.getByLabelText('Название'), 'eth1');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+
+    expect(await screen.findByRole('heading', { name: 'eth1' })).toBeInTheDocument();
+    expect(await screen.findByText('2', { selector: '.inspector__facts strong' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'CORE-B' })).toBeInTheDocument();
+    expect(loadProjection).toHaveBeenCalledTimes(2);
+    expect(createDeviceInterface).toHaveBeenCalledWith(deviceId, { display_name: 'eth1' });
   });
 });

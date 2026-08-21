@@ -31,6 +31,7 @@ from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolve
 from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
+    CreateDeviceInterfaceRequest,
     CreateNetworkDeviceRequest,
     DeviceDetailsDocument,
     ErrorResponse,
@@ -155,6 +156,28 @@ def create_network_device(
         )
         return ConfiguredDeviceDetailsResolver(CanonicalRepository(session)).resolve(
             created.physical_object_id
+        )
+
+
+@app.post(
+    "/v1/topology/devices/{physical_object_id}/interfaces",
+    response_model=DeviceDetailsDocument,
+    response_model_exclude_none=True,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def create_device_interface(
+    physical_object_id: uuid.UUID,
+    query: CreateDeviceInterfaceRequest,
+    session: Session = Depends(get_session),
+) -> DeviceDetailsDocument:
+    with session.begin():
+        DeviceCatalog(session).create_device_interface(
+            physical_object_id,
+            query.display_name,
+        )
+        return ConfiguredDeviceDetailsResolver(CanonicalRepository(session)).resolve(
+            physical_object_id
         )
 
 

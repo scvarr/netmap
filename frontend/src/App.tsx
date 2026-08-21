@@ -13,6 +13,7 @@ import type {
 } from './topology/types';
 import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
 import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
+import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
 
 const DEFAULT_REQUEST: TopologyProjectionRequest = {
   layer: 'L2',
@@ -24,9 +25,15 @@ interface AppProps {
   dataSource: TopologyDataSource;
   deviceDetailsDataSource: DeviceDetailsDataSource;
   deviceWriteDataSource?: DeviceWriteDataSource;
+  deviceInterfaceWriteDataSource?: DeviceInterfaceWriteDataSource;
 }
 
-export function App({ dataSource, deviceDetailsDataSource, deviceWriteDataSource }: AppProps) {
+export function App({
+  dataSource,
+  deviceDetailsDataSource,
+  deviceWriteDataSource,
+  deviceInterfaceWriteDataSource,
+}: AppProps) {
   const [document, setDocument] = useState<TopologyProjectionDocument | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +123,8 @@ export function App({ dataSource, deviceDetailsDataSource, deviceWriteDataSource
             document={document}
             selection={selection}
             deviceDetailsDataSource={deviceDetailsDataSource}
+            deviceInterfaceWriteDataSource={deviceInterfaceWriteDataSource}
+            onInterfaceCreated={(physicalObjectId) => { void load(physicalObjectId); }}
             onSelectNode={(node) => setSelection({ type: 'node', item: node })}
             onClose={() => setSelection(null)}
           />

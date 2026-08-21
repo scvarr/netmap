@@ -132,6 +132,19 @@ button { font: inherit; }
 .muted { color: #728789; font-size: 11px; }
 
 .device-interfaces { margin-top: 6px; }
+.device-interfaces__heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.device-interfaces__heading > h3 { margin-right: auto; }
+.create-interface { margin-bottom: 10px; }
+.create-interface__trigger { padding: 5px 8px; border: 1px solid #315b51; border-radius: 6px; color: #9fe6d0; background: #102722; cursor: pointer; font-size: 9px; }
+.create-interface__form { margin-bottom: 10px; padding: 10px; border: 1px solid #315256; border-radius: 8px; background: #0c191c; }
+.create-interface__form label > span { display: block; margin-bottom: 5px; color: #91a5a5; font-size: 10px; }
+.create-interface__form input { width: 100%; padding: 8px 9px; border: 1px solid #2a4448; border-radius: 6px; color: #e7f4f1; background: #081315; outline: none; }
+.create-interface__form input:focus { border-color: #55e5b5; }
+.create-interface__error { margin: 8px 0 0; color: #e0aaa5; font-size: 10px; }
+.create-interface__actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 10px; }
+.create-interface__actions button { padding: 6px 9px; border: 1px solid #315256; border-radius: 6px; color: #cce0dc; background: #13282b; cursor: pointer; font-size: 10px; }
+.create-interface__actions button[type="submit"] { border-color: #3a7968; color: #dff7ef; background: #15372f; }
+.create-interface__actions button:disabled { cursor: not-allowed; opacity: .45; }
 .device-details-state { margin: 0; padding: 12px; border: 1px solid #24383b; border-radius: 8px; color: #829698; background: #0c191c; font-size: 11px; line-height: 1.55; }
 .device-details-state--error { border-color: #5b3936; color: #d9aaa5; }
 .device-details-state--error p { margin: 0; }
