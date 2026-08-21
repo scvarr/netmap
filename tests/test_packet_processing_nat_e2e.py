@@ -403,24 +403,14 @@ def add_downstream_stage(repository, plan_id, kind):
 
 
 @pytest.mark.parametrize("kind", ["ROUTING_POLICY", "ROUTE_DECISION", "SECURITY", "NAT"])
-@pytest.mark.parametrize("source_value", ["CONSTRAINED", "UNKNOWN"])
-def test_nonexact_packet_skips_downstream_resolver_and_follows_uncertainty(kind, source_value):
+def test_unknown_packet_skips_downstream_resolver_and_follows_uncertainty(kind):
     with SessionLocal.begin() as session:
         repository = CanonicalRepository(session)
         context = repository.add_routing_context()
-        if source_value == "CONSTRAINED":
-            pool = repository.add_nat_pool(
-                address_ranges=[{"start": "198.51.100.10", "end": "198.51.100.20"}]
-            )
-            transform = {"op": "TRANSFORM", "source_ip": {"op": "SELECT_FROM", "pool_id": str(pool.id)}}
-            scope = {}
-            source_outcome = "TRANSFORMED_CONSTRAINED"
-        else:
-            interface = repository.add_network_interface()
-            binding = repository.add_l3_binding(interface.id, context.id)
-            transform = replace_destination("198.51.100.8")
-            scope = {"egress_l3_binding_ids": [str(binding.id)]}
-            source_outcome = "UNKNOWN"
+        interface = repository.add_network_interface()
+        binding = repository.add_l3_binding(interface.id, context.id)
+        transform = replace_destination("198.51.100.8")
+        scope = {"egress_l3_binding_ids": [str(binding.id)]}
         _policy, _rule, attachment = add_nat_attachment(repository, transform, scope=scope)
         plan = repository.add_packet_processing_plan("COMPLETE")
         source = repository.add_processing_stage(plan.id, "NAT", {"attachment_id": str(attachment.id)})
@@ -428,7 +418,7 @@ def test_nonexact_packet_skips_downstream_resolver_and_follows_uncertainty(kind,
         terminal = add_terminal(repository, plan.id, "UNKNOWN")
         repository.add_processing_entry_point(plan.id, "TRANSIT", source.id)
         for outcome in ("IDENTITY", "TRANSFORMED_EXACT", "TRANSFORMED_CONSTRAINED", "UNKNOWN"):
-            repository.add_processing_transition(plan.id, source.id, outcome, downstream.id if outcome == source_outcome else terminal.id)
+            repository.add_processing_transition(plan.id, source.id, outcome, downstream.id if outcome == "UNKNOWN" else terminal.id)
         downstream_outcomes = {
             "ROUTING_POLICY": ("TABLE_SELECTED", "TABLE_SELECTION_UNKNOWN"),
             "ROUTE_DECISION": ("FORWARD", "LOCAL", "DISCARD", "NO_ROUTE", "UNKNOWN", "CONFLICTING"),
@@ -442,10 +432,9 @@ def test_nonexact_packet_skips_downstream_resolver_and_follows_uncertainty(kind,
     artifact = evaluate(plan_id, context_id).json()
     downstream_execution = execution(artifact, kind, occurrence=(1 if kind == "NAT" else 0))
     expected_outcome = "TABLE_SELECTION_UNKNOWN" if kind == "ROUTING_POLICY" else "UNKNOWN"
-    expected_gap = "PACKET_CONSTRAINT_UNSUPPORTED" if source_value == "CONSTRAINED" else "PACKET_STATE_UNKNOWN"
 
     assert downstream_execution["stage_outcome"] == expected_outcome
-    assert expected_gap in {gap["code"] for gap in downstream_execution["gaps"]}
+    assert "PACKET_STATE_UNKNOWN" in {gap["code"] for gap in downstream_execution["gaps"]}
     assert downstream_execution["routing_policy_evaluation"] is None
     assert downstream_execution["next_hop_resolution"] is None
     assert downstream_execution["security_attachment_evaluation"] is None

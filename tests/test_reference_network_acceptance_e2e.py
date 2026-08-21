@@ -397,6 +397,10 @@ def build_reference_network(scenario="S0"):
             ("app", "10.20.30.40", 24),
         ):
             repository.add_interface_address(bindings[name].id, address, prefix)
+        if scenario in {"S9", "S9_ALL_DELIVERED"}:
+            repository.add_interface_address(
+                bindings["app"].id, "10.20.30.41", 24
+            )
 
         client_core = add_physical_segment(
             repository,
@@ -517,9 +521,30 @@ def build_reference_network(scenario="S0"):
             action="DROP" if scenario == "S2" else "PERMIT",
             traffic_class="LOCAL_INPUT",
         )
+        if scenario == "S9_ALL_DELIVERED":
+            for security in (post_security, app_security):
+                repository.add_security_rule(
+                    security["policy"].id,
+                    20,
+                    {
+                        "op": "ALL",
+                        "children": [
+                            {
+                                "op": "DESTINATION_IP_IN",
+                                "prefixes": ["10.20.30.41/32"],
+                            },
+                            {"op": "IP_PROTOCOL_IN", "values": [6]},
+                            {
+                                "op": "DESTINATION_PORT_IN",
+                                "ranges": [{"start": 8443, "end": 8443}],
+                            },
+                        ],
+                    },
+                    "PERMIT",
+                )
 
         nat_policy = repository.add_nat_policy({"op": "IDENTITY"}, "COMPLETE")
-        if scenario == "S9":
+        if scenario in {"S9", "S9_ALL_DELIVERED"}:
             pool = repository.add_nat_pool(
                 address_ranges=[
                     {"start": "10.20.30.40", "end": "10.20.30.41"}
@@ -951,20 +976,29 @@ def test_s8_connection_state_is_not_inherited_across_processing_points():
     ] == "UNKNOWN"
 
 
-def test_s9_constrained_nat_stops_before_downstream_packet_reasoning():
+def test_s9_constrained_nat_expands_into_exact_downstream_branches():
     fixture = build_reference_network("S9")
 
     artifact = packet_flow(fixture["contexts"]["CLIENT"].id).json()
 
     assert artifact["result"] == "UNKNOWN"
-    fw_step = artifact["branches"][0]["local_steps"][2]
-    nat = stage(fw_step, "NAT")
-    routing_policy = stage(fw_step, "ROUTING_POLICY")
-    assert nat["stage_outcome"] == "TRANSFORMED_CONSTRAINED"
-    assert nat["packet_after"] is None
-    assert nat["packet_after_constraint"] is not None
-    assert routing_policy["stage_outcome"] == "TABLE_SELECTION_UNKNOWN"
-    assert routing_policy["routing_policy_evaluation"] is None
-    assert "PACKET_CONSTRAINT_UNSUPPORTED" in {
-        gap["code"] for gap in routing_policy["gaps"]
+    assert len(artifact["branches"]) == 2
+    assert {branch["verdict"] for branch in artifact["branches"]} == {
+        "DELIVERED",
+        "NOT_DELIVERED",
     }
+    translated_destinations = set()
+    for branch in artifact["branches"]:
+        fw_step = branch["local_steps"][2]
+        nat = stage(fw_step, "NAT")
+        routing_policy = stage(fw_step, "ROUTING_POLICY")
+        assert nat["stage_outcome"] == "TRANSFORMED_CONSTRAINED"
+        assert nat["packet_after"] is None
+        assert nat["packet_after_constraint"] is not None
+        assert routing_policy["stage_outcome"] == "TABLE_SELECTED"
+        assert routing_policy["routing_policy_evaluation"] is not None
+        translated_destinations.add(routing_policy["packet_before"]["destination_ip"])
+        assert "PACKET_CONSTRAINT_UNSUPPORTED" not in {
+            gap["code"] for gap in routing_policy["gaps"]
+        }
+    assert translated_destinations == {"10.20.30.40", "10.20.30.41"}

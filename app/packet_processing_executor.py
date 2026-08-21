@@ -10,6 +10,7 @@ from app.packet_processing_plan import (
     ProcessingStageRecord,
     ProcessingTransitionRecord,
 )
+from app.packet_constraints import expand_packet_constraint
 from app.repository import CanonicalRepository
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
 from app.security_attachment_resolver import ConfiguredSecurityAttachmentResolver
@@ -101,7 +102,7 @@ class _ExecutionBranch:
 
 
 class PacketProcessingPlanExecutor:
-    VERSION = "packet-processing-full-local/1.5"
+    VERSION = "packet-processing-full-local/1.6"
 
     def __init__(self, repository: CanonicalRepository) -> None:
         self.repository = repository
@@ -301,6 +302,30 @@ class PacketProcessingPlanExecutor:
             )
 
         if state.current_packet_state is None:
+            if state.current_packet_constraint is not None:
+                expansion = expand_packet_constraint(
+                    state.current_packet_constraint
+                )
+                if not expansion.limit_exceeded:
+                    return [
+                        completed_branch
+                        for packet in expansion.packets
+                        for completed_branch in self._execute(
+                            plan,
+                            stages,
+                            transitions,
+                            initial,
+                            replace(
+                                state,
+                                current_packet_state=packet,
+                                current_packet_constraint=None,
+                                current_packet_unknown=False,
+                            ),
+                            executions,
+                            evidence,
+                            view,
+                        )
+                    ]
             return self._execute_nonexact(
                 plan,
                 stages,
@@ -312,6 +337,11 @@ class PacketProcessingPlanExecutor:
                 view,
                 stage,
                 stage_ref,
+                packet_gap_code=(
+                    "PACKET_CONSTRAINT_EXPANSION_LIMIT"
+                    if state.current_packet_constraint is not None
+                    else None
+                ),
             )
 
         if stage.kind == "ADJACENCY_L2":
@@ -967,6 +997,7 @@ class PacketProcessingPlanExecutor:
         view: EvaluationView,
         stage: ProcessingStageRecord,
         stage_ref: EvidenceRef,
+        packet_gap_code: str | None = None,
     ) -> list[_ExecutionBranch]:
         outcome = {
             "ROUTING_POLICY": "TABLE_SELECTION_UNKNOWN",
@@ -992,9 +1023,12 @@ class PacketProcessingPlanExecutor:
         )
         packet_gap = PacketProcessingExecutionGap(
             code=(
-                "PACKET_CONSTRAINT_UNSUPPORTED"
-                if state.current_packet_constraint is not None
-                else "PACKET_STATE_UNKNOWN"
+                packet_gap_code
+                or (
+                    "PACKET_CONSTRAINT_UNSUPPORTED"
+                    if state.current_packet_constraint is not None
+                    else "PACKET_STATE_UNKNOWN"
+                )
             ),
             stage_id=stage.stage_id,
             evidence_refs=[stage_ref],

@@ -832,6 +832,7 @@ class PacketProcessingExecutionGap(BaseModel):
         "SECURITY_STAGE_UNKNOWN",
         "NAT_STAGE_UNKNOWN",
         "PACKET_CONSTRAINT_UNSUPPORTED",
+        "PACKET_CONSTRAINT_EXPANSION_LIMIT",
         "PACKET_STATE_UNKNOWN",
         "STRUCTURAL_ADJACENCY_UNKNOWN",
     ]
@@ -937,8 +938,8 @@ class PacketProcessingEvaluationArtifact(BaseModel):
     schema_version: Literal[1] = 1
     query: PacketProcessingEvaluationQuery
     evaluation_view: EvaluationView
-    resolver_version: Literal["packet-processing-full-local/1.5"] = (
-        "packet-processing-full-local/1.5"
+    resolver_version: Literal["packet-processing-full-local/1.6"] = (
+        "packet-processing-full-local/1.6"
     )
     result: Literal[
         "CONTINUE_TO_NEXT_HOP",

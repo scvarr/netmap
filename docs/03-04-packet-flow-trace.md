@@ -453,7 +453,17 @@ CONFLICTING
 
 `IDENTITY` сохраняет exact current `PacketState`. `TRANSFORMED_EXACT` создаёт новый exact immutable `PacketState`. `TRANSFORMED_CONSTRAINED` создаёт отдельный `NATPacketConstraint`/symbolic packet result, а не fake exact `PacketState`.
 
-Если следующая stage не умеет reasoning над constraint, packet-flow branch становится `UNKNOWN`. Representative address/port выбирать запрещено.
+`TRANSFORMED_CONSTRAINED` не означает automatic `UNKNOWN`. Перед следующей
+stage, которой нужен exact packet, executor может materialize constraint как
+exhaustive set independent exact branches. Materialization допустима только
+если полный Cartesian product всех constrained fields конечен и не превышает
+internal safety limit. Representative address/port, sampling и partial
+enumeration запрещены.
+
+Текущий implementation limit равен `64` exact `PacketState`. Если полная
+cardinality больше limit, ни один candidate не выполняется downstream, branch
+становится `UNKNOWN` с gap `PACKET_CONSTRAINT_EXPANSION_LIMIT`. Это bounded
+enumeration, а не general symbolic predicate/routing algebra.
 
 ## ROUTE_DECISION stage
 
@@ -1657,6 +1667,17 @@ source_port ∈ range
 
 Flow engine может сохранять symbolic constraints.
 
+Для небольшого finite constraint executor может exhaustive-развернуть все
+значения constrained IP/port fields и их полный Cartesian product. Каждый
+candidate становится обычным exact `PacketState` в отдельной branch и проходит
+существующие RoutingPolicy, RouteDecision, Security, NAT и adjacency resolvers.
+NAT evidence при этом остаётся `TRANSFORMED_CONSTRAINED`; materialization не
+означает, что NAT выбрал один candidate.
+
+Overlapping ranges не создают duplicate semantic candidates. Если полный set
+превышает safety limit, partial prefix set не создаётся: результат остаётся
+`UNKNOWN` с `PACKET_CONSTRAINT_EXPANSION_LIMIT`.
+
 Следующий Security predicate может иногда разрешиться без exact allocation.
 
 Пример:
@@ -2758,7 +2779,7 @@ Plan/policy resolvers не знают user/owner и не используют pr
 35. `UNKNOWN` не превращается в negative из-за отсутствия данных.
 36. `EXACT` и `POSSIBLE` являются разными query semantics.
 37. Exact nondeterministic selection нельзя угадывать.
-38. `NATPacketConstraint` не является fake exact PacketState и может продолжать analysis только если downstream stage поддерживает constraint reasoning.
+38. `NATPacketConstraint` не является fake exact PacketState; он может продолжать analysis через exhaustive bounded exact branching либо через future constraint-aware reasoning.
 39. Reverse flow анализируется отдельно.
 40. Diagnostic flow trace не мутирует persistent FDB/neighbor/session/NAT state.
 41. What-if state может быть только ephemeral.
