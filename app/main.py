@@ -61,9 +61,12 @@ from app.schemas import (
     SecurityEvaluationQuery,
     StructuralAdjacencyArtifact,
     StructuralAdjacencyQuery,
+    TopologyProjectionDocument,
+    TopologyProjectionRequest,
     TraceArtifact,
 )
 from app.structural_adjacency_resolver import StructuralAdjacencyProofResolver
+from app.topology_projection_resolver import ConfiguredTopologyProjectionResolver
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("netmap")
@@ -96,6 +99,22 @@ async def request_validation_error_handler(
 def health(session: Session = Depends(get_session)) -> dict[str, str]:
     session.execute(text("SELECT 1"))
     return {"status": "ok"}
+
+
+@app.post(
+    "/v1/topology/projection",
+    response_model=TopologyProjectionDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def project_topology(
+    query: TopologyProjectionRequest,
+    session: Session = Depends(get_session),
+) -> TopologyProjectionDocument:
+    repository = CanonicalRepository(session)
+    return ConfiguredTopologyProjectionResolver(repository).resolve(
+        query, EvaluationView()
+    )
 
 
 @app.post(

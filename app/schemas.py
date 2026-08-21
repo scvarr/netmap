@@ -23,6 +23,67 @@ class EvaluationView(BaseModel):
     mode: Literal["CONFIGURED"] = "CONFIGURED"
 
 
+class ProjectionSourceRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ref_type: Literal["CANONICAL_FACT"]
+    entity_type: str = Field(min_length=1)
+    entity_id: uuid.UUID
+
+
+class TopologyProjectionScope(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    include_location_subtrees: list[ProjectionSourceRef]
+    include_entities: list[ProjectionSourceRef]
+
+
+class TopologyProjectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    layer: Literal["L1", "L2", "L3"]
+    detail_level: Literal["DEVICE"]
+    scope: TopologyProjectionScope
+    grouping: dict[str, Any] | None = None
+    filters: dict[str, Any] | None = None
+
+
+class TopologyProjectionNode(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    kind: str
+    label: str
+    source_refs: list[ProjectionSourceRef]
+    attributes: dict[str, Any]
+    status: str | None = None
+
+
+class TopologyProjectionEdge(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    from_node_id: str
+    to_node_id: str
+    kind: str
+    aggregate: bool
+    source_refs: list[ProjectionSourceRef]
+    attributes: dict[str, Any]
+    status: str | None = None
+
+
+class TopologyProjectionDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    layer: Literal["L1", "L2", "L3"]
+    detail_level: Literal["DEVICE"]
+    nodes: list[TopologyProjectionNode]
+    edges: list[TopologyProjectionEdge]
+    gaps: list[str]
+    warnings: list[str]
+
+
 class EvidenceRef(BaseModel):
     ref_type: Literal["CANONICAL_FACT"] = "CANONICAL_FACT"
     entity_type: Literal[

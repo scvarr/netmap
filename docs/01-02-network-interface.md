@@ -49,6 +49,13 @@ NetworkInterface
 
 Конкретный способ реализации гетерогенной ссылки `owner_entity_id` в БД пока не фиксируется.
 
+Текущий backend storage materialize только typed relation
+`NetworkInterface -> PhysicalObject` через
+`NetworkInterfacePhysicalOwner`. Отсутствие этой записи означает, что owner fact
+пока неизвестен. Это implementation subset не сужает conceptual owner model:
+будущие VM, namespace и software owners по-прежнему допустимы отдельными typed
+расширениями.
+
 Человекочитаемое имя остаётся metadata:
 
 ```text

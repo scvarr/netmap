@@ -13,6 +13,7 @@ from app.models import (
     InterfaceAddress,
     InterfacePhysicalBinding,
     NetworkInterface,
+    NetworkInterfacePhysicalOwner,
     NetworkInterfaceRealization,
     NATPolicy,
     NATPolicyAttachment,
@@ -98,6 +99,20 @@ class PhysicalBindingRecord:
     interface_id: uuid.UUID
     point_id: uuid.UUID
     point_member: int
+
+
+@dataclass(frozen=True)
+class NetworkInterfacePhysicalOwnerRecord:
+    owner_relation_id: uuid.UUID
+    interface_id: uuid.UUID
+    physical_object_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class ConnectionPointRecord:
+    point_id: uuid.UUID
+    physical_object_id: uuid.UUID
+    cardinality: int
 
 
 @dataclass(frozen=True)
@@ -372,6 +387,40 @@ class CanonicalRepository:
         self.session.add(interface)
         self.session.flush()
         return interface
+
+    def add_network_interface_physical_owner(
+        self,
+        interface_id: uuid.UUID,
+        physical_object_id: uuid.UUID,
+        owner_relation_id: uuid.UUID | None = None,
+    ) -> NetworkInterfacePhysicalOwner:
+        self.validate_network_interface(interface_id)
+        if self.session.get(PhysicalObject, physical_object_id) is None:
+            raise ValidationError(
+                "PhysicalObject does not exist",
+                {"physical_object_id": str(physical_object_id)},
+            )
+        existing = self.session.scalar(
+            select(NetworkInterfacePhysicalOwner).where(
+                NetworkInterfacePhysicalOwner.interface_id == interface_id
+            )
+        )
+        if existing is not None:
+            raise ValidationError(
+                "NetworkInterface already has a physical owner",
+                {
+                    "interface_id": str(interface_id),
+                    "existing_physical_object_id": str(existing.physical_object_id),
+                },
+            )
+        relation = NetworkInterfacePhysicalOwner(
+            id=owner_relation_id or uuid.uuid4(),
+            interface_id=interface_id,
+            physical_object_id=physical_object_id,
+        )
+        self.session.add(relation)
+        self.session.flush()
+        return relation
 
     def add_l2_forwarding_context(
         self, context_id: uuid.UUID | None = None
@@ -1212,6 +1261,106 @@ class CanonicalRepository:
                 "NetworkInterface does not exist",
                 {"interface_id": str(interface_id)},
             )
+
+    def require_physical_objects(
+        self, physical_object_ids: list[uuid.UUID]
+    ) -> tuple[uuid.UUID, ...]:
+        unique_ids = tuple(sorted(set(physical_object_ids), key=str))
+        if not unique_ids:
+            return ()
+        found = set(
+            self.session.scalars(
+                select(PhysicalObject.id).where(PhysicalObject.id.in_(unique_ids))
+            )
+        )
+        missing = [object_id for object_id in unique_ids if object_id not in found]
+        if missing:
+            raise ValidationError(
+                "Projection scope refers to a missing PhysicalObject",
+                {"physical_object_ids": [str(value) for value in missing]},
+            )
+        return unique_ids
+
+    def get_network_interface_physical_owners(
+        self, interface_ids: list[uuid.UUID] | None = None
+    ) -> tuple[NetworkInterfacePhysicalOwnerRecord, ...]:
+        statement = select(NetworkInterfacePhysicalOwner).order_by(
+            NetworkInterfacePhysicalOwner.interface_id,
+            NetworkInterfacePhysicalOwner.id,
+        )
+        if interface_ids is not None:
+            if not interface_ids:
+                return ()
+            statement = statement.where(
+                NetworkInterfacePhysicalOwner.interface_id.in_(interface_ids)
+            )
+        owners = tuple(self.session.scalars(statement))
+        records: list[NetworkInterfacePhysicalOwnerRecord] = []
+        seen_interfaces: set[uuid.UUID] = set()
+        for owner in owners:
+            if owner.interface_id in seen_interfaces:
+                raise ModelError(
+                    "NetworkInterface has multiple physical owners",
+                    {"interface_id": str(owner.interface_id)},
+                )
+            seen_interfaces.add(owner.interface_id)
+            if self.session.get(NetworkInterface, owner.interface_id) is None:
+                raise ModelError(
+                    "NetworkInterfacePhysicalOwner refers to a missing NetworkInterface",
+                    {"owner_relation_id": str(owner.id)},
+                )
+            if self.session.get(PhysicalObject, owner.physical_object_id) is None:
+                raise ModelError(
+                    "NetworkInterfacePhysicalOwner refers to a missing PhysicalObject",
+                    {"owner_relation_id": str(owner.id)},
+                )
+            records.append(
+                NetworkInterfacePhysicalOwnerRecord(
+                    owner_relation_id=owner.id,
+                    interface_id=owner.interface_id,
+                    physical_object_id=owner.physical_object_id,
+                )
+            )
+        return tuple(records)
+
+    def get_connection_point_records(
+        self, point_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, ConnectionPointRecord]:
+        unique_ids = tuple(sorted(set(point_ids), key=str))
+        if not unique_ids:
+            return {}
+        points = tuple(
+            self.session.scalars(
+                select(ConnectionPoint)
+                .where(ConnectionPoint.id.in_(unique_ids))
+                .order_by(ConnectionPoint.id)
+            )
+        )
+        by_id = {point.id: point for point in points}
+        missing = [point_id for point_id in unique_ids if point_id not in by_id]
+        if missing:
+            raise ModelError(
+                "L1 path refers to a missing ConnectionPoint",
+                {"point_ids": [str(value) for value in missing]},
+            )
+        records: dict[uuid.UUID, ConnectionPointRecord] = {}
+        for point in points:
+            if point.cardinality < 1:
+                raise ModelError(
+                    "ConnectionPoint cardinality must be at least 1",
+                    {"point_id": str(point.id), "cardinality": point.cardinality},
+                )
+            if self.session.get(PhysicalObject, point.physical_object_id) is None:
+                raise ModelError(
+                    "ConnectionPoint refers to a missing PhysicalObject",
+                    {"point_id": str(point.id)},
+                )
+            records[point.id] = ConnectionPointRecord(
+                point_id=point.id,
+                physical_object_id=point.physical_object_id,
+                cardinality=point.cardinality,
+            )
+        return records
 
     def get_physical_bindings_by_interface(
         self, interface_ids: list[uuid.UUID]

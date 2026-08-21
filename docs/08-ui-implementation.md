@@ -105,6 +105,10 @@ TopologyProjectionRequest
 
 `include_entities` содержит canonical refs. Scope entries образуют explicit include-set.
 
+Для первого B.UI.1 backend пустые `include_entities` и
+`include_location_subtrees` означают unbounded scope только внутри canonical
+model, видимой уже выбранному workspace-scoped repository/session.
+
 ### ProjectionSourceRef
 
 ```text

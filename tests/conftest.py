@@ -9,6 +9,7 @@ from app.models import (
     InterfaceAddress,
     InterfacePhysicalBinding,
     NetworkInterface,
+    NetworkInterfacePhysicalOwner,
     NetworkInterfaceRealization,
     NATPolicy,
     NATPolicyAttachment,
@@ -68,6 +69,7 @@ def clean_database():
         session.execute(delete(L2ForwardingContext))
         session.execute(delete(NetworkInterfaceRealization))
         session.execute(delete(InterfacePhysicalBinding))
+        session.execute(delete(NetworkInterfacePhysicalOwner))
         session.execute(delete(NetworkInterface))
         session.execute(delete(ConnectionMember))
         session.execute(delete(Connection))

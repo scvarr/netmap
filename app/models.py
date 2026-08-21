@@ -12,6 +12,9 @@ class PhysicalObject(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     connection_points: Mapped[list["ConnectionPoint"]] = relationship(back_populates="physical_object")
+    network_interface_owners: Mapped[list["NetworkInterfacePhysicalOwner"]] = relationship(
+        back_populates="physical_object"
+    )
 
 
 class ConnectionPoint(Base):
@@ -92,6 +95,29 @@ class NetworkInterface(Base):
     )
     l2_bindings: Mapped[list["L2Binding"]] = relationship(back_populates="interface")
     l3_bindings: Mapped[list["L3Binding"]] = relationship(back_populates="interface")
+    physical_owner: Mapped["NetworkInterfacePhysicalOwner | None"] = relationship(
+        back_populates="interface", uselist=False, cascade="all, delete-orphan"
+    )
+
+
+class NetworkInterfacePhysicalOwner(Base):
+    __tablename__ = "network_interface_physical_owners"
+    __table_args__ = (
+        UniqueConstraint("interface_id", name="uq_network_interface_physical_owners_interface"),
+        Index("ix_network_interface_physical_owners_physical_object_id", "physical_object_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    interface_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("network_interfaces.id", ondelete="CASCADE"), nullable=False
+    )
+    physical_object_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("physical_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+    interface: Mapped[NetworkInterface] = relationship(back_populates="physical_owner")
+    physical_object: Mapped[PhysicalObject] = relationship(
+        back_populates="network_interface_owners"
+    )
 
 
 class InterfacePhysicalBinding(Base):
