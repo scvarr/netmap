@@ -4,3 +4,7 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 .env
+.gitnexus/
+.claude/skills/gitnexus/
+AGENTS.md
+CLAUDE.md
