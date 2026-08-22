@@ -336,7 +336,7 @@ def test_reverse_uuid_insertion_order_still_returns_sorted_projection():
     )
 
 
-@pytest.mark.parametrize("layer", ["L1", "L3"])
+@pytest.mark.parametrize("layer", ["L3"])
 def test_unsupported_projection_layer_returns_typed_validation_error(layer):
     response = client.post(
         "/v1/topology/projection", json=projection_query(layer=layer)
@@ -344,7 +344,21 @@ def test_unsupported_projection_layer_returns_typed_validation_error(layer):
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
-    assert response.json()["error"]["details"]["reason"] == "PROJECTION_LAYER_UNSUPPORTED"
+    assert response.json()["error"]["details"]["reason"] == "PROJECTION_LAYER_DETAIL_UNSUPPORTED"
+
+
+@pytest.mark.parametrize(
+    ("layer", "detail_level"),
+    [("L1", "DEVICE"), ("L2", "PHYSICAL_OBJECT")],
+)
+def test_unsupported_projection_layer_detail_combinations_are_rejected(layer, detail_level):
+    response = client.post(
+        "/v1/topology/projection",
+        json=projection_query(layer=layer, detail_level=detail_level),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["details"]["reason"] == "PROJECTION_LAYER_DETAIL_UNSUPPORTED"
 
 
 @pytest.mark.parametrize(

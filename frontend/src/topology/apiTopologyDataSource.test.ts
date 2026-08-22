@@ -65,6 +65,28 @@ describe('ApiTopologyDataSource', () => {
     await expect(new ApiTopologyDataSource().loadProjection(request)).resolves.toEqual(document);
   });
 
+  it('accepts the public L1 physical-object projection document', async () => {
+    const physical: TopologyProjectionDocument = {
+      ...document,
+      layer: 'L1',
+      detail_level: 'PHYSICAL_OBJECT',
+      nodes: [{
+        ...document.nodes[0],
+        id: 'l1-object-a',
+        kind: 'PHYSICAL_OBJECT',
+        attributes: { connection_point_count: 2, owned_interface_count: 0 },
+      }],
+    };
+    const physicalRequest: TopologyProjectionRequest = {
+      layer: 'L1',
+      detail_level: 'PHYSICAL_OBJECT',
+      scope: { include_location_subtrees: [], include_entities: [] },
+    };
+    fetchMock.mockResolvedValue(jsonResponse(physical));
+
+    await expect(new ApiTopologyDataSource().loadProjection(physicalRequest)).resolves.toEqual(physical);
+  });
+
   it('accepts an empty projection document', async () => {
     const empty = { ...document, nodes: [], edges: [] };
     fetchMock.mockResolvedValue(jsonResponse(empty));

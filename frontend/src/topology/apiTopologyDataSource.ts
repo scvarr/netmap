@@ -59,7 +59,15 @@ const parseProjectionDocument = (value: unknown): TopologyProjectionDocument => 
   if (value.layer !== 'L1' && value.layer !== 'L2' && value.layer !== 'L3') {
     malformed('layer must be one of L1, L2, or L3.');
   }
-  if (value.detail_level !== 'DEVICE') malformed('detail_level must be "DEVICE".');
+  if (value.detail_level !== 'DEVICE' && value.detail_level !== 'PHYSICAL_OBJECT') {
+    malformed('detail_level must be "DEVICE" or "PHYSICAL_OBJECT".');
+  }
+  if (
+    (value.layer === 'L1' && value.detail_level !== 'PHYSICAL_OBJECT')
+    || (value.layer === 'L2' && value.detail_level !== 'DEVICE')
+  ) {
+    malformed('layer/detail_level combination is unsupported.');
+  }
   if (!Array.isArray(value.nodes)) return malformed('nodes must be an array.');
   if (!Array.isArray(value.edges)) return malformed('edges must be an array.');
   requireStringArray(value.gaps, 'gaps');

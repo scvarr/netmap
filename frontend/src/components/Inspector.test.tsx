@@ -177,4 +177,73 @@ describe('Inspector', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Закрыть инспектор' }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+
+  it('shows physical-object counts and neighbors without loading Device Details', () => {
+    const loadDeviceDetails = vi.fn();
+    const physical: TopologyProjectionDocument = {
+      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
+      nodes: [{
+        id: 'l1-core', kind: 'PHYSICAL_OBJECT', label: 'CORE', status: 'CONFIGURED',
+        attributes: { connection_point_count: 1, owned_interface_count: 1 },
+        source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'po-core' }],
+      }, {
+        id: 'l1-cable', kind: 'PHYSICAL_OBJECT', label: 'PhysicalObject abcdef12', status: 'CONFIGURED',
+        attributes: { label_source: 'TECHNICAL_FALLBACK', connection_point_count: 2, owned_interface_count: 0 },
+        source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'abcdef12-full' }],
+      }],
+      edges: [{
+        id: 'l1-edge', from_node_id: 'l1-core', to_node_id: 'l1-cable',
+        kind: 'L1_PHYSICAL_LINK', aggregate: true, status: 'CONFIGURED',
+        attributes: { supporting_connection_count: 1, supporting_member_pair_count: 1 },
+        source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Connection', entity_id: 'connection-1' }],
+      }], gaps: [], warnings: [],
+    };
+    render(
+      <Inspector
+        document={physical}
+        selection={{ type: 'node', item: physical.nodes[0] }}
+        deviceDetailsDataSource={{ loadDeviceDetails }}
+        onSelectNode={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText('Точек подключения').parentElement).toHaveTextContent('1');
+    expect(screen.getByText('Owned interfaces').parentElement).toHaveTextContent('1');
+    expect(screen.getByText('Физических связей').parentElement).toHaveTextContent('1');
+    expect(screen.getByRole('button', { name: /Объект abcdef12/ })).toHaveTextContent('Соединений: 1');
+    expect(loadDeviceDetails).not.toHaveBeenCalled();
+  });
+
+  it('shows physical edge aggregation and canonical refs', async () => {
+    const physical: TopologyProjectionDocument = {
+      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
+      nodes: document.nodes.map((node, index) => ({
+        ...node,
+        id: `l1-${index}`,
+        kind: 'PHYSICAL_OBJECT',
+        attributes: { connection_point_count: 1, owned_interface_count: index },
+      })),
+      edges: [{
+        ...document.edges[0],
+        id: 'l1-edge', from_node_id: 'l1-0', to_node_id: 'l1-1', kind: 'L1_PHYSICAL_LINK',
+        attributes: { supporting_connection_count: 2, supporting_member_pair_count: 3 },
+      }], gaps: [], warnings: [],
+    };
+    render(
+      <Inspector
+        document={physical}
+        selection={{ type: 'edge', item: physical.edges[0] }}
+        deviceDetailsDataSource={{ loadDeviceDetails: vi.fn() }}
+        onSelectNode={() => undefined}
+        onClose={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText('Соединений').parentElement).toHaveTextContent('2');
+    expect(screen.getByText('Пар members').parentElement).toHaveTextContent('3');
+    const details = screen.getByText('Технические детали').closest('details')!;
+    await userEvent.click(within(details).getByText('Технические детали'));
+    expect(within(details).getByText('Connection')).toBeInTheDocument();
+  });
 });

@@ -55,7 +55,10 @@ export function TopologyCanvas({ document, selection, onSelectionChange }: Topol
   };
 
   return (
-    <div className="topology-canvas" aria-label="Логическая схема сети">
+    <div
+      className="topology-canvas"
+      aria-label={document.layer === 'L1' ? 'Физическая схема сети' : 'Логическая схема сети'}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}

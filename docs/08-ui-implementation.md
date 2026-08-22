@@ -319,3 +319,27 @@ Bounded operation принимает два разных существующи�
 realization, L2/L3/IP или другие network facts. После success UI заново загружает
 Device Details и DEVICE projection; edge появляется только как derived backend
 projection над созданным L1 path.
+
+## W.4 — первая физическая L1-карта
+
+**FIXED**
+
+Существующий public `POST /v1/topology/projection` поддерживает две bounded
+комбинации layer/detail:
+
+```text
+L2 / DEVICE
+L1 / PHYSICAL_OBJECT
+```
+
+`L1 / PHYSICAL_OBJECT` представляет каждый canonical `PhysicalObject`, включая
+passive объекты без `NetworkInterface`. Node показывает `alias.display` либо
+deterministic fallback, количество собственных `ConnectionPoint` и количество
+интерфейсов по explicit `NetworkInterfacePhysicalOwner`.
+
+Physical edge выводится только из explicit `Connection` и его
+`ConnectionMember` между `ConnectionPoint` разных `PhysicalObject`. Relations
+между одной парой объектов агрегируются с сохранением supporting canonical refs;
+внутренняя связь двух точек одного объекта не создаёт self-loop. UI переключает
+logical/physical projections через общий `TopologyDataSource` и сохраняет node
+selection только по совпадающей canonical `PhysicalObject` source ref.

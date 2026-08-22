@@ -7,6 +7,7 @@ from app.repository import (
     CanonicalRepository,
     L1AdjacencyEdge,
     NetworkInterfacePhysicalOwnerRecord,
+    PhysicalConnectionMemberRecord,
     PhysicalBindingRecord,
     PointMember,
     RealizationRecord,
@@ -44,7 +45,7 @@ class _SupportingPath:
 
 
 class ConfiguredTopologyProjectionResolver:
-    VERSION = "topology-projection-configured/1.0"
+    VERSION = "topology-projection-configured/1.1"
     EDGE_KIND = "L2_DEVICE_LINK"
 
     def __init__(self, repository: CanonicalRepository) -> None:
@@ -61,6 +62,8 @@ class ConfiguredTopologyProjectionResolver:
                 "Topology projection supports only CONFIGURED view",
                 {"reason": "PROJECTION_VIEW_UNSUPPORTED"},
             )
+        if request.layer == "L1":
+            return self._resolve_l1_physical(request)
 
         owners = self.repository.get_network_interface_physical_owners()
         owner_by_interface = {owner.interface_id: owner for owner in owners}
@@ -137,11 +140,93 @@ class ConfiguredTopologyProjectionResolver:
             warnings=[],
         )
 
+    def _resolve_l1_physical(
+        self, request: TopologyProjectionRequest
+    ) -> TopologyProjectionDocument:
+        explicit_ids = self.repository.require_physical_objects(
+            [ref.entity_id for ref in request.scope.include_entities]
+        )
+        selected_object_ids = set(
+            explicit_ids or self.repository.get_physical_object_ids()
+        )
+        owners_by_object: dict[
+            uuid.UUID, list[NetworkInterfacePhysicalOwnerRecord]
+        ] = {}
+        for owner in self.repository.get_network_interface_physical_owners():
+            if owner.physical_object_id in selected_object_ids:
+                owners_by_object.setdefault(owner.physical_object_id, []).append(owner)
+
+        point_ids_by_object: dict[uuid.UUID, list[uuid.UUID]] = {}
+        for point in self.repository.get_all_connection_point_records():
+            if point.physical_object_id not in selected_object_ids:
+                continue
+            point_ids_by_object.setdefault(point.physical_object_id, []).append(
+                point.point_id
+            )
+
+        aliases = DeviceCatalog(
+            self.repository.session
+        ).physical_object_display_aliases(list(selected_object_ids))
+        nodes = [
+            self._physical_node(
+                object_id,
+                point_ids_by_object.get(object_id, []),
+                owners_by_object.get(object_id, []),
+                aliases.get(object_id),
+            )
+            for object_id in sorted(selected_object_ids, key=self._physical_node_id)
+        ]
+
+        members_by_pair: dict[
+            tuple[uuid.UUID, uuid.UUID], list[PhysicalConnectionMemberRecord]
+        ] = {}
+        for member in self.repository.get_physical_connection_member_records():
+            if member.object_a_id == member.object_b_id:
+                continue
+            if not {
+                member.object_a_id,
+                member.object_b_id,
+            }.issubset(selected_object_ids):
+                continue
+            pair = tuple(
+                sorted(
+                    (member.object_a_id, member.object_b_id),
+                    key=self._physical_node_id,
+                )
+            )
+            members_by_pair.setdefault(pair, []).append(member)
+
+        edges = [
+            self._physical_edge(pair, tuple(members_by_pair[pair]))
+            for pair in sorted(
+                members_by_pair,
+                key=lambda value: (
+                    self._physical_node_id(value[0]),
+                    self._physical_node_id(value[1]),
+                ),
+            )
+        ]
+        return TopologyProjectionDocument(
+            layer="L1",
+            detail_level="PHYSICAL_OBJECT",
+            nodes=nodes,
+            edges=edges,
+            gaps=[],
+            warnings=[],
+        )
+
     def _validate_request(self, request: TopologyProjectionRequest) -> None:
-        if request.layer != "L2":
+        if (request.layer, request.detail_level) not in {
+            ("L1", "PHYSICAL_OBJECT"),
+            ("L2", "DEVICE"),
+        }:
             raise ValidationError(
-                "Topology projection layer is not supported",
-                {"reason": "PROJECTION_LAYER_UNSUPPORTED", "layer": request.layer},
+                "Topology projection layer/detail level combination is not supported",
+                {
+                    "reason": "PROJECTION_LAYER_DETAIL_UNSUPPORTED",
+                    "layer": request.layer,
+                    "detail_level": request.detail_level,
+                },
             )
         if request.scope.include_location_subtrees:
             raise ValidationError(
@@ -172,6 +257,79 @@ class ConfiguredTopologyProjectionResolver:
                 },
             )
 
+    def _physical_node(
+        self,
+        physical_object_id: uuid.UUID,
+        point_ids: list[uuid.UUID],
+        owners: list[NetworkInterfacePhysicalOwnerRecord],
+        display_alias: DisplayAliasRecord | None,
+    ) -> TopologyProjectionNode:
+        refs = [self._ref("PhysicalObject", physical_object_id)]
+        if display_alias is not None:
+            refs.append(self._ref("EntityMetadata", display_alias.metadata_id))
+        refs.extend(self._ref("ConnectionPoint", point_id) for point_id in point_ids)
+        for owner in owners:
+            refs.extend(
+                [
+                    self._ref("NetworkInterfacePhysicalOwner", owner.owner_relation_id),
+                    self._ref("NetworkInterface", owner.interface_id),
+                ]
+            )
+        return TopologyProjectionNode(
+            id=self._physical_node_id(physical_object_id),
+            kind="PHYSICAL_OBJECT",
+            label=(
+                display_alias.value
+                if display_alias is not None
+                else f"PhysicalObject {str(physical_object_id)[:8]}"
+            ),
+            source_refs=self._dedupe_refs(refs),
+            attributes={
+                "label_source": (
+                    "ALIAS_DISPLAY" if display_alias is not None else "TECHNICAL_FALLBACK"
+                ),
+                "connection_point_count": len(point_ids),
+                "owned_interface_count": len(owners),
+            },
+            status="CONFIGURED",
+        )
+
+    def _physical_edge(
+        self,
+        pair: tuple[uuid.UUID, uuid.UUID],
+        members: tuple[PhysicalConnectionMemberRecord, ...],
+    ) -> TopologyProjectionEdge:
+        refs = [
+            self._ref("PhysicalObject", pair[0]),
+            self._ref("PhysicalObject", pair[1]),
+        ]
+        connection_ids: set[uuid.UUID] = set()
+        member_ids: set[uuid.UUID] = set()
+        for member in members:
+            connection_ids.add(member.connection_id)
+            member_ids.add(member.connection_member_id)
+            refs.extend(
+                [
+                    self._ref("ConnectionPoint", member.point_a_id),
+                    self._ref("ConnectionPoint", member.point_b_id),
+                    self._ref("Connection", member.connection_id),
+                    self._ref("ConnectionMember", member.connection_member_id),
+                ]
+            )
+        return TopologyProjectionEdge(
+            id=f"l1-physical-link:{pair[0]}:{pair[1]}",
+            from_node_id=self._physical_node_id(pair[0]),
+            to_node_id=self._physical_node_id(pair[1]),
+            kind="L1_PHYSICAL_LINK",
+            aggregate=True,
+            source_refs=self._dedupe_refs(refs),
+            attributes={
+                "directed": False,
+                "supporting_connection_count": len(connection_ids),
+                "supporting_member_pair_count": len(member_ids),
+            },
+            status="CONFIGURED",
+        )
     def _physical_candidates(
         self, owner: NetworkInterfacePhysicalOwnerRecord
     ) -> tuple[_PhysicalCandidate, ...]:
@@ -410,6 +568,10 @@ class ConfiguredTopologyProjectionResolver:
     @staticmethod
     def _node_id(physical_object_id: uuid.UUID) -> str:
         return f"l2-device:{physical_object_id}"
+
+    @staticmethod
+    def _physical_node_id(physical_object_id: uuid.UUID) -> str:
+        return f"l1-physical-object:{physical_object_id}"
 
     @staticmethod
     def _ref(entity_type: str, entity_id: uuid.UUID) -> ProjectionSourceRef:

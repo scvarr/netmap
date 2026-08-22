@@ -42,7 +42,7 @@ class TopologyProjectionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     layer: Literal["L1", "L2", "L3"]
-    detail_level: Literal["DEVICE"]
+    detail_level: Literal["DEVICE", "PHYSICAL_OBJECT"]
     scope: TopologyProjectionScope
     grouping: dict[str, Any] | None = None
     filters: dict[str, Any] | None = None
@@ -77,7 +77,7 @@ class TopologyProjectionDocument(BaseModel):
 
     schema_version: Literal["1.0"] = "1.0"
     layer: Literal["L1", "L2", "L3"]
-    detail_level: Literal["DEVICE"]
+    detail_level: Literal["DEVICE", "PHYSICAL_OBJECT"]
     nodes: list[TopologyProjectionNode]
     edges: list[TopologyProjectionEdge]
     gaps: list[str]

@@ -48,6 +48,14 @@ const EdgeCounts = ({ edge }: { edge: TopologyProjectionEdge }) => (
   </span>
 );
 
+const PhysicalEdgeCounts = ({ edge }: { edge: TopologyProjectionEdge }) => (
+  <span className="neighbor-link__counts">
+    Соединений: {displayCount(numericAttribute(edge, 'supporting_connection_count'))}
+    {' · '}
+    Пар members: {displayCount(numericAttribute(edge, 'supporting_member_pair_count'))}
+  </span>
+);
+
 const TechnicalDetails = ({ selection }: { selection: Exclude<TopologySelection, null> }) => {
   const item = selection.item;
   return (
@@ -128,6 +136,44 @@ export function Inspector({
       return neighbor ? [{ edge, neighbor }] : [];
     });
 
+    if (document?.layer === 'L1' && document.detail_level === 'PHYSICAL_OBJECT') {
+      return (
+        <aside className="inspector" aria-label="Инспектор">
+          <button className="inspector__close" onClick={onClose} aria-label="Закрыть инспектор">×</button>
+          <span className="eyebrow">Физический объект</span>
+          <h2>{displayNodeLabel(node)}</h2>
+          <p className="inspector__status"><i /> {displayStatus(node.status)}</p>
+          <div className="inspector__facts">
+            <Metric
+              label="Точек подключения"
+              value={displayCount(numericAttribute(node, 'connection_point_count'))}
+            />
+            <Metric
+              label="Owned interfaces"
+              value={displayCount(numericAttribute(node, 'owned_interface_count'))}
+            />
+            <Metric label="Физических связей" value={String(incidentEdges.length)} />
+          </div>
+          <section>
+            <h3>Соседние физические объекты <span>{neighbors.length}</span></h3>
+            {neighbors.length ? (
+              <ul className="neighbor-list">
+                {neighbors.map(({ edge, neighbor }) => (
+                  <li key={edge.id}>
+                    <button onClick={() => onSelectNode(neighbor)}>
+                      <strong>{displayNodeLabel(neighbor)}</strong>
+                      <PhysicalEdgeCounts edge={edge} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="muted">В текущей физической проекции соседей нет.</p>}
+          </section>
+          <TechnicalDetails selection={selection} />
+        </aside>
+      );
+    }
+
     return (
       <aside className="inspector" aria-label="Инспектор">
         <button className="inspector__close" onClick={onClose} aria-label="Закрыть инспектор">×</button>
@@ -176,6 +222,40 @@ export function Inspector({
   const target = nodesById.get(edge.to_node_id);
   const sourceLabel = source ? displayNodeLabel(source) : 'Неизвестное устройство';
   const targetLabel = target ? displayNodeLabel(target) : 'Неизвестное устройство';
+
+  if (document?.layer === 'L1' && document.detail_level === 'PHYSICAL_OBJECT') {
+    return (
+      <aside className="inspector" aria-label="Инспектор">
+        <button className="inspector__close" onClick={onClose} aria-label="Закрыть инспектор">×</button>
+        <span className="eyebrow">Физическая связь</span>
+        <h2>{sourceLabel} ↔ {targetLabel}</h2>
+        <p className="inspector__status"><i /> {displayStatus(edge.status)}</p>
+        <div className="inspector__facts">
+          <Metric
+            label="Соединений"
+            value={displayCount(numericAttribute(edge, 'supporting_connection_count'))}
+          />
+          <Metric
+            label="Пар members"
+            value={displayCount(numericAttribute(edge, 'supporting_member_pair_count'))}
+          />
+          <Metric label="Агрегированная" value={edge.aggregate ? 'Да' : 'Нет'} />
+        </div>
+        <p className="aggregate-explanation">
+          Эта линия агрегирует canonical Connection/ConnectionMember между физическими объектами.
+        </p>
+        <section className="edge-endpoints">
+          <h3>Физические объекты</h3>
+          <div>
+            {source && <button onClick={() => onSelectNode(source)}>{sourceLabel}</button>}
+            <span aria-hidden="true">↔</span>
+            {target && <button onClick={() => onSelectNode(target)}>{targetLabel}</button>}
+          </div>
+        </section>
+        <TechnicalDetails selection={selection} />
+      </aside>
+    );
+  }
 
   return (
     <aside className="inspector" aria-label="Инспектор">

@@ -116,6 +116,16 @@ class ConnectionPointRecord:
 
 
 @dataclass(frozen=True)
+class PhysicalConnectionMemberRecord:
+    connection_id: uuid.UUID
+    connection_member_id: uuid.UUID
+    point_a_id: uuid.UUID
+    point_b_id: uuid.UUID
+    object_a_id: uuid.UUID
+    object_b_id: uuid.UUID
+
+
+@dataclass(frozen=True)
 class RealizationRecord:
     realization_id: uuid.UUID
     upper_interface_id: uuid.UUID
@@ -1280,6 +1290,76 @@ class CanonicalRepository:
                 {"physical_object_ids": [str(value) for value in missing]},
             )
         return unique_ids
+
+    def get_physical_object_ids(self) -> tuple[uuid.UUID, ...]:
+        return tuple(
+            self.session.scalars(select(PhysicalObject.id).order_by(PhysicalObject.id))
+        )
+
+    def get_all_connection_point_records(self) -> tuple[ConnectionPointRecord, ...]:
+        point_ids = tuple(
+            self.session.scalars(select(ConnectionPoint.id).order_by(ConnectionPoint.id))
+        )
+        records = self.get_connection_point_records(list(point_ids))
+        return tuple(records[point_id] for point_id in point_ids)
+
+    def get_physical_connection_member_records(
+        self,
+    ) -> tuple[PhysicalConnectionMemberRecord, ...]:
+        point_a = aliased(ConnectionPoint)
+        point_b = aliased(ConnectionPoint)
+        member_counts = (
+            select(
+                ConnectionMember.connection_id,
+                func.count(ConnectionMember.id).label("member_count"),
+            )
+            .group_by(ConnectionMember.connection_id)
+            .subquery()
+        )
+        rows = self.session.execute(
+            select(
+                Connection,
+                ConnectionMember,
+                point_a,
+                point_b,
+                member_counts.c.member_count,
+            )
+            .join(ConnectionMember, ConnectionMember.connection_id == Connection.id)
+            .join(member_counts, member_counts.c.connection_id == Connection.id)
+            .join(point_a, point_a.id == Connection.point_a_id)
+            .join(point_b, point_b.id == Connection.point_b_id)
+            .order_by(Connection.id, ConnectionMember.index, ConnectionMember.id)
+        ).all()
+        records: list[PhysicalConnectionMemberRecord] = []
+        for connection, member, a_point, b_point, member_count in rows:
+            if connection.cardinality != member_count:
+                raise ModelError(
+                    "Connection cardinality does not equal its ConnectionMember count",
+                    {
+                        "connection_id": str(connection.id),
+                        "cardinality": connection.cardinality,
+                        "member_count": member_count,
+                    },
+                )
+            if (
+                member.point_a_member > a_point.cardinality
+                or member.point_b_member > b_point.cardinality
+            ):
+                raise ModelError(
+                    "ConnectionMember refers to a member above ConnectionPoint cardinality",
+                    {"connection_member_id": str(member.id)},
+                )
+            records.append(
+                PhysicalConnectionMemberRecord(
+                    connection_id=connection.id,
+                    connection_member_id=member.id,
+                    point_a_id=a_point.id,
+                    point_b_id=b_point.id,
+                    object_a_id=a_point.physical_object_id,
+                    object_b_id=b_point.physical_object_id,
+                )
+            )
+        return tuple(records)
 
     def get_network_interface_physical_owners(
         self, interface_ids: list[uuid.UUID] | None = None

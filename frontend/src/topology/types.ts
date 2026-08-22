@@ -1,5 +1,5 @@
 export type TopologyLayer = 'L1' | 'L2' | 'L3';
-export type TopologyDetailLevel = 'DEVICE';
+export type TopologyDetailLevel = 'DEVICE' | 'PHYSICAL_OBJECT';
 
 export interface ProjectionSourceRef {
   ref_type: string;

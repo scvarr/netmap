@@ -47,6 +47,9 @@ button { font: inherit; }
 .health--checking i { animation: pulse 1s infinite alternate; }
 
 .workspace { height: calc(100vh - 72px); padding: 24px 28px 28px; display: flex; flex-direction: column; gap: 14px; }
+.topology-mode-switch { display: inline-flex; align-self: flex-start; padding: 3px; border: 1px solid #253d42; border-radius: 8px; background: #091416; }
+.topology-mode-switch button { padding: 7px 13px; border: 0; border-radius: 6px; color: #829697; background: transparent; cursor: pointer; font-size: 10px; font-weight: 700; }
+.topology-mode-switch button[aria-pressed="true"] { color: #dff7ef; background: #183c34; }
 .workspace__heading { display: flex; align-items: flex-end; justify-content: space-between; }
 .workspace h1 { margin: 5px 0 0; font-size: clamp(24px, 2.2vw, 34px); letter-spacing: -.045em; }
 .workspace__heading-actions { display: flex; align-items: center; gap: 20px; }
@@ -80,6 +83,8 @@ button { font: inherit; }
   box-shadow: 0 12px 30px rgba(0, 0, 0, .22); transition: border-color .15s, box-shadow .15s, transform .15s;
 }
 .device-node:hover, .device-node--selected { border-color: #55e5b5; box-shadow: 0 0 0 2px rgba(85, 229, 181, .12), 0 14px 32px rgba(0, 0, 0, .3); transform: translateY(-2px); }
+.device-node--physical { border-color: #5d7188; background: linear-gradient(145deg, #162532, #0d171e); }
+.device-node--physical .device-node__kind { color: #9ebbd4; }
 .device-node__kind { color: #668387; font: 700 9px ui-monospace, "Cascadia Code", monospace; letter-spacing: .09em; }
 .device-node strong { font: 700 17px ui-monospace, "Cascadia Code", monospace; letter-spacing: -.04em; }
 .device-node__role { color: #8da1a2; font-size: 10px; }

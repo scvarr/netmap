@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { HealthIndicator } from './components/HealthIndicator';
 import { Inspector } from './components/Inspector';
@@ -16,11 +16,27 @@ import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
 import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
 import type { PhysicalLinkWriteDataSource } from './topology/physicalLinkWriteTypes';
 
-const DEFAULT_REQUEST: TopologyProjectionRequest = {
+const LOGICAL_REQUEST: TopologyProjectionRequest = {
   layer: 'L2',
   detail_level: 'DEVICE',
   scope: { include_location_subtrees: [], include_entities: [] },
 };
+
+const PHYSICAL_REQUEST: TopologyProjectionRequest = {
+  layer: 'L1',
+  detail_level: 'PHYSICAL_OBJECT',
+  scope: { include_location_subtrees: [], include_entities: [] },
+};
+
+type TopologyViewMode = 'logical' | 'physical';
+
+const physicalObjectId = (selection: TopologySelection): string | null => (
+  selection?.type === 'node'
+    ? selection.item.source_refs.find((ref) => (
+      ref.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'PhysicalObject'
+    ))?.entity_id ?? null
+    : null
+);
 
 interface AppProps {
   dataSource: TopologyDataSource;
@@ -42,12 +58,20 @@ export function App({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [reloadKey, setReloadKey] = useState(0);
+  const [viewMode, setViewMode] = useState<TopologyViewMode>('logical');
+  const selectionToPreserve = useRef<string | null | undefined>(undefined);
+  const loadSequence = useRef(0);
 
-  const load = useCallback(async (selectPhysicalObjectId?: string) => {
+  const load = useCallback(async (
+    request: TopologyProjectionRequest,
+    selectPhysicalObjectId?: string,
+  ) => {
+    const sequence = ++loadSequence.current;
     setLoading(true);
     setError(null);
     try {
-      const nextDocument = await dataSource.loadProjection(DEFAULT_REQUEST);
+      const nextDocument = await dataSource.loadProjection(request);
+      if (sequence !== loadSequence.current) return;
       setDocument(nextDocument);
       if (selectPhysicalObjectId) {
         const matches = nextDocument.nodes.filter((node) => node.source_refs.some((ref) => (
@@ -58,14 +82,20 @@ export function App({
         setSelection(matches.length === 1 ? { type: 'node', item: matches[0] } : null);
       }
     } catch (reason) {
+      if (sequence !== loadSequence.current) return;
       setDocument(null);
+      setSelection(null);
       setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
   }, [dataSource]);
 
-  useEffect(() => { void load(); }, [load, reloadKey]);
+  useEffect(() => {
+    const preserveId = selectionToPreserve.current;
+    selectionToPreserve.current = undefined;
+    void load(viewMode === 'logical' ? LOGICAL_REQUEST : PHYSICAL_REQUEST, preserveId ?? undefined);
+  }, [load, reloadKey, viewMode]);
 
   const isEmpty = document !== null && document.nodes.length === 0;
 
@@ -84,18 +114,52 @@ export function App({
       </header>
 
       <section className="workspace">
+        <div className="topology-mode-switch" role="group" aria-label="Режим карты">
+          <button
+            type="button"
+            aria-pressed={viewMode === 'logical'}
+            onClick={() => {
+              if (viewMode === 'logical') return;
+              selectionToPreserve.current = physicalObjectId(selection);
+              if (!selectionToPreserve.current) setSelection(null);
+              setViewMode('logical');
+            }}
+          >
+            Логическая
+          </button>
+          <button
+            type="button"
+            aria-pressed={viewMode === 'physical'}
+            onClick={() => {
+              if (viewMode === 'physical') return;
+              selectionToPreserve.current = physicalObjectId(selection);
+              if (!selectionToPreserve.current) setSelection(null);
+              setViewMode('physical');
+            }}
+          >
+            Физическая
+          </button>
+        </div>
         <div className="workspace__heading">
-          <div><span className="eyebrow">L2 · Device view</span><h1>Логическая топология</h1></div>
+          <div>
+            <span className="eyebrow">
+              {viewMode === 'logical' ? 'L2 · Device view' : 'L1 · Physical object view'}
+            </span>
+            <h1>{viewMode === 'logical' ? 'Логическая топология' : 'Физическая топология'}</h1>
+          </div>
           <div className="workspace__heading-actions">
             <div className="workspace__stats">
-              <span><strong>{document?.nodes.length ?? '—'}</strong> устройств</span>
+              <span>
+                <strong>{document?.nodes.length ?? '—'}</strong>
+                {viewMode === 'logical' ? ' устройств' : ' объектов'}
+              </span>
               <span><strong>{document?.edges.length ?? '—'}</strong> связей</span>
             </div>
-            {deviceWriteDataSource && (
+            {viewMode === 'logical' && deviceWriteDataSource && (
               <CreateNetworkDevice
                 dataSource={deviceWriteDataSource}
                 onCreated={(created) => {
-                  void load(created.device.source_ref.entity_id);
+                  void load(LOGICAL_REQUEST, created.device.source_ref.entity_id);
                 }}
               />
             )}
@@ -126,10 +190,10 @@ export function App({
             document={document}
             selection={selection}
             deviceDetailsDataSource={deviceDetailsDataSource}
-            deviceInterfaceWriteDataSource={deviceInterfaceWriteDataSource}
-            onInterfaceCreated={(physicalObjectId) => { void load(physicalObjectId); }}
-            physicalLinkWriteDataSource={physicalLinkWriteDataSource}
-            onPhysicalLinkCreated={(physicalObjectId) => { void load(physicalObjectId); }}
+            deviceInterfaceWriteDataSource={viewMode === 'logical' ? deviceInterfaceWriteDataSource : undefined}
+            onInterfaceCreated={(id) => { void load(LOGICAL_REQUEST, id); }}
+            physicalLinkWriteDataSource={viewMode === 'logical' ? physicalLinkWriteDataSource : undefined}
+            onPhysicalLinkCreated={(id) => { void load(LOGICAL_REQUEST, id); }}
             onSelectNode={(node) => setSelection({ type: 'node', item: node })}
             onClose={() => setSelection(null)}
           />

@@ -17,7 +17,9 @@ export const displayNodeLabel = (node: TopologyProjectionNode): string => {
     (sourceRef) => sourceRef.entity_type === 'PhysicalObject',
   );
   const identifier = physicalObjectRef?.entity_id ?? technicalMatch?.[1] ?? node.id;
-  return `Устройство ${shortId(identifier)}`;
+  return node.kind === 'PHYSICAL_OBJECT'
+    ? `Объект ${shortId(identifier)}`
+    : `Устройство ${shortId(identifier)}`;
 };
 
 export const displayStatus = (status?: string): string => ({

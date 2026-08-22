@@ -442,4 +442,71 @@ describe('App projection states', () => {
       cable_display_name: 'CORE-FW-01',
     });
   });
+
+  it('switches logical and physical requests while preserving only canonical counterparts', async () => {
+    const coreRef = {
+      ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'po-core',
+    };
+    const firewallRef = {
+      ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'po-fw',
+    };
+    const cableRef = {
+      ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'po-cable',
+    };
+    const logical: TopologyProjectionDocument = {
+      ...document,
+      nodes: [{
+        id: 'l2-core', kind: 'NETWORK_DEVICE', label: 'CORE', source_refs: [coreRef],
+        attributes: { owned_interface_count: 1 }, status: 'CONFIGURED',
+      }, {
+        id: 'l2-fw', kind: 'NETWORK_DEVICE', label: 'FW', source_refs: [firewallRef],
+        attributes: { owned_interface_count: 1 }, status: 'CONFIGURED',
+      }],
+      edges: [],
+    };
+    const physical: TopologyProjectionDocument = {
+      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
+      nodes: [{
+        id: 'l1-core', kind: 'PHYSICAL_OBJECT', label: 'CORE', source_refs: [coreRef],
+        attributes: { connection_point_count: 1, owned_interface_count: 1 }, status: 'CONFIGURED',
+      }, {
+        id: 'l1-cable', kind: 'PHYSICAL_OBJECT', label: 'CORE-FW-01', source_refs: [cableRef],
+        attributes: { connection_point_count: 2, owned_interface_count: 0 }, status: 'CONFIGURED',
+      }, {
+        id: 'l1-fw', kind: 'PHYSICAL_OBJECT', label: 'FW', source_refs: [firewallRef],
+        attributes: { connection_point_count: 1, owned_interface_count: 1 }, status: 'CONFIGURED',
+      }],
+      edges: [], gaps: [], warnings: [],
+    };
+    const loadProjection = vi.fn((request) => Promise.resolve(
+      request.layer === 'L1' ? physical : logical,
+    ));
+    const detailsSource: DeviceDetailsDataSource = {
+      loadDeviceDetails: vi.fn().mockResolvedValue({
+        schema_version: '1.0', device: { source_ref: coreRef, label: 'CORE' },
+        interfaces: [], gaps: [], warnings: [],
+      }),
+    };
+    render(<App dataSource={{ loadProjection }} deviceDetailsDataSource={detailsSource} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать узел' }));
+    expect(screen.getByRole('heading', { name: 'CORE' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Физическая' }));
+
+    expect(await screen.findByRole('heading', { name: 'Физическая топология' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'CORE' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Интерфейсы' })).not.toBeInTheDocument();
+    expect(loadProjection).toHaveBeenNthCalledWith(2, {
+      layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
+      scope: { include_location_subtrees: [], include_entities: [] },
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Выбрать CORE-B' }));
+    expect(screen.getByRole('heading', { name: 'CORE-FW-01' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Логическая' }));
+
+    expect(await screen.findByRole('heading', { name: 'Логическая топология' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Инспектор' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'CORE-FW-01' })).not.toBeInTheDocument();
+  });
 });
