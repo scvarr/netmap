@@ -19,6 +19,7 @@ import { DeviceInterfacesSection } from './DeviceInterfacesSection';
 import type { PhysicalObjectDetailsDataSource } from '../topology/physicalObjectDetailsTypes';
 import type { PhysicalObjectClassWriteDataSource } from '../topology/physicalObjectClassWriteTypes';
 import { PhysicalObjectDetailsSection } from './PhysicalObjectDetailsSection';
+import type { ConnectionPointWriteDataSource } from '../topology/connectionPointWriteTypes';
 
 interface InspectorProps {
   document: TopologyProjectionDocument | null;
@@ -30,8 +31,10 @@ interface InspectorProps {
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   physicalObjectClassWriteDataSource?: PhysicalObjectClassWriteDataSource;
   physicalEndpointConnectionWriteDataSource?: PhysicalEndpointConnectionWriteDataSource;
+  connectionPointWriteDataSource?: ConnectionPointWriteDataSource;
   onPhysicalEndpointConnected?: (physicalObjectId: string) => void;
   onPhysicalObjectClassUpdated?: (physicalObjectId: string) => void;
+  onConnectionPointCreated?: (physicalObjectId: string) => void;
   onPhysicalLinkCreated?: (physicalObjectId: string) => void;
   onSelectNode: (node: TopologyProjectionNode) => void;
   onClose: () => void;
@@ -121,8 +124,10 @@ export function Inspector({
   physicalObjectDetailsDataSource,
   physicalObjectClassWriteDataSource,
   physicalEndpointConnectionWriteDataSource,
+  connectionPointWriteDataSource,
   onPhysicalEndpointConnected,
   onPhysicalObjectClassUpdated,
+  onConnectionPointCreated,
   onPhysicalLinkCreated,
   onSelectNode,
   onClose,
@@ -192,6 +197,7 @@ export function Inspector({
               deviceDetailsDataSource={deviceDetailsDataSource}
               writeDataSource={physicalEndpointConnectionWriteDataSource}
               classWriteDataSource={physicalObjectClassWriteDataSource}
+              connectionPointWriteDataSource={connectionPointWriteDataSource}
               onConnected={() => {
                 const id = node.source_refs.find((ref) => (
                   ref.ref_type === 'CANONICAL_FACT'
@@ -205,6 +211,13 @@ export function Inspector({
                   && ref.entity_type === 'PhysicalObject'
                 ))?.entity_id;
                 if (id) onPhysicalObjectClassUpdated?.(id);
+              }}
+              onConnectionPointCreated={() => {
+                const id = node.source_refs.find((ref) => (
+                  ref.ref_type === 'CANONICAL_FACT'
+                  && ref.entity_type === 'PhysicalObject'
+                ))?.entity_id;
+                if (id) onConnectionPointCreated?.(id);
               }}
             />
           )}

@@ -412,3 +412,19 @@ connectivity. `PUT /v1/topology/physical-objects/{id}/class` идемпотен�
 значение; create physical object принимает optional `class`, а новые cable
 objects из W.3/W.6 получают explicit `class=cable`. Отсутствующий class остаётся
 валидным и существующие объекты автоматически не классифицируются.
+
+## W.7 — добавление ConnectionPoint
+
+**FIXED**
+
+```text
+POST /v1/topology/physical-objects/{physical_object_id}/connection-points
+    display_name
+    -> 201 PhysicalObjectDetailsDocument
+```
+
+Одна transaction создаёт только owning `ConnectionPoint` с `cardinality=1` и
+его `alias.display`. Совпадающие display names разрешены; operation не создаёт
+`Connection`, cable, interface/binding или L2/L3/IP facts. UI после success
+использует authoritative details response, заново загружает L1 projection и
+сохраняет выбранным тот же canonical `PhysicalObject`.

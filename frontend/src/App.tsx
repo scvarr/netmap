@@ -21,6 +21,7 @@ import type { PhysicalObjectDetailsDataSource } from './topology/physicalObjectD
 import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
 import type { PhysicalObjectClassWriteDataSource } from './topology/physicalObjectClassWriteTypes';
 import type { TopologyLayoutStore } from './topology/layoutStore';
+import type { ConnectionPointWriteDataSource } from './topology/connectionPointWriteTypes';
 
 const LOGICAL_REQUEST: TopologyProjectionRequest = {
   layer: 'L2',
@@ -54,6 +55,7 @@ interface AppProps {
   physicalEndpointConnectionWriteDataSource?: PhysicalEndpointConnectionWriteDataSource;
   physicalObjectWriteDataSource?: PhysicalObjectWriteDataSource;
   physicalObjectClassWriteDataSource?: PhysicalObjectClassWriteDataSource;
+  connectionPointWriteDataSource?: ConnectionPointWriteDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
 }
 
@@ -67,6 +69,7 @@ export function App({
   physicalEndpointConnectionWriteDataSource,
   physicalObjectWriteDataSource,
   physicalObjectClassWriteDataSource,
+  connectionPointWriteDataSource,
   topologyLayoutStore,
 }: AppProps) {
   const [document, setDocument] = useState<TopologyProjectionDocument | null>(null);
@@ -232,8 +235,12 @@ export function App({
             physicalEndpointConnectionWriteDataSource={viewMode === 'physical'
               ? physicalEndpointConnectionWriteDataSource
               : undefined}
+            connectionPointWriteDataSource={viewMode === 'physical'
+              ? connectionPointWriteDataSource
+              : undefined}
             onPhysicalEndpointConnected={(id) => { void load(PHYSICAL_REQUEST, id); }}
             onPhysicalObjectClassUpdated={(id) => { void load(PHYSICAL_REQUEST, id); }}
+            onConnectionPointCreated={(id) => { void load(PHYSICAL_REQUEST, id); }}
             onPhysicalLinkCreated={(id) => { void load(LOGICAL_REQUEST, id); }}
             onSelectNode={(node) => setSelection({ type: 'node', item: node })}
             onClose={() => setSelection(null)}

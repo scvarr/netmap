@@ -37,6 +37,7 @@ from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolve
 from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
+    CreateConnectionPointRequest,
     CreateDeviceInterfaceRequest,
     CreateNetworkDeviceRequest,
     CreatePhysicalEndpointConnectionRequest,
@@ -207,6 +208,28 @@ def create_physical_object(
         return ConfiguredPhysicalObjectDetailsResolver(
             CanonicalRepository(session)
         ).resolve(created.physical_object_id)
+
+
+@app.post(
+    "/v1/topology/physical-objects/{physical_object_id}/connection-points",
+    response_model=PhysicalObjectDetailsDocument,
+    response_model_exclude_none=True,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def create_connection_point(
+    physical_object_id: uuid.UUID,
+    query: CreateConnectionPointRequest,
+    session: Session = Depends(get_session),
+) -> PhysicalObjectDetailsDocument:
+    with session.begin():
+        DeviceCatalog(session).create_connection_point(
+            physical_object_id,
+            query.display_name,
+        )
+        return ConfiguredPhysicalObjectDetailsResolver(
+            CanonicalRepository(session)
+        ).resolve(physical_object_id)
 
 
 @app.post(

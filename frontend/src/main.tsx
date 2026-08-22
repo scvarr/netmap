@@ -11,6 +11,7 @@ import { ApiPhysicalObjectWriteDataSource } from './topology/apiPhysicalObjectWr
 import { ApiPhysicalEndpointConnectionWriteDataSource } from './topology/apiPhysicalEndpointConnectionWriteDataSource';
 import { ApiPhysicalObjectClassWriteDataSource } from './topology/apiPhysicalObjectClassWriteDataSource';
 import { BrowserTopologyLayoutStore } from './topology/layoutStore';
+import { ApiConnectionPointWriteDataSource } from './topology/apiConnectionPointWriteDataSource';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -25,6 +26,7 @@ createRoot(document.getElementById('root')!).render(
       physicalObjectWriteDataSource={new ApiPhysicalObjectWriteDataSource()}
       physicalEndpointConnectionWriteDataSource={new ApiPhysicalEndpointConnectionWriteDataSource()}
       physicalObjectClassWriteDataSource={new ApiPhysicalObjectClassWriteDataSource()}
+      connectionPointWriteDataSource={new ApiConnectionPointWriteDataSource()}
       topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
     />
   </StrictMode>,

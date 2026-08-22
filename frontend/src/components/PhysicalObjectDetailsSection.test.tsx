@@ -161,4 +161,42 @@ describe('PhysicalObjectDetailsSection', () => {
     expect(await screen.findByText('КОММУТАТОР')).toBeInTheDocument();
     expect(onClassUpdated).toHaveBeenCalledTimes(1);
   });
+
+  it('adds a point from the authoritative response and requests projection refresh', async () => {
+    const initial = details('object-a');
+    const updated = {
+      ...initial,
+      connection_points: [...initial.connection_points, {
+        connection_point_ref: {
+          ref_type: 'CANONICAL_FACT' as const,
+          entity_type: 'ConnectionPoint',
+          entity_id: 'object-a-point-3',
+        },
+        label: 'Port02',
+        cardinality: 1,
+        incident_connection_count: 0,
+        direct_interface_binding_count: 0,
+        source_refs: [],
+      }],
+    };
+    const createConnectionPoint = vi.fn().mockResolvedValue(updated);
+    const onConnectionPointCreated = vi.fn();
+    render(
+      <PhysicalObjectDetailsSection
+        node={node('object-a')}
+        dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(initial) }}
+        connectionPointWriteDataSource={{ createConnectionPoint }}
+        onConnectionPointCreated={onConnectionPointCreated}
+      />,
+    );
+
+    await screen.findByRole('heading', { name: 'Порт' });
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить точку' }));
+    await userEvent.type(screen.getByLabelText('Название'), 'Port02');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+
+    expect(await screen.findByRole('heading', { name: 'Port02' })).toBeInTheDocument();
+    expect(createConnectionPoint).toHaveBeenCalledWith('object-a', { display_name: 'Port02' });
+    expect(onConnectionPointCreated).toHaveBeenCalledTimes(1);
+  });
 });

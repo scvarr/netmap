@@ -52,6 +52,12 @@ class CreatedPhysicalObject:
     physical_object_class_id: uuid.UUID | None = None
 
 
+@dataclass(frozen=True)
+class CreatedConnectionPoint:
+    connection_point_id: uuid.UUID
+    connection_point_alias_id: uuid.UUID
+
+
 class DeviceCatalog:
     """Bounded read/write boundary for materialized display aliases."""
 
@@ -143,6 +149,29 @@ class DeviceCatalog:
             physical_object_alias_id=physical_alias.id,
             connection_point_alias_id=point_alias.id,
             physical_object_class_id=(object_class.id if object_class is not None else None),
+        )
+
+    def create_connection_point(
+        self,
+        physical_object_id: uuid.UUID,
+        display_name: str,
+    ) -> CreatedConnectionPoint:
+        if self.session.get(PhysicalObject, physical_object_id) is None:
+            raise ValidationError(
+                "PhysicalObject does not exist",
+                {"physical_object_id": str(physical_object_id)},
+            )
+        point = CanonicalRepository(self.session).add_connection_point(
+            physical_object_id,
+            cardinality=1,
+        )
+        alias = self._add_display_alias(
+            connection_point_id=point.id,
+            value=display_name,
+        )
+        return CreatedConnectionPoint(
+            connection_point_id=point.id,
+            connection_point_alias_id=alias.id,
         )
 
     def physical_object_display_aliases(

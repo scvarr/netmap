@@ -10,6 +10,8 @@ import type { PhysicalObjectClassWriteDataSource } from '../topology/physicalObj
 import type { ProjectionSourceRef, TopologyProjectionNode } from '../topology/types';
 import { physicalClassPresentation } from '../topology/presentation';
 import { ConnectPhysicalEndpoint } from './ConnectPhysicalEndpoint';
+import type { ConnectionPointWriteDataSource } from '../topology/connectionPointWriteTypes';
+import { CreateConnectionPoint } from './CreateConnectionPoint';
 
 interface PhysicalObjectDetailsSectionProps {
   node: TopologyProjectionNode;
@@ -18,8 +20,10 @@ interface PhysicalObjectDetailsSectionProps {
   deviceDetailsDataSource?: DeviceDetailsDataSource;
   writeDataSource?: PhysicalEndpointConnectionWriteDataSource;
   classWriteDataSource?: PhysicalObjectClassWriteDataSource;
+  connectionPointWriteDataSource?: ConnectionPointWriteDataSource;
   onConnected?: () => void;
   onClassUpdated?: () => void;
+  onConnectionPointCreated?: () => void;
 }
 
 type DetailsState =
@@ -182,8 +186,10 @@ export function PhysicalObjectDetailsSection({
   deviceDetailsDataSource,
   writeDataSource,
   classWriteDataSource,
+  connectionPointWriteDataSource,
   onConnected = () => undefined,
   onClassUpdated = () => undefined,
+  onConnectionPointCreated = () => undefined,
 }: PhysicalObjectDetailsSectionProps) {
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
@@ -247,6 +253,16 @@ export function PhysicalObjectDetailsSection({
           <h3 id="connection-points-heading">
             Точки подключения <span>{state.document.connection_points.length}</span>
           </h3>
+          {connectionPointWriteDataSource && physicalObjectId && (
+            <CreateConnectionPoint
+              physicalObjectId={physicalObjectId}
+              dataSource={connectionPointWriteDataSource}
+              onCreated={(document) => {
+                setState({ kind: 'loaded', document });
+                onConnectionPointCreated();
+              }}
+            />
+          )}
           {state.document.connection_points.length ? (
             <div className="connection-point-list">
               {state.document.connection_points.map((point) => (

@@ -23,6 +23,7 @@ import type {
   PhysicalObjectDetailsDocument,
 } from './topology/physicalObjectDetailsTypes';
 import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
+import type { ConnectionPointWriteDataSource } from './topology/connectionPointWriteTypes';
 
 vi.mock('./components/HealthIndicator', () => ({
   HealthIndicator: () => <div>Backend доступен</div>,
@@ -594,5 +595,74 @@ describe('App projection states', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Логическая' }));
     expect(await screen.findByRole('heading', { name: 'Логическая топология' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Розетка 101-1' })).not.toBeInTheDocument();
+  });
+
+  it('creates a connection point, refreshes L1, and preserves the physical object selection', async () => {
+    const objectRef = {
+      ref_type: 'CANONICAL_FACT' as const,
+      entity_type: 'PhysicalObject',
+      entity_id: 'po-pp1',
+    };
+    const initial: PhysicalObjectDetailsDocument = {
+      schema_version: '1.0',
+      physical_object: { source_ref: objectRef, label: 'PP1', class: 'patch_panel' },
+      connection_points: [{
+        connection_point_ref: {
+          ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'port-01',
+        },
+        label: 'Port01', cardinality: 1, incident_connection_count: 0,
+        direct_interface_binding_count: 0, source_refs: [],
+      }],
+      owned_interface_count: 0, gaps: [], warnings: [],
+    };
+    const updated: PhysicalObjectDetailsDocument = {
+      ...initial,
+      connection_points: [...initial.connection_points, {
+        connection_point_ref: {
+          ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'port-02',
+        },
+        label: 'Port02', cardinality: 1, incident_connection_count: 0,
+        direct_interface_binding_count: 0, source_refs: [],
+      }],
+    };
+    const physical = (count: number): TopologyProjectionDocument => ({
+      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
+      nodes: [{
+        id: 'l1-pp1', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [objectRef],
+        attributes: { connection_point_count: count, owned_interface_count: 0 },
+        status: 'CONFIGURED',
+      }],
+      edges: [], gaps: [], warnings: [],
+    });
+    const loadProjection = vi.fn()
+      .mockResolvedValueOnce({ ...document, nodes: [], edges: [] })
+      .mockResolvedValueOnce(physical(1))
+      .mockResolvedValueOnce(physical(2));
+    const loadPhysicalObjectDetails = vi.fn()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValue(updated);
+    const createConnectionPoint = vi.fn().mockResolvedValue(updated);
+    const writeSource: ConnectionPointWriteDataSource = { createConnectionPoint };
+    render(
+      <App
+        dataSource={{ loadProjection }}
+        deviceDetailsDataSource={deviceDetailsDataSource}
+        physicalObjectDetailsDataSource={{ loadPhysicalObjectDetails }}
+        connectionPointWriteDataSource={writeSource}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Физическая' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать узел' }));
+    await screen.findByRole('heading', { name: 'Port01' });
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить точку' }));
+    await userEvent.type(screen.getByLabelText('Название'), 'Port02');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+
+    expect(await screen.findByRole('heading', { name: 'Port02' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'PP1' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Точки подключения 2' })).toBeInTheDocument();
+    expect(createConnectionPoint).toHaveBeenCalledWith('po-pp1', { display_name: 'Port02' });
+    expect(loadProjection).toHaveBeenCalledTimes(3);
   });
 });

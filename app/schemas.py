@@ -190,6 +190,12 @@ class CreatePhysicalObjectConnectionPointRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
 
 
+class CreateConnectionPointRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_name: str = Field(min_length=1, max_length=255)
+
+
 class CreatePhysicalObjectRequest(BaseModel):
     model_config = ConfigDict(
         extra="forbid", str_strip_whitespace=True, populate_by_name=True
