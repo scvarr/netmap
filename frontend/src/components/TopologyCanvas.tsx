@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Background,
   BackgroundVariant,
@@ -10,7 +10,13 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { toFlowProjection, type DeviceFlowNode, type LogicalFlowEdge } from '../topology/layout';
+import {
+  toFlowProjection,
+  type DeviceFlowNode,
+  type FlowProjection,
+  type LogicalFlowEdge,
+  type TopologyLayoutEngine,
+} from '../topology/layout';
 import type { TopologyProjectionDocument, TopologySelection } from '../topology/types';
 import { DeviceNode } from './DeviceNode';
 
@@ -18,19 +24,49 @@ interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
   selection: TopologySelection;
   onSelectionChange: (selection: TopologySelection) => void;
+  layoutEngine?: TopologyLayoutEngine;
 }
 
 const nodeTypes = { device: DeviceNode };
 
-export function TopologyCanvas({ document, selection, onSelectionChange }: TopologyCanvasProps) {
-  const projection = useMemo(() => toFlowProjection(document), [document]);
+export function TopologyCanvas({
+  document,
+  selection,
+  onSelectionChange,
+  layoutEngine = toFlowProjection,
+}: TopologyCanvasProps) {
+  const [projection, setProjection] = useState<FlowProjection | null>(null);
+  const [layoutError, setLayoutError] = useState<string | null>(null);
   const { fitView } = useReactFlow();
   const selectedNodeId = selection?.type === 'node' ? selection.item.id : null;
 
   useEffect(() => {
-    if (!selectedNodeId || !projection.nodes.some((node) => node.id === selectedNodeId)) return;
+    let current = true;
+    setProjection(null);
+    setLayoutError(null);
+    void layoutEngine(document).then(
+      (nextProjection) => {
+        if (current) setProjection(nextProjection);
+      },
+      (reason: unknown) => {
+        if (!current) return;
+        setLayoutError(reason instanceof Error ? reason.message : 'Не удалось расположить топологию');
+      },
+    );
+    return () => { current = false; };
+  }, [document, layoutEngine]);
+
+  useEffect(() => {
+    if (!projection || !selectedNodeId || !projection.nodes.some((node) => node.id === selectedNodeId)) return;
     void fitView({ nodes: [{ id: selectedNodeId }], duration: 300, maxZoom: 1.1, padding: 0.8 });
-  }, [fitView, projection.nodes, selectedNodeId]);
+  }, [fitView, projection, selectedNodeId]);
+
+  if (layoutError) {
+    return <div className="topology-layout-state" role="alert">{layoutError}</div>;
+  }
+  if (!projection) {
+    return <div className="topology-layout-state" role="status">Располагаем топологию…</div>;
+  }
 
   const nodes = projection.nodes.map((node) => ({
     ...node,
@@ -79,6 +115,7 @@ export function TopologyCanvas({ document, selection, onSelectionChange }: Topol
         <MiniMap
           pannable
           zoomable
+          position="top-right"
           nodeColor="#183b3b"
           maskColor="rgba(5, 13, 15, 0.72)"
           ariaLabel="Мини-карта"

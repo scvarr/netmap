@@ -76,6 +76,7 @@ button { font: inherit; }
 .canvas-panel, .inspector { border: 1px solid #203135; border-radius: 14px; background: #0a1518; overflow: hidden; }
 .canvas-panel { position: relative; min-height: 420px; }
 .topology-canvas { width: 100%; height: 100%; }
+.topology-layout-state { width: 100%; height: 100%; display: grid; place-items: center; color: #7f9495; font-size: 12px; }
 
 .device-node {
   width: 178px; min-height: 112px; padding: 15px 16px; display: flex; flex-direction: column; gap: 5px;
