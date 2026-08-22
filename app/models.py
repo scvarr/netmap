@@ -126,7 +126,7 @@ class EntityMetadata(Base):
     __tablename__ = "entity_metadata"
     __table_args__ = (
         CheckConstraint(
-            "(physical_object_id IS NOT NULL) <> (network_interface_id IS NOT NULL)",
+            "num_nonnulls(physical_object_id, network_interface_id, connection_point_id) = 1",
             name="exactly_one_entity",
         ),
         CheckConstraint("key = 'alias.display'", name="display_alias_only"),
@@ -137,6 +137,9 @@ class EntityMetadata(Base):
         UniqueConstraint(
             "network_interface_id", "key", name="uq_entity_metadata_network_interface_key"
         ),
+        UniqueConstraint(
+            "connection_point_id", "key", name="uq_entity_metadata_connection_point_key"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -145,6 +148,9 @@ class EntityMetadata(Base):
     )
     network_interface_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("network_interfaces.id", ondelete="CASCADE"), nullable=True
+    )
+    connection_point_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("connection_points.id", ondelete="CASCADE"), nullable=True
     )
     key: Mapped[str] = mapped_column(String(64), nullable=False)
     value: Mapped[str] = mapped_column(String(255), nullable=False)

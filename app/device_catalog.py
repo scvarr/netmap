@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.errors import ValidationError
-from app.models import EntityMetadata, NetworkInterface, PhysicalObject
+from app.models import ConnectionPoint, EntityMetadata, NetworkInterface, PhysicalObject
 from app.repository import CanonicalRepository
 
 
@@ -35,8 +35,16 @@ class CreatedDeviceInterface:
     network_interface_alias_id: uuid.UUID
 
 
+@dataclass(frozen=True)
+class CreatedPhysicalObject:
+    physical_object_id: uuid.UUID
+    connection_point_id: uuid.UUID
+    physical_object_alias_id: uuid.UUID
+    connection_point_alias_id: uuid.UUID
+
+
 class DeviceCatalog:
-    """Bounded read/write boundary for device and interface display aliases."""
+    """Bounded read/write boundary for materialized display aliases."""
 
     def __init__(self, session: Session) -> None:
         self.session = session
@@ -95,6 +103,32 @@ class DeviceCatalog:
             network_interface_alias_id=interface_alias.id,
         )
 
+    def create_physical_object(
+        self,
+        display_name: str,
+        connection_point_display_name: str,
+    ) -> CreatedPhysicalObject:
+        repository = CanonicalRepository(self.session)
+        physical_object = repository.add_physical_object()
+        physical_alias = self._add_display_alias(
+            physical_object_id=physical_object.id,
+            value=display_name,
+        )
+        connection_point = repository.add_connection_point(
+            physical_object.id,
+            cardinality=1,
+        )
+        point_alias = self._add_display_alias(
+            connection_point_id=connection_point.id,
+            value=connection_point_display_name,
+        )
+        return CreatedPhysicalObject(
+            physical_object_id=physical_object.id,
+            connection_point_id=connection_point.id,
+            physical_object_alias_id=physical_alias.id,
+            connection_point_alias_id=point_alias.id,
+        )
+
     def physical_object_display_aliases(
         self, entity_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, DisplayAliasRecord]:
@@ -105,16 +139,23 @@ class DeviceCatalog:
     ) -> dict[uuid.UUID, DisplayAliasRecord]:
         return self._display_aliases(NetworkInterface, entity_ids)
 
+    def connection_point_display_aliases(
+        self, entity_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, DisplayAliasRecord]:
+        return self._display_aliases(ConnectionPoint, entity_ids)
+
     def _add_display_alias(
         self,
         *,
         value: str,
         physical_object_id: uuid.UUID | None = None,
         network_interface_id: uuid.UUID | None = None,
+        connection_point_id: uuid.UUID | None = None,
     ) -> EntityMetadata:
         alias = EntityMetadata(
             physical_object_id=physical_object_id,
             network_interface_id=network_interface_id,
+            connection_point_id=connection_point_id,
             key=DISPLAY_ALIAS_KEY,
             value=value,
         )
@@ -124,17 +165,17 @@ class DeviceCatalog:
 
     def _display_aliases(
         self,
-        entity_type: type[PhysicalObject] | type[NetworkInterface],
+        entity_type: type[PhysicalObject] | type[NetworkInterface] | type[ConnectionPoint],
         entity_ids: list[uuid.UUID],
     ) -> dict[uuid.UUID, DisplayAliasRecord]:
         unique_ids = tuple(sorted(set(entity_ids), key=str))
         if not unique_ids:
             return {}
-        target_column = (
-            EntityMetadata.physical_object_id
-            if entity_type is PhysicalObject
-            else EntityMetadata.network_interface_id
-        )
+        target_column = {
+            PhysicalObject: EntityMetadata.physical_object_id,
+            NetworkInterface: EntityMetadata.network_interface_id,
+            ConnectionPoint: EntityMetadata.connection_point_id,
+        }[entity_type]
         rows = tuple(
             self.session.scalars(
                 select(EntityMetadata)
@@ -148,5 +189,9 @@ class DeviceCatalog:
         return {
             entity_id: DisplayAliasRecord(row.id, entity_id, row.value)
             for row in rows
-            if (entity_id := row.physical_object_id or row.network_interface_id) is not None
+            if (
+                entity_id := row.physical_object_id
+                or row.network_interface_id
+                or row.connection_point_id
+            ) is not None
         }

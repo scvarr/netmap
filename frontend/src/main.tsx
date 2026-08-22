@@ -6,6 +6,8 @@ import { ApiDeviceDetailsDataSource } from './topology/apiDeviceDetailsDataSourc
 import { ApiDeviceWriteDataSource } from './topology/apiDeviceWriteDataSource';
 import { ApiDeviceInterfaceWriteDataSource } from './topology/apiDeviceInterfaceWriteDataSource';
 import { ApiPhysicalLinkWriteDataSource } from './topology/apiPhysicalLinkWriteDataSource';
+import { ApiPhysicalObjectDetailsDataSource } from './topology/apiPhysicalObjectDetailsDataSource';
+import { ApiPhysicalObjectWriteDataSource } from './topology/apiPhysicalObjectWriteDataSource';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -16,6 +18,8 @@ createRoot(document.getElementById('root')!).render(
       deviceWriteDataSource={new ApiDeviceWriteDataSource()}
       deviceInterfaceWriteDataSource={new ApiDeviceInterfaceWriteDataSource()}
       physicalLinkWriteDataSource={new ApiPhysicalLinkWriteDataSource()}
+      physicalObjectDetailsDataSource={new ApiPhysicalObjectDetailsDataSource()}
+      physicalObjectWriteDataSource={new ApiPhysicalObjectWriteDataSource()}
     />
   </StrictMode>,
 );

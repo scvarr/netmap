@@ -18,6 +18,11 @@ import type {
   PhysicalConnectionCreationDocument,
   PhysicalLinkWriteDataSource,
 } from './topology/physicalLinkWriteTypes';
+import type {
+  PhysicalObjectDetailsDataSource,
+  PhysicalObjectDetailsDocument,
+} from './topology/physicalObjectDetailsTypes';
+import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
 
 vi.mock('./components/HealthIndicator', () => ({
   HealthIndicator: () => <div>Backend доступен</div>,
@@ -508,5 +513,86 @@ describe('App projection states', () => {
     expect(await screen.findByRole('heading', { name: 'Логическая топология' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Инспектор' })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'CORE-FW-01' })).not.toBeInTheDocument();
+  });
+
+  it('creates a physical object, refreshes L1, selects it, and loads its point details', async () => {
+    const objectId = '00000000-0000-0000-0000-000000000501';
+    const pointId = '00000000-0000-0000-0000-000000000502';
+    const objectRef = {
+      ref_type: 'CANONICAL_FACT' as const,
+      entity_type: 'PhysicalObject',
+      entity_id: objectId,
+    };
+    const created: PhysicalObjectDetailsDocument = {
+      schema_version: '1.0',
+      physical_object: { source_ref: objectRef, label: 'Розетка 101-1' },
+      connection_points: [{
+        connection_point_ref: {
+          ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: pointId,
+        },
+        label: 'Порт',
+        cardinality: 1,
+        incident_connection_count: 0,
+        direct_interface_binding_count: 0,
+        source_refs: [],
+      }],
+      owned_interface_count: 0,
+      gaps: [],
+      warnings: [],
+    };
+    const emptyPhysical: TopologyProjectionDocument = {
+      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
+      nodes: [], edges: [], gaps: [], warnings: [],
+    };
+    const refreshedPhysical: TopologyProjectionDocument = {
+      ...emptyPhysical,
+      nodes: [{
+        id: 'l1-outlet', kind: 'PHYSICAL_OBJECT', label: 'Розетка 101-1',
+        source_refs: [objectRef],
+        attributes: { connection_point_count: 1, owned_interface_count: 0 },
+        status: 'CONFIGURED',
+      }],
+    };
+    const loadProjection = vi.fn()
+      .mockResolvedValueOnce({ ...document, nodes: [], edges: [] })
+      .mockResolvedValueOnce(emptyPhysical)
+      .mockResolvedValueOnce(refreshedPhysical)
+      .mockResolvedValueOnce({ ...document, nodes: [], edges: [] });
+    const createPhysicalObject = vi.fn().mockResolvedValue(created);
+    const writeSource: PhysicalObjectWriteDataSource = { createPhysicalObject };
+    const physicalDetailsSource: PhysicalObjectDetailsDataSource = {
+      loadPhysicalObjectDetails: vi.fn().mockResolvedValue(created),
+    };
+    render(
+      <App
+        dataSource={{ loadProjection }}
+        deviceDetailsDataSource={deviceDetailsDataSource}
+        physicalObjectWriteDataSource={writeSource}
+        physicalObjectDetailsDataSource={physicalDetailsSource}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Физическая' }));
+    expect(await screen.findByText('В этом scope пока пусто')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить' }));
+    await userEvent.type(screen.getByLabelText('Название'), 'Розетка 101-1');
+    await userEvent.type(screen.getByLabelText('Первая точка подключения'), 'Порт');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+
+    expect(await screen.findByRole('heading', { name: 'Розетка 101-1' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Порт' })).toBeInTheDocument();
+    expect(createPhysicalObject).toHaveBeenCalledWith({
+      display_name: 'Розетка 101-1',
+      initial_connection_point: { display_name: 'Порт' },
+    });
+    expect(loadProjection).toHaveBeenNthCalledWith(3, {
+      layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
+      scope: { include_location_subtrees: [], include_entities: [] },
+    });
+    expect(physicalDetailsSource.loadPhysicalObjectDetails).toHaveBeenCalledWith(objectId);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Логическая' }));
+    expect(await screen.findByRole('heading', { name: 'Логическая топология' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Розетка 101-1' })).not.toBeInTheDocument();
   });
 });

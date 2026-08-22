@@ -155,6 +155,15 @@ button { font: inherit; }
 .device-details-state--error p { margin: 0; }
 .device-details-state--error button { margin-top: 10px; padding: 7px 11px; border: 1px solid #72504b; border-radius: 6px; color: #f1d3ce; background: #291816; cursor: pointer; }
 .interface-list { display: flex; flex-direction: column; gap: 10px; }
+.physical-object-details { margin-top: 18px; padding-top: 4px; border-top: 1px solid #213438; }
+.physical-object-details__summary { margin: 12px 0 0; color: #9eb2b0; font-size: 11px; }
+.connection-point-list { display: flex; flex-direction: column; gap: 10px; }
+.connection-point-card { padding: 13px; border: 1px solid #294145; border-radius: 10px; background: #0d1c1f; }
+.connection-point-card > h4 { margin: 0 0 12px; color: #dcebe8; font-size: 13px; }
+.connection-point-card__metrics { display: grid; gap: 5px; padding: 10px; border-radius: 7px; background: #0a1719; }
+.connection-point-card__metrics span { color: #809596; font-size: 10px; }
+.connection-point-card__metrics strong { color: #d7e8e4; }
+.physical-object-details__technical { margin-top: 14px; }
 .interface-card { padding: 13px; border: 1px solid #294145; border-radius: 10px; background: #0d1c1f; }
 .interface-card > h4 { margin: 0 0 12px; color: #dcebe8; font-size: 13px; }
 .interface-card__addresses > strong { color: #718789; font-size: 9px; letter-spacing: .06em; text-transform: uppercase; }

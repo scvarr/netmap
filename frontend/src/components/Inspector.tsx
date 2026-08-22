@@ -15,6 +15,8 @@ import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
 import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
 import { DeviceInterfacesSection } from './DeviceInterfacesSection';
+import type { PhysicalObjectDetailsDataSource } from '../topology/physicalObjectDetailsTypes';
+import { PhysicalObjectDetailsSection } from './PhysicalObjectDetailsSection';
 
 interface InspectorProps {
   document: TopologyProjectionDocument | null;
@@ -23,6 +25,7 @@ interface InspectorProps {
   deviceInterfaceWriteDataSource?: DeviceInterfaceWriteDataSource;
   onInterfaceCreated?: (physicalObjectId: string) => void;
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
+  physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   onPhysicalLinkCreated?: (physicalObjectId: string) => void;
   onSelectNode: (node: TopologyProjectionNode) => void;
   onClose: () => void;
@@ -109,6 +112,7 @@ export function Inspector({
   deviceInterfaceWriteDataSource,
   onInterfaceCreated,
   physicalLinkWriteDataSource,
+  physicalObjectDetailsDataSource,
   onPhysicalLinkCreated,
   onSelectNode,
   onClose,
@@ -149,7 +153,7 @@ export function Inspector({
               value={displayCount(numericAttribute(node, 'connection_point_count'))}
             />
             <Metric
-              label="Owned interfaces"
+              label="Интерфейсов"
               value={displayCount(numericAttribute(node, 'owned_interface_count'))}
             />
             <Metric label="Физических связей" value={String(incidentEdges.length)} />
@@ -169,6 +173,13 @@ export function Inspector({
               </ul>
             ) : <p className="muted">В текущей физической проекции соседей нет.</p>}
           </section>
+          {physicalObjectDetailsDataSource && (
+            <PhysicalObjectDetailsSection
+              key={node.id}
+              node={node}
+              dataSource={physicalObjectDetailsDataSource}
+            />
+          )}
           <TechnicalDetails selection={selection} />
         </aside>
       );

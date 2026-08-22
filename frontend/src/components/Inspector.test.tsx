@@ -209,7 +209,7 @@ describe('Inspector', () => {
     );
 
     expect(screen.getByText('Точек подключения').parentElement).toHaveTextContent('1');
-    expect(screen.getByText('Owned interfaces').parentElement).toHaveTextContent('1');
+    expect(screen.getByText('Интерфейсов').parentElement).toHaveTextContent('1');
     expect(screen.getByText('Физических связей').parentElement).toHaveTextContent('1');
     expect(screen.getByRole('button', { name: /Объект abcdef12/ })).toHaveTextContent('Соединений: 1');
     expect(loadDeviceDetails).not.toHaveBeenCalled();

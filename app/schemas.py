@@ -133,6 +133,37 @@ class DeviceDetailsDocument(BaseModel):
     warnings: list[str]
 
 
+class PhysicalObjectDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_ref: ProjectionSourceRef
+    label: str = Field(min_length=1)
+    label_source: Literal["TECHNICAL_FALLBACK"] | None = None
+
+
+class ConnectionPointDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    connection_point_ref: ProjectionSourceRef
+    label: str = Field(min_length=1)
+    label_source: Literal["TECHNICAL_FALLBACK"] | None = None
+    cardinality: int = Field(ge=1)
+    incident_connection_count: int = Field(ge=0)
+    direct_interface_binding_count: int = Field(ge=0)
+    source_refs: list[ProjectionSourceRef]
+
+
+class PhysicalObjectDetailsDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    physical_object: PhysicalObjectDetails
+    connection_points: list[ConnectionPointDetails]
+    owned_interface_count: int = Field(ge=0)
+    gaps: list[str]
+    warnings: list[str]
+
+
 class CreateNetworkInterfaceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -150,6 +181,19 @@ class CreateDeviceInterfaceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     display_name: str = Field(min_length=1, max_length=255)
+
+
+class CreatePhysicalObjectConnectionPointRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_name: str = Field(min_length=1, max_length=255)
+
+
+class CreatePhysicalObjectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_name: str = Field(min_length=1, max_length=255)
+    initial_connection_point: CreatePhysicalObjectConnectionPointRequest
 
 
 class CreatePhysicalLinkRequest(BaseModel):

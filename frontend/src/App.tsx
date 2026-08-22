@@ -3,6 +3,7 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { HealthIndicator } from './components/HealthIndicator';
 import { Inspector } from './components/Inspector';
 import { CreateNetworkDevice } from './components/CreateNetworkDevice';
+import { CreatePhysicalObject } from './components/CreatePhysicalObject';
 import { TopologyCanvas } from './components/TopologyCanvas';
 import { ViewState } from './components/ViewState';
 import type {
@@ -15,6 +16,8 @@ import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
 import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
 import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
 import type { PhysicalLinkWriteDataSource } from './topology/physicalLinkWriteTypes';
+import type { PhysicalObjectDetailsDataSource } from './topology/physicalObjectDetailsTypes';
+import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
 
 const LOGICAL_REQUEST: TopologyProjectionRequest = {
   layer: 'L2',
@@ -44,6 +47,8 @@ interface AppProps {
   deviceWriteDataSource?: DeviceWriteDataSource;
   deviceInterfaceWriteDataSource?: DeviceInterfaceWriteDataSource;
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
+  physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
+  physicalObjectWriteDataSource?: PhysicalObjectWriteDataSource;
 }
 
 export function App({
@@ -52,6 +57,8 @@ export function App({
   deviceWriteDataSource,
   deviceInterfaceWriteDataSource,
   physicalLinkWriteDataSource,
+  physicalObjectDetailsDataSource,
+  physicalObjectWriteDataSource,
 }: AppProps) {
   const [document, setDocument] = useState<TopologyProjectionDocument | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
@@ -163,6 +170,17 @@ export function App({
                 }}
               />
             )}
+            {viewMode === 'physical' && physicalObjectWriteDataSource && (
+              <CreatePhysicalObject
+                dataSource={physicalObjectWriteDataSource}
+                onCreated={(created) => {
+                  void load(
+                    PHYSICAL_REQUEST,
+                    created.physical_object.source_ref.entity_id,
+                  );
+                }}
+              />
+            )}
           </div>
         </div>
         {document?.warnings.map((warning, index) => (
@@ -193,6 +211,7 @@ export function App({
             deviceInterfaceWriteDataSource={viewMode === 'logical' ? deviceInterfaceWriteDataSource : undefined}
             onInterfaceCreated={(id) => { void load(LOGICAL_REQUEST, id); }}
             physicalLinkWriteDataSource={viewMode === 'logical' ? physicalLinkWriteDataSource : undefined}
+            physicalObjectDetailsDataSource={viewMode === 'physical' ? physicalObjectDetailsDataSource : undefined}
             onPhysicalLinkCreated={(id) => { void load(LOGICAL_REQUEST, id); }}
             onSelectNode={(node) => setSelection({ type: 'node', item: node })}
             onClose={() => setSelection(null)}

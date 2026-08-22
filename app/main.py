@@ -24,6 +24,7 @@ from app.packet_processing_plan_selection_resolver import PacketProcessingPlanSe
 from app.packet_processing_executor import PacketProcessingPlanExecutor
 from app.packet_flow_resolver import ConfiguredPacketFlowResolver
 from app.physical_connections import PhysicalConnectionCatalog
+from app.physical_object_details_resolver import ConfiguredPhysicalObjectDetailsResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
@@ -35,6 +36,7 @@ from app.schemas import (
     CreateDeviceInterfaceRequest,
     CreateNetworkDeviceRequest,
     CreatePhysicalLinkRequest,
+    CreatePhysicalObjectRequest,
     DeviceDetailsDocument,
     ErrorResponse,
     EvaluationView,
@@ -58,6 +60,7 @@ from app.schemas import (
     PacketFlowEvaluationArtifact,
     PacketFlowEvaluationQuery,
     PhysicalConnectionCreationDocument,
+    PhysicalObjectDetailsDocument,
     NATEvaluationArtifact,
     NATEvaluationQuery,
     RouteDecisionArtifact,
@@ -139,6 +142,42 @@ def get_device_details(
     return ConfiguredDeviceDetailsResolver(CanonicalRepository(session)).resolve(
         physical_object_id
     )
+
+
+@app.get(
+    "/v1/topology/physical-objects/{physical_object_id}",
+    response_model=PhysicalObjectDetailsDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def get_physical_object_details(
+    physical_object_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> PhysicalObjectDetailsDocument:
+    return ConfiguredPhysicalObjectDetailsResolver(CanonicalRepository(session)).resolve(
+        physical_object_id
+    )
+
+
+@app.post(
+    "/v1/topology/physical-objects",
+    response_model=PhysicalObjectDetailsDocument,
+    response_model_exclude_none=True,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def create_physical_object(
+    query: CreatePhysicalObjectRequest,
+    session: Session = Depends(get_session),
+) -> PhysicalObjectDetailsDocument:
+    with session.begin():
+        created = DeviceCatalog(session).create_physical_object(
+            query.display_name,
+            query.initial_connection_point.display_name,
+        )
+        return ConfiguredPhysicalObjectDetailsResolver(
+            CanonicalRepository(session)
+        ).resolve(created.physical_object_id)
 
 
 @app.post(

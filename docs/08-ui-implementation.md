@@ -343,3 +343,30 @@ Physical edge выводится только из explicit `Connection` и ег
 внутренняя связь двух точек одного объекта не создаёт self-loop. UI переключает
 logical/physical projections через общий `TopologyDataSource` и сохраняет node
 selection только по совпадающей canonical `PhysicalObject` source ref.
+
+## W.5 — создание физического объекта с первой точкой
+
+**FIXED**
+
+Public read/write boundary:
+
+```text
+GET  /v1/topology/physical-objects/{physical_object_id}
+    -> PhysicalObjectDetailsDocument
+
+POST /v1/topology/physical-objects
+    display_name
+    initial_connection_point.display_name
+    -> 201 PhysicalObjectDetailsDocument
+```
+
+Одна transaction создаёт только `PhysicalObject`, его `alias.display`, одну
+`ConnectionPoint` с `cardinality=1` и её `alias.display`. Operation не создаёт
+`NetworkInterface`, binding, `Connection`, L2/L3/IP facts или новый canonical
+тип passive object. Details document возвращает factual counts для owned
+interfaces, incident connections и direct interface bindings.
+
+UI предоставляет operation только в Physical mode, после success заново
+загружает `L1 / PHYSICAL_OBJECT`, выбирает созданный объект по canonical ref и
+показывает именованную точку через bounded details API. Optimistic physical
+nodes не создаются.
