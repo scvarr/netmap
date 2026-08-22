@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from enum import StrEnum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, model_validator
 
@@ -213,6 +213,55 @@ class PhysicalConnectionCreationDocument(BaseModel):
     cable_ref: ProjectionSourceRef
     source_binding_ref: ProjectionSourceRef
     target_binding_ref: ProjectionSourceRef
+    connection_refs: list[ProjectionSourceRef] = Field(min_length=3, max_length=3)
+
+
+class NetworkInterfacePhysicalEndpointRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["NETWORK_INTERFACE"]
+    network_interface_id: uuid.UUID
+
+
+class ConnectionPointPhysicalEndpointRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["CONNECTION_POINT"]
+    connection_point_id: uuid.UUID
+    member_index: Literal[1] = 1
+
+
+PhysicalEndpointRequest = Annotated[
+    NetworkInterfacePhysicalEndpointRequest | ConnectionPointPhysicalEndpointRequest,
+    Field(discriminator="kind"),
+]
+
+
+class CreatePhysicalEndpointConnectionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    source: PhysicalEndpointRequest
+    target: PhysicalEndpointRequest
+    cable_display_name: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class PhysicalEndpointMaterialization(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["NETWORK_INTERFACE", "CONNECTION_POINT"]
+    endpoint_ref: ProjectionSourceRef
+    connection_point_ref: ProjectionSourceRef
+    interface_binding_ref: ProjectionSourceRef | None = None
+    member_index: Literal[1] = 1
+
+
+class PhysicalEndpointConnectionCreationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    source: PhysicalEndpointMaterialization
+    target: PhysicalEndpointMaterialization
+    cable_ref: ProjectionSourceRef
     connection_refs: list[ProjectionSourceRef] = Field(min_length=3, max_length=3)
 
 

@@ -23,7 +23,11 @@ from app.packet_processing_plan_resolver import PacketProcessingPlanValidationRe
 from app.packet_processing_plan_selection_resolver import PacketProcessingPlanSelectionResolver
 from app.packet_processing_executor import PacketProcessingPlanExecutor
 from app.packet_flow_resolver import ConfiguredPacketFlowResolver
-from app.physical_connections import PhysicalConnectionCatalog
+from app.physical_connections import (
+    ConnectionPointEndpoint,
+    NetworkInterfaceEndpoint,
+    PhysicalConnectionCatalog,
+)
 from app.physical_object_details_resolver import ConfiguredPhysicalObjectDetailsResolver
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
@@ -35,6 +39,7 @@ from app.schemas import (
     AdjacencyCandidatesQuery,
     CreateDeviceInterfaceRequest,
     CreateNetworkDeviceRequest,
+    CreatePhysicalEndpointConnectionRequest,
     CreatePhysicalLinkRequest,
     CreatePhysicalObjectRequest,
     DeviceDetailsDocument,
@@ -60,6 +65,8 @@ from app.schemas import (
     PacketFlowEvaluationArtifact,
     PacketFlowEvaluationQuery,
     PhysicalConnectionCreationDocument,
+    PhysicalEndpointConnectionCreationDocument,
+    PhysicalEndpointMaterialization,
     PhysicalObjectDetailsDocument,
     NATEvaluationArtifact,
     NATEvaluationQuery,
@@ -257,6 +264,68 @@ def create_physical_link(
             target_binding_ref=ref(
                 "InterfacePhysicalBinding", created.target_binding_id
             ),
+            connection_refs=[
+                ref("Connection", connection_id)
+                for connection_id in created.connection_ids
+            ],
+        )
+
+
+@app.post(
+    "/v1/topology/physical-connections",
+    response_model=PhysicalEndpointConnectionCreationDocument,
+    response_model_exclude_none=True,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def create_physical_endpoint_connection(
+    query: CreatePhysicalEndpointConnectionRequest,
+    session: Session = Depends(get_session),
+) -> PhysicalEndpointConnectionCreationDocument:
+    def endpoint(value: object) -> NetworkInterfaceEndpoint | ConnectionPointEndpoint:
+        if value.kind == "NETWORK_INTERFACE":
+            return NetworkInterfaceEndpoint(value.network_interface_id)
+        return ConnectionPointEndpoint(value.connection_point_id, value.member_index)
+
+    def ref(entity_type: str, entity_id: uuid.UUID) -> dict[str, object]:
+        return {
+            "ref_type": "CANONICAL_FACT",
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+        }
+
+    def materialization(value: object) -> PhysicalEndpointMaterialization:
+        original = value.endpoint
+        if isinstance(original, NetworkInterfaceEndpoint):
+            kind = "NETWORK_INTERFACE"
+            endpoint_ref = ref("NetworkInterface", original.interface_id)
+        else:
+            kind = "CONNECTION_POINT"
+            endpoint_ref = ref("ConnectionPoint", original.connection_point_id)
+        return PhysicalEndpointMaterialization(
+            kind=kind,
+            endpoint_ref=endpoint_ref,
+            connection_point_ref=ref(
+                "ConnectionPoint", value.connection_point_id
+            ),
+            interface_binding_ref=(
+                ref("InterfacePhysicalBinding", value.binding_id)
+                if value.binding_id is not None
+                else None
+            ),
+            member_index=1,
+        )
+
+    with session.begin():
+        created = PhysicalConnectionCatalog(session).create_endpoint_link(
+            endpoint(query.source),
+            endpoint(query.target),
+            query.cable_display_name,
+        )
+        return PhysicalEndpointConnectionCreationDocument(
+            source=materialization(created.source),
+            target=materialization(created.target),
+            cable_ref=ref("PhysicalObject", created.cable_id),
             connection_refs=[
                 ref("Connection", connection_id)
                 for connection_id in created.connection_ids

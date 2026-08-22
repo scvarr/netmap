@@ -16,6 +16,7 @@ import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
 import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
 import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
 import type { PhysicalLinkWriteDataSource } from './topology/physicalLinkWriteTypes';
+import type { PhysicalEndpointConnectionWriteDataSource } from './topology/physicalEndpointConnectionWriteTypes';
 import type { PhysicalObjectDetailsDataSource } from './topology/physicalObjectDetailsTypes';
 import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
 import type { TopologyLayoutStore } from './topology/layoutStore';
@@ -49,6 +50,7 @@ interface AppProps {
   deviceInterfaceWriteDataSource?: DeviceInterfaceWriteDataSource;
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
+  physicalEndpointConnectionWriteDataSource?: PhysicalEndpointConnectionWriteDataSource;
   physicalObjectWriteDataSource?: PhysicalObjectWriteDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
 }
@@ -60,6 +62,7 @@ export function App({
   deviceInterfaceWriteDataSource,
   physicalLinkWriteDataSource,
   physicalObjectDetailsDataSource,
+  physicalEndpointConnectionWriteDataSource,
   physicalObjectWriteDataSource,
   topologyLayoutStore,
 }: AppProps) {
@@ -220,6 +223,10 @@ export function App({
             onInterfaceCreated={(id) => { void load(LOGICAL_REQUEST, id); }}
             physicalLinkWriteDataSource={viewMode === 'logical' ? physicalLinkWriteDataSource : undefined}
             physicalObjectDetailsDataSource={viewMode === 'physical' ? physicalObjectDetailsDataSource : undefined}
+            physicalEndpointConnectionWriteDataSource={viewMode === 'physical'
+              ? physicalEndpointConnectionWriteDataSource
+              : undefined}
+            onPhysicalEndpointConnected={(id) => { void load(PHYSICAL_REQUEST, id); }}
             onPhysicalLinkCreated={(id) => { void load(LOGICAL_REQUEST, id); }}
             onSelectNode={(node) => setSelection({ type: 'node', item: node })}
             onClose={() => setSelection(null)}

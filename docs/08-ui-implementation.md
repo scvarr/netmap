@@ -370,3 +370,33 @@ UI предоставляет operation только в Physical mode, посл�
 загружает `L1 / PHYSICAL_OBJECT`, выбирает созданный объект по canonical ref и
 показывает именованную точку через bounded details API. Optimistic physical
 nodes не создаются.
+
+## W.6 — соединение физических endpoints
+
+**FIXED**
+
+Существующий W.3 interface-to-interface endpoint остаётся совместимым. Для
+последовательной сборки L1 composition добавлена adjacent public operation:
+
+```text
+POST /v1/topology/physical-connections
+    source: PhysicalEndpoint
+    target: PhysicalEndpoint
+    cable_display_name?
+
+PhysicalEndpoint =
+    NETWORK_INTERFACE(network_interface_id)
+    | CONNECTION_POINT(connection_point_id, member_index=1)
+```
+
+W.6 ограничен `cardinality=1` / member `1`. Для unbound
+`NetworkInterface` transaction создаёт owning device `ConnectionPoint` и
+`InterfacePhysicalBinding`; для `ConnectionPoint` используется ровно выбранная
+canonical точка. Затем та же transaction создаёт cable `PhysicalObject`, две
+его точки и три explicit `Connection` с member mapping `1↔1`.
+
+Наличие существующей `Connection` у passive `ConnectionPoint` не означает, что
+точка занята: через неё разрешено строить последовательную physical composition.
+Уже имеющий direct binding `NetworkInterface` автоматически не перепривязывается.
+Operation не создаёт L2/L3/IP facts. UI запускает её из Physical inspector и
+после success заново получает nodes/edges и details только через public API.

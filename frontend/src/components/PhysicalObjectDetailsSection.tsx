@@ -4,11 +4,18 @@ import type {
   PhysicalObjectDetailsDataSource,
   PhysicalObjectDetailsDocument,
 } from '../topology/physicalObjectDetailsTypes';
+import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
+import type { PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
 import type { ProjectionSourceRef, TopologyProjectionNode } from '../topology/types';
+import { ConnectPhysicalEndpoint } from './ConnectPhysicalEndpoint';
 
 interface PhysicalObjectDetailsSectionProps {
   node: TopologyProjectionNode;
   dataSource: PhysicalObjectDetailsDataSource;
+  topologyNodes?: TopologyProjectionNode[];
+  deviceDetailsDataSource?: DeviceDetailsDataSource;
+  writeDataSource?: PhysicalEndpointConnectionWriteDataSource;
+  onConnected?: () => void;
 }
 
 type DetailsState =
@@ -44,7 +51,23 @@ const SourceRefs = ({ refs }: { refs: ProjectionSourceRef[] }) => (
   </ul>
 );
 
-const PointCard = ({ point }: { point: ConnectionPointDetails }) => (
+interface PointCardProps {
+  point: ConnectionPointDetails;
+  topologyNodes: TopologyProjectionNode[];
+  physicalDetailsDataSource: PhysicalObjectDetailsDataSource;
+  deviceDetailsDataSource?: DeviceDetailsDataSource;
+  writeDataSource?: PhysicalEndpointConnectionWriteDataSource;
+  onConnected: () => void;
+}
+
+const PointCard = ({
+  point,
+  topologyNodes,
+  physicalDetailsDataSource,
+  deviceDetailsDataSource,
+  writeDataSource,
+  onConnected,
+}: PointCardProps) => (
   <article className="connection-point-card">
     <h4>{displayPointLabel(point)}</h4>
     <div className="connection-point-card__metrics">
@@ -52,6 +75,16 @@ const PointCard = ({ point }: { point: ConnectionPointDetails }) => (
       <span>Связей: <strong>{point.incident_connection_count}</strong></span>
       <span>Прямых привязок интерфейсов: <strong>{point.direct_interface_binding_count}</strong></span>
     </div>
+    {point.cardinality === 1 && deviceDetailsDataSource && writeDataSource && (
+      <ConnectPhysicalEndpoint
+        sourcePoint={point}
+        topologyNodes={topologyNodes}
+        physicalDetailsDataSource={physicalDetailsDataSource}
+        deviceDetailsDataSource={deviceDetailsDataSource}
+        writeDataSource={writeDataSource}
+        onConnected={onConnected}
+      />
+    )}
     <details className="interface-technical-details">
       <summary>Технические данные</summary>
       <SourceRefs refs={[point.connection_point_ref, ...point.source_refs]} />
@@ -62,6 +95,10 @@ const PointCard = ({ point }: { point: ConnectionPointDetails }) => (
 export function PhysicalObjectDetailsSection({
   node,
   dataSource,
+  topologyNodes = [],
+  deviceDetailsDataSource,
+  writeDataSource,
+  onConnected = () => undefined,
 }: PhysicalObjectDetailsSectionProps) {
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
@@ -116,7 +153,18 @@ export function PhysicalObjectDetailsSection({
           {state.document.connection_points.length ? (
             <div className="connection-point-list">
               {state.document.connection_points.map((point) => (
-                <PointCard key={point.connection_point_ref.entity_id} point={point} />
+                <PointCard
+                  key={point.connection_point_ref.entity_id}
+                  point={point}
+                  topologyNodes={topologyNodes}
+                  physicalDetailsDataSource={dataSource}
+                  deviceDetailsDataSource={deviceDetailsDataSource}
+                  writeDataSource={writeDataSource}
+                  onConnected={() => {
+                    setRetryKey((key) => key + 1);
+                    onConnected();
+                  }}
+                />
               ))}
             </div>
           ) : <p className="device-details-state">Точки подключения не заданы.</p>}

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ValidationError
-from app.models import EntityMetadata, NetworkInterface
+from app.models import ConnectionPoint, EntityMetadata, NetworkInterface
 from app.repository import CanonicalRepository, ConnectionMemberInput
 
 
@@ -17,6 +17,35 @@ class CreatedPhysicalConnection:
     cable_id: uuid.UUID
     source_binding_id: uuid.UUID
     target_binding_id: uuid.UUID
+    connection_ids: tuple[uuid.UUID, uuid.UUID, uuid.UUID]
+
+
+@dataclass(frozen=True)
+class NetworkInterfaceEndpoint:
+    interface_id: uuid.UUID
+
+
+@dataclass(frozen=True)
+class ConnectionPointEndpoint:
+    connection_point_id: uuid.UUID
+    member_index: int = 1
+
+
+PhysicalEndpoint = NetworkInterfaceEndpoint | ConnectionPointEndpoint
+
+
+@dataclass(frozen=True)
+class MaterializedPhysicalEndpoint:
+    endpoint: PhysicalEndpoint
+    connection_point_id: uuid.UUID
+    binding_id: uuid.UUID | None
+
+
+@dataclass(frozen=True)
+class CreatedEndpointPhysicalConnection:
+    source: MaterializedPhysicalEndpoint
+    target: MaterializedPhysicalEndpoint
+    cable_id: uuid.UUID
     connection_ids: tuple[uuid.UUID, uuid.UUID, uuid.UUID]
 
 
@@ -37,9 +66,43 @@ class PhysicalConnectionCatalog:
                 "A physical link requires two different NetworkInterfaces",
                 {"interface_id": str(source_interface_id)},
             )
+        created = self.create_endpoint_link(
+            NetworkInterfaceEndpoint(source_interface_id),
+            NetworkInterfaceEndpoint(target_interface_id),
+            cable_display_name,
+        )
+        assert created.source.binding_id is not None
+        assert created.target.binding_id is not None
+        return CreatedPhysicalConnection(
+            source_interface_id=source_interface_id,
+            target_interface_id=target_interface_id,
+            cable_id=created.cable_id,
+            source_binding_id=created.source.binding_id,
+            target_binding_id=created.target.binding_id,
+            connection_ids=created.connection_ids,
+        )
+
+    def create_endpoint_link(
+        self,
+        source: PhysicalEndpoint,
+        target: PhysicalEndpoint,
+        cable_display_name: str | None = None,
+    ) -> CreatedEndpointPhysicalConnection:
+        if source == target:
+            raise ValidationError(
+                "A physical connection requires two different endpoints",
+                {"endpoint": self._endpoint_description(source)},
+            )
 
         interface_ids = tuple(
-            sorted((source_interface_id, target_interface_id), key=str)
+            sorted(
+                {
+                    endpoint.interface_id
+                    for endpoint in (source, target)
+                    if isinstance(endpoint, NetworkInterfaceEndpoint)
+                },
+                key=str,
+            )
         )
         locked_interfaces = tuple(
             self.session.scalars(
@@ -79,14 +142,42 @@ class PhysicalConnectionCatalog:
                 {"interface_ids": [str(value) for value in already_bound_ids]},
             )
 
-        source_point = repository.add_connection_point(
-            owners[source_interface_id].physical_object_id,
-            cardinality=1,
+        point_ids = tuple(
+            sorted(
+                {
+                    endpoint.connection_point_id
+                    for endpoint in (source, target)
+                    if isinstance(endpoint, ConnectionPointEndpoint)
+                },
+                key=str,
+            )
         )
-        source_binding = repository.add_interface_physical_binding(
-            source_interface_id,
-            source_point.id,
-            point_member=1,
+        locked_points = tuple(
+            self.session.scalars(
+                select(ConnectionPoint)
+                .where(ConnectionPoint.id.in_(point_ids))
+                .order_by(ConnectionPoint.id)
+                .with_for_update()
+            )
+        )
+        points_by_id = {point.id: point for point in locked_points}
+        missing_point_ids = [value for value in point_ids if value not in points_by_id]
+        if missing_point_ids:
+            raise ValidationError(
+                "ConnectionPoint does not exist",
+                {"connection_point_ids": [str(value) for value in missing_point_ids]},
+            )
+        unsupported_points = [
+            point.id for point in locked_points if point.cardinality != 1
+        ]
+        if unsupported_points:
+            raise ValidationError(
+                "W.6 supports only cardinality=1 ConnectionPoints",
+                {"connection_point_ids": [str(value) for value in unsupported_points]},
+            )
+
+        source_materialized = self._materialize_endpoint(
+            source, repository, owners
         )
 
         cable = repository.add_physical_object()
@@ -102,21 +193,15 @@ class PhysicalConnectionCatalog:
         cable_a = repository.add_connection_point(cable.id, cardinality=1)
         cable_b = repository.add_connection_point(cable.id, cardinality=1)
 
-        target_point = repository.add_connection_point(
-            owners[target_interface_id].physical_object_id,
-            cardinality=1,
-        )
-        target_binding = repository.add_interface_physical_binding(
-            target_interface_id,
-            target_point.id,
-            point_member=1,
+        target_materialized = self._materialize_endpoint(
+            target, repository, owners
         )
 
         member = [
             ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)
         ]
         source_connection, _ = repository.add_connection(
-            source_point.id,
+            source_materialized.connection_point_id,
             cable_a.id,
             cardinality=1,
             members=member,
@@ -129,20 +214,65 @@ class PhysicalConnectionCatalog:
         )
         target_connection, _ = repository.add_connection(
             cable_b.id,
-            target_point.id,
+            target_materialized.connection_point_id,
             cardinality=1,
             members=member,
         )
 
-        return CreatedPhysicalConnection(
-            source_interface_id=source_interface_id,
-            target_interface_id=target_interface_id,
+        return CreatedEndpointPhysicalConnection(
+            source=source_materialized,
+            target=target_materialized,
             cable_id=cable.id,
-            source_binding_id=source_binding.id,
-            target_binding_id=target_binding.id,
             connection_ids=(
                 source_connection.id,
                 internal_connection.id,
                 target_connection.id,
             ),
+        )
+
+    @staticmethod
+    def _endpoint_description(endpoint: PhysicalEndpoint) -> dict[str, str | int]:
+        if isinstance(endpoint, NetworkInterfaceEndpoint):
+            return {
+                "kind": "NETWORK_INTERFACE",
+                "network_interface_id": str(endpoint.interface_id),
+            }
+        return {
+            "kind": "CONNECTION_POINT",
+            "connection_point_id": str(endpoint.connection_point_id),
+            "member_index": endpoint.member_index,
+        }
+
+    @staticmethod
+    def _materialize_endpoint(
+        endpoint: PhysicalEndpoint,
+        repository: CanonicalRepository,
+        owners: dict[uuid.UUID, object],
+    ) -> MaterializedPhysicalEndpoint:
+        if isinstance(endpoint, ConnectionPointEndpoint):
+            if endpoint.member_index != 1:
+                raise ValidationError(
+                    "W.6 supports only ConnectionPoint member 1",
+                    {"member_index": endpoint.member_index},
+                )
+            return MaterializedPhysicalEndpoint(
+                endpoint=endpoint,
+                connection_point_id=endpoint.connection_point_id,
+                binding_id=None,
+            )
+
+        owner = owners[endpoint.interface_id]
+        point = repository.add_connection_point(
+            owner.physical_object_id,
+            cardinality=1,
+        )
+        binding = repository.add_interface_physical_binding(
+            endpoint.interface_id,
+            point.id,
+            point_member=1,
+        )
+        return MaterializedPhysicalEndpoint(
+            endpoint=endpoint,
+            connection_point_id=point.id,
+            binding_id=binding.id,
         )

@@ -14,6 +14,7 @@ import type {
 import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
 import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
+import type { PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
 import { DeviceInterfacesSection } from './DeviceInterfacesSection';
 import type { PhysicalObjectDetailsDataSource } from '../topology/physicalObjectDetailsTypes';
 import { PhysicalObjectDetailsSection } from './PhysicalObjectDetailsSection';
@@ -26,6 +27,8 @@ interface InspectorProps {
   onInterfaceCreated?: (physicalObjectId: string) => void;
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
+  physicalEndpointConnectionWriteDataSource?: PhysicalEndpointConnectionWriteDataSource;
+  onPhysicalEndpointConnected?: (physicalObjectId: string) => void;
   onPhysicalLinkCreated?: (physicalObjectId: string) => void;
   onSelectNode: (node: TopologyProjectionNode) => void;
   onClose: () => void;
@@ -113,6 +116,8 @@ export function Inspector({
   onInterfaceCreated,
   physicalLinkWriteDataSource,
   physicalObjectDetailsDataSource,
+  physicalEndpointConnectionWriteDataSource,
+  onPhysicalEndpointConnected,
   onPhysicalLinkCreated,
   onSelectNode,
   onClose,
@@ -178,6 +183,16 @@ export function Inspector({
               key={node.id}
               node={node}
               dataSource={physicalObjectDetailsDataSource}
+              topologyNodes={document.nodes}
+              deviceDetailsDataSource={deviceDetailsDataSource}
+              writeDataSource={physicalEndpointConnectionWriteDataSource}
+              onConnected={() => {
+                const id = node.source_refs.find((ref) => (
+                  ref.ref_type === 'CANONICAL_FACT'
+                  && ref.entity_type === 'PhysicalObject'
+                ))?.entity_id;
+                if (id) onPhysicalEndpointConnected?.(id);
+              }}
             />
           )}
           <TechnicalDetails selection={selection} />
