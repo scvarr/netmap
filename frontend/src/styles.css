@@ -67,8 +67,8 @@ button { font: inherit; }
 .create-device__heading > button { border: 0; color: #91a4a5; background: transparent; cursor: pointer; font-size: 20px; }
 .create-device__form label { display: block; margin-top: 12px; }
 .create-device__form label > span { display: block; margin-bottom: 6px; color: #91a5a5; font-size: 11px; }
-.create-device__form input { width: 100%; padding: 10px 11px; border: 1px solid #2a4448; border-radius: 7px; color: #e7f4f1; background: #081315; outline: none; }
-.create-device__form input:focus { border-color: #55e5b5; box-shadow: 0 0 0 2px rgba(85, 229, 181, .1); }
+.create-device__form input, .create-device__form select { width: 100%; padding: 10px 11px; border: 1px solid #2a4448; border-radius: 7px; color: #e7f4f1; background: #081315; outline: none; }
+.create-device__form input:focus, .create-device__form select:focus { border-color: #55e5b5; box-shadow: 0 0 0 2px rgba(85, 229, 181, .1); }
 .create-device__submit { width: 100%; margin-top: 16px; }
 .create-device__submit:disabled { cursor: not-allowed; opacity: .45; }
 .create-device__error { margin: 12px 0 0; padding: 9px 10px; border: 1px solid #5b3936; border-radius: 7px; color: #e0aaa5; background: #251614; font-size: 10px; line-height: 1.5; }
@@ -86,6 +86,17 @@ button { font: inherit; }
 .device-node:hover, .device-node--selected { border-color: #55e5b5; box-shadow: 0 0 0 2px rgba(85, 229, 181, .12), 0 14px 32px rgba(0, 0, 0, .3); transform: translateY(-2px); }
 .device-node--physical { border-color: #5d7188; background: linear-gradient(145deg, #162532, #0d171e); }
 .device-node--physical .device-node__kind { color: #9ebbd4; }
+.device-node--class-workstation { border-color: #4d83a6; background: linear-gradient(145deg, #142b38, #0d1920); }
+.device-node--class-workstation .device-node__kind { color: #8bc9ef; }
+.device-node--class-switch { border-color: #a37942; background: linear-gradient(145deg, #302619, #19150f); }
+.device-node--class-switch .device-node__kind { color: #efc779; }
+.device-node--class-cable { border-color: #745c91; background: linear-gradient(145deg, #251d30, #15111b); }
+.device-node--class-cable .device-node__kind { color: #c8a5ee; }
+.device-node--class-outlet { border-color: #4e8b70; background: linear-gradient(145deg, #173027, #0e1b17); }
+.device-node--class-outlet .device-node__kind { color: #8cddb8; }
+.device-node--class-patch-panel { border-color: #945f69; background: linear-gradient(145deg, #301d22, #1a1114); }
+.device-node--class-patch-panel .device-node__kind { color: #eba5b2; }
+.device-node--class-unknown { border-color: #5d7188; }
 .device-node__kind { color: #668387; font: 700 9px ui-monospace, "Cascadia Code", monospace; letter-spacing: .09em; }
 .device-node strong { font: 700 17px ui-monospace, "Cascadia Code", monospace; letter-spacing: -.04em; }
 .device-node__role { color: #8da1a2; font-size: 10px; }
@@ -160,6 +171,16 @@ button { font: inherit; }
 .interface-list { display: flex; flex-direction: column; gap: 10px; }
 .physical-object-details { margin-top: 18px; padding-top: 4px; border-top: 1px solid #213438; }
 .physical-object-details__summary { margin: 12px 0 0; color: #9eb2b0; font-size: 11px; }
+.physical-class-editor { margin-top: 14px; padding: 12px; border: 1px solid #294145; border-radius: 9px; background: #0d1c1f; }
+.physical-class-editor h3 { margin: 0 0 8px; }
+.physical-class-editor__current { margin: 0 0 10px; color: #d6e6e2; font-size: 11px; font-weight: 700; }
+.physical-class-editor label { display: block; margin-top: 8px; }
+.physical-class-editor label > span { display: block; margin-bottom: 5px; color: #809596; font-size: 9px; }
+.physical-class-editor select, .physical-class-editor input { width: 100%; padding: 8px 9px; border: 1px solid #2a4448; border-radius: 6px; color: #e7f4f1; background: #081315; outline: none; }
+.physical-class-editor select:focus, .physical-class-editor input:focus { border-color: #55e5b5; }
+.physical-class-editor button { margin-top: 10px; padding: 7px 10px; border: 1px solid #3a7968; border-radius: 6px; color: #dff7ef; background: #15372f; cursor: pointer; font-size: 10px; }
+.physical-class-editor button:disabled { cursor: not-allowed; opacity: .45; }
+.physical-class-editor__error { margin: 8px 0 0; color: #e0aaa5; font-size: 10px; }
 .connection-point-list { display: flex; flex-direction: column; gap: 10px; }
 .connection-point-card { padding: 13px; border: 1px solid #294145; border-radius: 10px; background: #0d1c1f; }
 .connection-point-card > h4 { margin: 0 0 12px; color: #dcebe8; font-size: 13px; }

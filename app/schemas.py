@@ -134,11 +134,12 @@ class DeviceDetailsDocument(BaseModel):
 
 
 class PhysicalObjectDetails(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     source_ref: ProjectionSourceRef
     label: str = Field(min_length=1)
     label_source: Literal["TECHNICAL_FALLBACK"] | None = None
+    class_: str | None = Field(default=None, alias="class", min_length=1, max_length=255)
 
 
 class ConnectionPointDetails(BaseModel):
@@ -190,10 +191,19 @@ class CreatePhysicalObjectConnectionPointRequest(BaseModel):
 
 
 class CreatePhysicalObjectRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(
+        extra="forbid", str_strip_whitespace=True, populate_by_name=True
+    )
 
     display_name: str = Field(min_length=1, max_length=255)
     initial_connection_point: CreatePhysicalObjectConnectionPointRequest
+    class_: str | None = Field(default=None, alias="class", min_length=1, max_length=255)
+
+
+class SetPhysicalObjectClassRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    value: str = Field(min_length=1, max_length=255)
 
 
 class CreatePhysicalLinkRequest(BaseModel):

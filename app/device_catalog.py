@@ -10,12 +10,20 @@ from app.repository import CanonicalRepository
 
 
 DISPLAY_ALIAS_KEY = "alias.display"
+PHYSICAL_OBJECT_CLASS_KEY = "class"
 
 
 @dataclass(frozen=True)
 class DisplayAliasRecord:
     metadata_id: uuid.UUID
     entity_id: uuid.UUID
+    value: str
+
+
+@dataclass(frozen=True)
+class PhysicalObjectClassRecord:
+    metadata_id: uuid.UUID
+    physical_object_id: uuid.UUID
     value: str
 
 
@@ -41,6 +49,7 @@ class CreatedPhysicalObject:
     connection_point_id: uuid.UUID
     physical_object_alias_id: uuid.UUID
     connection_point_alias_id: uuid.UUID
+    physical_object_class_id: uuid.UUID | None = None
 
 
 class DeviceCatalog:
@@ -107,6 +116,7 @@ class DeviceCatalog:
         self,
         display_name: str,
         connection_point_display_name: str,
+        class_value: str | None = None,
     ) -> CreatedPhysicalObject:
         repository = CanonicalRepository(self.session)
         physical_object = repository.add_physical_object()
@@ -122,11 +132,17 @@ class DeviceCatalog:
             connection_point_id=connection_point.id,
             value=connection_point_display_name,
         )
+        object_class = (
+            self._add_physical_object_class(physical_object.id, class_value)
+            if class_value is not None
+            else None
+        )
         return CreatedPhysicalObject(
             physical_object_id=physical_object.id,
             connection_point_id=connection_point.id,
             physical_object_alias_id=physical_alias.id,
             connection_point_alias_id=point_alias.id,
+            physical_object_class_id=(object_class.id if object_class is not None else None),
         )
 
     def physical_object_display_aliases(
@@ -143,6 +159,55 @@ class DeviceCatalog:
         self, entity_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, DisplayAliasRecord]:
         return self._display_aliases(ConnectionPoint, entity_ids)
+
+    def physical_object_classes(
+        self, entity_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, PhysicalObjectClassRecord]:
+        unique_ids = tuple(sorted(set(entity_ids), key=str))
+        if not unique_ids:
+            return {}
+        rows = tuple(
+            self.session.scalars(
+                select(EntityMetadata)
+                .where(
+                    EntityMetadata.physical_object_id.in_(unique_ids),
+                    EntityMetadata.key == PHYSICAL_OBJECT_CLASS_KEY,
+                )
+                .order_by(EntityMetadata.physical_object_id, EntityMetadata.id)
+            )
+        )
+        return {
+            row.physical_object_id: PhysicalObjectClassRecord(
+                row.id, row.physical_object_id, row.value
+            )
+            for row in rows
+            if row.physical_object_id is not None
+        }
+
+    def set_physical_object_class(
+        self, physical_object_id: uuid.UUID, value: str
+    ) -> PhysicalObjectClassRecord:
+        if self.session.get(PhysicalObject, physical_object_id) is None:
+            raise ValidationError(
+                "PhysicalObject does not exist",
+                {"physical_object_id": str(physical_object_id)},
+            )
+        existing = self.session.scalar(
+            select(EntityMetadata).where(
+                EntityMetadata.physical_object_id == physical_object_id,
+                EntityMetadata.key == PHYSICAL_OBJECT_CLASS_KEY,
+            )
+        )
+        metadata = existing or EntityMetadata(
+            physical_object_id=physical_object_id,
+            key=PHYSICAL_OBJECT_CLASS_KEY,
+            value=value,
+        )
+        metadata.value = value
+        if existing is None:
+            self.session.add(metadata)
+        self.session.flush()
+        return PhysicalObjectClassRecord(metadata.id, physical_object_id, metadata.value)
 
     def _add_display_alias(
         self,
@@ -162,6 +227,18 @@ class DeviceCatalog:
         self.session.add(alias)
         self.session.flush()
         return alias
+
+    def _add_physical_object_class(
+        self, physical_object_id: uuid.UUID, value: str
+    ) -> EntityMetadata:
+        metadata = EntityMetadata(
+            physical_object_id=physical_object_id,
+            key=PHYSICAL_OBJECT_CLASS_KEY,
+            value=value,
+        )
+        self.session.add(metadata)
+        self.session.flush()
+        return metadata
 
     def _display_aliases(
         self,

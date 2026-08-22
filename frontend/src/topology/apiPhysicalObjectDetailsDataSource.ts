@@ -66,6 +66,9 @@ export const parsePhysicalObjectDetailsDocument = (
   requireObject(value.physical_object, 'physical_object');
   validateRef(value.physical_object.source_ref, 'physical_object.source_ref');
   validateLabel(value.physical_object, 'physical_object');
+  if (value.physical_object.class !== undefined) {
+    requireString(value.physical_object.class, 'physical_object.class');
+  }
   if (!Array.isArray(value.connection_points)) malformed('connection_points must be an array.');
   const connectionPoints = value.connection_points as unknown[];
   connectionPoints.forEach((item, index) => {

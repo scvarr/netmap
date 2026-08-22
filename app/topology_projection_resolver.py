@@ -1,7 +1,11 @@
 import uuid
 from dataclasses import dataclass
 
-from app.device_catalog import DeviceCatalog, DisplayAliasRecord
+from app.device_catalog import (
+    DeviceCatalog,
+    DisplayAliasRecord,
+    PhysicalObjectClassRecord,
+)
 from app.errors import ModelError, ValidationError
 from app.repository import (
     CanonicalRepository,
@@ -167,12 +171,16 @@ class ConfiguredTopologyProjectionResolver:
         aliases = DeviceCatalog(
             self.repository.session
         ).physical_object_display_aliases(list(selected_object_ids))
+        classes = DeviceCatalog(self.repository.session).physical_object_classes(
+            list(selected_object_ids)
+        )
         nodes = [
             self._physical_node(
                 object_id,
                 point_ids_by_object.get(object_id, []),
                 owners_by_object.get(object_id, []),
                 aliases.get(object_id),
+                classes.get(object_id),
             )
             for object_id in sorted(selected_object_ids, key=self._physical_node_id)
         ]
@@ -263,10 +271,13 @@ class ConfiguredTopologyProjectionResolver:
         point_ids: list[uuid.UUID],
         owners: list[NetworkInterfacePhysicalOwnerRecord],
         display_alias: DisplayAliasRecord | None,
+        object_class: PhysicalObjectClassRecord | None,
     ) -> TopologyProjectionNode:
         refs = [self._ref("PhysicalObject", physical_object_id)]
         if display_alias is not None:
             refs.append(self._ref("EntityMetadata", display_alias.metadata_id))
+        if object_class is not None:
+            refs.append(self._ref("EntityMetadata", object_class.metadata_id))
         refs.extend(self._ref("ConnectionPoint", point_id) for point_id in point_ids)
         for owner in owners:
             refs.extend(
@@ -290,6 +301,7 @@ class ConfiguredTopologyProjectionResolver:
                 ),
                 "connection_point_count": len(point_ids),
                 "owned_interface_count": len(owners),
+                **({"class": object_class.value} if object_class is not None else {}),
             },
             status="CONFIGURED",
         )

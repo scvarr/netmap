@@ -19,6 +19,7 @@ import type { PhysicalLinkWriteDataSource } from './topology/physicalLinkWriteTy
 import type { PhysicalEndpointConnectionWriteDataSource } from './topology/physicalEndpointConnectionWriteTypes';
 import type { PhysicalObjectDetailsDataSource } from './topology/physicalObjectDetailsTypes';
 import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
+import type { PhysicalObjectClassWriteDataSource } from './topology/physicalObjectClassWriteTypes';
 import type { TopologyLayoutStore } from './topology/layoutStore';
 
 const LOGICAL_REQUEST: TopologyProjectionRequest = {
@@ -52,6 +53,7 @@ interface AppProps {
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   physicalEndpointConnectionWriteDataSource?: PhysicalEndpointConnectionWriteDataSource;
   physicalObjectWriteDataSource?: PhysicalObjectWriteDataSource;
+  physicalObjectClassWriteDataSource?: PhysicalObjectClassWriteDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
 }
 
@@ -64,6 +66,7 @@ export function App({
   physicalObjectDetailsDataSource,
   physicalEndpointConnectionWriteDataSource,
   physicalObjectWriteDataSource,
+  physicalObjectClassWriteDataSource,
   topologyLayoutStore,
 }: AppProps) {
   const [document, setDocument] = useState<TopologyProjectionDocument | null>(null);
@@ -223,10 +226,14 @@ export function App({
             onInterfaceCreated={(id) => { void load(LOGICAL_REQUEST, id); }}
             physicalLinkWriteDataSource={viewMode === 'logical' ? physicalLinkWriteDataSource : undefined}
             physicalObjectDetailsDataSource={viewMode === 'physical' ? physicalObjectDetailsDataSource : undefined}
+            physicalObjectClassWriteDataSource={viewMode === 'physical'
+              ? physicalObjectClassWriteDataSource
+              : undefined}
             physicalEndpointConnectionWriteDataSource={viewMode === 'physical'
               ? physicalEndpointConnectionWriteDataSource
               : undefined}
             onPhysicalEndpointConnected={(id) => { void load(PHYSICAL_REQUEST, id); }}
+            onPhysicalObjectClassUpdated={(id) => { void load(PHYSICAL_REQUEST, id); }}
             onPhysicalLinkCreated={(id) => { void load(LOGICAL_REQUEST, id); }}
             onSelectNode={(node) => setSelection({ type: 'node', item: node })}
             onClose={() => setSelection(null)}

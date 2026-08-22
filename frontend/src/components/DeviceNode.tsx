@@ -1,17 +1,20 @@
 import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { Node } from '@xyflow/react';
 import type { DeviceNodeData } from '../topology/layout';
-import { displayNodeLabel } from '../topology/presentation';
+import { displayNodeLabel, physicalClassPresentation } from '../topology/presentation';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
 export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
   const { projection } = data;
   const physical = projection.kind === 'PHYSICAL_OBJECT';
+  const classPresentation = physicalClassPresentation(projection.attributes.class);
   return (
-    <div className={`device-node${physical ? ' device-node--physical' : ''}${selected ? ' device-node--selected' : ''}`}>
+    <div className={`device-node${physical ? ` device-node--physical device-node--class-${classPresentation.accent}` : ''}${selected ? ' device-node--selected' : ''}`}>
       <Handle type="target" position={Position.Top} className="device-node__handle" />
-      <span className="device-node__kind">{projection.kind}</span>
+      <span className="device-node__kind">
+        {physical ? classPresentation.label : projection.kind}
+      </span>
       <strong>{displayNodeLabel(projection)}</strong>
       <span className="device-node__role">
         {physical

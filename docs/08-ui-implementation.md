@@ -400,3 +400,15 @@ canonical точка. Затем та же transaction создаёт cable `Phy
 Уже имеющий direct binding `NetworkInterface` автоматически не перепривязывается.
 Operation не создаёт L2/L3/IP facts. UI запускает её из Physical inspector и
 после success заново получает nodes/edges и details только через public API.
+
+## W.6.1 — классификация PhysicalObject
+
+**FIXED**
+
+Bounded metadata materialization поддерживает optional непустую строку `class`
+только для `PhysicalObject`. Она возвращается в `PhysicalObjectDetailsDocument`
+и в `attributes.class` L1 projection без вывода из aliases, counts или
+connectivity. `PUT /v1/topology/physical-objects/{id}/class` идемпотентно меняет
+значение; create physical object принимает optional `class`, а новые cable
+objects из W.3/W.6 получают explicit `class=cable`. Отсутствующий class остаётся
+валидным и существующие объекты автоматически не классифицируются.

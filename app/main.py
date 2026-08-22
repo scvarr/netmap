@@ -78,6 +78,7 @@ from app.schemas import (
     SecurityPolicyEvaluationQuery,
     SecurityEvaluationArtifact,
     SecurityEvaluationQuery,
+    SetPhysicalObjectClassRequest,
     StructuralAdjacencyArtifact,
     StructuralAdjacencyQuery,
     TopologyProjectionDocument,
@@ -166,6 +167,26 @@ def get_physical_object_details(
     )
 
 
+@app.put(
+    "/v1/topology/physical-objects/{physical_object_id}/class",
+    response_model=PhysicalObjectDetailsDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def set_physical_object_class(
+    physical_object_id: uuid.UUID,
+    query: SetPhysicalObjectClassRequest,
+    session: Session = Depends(get_session),
+) -> PhysicalObjectDetailsDocument:
+    with session.begin():
+        DeviceCatalog(session).set_physical_object_class(
+            physical_object_id, query.value
+        )
+        return ConfiguredPhysicalObjectDetailsResolver(
+            CanonicalRepository(session)
+        ).resolve(physical_object_id)
+
+
 @app.post(
     "/v1/topology/physical-objects",
     response_model=PhysicalObjectDetailsDocument,
@@ -181,6 +202,7 @@ def create_physical_object(
         created = DeviceCatalog(session).create_physical_object(
             query.display_name,
             query.initial_connection_point.display_name,
+            query.class_,
         )
         return ConfiguredPhysicalObjectDetailsResolver(
             CanonicalRepository(session)

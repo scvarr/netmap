@@ -135,4 +135,30 @@ describe('PhysicalObjectDetailsSection', () => {
     expect(screen.getByText(/нет однозначной ссылки/)).toBeInTheDocument();
     expect(loadPhysicalObjectDetails).not.toHaveBeenCalled();
   });
+
+  it('updates class from presets and reports authoritative refresh', async () => {
+    const initial = details('object-a');
+    const updated = {
+      ...initial,
+      physical_object: { ...initial.physical_object, class: 'switch' },
+    };
+    const setPhysicalObjectClass = vi.fn().mockResolvedValue(updated);
+    const onClassUpdated = vi.fn();
+    render(
+      <PhysicalObjectDetailsSection
+        node={node('object-a')}
+        dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(initial) }}
+        classWriteDataSource={{ setPhysicalObjectClass }}
+        onClassUpdated={onClassUpdated}
+      />,
+    );
+
+    await screen.findByText('ФИЗИЧЕСКИЙ ОБЪЕКТ');
+    await userEvent.selectOptions(screen.getByLabelText('Классификация'), 'switch');
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить тип' }));
+
+    expect(setPhysicalObjectClass).toHaveBeenCalledWith('object-a', 'switch');
+    expect(await screen.findByText('КОММУТАТОР')).toBeInTheDocument();
+    expect(onClassUpdated).toHaveBeenCalledTimes(1);
+  });
 });

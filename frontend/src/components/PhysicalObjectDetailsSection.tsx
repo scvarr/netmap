@@ -6,7 +6,9 @@ import type {
 } from '../topology/physicalObjectDetailsTypes';
 import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
+import type { PhysicalObjectClassWriteDataSource } from '../topology/physicalObjectClassWriteTypes';
 import type { ProjectionSourceRef, TopologyProjectionNode } from '../topology/types';
+import { physicalClassPresentation } from '../topology/presentation';
 import { ConnectPhysicalEndpoint } from './ConnectPhysicalEndpoint';
 
 interface PhysicalObjectDetailsSectionProps {
@@ -15,7 +17,9 @@ interface PhysicalObjectDetailsSectionProps {
   topologyNodes?: TopologyProjectionNode[];
   deviceDetailsDataSource?: DeviceDetailsDataSource;
   writeDataSource?: PhysicalEndpointConnectionWriteDataSource;
+  classWriteDataSource?: PhysicalObjectClassWriteDataSource;
   onConnected?: () => void;
+  onClassUpdated?: () => void;
 }
 
 type DetailsState =
@@ -50,6 +54,85 @@ const SourceRefs = ({ refs }: { refs: ProjectionSourceRef[] }) => (
     ))}
   </ul>
 );
+
+const KNOWN_CLASSES = new Set(['workstation', 'switch', 'cable', 'outlet', 'patch_panel']);
+
+interface PhysicalObjectClassEditorProps {
+  physicalObjectId: string;
+  currentClass?: string;
+  dataSource: PhysicalObjectClassWriteDataSource;
+  onUpdated: (document: PhysicalObjectDetailsDocument) => void;
+}
+
+const PhysicalObjectClassEditor = ({
+  physicalObjectId,
+  currentClass,
+  dataSource,
+  onUpdated,
+}: PhysicalObjectClassEditorProps) => {
+  const initialPreset = currentClass && KNOWN_CLASSES.has(currentClass) ? currentClass : '__custom__';
+  const [preset, setPreset] = useState(initialPreset);
+  const [customValue, setCustomValue] = useState(
+    currentClass && !KNOWN_CLASSES.has(currentClass) ? currentClass : '',
+  );
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const value = preset === '__custom__' ? customValue.trim() : preset;
+  const unchanged = value === (currentClass ?? '');
+
+  const submit = async () => {
+    if (!value || pending || unchanged) return;
+    setPending(true);
+    setError(null);
+    try {
+      onUpdated(await dataSource.setPhysicalObjectClass(physicalObjectId, value));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  return (
+    <section className="physical-class-editor" aria-label="Тип объекта">
+      <h3>Тип объекта</h3>
+      <p className="physical-class-editor__current">
+        {physicalClassPresentation(currentClass).label}
+        {currentClass && !KNOWN_CLASSES.has(currentClass) ? ` · ${currentClass}` : ''}
+      </p>
+      <label>
+        <span>Классификация</span>
+        <select
+          value={preset}
+          onChange={(event) => setPreset(event.target.value)}
+          disabled={pending}
+        >
+          <option value="workstation">ПК</option>
+          <option value="switch">Коммутатор</option>
+          <option value="cable">Кабель</option>
+          <option value="outlet">Розетка</option>
+          <option value="patch_panel">Патч-панель</option>
+          <option value="__custom__">Другое</option>
+        </select>
+      </label>
+      {preset === '__custom__' && (
+        <label>
+          <span>Значение</span>
+          <input
+            value={customValue}
+            onChange={(event) => setCustomValue(event.target.value)}
+            disabled={pending}
+            placeholder="Например: ups"
+          />
+        </label>
+      )}
+      {error && <p className="physical-class-editor__error" role="alert">{error}</p>}
+      <button type="button" onClick={() => void submit()} disabled={!value || pending || unchanged}>
+        {pending ? 'Сохраняем…' : 'Сохранить тип'}
+      </button>
+    </section>
+  );
+};
 
 interface PointCardProps {
   point: ConnectionPointDetails;
@@ -98,7 +181,9 @@ export function PhysicalObjectDetailsSection({
   topologyNodes = [],
   deviceDetailsDataSource,
   writeDataSource,
+  classWriteDataSource,
   onConnected = () => undefined,
+  onClassUpdated = () => undefined,
 }: PhysicalObjectDetailsSectionProps) {
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
@@ -147,6 +232,18 @@ export function PhysicalObjectDetailsSection({
           <div className="physical-object-details__summary">
             <span>Интерфейсов: <strong>{state.document.owned_interface_count}</strong></span>
           </div>
+          {classWriteDataSource && physicalObjectId && (
+            <PhysicalObjectClassEditor
+              key={state.document.physical_object.class ?? 'unclassified'}
+              physicalObjectId={physicalObjectId}
+              currentClass={state.document.physical_object.class}
+              dataSource={classWriteDataSource}
+              onUpdated={(document) => {
+                setState({ kind: 'loaded', document });
+                onClassUpdated();
+              }}
+            />
+          )}
           <h3 id="connection-points-heading">
             Точки подключения <span>{state.document.connection_points.length}</span>
           </h3>

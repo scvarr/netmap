@@ -121,7 +121,7 @@ class NetworkInterfacePhysicalOwner(Base):
 
 
 class EntityMetadata(Base):
-    """Bounded metadata materialization for display aliases."""
+    """Bounded metadata materialization for display aliases and object class."""
 
     __tablename__ = "entity_metadata"
     __table_args__ = (
@@ -129,7 +129,11 @@ class EntityMetadata(Base):
             "num_nonnulls(physical_object_id, network_interface_id, connection_point_id) = 1",
             name="exactly_one_entity",
         ),
-        CheckConstraint("key = 'alias.display'", name="display_alias_only"),
+        CheckConstraint(
+            "key = 'alias.display' OR "
+            "(key = 'class' AND physical_object_id IS NOT NULL)",
+            name="supported_key_target",
+        ),
         CheckConstraint("char_length(btrim(value)) > 0", name="value_not_blank"),
         UniqueConstraint(
             "physical_object_id", "key", name="uq_entity_metadata_physical_object_key"

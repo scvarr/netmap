@@ -23,6 +23,9 @@ class ConfiguredPhysicalObjectDetailsResolver:
         object_alias = catalog.physical_object_display_aliases([physical_object_id]).get(
             physical_object_id
         )
+        object_class = catalog.physical_object_classes([physical_object_id]).get(
+            physical_object_id
+        )
         points = tuple(
             point
             for point in self.repository.get_all_connection_point_records()
@@ -97,6 +100,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
                 label_source=(
                     None if object_alias is not None else "TECHNICAL_FALLBACK"
                 ),
+                class_=(object_class.value if object_class is not None else None),
             ),
             connection_points=[
                 self._point_details(

@@ -7,6 +7,20 @@ const TECHNICAL_DEVICE_LABEL = /^PhysicalObject\s+(.+)$/i;
 
 const shortId = (value: string): string => value.replace(/[{}]/g, '').slice(0, 8);
 
+export interface PhysicalClassPresentation {
+  label: string;
+  accent: 'workstation' | 'switch' | 'cable' | 'outlet' | 'patch-panel' | 'unknown';
+}
+
+export const physicalClassPresentation = (value: unknown): PhysicalClassPresentation => {
+  if (value === 'workstation') return { label: 'ПК', accent: 'workstation' };
+  if (value === 'switch') return { label: 'КОММУТАТОР', accent: 'switch' };
+  if (value === 'cable') return { label: 'КАБЕЛЬ', accent: 'cable' };
+  if (value === 'outlet') return { label: 'РОЗЕТКА', accent: 'outlet' };
+  if (value === 'patch_panel') return { label: 'ПАТЧ-ПАНЕЛЬ', accent: 'patch-panel' };
+  return { label: 'ФИЗИЧЕСКИЙ ОБЪЕКТ', accent: 'unknown' };
+};
+
 export const displayNodeLabel = (node: TopologyProjectionNode): string => {
   const technicalMatch = node.label.match(TECHNICAL_DEVICE_LABEL);
   if (node.attributes.label_source !== 'TECHNICAL_FALLBACK' && !technicalMatch) {

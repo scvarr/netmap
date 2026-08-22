@@ -11,9 +11,14 @@ export function CreatePhysicalObject({ dataSource, onCreated }: CreatePhysicalOb
   const [open, setOpen] = useState(false);
   const [objectName, setObjectName] = useState('');
   const [pointName, setPointName] = useState('');
+  const [category, setCategory] = useState('');
+  const [customClass, setCustomClass] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const valid = objectName.trim().length > 0 && pointName.trim().length > 0;
+  const classValue = category === '__custom__' ? customClass.trim() : category;
+  const valid = objectName.trim().length > 0
+    && pointName.trim().length > 0
+    && (category !== '__custom__' || classValue.length > 0);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -24,9 +29,12 @@ export function CreatePhysicalObject({ dataSource, onCreated }: CreatePhysicalOb
       const created = await dataSource.createPhysicalObject({
         display_name: objectName.trim(),
         initial_connection_point: { display_name: pointName.trim() },
+        ...(classValue ? { class: classValue } : {}),
       });
       setObjectName('');
       setPointName('');
+      setCategory('');
+      setCustomClass('');
       setOpen(false);
       onCreated(created);
     } catch (reason) {
@@ -75,6 +83,30 @@ export function CreatePhysicalObject({ dataSource, onCreated }: CreatePhysicalOb
               disabled={submitting}
             />
           </label>
+          <label>
+            <span>Категория</span>
+            <select
+              aria-label="Категория"
+              value={category}
+              onChange={(event) => setCategory(event.target.value)}
+              disabled={submitting}
+            >
+              <option value="">Другое / не указано</option>
+              <option value="outlet">Розетка</option>
+              <option value="patch_panel">Патч-панель</option>
+              <option value="__custom__">Другое значение</option>
+            </select>
+          </label>
+          {category === '__custom__' && (
+            <label>
+              <span>Значение типа</span>
+              <input
+                value={customClass}
+                onChange={(event) => setCustomClass(event.target.value)}
+                disabled={submitting}
+              />
+            </label>
+          )}
           {error && <p className="create-device__error" role="alert">Не удалось создать физический объект. {error}</p>}
           <button className="create-device__submit" type="submit" disabled={!valid || submitting}>
             {submitting ? 'Создаём…' : 'Создать'}

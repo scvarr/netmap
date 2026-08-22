@@ -4,6 +4,7 @@ export interface PhysicalObjectDetails {
   source_ref: ProjectionSourceRef;
   label: string;
   label_source?: 'TECHNICAL_FALLBACK';
+  class?: string;
 }
 
 export interface ConnectionPointDetails {

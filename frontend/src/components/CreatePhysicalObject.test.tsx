@@ -47,4 +47,24 @@ describe('CreatePhysicalObject', () => {
     expect(screen.getByLabelText('Название')).toHaveValue('Розетка 101-1');
     expect(screen.getByRole('button', { name: 'Создать' })).toBeEnabled();
   });
+
+  it('sends the selected bounded category', async () => {
+    const createPhysicalObject = vi.fn().mockResolvedValue({
+      ...physicalObjectDocument,
+      physical_object: { ...physicalObjectDocument.physical_object, class: 'outlet' },
+    });
+    render(<CreatePhysicalObject dataSource={{ createPhysicalObject }} onCreated={vi.fn()} />);
+
+    await userEvent.click(screen.getByRole('button', { name: '+ Добавить' }));
+    await userEvent.type(screen.getByLabelText('Название'), 'Outlet1');
+    await userEvent.type(screen.getByLabelText('Первая точка подключения'), 'Port');
+    await userEvent.selectOptions(screen.getByLabelText('Категория'), 'outlet');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+
+    expect(createPhysicalObject).toHaveBeenCalledWith({
+      display_name: 'Outlet1',
+      initial_connection_point: { display_name: 'Port' },
+      class: 'outlet',
+    });
+  });
 });

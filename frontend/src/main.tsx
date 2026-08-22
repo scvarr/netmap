@@ -9,6 +9,7 @@ import { ApiPhysicalLinkWriteDataSource } from './topology/apiPhysicalLinkWriteD
 import { ApiPhysicalObjectDetailsDataSource } from './topology/apiPhysicalObjectDetailsDataSource';
 import { ApiPhysicalObjectWriteDataSource } from './topology/apiPhysicalObjectWriteDataSource';
 import { ApiPhysicalEndpointConnectionWriteDataSource } from './topology/apiPhysicalEndpointConnectionWriteDataSource';
+import { ApiPhysicalObjectClassWriteDataSource } from './topology/apiPhysicalObjectClassWriteDataSource';
 import { BrowserTopologyLayoutStore } from './topology/layoutStore';
 import './styles.css';
 
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')!).render(
       physicalObjectDetailsDataSource={new ApiPhysicalObjectDetailsDataSource()}
       physicalObjectWriteDataSource={new ApiPhysicalObjectWriteDataSource()}
       physicalEndpointConnectionWriteDataSource={new ApiPhysicalEndpointConnectionWriteDataSource()}
+      physicalObjectClassWriteDataSource={new ApiPhysicalObjectClassWriteDataSource()}
       topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
     />
   </StrictMode>,

@@ -36,4 +36,15 @@ describe('ApiPhysicalObjectDetailsDataSource', () => {
       },
     })).toThrow(/CANONICAL_FACT/);
   });
+
+  it('accepts an optional class and rejects a blank class', () => {
+    expect(parsePhysicalObjectDetailsDocument({
+      ...physicalObjectDocument,
+      physical_object: { ...physicalObjectDocument.physical_object, class: 'custom-kind' },
+    }).physical_object.class).toBe('custom-kind');
+    expect(() => parsePhysicalObjectDetailsDocument({
+      ...physicalObjectDocument,
+      physical_object: { ...physicalObjectDocument.physical_object, class: '' },
+    })).toThrow(/physical_object.class/);
+  });
 });

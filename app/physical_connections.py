@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.device_catalog import DISPLAY_ALIAS_KEY
+from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ValidationError
 from app.models import ConnectionPoint, EntityMetadata, NetworkInterface
 from app.repository import CanonicalRepository, ConnectionMemberInput
@@ -181,6 +181,13 @@ class PhysicalConnectionCatalog:
         )
 
         cable = repository.add_physical_object()
+        self.session.add(
+            EntityMetadata(
+                physical_object_id=cable.id,
+                key=PHYSICAL_OBJECT_CLASS_KEY,
+                value="cable",
+            )
+        )
         if cable_display_name is not None:
             self.session.add(
                 EntityMetadata(
@@ -189,7 +196,7 @@ class PhysicalConnectionCatalog:
                     value=cable_display_name,
                 )
             )
-            self.session.flush()
+        self.session.flush()
         cable_a = repository.add_connection_point(cable.id, cardinality=1)
         cable_b = repository.add_connection_point(cable.id, cardinality=1)
 
