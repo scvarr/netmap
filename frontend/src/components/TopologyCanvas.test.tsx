@@ -1,25 +1,52 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { TopologyCanvas } from './TopologyCanvas';
 import type { FlowProjection, TopologyLayoutEngine } from '../topology/layout';
 import type { TopologyProjectionDocument } from '../topology/types';
+import type { TopologyLayoutStore } from '../topology/layoutStore';
+
+const { fitViewMock } = vi.hoisted(() => ({ fitViewMock: vi.fn() }));
 
 vi.mock('@xyflow/react', () => ({
+  applyNodeChanges: (changes: Array<{ id: string; position?: { x: number; y: number } }>, nodes: FlowProjection['nodes']) => (
+    nodes.map((node) => {
+      const change = changes.find((item) => item.id === node.id);
+      return change?.position ? { ...node, position: change.position } : node;
+    })
+  ),
   Background: () => null,
   BackgroundVariant: { Dots: 'dots' },
+  BaseEdge: () => null,
   Controls: () => null,
+  getStraightPath: () => ['', 0, 0],
+  Handle: () => null,
   MiniMap: () => null,
-  ReactFlow: ({ nodes, onNodeClick }: {
+  Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
+  ReactFlow: ({ nodes, onNodeClick, onNodesChange, onNodeDragStop, children }: {
     nodes: FlowProjection['nodes'];
     onNodeClick: (event: unknown, node: FlowProjection['nodes'][number]) => void;
+    onNodesChange: (changes: unknown[]) => void;
+    onNodeDragStop: (event: unknown, node: FlowProjection['nodes'][number]) => void;
+    children: React.ReactNode;
   }) => (
     <div data-testid="flow">
       {nodes.map((node) => (
-        <button key={node.id} onClick={() => onNodeClick({}, node)}>{node.id}</button>
+        <div key={node.id}>
+          <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
+          <span data-testid={`position-${node.id}`}>{node.position.x},{node.position.y}</span>
+          <button onClick={() => {
+            const dragged = { ...node, position: { x: 42, y: 84 } };
+            onNodesChange([{ id: node.id, type: 'position', position: dragged.position }]);
+            onNodeDragStop({}, dragged);
+          }}>drag {node.id}</button>
+        </div>
       ))}
+      {children}
     </div>
   ),
-  useReactFlow: () => ({ fitView: vi.fn() }),
+  useInternalNode: () => undefined,
+  useReactFlow: () => ({ fitView: fitViewMock }),
 }));
 
 const documentFor = (id: string): TopologyProjectionDocument => ({
@@ -97,5 +124,58 @@ describe('TopologyCanvas async layout boundary', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'logical-A' }));
     expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: document.nodes[0] });
+  });
+
+  it('applies stored overrides and saves a manual drag for the current view', async () => {
+    const document = documentFor('logical-A');
+    const store: TopologyLayoutStore = {
+      load: vi.fn().mockReturnValue({ 'logical-A': { x: 10, y: 20 } }),
+      save: vi.fn(),
+      clear: vi.fn(),
+    };
+    render(
+      <TopologyCanvas
+        document={document}
+        selection={null}
+        onSelectionChange={vi.fn()}
+        layoutEngine={async (input) => flowFor(input)}
+        layoutStore={store}
+      />,
+    );
+
+    expect(await screen.findByTestId('position-logical-A')).toHaveTextContent('10,20');
+    fireEvent.click(screen.getByRole('button', { name: 'drag logical-A' }));
+
+    expect(store.save).toHaveBeenCalledWith('L2/DEVICE', {
+      'logical-A': { x: 42, y: 84 },
+    });
+    expect(screen.getByTestId('position-logical-A')).toHaveTextContent('42,84');
+  });
+
+  it('auto-layout clears only the current view, reruns ELK, and fits the canvas', async () => {
+    fitViewMock.mockClear();
+    const document = documentFor('physical-A');
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async (input) => flowFor(input));
+    const store: TopologyLayoutStore = {
+      load: vi.fn().mockReturnValue({}),
+      save: vi.fn(),
+      clear: vi.fn(),
+    };
+    render(
+      <TopologyCanvas
+        document={document}
+        selection={null}
+        onSelectionChange={vi.fn()}
+        layoutEngine={layoutEngine}
+        layoutStore={store}
+      />,
+    );
+    await screen.findByRole('button', { name: 'physical-A' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Авторазмещение' }));
+
+    await waitFor(() => expect(layoutEngine).toHaveBeenCalledTimes(2));
+    expect(store.clear).toHaveBeenCalledWith('L1/PHYSICAL_OBJECT');
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalled());
   });
 });

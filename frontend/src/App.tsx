@@ -18,6 +18,7 @@ import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceW
 import type { PhysicalLinkWriteDataSource } from './topology/physicalLinkWriteTypes';
 import type { PhysicalObjectDetailsDataSource } from './topology/physicalObjectDetailsTypes';
 import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
+import type { TopologyLayoutStore } from './topology/layoutStore';
 
 const LOGICAL_REQUEST: TopologyProjectionRequest = {
   layer: 'L2',
@@ -49,6 +50,7 @@ interface AppProps {
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   physicalObjectWriteDataSource?: PhysicalObjectWriteDataSource;
+  topologyLayoutStore?: TopologyLayoutStore;
 }
 
 export function App({
@@ -59,6 +61,7 @@ export function App({
   physicalLinkWriteDataSource,
   physicalObjectDetailsDataSource,
   physicalObjectWriteDataSource,
+  topologyLayoutStore,
 }: AppProps) {
   const [document, setDocument] = useState<TopologyProjectionDocument | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
@@ -200,7 +203,12 @@ export function App({
             {!loading && !error && isEmpty && <ViewState kind="empty" />}
             {!loading && !error && document && !isEmpty && (
               <ReactFlowProvider>
-                <TopologyCanvas document={document} selection={selection} onSelectionChange={setSelection} />
+                <TopologyCanvas
+                  document={document}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                  layoutStore={topologyLayoutStore}
+                />
               </ReactFlowProvider>
             )}
           </section>

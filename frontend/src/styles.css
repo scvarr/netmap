@@ -90,7 +90,9 @@ button { font: inherit; }
 .device-node strong { font: 700 17px ui-monospace, "Cascadia Code", monospace; letter-spacing: -.04em; }
 .device-node__role { color: #8da1a2; font-size: 10px; }
 .device-node__status { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: #69cdaa; font: 700 8px ui-monospace, "Cascadia Code", monospace; letter-spacing: .08em; }
-.device-node__handle { width: 8px !important; height: 8px !important; border: 2px solid #0d1b1e !important; background: #667d80 !important; }
+.device-node__handle { width: 1px !important; height: 1px !important; border: 0 !important; opacity: 0; pointer-events: none; }
+.topology-auto-layout { padding: 8px 11px; border: 1px solid #345052; border-radius: 7px; color: #b4c6c4; background: rgba(16, 32, 35, .92); font-size: 10px; cursor: pointer; }
+.topology-auto-layout:hover { border-color: #55e5b5; color: #e8f4f1; }
 .react-flow__controls { overflow: hidden; border: 1px solid #2a3d40 !important; border-radius: 8px !important; box-shadow: none !important; }
 .react-flow__controls-button { border-color: #2a3d40 !important; color: #b4c6c4 !important; background: #102023 !important; }
 .react-flow__controls-button:hover { background: #183034 !important; }

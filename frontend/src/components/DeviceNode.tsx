@@ -10,7 +10,7 @@ export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
   const physical = projection.kind === 'PHYSICAL_OBJECT';
   return (
     <div className={`device-node${physical ? ' device-node--physical' : ''}${selected ? ' device-node--selected' : ''}`}>
-      <Handle type="target" position={Position.Left} className="device-node__handle" />
+      <Handle type="target" position={Position.Top} className="device-node__handle" />
       <span className="device-node__kind">{projection.kind}</span>
       <strong>{displayNodeLabel(projection)}</strong>
       <span className="device-node__role">
@@ -19,7 +19,7 @@ export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
           : String(projection.attributes.role ?? 'DEVICE')}
       </span>
       <span className="device-node__status"><i /> {projection.status ?? 'UNKNOWN'}</span>
-      <Handle type="source" position={Position.Right} className="device-node__handle" />
+      <Handle type="source" position={Position.Top} className="device-node__handle" />
     </div>
   );
 }

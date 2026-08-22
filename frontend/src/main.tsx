@@ -8,6 +8,7 @@ import { ApiDeviceInterfaceWriteDataSource } from './topology/apiDeviceInterface
 import { ApiPhysicalLinkWriteDataSource } from './topology/apiPhysicalLinkWriteDataSource';
 import { ApiPhysicalObjectDetailsDataSource } from './topology/apiPhysicalObjectDetailsDataSource';
 import { ApiPhysicalObjectWriteDataSource } from './topology/apiPhysicalObjectWriteDataSource';
+import { BrowserTopologyLayoutStore } from './topology/layoutStore';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -20,6 +21,7 @@ createRoot(document.getElementById('root')!).render(
       physicalLinkWriteDataSource={new ApiPhysicalLinkWriteDataSource()}
       physicalObjectDetailsDataSource={new ApiPhysicalObjectDetailsDataSource()}
       physicalObjectWriteDataSource={new ApiPhysicalObjectWriteDataSource()}
+      topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
     />
   </StrictMode>,
 );

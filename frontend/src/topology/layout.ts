@@ -151,7 +151,7 @@ export const toFlowProjection: TopologyLayoutEngine = async (document) => {
       id: projection.id,
       source: projection.from_node_id,
       target: projection.to_node_id,
-      type: 'smoothstep',
+      type: 'floating',
       data: { projection },
     })),
   };

@@ -1,13 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
+  applyNodeChanges,
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
+  Panel,
   ReactFlow,
   useReactFlow,
   type EdgeMouseHandler,
   type NodeMouseHandler,
+  type OnNodeDrag,
+  type OnNodesChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -18,27 +22,42 @@ import {
   type TopologyLayoutEngine,
 } from '../topology/layout';
 import type { TopologyProjectionDocument, TopologySelection } from '../topology/types';
+import {
+  applyTopologyPositionOverrides,
+  topologyLayoutViewKey,
+  type TopologyLayoutStore,
+} from '../topology/layoutStore';
 import { DeviceNode } from './DeviceNode';
+import { FloatingTopologyEdge } from './FloatingTopologyEdge';
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
   selection: TopologySelection;
   onSelectionChange: (selection: TopologySelection) => void;
   layoutEngine?: TopologyLayoutEngine;
+  layoutStore?: TopologyLayoutStore;
 }
 
 const nodeTypes = { device: DeviceNode };
+const edgeTypes = { floating: FloatingTopologyEdge };
 
 export function TopologyCanvas({
   document,
   selection,
   onSelectionChange,
   layoutEngine = toFlowProjection,
+  layoutStore,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
+  const [layoutRevision, setLayoutRevision] = useState(0);
+  const fitAfterLayout = useRef(false);
+  const currentDocument = useRef(document);
   const { fitView } = useReactFlow();
   const selectedNodeId = selection?.type === 'node' ? selection.item.id : null;
+  const viewKey = topologyLayoutViewKey(document);
+
+  currentDocument.current = document;
 
   useEffect(() => {
     let current = true;
@@ -46,7 +65,12 @@ export function TopologyCanvas({
     setLayoutError(null);
     void layoutEngine(document).then(
       (nextProjection) => {
-        if (current) setProjection(nextProjection);
+        if (!current || currentDocument.current !== document) return;
+        const storedPositions = layoutStore?.load(viewKey) ?? {};
+        setProjection({
+          ...nextProjection,
+          nodes: applyTopologyPositionOverrides(nextProjection.nodes, storedPositions),
+        });
       },
       (reason: unknown) => {
         if (!current) return;
@@ -54,7 +78,13 @@ export function TopologyCanvas({
       },
     );
     return () => { current = false; };
-  }, [document, layoutEngine]);
+  }, [document, layoutEngine, layoutRevision, layoutStore, viewKey]);
+
+  useEffect(() => {
+    if (!projection || !fitAfterLayout.current) return;
+    fitAfterLayout.current = false;
+    void fitView({ duration: 300, maxZoom: 1.1, padding: 0.2 });
+  }, [fitView, projection]);
 
   useEffect(() => {
     if (!projection || !selectedNodeId || !projection.nodes.some((node) => node.id === selectedNodeId)) return;
@@ -89,6 +119,24 @@ export function TopologyCanvas({
     const item = edge.data?.projection;
     if (item) onSelectionChange({ type: 'edge', item });
   };
+  const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
+    setProjection((current) => current ? {
+      ...current,
+      nodes: applyNodeChanges(changes, current.nodes),
+    } : current);
+  };
+  const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
+    if (!layoutStore) return;
+    layoutStore.save(viewKey, {
+      ...layoutStore.load(viewKey),
+      [draggedNode.id]: draggedNode.position,
+    });
+  };
+  const resetLayout = () => {
+    layoutStore?.clear(viewKey);
+    fitAfterLayout.current = true;
+    setLayoutRevision((revision) => revision + 1);
+  };
 
   return (
     <div
@@ -99,6 +147,9 @@ export function TopologyCanvas({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
+        onNodesChange={onNodesChange}
+        onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={() => onSelectionChange(null)}
@@ -106,11 +157,16 @@ export function TopologyCanvas({
         fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
         minZoom={0.35}
         maxZoom={1.8}
-        nodesDraggable={false}
+        nodesDraggable
         nodesConnectable={false}
         elementsSelectable
         proOptions={{ hideAttribution: true }}
       >
+        <Panel position="top-left">
+          <button type="button" className="topology-auto-layout" onClick={resetLayout}>
+            Авторазмещение
+          </button>
+        </Panel>
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} color="#25383c" />
         <MiniMap
           pannable
