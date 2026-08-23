@@ -50,6 +50,10 @@ export interface CreateObjectBlueprintRequest {
   authoring_recipe?: BlueprintAuthoringRecipe;
 }
 
+export interface CreateObjectBlueprintVersionRequest extends Omit<CreateObjectBlueprintRequest, 'name'> {
+  blueprint_name?: string;
+}
+
 export interface ObjectBlueprintListItem {
   blueprint_ref: LibraryRef;
   name: string;
@@ -90,4 +94,6 @@ export interface ObjectBlueprintDataSource {
   loadObjectBlueprints(): Promise<ObjectBlueprintListDocument>;
   loadObjectBlueprintVersion(blueprintId: string, versionId: string): Promise<ObjectBlueprintVersionDocument>;
   createObjectBlueprint(request: CreateObjectBlueprintRequest): Promise<ObjectBlueprintCreationDocument>;
+  createObjectBlueprintVersion?(blueprintId: string, request: CreateObjectBlueprintVersionRequest): Promise<ObjectBlueprintCreationDocument>;
+  deleteObjectBlueprint?(blueprintId: string): Promise<void>;
 }

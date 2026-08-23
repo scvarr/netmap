@@ -6,6 +6,7 @@ import { MapPage } from './pages/MapPage';
 import { NewInfrastructureObjectPage } from './pages/NewInfrastructureObjectPage';
 import { NewObjectBlueprintPage } from './pages/NewObjectBlueprintPage';
 import { ObjectBlueprintLibraryPage } from './pages/ObjectBlueprintLibraryPage';
+import { EditObjectBlueprintPage } from './pages/EditObjectBlueprintPage';
 import type { ConnectionPointWriteDataSource } from './topology/connectionPointWriteTypes';
 import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
 import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
@@ -58,6 +59,7 @@ export function App(props: AppProps) {
         />
         <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
+        <Route path="library/object-blueprints/:blueprintId/versions/:versionId/edit" element={props.objectBlueprintDataSource ? <EditObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route
           path="infrastructure/objects/new"
           element={(

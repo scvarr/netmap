@@ -267,3 +267,24 @@ def test_blueprint_version_creation_is_atomic_and_delete_is_safe():
     assert client.get(
         f"/v1/library/object-blueprints/{blueprint_id}/versions/00000000-0000-0000-0000-000000000002"
     ).status_code == 422
+
+
+def test_next_version_can_rename_atomically_without_mutating_v1():
+    first = version_snapshot("A", "B")
+    created = client.post("/v1/library/object-blueprints", json={"name": "Original", **first})
+    blueprint_id = created.json()["blueprint_ref"]["entity_id"]
+    v1_id = created.json()["version_ref"]["entity_id"]
+    second = version_snapshot("C", "D")
+    response = client.post(
+        f"/v1/library/object-blueprints/{blueprint_id}/versions",
+        json={"blueprint_name": "Renamed", **second},
+    )
+    assert response.status_code == 201
+    v2_id = response.json()["version_ref"]["entity_id"]
+    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v1_id}").json()["slots"][0]["key"] == "A01"
+    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v2_id}").json()["name"] == "Renamed"
+    invalid = version_snapshot("E", "F"); invalid["slots"] = invalid["slots"][:1]
+    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"blueprint_name": "Should not persist", **invalid}).status_code == 422
+    listing = client.get("/v1/library/object-blueprints").json()["blueprints"]
+    item = next(item for item in listing if item["blueprint_ref"]["entity_id"] == blueprint_id)
+    assert item["name"] == "Renamed" and item["version_count"] == 2

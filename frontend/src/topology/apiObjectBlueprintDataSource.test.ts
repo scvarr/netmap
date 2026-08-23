@@ -19,4 +19,11 @@ describe('ApiObjectBlueprintDataSource', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: 'VALIDATION_ERROR', message: 'Bad blueprint' } }), { status: 422 })));
     await expect(new ApiObjectBlueprintDataSource().createObjectBlueprint(request)).rejects.toThrow('VALIDATION_ERROR: Bad blueprint');
   });
+  it('uses bounded next-version and delete operations', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ schema_version: '1.0', blueprint_ref: ref('ObjectBlueprint', 'bp'), version_ref: ref('ObjectBlueprintVersion', 'v2') }), { status: 201 })).mockResolvedValueOnce(new Response(null, { status: 204 })); vi.stubGlobal('fetch', fetchMock);
+    await new ApiObjectBlueprintDataSource().createObjectBlueprintVersion('bp', { blueprint_name: 'Renamed', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slots: [], internal_links: [] });
+    await new ApiObjectBlueprintDataSource().deleteObjectBlueprint('bp');
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/library/object-blueprints/bp/versions', expect.objectContaining({ method: 'POST' }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/library/object-blueprints/bp', { method: 'DELETE' });
+  });
 });

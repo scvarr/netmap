@@ -333,6 +333,7 @@ class CreateObjectBlueprintVersionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
+    blueprint_name: str | None = Field(default=None, min_length=1, max_length=255)
     body: BlueprintBody
     slots: list[BlueprintEndpointSlotRequest]
     internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)

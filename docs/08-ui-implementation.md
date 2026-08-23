@@ -566,3 +566,13 @@ its latest version plus `version_count`; historical details remain addressable.
 `DELETE /v1/library/object-blueprints/{blueprint_id}` removes only unused library
 records and rejects a blueprint with any materialized instance; it never cascades
 into canonical topology.
+
+## BLUEPRINT.3b — edit and safe-delete UI
+
+Library cards expose the latest-version edit route and an explicitly confirmed
+delete action. Editing hydrates only the exact version's persisted authoring
+recipe; a legacy version without a recipe is clearly non-editable in the
+structured editor and is never guessed from slot names. Save produces vN+1 via
+the bounded version operation, preserving vN. An optional `blueprint_name` is
+renamed atomically with that new version. Delete always reloads the authoritative
+library and conflict leaves both the card and all canonical topology untouched.

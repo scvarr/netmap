@@ -90,6 +90,8 @@ class ObjectBlueprintCatalog:
         )
         if blueprint is None:
             raise ValidationError("ObjectBlueprint was not found", {"blueprint_id": str(blueprint_id)})
+        if query.blueprint_name is not None:
+            blueprint.name = query.blueprint_name
         current = self.session.scalar(
             select(func.max(ObjectBlueprintVersion.version_number)).where(
                 ObjectBlueprintVersion.blueprint_id == blueprint_id

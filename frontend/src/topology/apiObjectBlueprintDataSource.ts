@@ -6,6 +6,7 @@ import type {
   BlueprintSlot,
   BlueprintSlotKind,
   CreateObjectBlueprintRequest,
+  CreateObjectBlueprintVersionRequest,
   LibraryRef,
   ObjectBlueprintCreationDocument,
   ObjectBlueprintDataSource,
@@ -108,5 +109,13 @@ export class ApiObjectBlueprintDataSource implements ObjectBlueprintDataSource {
     const response = await fetch(this.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }); if (!response.ok) throw await backendError(response);
     let body: unknown; try { body = await response.json(); } catch { return malformed('response body must be valid JSON.'); }
     return parseObjectBlueprintCreationDocument(body);
+  }
+  async createObjectBlueprintVersion(blueprintId: string, request: CreateObjectBlueprintVersionRequest): Promise<ObjectBlueprintCreationDocument> {
+    const response = await fetch(`${this.endpoint}/${encodeURIComponent(blueprintId)}/versions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }); if (!response.ok) throw await backendError(response);
+    let body: unknown; try { body = await response.json(); } catch { return malformed('response body must be valid JSON.'); }
+    return parseObjectBlueprintCreationDocument(body);
+  }
+  async deleteObjectBlueprint(blueprintId: string): Promise<void> {
+    const response = await fetch(`${this.endpoint}/${encodeURIComponent(blueprintId)}`, { method: 'DELETE' }); if (!response.ok) throw await backendError(response);
   }
 }
