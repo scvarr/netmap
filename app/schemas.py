@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, model_validator
+from pydantic_core import PydanticCustomError
 
 
 class PointMemberAddress(BaseModel):
@@ -210,6 +211,117 @@ class SetPhysicalObjectClassRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     value: str = Field(min_length=1, max_length=255)
+
+
+class BlueprintAnchor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    side: Literal["LEFT", "RIGHT", "TOP", "BOTTOM"]
+    offset: float = Field(ge=0, le=1)
+
+
+class BlueprintBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["RECTANGLE"]
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+    fill_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class BlueprintEndpointSlotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    key: str = Field(min_length=1, max_length=255)
+    display_name: str = Field(min_length=1, max_length=255)
+    kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
+    anchor: BlueprintAnchor
+
+
+class BlueprintInternalLinkRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    from_slot_key: str = Field(min_length=1, max_length=255)
+    to_slot_key: str = Field(min_length=1, max_length=255)
+
+
+class CreateObjectBlueprintRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=255)
+    default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
+    body: BlueprintBody
+    slots: list[BlueprintEndpointSlotRequest]
+    internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_slots_and_links(self) -> "CreateObjectBlueprintRequest":
+        keys = [slot.key for slot in self.slots]
+        if len(keys) != len(set(keys)):
+            raise PydanticCustomError(
+                "blueprint_duplicate_slot_key", "Blueprint slot keys must be unique"
+            )
+        known = set(keys)
+        pairs: set[tuple[str, str]] = set()
+        for link in self.internal_links:
+            if link.from_slot_key not in known or link.to_slot_key not in known:
+                raise PydanticCustomError(
+                    "blueprint_unknown_internal_link_slot",
+                    "Blueprint internal link refers to an unknown slot key",
+                )
+            if link.from_slot_key == link.to_slot_key:
+                raise PydanticCustomError(
+                    "blueprint_self_internal_link",
+                    "Blueprint internal link cannot refer to the same slot",
+                )
+            pair = tuple(sorted((link.from_slot_key, link.to_slot_key)))
+            if pair in pairs:
+                raise PydanticCustomError(
+                    "blueprint_duplicate_internal_link",
+                    "Blueprint internal links must be unique as unordered pairs",
+                )
+            pairs.add(pair)
+        return self
+
+
+class InstantiateObjectBlueprintRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_name: str = Field(min_length=1, max_length=255)
+
+
+class BlueprintLibraryRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ref_type: Literal["LIBRARY_RECORD"] = "LIBRARY_RECORD"
+    entity_type: Literal["ObjectBlueprint", "ObjectBlueprintVersion"]
+    entity_id: uuid.UUID
+
+
+class ObjectBlueprintCreationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    blueprint_ref: BlueprintLibraryRef
+    version_ref: BlueprintLibraryRef
+
+
+class ObjectBlueprintInstantiationSlot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slot_key: str = Field(min_length=1)
+    connection_point_ref: ProjectionSourceRef
+    network_interface_ref: ProjectionSourceRef | None = None
+
+
+class ObjectBlueprintInstantiationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    blueprint_ref: BlueprintLibraryRef
+    version_ref: BlueprintLibraryRef
+    physical_object_ref: ProjectionSourceRef
+    slots: list[ObjectBlueprintInstantiationSlot]
 
 
 class CreatePhysicalLinkRequest(BaseModel):

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import CIDR, INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -158,6 +158,116 @@ class EntityMetadata(Base):
     )
     key: Mapped[str] = mapped_column(String(64), nullable=False)
     value: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class ObjectBlueprint(Base):
+    """Authoring record; it is not a canonical topology fact."""
+
+    __tablename__ = "object_blueprints"
+    __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class ObjectBlueprintVersion(Base):
+    __tablename__ = "object_blueprint_versions"
+    __table_args__ = (
+        CheckConstraint("version_number >= 1", name="version_number_positive"),
+        CheckConstraint("body_kind = 'RECTANGLE'", name="rectangle_only"),
+        CheckConstraint("width > 0", name="width_positive"),
+        CheckConstraint("height > 0", name="height_positive"),
+        CheckConstraint("fill_color IS NULL OR fill_color ~ '^#[0-9A-Fa-f]{6}$'", name="fill_color_hex"),
+        UniqueConstraint("blueprint_id", "version_number", name="uq_object_blueprint_versions_number"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    blueprint_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("object_blueprints.id", ondelete="RESTRICT"), nullable=False
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    default_physical_object_class: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    body_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    width: Mapped[float] = mapped_column(Float, nullable=False)
+    height: Mapped[float] = mapped_column(Float, nullable=False)
+    fill_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+
+
+class BlueprintEndpointSlot(Base):
+    __tablename__ = "blueprint_endpoint_slots"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(slot_key)) > 0", name="slot_key_not_blank"),
+        CheckConstraint("char_length(btrim(display_name)) > 0", name="display_name_not_blank"),
+        CheckConstraint("kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="kind_supported"),
+        CheckConstraint("anchor_side IN ('LEFT', 'RIGHT', 'TOP', 'BOTTOM')", name="anchor_side_supported"),
+        CheckConstraint("anchor_offset >= 0 AND anchor_offset <= 1", name="anchor_offset_range"),
+        UniqueConstraint("blueprint_version_id", "slot_key", name="uq_blueprint_endpoint_slots_key"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    slot_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    anchor_side: Mapped[str] = mapped_column(String(16), nullable=False)
+    anchor_offset: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class BlueprintInternalLink(Base):
+    __tablename__ = "blueprint_internal_links"
+    __table_args__ = (
+        CheckConstraint("slot_a_id <> slot_b_id", name="distinct_slots"),
+        UniqueConstraint("blueprint_version_id", "slot_a_id", "slot_b_id", name="uq_blueprint_internal_links_unordered"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    slot_a_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("blueprint_endpoint_slots.id", ondelete="RESTRICT"), nullable=False
+    )
+    slot_b_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("blueprint_endpoint_slots.id", ondelete="RESTRICT"), nullable=False
+    )
+
+
+class BlueprintInstance(Base):
+    __tablename__ = "blueprint_instances"
+    __table_args__ = (UniqueConstraint("physical_object_id", name="uq_blueprint_instances_physical_object"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    physical_object_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("physical_objects.id", ondelete="RESTRICT"), nullable=False
+    )
+
+
+class BlueprintInstanceSlot(Base):
+    __tablename__ = "blueprint_instance_slots"
+    __table_args__ = (
+        UniqueConstraint("blueprint_instance_id", "blueprint_slot_id", name="uq_blueprint_instance_slots_slot"),
+        UniqueConstraint("connection_point_id", name="uq_blueprint_instance_slots_connection_point"),
+        UniqueConstraint("network_interface_id", name="uq_blueprint_instance_slots_network_interface"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    blueprint_instance_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("blueprint_instances.id", ondelete="RESTRICT"), nullable=False
+    )
+    blueprint_slot_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("blueprint_endpoint_slots.id", ondelete="RESTRICT"), nullable=False
+    )
+    connection_point_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("connection_points.id", ondelete="RESTRICT"), nullable=False
+    )
+    network_interface_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("network_interfaces.id", ondelete="RESTRICT"), nullable=True
+    )
 
 
 class InterfacePhysicalBinding(Base):

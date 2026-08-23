@@ -515,3 +515,16 @@ canonical сущностью backend.
 Count может быть показан как factual context, но не определяет membership и не
 блокирует выбор: backend остаётся authority по uniqueness. Existing contexts после
 reload намеренно не показываются — public L2 list/detail API пока отсутствует.
+
+## BLUEPRINT.1 — persisted object blueprints
+
+`ObjectBlueprint` и immutable initial `ObjectBlueprintVersion` — authoring/presentation
+records, не canonical topology facts и не вход resolver semantics. Version хранит только
+explicit `RECTANGLE` body и explicit slots/internal links; будущий editor может генерировать
+повторяющиеся группы, но persisted version всегда хранит развёрнутые stable slots.
+
+Instantiate атомарно materializes отдельный canonical `PhysicalObject`, его aliases/class,
+ConnectionPoints, а для `NETWORK_PORT` — NetworkInterface, owner и direct physical binding.
+Explicit internal links materialize ordinary canonical `Connection`/`ConnectionMember`; geometry
+или стороны anchors никогда не создают L1 связи. Persisted slot-to-canonical endpoint mappings
+сохраняют provenance каждого instance. List/detail/editor и новые version отсутствуют в этом slice.

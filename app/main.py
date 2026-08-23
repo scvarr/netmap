@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
+from app.blueprint_catalog import ObjectBlueprintCatalog
 from app.database import get_session
 from app.device_catalog import DeviceCatalog
 from app.device_details_resolver import ConfiguredDeviceDetailsResolver
@@ -40,6 +41,7 @@ from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
     CreateConnectionPointRequest,
+    CreateObjectBlueprintRequest,
     CreateDeviceInterfaceRequest,
     CreateNetworkDeviceRequest,
     CreatePhysicalEndpointConnectionRequest,
@@ -51,6 +53,7 @@ from app.schemas import (
     EvaluationView,
     InterfacePhysicalTraceArtifact,
     InterfacePhysicalTraceQuery,
+    InstantiateObjectBlueprintRequest,
     L1TraceQuery,
     L2ReachabilityQuery,
     L2ReachabilityTraceArtifact,
@@ -69,6 +72,8 @@ from app.schemas import (
     PacketProcessingEvaluationQuery,
     PacketFlowEvaluationArtifact,
     PacketFlowEvaluationQuery,
+    ObjectBlueprintCreationDocument,
+    ObjectBlueprintInstantiationDocument,
     PhysicalConnectionCreationDocument,
     PhysicalEndpointConnectionCreationDocument,
     PhysicalEndpointMaterialization,
@@ -212,6 +217,60 @@ def create_physical_object(
         return ConfiguredPhysicalObjectDetailsResolver(
             CanonicalRepository(session)
         ).resolve(created.physical_object_id)
+
+
+@app.post(
+    "/v1/library/object-blueprints",
+    response_model=ObjectBlueprintCreationDocument,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}},
+)
+def create_object_blueprint(
+    query: CreateObjectBlueprintRequest,
+    session: Session = Depends(get_session),
+) -> ObjectBlueprintCreationDocument:
+    with session.begin():
+        created = ObjectBlueprintCatalog(session).create_initial_version(query)
+        return {
+            "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
+            "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},
+        }
+
+
+@app.post(
+    "/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}/instantiate",
+    response_model=ObjectBlueprintInstantiationDocument,
+    response_model_exclude_none=True,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def instantiate_object_blueprint(
+    blueprint_id: uuid.UUID,
+    version_id: uuid.UUID,
+    query: InstantiateObjectBlueprintRequest,
+    session: Session = Depends(get_session),
+) -> ObjectBlueprintInstantiationDocument:
+    with session.begin():
+        created = ObjectBlueprintCatalog(session).instantiate(blueprint_id, version_id, query.display_name)
+        return {
+            "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
+            "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},
+            "physical_object_ref": {
+                "ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": created.physical_object_id,
+            },
+            "slots": [
+                {
+                    "slot_key": slot.slot_key,
+                    "connection_point_ref": {
+                        "ref_type": "CANONICAL_FACT", "entity_type": "ConnectionPoint", "entity_id": slot.connection_point_id,
+                    },
+                    **({"network_interface_ref": {
+                        "ref_type": "CANONICAL_FACT", "entity_type": "NetworkInterface", "entity_id": slot.network_interface_id,
+                    }} if slot.network_interface_id is not None else {}),
+                }
+                for slot in created.slots
+            ],
+        }
 
 
 @app.post(

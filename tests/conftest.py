@@ -9,6 +9,10 @@ from app.models import (
     Connection,
     ConnectionMember,
     ConnectionPoint,
+    BlueprintEndpointSlot,
+    BlueprintInstance,
+    BlueprintInstanceSlot,
+    BlueprintInternalLink,
     InterfaceAddress,
     InterfacePhysicalBinding,
     NetworkInterface,
@@ -21,6 +25,8 @@ from app.models import (
     PacketProcessingPlan,
     PacketProcessingPlanAttachment,
     PacketProcessingPlanAttachmentSet,
+    ObjectBlueprint,
+    ObjectBlueprintVersion,
     PhysicalObject,
     ProcessingEntryPoint,
     ProcessingStage,
@@ -77,6 +83,12 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 def clean_database():
     require_confirmed_test_database()
     with SessionLocal.begin() as session:
+        session.execute(delete(BlueprintInstanceSlot))
+        session.execute(delete(BlueprintInstance))
+        session.execute(delete(BlueprintInternalLink))
+        session.execute(delete(BlueprintEndpointSlot))
+        session.execute(delete(ObjectBlueprintVersion))
+        session.execute(delete(ObjectBlueprint))
         session.execute(delete(PacketProcessingPlanAttachment))
         session.execute(delete(PacketProcessingPlanAttachmentSet))
         session.execute(delete(ProcessingEntryPoint))
