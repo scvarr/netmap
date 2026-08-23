@@ -170,15 +170,25 @@ collapse
 
 Collapsed path должен иметь возможность раскрыться до supporting path/evidence.
 
-## Основной рабочий экран
+## Product surfaces
 
-**WORKING HYPOTHESIS**
+**FIXED для текущего frontend product direction**
 
-Основной интерфейс NetMap рассматривается как единое рабочее пространство исследования сети, а не как набор полностью изолированных экранов.
+NetMap разделяет три пользовательских поверхности:
 
-Topology остаётся главным пространственным контекстом.
+```text
+CATALOG
+    ввод и управление canonical facts через public operations
 
-На ней могут существовать:
+MAP
+    исследование topology через projection-oriented DTO
+
+TRACE COMMAND BAR
+    planned primary surface для формулировки сетевого вопроса
+```
+
+`Map` остаётся главным пространственным контекстом исследования сети, но не
+является canonical CRUD surface. На карте могут существовать:
 
 - поиск/переход к объекту;
 - выбор source/destination;
@@ -188,7 +198,14 @@ Topology остаётся главным пространственным кон
 - trace overlay;
 - краткая информация по выбранному объекту или проблемной точке.
 
-Точная компоновка панелей, inspector и controls пока не фиксируется.
+Map использует bounded Quick Inspector для контекста выбранного projection
+object и навигации по canonical `PhysicalObject` ref в Catalog. Canonical write
+operations размещаются на catalog create/detail pages. Большой CRUD inspector,
+использовавшийся в ранних W.1-W.7 frontend slices, является historical
+implementation placement и не архитектурным инвариантом.
+
+Trace Command Bar не реализуется в UI-SHELL.1, но остаётся planned primary trace
+interaction surface. Точная компоновка будущих trace controls не фиксируется.
 
 ## Простая трассировка на основном экране
 

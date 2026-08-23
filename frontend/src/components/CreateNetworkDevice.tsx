@@ -5,10 +5,11 @@ import type { DeviceWriteDataSource } from '../topology/deviceWriteTypes';
 interface CreateNetworkDeviceProps {
   dataSource: DeviceWriteDataSource;
   onCreated: (document: DeviceDetailsDocument) => void;
+  variant?: 'popover' | 'page';
 }
 
-export function CreateNetworkDevice({ dataSource, onCreated }: CreateNetworkDeviceProps) {
-  const [open, setOpen] = useState(false);
+export function CreateNetworkDevice({ dataSource, onCreated, variant = 'popover' }: CreateNetworkDeviceProps) {
+  const [open, setOpen] = useState(variant === 'page');
   const [deviceName, setDeviceName] = useState('');
   const [interfaceName, setInterfaceName] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -38,25 +39,27 @@ export function CreateNetworkDevice({ dataSource, onCreated }: CreateNetworkDevi
 
   return (
     <div className="create-device">
-      <button
-        className="create-device__trigger"
-        type="button"
-        aria-expanded={open}
-        onClick={() => {
-          setOpen((value) => !value);
-          setError(null);
-        }}
-      >
-        + Добавить
-      </button>
+      {variant === 'popover' && (
+        <button
+          className="create-device__trigger"
+          type="button"
+          aria-expanded={open}
+          onClick={() => {
+            setOpen((value) => !value);
+            setError(null);
+          }}
+        >
+          + Добавить
+        </button>
+      )}
       {open && (
-        <form className="create-device__form" onSubmit={submit} noValidate>
+        <form className={`create-device__form${variant === 'page' ? ' create-device__form--page' : ''}`} onSubmit={submit} noValidate>
           <div className="create-device__heading">
             <div>
               <span className="eyebrow">Новый объект</span>
               <h2>Сетевое устройство</h2>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label="Закрыть форму">×</button>
+            {variant === 'popover' && <button type="button" onClick={() => setOpen(false)} aria-label="Закрыть форму">×</button>}
           </div>
           <label>
             <span>Название устройства</span>

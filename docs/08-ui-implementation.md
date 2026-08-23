@@ -33,6 +33,52 @@ React Flow (@xyflow/react)
 
 Первому UI не требуется SSR/full-stack frontend framework.
 
+## UI-SHELL.1 — application shell и product surfaces
+
+**FIXED для текущей frontend architecture; network/API semantics не меняются**
+
+Frontend использует client-side routing и reusable application shell с основной
+sidebar navigation. Текущие маршруты:
+
+```text
+/
+    -> redirect /map
+
+/map
+/infrastructure/objects
+/infrastructure/objects/new
+/infrastructure/objects/:physicalObjectId
+```
+
+Текущая product model:
+
+```text
+Map
+    projection/read/exploration surface
+
+Catalog
+    canonical data management через существующие public read/write operations
+
+Trace Command Bar
+    planned primary trace interaction surface; не реализован в UI-SHELL.1
+```
+
+`/map` получает только `TopologyProjectionDocument`, сохраняет frontend-owned
+layout и использует canonical `PhysicalObject` source refs для URL `focus` и
+переходов между projections/pages. Quick Inspector показывает bounded context и
+не содержит canonical create/edit forms.
+
+Первый Catalog list временно переиспользует public `L1 / PHYSICAL_OBJECT`
+projection как bounded object list. Object Detail загружает authoritative
+`PhysicalObjectDetailsDocument` и переиспользует W.2/W.3/W.6/W.6.1/W.7 detail
+sections/datasources. Full-page creation переиспользует W.1 и W.5 operations.
+Это frontend reuse текущих public boundaries, а не новый backend catalog API и
+не frontend raw join.
+
+Историческое размещение W.1-W.7 forms внутри большого map inspector superseded
+этим разделением. Их FIXED API, transaction и canonical identity semantics не
+изменяются.
+
 ## U.1 — первая логическая схема
 
 **FIXED**
@@ -265,11 +311,11 @@ POST /v1/topology/devices
 `NetworkInterface`, его `alias.display` и `NetworkInterfacePhysicalOwner`.
 Operation не создаёт `ConnectionPoint`, physical binding, L2/L3 facts или IP.
 
-UI вызывает только этот public endpoint. После success он заново загружает
-обычную DEVICE projection, выбирает созданный node по canonical PhysicalObject
-source ref и показывает его через общий Device Details inspector. Созданный
-node не является optimistic/fake presentation object и после browser reload
-снова приходит из canonical backend.
+UI вызывает только этот public endpoint. В текущем UI-SHELL.1 operation
+размещена на full-page Catalog create flow; после success UI переходит на detail
+route по canonical PhysicalObject source ref. Созданный объект не является
+optimistic/fake presentation object и после browser reload снова приходит из
+canonical backend. Прежнее размещение формы на карте superseded.
 
 ## W.2 — добавление NetworkInterface устройству
 
@@ -290,9 +336,10 @@ POST /v1/topology/devices/{physical_object_id}/interfaces
 physical/realization binding, L2/L3 facts или IP. Совпадающие display names не
 являются canonical uniqueness constraint.
 
-UI запускает operation из секции интерфейсов выбранного device inspector. После
-success он обновляет Device Details и DEVICE projection из backend, сохраняя
-выбранным тот же PhysicalObject; optimistic/fake interface не создаётся.
+UI запускает operation из секции интерфейсов Object Detail Page. После success
+он обновляет Device Details и relevant projection из backend, сохраняя тот же
+canonical PhysicalObject; optimistic/fake interface не создаётся. Прежнее
+размещение секции в map inspector superseded.
 
 ## W.3 — первое физическое соединение интерфейсов
 
@@ -366,10 +413,11 @@ POST /v1/topology/physical-objects
 тип passive object. Details document возвращает factual counts для owned
 interfaces, incident connections и direct interface bindings.
 
-UI предоставляет operation только в Physical mode, после success заново
-загружает `L1 / PHYSICAL_OBJECT`, выбирает созданный объект по canonical ref и
-показывает именованную точку через bounded details API. Optimistic physical
-nodes не создаются.
+UI предоставляет operation на full-page Catalog create flow, после success
+переходит на canonical Object Detail route и показывает именованную точку через
+bounded details API. Relevant `L1 / PHYSICAL_OBJECT` projection позднее
+загружается обычным read flow. Optimistic physical nodes не создаются. Прежнее
+размещение operation только в Physical map mode superseded.
 
 ## W.6 — соединение физических endpoints
 
@@ -398,8 +446,10 @@ canonical точка. Затем та же transaction создаёт cable `Phy
 Наличие существующей `Connection` у passive `ConnectionPoint` не означает, что
 точка занята: через неё разрешено строить последовательную physical composition.
 Уже имеющий direct binding `NetworkInterface` автоматически не перепривязывается.
-Operation не создаёт L2/L3/IP facts. UI запускает её из Physical inspector и
-после success заново получает nodes/edges и details только через public API.
+Operation не создаёт L2/L3/IP facts. UI запускает её из PhysicalObject detail
+section на Object Detail Page и после success заново получает nodes/edges и
+details только через public API. Прежнее размещение в Physical map inspector
+superseded.
 
 ## W.6.1 — классификация PhysicalObject
 
@@ -426,5 +476,6 @@ POST /v1/topology/physical-objects/{physical_object_id}/connection-points
 Одна transaction создаёт только owning `ConnectionPoint` с `cardinality=1` и
 его `alias.display`. Совпадающие display names разрешены; operation не создаёт
 `Connection`, cable, interface/binding или L2/L3/IP facts. UI после success
-использует authoritative details response, заново загружает L1 projection и
-сохраняет выбранным тот же canonical `PhysicalObject`.
+использует authoritative details response на Object Detail Page, заново
+загружает L1 projection и сохраняет тот же canonical `PhysicalObject` route.
+Прежнее размещение в map inspector superseded.

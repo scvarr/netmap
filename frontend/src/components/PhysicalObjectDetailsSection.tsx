@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type {
   ConnectionPointDetails,
   PhysicalObjectDetailsDataSource,
@@ -24,6 +24,7 @@ interface PhysicalObjectDetailsSectionProps {
   onConnected?: () => void;
   onClassUpdated?: () => void;
   onConnectionPointCreated?: () => void;
+  onDocumentChange?: (document: PhysicalObjectDetailsDocument) => void;
 }
 
 type DetailsState =
@@ -190,6 +191,7 @@ export function PhysicalObjectDetailsSection({
   onConnected = () => undefined,
   onClassUpdated = () => undefined,
   onConnectionPointCreated = () => undefined,
+  onDocumentChange = () => undefined,
 }: PhysicalObjectDetailsSectionProps) {
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
@@ -198,6 +200,8 @@ export function PhysicalObjectDetailsSection({
       ? { kind: 'loading' }
       : { kind: 'unavailable', message: 'Детали недоступны: нет однозначной ссылки на PhysicalObject.' }
   ));
+  const onDocumentChangeRef = useRef(onDocumentChange);
+  onDocumentChangeRef.current = onDocumentChange;
 
   useEffect(() => {
     if (!physicalObjectId) {
@@ -210,7 +214,12 @@ export function PhysicalObjectDetailsSection({
     let current = true;
     setState({ kind: 'loading' });
     void dataSource.loadPhysicalObjectDetails(physicalObjectId).then(
-      (document) => { if (current) setState({ kind: 'loaded', document }); },
+      (document) => {
+        if (current) {
+          setState({ kind: 'loaded', document });
+          onDocumentChangeRef.current(document);
+        }
+      },
       (reason: unknown) => {
         if (current) {
           setState({
@@ -246,6 +255,7 @@ export function PhysicalObjectDetailsSection({
               dataSource={classWriteDataSource}
               onUpdated={(document) => {
                 setState({ kind: 'loaded', document });
+                onDocumentChange(document);
                 onClassUpdated();
               }}
             />
@@ -259,6 +269,7 @@ export function PhysicalObjectDetailsSection({
               dataSource={connectionPointWriteDataSource}
               onCreated={(document) => {
                 setState({ kind: 'loaded', document });
+                onDocumentChange(document);
                 onConnectionPointCreated();
               }}
             />

@@ -1,29 +1,19 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import { App } from './App';
+import { App, type AppProps } from './App';
+import type { DeviceDetailsDocument } from './topology/deviceDetailsTypes';
+import type { PhysicalObjectDetailsDocument } from './topology/physicalObjectDetailsTypes';
+import {
+  LOGICAL_PROJECTION_REQUEST,
+  PHYSICAL_PROJECTION_REQUEST,
+} from './topology/projection';
 import type {
   TopologyDataSource,
   TopologyProjectionDocument,
   TopologySelection,
 } from './topology/types';
-import type {
-  DeviceDetailsDataSource,
-  DeviceDetailsDocument,
-  DeviceInterfaceDetails,
-} from './topology/deviceDetailsTypes';
-import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
-import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
-import type {
-  PhysicalConnectionCreationDocument,
-  PhysicalLinkWriteDataSource,
-} from './topology/physicalLinkWriteTypes';
-import type {
-  PhysicalObjectDetailsDataSource,
-  PhysicalObjectDetailsDocument,
-} from './topology/physicalObjectDetailsTypes';
-import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
-import type { ConnectionPointWriteDataSource } from './topology/connectionPointWriteTypes';
 
 vi.mock('./components/HealthIndicator', () => ({
   HealthIndicator: () => <div>Backend доступен</div>,
@@ -34,635 +24,273 @@ vi.mock('./components/TopologyCanvas', () => ({
     document: TopologyProjectionDocument;
     onSelectionChange: (selection: TopologySelection) => void;
   }) => (
-    <div aria-label="Логическая схема сети">
-      {document.nodes.map((node) => <span key={node.id}>{node.label}</span>)}
-      {document.nodes[0] && (
-        <button onClick={() => onSelectionChange({ type: 'node', item: document.nodes[0] })}>
-          Выбрать узел
-        </button>
-      )}
-      {document.nodes[1] && (
-        <button onClick={() => onSelectionChange({ type: 'node', item: document.nodes[1] })}>
-          Выбрать CORE-B
-        </button>
-      )}
-      {document.edges[0] && (
-        <button onClick={() => onSelectionChange({ type: 'edge', item: document.edges[0] })}>
-          Выбрать связь
-        </button>
-      )}
+    <div aria-label={document.layer === 'L1' ? 'Физическая схема сети' : 'Логическая схема сети'}>
+      {document.nodes.map((node) => (
+        <div key={node.id}>
+          <span>{node.label}</span>
+          <button onClick={() => onSelectionChange({ type: 'node', item: node })}>Выбрать {node.label}</button>
+        </div>
+      ))}
     </div>
   ),
 }));
 
-const document: TopologyProjectionDocument = {
+const ppId = '00000000-0000-0000-0000-000000000101';
+const swId = '00000000-0000-0000-0000-000000000102';
+const physicalRef = (entityId: string) => ({
+  ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: entityId,
+});
+
+const physicalDocument: TopologyProjectionDocument = {
+  schema_version: '1.0',
+  layer: 'L1',
+  detail_level: 'PHYSICAL_OBJECT',
+  nodes: [{
+    id: 'physical-pp1', kind: 'PHYSICAL_OBJECT', label: 'PP1', status: 'CONFIGURED',
+    source_refs: [physicalRef(ppId)],
+    attributes: { class: 'patch_panel', connection_point_count: 2, owned_interface_count: 0 },
+  }, {
+    id: 'physical-sw1', kind: 'PHYSICAL_OBJECT', label: 'SW1', status: 'CONFIGURED',
+    source_refs: [physicalRef(swId)],
+    attributes: { class: 'switch', connection_point_count: 2, owned_interface_count: 2 },
+  }],
+  edges: [{
+    id: 'physical-edge', from_node_id: 'physical-pp1', to_node_id: 'physical-sw1',
+    kind: 'L1_PHYSICAL_LINK', aggregate: true, status: 'CONFIGURED', source_refs: [],
+    attributes: { supporting_connection_count: 1, supporting_member_pair_count: 1 },
+  }],
+  gaps: [], warnings: [],
+};
+
+const logicalDocument: TopologyProjectionDocument = {
   schema_version: '1.0',
   layer: 'L2',
   detail_level: 'DEVICE',
   nodes: [{
-    id: 'projection-device-a',
-    kind: 'NETWORK_DEVICE',
-    label: 'PhysicalObject abcdef12',
-    source_refs: [{
-      ref_type: 'CANONICAL_FACT',
-      entity_type: 'NetworkInterfacePhysicalOwner',
-      entity_id: '00000000-0000-0000-0000-000000000001',
-    }],
-    attributes: { label_source: 'TECHNICAL_FALLBACK', owned_interface_count: 2 },
+    id: 'logical-sw1', kind: 'NETWORK_DEVICE', label: 'SW1', status: 'CONFIGURED',
+    source_refs: [physicalRef(swId)], attributes: { owned_interface_count: 2 },
+  }],
+  edges: [], gaps: [], warnings: [],
+};
+
+const ppDetails: PhysicalObjectDetailsDocument = {
+  schema_version: '1.0',
+  physical_object: { source_ref: physicalRef(ppId), label: 'PP1', class: 'patch_panel' },
+  connection_points: [{
+    connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'port-01' },
+    label: 'Port01', cardinality: 1, incident_connection_count: 1,
+    direct_interface_binding_count: 0, source_refs: [],
   }, {
-    id: 'projection-device-b',
-    kind: 'NETWORK_DEVICE',
-    label: 'CORE-B',
-    source_refs: [{
-      ref_type: 'CANONICAL_FACT',
-      entity_type: 'PhysicalObject',
-      entity_id: '00000000-0000-0000-0000-000000000003',
-    }],
-    attributes: { owned_interface_count: 1 },
+    connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'port-02' },
+    label: 'Port02', cardinality: 1, incident_connection_count: 1,
+    direct_interface_binding_count: 0, source_refs: [],
   }],
-  edges: [{
-    id: 'projection-edge-a-b',
-    from_node_id: 'projection-device-a',
-    to_node_id: 'projection-device-b',
-    kind: 'LOGICAL_LINK',
-    aggregate: true,
-    source_refs: [{
-      ref_type: 'CANONICAL_FACT',
-      entity_type: 'Connection',
-      entity_id: '00000000-0000-0000-0000-000000000002',
-    }],
-    attributes: { supporting_path_count: 1, supporting_interface_pair_count: 1 },
-  }],
-  gaps: [],
-  warnings: [],
+  owned_interface_count: 0, gaps: [], warnings: [],
 };
 
-const dataSourceFor = (result: TopologyProjectionDocument = document): TopologyDataSource => ({
-  loadProjection: vi.fn().mockResolvedValue(result),
-});
-
-const deviceDetailsDataSource: DeviceDetailsDataSource = {
-  loadDeviceDetails: vi.fn().mockResolvedValue({
-    schema_version: '1.0',
-    device: { source_ref: document.nodes[1].source_refs[0], label: 'CORE-B' },
-    interfaces: [], gaps: [], warnings: [],
-  }),
+const swDetails: PhysicalObjectDetailsDocument = {
+  ...ppDetails,
+  physical_object: { source_ref: physicalRef(swId), label: 'SW1', class: 'switch' },
+  connection_points: ppDetails.connection_points.map((point, index) => ({
+    ...point,
+    connection_point_ref: { ...point.connection_point_ref, entity_id: `sw-port-${index}` },
+  })),
+  owned_interface_count: 2,
 };
 
-describe('App projection states', () => {
-  it('renders loading state while the projection request is pending', () => {
+const deviceDetails: DeviceDetailsDocument = {
+  schema_version: '1.0',
+  device: { source_ref: physicalRef(swId), label: 'SW1' },
+  interfaces: [{
+    interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: 'eth0-id' },
+    label: 'eth0', addresses: [], l2_binding_count: 0, l3_binding_count: 0,
+    direct_physical_bindings: [], realization_down_count: 0, realization_up_count: 0,
+    source_refs: [],
+  }], gaps: [], warnings: [],
+};
+
+const LocationProbe = () => {
+  const location = useLocation();
+  return <output data-testid="location">{location.pathname}{location.search}</output>;
+};
+
+const dataSourceFor = () => ({
+  loadProjection: vi.fn((request) => Promise.resolve(
+    request.layer === 'L1' ? physicalDocument : logicalDocument,
+  )),
+} satisfies TopologyDataSource);
+
+const renderApp = (route: string, overrides: Partial<AppProps> = {}) => {
+  const dataSource = overrides.dataSource ?? dataSourceFor();
+  const props: AppProps = {
+    dataSource,
+    deviceDetailsDataSource: {
+      loadDeviceDetails: vi.fn().mockResolvedValue(deviceDetails),
+    },
+    physicalObjectDetailsDataSource: {
+      loadPhysicalObjectDetails: vi.fn((id) => Promise.resolve(id === swId ? swDetails : ppDetails)),
+    },
+    ...overrides,
+  };
+  render(
+    <MemoryRouter initialEntries={[route]}>
+      <App {...props} />
+      <LocationProbe />
+    </MemoryRouter>,
+  );
+  return { props, dataSource };
+};
+
+describe('UI-SHELL.1 routes and product surfaces', () => {
+  it('redirects / to /map and uses the stable logical default', async () => {
+    const { dataSource } = renderApp('/');
+    expect(await screen.findByTestId('location')).toHaveTextContent('/map');
+    await waitFor(() => expect(dataSource.loadProjection).toHaveBeenCalledWith(LOGICAL_PROJECTION_REQUEST));
+  });
+
+  it('opens topology on /map', async () => {
+    renderApp('/map');
+    expect(await screen.findByLabelText('Логическая схема сети')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Основная навигация' })).toBeInTheDocument();
+  });
+
+  it.each([
+    ['logical', LOGICAL_PROJECTION_REQUEST, 'Логическая схема сети'],
+    ['physical', PHYSICAL_PROJECTION_REQUEST, 'Физическая схема сети'],
+  ] as const)('selects the %s projection from URL state', async (view, request, label) => {
+    const { dataSource } = renderApp(`/map?view=${view}`);
+    expect(await screen.findByLabelText(label)).toBeInTheDocument();
+    expect(dataSource.loadProjection).toHaveBeenCalledWith(request);
+  });
+
+  it('focuses a projection node through its canonical PhysicalObject ref', async () => {
+    renderApp(`/map?view=physical&focus=${ppId}`);
+    expect(await screen.findByRole('heading', { name: 'PP1' })).toBeInTheDocument();
+    expect(screen.getByText('ПАТЧ-ПАНЕЛЬ')).toBeInTheDocument();
+  });
+
+  it('handles a canonical focus absent from the projection without crashing', async () => {
+    renderApp('/map?view=physical&focus=absent-object');
+    expect(await screen.findByText(/отсутствует в этой проекции/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Быстрый инспектор')).not.toBeInTheDocument();
+  });
+
+  it('preserves canonical selection across projection switches', async () => {
+    const { dataSource } = renderApp('/map?view=logical');
+    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать SW1' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Физическая' }));
+    expect(await screen.findByLabelText('Физическая схема сети')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'SW1' })).toBeInTheDocument();
+    expect(dataSource.loadProjection).toHaveBeenLastCalledWith(PHYSICAL_PROJECTION_REQUEST);
+  });
+
+  it('opens object detail from Quick Inspector and exposes no canonical forms on Map', async () => {
+    renderApp(`/map?view=physical&focus=${ppId}`);
+    const open = await screen.findByRole('link', { name: 'Открыть объект' });
+    expect(open).toHaveAttribute('href', `/infrastructure/objects/${ppId}`);
+    expect(screen.queryByLabelText('Название устройства')).not.toBeInTheDocument();
+    expect(screen.queryByText('+ Добавить точку')).not.toBeInTheDocument();
+    expect(screen.queryByText('Сохранить тип')).not.toBeInTheDocument();
+  });
+
+  it('loads the catalog through L1 / PHYSICAL_OBJECT and renders factual columns', async () => {
+    const { dataSource } = renderApp('/infrastructure/objects');
+    expect(await screen.findByRole('heading', { name: 'Объекты' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'PP1' })).toBeInTheDocument();
+    expect(screen.getByText('patch_panel')).toBeInTheDocument();
+    expect(dataSource.loadProjection).toHaveBeenCalledWith(PHYSICAL_PROJECTION_REQUEST);
+  });
+
+  it('links an object row to the canonical detail URL', async () => {
+    renderApp('/infrastructure/objects');
+    expect(await screen.findByRole('link', { name: 'PP1' })).toHaveAttribute(
+      'href', `/infrastructure/objects/${ppId}`,
+    );
+  });
+
+  it('loads PhysicalObjectDetailsDocument on object detail and links back to canonical map focus', async () => {
+    const loadPhysicalObjectDetails = vi.fn().mockResolvedValue(ppDetails);
+    renderApp(`/infrastructure/objects/${ppId}`, {
+      physicalObjectDetailsDataSource: { loadPhysicalObjectDetails },
+    });
+    expect(await screen.findByRole('heading', { name: 'PP1' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Port01' })).toBeInTheDocument();
+    expect(loadPhysicalObjectDetails).toHaveBeenCalledWith(ppId);
+    expect(screen.getByRole('link', { name: 'Показать на карте' })).toHaveAttribute(
+      'href', `/map?view=physical&focus=${ppId}`,
+    );
+  });
+
+  it('reuses existing detail write sections for active objects', async () => {
+    renderApp(`/infrastructure/objects/${swId}`, {
+      deviceInterfaceWriteDataSource: { createDeviceInterface: vi.fn() },
+      connectionPointWriteDataSource: { createConnectionPoint: vi.fn() },
+      physicalObjectClassWriteDataSource: { setPhysicalObjectClass: vi.fn() },
+    });
+    expect(await screen.findByRole('heading', { name: 'SW1' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '+ Добавить интерфейс' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Добавить точку' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Сохранить тип' })).toBeInTheDocument();
+  });
+
+  it('uses the existing device write datasource and navigates to canonical detail after success', async () => {
+    const createdId = '00000000-0000-0000-0000-000000000501';
+    const createNetworkDevice = vi.fn().mockResolvedValue({
+      ...deviceDetails,
+      device: { ...deviceDetails.device, source_ref: physicalRef(createdId), label: 'CORE-NEW' },
+    });
+    renderApp('/infrastructure/objects/new', {
+      deviceWriteDataSource: { createNetworkDevice },
+    });
+    await userEvent.type(screen.getByLabelText('Название устройства'), ' CORE-NEW ');
+    await userEvent.type(screen.getByLabelText('Первый интерфейс'), ' eth0 ');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+    expect(createNetworkDevice).toHaveBeenCalledWith({
+      display_name: 'CORE-NEW', initial_interface: { display_name: 'eth0' },
+    });
+    expect(await screen.findByTestId('location')).toHaveTextContent(`/infrastructure/objects/${createdId}`);
+  });
+
+  it('uses the existing physical-object write datasource and navigates after success', async () => {
+    const createdId = '00000000-0000-0000-0000-000000000502';
+    const createPhysicalObject = vi.fn().mockResolvedValue({
+      ...ppDetails,
+      physical_object: { ...ppDetails.physical_object, source_ref: physicalRef(createdId), label: 'Outlet1' },
+    });
+    renderApp('/infrastructure/objects/new', {
+      physicalObjectWriteDataSource: { createPhysicalObject },
+    });
+    await userEvent.click(screen.getByRole('button', { name: /Физический объект/ }));
+    await userEvent.type(screen.getByLabelText('Название'), 'Outlet1');
+    await userEvent.type(screen.getByLabelText('Первая точка подключения'), 'Port');
+    await userEvent.selectOptions(screen.getByLabelText('Категория'), 'outlet');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+    expect(createPhysicalObject).toHaveBeenCalledWith({
+      display_name: 'Outlet1', initial_connection_point: { display_name: 'Port' }, class: 'outlet',
+    });
+    expect(await screen.findByTestId('location')).toHaveTextContent(`/infrastructure/objects/${createdId}`);
+  });
+
+  it('keeps loading, error, and empty map states working', async () => {
     const pending: TopologyDataSource = {
       loadProjection: vi.fn(() => new Promise<TopologyProjectionDocument>(() => undefined)),
     };
-    render(<App dataSource={pending} deviceDetailsDataSource={deviceDetailsDataSource} />);
-
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/map']}>
+        <App dataSource={pending} deviceDetailsDataSource={{ loadDeviceDetails: vi.fn() }} />
+      </MemoryRouter>,
+    );
     expect(screen.getByText('Загружаем topology projection')).toBeInTheDocument();
-  });
+    unmount();
 
-  it('displays topology nodes from an API projection document', async () => {
-    render(<App dataSource={dataSourceFor()} deviceDetailsDataSource={deviceDetailsDataSource} />);
-
-    expect(await screen.findByText('PhysicalObject abcdef12')).toBeInTheDocument();
-    expect(screen.getByText('Настроенная проекция')).toBeInTheDocument();
-    expect(screen.queryByText('Fixture data')).not.toBeInTheDocument();
-  });
-
-  it('renders the empty state from an empty API document', async () => {
-    render(<App dataSource={dataSourceFor({ ...document, nodes: [], edges: [] })} deviceDetailsDataSource={deviceDetailsDataSource} />);
-    expect(await screen.findByText('В этом scope пока пусто')).toBeInTheDocument();
-  });
-
-  it('renders the rejected data-source error state', async () => {
-    const dataSource: TopologyDataSource = {
-      loadProjection: vi.fn().mockRejectedValue(new Error('VALIDATION_ERROR: Unsupported layer')),
-    };
-    render(<App dataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} />);
-    expect(await screen.findByText('VALIDATION_ERROR: Unsupported layer')).toBeInTheDocument();
-  });
-
-  it('invokes the data source again on retry', async () => {
-    const loadProjection = vi.fn()
-      .mockRejectedValueOnce(new Error('backend unavailable'))
-      .mockResolvedValueOnce({ ...document, nodes: [], edges: [] });
-    render(<App dataSource={{ loadProjection }} deviceDetailsDataSource={deviceDetailsDataSource} />);
-
+    renderApp('/map', { dataSource: { loadProjection: vi.fn().mockRejectedValue(new Error('backend unavailable')) } });
     expect(await screen.findByText('backend unavailable')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  });
 
+  it('renders the catalog empty state without inventing objects', async () => {
+    renderApp('/infrastructure/objects', {
+      dataSource: { loadProjection: vi.fn().mockResolvedValue({ ...physicalDocument, nodes: [], edges: [] }) },
+    });
     expect(await screen.findByText('В этом scope пока пусто')).toBeInTheDocument();
-    expect(loadProjection).toHaveBeenCalledTimes(2);
-  });
-
-  it('shows projection gaps separately from warnings', async () => {
-    render(<App dataSource={dataSourceFor({
-      ...document,
-      gaps: ['NETWORK_INTERFACE_OWNER_UNKNOWN'],
-      warnings: ['Projection is partial'],
-    })} deviceDetailsDataSource={deviceDetailsDataSource} />);
-
-    expect(await screen.findByText('NETWORK_INTERFACE_OWNER_UNKNOWN')).toBeInTheDocument();
-    expect(screen.getByText('Пробел проекции')).toBeInTheDocument();
-    expect(screen.getByText('Projection is partial')).toBeInTheDocument();
-  });
-
-  it('keeps node selection and inspector source refs working', async () => {
-    render(<App dataSource={dataSourceFor()} deviceDetailsDataSource={deviceDetailsDataSource} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать узел' }));
-
-    expect(screen.getByRole('heading', { name: 'Устройство abcdef12' })).toBeInTheDocument();
-    const details = screen.getByText('Технические детали').closest('details')!;
-    await userEvent.click(within(details).getByText('Технические детали'));
-    expect(within(details).getByText('NetworkInterfacePhysicalOwner')).toBeInTheDocument();
-  });
-
-  it('keeps edge selection and inspector source refs working', async () => {
-    render(<App dataSource={dataSourceFor()} deviceDetailsDataSource={deviceDetailsDataSource} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать связь' }));
-
-    expect(screen.getByRole('heading', {
-      name: 'Устройство abcdef12 ↔ CORE-B',
-    })).toBeInTheDocument();
-    const details = screen.getByText('Технические детали').closest('details')!;
-    await userEvent.click(within(details).getByText('Технические детали'));
-    expect(within(details).getByText('Connection')).toBeInTheDocument();
-    expect(screen.getByText('Да')).toBeInTheDocument();
-  });
-
-  it('keeps topology visible when the selected device details request fails', async () => {
-    const failingDetails: DeviceDetailsDataSource = {
-      loadDeviceDetails: vi.fn().mockRejectedValue(new Error('details unavailable')),
-    };
-    render(<App dataSource={dataSourceFor()} deviceDetailsDataSource={failingDetails} />);
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать CORE-B' }));
-
-    expect(await screen.findByText(/details unavailable/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Логическая схема сети')).toBeInTheDocument();
-    expect(screen.getAllByText('CORE-B').length).toBeGreaterThan(0);
-  });
-
-  it('refreshes the projection and selects the canonical node after create', async () => {
-    const newDeviceId = '00000000-0000-0000-0000-000000000010';
-    const newInterfaceId = '00000000-0000-0000-0000-000000000011';
-    const created: DeviceDetailsDocument = {
-      schema_version: '1.0',
-      device: {
-        source_ref: {
-          ref_type: 'CANONICAL_FACT',
-          entity_type: 'PhysicalObject',
-          entity_id: newDeviceId,
-        },
-        label: 'CORE-NEW',
-      },
-      interfaces: [{
-        interface_ref: {
-          ref_type: 'CANONICAL_FACT',
-          entity_type: 'NetworkInterface',
-          entity_id: newInterfaceId,
-        },
-        label: 'eth0',
-        addresses: [],
-        l2_binding_count: 0,
-        l3_binding_count: 0,
-        direct_physical_bindings: [],
-        realization_down_count: 0,
-        realization_up_count: 0,
-        source_refs: [],
-      }],
-      gaps: [],
-      warnings: [],
-    };
-    const refreshed: TopologyProjectionDocument = {
-      ...document,
-      nodes: [{
-        id: 'projection-device-new',
-        kind: 'NETWORK_DEVICE',
-        label: 'CORE-NEW',
-        source_refs: [created.device.source_ref],
-        attributes: { label_source: 'ALIAS_DISPLAY', owned_interface_count: 1 },
-        status: 'CONFIGURED',
-      }],
-      edges: [],
-    };
-    const loadProjection = vi.fn()
-      .mockResolvedValueOnce({ ...document, nodes: [], edges: [] })
-      .mockResolvedValueOnce(refreshed);
-    const createNetworkDevice = vi.fn().mockResolvedValue(created);
-    const writeSource: DeviceWriteDataSource = { createNetworkDevice };
-    const detailsSource: DeviceDetailsDataSource = {
-      loadDeviceDetails: vi.fn().mockResolvedValue(created),
-    };
-    render(
-      <App
-        dataSource={{ loadProjection }}
-        deviceDetailsDataSource={detailsSource}
-        deviceWriteDataSource={writeSource}
-      />,
-    );
-
-    await userEvent.click(await screen.findByRole('button', { name: '+ Добавить' }));
-    await userEvent.type(screen.getByLabelText('Название устройства'), 'CORE-NEW');
-    await userEvent.type(screen.getByLabelText('Первый интерфейс'), 'eth0');
-    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
-
-    expect(await screen.findByRole('heading', { name: 'CORE-NEW' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'eth0' })).toBeInTheDocument();
-    expect(loadProjection).toHaveBeenCalledTimes(2);
-    expect(createNetworkDevice).toHaveBeenCalledTimes(1);
-    expect(detailsSource.loadDeviceDetails).toHaveBeenCalledWith(newDeviceId);
-  });
-
-  it('refreshes projection after interface create and keeps the same device selected', async () => {
-    const deviceId = document.nodes[1].source_refs[0].entity_id;
-    const initialDetails: DeviceDetailsDocument = {
-      schema_version: '1.0',
-      device: { source_ref: document.nodes[1].source_refs[0], label: 'CORE-B' },
-      interfaces: [{
-        interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: 'eth0-id' },
-        label: 'eth0', addresses: [], l2_binding_count: 0, l3_binding_count: 0,
-        direct_physical_bindings: [], realization_down_count: 0, realization_up_count: 0,
-        source_refs: [],
-      }], gaps: [], warnings: [],
-    };
-    const updatedDetails: DeviceDetailsDocument = {
-      ...initialDetails,
-      interfaces: [
-        ...initialDetails.interfaces,
-        {
-          ...initialDetails.interfaces[0],
-          interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: 'eth1-id' },
-          label: 'eth1',
-        },
-      ],
-    };
-    const refreshed: TopologyProjectionDocument = {
-      ...document,
-      nodes: document.nodes.map((item) => item.id === document.nodes[1].id
-        ? { ...item, attributes: { ...item.attributes, owned_interface_count: 2 } }
-        : item),
-    };
-    const loadProjection = vi.fn()
-      .mockResolvedValueOnce(document)
-      .mockResolvedValueOnce(refreshed);
-    const detailsSource: DeviceDetailsDataSource = {
-      loadDeviceDetails: vi.fn().mockResolvedValue(initialDetails),
-    };
-    const createDeviceInterface = vi.fn().mockResolvedValue(updatedDetails);
-    const interfaceWriteSource: DeviceInterfaceWriteDataSource = { createDeviceInterface };
-    render(
-      <App
-        dataSource={{ loadProjection }}
-        deviceDetailsDataSource={detailsSource}
-        deviceInterfaceWriteDataSource={interfaceWriteSource}
-      />,
-    );
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать CORE-B' }));
-    await screen.findByRole('heading', { name: 'eth0' });
-    await userEvent.click(screen.getByRole('button', { name: '+ Добавить интерфейс' }));
-    await userEvent.type(screen.getByLabelText('Название'), 'eth1');
-    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
-
-    expect(await screen.findByRole('heading', { name: 'eth1' })).toBeInTheDocument();
-    expect(await screen.findByText('2', { selector: '.inspector__facts strong' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'CORE-B' })).toBeInTheDocument();
-    expect(loadProjection).toHaveBeenCalledTimes(2);
-    expect(createDeviceInterface).toHaveBeenCalledWith(deviceId, { display_name: 'eth1' });
-  });
-
-  it('creates a physical link, refreshes the projection, and keeps the source selected', async () => {
-    const coreId = '00000000-0000-0000-0000-000000000101';
-    const fwId = '00000000-0000-0000-0000-000000000102';
-    const coreInterfaceId = '00000000-0000-0000-0000-000000000201';
-    const fwInterfaceId = '00000000-0000-0000-0000-000000000202';
-    const nodes = [{
-      id: 'projection-core', kind: 'NETWORK_DEVICE', label: 'CORE', status: 'CONFIGURED',
-      source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: coreId }],
-      attributes: { owned_interface_count: 1 },
-    }, {
-      id: 'projection-fw', kind: 'NETWORK_DEVICE', label: 'FW', status: 'CONFIGURED',
-      source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: fwId }],
-      attributes: { owned_interface_count: 1 },
-    }];
-    const isolated: TopologyProjectionDocument = { ...document, nodes, edges: [] };
-    const linked: TopologyProjectionDocument = {
-      ...isolated,
-      edges: [{
-        id: 'projection-core-fw',
-        from_node_id: nodes[0].id,
-        to_node_id: nodes[1].id,
-        kind: 'L2_DEVICE_LINK',
-        aggregate: true,
-        status: 'CONFIGURED',
-        source_refs: [],
-        attributes: { supporting_path_count: 1, supporting_interface_pair_count: 1 },
-      }],
-    };
-    const interfaceDetails = (
-      interfaceId: string,
-      label: string,
-      bound = false,
-    ): DeviceInterfaceDetails => ({
-      interface_ref: {
-        ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: interfaceId,
-      },
-      label,
-      addresses: [],
-      l2_binding_count: 0,
-      l3_binding_count: 0,
-      direct_physical_bindings: bound ? [{
-        connection_point_ref: {
-          ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: `${interfaceId}-point`,
-        },
-        member_index: 1,
-        source_refs: [],
-      }] : [],
-      realization_down_count: 0,
-      realization_up_count: 0,
-      source_refs: [],
-    });
-    let created = false;
-    const detailsSource: DeviceDetailsDataSource = {
-      loadDeviceDetails: vi.fn((id) => Promise.resolve({
-        schema_version: '1.0',
-        device: {
-          source_ref: {
-            ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id,
-          },
-          label: id === coreId ? 'CORE' : 'FW',
-        },
-        interfaces: [id === coreId
-          ? interfaceDetails(coreInterfaceId, 'eth0', created)
-          : interfaceDetails(fwInterfaceId, 'eth0')],
-        gaps: [], warnings: [],
-      } satisfies DeviceDetailsDocument)),
-    };
-    const creation: PhysicalConnectionCreationDocument = {
-      schema_version: '1.0',
-      source_interface_ref: interfaceDetails(coreInterfaceId, 'eth0').interface_ref,
-      target_interface_ref: interfaceDetails(fwInterfaceId, 'eth0').interface_ref,
-      cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'cable-id' },
-      source_binding_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'InterfacePhysicalBinding', entity_id: 'source-binding' },
-      target_binding_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'InterfacePhysicalBinding', entity_id: 'target-binding' },
-      connection_refs: ['1', '2', '3'].map((id) => ({
-        ref_type: 'CANONICAL_FACT', entity_type: 'Connection', entity_id: id,
-      })),
-    };
-    const createPhysicalLink = vi.fn().mockImplementation(() => {
-      created = true;
-      return Promise.resolve(creation);
-    });
-    const physicalWriteSource: PhysicalLinkWriteDataSource = { createPhysicalLink };
-    const loadProjection = vi.fn()
-      .mockResolvedValueOnce(isolated)
-      .mockResolvedValueOnce(linked);
-    render(
-      <App
-        dataSource={{ loadProjection }}
-        deviceDetailsDataSource={detailsSource}
-        physicalLinkWriteDataSource={physicalWriteSource}
-      />,
-    );
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать узел' }));
-    await screen.findByRole('heading', { name: 'eth0' });
-    await userEvent.click(screen.getByRole('button', { name: 'Подключить' }));
-    await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), fwId);
-    await screen.findByRole('option', { name: 'eth0' });
-    await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), fwInterfaceId);
-    await userEvent.type(screen.getByLabelText('Кабель'), 'CORE-FW-01');
-    await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
-
-    expect(await screen.findByRole('heading', { name: 'CORE' })).toBeInTheDocument();
-    expect(
-      await screen.findByRole('heading', { name: 'Соседние устройства 1' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText('FW', { selector: '.neighbor-list strong' })).toBeInTheDocument();
-    expect(
-      await screen.findByText('Прямых физических привязок:', { exact: false }),
-    ).toHaveTextContent('Прямых физических привязок: 1');
-    expect(loadProjection).toHaveBeenCalledTimes(2);
-    expect(createPhysicalLink).toHaveBeenCalledWith({
-      source_interface_id: coreInterfaceId,
-      target_interface_id: fwInterfaceId,
-      cable_display_name: 'CORE-FW-01',
-    });
-  });
-
-  it('switches logical and physical requests while preserving only canonical counterparts', async () => {
-    const coreRef = {
-      ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'po-core',
-    };
-    const firewallRef = {
-      ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'po-fw',
-    };
-    const cableRef = {
-      ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'po-cable',
-    };
-    const logical: TopologyProjectionDocument = {
-      ...document,
-      nodes: [{
-        id: 'l2-core', kind: 'NETWORK_DEVICE', label: 'CORE', source_refs: [coreRef],
-        attributes: { owned_interface_count: 1 }, status: 'CONFIGURED',
-      }, {
-        id: 'l2-fw', kind: 'NETWORK_DEVICE', label: 'FW', source_refs: [firewallRef],
-        attributes: { owned_interface_count: 1 }, status: 'CONFIGURED',
-      }],
-      edges: [],
-    };
-    const physical: TopologyProjectionDocument = {
-      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
-      nodes: [{
-        id: 'l1-core', kind: 'PHYSICAL_OBJECT', label: 'CORE', source_refs: [coreRef],
-        attributes: { connection_point_count: 1, owned_interface_count: 1 }, status: 'CONFIGURED',
-      }, {
-        id: 'l1-cable', kind: 'PHYSICAL_OBJECT', label: 'CORE-FW-01', source_refs: [cableRef],
-        attributes: { connection_point_count: 2, owned_interface_count: 0 }, status: 'CONFIGURED',
-      }, {
-        id: 'l1-fw', kind: 'PHYSICAL_OBJECT', label: 'FW', source_refs: [firewallRef],
-        attributes: { connection_point_count: 1, owned_interface_count: 1 }, status: 'CONFIGURED',
-      }],
-      edges: [], gaps: [], warnings: [],
-    };
-    const loadProjection = vi.fn((request) => Promise.resolve(
-      request.layer === 'L1' ? physical : logical,
-    ));
-    const detailsSource: DeviceDetailsDataSource = {
-      loadDeviceDetails: vi.fn().mockResolvedValue({
-        schema_version: '1.0', device: { source_ref: coreRef, label: 'CORE' },
-        interfaces: [], gaps: [], warnings: [],
-      }),
-    };
-    render(<App dataSource={{ loadProjection }} deviceDetailsDataSource={detailsSource} />);
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать узел' }));
-    expect(screen.getByRole('heading', { name: 'CORE' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Физическая' }));
-
-    expect(await screen.findByRole('heading', { name: 'Физическая топология' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'CORE' })).toBeInTheDocument();
-    expect(screen.queryByRole('region', { name: 'Интерфейсы' })).not.toBeInTheDocument();
-    expect(loadProjection).toHaveBeenNthCalledWith(2, {
-      layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
-      scope: { include_location_subtrees: [], include_entities: [] },
-    });
-
-    await userEvent.click(screen.getByRole('button', { name: 'Выбрать CORE-B' }));
-    expect(screen.getByRole('heading', { name: 'CORE-FW-01' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Логическая' }));
-
-    expect(await screen.findByRole('heading', { name: 'Логическая топология' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Инспектор' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'CORE-FW-01' })).not.toBeInTheDocument();
-  });
-
-  it('creates a physical object, refreshes L1, selects it, and loads its point details', async () => {
-    const objectId = '00000000-0000-0000-0000-000000000501';
-    const pointId = '00000000-0000-0000-0000-000000000502';
-    const objectRef = {
-      ref_type: 'CANONICAL_FACT' as const,
-      entity_type: 'PhysicalObject',
-      entity_id: objectId,
-    };
-    const created: PhysicalObjectDetailsDocument = {
-      schema_version: '1.0',
-      physical_object: { source_ref: objectRef, label: 'Розетка 101-1' },
-      connection_points: [{
-        connection_point_ref: {
-          ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: pointId,
-        },
-        label: 'Порт',
-        cardinality: 1,
-        incident_connection_count: 0,
-        direct_interface_binding_count: 0,
-        source_refs: [],
-      }],
-      owned_interface_count: 0,
-      gaps: [],
-      warnings: [],
-    };
-    const emptyPhysical: TopologyProjectionDocument = {
-      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
-      nodes: [], edges: [], gaps: [], warnings: [],
-    };
-    const refreshedPhysical: TopologyProjectionDocument = {
-      ...emptyPhysical,
-      nodes: [{
-        id: 'l1-outlet', kind: 'PHYSICAL_OBJECT', label: 'Розетка 101-1',
-        source_refs: [objectRef],
-        attributes: { connection_point_count: 1, owned_interface_count: 0 },
-        status: 'CONFIGURED',
-      }],
-    };
-    const loadProjection = vi.fn()
-      .mockResolvedValueOnce({ ...document, nodes: [], edges: [] })
-      .mockResolvedValueOnce(emptyPhysical)
-      .mockResolvedValueOnce(refreshedPhysical)
-      .mockResolvedValueOnce({ ...document, nodes: [], edges: [] });
-    const createPhysicalObject = vi.fn().mockResolvedValue(created);
-    const writeSource: PhysicalObjectWriteDataSource = { createPhysicalObject };
-    const physicalDetailsSource: PhysicalObjectDetailsDataSource = {
-      loadPhysicalObjectDetails: vi.fn().mockResolvedValue(created),
-    };
-    render(
-      <App
-        dataSource={{ loadProjection }}
-        deviceDetailsDataSource={deviceDetailsDataSource}
-        physicalObjectWriteDataSource={writeSource}
-        physicalObjectDetailsDataSource={physicalDetailsSource}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Физическая' }));
-    expect(await screen.findByText('В этом scope пока пусто')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: '+ Добавить' }));
-    await userEvent.type(screen.getByLabelText('Название'), 'Розетка 101-1');
-    await userEvent.type(screen.getByLabelText('Первая точка подключения'), 'Порт');
-    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
-
-    expect(await screen.findByRole('heading', { name: 'Розетка 101-1' })).toBeInTheDocument();
-    expect(await screen.findByRole('heading', { name: 'Порт' })).toBeInTheDocument();
-    expect(createPhysicalObject).toHaveBeenCalledWith({
-      display_name: 'Розетка 101-1',
-      initial_connection_point: { display_name: 'Порт' },
-    });
-    expect(loadProjection).toHaveBeenNthCalledWith(3, {
-      layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
-      scope: { include_location_subtrees: [], include_entities: [] },
-    });
-    expect(physicalDetailsSource.loadPhysicalObjectDetails).toHaveBeenCalledWith(objectId);
-
-    await userEvent.click(screen.getByRole('button', { name: 'Логическая' }));
-    expect(await screen.findByRole('heading', { name: 'Логическая топология' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Розетка 101-1' })).not.toBeInTheDocument();
-  });
-
-  it('creates a connection point, refreshes L1, and preserves the physical object selection', async () => {
-    const objectRef = {
-      ref_type: 'CANONICAL_FACT' as const,
-      entity_type: 'PhysicalObject',
-      entity_id: 'po-pp1',
-    };
-    const initial: PhysicalObjectDetailsDocument = {
-      schema_version: '1.0',
-      physical_object: { source_ref: objectRef, label: 'PP1', class: 'patch_panel' },
-      connection_points: [{
-        connection_point_ref: {
-          ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'port-01',
-        },
-        label: 'Port01', cardinality: 1, incident_connection_count: 0,
-        direct_interface_binding_count: 0, source_refs: [],
-      }],
-      owned_interface_count: 0, gaps: [], warnings: [],
-    };
-    const updated: PhysicalObjectDetailsDocument = {
-      ...initial,
-      connection_points: [...initial.connection_points, {
-        connection_point_ref: {
-          ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'port-02',
-        },
-        label: 'Port02', cardinality: 1, incident_connection_count: 0,
-        direct_interface_binding_count: 0, source_refs: [],
-      }],
-    };
-    const physical = (count: number): TopologyProjectionDocument => ({
-      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
-      nodes: [{
-        id: 'l1-pp1', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [objectRef],
-        attributes: { connection_point_count: count, owned_interface_count: 0 },
-        status: 'CONFIGURED',
-      }],
-      edges: [], gaps: [], warnings: [],
-    });
-    const loadProjection = vi.fn()
-      .mockResolvedValueOnce({ ...document, nodes: [], edges: [] })
-      .mockResolvedValueOnce(physical(1))
-      .mockResolvedValueOnce(physical(2));
-    const loadPhysicalObjectDetails = vi.fn()
-      .mockResolvedValueOnce(initial)
-      .mockResolvedValue(updated);
-    const createConnectionPoint = vi.fn().mockResolvedValue(updated);
-    const writeSource: ConnectionPointWriteDataSource = { createConnectionPoint };
-    render(
-      <App
-        dataSource={{ loadProjection }}
-        deviceDetailsDataSource={deviceDetailsDataSource}
-        physicalObjectDetailsDataSource={{ loadPhysicalObjectDetails }}
-        connectionPointWriteDataSource={writeSource}
-      />,
-    );
-
-    await userEvent.click(screen.getByRole('button', { name: 'Физическая' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'Выбрать узел' }));
-    await screen.findByRole('heading', { name: 'Port01' });
-    await userEvent.click(screen.getByRole('button', { name: '+ Добавить точку' }));
-    await userEvent.type(screen.getByLabelText('Название'), 'Port02');
-    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
-
-    expect(await screen.findByRole('heading', { name: 'Port02' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'PP1' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Точки подключения 2' })).toBeInTheDocument();
-    expect(createConnectionPoint).toHaveBeenCalledWith('po-pp1', { display_name: 'Port02' });
-    expect(loadProjection).toHaveBeenCalledTimes(3);
   });
 });

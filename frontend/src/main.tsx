@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { ApiTopologyDataSource } from './topology/apiTopologyDataSource';
 import { ApiDeviceDetailsDataSource } from './topology/apiDeviceDetailsDataSource';
@@ -16,18 +17,20 @@ import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App
-      dataSource={new ApiTopologyDataSource()}
-      deviceDetailsDataSource={new ApiDeviceDetailsDataSource()}
-      deviceWriteDataSource={new ApiDeviceWriteDataSource()}
-      deviceInterfaceWriteDataSource={new ApiDeviceInterfaceWriteDataSource()}
-      physicalLinkWriteDataSource={new ApiPhysicalLinkWriteDataSource()}
-      physicalObjectDetailsDataSource={new ApiPhysicalObjectDetailsDataSource()}
-      physicalObjectWriteDataSource={new ApiPhysicalObjectWriteDataSource()}
-      physicalEndpointConnectionWriteDataSource={new ApiPhysicalEndpointConnectionWriteDataSource()}
-      physicalObjectClassWriteDataSource={new ApiPhysicalObjectClassWriteDataSource()}
-      connectionPointWriteDataSource={new ApiConnectionPointWriteDataSource()}
-      topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
-    />
+    <BrowserRouter>
+      <App
+        dataSource={new ApiTopologyDataSource()}
+        deviceDetailsDataSource={new ApiDeviceDetailsDataSource()}
+        deviceWriteDataSource={new ApiDeviceWriteDataSource()}
+        deviceInterfaceWriteDataSource={new ApiDeviceInterfaceWriteDataSource()}
+        physicalLinkWriteDataSource={new ApiPhysicalLinkWriteDataSource()}
+        physicalObjectDetailsDataSource={new ApiPhysicalObjectDetailsDataSource()}
+        physicalObjectWriteDataSource={new ApiPhysicalObjectWriteDataSource()}
+        physicalEndpointConnectionWriteDataSource={new ApiPhysicalEndpointConnectionWriteDataSource()}
+        physicalObjectClassWriteDataSource={new ApiPhysicalObjectClassWriteDataSource()}
+        connectionPointWriteDataSource={new ApiConnectionPointWriteDataSource()}
+        topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
+      />
+    </BrowserRouter>
   </StrictMode>,
 );

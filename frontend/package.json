@@ -13,7 +13,8 @@
     "@xyflow/react": "12.11.3",
     "elkjs": "0.11.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-router-dom": "^7.18.2"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "7.0.1",
