@@ -290,6 +290,9 @@ a { color: inherit; }
 .map-page__canvas { position: absolute; inset: 0; }
 .map-page__canvas .topology-canvas { height: 100%; }
 .map-page__toolbar { position: absolute; z-index: 12; top: 16px; left: 50%; transform: translateX(-50%); box-shadow: 0 10px 35px rgba(0, 0, 0, .35); }
+.map-dialog { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; padding: 20px; background: rgb(0 0 0 / .55); }
+.map-dialog__surface { display: flex; flex-direction: column; gap: 10px; width: min(100%, 420px); max-height: min(70vh, 560px); overflow: auto; padding: 22px; border: 1px solid #356066; border-radius: 12px; background: #0b191b; box-shadow: 0 20px 60px #000; }
+.map-dialog__surface h2 { margin: 0 0 4px; }.map-dialog__surface label { display: grid; gap: 6px; color: #91a5a5; font-size: 11px; }.map-dialog__surface input, .map-dialog__surface button { padding: 9px; border: 1px solid #2a4448; border-radius: 6px; color: #e7f4f1; background: #081315; cursor: pointer; }.map-dialog__surface button:hover { border-color: #55e5b5; }
 .trace-command { position: absolute; z-index: 12; top: 16px; left: 16px; width: min(430px, calc(100% - 32px)); padding: 8px; border: 1px solid #294145; border-radius: 9px; background: rgba(9, 22, 25, .96); box-shadow: 0 10px 35px rgba(0, 0, 0, .35); backdrop-filter: blur(12px); }
 .trace-command form { display: flex; gap: 7px; }
 .trace-command form label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
