@@ -113,6 +113,7 @@ export function ConnectPhysicalEndpoint({
   const pointTargets = targetState.kind === 'points'
     ? targetState.document.connection_points.filter((point) => (
       point.cardinality === 1
+      && point.incident_connection_count < point.cardinality
       && point.connection_point_ref.entity_id !== sourcePoint.connection_point_ref.entity_id
     ))
     : [];
@@ -157,12 +158,13 @@ export function ConnectPhysicalEndpoint({
         type="button"
         className="connect-interface__trigger"
         aria-expanded={open}
+        disabled={sourcePoint.incident_connection_count >= sourcePoint.cardinality}
         onClick={() => {
           setOpen((value) => !value);
           setError(null);
         }}
       >
-        Подключить
+        {sourcePoint.incident_connection_count >= sourcePoint.cardinality ? 'Точка уже подключена' : 'Подключить'}
       </button>
       {open && (
         <form className="connect-interface__form" onSubmit={submit} noValidate>

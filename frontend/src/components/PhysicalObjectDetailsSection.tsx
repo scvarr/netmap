@@ -163,7 +163,7 @@ const PointCard = ({
       <span>Связей: <strong>{point.incident_connection_count}</strong></span>
       <span>Прямых привязок интерфейсов: <strong>{point.direct_interface_binding_count}</strong></span>
     </div>
-    {point.cardinality === 1 && deviceDetailsDataSource && writeDataSource && (
+    {point.cardinality === 1 && point.incident_connection_count < point.cardinality && deviceDetailsDataSource && writeDataSource && (
       <ConnectPhysicalEndpoint
         sourcePoint={point}
         topologyNodes={topologyNodes}
@@ -172,6 +172,9 @@ const PointCard = ({
         writeDataSource={writeDataSource}
         onConnected={onConnected}
       />
+    )}
+    {point.cardinality === 1 && point.incident_connection_count >= point.cardinality && (
+      <p className="muted">Точка уже подключена.</p>
     )}
     <details className="interface-technical-details">
       <summary>Технические данные</summary>

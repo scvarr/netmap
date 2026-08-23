@@ -11,8 +11,10 @@ export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
   const classPresentation = physicalClassPresentation(projection.attributes.class);
   const blueprint = projection.attributes.blueprint_presentation;
   if (physical && blueprint) return <div className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: blueprint.body.width, height: blueprint.body.height, background: blueprint.body.fill_color ?? '#18383a' }}>
+    <Handle type="target" position={Position.Top} className="device-node__handle" />
     <strong className="blueprint-map-node__label">{displayNodeLabel(projection)}</strong>
     {blueprint.slots.map((slot) => { const style = slot.anchor.side === 'LEFT' ? { left: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(-50%, -50%)' } : slot.anchor.side === 'RIGHT' ? { right: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(50%, -50%)' } : slot.anchor.side === 'TOP' ? { left: `${slot.anchor.offset * 100}%`, top: 0, transform: 'translate(-50%, -50%)' } : { left: `${slot.anchor.offset * 100}%`, bottom: 0, transform: 'translate(-50%, 50%)' }; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} />; })}
+    <Handle type="source" position={Position.Top} className="device-node__handle" />
   </div>;
   return (
     <div className={`device-node${physical ? ` device-node--physical device-node--class-${classPresentation.accent}` : ''}${selected ? ' device-node--selected' : ''}${data.traceHighlighted ? ' device-node--trace-highlighted' : ''}`}>

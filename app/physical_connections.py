@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ValidationError
-from app.models import ConnectionPoint, EntityMetadata, NetworkInterface
+from app.models import Connection, ConnectionPoint, EntityMetadata, NetworkInterface
 from app.models import BlueprintEndpointSlot, BlueprintInternalLink, ObjectBlueprintVersion
 from app.blueprint_catalog import ObjectBlueprintCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
@@ -177,6 +177,17 @@ class PhysicalConnectionCatalog:
             raise ValidationError(
                 "W.6 supports only cardinality=1 ConnectionPoints",
                 {"connection_point_ids": [str(value) for value in unsupported_points]},
+            )
+        occupied_points = [
+            point.id for point in locked_points
+            if self.session.scalar(select(Connection.id).where(
+                (Connection.point_a_id == point.id) | (Connection.point_b_id == point.id)
+            ).limit(1)) is not None
+        ]
+        if occupied_points:
+            raise ValidationError(
+                "ConnectionPoint member is already occupied",
+                {"reason": "CONNECTION_POINT_MEMBER_OCCUPIED", "connection_point_ids": [str(value) for value in occupied_points]},
             )
 
         blueprint_instance = None

@@ -21,7 +21,7 @@ const sourcePoint = {
   connection_point_ref: pointRef('outlet-port'),
   label: 'Port',
   cardinality: 1,
-  incident_connection_count: 2,
+  incident_connection_count: 0,
   direct_interface_binding_count: 0,
   source_refs: [],
 };
@@ -32,7 +32,7 @@ const panelDetails: PhysicalObjectDetailsDocument = {
     connection_point_ref: pointRef('panel-port-01'),
     label: 'Port01',
     cardinality: 1,
-    incident_connection_count: 1,
+    incident_connection_count: 0,
     direct_interface_binding_count: 0,
     source_refs: [],
   }],
@@ -79,7 +79,7 @@ describe('ConnectPhysicalEndpoint', () => {
     const { createPhysicalEndpointConnection, onConnected } = renderForm();
     await userEvent.click(screen.getByRole('button', { name: 'Подключить' }));
     await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'panel');
-    expect(await screen.findByRole('option', { name: 'Port01 · связей: 1' })).toBeInTheDocument();
+    expect(await screen.findByRole('option', { name: 'Port01 · связей: 0' })).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText('Целевая конечная точка'), 'panel-port-01');
     await userEvent.type(screen.getByPlaceholderText('Необязательное название'), 'cable-2');
     const form = screen.getByText('Подключить точку кабелем').closest('form')!;
