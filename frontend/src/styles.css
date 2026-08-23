@@ -349,6 +349,9 @@ a { color: inherit; }
 .catalog-table td:nth-child(2) strong { display: block; color: #b8cbc8; font-size: 10px; }
 .catalog-table td:nth-child(2) code { display: block; margin-top: 4px; color: #647b7d; font-size: 9px; }
 .catalog-table__open { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: #55e5b5; text-decoration: none; background: #112a25; }
+.catalog-table__actions { display: flex; justify-content: flex-end; gap: 8px; }
+.catalog-table__delete { width: 28px; height: 28px; border: 0; border-radius: 7px; color: #ff9f93; background: #351d20; cursor: pointer; font-size: 16px; }
+.catalog-table__delete:hover, .catalog-table__delete:focus-visible { color: #fff0ed; background: #57272c; outline: 1px solid #ff9f93; }
 .catalog-note { margin: 12px 0 0; padding: 10px 12px; border: 1px solid #3b3c2d; border-radius: 8px; color: #c3bd83; background: #181911; font-size: 11px; }
 .catalog-note--gap { border-color: #594437; color: #d9aa8c; background: #1d1612; }
 .blueprint-library-page__surface { position: relative; min-height: 360px; margin-top: 28px; }

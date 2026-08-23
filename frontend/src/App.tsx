@@ -58,7 +58,7 @@ export function App(props: AppProps) {
         />
         <Route
           path="infrastructure/objects"
-          element={<InfrastructureObjectsPage dataSource={props.dataSource} />}
+          element={<InfrastructureObjectsPage dataSource={props.dataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} />}
         />
         <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
