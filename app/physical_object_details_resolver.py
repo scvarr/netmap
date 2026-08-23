@@ -3,7 +3,7 @@ import uuid
 from sqlalchemy import or_, select
 
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
-from app.models import Connection, ConnectionMember, InterfacePhysicalBinding
+from app.models import Connection, ConnectionMember, ConnectionPoint, InterfacePhysicalBinding
 from app.repository import CanonicalRepository
 from app.schemas import (
     ConnectionPointDetails,
@@ -36,6 +36,9 @@ class ConfiguredPhysicalObjectDetailsResolver:
         connections_by_point: dict[uuid.UUID, dict[uuid.UUID, set[uuid.UUID]]] = {
             point_id: {} for point_id in point_ids
         }
+        external_connection_ids_by_point: dict[uuid.UUID, set[uuid.UUID]] = {
+            point_id: set() for point_id in point_ids
+        }
         bindings_by_point: dict[uuid.UUID, list[tuple[uuid.UUID, uuid.UUID]]] = {
             point_id: [] for point_id in point_ids
         }
@@ -63,15 +66,30 @@ class ConfiguredPhysicalObjectDetailsResolver:
                     .order_by(ConnectionMember.connection_id, ConnectionMember.id)
                 ):
                     member_ids_by_connection[member.connection_id].add(member.id)
+            endpoint_ids = {
+                endpoint_id
+                for connection in connections
+                for endpoint_id in (connection.point_a_id, connection.point_b_id)
+            }
+            owners_by_point = dict(
+                self.repository.session.execute(
+                    select(ConnectionPoint.id, ConnectionPoint.physical_object_id)
+                    .where(ConnectionPoint.id.in_(endpoint_ids))
+                ).all()
+            )
             for connection in connections:
                 if connection.point_a_id in connections_by_point:
                     connections_by_point[connection.point_a_id][connection.id] = (
                         member_ids_by_connection[connection.id]
                     )
+                    if owners_by_point[connection.point_a_id] != owners_by_point[connection.point_b_id]:
+                        external_connection_ids_by_point[connection.point_a_id].add(connection.id)
                 if connection.point_b_id in connections_by_point:
                     connections_by_point[connection.point_b_id][connection.id] = (
                         member_ids_by_connection[connection.id]
                     )
+                    if owners_by_point[connection.point_a_id] != owners_by_point[connection.point_b_id]:
+                        external_connection_ids_by_point[connection.point_b_id].add(connection.id)
             bindings = tuple(
                 self.repository.session.scalars(
                     select(InterfacePhysicalBinding)
@@ -108,6 +126,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
                     point.cardinality,
                     point_aliases.get(point.point_id),
                     connections_by_point[point.point_id],
+                    external_connection_ids_by_point[point.point_id],
                     bindings_by_point[point.point_id],
                 )
                 for point in sorted(points, key=lambda value: str(value.point_id))
@@ -123,6 +142,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
         cardinality: int,
         alias: DisplayAliasRecord | None,
         connections: dict[uuid.UUID, set[uuid.UUID]],
+        external_connection_ids: set[uuid.UUID],
         bindings: list[tuple[uuid.UUID, uuid.UUID]],
     ) -> ConnectionPointDetails:
         refs = [self._ref("ConnectionPoint", point_id)]
@@ -148,6 +168,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
             label_source=None if alias is not None else "TECHNICAL_FALLBACK",
             cardinality=cardinality,
             incident_connection_count=len(connections),
+            external_connection_count=len(external_connection_ids),
             direct_interface_binding_count=len(bindings),
             source_refs=self._dedupe_refs(refs),
         )

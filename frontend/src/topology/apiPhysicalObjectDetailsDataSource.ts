@@ -78,6 +78,7 @@ export const parsePhysicalObjectDetailsDocument = (
     validateLabel(item, path);
     requireCount(item.cardinality, `${path}.cardinality`, 1);
     requireCount(item.incident_connection_count, `${path}.incident_connection_count`);
+    requireCount(item.external_connection_count, `${path}.external_connection_count`);
     requireCount(item.direct_interface_binding_count, `${path}.direct_interface_binding_count`);
     validateRefs(item.source_refs, `${path}.source_refs`);
   });

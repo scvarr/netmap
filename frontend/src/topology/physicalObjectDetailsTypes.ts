@@ -13,6 +13,7 @@ export interface ConnectionPointDetails {
   label_source?: 'TECHNICAL_FALLBACK';
   cardinality: number;
   incident_connection_count: number;
+  external_connection_count?: number;
   direct_interface_binding_count: number;
   source_refs: ProjectionSourceRef[];
 }

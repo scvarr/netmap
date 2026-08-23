@@ -15,6 +15,7 @@ export const physicalObjectDocument: PhysicalObjectDetailsDocument = {
     label: 'Порт',
     cardinality: 1,
     incident_connection_count: 0,
+    external_connection_count: 0,
     direct_interface_binding_count: 0,
     source_refs: [{
       ref_type: 'CANONICAL_FACT', entity_type: 'EntityMetadata', entity_id: 'alias-1',

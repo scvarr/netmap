@@ -18,6 +18,7 @@ const document: PhysicalObjectDetailsDocument = {
     label: 'Port02',
     cardinality: 1,
     incident_connection_count: 0,
+    external_connection_count: 0,
     direct_interface_binding_count: 0,
     source_refs: [],
   }],

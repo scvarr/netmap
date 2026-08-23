@@ -151,6 +151,7 @@ class ConnectionPointDetails(BaseModel):
     label_source: Literal["TECHNICAL_FALLBACK"] | None = None
     cardinality: int = Field(ge=1)
     incident_connection_count: int = Field(ge=0)
+    external_connection_count: int = Field(ge=0)
     direct_interface_binding_count: int = Field(ge=0)
     source_refs: list[ProjectionSourceRef]
 

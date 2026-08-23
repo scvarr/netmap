@@ -23,14 +23,16 @@ vi.mock('@xyflow/react', () => ({
   MiniMap: () => null,
   Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
-  ReactFlow: ({ nodes, onNodeClick, onNodesChange, onNodeDragStop, children }: {
+  ReactFlow: ({ nodes, edges, onNodeClick, onNodesChange, onNodeDragStop, children }: {
     nodes: FlowProjection['nodes'];
+    edges: FlowProjection['edges'];
     onNodeClick: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     onNodesChange: (changes: unknown[]) => void;
     onNodeDragStop: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     children: React.ReactNode;
   }) => (
     <div data-testid="flow">
+      <svg>{edges.map((edge) => <path key={edge.id} data-testid={`svg-path-${edge.id}`} d="M0,0L1,1" />)}</svg>
       {nodes.map((node) => (
         <div key={node.id}>
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
@@ -76,6 +78,30 @@ const deferred = <T,>() => {
 };
 
 describe('TopologyCanvas async layout boundary', () => {
+  it.each([
+    ['blueprint to blueprint', false, false],
+    ['blueprint to generic', false, true],
+    ['collapsed cable between blueprint nodes', true, false],
+  ])('renders an SVG path for %s', async (_, collapsedCable, genericTarget) => {
+    const blueprint = (id: string, point: string) => ({
+      id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [], attributes: {
+        blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint', entity_id: `${id}-bp` }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion', entity_id: `${id}-v` }, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, slots: [{ slot_key: 'port', display_name: 'port', kind: 'CONNECTION_POINT' as const, anchor: { side: 'RIGHT' as const, offset: .5 }, connection_point_id: point }] },
+      },
+    });
+    const left = blueprint('left', 'left-cp');
+    const right = genericTarget ? { ...blueprint('right', 'right-cp'), attributes: {} } : blueprint('right', 'right-cp');
+    const directEdge = { id: 'left-right', from_node_id: 'left', to_node_id: 'right', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [{ from_connection_point_id: 'left-cp', from_member_index: 1, to_connection_point_id: 'right-cp', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member' }] } };
+    const base: TopologyProjectionDocument = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] };
+    const document: TopologyProjectionDocument = collapsedCable ? {
+      ...base, nodes: [left, { id: 'cable', kind: 'PHYSICAL_OBJECT', label: 'cable', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'cable-a' }, { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'cable-b' }], attributes: { class: 'cable', connection_point_count: 2 } }, right], edges: [
+        { ...directEdge, id: 'left-cable', to_node_id: 'cable', attributes: { endpoint_pairs: [{ ...directEdge.attributes.endpoint_pairs![0], to_connection_point_id: 'cable-a' }] } },
+        { ...directEdge, id: 'cable-right', from_node_id: 'cable', attributes: { endpoint_pairs: [{ ...directEdge.attributes.endpoint_pairs![0], from_connection_point_id: 'cable-b' }] } },
+      ],
+    } : { ...base, nodes: [left, right], edges: [directEdge] };
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => (await import('../topology/layout')).toFlowProjection(input)} />);
+    expect(await screen.findByTestId(collapsedCable ? 'svg-path-collapsed-cable:cable' : 'svg-path-left-right::member::member')).toHaveAttribute('d', 'M0,0L1,1');
+  });
+
   it('does not apply a stale layout after a fast projection switch', async () => {
     const logical = documentFor('logical-A');
     const physical = documentFor('physical-B');

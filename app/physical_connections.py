@@ -1,12 +1,12 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ValidationError
-from app.models import Connection, ConnectionPoint, EntityMetadata, NetworkInterface
+from app.models import Connection, ConnectionMember, ConnectionPoint, EntityMetadata, NetworkInterface
 from app.models import BlueprintEndpointSlot, BlueprintInternalLink, ObjectBlueprintVersion
 from app.blueprint_catalog import ObjectBlueprintCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
@@ -178,11 +178,16 @@ class PhysicalConnectionCatalog:
                 "W.6 supports only cardinality=1 ConnectionPoints",
                 {"connection_point_ids": [str(value) for value in unsupported_points]},
             )
+        requested_members = {
+            endpoint.connection_point_id: endpoint.member_index
+            for endpoint in (source, target)
+            if isinstance(endpoint, ConnectionPointEndpoint)
+        }
         occupied_points = [
             point.id for point in locked_points
-            if self.session.scalar(select(Connection.id).where(
-                (Connection.point_a_id == point.id) | (Connection.point_b_id == point.id)
-            ).limit(1)) is not None
+            if self._has_external_member_connection(
+                point, requested_members[point.id]
+            )
         ]
         if occupied_points:
             raise ValidationError(
@@ -279,6 +284,49 @@ class PhysicalConnectionCatalog:
             "connection_point_id": str(endpoint.connection_point_id),
             "member_index": endpoint.member_index,
         }
+
+    def _has_external_member_connection(
+        self,
+        point: ConnectionPoint,
+        member_index: int,
+    ) -> bool:
+        """Return whether this exact member is attached outside its owner.
+
+        A Connection remains an incident topology fact even when both endpoints
+        belong to one PhysicalObject.  Only a member mapping which crosses that
+        canonical ownership boundary consumes external endpoint capacity.
+        """
+        opposite_point = aliased(ConnectionPoint)
+        connection_uses_member = or_(
+            and_(
+                Connection.point_a_id == point.id,
+                ConnectionMember.point_a_member == member_index,
+            ),
+            and_(
+                Connection.point_b_id == point.id,
+                ConnectionMember.point_b_member == member_index,
+            ),
+        )
+        opposite_endpoint = or_(
+            and_(
+                Connection.point_a_id == point.id,
+                Connection.point_b_id == opposite_point.id,
+            ),
+            and_(
+                Connection.point_b_id == point.id,
+                Connection.point_a_id == opposite_point.id,
+            ),
+        )
+        return self.session.scalar(
+            select(Connection.id)
+            .join(ConnectionMember)
+            .join(opposite_point, opposite_endpoint)
+            .where(
+                connection_uses_member,
+                opposite_point.physical_object_id != point.physical_object_id,
+            )
+            .limit(1)
+        ) is not None
 
     @staticmethod
     def _materialize_endpoint(

@@ -22,6 +22,7 @@ const sourcePoint = {
   label: 'Port',
   cardinality: 1,
   incident_connection_count: 0,
+  external_connection_count: 0,
   direct_interface_binding_count: 0,
   source_refs: [],
 };
@@ -33,6 +34,7 @@ const panelDetails: PhysicalObjectDetailsDocument = {
     label: 'Port01',
     cardinality: 1,
     incident_connection_count: 0,
+    external_connection_count: 0,
     direct_interface_binding_count: 0,
     source_refs: [],
   }],
@@ -75,6 +77,44 @@ const renderForm = (createPhysicalEndpointConnection = vi.fn().mockResolvedValue
 };
 
 describe('ConnectPhysicalEndpoint', () => {
+  it('keeps an internally connected source enabled and an internally connected target selectable', async () => {
+    const createPhysicalEndpointConnection = vi.fn().mockResolvedValue({});
+    const internallyConnected = { ...sourcePoint, incident_connection_count: 1, external_connection_count: 0 };
+    const targetWithInternalLink = {
+      ...panelDetails,
+      connection_points: [{ ...panelDetails.connection_points[0], incident_connection_count: 1, external_connection_count: 0 }],
+    };
+    render(
+      <ConnectPhysicalEndpoint
+        sourcePoint={internallyConnected}
+        topologyNodes={nodes}
+        physicalDetailsDataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(targetWithInternalLink) }}
+        deviceDetailsDataSource={{ loadDeviceDetails: vi.fn().mockResolvedValue(switchDetails) }}
+        writeDataSource={{ createPhysicalEndpointConnection }}
+        onConnected={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить' }));
+    await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'panel');
+    expect(await screen.findByRole('option', { name: 'Port01 · связей: 1' })).toBeInTheDocument();
+  });
+
+  it('disables an externally occupied source and filters an externally occupied target', async () => {
+    render(
+      <ConnectPhysicalEndpoint
+        sourcePoint={{ ...sourcePoint, incident_connection_count: 1, external_connection_count: 1 }}
+        topologyNodes={nodes}
+        physicalDetailsDataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue({
+          ...panelDetails,
+          connection_points: [{ ...panelDetails.connection_points[0], incident_connection_count: 2, external_connection_count: 1 }],
+        }) }}
+        deviceDetailsDataSource={{ loadDeviceDetails: vi.fn().mockResolvedValue(switchDetails) }}
+        writeDataSource={{ createPhysicalEndpointConnection: vi.fn() }}
+        onConnected={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Точка уже подключена' })).toBeDisabled();
+  });
   it('keeps an already incident passive point selectable and connects it to another point', async () => {
     const { createPhysicalEndpointConnection, onConnected } = renderForm();
     await userEvent.click(screen.getByRole('button', { name: 'Подключить' }));

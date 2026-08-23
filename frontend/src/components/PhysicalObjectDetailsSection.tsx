@@ -161,9 +161,10 @@ const PointCard = ({
     <div className="connection-point-card__metrics">
       <span>Cardinality: <strong>{point.cardinality}</strong></span>
       <span>Связей: <strong>{point.incident_connection_count}</strong></span>
+      <span>Внешних подключений: <strong>{point.external_connection_count ?? 0}</strong></span>
       <span>Прямых привязок интерфейсов: <strong>{point.direct_interface_binding_count}</strong></span>
     </div>
-    {point.cardinality === 1 && point.incident_connection_count < point.cardinality && deviceDetailsDataSource && writeDataSource && (
+    {point.cardinality === 1 && (point.external_connection_count ?? 0) < point.cardinality && deviceDetailsDataSource && writeDataSource && (
       <ConnectPhysicalEndpoint
         sourcePoint={point}
         topologyNodes={topologyNodes}
@@ -173,7 +174,7 @@ const PointCard = ({
         onConnected={onConnected}
       />
     )}
-    {point.cardinality === 1 && point.incident_connection_count >= point.cardinality && (
+    {point.cardinality === 1 && (point.external_connection_count ?? 0) >= point.cardinality && (
       <p className="muted">Точка уже подключена.</p>
     )}
     <details className="interface-technical-details">

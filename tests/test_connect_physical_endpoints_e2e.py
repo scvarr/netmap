@@ -16,6 +16,7 @@ from app.models import (
     PhysicalObject,
 )
 from app.repository import CanonicalRepository
+from app.repository import ConnectionMemberInput
 
 
 client = TestClient(app)
@@ -89,58 +90,76 @@ def physical_projection() -> dict:
     return response.json()
 
 
-def test_endpoint_connections_reject_occupied_passive_member_without_creating_cable():
+def test_blueprint_patch_panel_internal_pair_allows_one_external_attachment_per_side():
     pc_id, pc_interface_id = create_device("PC1", "eth0")
-    outlet_id, outlet_point_id = create_physical_object("Outlet1", "Port")
-    panel_id, panel_point_id = create_physical_object("PP1", "Port01")
     switch_id, switch_interface_id = create_device("SW1", "eth1")
+    blueprint = client.post("/v1/library/object-blueprints", json={
+        "name": "Patch panel",
+        "body": {"kind": "RECTANGLE", "width": 300, "height": 80},
+        "slots": [
+            {"key": "front01", "display_name": "Front01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .5}},
+            {"key": "rear01", "display_name": "Rear01", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .5}},
+        ],
+        "internal_links": [{"from_slot_key": "front01", "to_slot_key": "rear01"}],
+    }).json()
+    panel = client.post(
+        f"/v1/library/object-blueprints/{blueprint['blueprint_ref']['entity_id']}/versions/{blueprint['version_ref']['entity_id']}/instantiate",
+        json={"display_name": "PP1"},
+    ).json()
+    panel_id = panel["physical_object_ref"]["entity_id"]
+    panel_points = {item["slot_key"]: item["connection_point_ref"]["entity_id"] for item in panel["slots"]}
 
     responses = (
         connect(
             interface_endpoint(pc_interface_id),
-            point_endpoint(outlet_point_id),
+            point_endpoint(panel_points["front01"]),
             "cable-1",
         ),
         connect(
-            point_endpoint(outlet_point_id),
-            point_endpoint(panel_point_id),
+            point_endpoint(panel_points["rear01"]),
+            interface_endpoint(switch_interface_id),
             "cable-2",
         ),
         connect(
-            point_endpoint(panel_point_id),
-            interface_endpoint(switch_interface_id),
+            point_endpoint(panel_points["front01"]),
+            point_endpoint(panel_points["rear01"]),
             "cable-3",
         ),
     )
-    assert [response.status_code for response in responses] == [201, 422, 201]
-    assert responses[1].json()["error"]["details"]["reason"] == "CONNECTION_POINT_MEMBER_OCCUPIED"
+    assert [response.status_code for response in responses] == [201, 201, 422]
+    assert responses[2].json()["error"]["details"]["reason"] == "CONNECTION_POINT_MEMBER_OCCUPIED"
     assert responses[0].json()["source"]["interface_binding_ref"]
-    assert "interface_binding_ref" not in responses[0].json()["target"]
-    assert responses[2].json()["target"]["interface_binding_ref"]
+    assert responses[1].json()["target"]["interface_binding_ref"]
 
     with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(Connection)) == 6
-        assert session.scalar(select(func.count()).select_from(ConnectionMember)) == 6
+        assert session.scalar(select(func.count()).select_from(Connection)) == 7
+        assert session.scalar(select(func.count()).select_from(ConnectionMember)) == 7
         assert session.scalar(
             select(func.count()).select_from(InterfacePhysicalBinding)
         ) == 2
-        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 6
+        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 5
         for model in (L2Binding, L3Binding, InterfaceAddress):
             assert session.scalar(select(func.count()).select_from(model)) == 0
 
-    outlet = client.get(f"/v1/topology/physical-objects/{outlet_id}").json()
     panel = client.get(f"/v1/topology/physical-objects/{panel_id}").json()
-    assert outlet["connection_points"][0]["incident_connection_count"] == 1
-    assert panel["connection_points"][0]["incident_connection_count"] == 1
+    details_by_label = {point["label"]: point for point in panel["connection_points"]}
+    assert details_by_label["Front01"]["incident_connection_count"] == 2
+    assert details_by_label["Front01"]["external_connection_count"] == 1
+    assert details_by_label["Rear01"]["incident_connection_count"] == 2
+    assert details_by_label["Rear01"]["external_connection_count"] == 1
+
+    trace = client.post("/v1/traces/l1", json={
+        "from": {"point_id": panel_points["front01"], "member_index": 1},
+        "to": {"point_id": panel_points["rear01"], "member_index": 1},
+    })
+    assert trace.status_code == 200 and trace.json()["verdict"] == "REACHABLE"
 
     projection = physical_projection()
     assert {node["label"] for node in projection["nodes"]} == {
         "PC1",
-        "Outlet1",
         "PP1",
         "SW1",
-        "cable-1",
-        "cable-3",
+        "cable-1", "cable-2",
     }
     assert len(projection["edges"]) == 4
     assert all(
@@ -164,6 +183,37 @@ def test_existing_connection_point_member_cannot_be_connected_again():
     assert second.json()["error"]["details"]["reason"] == "CONNECTION_POINT_MEMBER_OCCUPIED"
     details = client.get(f"/v1/topology/physical-objects/{object_id}").json()
     assert details["connection_points"][0]["incident_connection_count"] == 1
+
+
+def test_manual_two_sided_outlet_keeps_internal_topology_separate_from_external_occupancy():
+    pc_id, pc_interface = create_device("PC1", "eth0")
+    switch_id, switch_interface = create_device("SW1", "eth1")
+    _, duplicate_interface = create_device("PC2", "eth0")
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        outlet = repository.add_physical_object()
+        room = repository.add_connection_point(outlet.id, cardinality=1)
+        rear = repository.add_connection_point(outlet.id, cardinality=1)
+        repository.add_connection(
+            room.id,
+            rear.id,
+            cardinality=1,
+            members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+        )
+
+    first = connect(interface_endpoint(pc_interface), point_endpoint(str(room.id)), "room-cable")
+    second = connect(point_endpoint(str(rear.id)), interface_endpoint(switch_interface), "rear-cable")
+    duplicate_source = connect(interface_endpoint(duplicate_interface), point_endpoint(str(room.id)), "duplicate")
+
+    assert [first.status_code, second.status_code, duplicate_source.status_code] == [201, 201, 422]
+    assert duplicate_source.json()["error"]["details"]["reason"] == "CONNECTION_POINT_MEMBER_OCCUPIED"
+    details = client.get(f"/v1/topology/physical-objects/{outlet.id}").json()
+    assert {(item["incident_connection_count"], item["external_connection_count"]) for item in details["connection_points"]} == {(2, 1)}
+    trace = client.post("/v1/traces/l1", json={
+        "from": {"point_id": str(room.id), "member_index": 1},
+        "to": {"point_id": str(rear.id), "member_index": 1},
+    })
+    assert trace.status_code == 200 and trace.json()["verdict"] == "REACHABLE"
 
 
 def test_endpoint_connection_materializes_exact_simple_cable_blueprint():
