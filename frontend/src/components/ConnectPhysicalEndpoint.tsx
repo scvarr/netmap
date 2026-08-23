@@ -44,6 +44,24 @@ const interfaceLabel = (label: string, id: string): string => {
   return technical ? `Интерфейс ${(technical[1] || id).slice(0, 8)}` : label;
 };
 
+const naturalLabelCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base',
+});
+
+const isTechnicalFallback = (node: TopologyProjectionNode): boolean => (
+  node.attributes.label_source === 'TECHNICAL_FALLBACK'
+  || /^PhysicalObject\s+/i.test(node.label)
+  || /^Объект\s+/i.test(node.label)
+);
+
+const stableNaturalSort = <T,>(items: T[], label: (item: T) => string): T[] => (
+  items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => naturalLabelCollator.compare(label(left.item), label(right.item)) || left.index - right.index)
+    .map(({ item }) => item)
+);
+
 export function ConnectPhysicalEndpoint({
   sourcePoint,
   topologyNodes,
@@ -62,17 +80,19 @@ export function ConnectPhysicalEndpoint({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const targetObjects = useMemo(() => topologyNodes.flatMap((node) => {
+  const targetObjects = useMemo(() => stableNaturalSort(topologyNodes.flatMap((node) => {
+    if (node.kind !== 'PHYSICAL_OBJECT') return [];
     const id = physicalObjectId(node);
     if (!id) return [];
-    if (
-      targetKind === 'NETWORK_INTERFACE'
-      && (numericAttribute(node, 'owned_interface_count') ?? 0) < 1
-    ) {
+    if (node.attributes.class === 'cable') return [];
+    const usable = targetKind === 'CONNECTION_POINT'
+      ? (numericAttribute(node, 'connection_point_count') ?? 0) > 0
+      : (numericAttribute(node, 'owned_interface_count') ?? 0) > 0;
+    if (!usable) {
       return [];
     }
-    return [{ id, label: displayNodeLabel(node) }];
-  }), [targetKind, topologyNodes]);
+    return [{ id, label: displayNodeLabel(node), technicalFallback: isTechnicalFallback(node) }];
+  }), (object) => `${object.technicalFallback ? '1' : '0'}:${object.label}`), [targetKind, topologyNodes]);
 
   useEffect(() => {
     setTargetEntityId('');
@@ -111,14 +131,17 @@ export function ConnectPhysicalEndpoint({
   ]);
 
   const pointTargets = targetState.kind === 'points'
-    ? targetState.document.connection_points.filter((point) => (
+    ? stableNaturalSort(targetState.document.connection_points.filter((point) => (
       point.cardinality === 1
       && (point.external_connection_count ?? 0) < point.cardinality
       && point.connection_point_ref.entity_id !== sourcePoint.connection_point_ref.entity_id
-    ))
+    )), (point) => point.label)
     : [];
   const interfaceTargets = targetState.kind === 'interfaces'
-    ? targetState.document.interfaces.filter((item) => item.direct_physical_bindings.length === 0)
+    ? stableNaturalSort(
+      targetState.document.interfaces.filter((item) => item.direct_physical_bindings.length === 0),
+      (item) => interfaceLabel(item.label, item.interface_ref.entity_id),
+    )
     : [];
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
@@ -184,6 +207,13 @@ export function ConnectPhysicalEndpoint({
               <option value="NETWORK_INTERFACE">Интерфейс устройства</option>
             </select>
           </label>
+          {targetObjects.length === 0 && (
+            <p className="muted">
+              {targetKind === 'CONNECTION_POINT'
+                ? 'Нет объектов с точками подключения.'
+                : 'Нет объектов с сетевыми интерфейсами.'}
+            </p>
+          )}
           <label>
             <span>Физический объект</span>
             <select
@@ -224,10 +254,10 @@ export function ConnectPhysicalEndpoint({
           </label>
           {targetState.kind === 'loading' && <p className="muted">Загружаем endpoints…</p>}
           {targetState.kind === 'points' && pointTargets.length === 0 && (
-            <p className="muted">Нет подходящих точек cardinality=1.</p>
+            <p className="muted">Нет свободных точек подключения.</p>
           )}
           {targetState.kind === 'interfaces' && interfaceTargets.length === 0 && (
-            <p className="muted">Нет интерфейсов без прямой физической привязки.</p>
+            <p className="muted">Нет свободных интерфейсов.</p>
           )}
           {targetState.kind === 'error' && (
             <div className="connect-interface__target-error">
