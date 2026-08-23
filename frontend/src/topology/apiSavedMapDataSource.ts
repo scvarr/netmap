@@ -1,0 +1,25 @@
+import type { MapPlacement, SavedMap, SavedMapDataSource, SavedMapRef, SavedMapSummary } from './savedMapTypes';
+import type { ProjectionSourceRef } from './types';
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const malformed = (message: string): never => { throw new Error(`Malformed SavedMap response: ${message}`); };
+const object = (value: unknown, path: string): Record<string, unknown> => { if (!value || typeof value !== 'object' || Array.isArray(value)) malformed(`${path} must be an object.`); return value as Record<string, unknown>; };
+const uuid = (value: unknown, path: string): string => { if (typeof value !== 'string' || !UUID.test(value)) malformed(`${path} must be a UUID.`); return value as string; };
+const string = (value: unknown, path: string): string => { if (typeof value !== 'string' || !value.trim()) malformed(`${path} must be a non-empty string.`); return value as string; };
+const mapRef = (value: unknown, path: string): SavedMapRef => { const ref = object(value, path); if (ref.entity_type !== 'SavedMap') malformed(`${path}.entity_type must be SavedMap.`); return { entity_type: 'SavedMap', entity_id: uuid(ref.entity_id, `${path}.entity_id`) }; };
+const physicalRef = (value: unknown, path: string): ProjectionSourceRef => { const ref = object(value, path); if (ref.ref_type !== 'CANONICAL_FACT' || ref.entity_type !== 'PhysicalObject') malformed(`${path} must be a canonical PhysicalObject ref.`); return { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: uuid(ref.entity_id, `${path}.entity_id`) }; };
+const placement = (value: unknown, path: string): MapPlacement => { const item = object(value, path); if (!Number.isFinite(item.x) || !Number.isFinite(item.y)) malformed(`${path}.x/y must be finite.`); return { physical_object_ref: physicalRef(item.physical_object_ref, `${path}.physical_object_ref`), x: item.x as number, y: item.y as number }; };
+const summary = (value: unknown, path: string): SavedMapSummary => { const item = object(value, path); return { map_ref: mapRef(item.map_ref, `${path}.map_ref`), name: string(item.name, `${path}.name`), created_at: string(item.created_at, `${path}.created_at`), updated_at: string(item.updated_at, `${path}.updated_at`) }; };
+const parseMap = (value: unknown): SavedMap => { const item = object(value, 'map'); const base = summary(item, 'map'); if (!Array.isArray(item.placements)) malformed('map.placements must be an array.'); const placements = item.placements as unknown[]; return { ...base, placements: placements.map((entry, index) => placement(entry, `map.placements[${index}]`)) }; };
+const error = async (response: Response): Promise<Error> => { try { const body = object(await response.json(), 'error'); const item = object(body.error, 'error'); if (typeof item.code === 'string' && typeof item.message === 'string') return new Error(`${item.code}: ${item.message}`); } catch { /* generic below */ } return new Error(`HTTP ${response.status} while using SavedMap API.`); };
+
+export class ApiSavedMapDataSource implements SavedMapDataSource {
+  constructor(private readonly endpoint = '/api/v1/maps') {}
+  async listMaps(): Promise<SavedMapSummary[]> { const response = await fetch(this.endpoint); if (!response.ok) throw await error(response); const body = object(await response.json(), 'list'); if (!Array.isArray(body.maps)) malformed('list.maps must be an array.'); return (body.maps as unknown[]).map((item, index) => summary(item, `list.maps[${index}]`)); }
+  async createMap(name: string): Promise<SavedMap> { const response = await fetch(this.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }); if (!response.ok) throw await error(response); return parseMap(await response.json()); }
+  async loadMap(mapId: string): Promise<SavedMap> { uuid(mapId, 'mapId'); const response = await fetch(`${this.endpoint}/${encodeURIComponent(mapId)}`); if (!response.ok) throw await error(response); return parseMap(await response.json()); }
+  async addPlacement(mapId: string, physicalObjectId: string, x: number, y: number): Promise<void> { await this.mutate(`${mapId}/placements`, 'POST', { physical_object_id: physicalObjectId, x, y }); }
+  async movePlacement(mapId: string, physicalObjectId: string, x: number, y: number): Promise<void> { await this.mutate(`${mapId}/placements/${encodeURIComponent(physicalObjectId)}`, 'PUT', { x, y }); }
+  async removePlacement(mapId: string, physicalObjectId: string): Promise<void> { await this.mutate(`${mapId}/placements/${encodeURIComponent(physicalObjectId)}`, 'DELETE'); }
+  private async mutate(path: string, method: string, body?: object): Promise<void> { const response = await fetch(`${this.endpoint}/${path}`, { method, headers: body ? { 'Content-Type': 'application/json' } : undefined, body: body ? JSON.stringify(body) : undefined }); if (!response.ok) throw await error(response); }
+}

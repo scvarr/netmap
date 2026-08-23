@@ -63,8 +63,11 @@ Trace Command Bar
     planned primary trace interaction surface; не реализован в UI-SHELL.1
 ```
 
-`/map` получает только `TopologyProjectionDocument`, сохраняет frontend-owned
-layout и использует canonical `PhysicalObject` source refs для URL `focus` и
+`/map?map=<SavedMap UUID>&view=physical` first loads its explicit SavedMap
+presentation scope, then obtains `TopologyProjectionDocument` only for its
+placed canonical `PhysicalObject` refs. SavedMap coordinates are server-owned
+and never overridden by frontend layout persistence; an empty map never sends
+an empty projection scope. It uses canonical `PhysicalObject` source refs for URL `focus` and
 переходов между projections/pages. Quick Inspector показывает bounded context и
 не содержит canonical create/edit forms.
 

@@ -18,9 +18,13 @@ export const PHYSICAL_PROJECTION_REQUEST: TopologyProjectionRequest = {
 
 export type TopologyViewMode = 'logical' | 'physical';
 
-export const projectionRequestFor = (view: TopologyViewMode): TopologyProjectionRequest => (
-  view === 'physical' ? PHYSICAL_PROJECTION_REQUEST : LOGICAL_PROJECTION_REQUEST
-);
+export const projectionRequestFor = (view: TopologyViewMode, physicalObjectIds?: string[]): TopologyProjectionRequest => {
+  const base = view === 'physical' ? PHYSICAL_PROJECTION_REQUEST : LOGICAL_PROJECTION_REQUEST;
+  return physicalObjectIds === undefined ? base : {
+    ...base,
+    scope: { include_location_subtrees: [], include_entities: physicalObjectIds.map((entity_id) => ({ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id })) },
+  };
+};
 
 export const physicalObjectIdForNode = (node: TopologyProjectionNode): string | null => {
   const refs = node.source_refs.filter((ref) => (

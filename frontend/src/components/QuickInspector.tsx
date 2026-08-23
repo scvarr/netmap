@@ -19,6 +19,7 @@ interface QuickInspectorProps {
   onSelectNode: (node: TopologyProjectionNode) => void;
   onClose: () => void;
   onDeletePhysicalObject?: (physicalObjectId: string) => Promise<void>;
+  onRemoveFromMap?: (physicalObjectId: string) => Promise<void>;
 }
 
 const Metric = ({ label, value }: { label: string; value: string }) => (
@@ -31,6 +32,7 @@ export function QuickInspector({
   onSelectNode,
   onClose,
   onDeletePhysicalObject,
+  onRemoveFromMap,
 }: QuickInspectorProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   if (!selection) return null;
@@ -87,6 +89,9 @@ export function QuickInspector({
         )}
         {isPhysical && physicalObjectId && onDeletePhysicalObject && (
           <button type="button" onClick={() => void deleteObject()}>Удалить</button>
+        )}
+        {isPhysical && physicalObjectId && onRemoveFromMap && (
+          <button type="button" onClick={() => void onRemoveFromMap(physicalObjectId)}>Убрать с карты</button>
         )}
         {deleteError && <p role="alert">{deleteError}</p>}
         <details className="quick-inspector__technical">

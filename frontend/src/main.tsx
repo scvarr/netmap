@@ -17,6 +17,7 @@ import { ApiInterfacePhysicalTraceDataSource } from './topology/apiInterfacePhys
 import { ApiL2ForwardingContextWriteDataSource } from './topology/apiL2ForwardingContextWriteDataSource';
 import { ApiObjectBlueprintDataSource } from './topology/apiObjectBlueprintDataSource';
 import { ApiPhysicalObjectDeleteDataSource } from './topology/apiPhysicalObjectDeleteDataSource';
+import { ApiSavedMapDataSource } from './topology/apiSavedMapDataSource';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -37,6 +38,7 @@ createRoot(document.getElementById('root')!).render(
         l2ForwardingContextWriteDataSource={new ApiL2ForwardingContextWriteDataSource()}
         objectBlueprintDataSource={new ApiObjectBlueprintDataSource()}
         physicalObjectDeleteDataSource={new ApiPhysicalObjectDeleteDataSource()}
+        savedMapDataSource={new ApiSavedMapDataSource()}
         topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
       />
     </BrowserRouter>

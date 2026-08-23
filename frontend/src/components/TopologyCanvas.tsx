@@ -30,6 +30,8 @@ import {
 import { DeviceNode } from './DeviceNode';
 import { FloatingTopologyEdge } from './FloatingTopologyEdge';
 import type { PhysicalTraceOverlay } from '../topology/interfacePhysicalTraceOverlay';
+import { physicalObjectIdForNode } from '../topology/projection';
+import type { XYPosition } from '@xyflow/react';
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -38,6 +40,9 @@ interface TopologyCanvasProps {
   layoutEngine?: TopologyLayoutEngine;
   layoutStore?: TopologyLayoutStore;
   traceOverlay?: PhysicalTraceOverlay;
+  positionOverrides?: Record<string, XYPosition>;
+  onPhysicalNodeDragStop?: (physicalObjectId: string, position: XYPosition) => void;
+  disableAutoLayout?: boolean;
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -50,6 +55,9 @@ export function TopologyCanvas({
   layoutEngine = toFlowProjection,
   layoutStore,
   traceOverlay,
+  positionOverrides,
+  onPhysicalNodeDragStop,
+  disableAutoLayout,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -69,7 +77,7 @@ export function TopologyCanvas({
     void layoutEngine(document).then(
       (nextProjection) => {
         if (!current || currentDocument.current !== document) return;
-        const storedPositions = layoutStore?.load(viewKey) ?? {};
+        const storedPositions = positionOverrides ?? layoutStore?.load(viewKey) ?? {};
         setProjection({
           ...nextProjection,
           nodes: applyTopologyPositionOverrides(nextProjection.nodes, storedPositions),
@@ -81,7 +89,7 @@ export function TopologyCanvas({
       },
     );
     return () => { current = false; };
-  }, [document, layoutEngine, layoutRevision, layoutStore, viewKey]);
+  }, [document, layoutEngine, layoutRevision, layoutStore, positionOverrides, viewKey]);
 
   useEffect(() => {
     if (!projection || !fitAfterLayout.current) return;
@@ -131,6 +139,8 @@ export function TopologyCanvas({
     } : current);
   };
   const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
+    const physicalObjectId = physicalObjectIdForNode(draggedNode.data.projection);
+    if (onPhysicalNodeDragStop && physicalObjectId) { onPhysicalNodeDragStop(physicalObjectId, draggedNode.position); return; }
     if (!layoutStore) return;
     layoutStore.save(viewKey, {
       ...layoutStore.load(viewKey),
@@ -162,15 +172,13 @@ export function TopologyCanvas({
         fitViewOptions={{ padding: 0.2, maxZoom: document.layer === 'L1' ? 4 : 1.1 }}
         minZoom={0.35}
         maxZoom={document.layer === 'L1' ? 4 : 1.8}
-        nodesDraggable
+        nodesDraggable={Boolean(onPhysicalNodeDragStop) || (!disableAutoLayout && document.layer === 'L1')}
         nodesConnectable={false}
         elementsSelectable
         proOptions={{ hideAttribution: true }}
       >
         <Panel position="top-left">
-          <button type="button" className="topology-auto-layout" onClick={resetLayout}>
-            Авторазмещение
-          </button>
+          {!disableAutoLayout && <button type="button" className="topology-auto-layout" onClick={resetLayout}>Авторазмещение</button>}
         </Panel>
         <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} color="#25383c" />
         <MiniMap

@@ -22,6 +22,7 @@ import type { InterfacePhysicalTraceDataSource } from './topology/interfacePhysi
 import type { L2ForwardingContextWriteDataSource } from './topology/l2ForwardingContextWriteTypes';
 import type { ObjectBlueprintDataSource } from './topology/objectBlueprintTypes';
 import type { PhysicalObjectDeleteDataSource } from './topology/physicalObjectDeleteTypes';
+import type { SavedMapDataSource } from './topology/savedMapTypes';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
@@ -39,6 +40,7 @@ export interface AppProps {
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
   objectBlueprintDataSource?: ObjectBlueprintDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
+  savedMapDataSource?: SavedMapDataSource;
 }
 
 export function App(props: AppProps) {
@@ -54,6 +56,7 @@ export function App(props: AppProps) {
             traceDataSource={props.traceDataSource}
             topologyLayoutStore={props.topologyLayoutStore}
             physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource}
+            savedMapDataSource={props.savedMapDataSource}
           />}
         />
         <Route
