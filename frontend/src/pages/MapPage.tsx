@@ -14,11 +14,12 @@ import type { InterfacePhysicalTraceArtifact } from '../topology/interfacePhysic
 import { physicalTraceOverlayFor } from '../topology/interfacePhysicalTraceOverlay';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectDeleteTypes';
-import type { TopologyDataSource, TopologyProjectionDocument, TopologySelection } from '../topology/types';
+import type { TopologyDataSource, TopologyProjectionDocument, TopologyProjectionNode, TopologySelection } from '../topology/types';
 
 interface MapPageProps { dataSource: TopologyDataSource; deviceDetailsDataSource: DeviceDetailsDataSource; savedMapDataSource?: SavedMapDataSource; physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource; traceDataSource?: InterfacePhysicalTraceDataSource; topologyLayoutStore?: TopologyLayoutStore }
 const view = (value: string | null): TopologyViewMode => value === 'physical' ? 'physical' : 'logical';
 const natural = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+export const mapCandidateChoices = (nodes: TopologyProjectionNode[], placedIds: string[]) => nodes.map((node) => ({ id: physicalObjectIdForNode(node), label: displayNodeLabel(node), className: node.attributes.class })).filter((item): item is { id: string; label: string; className: unknown } => item.id !== null && item.className !== 'cable' && !placedIds.includes(item.id)).sort((a, b) => natural(a.label, b.label));
 
 export function MapPage({ dataSource, deviceDetailsDataSource, savedMapDataSource, physicalObjectDeleteDataSource, traceDataSource }: MapPageProps) {
   const [params, setParams] = useSearchParams(); const mapId = params.get('map'); const viewMode = view(params.get('view'));
@@ -38,7 +39,7 @@ export function MapPage({ dataSource, deviceDetailsDataSource, savedMapDataSourc
   const move = async (id: string, p: { x: number; y: number }) => { if (!savedMapDataSource || !mapId) return; try { await savedMapDataSource.movePlacement(mapId, id, p.x, p.y); await reloadMap(); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось сохранить позицию'); await reloadMap(); } };
   const remove = async (id: string) => { if (!savedMapDataSource || !mapId) return; await savedMapDataSource.removePlacement(mapId, id); setSelection(null); await reloadMap(); };
   const positions = useMemo(() => Object.fromEntries((map?.placements ?? []).map((item) => { const node = nodeForPhysicalObject(document?.nodes ?? [], item.physical_object_ref.entity_id); return node ? [node.id, { x: item.x, y: item.y }] : null; }).filter((item): item is [string, { x: number; y: number }] => item !== null)), [document, map]);
-  const choices = (candidates?.nodes ?? []).map((node) => ({ id: physicalObjectIdForNode(node), label: displayNodeLabel(node) })).filter((item): item is { id: string; label: string } => item.id !== null && !ids.includes(item.id)).sort((a, b) => natural(a.label, b.label));
+  const choices = mapCandidateChoices(candidates?.nodes ?? [], ids);
   const legacy = !savedMapDataSource;
   return <main className="map-page"><div className="map-page__toolbar topology-mode-switch"><label>Карты: {legacy ? '—' : <select aria-label="Карты" value={mapId ?? ''} onChange={(e) => selectMap(e.target.value)}><option value="" disabled>Выберите карту</option>{(maps ?? []).map((item) => <option key={item.map_ref.entity_id} value={item.map_ref.entity_id}>{item.name}</option>)}</select>}</label>{!legacy && <><button type="button" onClick={() => setCreating(true)}>+ Новая карта</button><button type="button" onClick={() => void loadCandidates()} disabled={!map}>+ Добавить объект</button></>}<button type="button" aria-pressed={viewMode === 'logical'} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('view', 'logical'); return n; })}>Логическая</button><button type="button" aria-pressed={viewMode === 'physical'} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('view', 'physical'); return n; })}>Физическая</button></div>
     {creating && <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Новая карта"><div className="map-dialog__surface"><label>Название<input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label><button type="button" onClick={() => setCreating(false)}>Отмена</button><button type="button" onClick={() => void create()}>Создать</button></div></section>}
