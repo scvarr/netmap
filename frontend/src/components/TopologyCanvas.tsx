@@ -43,6 +43,7 @@ interface TopologyCanvasProps {
   positionOverrides?: Record<string, XYPosition>;
   onPhysicalNodeDragStop?: (physicalObjectId: string, position: XYPosition) => void;
   disableAutoLayout?: boolean;
+  preserveViewport?: boolean;
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -58,6 +59,7 @@ export function TopologyCanvas({
   positionOverrides,
   onPhysicalNodeDragStop,
   disableAutoLayout,
+  preserveViewport = false,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -168,7 +170,7 @@ export function TopologyCanvas({
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={() => onSelectionChange(null)}
-        fitView
+        fitView={!preserveViewport}
         fitViewOptions={{ padding: 0.2, maxZoom: document.layer === 'L1' ? 4 : 1.1 }}
         minZoom={0.35}
         maxZoom={document.layer === 'L1' ? 4 : 1.8}
