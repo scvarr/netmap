@@ -7,6 +7,7 @@ import type {
 } from '../topology/deviceDetailsTypes';
 import type { TopologyProjectionNode } from '../topology/types';
 import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
+import type { L2ForwardingContextWriteDataSource } from '../topology/l2ForwardingContextWriteTypes';
 import { DeviceInterfacesSection } from './DeviceInterfacesSection';
 
 const node = (id: string, refs = [{
@@ -209,5 +210,71 @@ describe('DeviceInterfacesSection', () => {
     expect(within(eth1.closest('article')!).getByText('IP-адреса не назначены')).toBeInTheDocument();
     expect(createDeviceInterface).toHaveBeenCalledWith('device-a', { display_name: 'eth1' });
     expect(onInterfaceCreated).toHaveBeenCalledWith('device-a');
+  });
+
+  it('creates an untagged L2 context only from two owned interfaces and refreshes authoritative details', async () => {
+    const refreshed = {
+      ...details(),
+      interfaces: details().interfaces.map((item) => ({ ...item, l2_binding_count: item.l2_binding_count + 1 })),
+    };
+    const loadDeviceDetails = vi.fn().mockResolvedValueOnce(details()).mockResolvedValueOnce(refreshed);
+    const createL2ForwardingContext = vi.fn().mockResolvedValue({
+      schema_version: '1.0',
+      forwarding_context_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'L2ForwardingContext', entity_id: 'context-ref' },
+      bindings: details().interfaces.map((item) => ({
+        interface_ref: item.interface_ref,
+        binding_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'L2Binding', entity_id: `binding-${item.interface_ref.entity_id}` },
+        ingress_rule_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'L2IngressRule', entity_id: `ingress-${item.interface_ref.entity_id}` }],
+        egress_rule_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'L2EgressRule', entity_id: `egress-${item.interface_ref.entity_id}` },
+      })),
+    });
+    const l2DataSource: L2ForwardingContextWriteDataSource = { createL2ForwardingContext };
+    render(<DeviceInterfacesSection node={node('device-a')} dataSource={{ loadDeviceDetails }} l2ForwardingContextWriteDataSource={l2DataSource} />);
+
+    expect(await screen.findByRole('heading', { name: 'L2 forwarding' })).toBeInTheDocument();
+    const create = screen.getByRole('button', { name: 'Создать L2 context' });
+    expect(create).toBeDisabled();
+    await userEvent.click(create);
+    expect(createL2ForwardingContext).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /NetworkInterface abcdef12/ }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /NetworkInterface fedcba98/ }));
+    await userEvent.click(create);
+
+    expect(createL2ForwardingContext).toHaveBeenCalledWith({ bindings: [
+      { interface_id: 'abcdef12-interface-a', ingress_exact_stacks: [[]], egress_emit_stack: [] },
+      { interface_id: 'fedcba98-interface-b', ingress_exact_stacks: [[]], egress_emit_stack: [] },
+    ] });
+    expect(await screen.findByRole('status')).toHaveTextContent('L2 context создан');
+    await act(async () => undefined);
+    expect(loadDeviceDetails).toHaveBeenCalledTimes(2);
+    expect(await screen.findAllByText('3', { selector: 'strong' })).toHaveLength(1);
+    expect(screen.queryByRole('checkbox', { name: /foreign-interface/ })).not.toBeInTheDocument();
+  });
+
+  it('does not expose the L2 form with fewer than two owned interfaces', async () => {
+    render(<DeviceInterfacesSection
+      node={node('device-a')}
+      dataSource={sourceFor({ ...details(), interfaces: [details().interfaces[0]] })}
+      l2ForwardingContextWriteDataSource={{ createL2ForwardingContext: vi.fn() }}
+    />);
+    await screen.findByRole('heading', { name: 'Интерфейс abcdef12' });
+    expect(screen.queryByRole('heading', { name: 'L2 forwarding' })).not.toBeInTheDocument();
+  });
+
+  it('shows a public L2 error without an optimistic success', async () => {
+    const createL2ForwardingContext = vi.fn().mockRejectedValue(new Error('VALIDATION_ERROR: rejected'));
+    render(<DeviceInterfacesSection
+      node={node('device-a')}
+      dataSource={sourceFor()}
+      l2ForwardingContextWriteDataSource={{ createL2ForwardingContext }}
+    />);
+    await screen.findByRole('heading', { name: 'L2 forwarding' });
+    await userEvent.click(screen.getByRole('checkbox', { name: /NetworkInterface abcdef12/ }));
+    await userEvent.click(screen.getByRole('checkbox', { name: /NetworkInterface fedcba98/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Создать L2 context' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('VALIDATION_ERROR: rejected');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });

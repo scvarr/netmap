@@ -237,6 +237,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     const loadPhysicalObjectDetails = vi.fn().mockResolvedValue(ppDetails);
     renderApp(`/infrastructure/objects/${ppId}`, {
       physicalObjectDetailsDataSource: { loadPhysicalObjectDetails },
+      l2ForwardingContextWriteDataSource: { createL2ForwardingContext: vi.fn() },
     });
     expect(await screen.findByRole('heading', { name: 'PP1' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Port01' })).toBeInTheDocument();
@@ -244,18 +245,29 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     expect(screen.getByRole('link', { name: 'Показать на карте' })).toHaveAttribute(
       'href', `/map?view=physical&focus=${ppId}`,
     );
+    expect(screen.queryByRole('heading', { name: 'L2 forwarding' })).not.toBeInTheDocument();
   });
 
   it('reuses existing detail write sections for active objects', async () => {
+    const twoInterfaces = {
+      ...deviceDetails,
+      interfaces: [
+        ...deviceDetails.interfaces,
+        { ...deviceDetails.interfaces[0], interface_ref: { ...deviceDetails.interfaces[0].interface_ref, entity_id: 'eth1-id' }, label: 'eth1' },
+      ],
+    };
     renderApp(`/infrastructure/objects/${swId}`, {
+      deviceDetailsDataSource: { loadDeviceDetails: vi.fn().mockResolvedValue(twoInterfaces) },
       deviceInterfaceWriteDataSource: { createDeviceInterface: vi.fn() },
       connectionPointWriteDataSource: { createConnectionPoint: vi.fn() },
       physicalObjectClassWriteDataSource: { setPhysicalObjectClass: vi.fn() },
+      l2ForwardingContextWriteDataSource: { createL2ForwardingContext: vi.fn() },
     });
     expect(await screen.findByRole('heading', { name: 'SW1' })).toBeInTheDocument();
     expect(await screen.findByRole('button', { name: '+ Добавить интерфейс' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '+ Добавить точку' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Сохранить тип' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'L2 forwarding' })).toBeInTheDocument();
   });
 
   it('uses the existing device write datasource and navigates to canonical detail after success', async () => {

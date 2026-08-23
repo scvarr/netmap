@@ -16,6 +16,7 @@ import type { PhysicalObjectDetailsDataSource } from './topology/physicalObjectD
 import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
 import type { TopologyDataSource } from './topology/types';
 import type { InterfacePhysicalTraceDataSource } from './topology/interfacePhysicalTraceTypes';
+import type { L2ForwardingContextWriteDataSource } from './topology/l2ForwardingContextWriteTypes';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
@@ -30,6 +31,7 @@ export interface AppProps {
   physicalObjectClassWriteDataSource?: PhysicalObjectClassWriteDataSource;
   connectionPointWriteDataSource?: ConnectionPointWriteDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
+  l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
 }
 
 export function App(props: AppProps) {
@@ -71,6 +73,7 @@ export function App(props: AppProps) {
               physicalEndpointConnectionWriteDataSource={props.physicalEndpointConnectionWriteDataSource}
               physicalObjectClassWriteDataSource={props.physicalObjectClassWriteDataSource}
               connectionPointWriteDataSource={props.connectionPointWriteDataSource}
+              l2ForwardingContextWriteDataSource={props.l2ForwardingContextWriteDataSource}
             />
           )}
         />

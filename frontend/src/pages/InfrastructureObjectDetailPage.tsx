@@ -7,6 +7,7 @@ import { PHYSICAL_PROJECTION_REQUEST } from '../topology/projection';
 import type { ConnectionPointWriteDataSource } from '../topology/connectionPointWriteTypes';
 import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
+import type { L2ForwardingContextWriteDataSource } from '../topology/l2ForwardingContextWriteTypes';
 import type { PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
 import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
 import type { PhysicalObjectClassWriteDataSource } from '../topology/physicalObjectClassWriteTypes';
@@ -25,6 +26,7 @@ interface InfrastructureObjectDetailPageProps {
   physicalEndpointConnectionWriteDataSource?: PhysicalEndpointConnectionWriteDataSource;
   physicalObjectClassWriteDataSource?: PhysicalObjectClassWriteDataSource;
   connectionPointWriteDataSource?: ConnectionPointWriteDataSource;
+  l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
 }
 
 export function InfrastructureObjectDetailPage({
@@ -36,6 +38,7 @@ export function InfrastructureObjectDetailPage({
   physicalEndpointConnectionWriteDataSource,
   physicalObjectClassWriteDataSource,
   connectionPointWriteDataSource,
+  l2ForwardingContextWriteDataSource,
 }: InfrastructureObjectDetailPageProps) {
   const { physicalObjectId = '' } = useParams();
   const [details, setDetails] = useState<PhysicalObjectDetailsDocument | null>(null);
@@ -133,6 +136,7 @@ export function InfrastructureObjectDetailPage({
             topologyNodes={projection?.nodes ?? []}
             physicalLinkWriteDataSource={physicalLinkWriteDataSource}
             onPhysicalLinkCreated={refreshProjection}
+            l2ForwardingContextWriteDataSource={l2ForwardingContextWriteDataSource}
           />
         </section>
       )}

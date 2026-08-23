@@ -497,3 +497,21 @@ rules. Пустой stack `[]` означает untagged representation; `null` 
 `egress_emit_stack` означает отсутствие `L2EgressRule`. Response возвращает
 только authoritative refs созданных context/binding/rule facts. Операция не
 создаёт L1/L3/IP/MAC или canonical aliases и не меняет L2 resolver semantics.
+
+## L2.1b — untagged context из Object Detail
+
+Для active device с двумя или более owned `NetworkInterface` Object Detail
+показывает bounded форму `L2 forwarding` → `Создать untagged context`. Пользователь
+выбирает минимум два interface только из authoritative Device Details текущего
+`PhysicalObject`; каждый выбранный interface отправляется как
+`{ interface_id, ingress_exact_stacks: [[]], egress_emit_stack: [] }`.
+`[]` означает untagged Ethernet representation. UI не вводит VLAN, canonical VLAN,
+access/trunk или дополнительную frontend L2-semantics; context остаётся локальной
+canonical сущностью backend.
+
+После подтверждённого 201 UI показывает краткий success и technical
+`forwarding_context_ref`, затем заново загружает Device Details. `l2_binding_count`
+отображается только из этого authoritative refresh; optimistic binding не создаётся.
+Count может быть показан как factual context, но не определяет membership и не
+блокирует выбор: backend остаётся authority по uniqueness. Existing contexts после
+reload намеренно не показываются — public L2 list/detail API пока отсутствует.

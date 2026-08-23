@@ -7,6 +7,8 @@ import type {
 import type { ProjectionSourceRef, TopologyProjectionNode } from '../topology/types';
 import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
 import { CreateDeviceInterface } from './CreateDeviceInterface';
+import { CreateUntaggedL2ForwardingContext } from './CreateUntaggedL2ForwardingContext';
+import type { L2ForwardingContextWriteDataSource } from '../topology/l2ForwardingContextWriteTypes';
 import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
 import { displayNodeLabel } from '../topology/presentation';
 import {
@@ -22,6 +24,7 @@ interface DeviceInterfacesSectionProps {
   topologyNodes?: TopologyProjectionNode[];
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
   onPhysicalLinkCreated?: (physicalObjectId: string) => void;
+  l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
 }
 
 type DetailsState =
@@ -154,6 +157,7 @@ export function DeviceInterfacesSection({
   topologyNodes = [],
   physicalLinkWriteDataSource,
   onPhysicalLinkCreated,
+  l2ForwardingContextWriteDataSource,
 }: DeviceInterfacesSectionProps) {
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
@@ -218,8 +222,15 @@ export function DeviceInterfacesSection({
         </div>
       )}
       {state.kind === 'loaded' && (
-        state.document.interfaces.length
-          ? <div className="interface-list">{state.document.interfaces.map((item) => (
+        state.document.interfaces.length ? <>
+          {l2ForwardingContextWriteDataSource && state.document.interfaces.length >= 2 && (
+            <CreateUntaggedL2ForwardingContext
+              interfaces={state.document.interfaces}
+              dataSource={l2ForwardingContextWriteDataSource}
+              onCreated={() => setRetryKey((key) => key + 1)}
+            />
+          )}
+          <div className="interface-list">{state.document.interfaces.map((item) => (
             <InterfaceCard
               key={item.interface_ref.entity_id}
               item={item}
@@ -232,7 +243,7 @@ export function DeviceInterfacesSection({
               }}
             />
           ))}</div>
-          : <p className="device-details-state">У устройства нет owned interfaces.</p>
+        </> : <p className="device-details-state">У устройства нет owned interfaces.</p>
       )}
     </section>
   );
