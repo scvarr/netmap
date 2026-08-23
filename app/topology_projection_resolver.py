@@ -1,12 +1,15 @@
 import uuid
 from dataclasses import dataclass
 
+from sqlalchemy import select
+
 from app.device_catalog import (
     DeviceCatalog,
     DisplayAliasRecord,
     PhysicalObjectClassRecord,
 )
 from app.errors import ModelError, ValidationError
+from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, ObjectBlueprint, ObjectBlueprintVersion
 from app.repository import (
     CanonicalRepository,
     L1AdjacencyEdge,
@@ -174,6 +177,7 @@ class ConfiguredTopologyProjectionResolver:
         classes = DeviceCatalog(self.repository.session).physical_object_classes(
             list(selected_object_ids)
         )
+        presentations = self._blueprint_presentations(selected_object_ids)
         nodes = [
             self._physical_node(
                 object_id,
@@ -181,6 +185,7 @@ class ConfiguredTopologyProjectionResolver:
                 owners_by_object.get(object_id, []),
                 aliases.get(object_id),
                 classes.get(object_id),
+                presentations.get(object_id),
             )
             for object_id in sorted(selected_object_ids, key=self._physical_node_id)
         ]
@@ -272,6 +277,7 @@ class ConfiguredTopologyProjectionResolver:
         owners: list[NetworkInterfacePhysicalOwnerRecord],
         display_alias: DisplayAliasRecord | None,
         object_class: PhysicalObjectClassRecord | None,
+        blueprint_presentation: dict | None = None,
     ) -> TopologyProjectionNode:
         refs = [self._ref("PhysicalObject", physical_object_id)]
         if display_alias is not None:
@@ -302,6 +308,7 @@ class ConfiguredTopologyProjectionResolver:
                 "connection_point_count": len(point_ids),
                 "owned_interface_count": len(owners),
                 **({"class": object_class.value} if object_class is not None else {}),
+                **({"blueprint_presentation": blueprint_presentation} if blueprint_presentation is not None else {}),
             },
             status="CONFIGURED",
         )
@@ -339,9 +346,43 @@ class ConfiguredTopologyProjectionResolver:
                 "directed": False,
                 "supporting_connection_count": len(connection_ids),
                 "supporting_member_pair_count": len(member_ids),
+                "endpoint_pairs": [
+                    self._oriented_endpoint_pair(pair, member)
+                    for member in sorted(members, key=lambda value: (str(value.connection_id), str(value.connection_member_id)))
+                ],
             },
             status="CONFIGURED",
         )
+
+    def _oriented_endpoint_pair(self, pair: tuple[uuid.UUID, uuid.UUID], member: PhysicalConnectionMemberRecord) -> dict:
+        if member.object_a_id == pair[0]:
+            from_point, from_member, to_point, to_member = member.point_a_id, member.point_a_member, member.point_b_id, member.point_b_member
+        else:
+            from_point, from_member, to_point, to_member = member.point_b_id, member.point_b_member, member.point_a_id, member.point_a_member
+        return {"from_connection_point_id": str(from_point), "from_member_index": from_member, "to_connection_point_id": str(to_point), "to_member_index": to_member, "connection_id": str(member.connection_id), "connection_member_id": str(member.connection_member_id)}
+
+    def _blueprint_presentations(self, object_ids: set[uuid.UUID]) -> dict[uuid.UUID, dict]:
+        if not object_ids:
+            return {}
+        rows = self.repository.session.execute(
+            select(BlueprintInstance, ObjectBlueprintVersion, ObjectBlueprint)
+            .join(ObjectBlueprintVersion, ObjectBlueprintVersion.id == BlueprintInstance.blueprint_version_id)
+            .join(ObjectBlueprint, ObjectBlueprint.id == ObjectBlueprintVersion.blueprint_id)
+            .where(BlueprintInstance.physical_object_id.in_(object_ids))
+        ).all()
+        by_instance = {instance.id: (instance, version, blueprint) for instance, version, blueprint in rows}
+        if not by_instance:
+            return {}
+        slots_by_instance: dict[uuid.UUID, list[dict]] = {instance_id: [] for instance_id in by_instance}
+        mappings = self.repository.session.execute(
+            select(BlueprintInstanceSlot, BlueprintEndpointSlot)
+            .join(BlueprintEndpointSlot, BlueprintEndpointSlot.id == BlueprintInstanceSlot.blueprint_slot_id)
+            .where(BlueprintInstanceSlot.blueprint_instance_id.in_(by_instance))
+            .order_by(BlueprintInstanceSlot.blueprint_instance_id, BlueprintEndpointSlot.slot_key)
+        ).all()
+        for mapping, slot in mappings:
+            slots_by_instance[mapping.blueprint_instance_id].append({"slot_key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "anchor": {"side": slot.anchor_side, "offset": slot.anchor_offset}, "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None})
+        return {instance.physical_object_id: {"blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprint", "entity_id": str(blueprint.id)}, "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprintVersion", "entity_id": str(version.id)}, "body": {"kind": version.body_kind, "width": version.width, "height": version.height, "fill_color": version.fill_color}, "slots": slots_by_instance[instance.id]} for instance, version, blueprint in by_instance.values()}
     def _physical_candidates(
         self, owner: NetworkInterfacePhysicalOwnerRecord
     ) -> tuple[_PhysicalCandidate, ...]:

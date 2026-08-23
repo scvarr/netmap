@@ -121,6 +121,8 @@ class PhysicalConnectionMemberRecord:
     connection_member_id: uuid.UUID
     point_a_id: uuid.UUID
     point_b_id: uuid.UUID
+    point_a_member: int
+    point_b_member: int
     object_a_id: uuid.UUID
     object_b_id: uuid.UUID
 
@@ -1355,6 +1357,8 @@ class CanonicalRepository:
                     connection_member_id=member.id,
                     point_a_id=a_point.id,
                     point_b_id=b_point.id,
+                    point_a_member=member.point_a_member,
+                    point_b_member=member.point_b_member,
                     object_a_id=a_point.physical_object_id,
                     object_b_id=b_point.physical_object_id,
                 )

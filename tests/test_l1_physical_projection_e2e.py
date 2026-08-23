@@ -106,6 +106,7 @@ def test_w3_link_projects_core_cable_firewall_with_canonical_evidence():
     assert all(edge["aggregate"] is True for edge in body["edges"])
     assert all(edge["attributes"]["supporting_connection_count"] == 1 for edge in body["edges"])
     assert all(edge["attributes"]["supporting_member_pair_count"] == 1 for edge in body["edges"])
+    points_by_node = {node["id"]: {ref["entity_id"] for ref in node["source_refs"] if ref["entity_type"] == "ConnectionPoint"} for node in body["nodes"]}
     for edge in body["edges"]:
         assert {ref["entity_type"] for ref in edge["source_refs"]} == {
             "PhysicalObject",
@@ -113,6 +114,10 @@ def test_w3_link_projects_core_cable_firewall_with_canonical_evidence():
             "Connection",
             "ConnectionMember",
         }
+        assert len(edge["attributes"]["endpoint_pairs"]) == 1
+        endpoint = edge["attributes"]["endpoint_pairs"][0]
+        assert endpoint["from_connection_point_id"] in points_by_node[edge["from_node_id"]]
+        assert endpoint["to_connection_point_id"] in points_by_node[edge["to_node_id"]]
 
     core_node = node_by_object(body, physical_object_id(core))
     cable_node = node_by_object(body, cable_id)
@@ -162,6 +167,8 @@ def test_parallel_connections_aggregate_counts_and_scope_is_induced():
     )
     assert core_cable["attributes"]["supporting_connection_count"] == 2
     assert core_cable["attributes"]["supporting_member_pair_count"] == 2
+    assert len(core_cable["attributes"]["endpoint_pairs"]) == 2
+    assert core_cable["attributes"]["endpoint_pairs"] == sorted(core_cable["attributes"]["endpoint_pairs"], key=lambda pair: (pair["connection_id"], pair["connection_member_id"]))
 
     scoped = client.post(
         "/v1/topology/projection",
@@ -171,3 +178,34 @@ def test_parallel_connections_aggregate_counts_and_scope_is_induced():
     assert len(scoped["edges"]) == 1
     assert edge_object_pair(scoped["edges"][0]) == frozenset((str(core_id), str(cable_id)))
     assert physical_object_id(firewall) not in str(scoped)
+
+
+def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
+    slots = [
+        {"key": "front01", "display_name": "Front01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .25}},
+        {"key": "rear01", "display_name": "Rear01", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .75}},
+    ]
+    created = client.post("/v1/library/object-blueprints", json={"name": "Panel", "body": {"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"}, "slots": slots, "internal_links": [{"from_slot_key": "front01", "to_slot_key": "rear01"}]}).json()
+    instance = client.post(f"/v1/library/object-blueprints/{created['blueprint_ref']['entity_id']}/versions/{created['version_ref']['entity_id']}/instantiate", json={"display_name": "PP1"}).json()
+    assert client.post(f"/v1/library/object-blueprints/{created['blueprint_ref']['entity_id']}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "slots": slots, "internal_links": [{"from_slot_key": "front01", "to_slot_key": "rear01"}]}).status_code == 201
+    node = node_by_object(client.post("/v1/topology/projection", json=projection_query()).json(), instance["physical_object_ref"]["entity_id"])
+    presentation = node["attributes"]["blueprint_presentation"]
+    assert presentation["version_ref"]["entity_id"] == created["version_ref"]["entity_id"]
+    assert presentation["body"] == {"kind": "RECTANGLE", "width": 480.0, "height": 70.0, "fill_color": "#123456"}
+    assert [(slot["slot_key"], slot["anchor"]["side"], slot["anchor"]["offset"]) for slot in presentation["slots"]] == [("front01", "LEFT", .25), ("rear01", "RIGHT", .75)]
+    assert {slot["connection_point_id"] for slot in presentation["slots"]} == {slot["connection_point_ref"]["entity_id"] for slot in instance["slots"]}
+    assert all(ref["ref_type"] == "CANONICAL_FACT" for ref in node["source_refs"])
+
+
+def test_switch_blueprint_exposes_network_port_mapping_without_self_edge():
+    slots = [
+        {"key": "eth01", "display_name": "eth01", "kind": "NETWORK_PORT", "anchor": {"side": "BOTTOM", "offset": .25}},
+        {"key": "eth02", "display_name": "eth02", "kind": "NETWORK_PORT", "anchor": {"side": "BOTTOM", "offset": .75}},
+    ]
+    created = client.post("/v1/library/object-blueprints", json={"name": "Switch", "body": {"kind": "RECTANGLE", "width": 400, "height": 100}, "slots": slots, "internal_links": []}).json()
+    instance = client.post(f"/v1/library/object-blueprints/{created['blueprint_ref']['entity_id']}/versions/{created['version_ref']['entity_id']}/instantiate", json={"display_name": "SW1"}).json()
+    document = client.post("/v1/topology/projection", json=projection_query()).json()
+    node = node_by_object(document, instance["physical_object_ref"]["entity_id"])
+    mapped = node["attributes"]["blueprint_presentation"]["slots"]
+    assert all(slot["network_interface_id"] is not None for slot in mapped)
+    assert not any(instance["physical_object_ref"]["entity_id"] in edge_object_pair(edge) and edge["from_node_id"] == edge["to_node_id"] for edge in document["edges"])

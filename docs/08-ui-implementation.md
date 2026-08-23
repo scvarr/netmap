@@ -584,3 +584,13 @@ Library instantiation targets exactly the latest card's displayed immutable
 instance display name. Its strictly validated authoritative `physical_object_ref`
 opens Object Detail; the frontend never synthesizes interfaces, points, or
 connections. Materialization does not change blueprint versions or card state.
+
+## MAP-BLUEPRINT.1a — Physical projection presentation enrichment
+
+Only `L1 / PHYSICAL_OBJECT` nodes for materialized instances expose bounded
+`attributes.blueprint_presentation`: immutable library provenance, exact version
+body, and persisted slot-to-canonical CP/optional NI mappings. Library refs never
+enter `source_refs`. Physical aggregate edges expose deterministic endpoint pairs
+oriented to `from_node_id` and `to_node_id`; these are canonical connection/member
+facts, not geometry-derived handles. Internal links remain internal and do not
+create a self-edge.
