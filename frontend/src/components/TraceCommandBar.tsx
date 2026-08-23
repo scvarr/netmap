@@ -18,6 +18,13 @@ interface EndpointChoice { label: string; interfaces: DeviceInterfaceDetails[]; 
 
 interface PendingTrace { source: EndpointChoice; destination: EndpointChoice; }
 
+const interfaceLabelCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+
+const sortInterfacesNaturally = (interfaces: DeviceInterfaceDetails[]) => interfaces
+  .map((item, index) => ({ item, index }))
+  .sort((left, right) => interfaceLabelCollator.compare(left.item.label, right.item.label) || left.index - right.index)
+  .map(({ item }) => item);
+
 export const parseTraceCommand = (input: string): ParsedTraceCommand | Error => {
   const parts = input.trim().split(/\s+/);
   if (parts.length !== 4 || parts[0].toLowerCase() !== 'trace' || parts[3].toLowerCase() !== 'l1') {
@@ -37,7 +44,12 @@ const resolveDevice = (document: TopologyProjectionDocument, label: string): Top
 
 const endpointChoice = (label: string, interfaces: DeviceInterfaceDetails[]): EndpointChoice | Error => {
   if (interfaces.length === 0) return new Error(`У устройства «${label}» нет NetworkInterface для L1 trace.`);
-  return { label, interfaces, selectedId: interfaces.length === 1 ? interfaces[0].interface_ref.entity_id : undefined };
+  const sortedInterfaces = sortInterfacesNaturally(interfaces);
+  return {
+    label,
+    interfaces: sortedInterfaces,
+    selectedId: sortedInterfaces.length === 1 ? sortedInterfaces[0].interface_ref.entity_id : undefined,
+  };
 };
 
 const warningText = (warning: Record<string, unknown>) => JSON.stringify(warning);

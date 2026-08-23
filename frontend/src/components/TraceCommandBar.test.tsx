@@ -11,11 +11,11 @@ const sourceId = '00000000-0000-0000-0000-000000000101';
 const targetId = '00000000-0000-0000-0000-000000000102';
 const interfaceId = (suffix: string) => `00000000-0000-0000-0000-000000000${suffix}`;
 const physicalRef = (entity_id: string) => ({ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id });
-const interfaceDetails = (deviceId: string, label: string, ids: string[]): DeviceDetailsDocument => ({
+const interfaceDetails = (deviceId: string, label: string, ids: string[], labels?: string[]): DeviceDetailsDocument => ({
   schema_version: '1.0', device: { source_ref: physicalRef(deviceId), label },
   interfaces: ids.map((id, index) => ({
     interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: id },
-    label: `eth${index}`, addresses: [], l2_binding_count: 0, l3_binding_count: 0,
+    label: labels?.[index] ?? `eth${index}`, addresses: [], l2_binding_count: 0, l3_binding_count: 0,
     direct_physical_bindings: [], realization_down_count: 0, realization_up_count: 0, source_refs: [],
   })), gaps: [], warnings: [],
 });
@@ -113,6 +113,16 @@ describe('TraceCommandBar', () => {
     await waitFor(() => expect(traceDataSource.traceInterfacePhysical).toHaveBeenCalledWith({
       from_interface_id: interfaceId('212'), to_interface_id: interfaceId('202'),
     }));
+  });
+
+  it('sorts selectable interfaces in stable natural label order', async () => {
+    renderBar({ details: {
+      [sourceId]: interfaceDetails(sourceId, 'PC1', [interfaceId('211'), interfaceId('212'), interfaceId('213')], ['A10', 'A02', 'A01']),
+      [targetId]: interfaceDetails(targetId, 'PC2', [interfaceId('202')]),
+    } });
+    await submit('trace PC1 PC2 l1');
+    const selector = await screen.findByLabelText('Интерфейс источника') as HTMLSelectElement;
+    expect(Array.from(selector.options, (option) => option.text)).toEqual(['Выберите интерфейс', 'A01', 'A02', 'A10']);
   });
 
   it('presents UNKNOWN as not proven and exposes public gaps and warnings', async () => {
