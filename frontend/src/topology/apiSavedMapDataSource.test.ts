@@ -1,0 +1,16 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiSavedMapDataSource } from './apiSavedMapDataSource';
+
+const mapId = '00000000-0000-4000-8000-000000000001';
+const objectId = '00000000-0000-4000-8000-000000000002';
+const body = { map_ref: { entity_type: 'SavedMap', entity_id: mapId }, name: 'First', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: objectId }, x: 12, y: 34 }] };
+const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+
+describe('ApiSavedMapDataSource', () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); }); afterEach(() => vi.unstubAllGlobals());
+  it('parses list, create and detail responses strictly', async () => { fetchMock.mockResolvedValueOnce(response({ maps: [body] })).mockResolvedValueOnce(response(body)).mockResolvedValueOnce(response(body)); const source = new ApiSavedMapDataSource(); await expect(source.listMaps()).resolves.toHaveLength(1); await expect(source.createMap('First')).resolves.toMatchObject({ name: 'First' }); await expect(source.loadMap(mapId)).resolves.toMatchObject({ placements: [{ x: 12, y: 34 }] }); });
+  it('uses public placement CRUD paths and bodies', async () => { fetchMock.mockResolvedValue(response({})); const source = new ApiSavedMapDataSource(); await source.addPlacement(mapId, objectId, 1, 2); await source.movePlacement(mapId, objectId, 3, 4); await source.removePlacement(mapId, objectId); expect(fetchMock.mock.calls.map(([url, init]) => [url, init ? [(init as RequestInit).method, (init as RequestInit).body] : ['DELETE', undefined]])).toEqual([[`/api/v1/maps/${mapId}/placements`, ['POST', JSON.stringify({ physical_object_id: objectId, x: 1, y: 2 })]], [`/api/v1/maps/${mapId}/placements/${objectId}`, ['PUT', JSON.stringify({ x: 3, y: 4 })]], [`/api/v1/maps/${mapId}/placements/${objectId}`, ['DELETE', undefined]]]); });
+  it.each([{ ...body, map_ref: { entity_type: 'SavedMap', entity_id: 'bad' } }, { ...body, placements: [{ ...body.placements[0], physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Connection', entity_id: objectId } }] }, { ...body, placements: [{ ...body.placements[0], x: Infinity }] }, { ...body, placements: {} }])('rejects malformed response', async (invalid) => { fetchMock.mockResolvedValue(response(invalid)); await expect(new ApiSavedMapDataSource().loadMap(mapId)).rejects.toThrow('Malformed SavedMap'); });
+  it('exposes API errors', async () => { fetchMock.mockResolvedValue(response({ error: { code: 'MODEL_ERROR', message: 'Conflict' } }, 409)); await expect(new ApiSavedMapDataSource().listMaps()).rejects.toThrow('MODEL_ERROR: Conflict'); });
+});
