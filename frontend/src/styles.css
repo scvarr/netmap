@@ -84,6 +84,7 @@ button { font: inherit; }
   box-shadow: 0 12px 30px rgba(0, 0, 0, .22); transition: border-color .15s, box-shadow .15s, transform .15s;
 }
 .device-node:hover, .device-node--selected { border-color: #55e5b5; box-shadow: 0 0 0 2px rgba(85, 229, 181, .12), 0 14px 32px rgba(0, 0, 0, .3); transform: translateY(-2px); }
+.device-node--trace-highlighted { border-color: #f0bd66; box-shadow: 0 0 0 3px rgba(240, 189, 102, .2), 0 14px 32px rgba(0, 0, 0, .3); }
 .device-node--physical { border-color: #5d7188; background: linear-gradient(145deg, #162532, #0d171e); }
 .device-node--physical .device-node__kind { color: #9ebbd4; }
 .device-node--class-workstation { border-color: #4d83a6; background: linear-gradient(145deg, #142b38, #0d1920); }
@@ -288,6 +289,7 @@ a { color: inherit; }
 .trace-command__choices select { padding: 6px; }
 .trace-result { display: grid; gap: 3px; border: 1px solid #315256; color: #b9cdca; background: #0c191c; }
 .trace-result strong { color: #dff7ef; font-size: 11px; }
+.trace-result__clear { justify-self: start; margin-top: 3px; }
 .trace-result--reachable { border-color: #3a7968; }
 .trace-result--unknown { border-color: #9a7442; }
 .trace-result--unknown strong { color: #f1c78d; }

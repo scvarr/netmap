@@ -232,6 +232,14 @@ Conceptual control:
 
 UI не должен автоматически переводить пользователя на максимальную детализацию только потому, что trace содержит интерфейсы/правила/кабели.
 
+Для interface-physical L1 trace доказанный `REACHABLE` result может переключить
+карту на существующую L1 / PHYSICAL_OBJECT projection. Overlay сопоставляется
+только с `source_refs` этой projection по canonical evidence refs selected
+reachable branch edges (union branch допустим). UI не строит путь по geometry,
+не запускает собственный graph traversal и не относит весь artifact evidence к
+branch без `edge_ids`. `UNKNOWN` не создаёт route overlay. Сброс trace удаляет
+result/overlay, но не меняет сохранённый manual layout.
+
 ## Анимация trace
 
 **WORKING HYPOTHESIS**

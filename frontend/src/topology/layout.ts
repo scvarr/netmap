@@ -20,6 +20,7 @@ const loadElk = (): Promise<ELK> => {
 
 export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
+  traceHighlighted?: boolean;
 }
 
 export interface LogicalEdgeData extends Record<string, unknown> {

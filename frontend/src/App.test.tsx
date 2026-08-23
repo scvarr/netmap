@@ -20,11 +20,13 @@ vi.mock('./components/HealthIndicator', () => ({
 }));
 
 vi.mock('./components/TopologyCanvas', () => ({
-  TopologyCanvas: ({ document, onSelectionChange }: {
+  TopologyCanvas: ({ document, onSelectionChange, traceOverlay }: {
     document: TopologyProjectionDocument;
     onSelectionChange: (selection: TopologySelection) => void;
+    traceOverlay?: { highlightedNodeIds: Set<string>; highlightedEdgeIds: Set<string> };
   }) => (
     <div aria-label={document.layer === 'L1' ? 'Физическая схема сети' : 'Логическая схема сети'}>
+      <output data-testid="trace-overlay">{[...(traceOverlay?.highlightedNodeIds ?? [])].join(',')}|{[...(traceOverlay?.highlightedEdgeIds ?? [])].join(',')}</output>
       {document.nodes.map((node) => (
         <div key={node.id}>
           <span>{node.label}</span>
@@ -181,7 +183,30 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Физическая' }));
     expect(await screen.findByLabelText('Физическая схема сети')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'SW1' })).toBeInTheDocument();
-    expect(dataSource.loadProjection).toHaveBeenLastCalledWith(PHYSICAL_PROJECTION_REQUEST);
+    expect(dataSource.loadProjection).toHaveBeenCalledWith(PHYSICAL_PROJECTION_REQUEST);
+  });
+
+  it('runs L1 from Physical view using the logical projection and shows only evidenced overlay after REACHABLE', async () => {
+    const traceDataSource = { traceInterfacePhysical: vi.fn().mockResolvedValue({
+      schema_version: 1,
+      query: { from_interface_id: 'eth0-id', to_interface_id: 'eth0-id' },
+      verdict: 'REACHABLE',
+      branches: [{ branch_id: 'branch', source_candidate_id: 'source', target_candidate_id: 'target', edge_ids: ['trace-edge'], evidence_refs: [] }],
+      nodes: [],
+      edges: [{ id: 'trace-edge', from_node_id: 'n1', to_node_id: 'n2', evidence_refs: [{ entity_type: 'PhysicalObject', entity_id: swId }] }],
+      gaps: [], warnings: [],
+    } as const) };
+    const { dataSource } = renderApp('/map?view=physical', { traceDataSource });
+    expect(await screen.findByLabelText('Физическая схема сети')).toBeInTheDocument();
+    await waitFor(() => expect(dataSource.loadProjection).toHaveBeenCalledWith(LOGICAL_PROJECTION_REQUEST));
+    await userEvent.type(screen.getByLabelText('Trace command'), 'trace SW1 SW1 l1');
+    await userEvent.click(screen.getByRole('button', { name: 'Trace' }));
+    await waitFor(() => expect(traceDataSource.traceInterfacePhysical).toHaveBeenCalledWith({
+      from_interface_id: 'eth0-id', to_interface_id: 'eth0-id',
+    }));
+    expect(screen.getByTestId('trace-overlay')).toHaveTextContent('physical-sw1|');
+    await userEvent.click(screen.getByRole('button', { name: 'Сбросить трассировку' }));
+    expect(screen.getByTestId('trace-overlay')).toHaveTextContent('|');
   });
 
   it('opens object detail from Quick Inspector and exposes no canonical forms on Map', async () => {

@@ -14,6 +14,8 @@ import {
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { InterfacePhysicalTraceDataSource } from '../topology/interfacePhysicalTraceTypes';
+import { physicalTraceOverlayFor } from '../topology/interfacePhysicalTraceOverlay';
+import type { InterfacePhysicalTraceArtifact } from '../topology/interfacePhysicalTraceTypes';
 import type {
   TopologyDataSource,
   TopologyProjectionDocument,
@@ -36,6 +38,8 @@ export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, 
   const viewMode = viewFrom(searchParams.get('view'));
   const focusId = searchParams.get('focus');
   const [document, setDocument] = useState<TopologyProjectionDocument | null>(null);
+  const [logicalDocument, setLogicalDocument] = useState<TopologyProjectionDocument | null>(null);
+  const [traceArtifact, setTraceArtifact] = useState<InterfacePhysicalTraceArtifact | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,6 +55,7 @@ export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, 
       (nextDocument) => {
         if (sequence !== loadSequence.current) return;
         setDocument(nextDocument);
+        if (nextDocument.layer === 'L2' && nextDocument.detail_level === 'DEVICE') setLogicalDocument(nextDocument);
         setLoading(false);
       },
       (reason: unknown) => {
@@ -61,6 +66,16 @@ export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, 
       },
     );
   }, [dataSource, reloadKey, viewMode]);
+
+  useEffect(() => {
+    if (viewMode === 'logical') return;
+    let current = true;
+    void dataSource.loadProjection(projectionRequestFor('logical')).then(
+      (nextDocument) => { if (current) setLogicalDocument(nextDocument); },
+      () => { if (current) setLogicalDocument(null); },
+    );
+    return () => { current = false; };
+  }, [dataSource, viewMode]);
 
   const focusedNode = useMemo(() => (
     document && focusId ? nodeForPhysicalObject(document.nodes, focusId) : null
@@ -108,6 +123,17 @@ export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, 
 
   const isEmpty = document !== null && document.nodes.length === 0;
   const focusMissing = Boolean(document && focusId && !focusedNode);
+  const traceOverlay = useMemo(() => physicalTraceOverlayFor(traceArtifact, document), [document, traceArtifact]);
+
+  const updateTraceArtifact = useCallback((artifact: InterfacePhysicalTraceArtifact | null) => {
+    setTraceArtifact(artifact);
+    if (artifact?.verdict !== 'REACHABLE') return;
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('view', 'physical');
+      return next;
+    });
+  }, [setSearchParams]);
 
   return (
     <main className="map-page">
@@ -120,9 +146,11 @@ export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, 
         </button>
       </div>
       <TraceCommandBar
-        document={document}
+        logicalDocument={logicalDocument}
         deviceDetailsDataSource={deviceDetailsDataSource}
         traceDataSource={traceDataSource}
+        traceArtifact={traceArtifact}
+        onTraceArtifact={updateTraceArtifact}
       />
       {(document?.warnings.length || document?.gaps.length || focusMissing) && (
         <div className="map-page__notices" aria-label="Сообщения проекции">
@@ -142,6 +170,7 @@ export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, 
               selection={selection}
               onSelectionChange={updateSelection}
               layoutStore={topologyLayoutStore}
+              traceOverlay={traceOverlay}
             />
           </ReactFlowProvider>
         )}

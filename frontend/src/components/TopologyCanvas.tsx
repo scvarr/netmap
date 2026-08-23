@@ -29,6 +29,7 @@ import {
 } from '../topology/layoutStore';
 import { DeviceNode } from './DeviceNode';
 import { FloatingTopologyEdge } from './FloatingTopologyEdge';
+import type { PhysicalTraceOverlay } from '../topology/interfacePhysicalTraceOverlay';
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -36,6 +37,7 @@ interface TopologyCanvasProps {
   onSelectionChange: (selection: TopologySelection) => void;
   layoutEngine?: TopologyLayoutEngine;
   layoutStore?: TopologyLayoutStore;
+  traceOverlay?: PhysicalTraceOverlay;
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -47,6 +49,7 @@ export function TopologyCanvas({
   onSelectionChange,
   layoutEngine = toFlowProjection,
   layoutStore,
+  traceOverlay,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -100,15 +103,17 @@ export function TopologyCanvas({
 
   const nodes = projection.nodes.map((node) => ({
     ...node,
+    data: { ...node.data, traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false },
     selected: selection?.type === 'node' && selection.item.id === node.id,
   }));
   const edges = projection.edges.map((edge) => {
     const isSelected = selection?.type === 'edge' && selection.item.id === edge.id;
+    const isTraced = traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false;
     return {
       ...edge,
       selected: isSelected,
-      animated: isSelected,
-      style: { stroke: isSelected ? '#54e3b4' : '#52676b', strokeWidth: isSelected ? 3 : 2 },
+      animated: isSelected || isTraced,
+      style: { stroke: isSelected ? '#54e3b4' : isTraced ? '#f0bd66' : '#52676b', strokeWidth: isSelected ? 3 : isTraced ? 4 : 2, opacity: isTraced ? 1 : 0.72 },
     };
   });
 

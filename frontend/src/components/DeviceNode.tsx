@@ -10,7 +10,7 @@ export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
   const physical = projection.kind === 'PHYSICAL_OBJECT';
   const classPresentation = physicalClassPresentation(projection.attributes.class);
   return (
-    <div className={`device-node${physical ? ` device-node--physical device-node--class-${classPresentation.accent}` : ''}${selected ? ' device-node--selected' : ''}`}>
+    <div className={`device-node${physical ? ` device-node--physical device-node--class-${classPresentation.accent}` : ''}${selected ? ' device-node--selected' : ''}${data.traceHighlighted ? ' device-node--trace-highlighted' : ''}`}>
       <Handle type="target" position={Position.Top} className="device-node__handle" />
       <span className="device-node__kind">
         {physical ? classPresentation.label : projection.kind}

@@ -4,7 +4,7 @@ import { ApiInterfacePhysicalTraceDataSource } from './apiInterfacePhysicalTrace
 const artifact = {
   schema_version: 1,
   query: { from_interface_id: 'interface-a', to_interface_id: 'interface-b' },
-  verdict: 'UNKNOWN', branches: [], gaps: [{ code: 'L1_TOPOLOGY_INCOMPLETE' }], warnings: [],
+  verdict: 'UNKNOWN', branches: [], nodes: [], edges: [], gaps: [{ code: 'L1_TOPOLOGY_INCOMPLETE' }], warnings: [],
 };
 
 describe('ApiInterfacePhysicalTraceDataSource', () => {
@@ -23,5 +23,14 @@ describe('ApiInterfacePhysicalTraceDataSource', () => {
   it('rejects artifacts outside the public verdict contract', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ ...artifact, verdict: 'UNREACHABLE' }), { status: 200 }));
     await expect(new ApiInterfacePhysicalTraceDataSource().traceInterfacePhysical(artifact.query)).rejects.toThrow('verdict');
+  });
+
+  it('rejects a branch that lacks the public evidence and edge fields needed for an overlay', async () => {
+    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({
+      ...artifact,
+      verdict: 'REACHABLE',
+      branches: [{ branch_id: 'branch-a' }],
+    }), { status: 200 }));
+    await expect(new ApiInterfacePhysicalTraceDataSource().traceInterfacePhysical(artifact.query)).rejects.toThrow('source_candidate_id');
   });
 });

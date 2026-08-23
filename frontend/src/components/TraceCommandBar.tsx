@@ -5,9 +5,11 @@ import { physicalObjectIdForNode } from '../topology/projection';
 import type { TopologyProjectionDocument, TopologyProjectionNode } from '../topology/types';
 
 interface TraceCommandBarProps {
-  document: TopologyProjectionDocument | null;
+  logicalDocument: TopologyProjectionDocument | null;
   deviceDetailsDataSource: DeviceDetailsDataSource;
   traceDataSource?: InterfacePhysicalTraceDataSource;
+  traceArtifact: InterfacePhysicalTraceArtifact | null;
+  onTraceArtifact: (artifact: InterfacePhysicalTraceArtifact | null) => void;
 }
 
 interface ParsedTraceCommand { sourceLabel: string; destinationLabel: string; }
@@ -40,18 +42,17 @@ const endpointChoice = (label: string, interfaces: DeviceInterfaceDetails[]): En
 
 const warningText = (warning: Record<string, unknown>) => JSON.stringify(warning);
 
-export function TraceCommandBar({ document, deviceDetailsDataSource, traceDataSource }: TraceCommandBarProps) {
+export function TraceCommandBar({ logicalDocument, deviceDetailsDataSource, traceDataSource, traceArtifact, onTraceArtifact }: TraceCommandBarProps) {
   const [command, setCommand] = useState('');
   const [pending, setPending] = useState<PendingTrace | null>(null);
-  const [result, setResult] = useState<InterfacePhysicalTraceArtifact | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const runTrace = async (sourceId: string, destinationId: string) => {
     if (!traceDataSource) { setMessage('L1 trace datasource пока недоступен.'); return; }
-    setLoading(true); setMessage(null); setResult(null);
+    setLoading(true); setMessage(null);
     try {
-      setResult(await traceDataSource.traceInterfacePhysical({ from_interface_id: sourceId, to_interface_id: destinationId }));
+      onTraceArtifact(await traceDataSource.traceInterfacePhysical({ from_interface_id: sourceId, to_interface_id: destinationId }));
       setPending(null);
     } catch (reason) {
       setMessage(reason instanceof Error ? reason.message : 'Не удалось выполнить L1 trace.');
@@ -60,14 +61,14 @@ export function TraceCommandBar({ document, deviceDetailsDataSource, traceDataSo
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    setMessage(null); setResult(null); setPending(null);
+    setMessage(null); onTraceArtifact(null); setPending(null);
     const parsed = parseTraceCommand(command);
     if (parsed instanceof Error) { setMessage(parsed.message); return; }
-    if (!document || document.layer !== 'L2' || document.detail_level !== 'DEVICE') {
+    if (!logicalDocument || logicalDocument.layer !== 'L2' || logicalDocument.detail_level !== 'DEVICE') {
       setMessage('Для trace нужна загруженная логическая DEVICE projection.'); return;
     }
-    const sourceNode = resolveDevice(document, parsed.sourceLabel);
-    const destinationNode = resolveDevice(document, parsed.destinationLabel);
+    const sourceNode = resolveDevice(logicalDocument, parsed.sourceLabel);
+    const destinationNode = resolveDevice(logicalDocument, parsed.destinationLabel);
     if (sourceNode instanceof Error) { setMessage(sourceNode.message); return; }
     if (destinationNode instanceof Error) { setMessage(destinationNode.message); return; }
     const sourceId = physicalObjectIdForNode(sourceNode);
@@ -118,11 +119,12 @@ export function TraceCommandBar({ document, deviceDetailsDataSource, traceDataSo
       ))}
       <button type="button" onClick={tracePending} disabled={loading || !pending.source.selectedId || !pending.destination.selectedId}>Трассировать L1</button>
     </div>}
-    {result && <div className={`trace-result trace-result--${result.verdict.toLowerCase()}`} aria-label="Результат L1 trace">
-      <strong>{result.verdict === 'REACHABLE' ? 'Физический L1-путь доказан' : 'Физический L1-путь не доказан'}</strong>
-      {result.verdict === 'REACHABLE' && <span>Доказанных ветвей: {result.branches.length}</span>}
-      {result.gaps.length > 0 && <p>Gaps: {result.gaps.map((gap) => gap.code).join(', ')}</p>}
-      {result.warnings.length > 0 && <p>Warnings: {result.warnings.map(warningText).join('; ')}</p>}
+    {traceArtifact && <div className={`trace-result trace-result--${traceArtifact.verdict.toLowerCase()}`} aria-label="Результат L1 trace">
+      <strong>{traceArtifact.verdict === 'REACHABLE' ? 'Физический L1-путь доказан' : 'Физический L1-путь не доказан'}</strong>
+      {traceArtifact.verdict === 'REACHABLE' && <span>Доказанных ветвей: {traceArtifact.branches.length}</span>}
+      {traceArtifact.gaps.length > 0 && <p>Gaps: {traceArtifact.gaps.map((gap) => gap.code).join(', ')}</p>}
+      {traceArtifact.warnings.length > 0 && <p>Warnings: {traceArtifact.warnings.map(warningText).join('; ')}</p>}
+      <button type="button" className="trace-result__clear" onClick={() => onTraceArtifact(null)}>Сбросить трассировку</button>
     </div>}
   </section>;
 }

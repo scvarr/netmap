@@ -22,6 +22,19 @@ const requireString = (value: unknown, path: string): void => {
   if (typeof value !== 'string') malformed(`${path} must be a string.`);
 };
 
+const requireEvidenceRefs = (value: unknown, path: string): void => {
+  if (!Array.isArray(value)) malformed(`${path} must be an array.`);
+  const refs = value as unknown[];
+  refs.forEach((ref, index) => {
+    requireObject(ref, `${path}[${index}]`);
+    requireString(ref.entity_type, `${path}[${index}].entity_type`);
+    requireString(ref.entity_id, `${path}[${index}].entity_id`);
+    if (ref.ref_type !== undefined && ref.ref_type !== 'CANONICAL_FACT') {
+      malformed(`${path}[${index}].ref_type must be CANONICAL_FACT when present.`);
+    }
+  });
+};
+
 const parseArtifact = (value: unknown): InterfacePhysicalTraceArtifact => {
   requireObject(value, 'document');
   if (value.schema_version !== 1) malformed('schema_version must be 1.');
@@ -31,9 +44,32 @@ const parseArtifact = (value: unknown): InterfacePhysicalTraceArtifact => {
   if (value.verdict !== 'REACHABLE' && value.verdict !== 'UNKNOWN') {
     malformed('verdict must be REACHABLE or UNKNOWN.');
   }
-  if (!Array.isArray(value.branches) || !value.branches.every((branch) => isObject(branch) && typeof branch.branch_id === 'string')) {
-    malformed('branches must contain branch_id strings.');
-  }
+  const branches = value.branches as unknown;
+  if (!Array.isArray(branches)) malformed('branches must be an array.');
+  (branches as unknown[]).forEach((branch, index) => {
+    requireObject(branch, `branches[${index}]`);
+    requireString(branch.branch_id, `branches[${index}].branch_id`);
+    requireString(branch.source_candidate_id, `branches[${index}].source_candidate_id`);
+    requireString(branch.target_candidate_id, `branches[${index}].target_candidate_id`);
+    if (!Array.isArray(branch.edge_ids) || !branch.edge_ids.every((id) => typeof id === 'string')) malformed(`branches[${index}].edge_ids must be strings.`);
+    requireEvidenceRefs(branch.evidence_refs, `branches[${index}].evidence_refs`);
+  });
+  const nodes = value.nodes as unknown;
+  if (!Array.isArray(nodes)) malformed('nodes must be an array.');
+  (nodes as unknown[]).forEach((node, index) => {
+    requireObject(node, `nodes[${index}]`);
+    requireString(node.id, `nodes[${index}].id`);
+    requireEvidenceRefs(node.canonical_refs, `nodes[${index}].canonical_refs`);
+  });
+  const edges = value.edges as unknown;
+  if (!Array.isArray(edges)) malformed('edges must be an array.');
+  (edges as unknown[]).forEach((edge, index) => {
+    requireObject(edge, `edges[${index}]`);
+    requireString(edge.id, `edges[${index}].id`);
+    requireString(edge.from_node_id, `edges[${index}].from_node_id`);
+    requireString(edge.to_node_id, `edges[${index}].to_node_id`);
+    requireEvidenceRefs(edge.evidence_refs, `edges[${index}].evidence_refs`);
+  });
   if (!Array.isArray(value.gaps) || !value.gaps.every((gap) => isObject(gap) && typeof gap.code === 'string')) {
     malformed('gaps must contain public gap codes.');
   }

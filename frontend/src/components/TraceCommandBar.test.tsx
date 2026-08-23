@@ -1,9 +1,10 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { useState } from 'react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { TraceCommandBar, parseTraceCommand } from './TraceCommandBar';
 import type { DeviceDetailsDocument } from '../topology/deviceDetailsTypes';
-import type { InterfacePhysicalTraceArtifact } from '../topology/interfacePhysicalTraceTypes';
+import type { InterfacePhysicalTraceArtifact, InterfacePhysicalTraceDataSource, InterfacePhysicalTraceQuery } from '../topology/interfacePhysicalTraceTypes';
 import type { TopologyProjectionDocument } from '../topology/types';
 
 const sourceId = '00000000-0000-0000-0000-000000000101';
@@ -27,7 +28,17 @@ const document: TopologyProjectionDocument = {
 };
 const reachable: InterfacePhysicalTraceArtifact = {
   schema_version: 1, query: { from_interface_id: interfaceId('201'), to_interface_id: interfaceId('202') },
-  verdict: 'REACHABLE', branches: [{ branch_id: 'branch-1' }], gaps: [], warnings: [],
+  verdict: 'REACHABLE', branches: [{ branch_id: 'branch-1', source_candidate_id: 'source', target_candidate_id: 'target', edge_ids: [], evidence_refs: [] }], nodes: [], edges: [], gaps: [], warnings: [],
+};
+
+const TraceHarness = ({ logicalDocument, deviceDetailsDataSource, traceDataSource, onTraceArtifact }: {
+  logicalDocument: TopologyProjectionDocument;
+  deviceDetailsDataSource: { loadDeviceDetails(id: string): Promise<DeviceDetailsDocument> };
+  traceDataSource: InterfacePhysicalTraceDataSource;
+  onTraceArtifact: (artifact: InterfacePhysicalTraceArtifact | null) => void;
+}) => {
+  const [traceArtifact, setTraceArtifact] = useState<InterfacePhysicalTraceArtifact | null>(null);
+  return <TraceCommandBar logicalDocument={logicalDocument} deviceDetailsDataSource={deviceDetailsDataSource} traceDataSource={traceDataSource} traceArtifact={traceArtifact} onTraceArtifact={(artifact) => { setTraceArtifact(artifact); onTraceArtifact(artifact); }} />;
 };
 
 const renderBar = (overrides: { document?: TopologyProjectionDocument; details?: Record<string, DeviceDetailsDocument>; result?: InterfacePhysicalTraceArtifact } = {}) => {
@@ -36,9 +47,12 @@ const renderBar = (overrides: { document?: TopologyProjectionDocument; details?:
     [targetId]: interfaceDetails(targetId, 'PC2', [interfaceId('202')]),
   };
   const deviceDetailsDataSource = { loadDeviceDetails: vi.fn((id: string) => Promise.resolve(details[id])) };
-  const traceDataSource = { traceInterfacePhysical: vi.fn().mockResolvedValue(overrides.result ?? reachable) };
-  render(<TraceCommandBar document={overrides.document ?? document} deviceDetailsDataSource={deviceDetailsDataSource} traceDataSource={traceDataSource} />);
-  return { deviceDetailsDataSource, traceDataSource };
+  const traceDataSource: InterfacePhysicalTraceDataSource = {
+    traceInterfacePhysical: vi.fn<(query: InterfacePhysicalTraceQuery) => Promise<InterfacePhysicalTraceArtifact>>().mockResolvedValue(overrides.result ?? reachable),
+  };
+  const onTraceArtifact = vi.fn();
+  render(<TraceHarness logicalDocument={overrides.document ?? document} deviceDetailsDataSource={deviceDetailsDataSource} traceDataSource={traceDataSource} onTraceArtifact={onTraceArtifact} />);
+  return { deviceDetailsDataSource, traceDataSource, onTraceArtifact };
 };
 
 const submit = async (value: string) => {
