@@ -107,8 +107,8 @@ export function TopologyCanvas({
     selected: selection?.type === 'node' && selection.item.id === node.id,
   }));
   const edges = projection.edges.map((edge) => {
-    const isSelected = selection?.type === 'edge' && selection.item.id === edge.id;
-    const isTraced = traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false;
+    const isSelected = selection?.type === 'edge' && selection.item.id === edge.data?.projection.id;
+    const isTraced = edge.data?.endpointPair ? (traceOverlay?.highlightedConnectionMemberIds.has(edge.data.endpointPair.connection_member_id) ?? false) : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
     return {
       ...edge,
       selected: isSelected,
@@ -159,9 +159,9 @@ export function TopologyCanvas({
         onEdgeClick={onEdgeClick}
         onPaneClick={() => onSelectionChange(null)}
         fitView
-        fitViewOptions={{ padding: 0.2, maxZoom: 1.1 }}
+        fitViewOptions={{ padding: 0.2, maxZoom: document.layer === 'L1' ? 4 : 1.1 }}
         minZoom={0.35}
-        maxZoom={1.8}
+        maxZoom={document.layer === 'L1' ? 4 : 1.8}
         nodesDraggable
         nodesConnectable={false}
         elementsSelectable

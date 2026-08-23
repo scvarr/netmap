@@ -24,6 +24,10 @@ const requireObject: (
 const requireString = (value: unknown, path: string): void => {
   if (typeof value !== 'string') malformed(`${path} must be a string.`);
 };
+const requirePositiveNumber = (value: unknown, path: string): void => { if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) malformed(`${path} must be positive.`); };
+const validateLibraryRef = (value: unknown, path: string, type: string): void => { requireObject(value, path); if (value.ref_type !== 'LIBRARY_RECORD' || value.entity_type !== type) malformed(`${path} must be a LIBRARY_RECORD ${type} ref.`); requireString(value.entity_id, `${path}.entity_id`); };
+const validateBlueprintPresentation = (value: unknown, path: string): void => { requireObject(value, path); validateLibraryRef(value.blueprint_ref, `${path}.blueprint_ref`, 'ObjectBlueprint'); validateLibraryRef(value.version_ref, `${path}.version_ref`, 'ObjectBlueprintVersion'); requireObject(value.body, `${path}.body`); if (value.body.kind !== 'RECTANGLE') malformed(`${path}.body.kind must be RECTANGLE.`); requirePositiveNumber(value.body.width, `${path}.body.width`); requirePositiveNumber(value.body.height, `${path}.body.height`); if (value.body.fill_color != null && (typeof value.body.fill_color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(value.body.fill_color))) malformed(`${path}.body.fill_color is invalid.`); if (!Array.isArray(value.slots)) malformed(`${path}.slots must be an array.`); for (const [index, item] of (value.slots as unknown[]).entries()) { requireObject(item, `${path}.slots[${index}]`); requireString(item.slot_key, `${path}.slots[${index}].slot_key`); requireString(item.display_name, `${path}.slots[${index}].display_name`); if (item.kind !== 'CONNECTION_POINT' && item.kind !== 'NETWORK_PORT') malformed(`${path}.slots[${index}].kind is invalid.`); requireObject(item.anchor, `${path}.slots[${index}].anchor`); if (!['LEFT', 'RIGHT', 'TOP', 'BOTTOM'].includes(String(item.anchor.side)) || typeof item.anchor.offset !== 'number' || item.anchor.offset < 0 || item.anchor.offset > 1) malformed(`${path}.slots[${index}].anchor is invalid.`); requireString(item.connection_point_id, `${path}.slots[${index}].connection_point_id`); if (item.network_interface_id != null) requireString(item.network_interface_id, `${path}.slots[${index}].network_interface_id`); } };
+const validateEndpointPairs = (value: unknown, path: string): void => { if (!Array.isArray(value)) malformed(`${path} must be an array.`); for (const [index, pair] of (value as unknown[]).entries()) { requireObject(pair, `${path}[${index}]`); for (const key of ['from_connection_point_id', 'to_connection_point_id', 'connection_id', 'connection_member_id']) requireString(pair[key], `${path}[${index}].${key}`); for (const key of ['from_member_index', 'to_member_index']) if (!Number.isInteger(pair[key]) || (pair[key] as number) < 1) malformed(`${path}[${index}].${key} must be positive integer.`); } };
 
 const requireStringArray = (value: unknown, path: string): void => {
   if (!Array.isArray(value) || !value.every((item) => typeof item === 'string')) {
@@ -39,6 +43,7 @@ const validateNode = (value: unknown, index: number): void => {
   requireString(value.label, `${path}.label`);
   if (!Array.isArray(value.source_refs)) malformed(`${path}.source_refs must be an array.`);
   if (!isObject(value.attributes)) malformed(`${path}.attributes must be an object.`);
+  requireObject(value.attributes, `${path}.attributes`); if (value.attributes.blueprint_presentation != null) validateBlueprintPresentation(value.attributes.blueprint_presentation, `${path}.attributes.blueprint_presentation`);
 };
 
 const validateEdge = (value: unknown, index: number): void => {
@@ -51,6 +56,7 @@ const validateEdge = (value: unknown, index: number): void => {
   if (typeof value.aggregate !== 'boolean') malformed(`${path}.aggregate must be a boolean.`);
   if (!Array.isArray(value.source_refs)) malformed(`${path}.source_refs must be an array.`);
   if (!isObject(value.attributes)) malformed(`${path}.attributes must be an object.`);
+  requireObject(value.attributes, `${path}.attributes`); if (value.attributes.endpoint_pairs != null) validateEndpointPairs(value.attributes.endpoint_pairs, `${path}.attributes.endpoint_pairs`);
 };
 
 const parseProjectionDocument = (value: unknown): TopologyProjectionDocument => {

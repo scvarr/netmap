@@ -125,6 +125,16 @@ describe('ELK topology layout', () => {
     );
   });
 
+  it('uses exact blueprint dimensions while generic nodes keep the fallback', async () => {
+    const document = documentFor(['panel', 'cable', 'manual'], [], 'L1', 'PHYSICAL_OBJECT');
+    document.nodes[0].attributes.blueprint_presentation = { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v' }, body: { kind: 'RECTANGLE', width: 480, height: 70 }, slots: [] };
+    document.nodes[1].attributes.blueprint_presentation = { ...document.nodes[0].attributes.blueprint_presentation, body: { kind: 'RECTANGLE', width: 120, height: 6 } };
+    const flow = await toFlowProjection(document);
+    expect(flow.nodes.find((node) => node.id === 'panel')).toMatchObject({ width: 480, height: 70 });
+    expect(flow.nodes.find((node) => node.id === 'cable')).toMatchObject({ width: 120, height: 6 });
+    expect(flow.nodes.find((node) => node.id === 'manual')).toMatchObject({ width: undefined, height: undefined });
+  });
+
   it.each([
     ['logical', 'L2', 'DEVICE'],
     ['physical', 'L1', 'PHYSICAL_OBJECT'],

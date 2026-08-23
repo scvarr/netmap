@@ -594,3 +594,12 @@ enter `source_refs`. Physical aggregate edges expose deterministic endpoint pair
 oriented to `from_node_id` and `to_node_id`; these are canonical connection/member
 facts, not geometry-derived handles. Internal links remain internal and do not
 create a self-edge.
+
+## MAP-BLUEPRINT.1b — Physical map rendering
+
+The Physical map renders `blueprint_presentation` rectangles in exact persisted
+presentation units and places visible ports by canonical ConnectionPoint mapping.
+Each aggregate edge expands only in the presentation layer into its exact member
+segments; segment clicks still select the aggregate projection edge. A segment is
+trace-emphasized only when public evidence includes its ConnectionMember. Manual
+objects and unknown endpoints retain generic node/floating-boundary fallback.

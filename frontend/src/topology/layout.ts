@@ -1,6 +1,7 @@
 import type { ELK, ElkExtendedEdge, ElkNode } from 'elkjs';
 import type { Edge, Node } from '@xyflow/react';
 import type {
+  PhysicalEndpointPair,
   TopologyProjectionDocument,
   TopologyProjectionEdge,
   TopologyProjectionNode,
@@ -25,6 +26,7 @@ export interface DeviceNodeData extends Record<string, unknown> {
 
 export interface LogicalEdgeData extends Record<string, unknown> {
   projection: TopologyProjectionEdge;
+  endpointPair?: PhysicalEndpointPair;
 }
 
 export type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
@@ -129,8 +131,8 @@ export const toFlowProjection: TopologyLayoutEngine = async (document) => {
     },
     children: orderedNodes.map((node) => ({
       id: node.id,
-      width: LAYOUT_NODE_WIDTH,
-      height: LAYOUT_NODE_HEIGHT,
+      width: node.attributes.blueprint_presentation?.body.width ?? LAYOUT_NODE_WIDTH,
+      height: node.attributes.blueprint_presentation?.body.height ?? LAYOUT_NODE_HEIGHT,
     })),
     edges: layoutEdges,
   };
@@ -145,15 +147,14 @@ export const toFlowProjection: TopologyLayoutEngine = async (document) => {
     nodes: orderedNodes.map((projection) => ({
       id: projection.id,
       type: 'device',
+      width: projection.attributes.blueprint_presentation?.body.width,
+      height: projection.attributes.blueprint_presentation?.body.height,
       position: positions.get(projection.id) ?? { x: 0, y: 0 },
       data: { projection },
     })),
-    edges: orderedEdges.map((projection) => ({
-      id: projection.id,
-      source: projection.from_node_id,
-      target: projection.to_node_id,
-      type: 'floating',
-      data: { projection },
-    })),
+    edges: orderedEdges.flatMap((projection) => {
+      const pairs = projection.attributes.endpoint_pairs;
+      return pairs?.length ? pairs.map((endpointPair) => ({ id: `${projection.id}::member::${endpointPair.connection_member_id}`, source: projection.from_node_id, target: projection.to_node_id, type: 'floating' as const, data: { projection, endpointPair } })) : [{ id: projection.id, source: projection.from_node_id, target: projection.to_node_id, type: 'floating' as const, data: { projection } }];
+    }),
   };
 };

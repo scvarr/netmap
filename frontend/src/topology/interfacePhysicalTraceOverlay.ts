@@ -4,9 +4,10 @@ import type { TopologyProjectionDocument } from './types';
 export interface PhysicalTraceOverlay {
   highlightedNodeIds: Set<string>;
   highlightedEdgeIds: Set<string>;
+  highlightedConnectionMemberIds: Set<string>;
 }
 
-const emptyOverlay = (): PhysicalTraceOverlay => ({ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set() });
+const emptyOverlay = (): PhysicalTraceOverlay => ({ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set() });
 
 const sameEvidence = (left: InterfaceTraceEvidenceRef, right: { entity_type: string; entity_id: string }): boolean => (
   left.entity_type === right.entity_type && left.entity_id === right.entity_id
@@ -37,6 +38,7 @@ export const physicalTraceOverlayFor = (
   for (const edge of document.edges) {
     if (!edge.source_refs.some((ref) => evidence.some((item) => sameEvidence(item, ref)))) continue;
     overlay.highlightedEdgeIds.add(edge.id);
+    for (const pair of edge.attributes.endpoint_pairs ?? []) if (evidence.some((item) => item.entity_type === 'ConnectionMember' && item.entity_id === pair.connection_member_id)) overlay.highlightedConnectionMemberIds.add(pair.connection_member_id);
     // Endpoints are emphasized only because this exact physical projection edge is evidenced.
     overlay.highlightedNodeIds.add(edge.from_node_id);
     overlay.highlightedNodeIds.add(edge.to_node_id);

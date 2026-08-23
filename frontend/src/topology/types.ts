@@ -6,6 +6,13 @@ export interface ProjectionSourceRef {
   entity_type: string;
   entity_id: string;
 }
+export interface BlueprintPresentation {
+  blueprint_ref: { ref_type: 'LIBRARY_RECORD'; entity_type: 'ObjectBlueprint'; entity_id: string };
+  version_ref: { ref_type: 'LIBRARY_RECORD'; entity_type: 'ObjectBlueprintVersion'; entity_id: string };
+  body: { kind: 'RECTANGLE'; width: number; height: number; fill_color?: string | null };
+  slots: Array<{ slot_key: string; display_name: string; kind: 'CONNECTION_POINT' | 'NETWORK_PORT'; anchor: { side: 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM'; offset: number }; connection_point_id: string; network_interface_id?: string | null }>;
+}
+export interface PhysicalEndpointPair { from_connection_point_id: string; from_member_index: number; to_connection_point_id: string; to_member_index: number; connection_id: string; connection_member_id: string; }
 
 export interface TopologyProjectionScope {
   include_location_subtrees: ProjectionSourceRef[];
@@ -25,7 +32,7 @@ export interface TopologyProjectionNode {
   kind: string;
   label: string;
   source_refs: ProjectionSourceRef[];
-  attributes: Record<string, unknown>;
+  attributes: Record<string, unknown> & { blueprint_presentation?: BlueprintPresentation };
   status?: string;
 }
 
@@ -36,7 +43,7 @@ export interface TopologyProjectionEdge {
   kind: string;
   aggregate: boolean;
   source_refs: ProjectionSourceRef[];
-  attributes: Record<string, unknown>;
+  attributes: Record<string, unknown> & { endpoint_pairs?: PhysicalEndpointPair[] };
   status?: string;
 }
 

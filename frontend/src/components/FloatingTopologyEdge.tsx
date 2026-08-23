@@ -76,12 +76,18 @@ export function FloatingTopologyEdge({
   markerStart,
   markerEnd,
   interactionWidth,
+  data,
 }: EdgeProps<LogicalFlowEdge>) {
   const sourceNode = useInternalNode<DeviceFlowNode>(source);
   const targetNode = useInternalNode<DeviceFlowNode>(target);
   if (!sourceNode || !targetNode) return null;
 
-  const endpoints = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
+  const pair = data?.endpointPair;
+  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => {
+    if (!connectionPointId) return null; const presentation = node.data.projection.attributes.blueprint_presentation; const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId); if (!presentation || !slot) return null; const box = rectangle(node); const side = slot.anchor.side; return { x: box.x + (side === 'LEFT' ? 0 : side === 'RIGHT' ? box.width : box.width * slot.anchor.offset), y: box.y + (side === 'TOP' ? 0 : side === 'BOTTOM' ? box.height : box.height * slot.anchor.offset), side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom };
+  };
+  const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
+  const endpoints = { source: exact(sourceNode, pair?.from_connection_point_id) ?? floating.source, target: exact(targetNode, pair?.to_connection_point_id) ?? floating.target };
   const [path] = getStraightPath({
     sourceX: endpoints.source.x,
     sourceY: endpoints.source.y,

@@ -86,6 +86,13 @@ describe('ApiTopologyDataSource', () => {
 
     await expect(new ApiTopologyDataSource().loadProjection(physicalRequest)).resolves.toEqual(physical);
   });
+  it('validates bounded blueprint presentation and endpoint-pair attributes', async () => {
+    const physical = { ...document, layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [{ ...document.nodes[0], kind: 'PHYSICAL_OBJECT', attributes: { blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 120, height: 6 }, slots: [{ slot_key: 'A', display_name: 'A', kind: 'CONNECTION_POINT', anchor: { side: 'LEFT', offset: 0 }, connection_point_id: 'cp-a' }] } } }], edges: [{ id: 'e', from_node_id: 'device-a', to_node_id: 'device-a', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [{ from_connection_point_id: 'cp-a', from_member_index: 1, to_connection_point_id: 'cp-b', to_member_index: 1, connection_id: 'c', connection_member_id: 'm' }] } }] };
+    fetchMock.mockResolvedValue(jsonResponse(physical));
+    await expect(new ApiTopologyDataSource().loadProjection({ ...request, layer: 'L1', detail_level: 'PHYSICAL_OBJECT', grouping: undefined, filters: undefined })).resolves.toEqual(physical);
+    fetchMock.mockResolvedValue(jsonResponse({ ...physical, nodes: [{ ...physical.nodes[0], attributes: { blueprint_presentation: { ...physical.nodes[0].attributes.blueprint_presentation, body: { kind: 'RECTANGLE', width: 0, height: 6 } } } }] }));
+    await expect(new ApiTopologyDataSource().loadProjection({ ...request, layer: 'L1', detail_level: 'PHYSICAL_OBJECT', grouping: undefined, filters: undefined })).rejects.toThrow('Malformed topology projection response');
+  });
 
   it('accepts an empty projection document', async () => {
     const empty = { ...document, nodes: [], edges: [] };
