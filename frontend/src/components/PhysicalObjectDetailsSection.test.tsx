@@ -55,6 +55,26 @@ const deferred = <T,>() => {
 };
 
 describe('PhysicalObjectDetailsSection', () => {
+  it('naturally sorts rendered connection-point cards instead of preserving UUID order', async () => {
+    const unordered = {
+      ...details('object-a'),
+      connection_points: ['R10', 'R20', 'R11', 'R09', 'R22', 'L02'].map((label, index) => ({
+        ...details('object-a').connection_points[0],
+        label,
+        connection_point_ref: {
+          ref_type: 'CANONICAL_FACT' as const,
+          entity_type: 'ConnectionPoint',
+          entity_id: `point-${index}`,
+        },
+      })),
+    };
+    render(<PhysicalObjectDetailsSection node={node('object-a')} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(unordered) }} />);
+
+    await screen.findByRole('heading', { name: 'L02' });
+    expect(screen.getAllByRole('heading', { level: 4 }).map((heading) => heading.textContent))
+      .toEqual(['L02', 'R09', 'R10', 'R11', 'R20', 'R22']);
+  });
+
   it('renders named points, factual counts, fallback, and collapsed raw refs', async () => {
     render(
       <PhysicalObjectDetailsSection

@@ -48,6 +48,28 @@ const displayPointLabel = (point: ConnectionPointDetails): string => {
   return `Точка ${shortId(technical?.[1] ?? point.connection_point_ref.entity_id)}`;
 };
 
+const pointLabelCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base',
+});
+
+const isTechnicalPointLabel = (point: ConnectionPointDetails): boolean => (
+  point.label_source === 'TECHNICAL_FALLBACK'
+  || /^ConnectionPoint\s+/i.test(point.label)
+  || /^Точка\s+/i.test(point.label)
+);
+
+const sortedConnectionPoints = (points: ConnectionPointDetails[]): ConnectionPointDetails[] => (
+  points
+    .map((point, index) => ({ point, index }))
+    .sort((left, right) => (
+      Number(isTechnicalPointLabel(left.point)) - Number(isTechnicalPointLabel(right.point))
+      || pointLabelCollator.compare(displayPointLabel(left.point), displayPointLabel(right.point))
+      || left.index - right.index
+    ))
+    .map(({ point }) => point)
+);
+
 const SourceRefs = ({ refs }: { refs: ProjectionSourceRef[] }) => (
   <ul className="source-refs">
     {refs.map((ref) => (
@@ -280,7 +302,7 @@ export function PhysicalObjectDetailsSection({
           )}
           {state.document.connection_points.length ? (
             <div className="connection-point-list">
-              {state.document.connection_points.map((point) => (
+              {sortedConnectionPoints(state.document.connection_points).map((point) => (
                 <PointCard
                   key={point.connection_point_ref.entity_id}
                   point={point}
