@@ -12,6 +12,7 @@ import {
   type DeviceFlowNode,
   type LogicalFlowEdge,
 } from '../topology/layout';
+import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 
 export interface NodeRectangle {
   x: number;
@@ -68,6 +69,18 @@ const rectangle = (node: InternalNode<DeviceFlowNode>): NodeRectangle => ({
   height: node.measured.height ?? node.height ?? LAYOUT_NODE_HEIGHT,
 });
 
+export const getConnectionPointEndpoint = (
+  projection: DeviceFlowNode['data']['projection'],
+  box: NodeRectangle,
+  connectionPointId: string | undefined,
+): FloatingEndpoint | null => {
+  if (!connectionPointId) return null;
+  const presentation = projection.attributes.blueprint_presentation;
+  const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId);
+  if (slot) { const side = slot.anchor.side; return { x: box.x + (side === 'LEFT' ? 0 : side === 'RIGHT' ? box.width : box.width * slot.anchor.offset), y: box.y + (side === 'TOP' ? 0 : side === 'BOTTOM' ? box.height : box.height * slot.anchor.offset), side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom }; }
+  const points = genericConnectionPoints(projection); const index = points.findIndex((point) => point.connection_point_id === connectionPointId); return index < 0 ? null : { x: box.x + box.width, y: box.y + box.height * genericEndpointOffset(index, points.length), side: Position.Right };
+};
+
 export function FloatingTopologyEdge({
   id,
   source,
@@ -83,9 +96,7 @@ export function FloatingTopologyEdge({
   if (!sourceNode || !targetNode) return null;
 
   const pair = data?.endpointPair;
-  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => {
-    if (!connectionPointId) return null; const presentation = node.data.projection.attributes.blueprint_presentation; const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId); if (!presentation || !slot) return null; const box = rectangle(node); const side = slot.anchor.side; return { x: box.x + (side === 'LEFT' ? 0 : side === 'RIGHT' ? box.width : box.width * slot.anchor.offset), y: box.y + (side === 'TOP' ? 0 : side === 'BOTTOM' ? box.height : box.height * slot.anchor.offset), side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom };
-  };
+  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => getConnectionPointEndpoint(node.data.projection, rectangle(node), connectionPointId);
   const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
   const endpoints = { source: exact(sourceNode, pair?.from_connection_point_id) ?? floating.source, target: exact(targetNode, pair?.to_connection_point_id) ?? floating.target };
   const [path] = getStraightPath({

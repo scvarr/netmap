@@ -103,6 +103,12 @@ def test_create_physical_object_is_atomic_and_visible_only_in_l1_projection():
     assert physical.json()["nodes"][0]["attributes"] == {
         "label_source": "ALIAS_DISPLAY",
         "connection_point_count": 1,
+        "connection_points": [{
+            "connection_point_id": str(point_id),
+            "display_name": "Порт",
+            "cardinality": 1,
+            "external_connection_count": 0,
+        }],
         "owned_interface_count": 0,
     }
     logical = client.post(

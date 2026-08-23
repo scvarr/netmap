@@ -104,6 +104,7 @@ button { font: inherit; }
 .device-node__role { color: #8da1a2; font-size: 10px; }
 .device-node__status { display: flex; align-items: center; gap: 6px; margin-top: 6px; color: #69cdaa; font: 700 8px ui-monospace, "Cascadia Code", monospace; letter-spacing: .08em; }
 .device-node__handle { width: 1px !important; height: 1px !important; border: 0 !important; opacity: 0; pointer-events: none; }
+.generic-map-node__endpoint { position: absolute; right: 0; z-index: 3; transform: translate(50%, -50%); width: 8px; height: 8px; border: 1px solid #e6fffb; border-radius: 50%; background: #18383a; }.generic-map-node__endpoint small { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #d9ffff; font-size: 9px; white-space: nowrap; pointer-events: none; }.generic-map-node__handle { width: 8px !important; height: 8px !important; min-width: 8px !important; min-height: 8px !important; opacity: 0 !important; border: 0 !important; }
 .topology-auto-layout { padding: 8px 11px; border: 1px solid #345052; border-radius: 7px; color: #b4c6c4; background: rgba(16, 32, 35, .92); font-size: 10px; cursor: pointer; }
 .topology-auto-layout:hover { border-color: #55e5b5; color: #e8f4f1; }
 .react-flow__controls { overflow: hidden; border: 1px solid #2a3d40 !important; border-radius: 8px !important; box-shadow: none !important; }

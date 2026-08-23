@@ -122,6 +122,12 @@ def test_w3_link_projects_core_cable_firewall_with_canonical_evidence():
     core_node = node_by_object(body, physical_object_id(core))
     cable_node = node_by_object(body, cable_id)
     assert core_node["attributes"]["connection_point_count"] == 1
+    assert core_node["attributes"]["connection_points"] == [{
+        "connection_point_id": next(iter(points_by_node[core_node["id"]])),
+        "display_name": core_node["attributes"]["connection_points"][0]["display_name"],
+        "cardinality": 1,
+        "external_connection_count": 1,
+    }]
     assert core_node["attributes"]["owned_interface_count"] == 1
     assert cable_node["attributes"]["connection_point_count"] == 2
     assert cable_node["attributes"]["owned_interface_count"] == 0
@@ -140,6 +146,7 @@ def test_passive_and_fallback_physical_objects_are_valid_isolated_nodes():
     assert node["attributes"] == {
         "label_source": "TECHNICAL_FALLBACK",
         "connection_point_count": 0,
+        "connection_points": [],
         "owned_interface_count": 0,
     }
 

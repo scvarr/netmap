@@ -61,6 +61,13 @@ Member точки является координатой внутри Connectio
 
 `Connection` — недиректная бинарная физическая связь ровно между двумя `ConnectionPoint`.
 
+## Presentation fallback
+
+L1 physical projection may expose canonical ConnectionPoint summaries for map rendering.
+For a non-blueprint PhysicalObject, the frontend presents these points on a deterministic
+generic right-side rail. This geometry is presentation-only and is never stored as a
+canonical connection fact; blueprint slot anchors remain authoritative when present.
+
 Концептуально:
 
 ```text

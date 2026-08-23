@@ -163,13 +163,22 @@ class ConfiguredTopologyProjectionResolver:
             if owner.physical_object_id in selected_object_ids:
                 owners_by_object.setdefault(owner.physical_object_id, []).append(owner)
 
-        point_ids_by_object: dict[uuid.UUID, list[uuid.UUID]] = {}
-        for point in self.repository.get_all_connection_point_records():
+        points_by_object: dict[uuid.UUID, list] = {}
+        all_points = self.repository.get_all_connection_point_records()
+        for point in all_points:
             if point.physical_object_id not in selected_object_ids:
                 continue
-            point_ids_by_object.setdefault(point.physical_object_id, []).append(
-                point.point_id
-            )
+            points_by_object.setdefault(point.physical_object_id, []).append(point)
+
+        point_aliases = DeviceCatalog(self.repository.session).connection_point_display_aliases(
+            [point.point_id for point in all_points if point.physical_object_id in selected_object_ids]
+        )
+        external_connection_ids_by_point: dict[uuid.UUID, set[uuid.UUID]] = {}
+        for member in self.repository.get_physical_connection_member_records():
+            if member.object_a_id == member.object_b_id:
+                continue
+            external_connection_ids_by_point.setdefault(member.point_a_id, set()).add(member.connection_id)
+            external_connection_ids_by_point.setdefault(member.point_b_id, set()).add(member.connection_id)
 
         aliases = DeviceCatalog(
             self.repository.session
@@ -181,7 +190,9 @@ class ConfiguredTopologyProjectionResolver:
         nodes = [
             self._physical_node(
                 object_id,
-                point_ids_by_object.get(object_id, []),
+                points_by_object.get(object_id, []),
+                point_aliases,
+                external_connection_ids_by_point,
                 owners_by_object.get(object_id, []),
                 aliases.get(object_id),
                 classes.get(object_id),
@@ -273,7 +284,9 @@ class ConfiguredTopologyProjectionResolver:
     def _physical_node(
         self,
         physical_object_id: uuid.UUID,
-        point_ids: list[uuid.UUID],
+        points: list,
+        point_aliases: dict[uuid.UUID, DisplayAliasRecord],
+        external_connection_ids_by_point: dict[uuid.UUID, set[uuid.UUID]],
         owners: list[NetworkInterfacePhysicalOwnerRecord],
         display_alias: DisplayAliasRecord | None,
         object_class: PhysicalObjectClassRecord | None,
@@ -284,7 +297,7 @@ class ConfiguredTopologyProjectionResolver:
             refs.append(self._ref("EntityMetadata", display_alias.metadata_id))
         if object_class is not None:
             refs.append(self._ref("EntityMetadata", object_class.metadata_id))
-        refs.extend(self._ref("ConnectionPoint", point_id) for point_id in point_ids)
+        refs.extend(self._ref("ConnectionPoint", point.point_id) for point in points)
         for owner in owners:
             refs.extend(
                 [
@@ -305,7 +318,22 @@ class ConfiguredTopologyProjectionResolver:
                 "label_source": (
                     "ALIAS_DISPLAY" if display_alias is not None else "TECHNICAL_FALLBACK"
                 ),
-                "connection_point_count": len(point_ids),
+                "connection_point_count": len(points),
+                "connection_points": [
+                    {
+                        "connection_point_id": str(point.point_id),
+                        "display_name": (
+                            point_aliases[point.point_id].value
+                            if point.point_id in point_aliases
+                            else f"ConnectionPoint {str(point.point_id)[:8]}"
+                        ),
+                        "cardinality": point.cardinality,
+                        "external_connection_count": len(
+                            external_connection_ids_by_point.get(point.point_id, set())
+                        ),
+                    }
+                    for point in sorted(points, key=lambda value: str(value.point_id))
+                ],
                 "owned_interface_count": len(owners),
                 **({"class": object_class.value} if object_class is not None else {}),
                 **({"blueprint_presentation": blueprint_presentation} if blueprint_presentation is not None else {}),
