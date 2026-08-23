@@ -32,6 +32,7 @@ from app.physical_connections import (
     PhysicalConnectionCatalog,
 )
 from app.physical_object_details_resolver import ConfiguredPhysicalObjectDetailsResolver
+from app.physical_object_deletion import PhysicalObjectDeletionCatalog
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
@@ -178,6 +179,19 @@ def get_physical_object_details(
     return ConfiguredPhysicalObjectDetailsResolver(CanonicalRepository(session)).resolve(
         physical_object_id
     )
+
+
+@app.delete(
+    "/v1/topology/physical-objects/{physical_object_id}",
+    status_code=204,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def delete_physical_object(
+    physical_object_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        PhysicalObjectDeletionCatalog(session).delete(physical_object_id)
 
 
 @app.put(

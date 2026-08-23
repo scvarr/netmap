@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   displayCount,
@@ -17,6 +18,7 @@ interface QuickInspectorProps {
   selection: TopologySelection;
   onSelectNode: (node: TopologyProjectionNode) => void;
   onClose: () => void;
+  onDeletePhysicalObject?: (physicalObjectId: string) => Promise<void>;
 }
 
 const Metric = ({ label, value }: { label: string; value: string }) => (
@@ -28,7 +30,9 @@ export function QuickInspector({
   selection,
   onSelectNode,
   onClose,
+  onDeletePhysicalObject,
 }: QuickInspectorProps) {
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   if (!selection) return null;
   const nodesById = new Map(document?.nodes.map((node) => [node.id, node]) ?? []);
 
@@ -44,6 +48,17 @@ export function QuickInspector({
       : node.attributes.class
         ? physicalClassPresentation(node.attributes.class).label
         : 'СЕТЕВОЙ ОБЪЕКТ';
+    const isCable = node.attributes.class === 'cable';
+    const deleteLabel = isCable
+      ? `Удалить кабель «${displayNodeLabel(node)}» и разорвать соединение?`
+      : `Удалить объект «${displayNodeLabel(node)}»?`;
+    const deleteObject = async () => {
+      if (!physicalObjectId || !onDeletePhysicalObject || !window.confirm(deleteLabel)) return;
+      setDeleteError(null);
+      try { await onDeletePhysicalObject(physicalObjectId); } catch (reason) {
+        setDeleteError(reason instanceof Error ? reason.message : 'Не удалось удалить объект');
+      }
+    };
 
     return (
       <aside className="quick-inspector" aria-label="Быстрый инспектор">
@@ -70,6 +85,10 @@ export function QuickInspector({
         ) : (
           <p className="quick-inspector__unavailable">У объекта нет однозначной canonical-ссылки.</p>
         )}
+        {isPhysical && physicalObjectId && onDeletePhysicalObject && (
+          <button type="button" onClick={() => void deleteObject()}>Удалить</button>
+        )}
+        {deleteError && <p role="alert">{deleteError}</p>}
         <details className="quick-inspector__technical">
           <summary>Технические детали</summary>
           <dl>

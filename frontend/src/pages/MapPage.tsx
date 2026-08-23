@@ -14,6 +14,7 @@ import {
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { InterfacePhysicalTraceDataSource } from '../topology/interfacePhysicalTraceTypes';
+import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectDeleteTypes';
 import { physicalTraceOverlayFor } from '../topology/interfacePhysicalTraceOverlay';
 import type { InterfacePhysicalTraceArtifact } from '../topology/interfacePhysicalTraceTypes';
 import type {
@@ -27,13 +28,14 @@ interface MapPageProps {
   deviceDetailsDataSource: DeviceDetailsDataSource;
   traceDataSource?: InterfacePhysicalTraceDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
+  physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
 }
 
 const viewFrom = (value: string | null): TopologyViewMode => (
   value === 'physical' ? 'physical' : 'logical'
 );
 
-export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, topologyLayoutStore }: MapPageProps) {
+export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, topologyLayoutStore, physicalObjectDeleteDataSource }: MapPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewMode = viewFrom(searchParams.get('view'));
   const focusId = searchParams.get('focus');
@@ -180,6 +182,11 @@ export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, 
         selection={selection}
         onSelectNode={(node) => updateSelection({ type: 'node', item: node })}
         onClose={() => updateSelection(null)}
+        onDeletePhysicalObject={viewMode === 'physical' && physicalObjectDeleteDataSource ? async (physicalObjectId) => {
+          await physicalObjectDeleteDataSource.deletePhysicalObject(physicalObjectId);
+          updateSelection(null);
+          setReloadKey((key) => key + 1);
+        } : undefined}
       />
     </main>
   );
