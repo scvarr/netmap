@@ -204,4 +204,29 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(store.clear).toHaveBeenCalledWith('L1/PHYSICAL_OBJECT');
     await waitFor(() => expect(fitViewMock).toHaveBeenCalled());
   });
+
+  it('does not rerun layout for a new position override object in the same scene', async () => {
+    const document = documentFor('physical-A');
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async (input) => flowFor(input));
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" positionOverrides={{ 'physical-A': { x: 1, y: 2 } }} layoutEngine={layoutEngine} />);
+    await screen.findByRole('button', { name: 'physical-A' });
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" positionOverrides={{ 'physical-A': { x: 42, y: 84 } }} layoutEngine={layoutEngine} />);
+    expect(layoutEngine).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('position-physical-A')).toHaveTextContent('1,2');
+  });
+
+  it('fits each new scene once and applies an explicit authoritative rollback without ELK', async () => {
+    fitViewMock.mockClear();
+    const document = documentFor('physical-A');
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async (input) => flowFor(input));
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" positionOverrides={{ 'physical-A': { x: 10, y: 20 } }} authoritativePositionRevision={0} layoutEngine={layoutEngine} />);
+    await screen.findByRole('button', { name: 'physical-A' });
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/logical" positionOverrides={{ 'physical-A': { x: 10, y: 20 } }} authoritativePositionRevision={0} layoutEngine={layoutEngine} />);
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(2));
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/logical" positionOverrides={{ 'physical-A': { x: 99, y: 77 } }} authoritativePositionRevision={1} layoutEngine={layoutEngine} />);
+    await waitFor(() => expect(screen.getByTestId('position-physical-A')).toHaveTextContent('99,77'));
+    expect(layoutEngine).toHaveBeenCalledTimes(1);
+    expect(fitViewMock).toHaveBeenCalledTimes(2);
+  });
 });

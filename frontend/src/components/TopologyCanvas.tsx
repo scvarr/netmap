@@ -40,10 +40,11 @@ interface TopologyCanvasProps {
   layoutEngine?: TopologyLayoutEngine;
   layoutStore?: TopologyLayoutStore;
   traceOverlay?: PhysicalTraceOverlay;
+  sceneKey?: string;
   positionOverrides?: Record<string, XYPosition>;
+  authoritativePositionRevision?: number;
   onPhysicalNodeDragStop?: (physicalObjectId: string, position: XYPosition) => void;
   disableAutoLayout?: boolean;
-  preserveViewport?: boolean;
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -56,19 +57,23 @@ export function TopologyCanvas({
   layoutEngine = toFlowProjection,
   layoutStore,
   traceOverlay,
+  sceneKey,
   positionOverrides,
+  authoritativePositionRevision,
   onPhysicalNodeDragStop,
   disableAutoLayout,
-  preserveViewport = false,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const fitAfterLayout = useRef(false);
+  const fittedSceneKey = useRef<string | null>(null);
+  const appliedAuthoritativePositionRevision = useRef(authoritativePositionRevision);
   const currentDocument = useRef(document);
   const { fitView } = useReactFlow();
   const selectedNodeId = selection?.type === 'node' ? selection.item.id : null;
   const viewKey = topologyLayoutViewKey(document);
+  const presentationSceneKey = sceneKey ?? viewKey;
 
   currentDocument.current = document;
 
@@ -91,13 +96,29 @@ export function TopologyCanvas({
       },
     );
     return () => { current = false; };
-  }, [document, layoutEngine, layoutRevision, layoutStore, positionOverrides, viewKey]);
+  }, [document, layoutEngine, layoutRevision, layoutStore, viewKey]);
+
+  // A position acknowledgement is already reflected by React Flow's drag state.
+  // Only an explicit authoritative revision (for example, a failed persistence rollback)
+  // may replace positions without rebuilding the layout scene.
+  useEffect(() => {
+    if (appliedAuthoritativePositionRevision.current === authoritativePositionRevision) return;
+    appliedAuthoritativePositionRevision.current = authoritativePositionRevision;
+    if (!positionOverrides) return;
+    setProjection((current) => current ? {
+      ...current,
+      nodes: applyTopologyPositionOverrides(current.nodes, positionOverrides),
+    } : current);
+  }, [authoritativePositionRevision]);
 
   useEffect(() => {
-    if (!projection || !fitAfterLayout.current) return;
+    if (!projection) return;
+    const shouldFit = fitAfterLayout.current || fittedSceneKey.current !== presentationSceneKey;
+    if (!shouldFit) return;
     fitAfterLayout.current = false;
+    fittedSceneKey.current = presentationSceneKey;
     void fitView({ duration: 300, maxZoom: 1.1, padding: 0.2 });
-  }, [fitView, projection]);
+  }, [fitView, presentationSceneKey, projection]);
 
   useEffect(() => {
     if (!projection || !selectedNodeId || !projection.nodes.some((node) => node.id === selectedNodeId)) return;
@@ -170,7 +191,7 @@ export function TopologyCanvas({
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
         onPaneClick={() => onSelectionChange(null)}
-        fitView={!preserveViewport}
+        fitView={false}
         fitViewOptions={{ padding: 0.2, maxZoom: document.layer === 'L1' ? 4 : 1.1 }}
         minZoom={0.35}
         maxZoom={document.layer === 'L1' ? 4 : 1.8}
