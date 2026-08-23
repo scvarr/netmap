@@ -28,6 +28,7 @@ from app.models import (
     ObjectBlueprint,
     ObjectBlueprintVersion,
     MapPlacement,
+    MapViewPosition,
     PhysicalObject,
     SavedMap,
     ProcessingEntryPoint,
@@ -85,6 +86,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 def clean_database():
     require_confirmed_test_database()
     with SessionLocal.begin() as session:
+        session.execute(delete(MapViewPosition))
         session.execute(delete(MapPlacement))
         session.execute(delete(SavedMap))
         session.execute(delete(BlueprintInstanceSlot))

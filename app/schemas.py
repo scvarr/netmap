@@ -63,12 +63,18 @@ class MoveMapPlacementRequest(BaseModel):
     y: FiniteFloat
 
 
+class MapViewPositionDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: FiniteFloat
+    y: FiniteFloat
+
+
 class MapPlacementDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     physical_object_ref: ProjectionSourceRef
-    x: FiniteFloat
-    y: FiniteFloat
+    positions: dict[Literal["L1/PHYSICAL_OBJECT", "L2/DEVICE"], MapViewPositionDocument]
 
 
 class SavedMapSummary(BaseModel):

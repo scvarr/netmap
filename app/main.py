@@ -1,5 +1,6 @@
 import logging
 import uuid
+from typing import Literal
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -18,6 +19,7 @@ from app.interface_resolver import InterfacePhysicalResolver
 from app.l2_resolver import L2ReachabilityResolver
 from app.l2_catalog import L2Catalog, L2ForwardingContextBindingInput
 from app.l3_resolver import SelectedTableRouteDecisionResolver
+from app.models import MapViewKey
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.nat_resolver import ConfiguredNATPolicyResolver
@@ -129,8 +131,10 @@ def _saved_map_document(detail) -> dict[str, object]:
                     "entity_type": "PhysicalObject",
                     "entity_id": placement.physical_object_id,
                 },
-                "x": placement.x,
-                "y": placement.y,
+                "positions": {
+                    str(position.view_key): {"x": position.x, "y": position.y}
+                    for position in placement.view_positions
+                },
             }
             for placement in detail.placements
         ],
@@ -213,9 +217,24 @@ def add_map_placement(map_id: uuid.UUID, query: CreateMapPlacementRequest, sessi
 
 @app.put("/v1/maps/{map_id}/placements/{physical_object_id}", response_model=MapPlacementsDocument, responses={422: {"model": ErrorResponse}})
 def move_map_placement(map_id: uuid.UUID, physical_object_id: uuid.UUID, query: MoveMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+    """Compatibility alias for the physical (`L1/PHYSICAL_OBJECT`) position."""
     with session.begin():
         catalog = SavedMapCatalog(session)
         catalog.move_placement(map_id, physical_object_id, query.x, query.y)
+        return _map_placements_document(catalog.placements(map_id))
+
+
+@app.put("/v1/maps/{map_id}/placements/{physical_object_id}/positions/{view_key}", response_model=MapPlacementsDocument, responses={422: {"model": ErrorResponse}})
+def set_map_view_position(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: MoveMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog.set_view_position(
+            map_id,
+            physical_object_id,
+            MapViewKey.PHYSICAL if view_key == "physical" else MapViewKey.LOGICAL,
+            query.x,
+            query.y,
+        )
         return _map_placements_document(catalog.placements(map_id))
 
 

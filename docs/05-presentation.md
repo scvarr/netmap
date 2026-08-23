@@ -119,11 +119,16 @@ implicit workspace and is a presentation scope, not a canonical network fact.
 When `NetworkWorkspace` becomes a persisted boundary, a separate migration adds
 the explicit `workspace_id` to `SavedMap`.
 
-`MapPlacement` stores only presentation coordinates for one canonical
-`PhysicalObject` in one `SavedMap`. Canonical existence does not imply a map
-placement, and removing a placement never deletes or changes canonical topology.
-Deleting a canonical PhysicalObject may safely remove its dependent placements.
-Resolvers, projections, and traces neither read nor expose SavedMap state.
+`MapPlacement` is membership only: one canonical `PhysicalObject` in one
+`SavedMap`. `MapViewPosition` stores that membership's presentation coordinates
+independently for each supported network view (`L1 / PHYSICAL_OBJECT` and
+`L2 / DEVICE`). Map scope and network view are orthogonal dimensions: absence
+of a view position means the frontend may initialize that view's layout, never
+that coordinates are copied from another view. Canonical existence does not
+imply map membership, and removing membership never deletes or changes
+canonical topology. Deleting a canonical `PhysicalObject` may safely remove its
+dependent placements and positions. Resolvers, projections, and traces neither
+read nor expose SavedMap state.
 
 Aggregate edge не должен визуально или семантически утверждать наличие одного canonical `Connection`, если он на самом деле представляет несколько supporting paths/relations.
 

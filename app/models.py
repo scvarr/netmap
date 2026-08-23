@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import CIDR, INET, JSONB, UUID
@@ -44,7 +45,7 @@ class SavedMap(Base):
 
 
 class MapPlacement(Base):
-    """Coordinates of one canonical PhysicalObject within one SavedMap."""
+    """Membership of one canonical PhysicalObject in one SavedMap."""
 
     __tablename__ = "map_placements"
     __table_args__ = (
@@ -59,10 +60,38 @@ class MapPlacement(Base):
     physical_object_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("physical_objects.id", ondelete="CASCADE"), nullable=False
     )
-    x: Mapped[float] = mapped_column(Float, nullable=False)
-    y: Mapped[float] = mapped_column(Float, nullable=False)
+    view_positions: Mapped[list["MapViewPosition"]] = relationship(
+        back_populates="placement", cascade="all, delete-orphan", passive_deletes=True
+    )
     saved_map: Mapped[SavedMap] = relationship(back_populates="placements")
     physical_object: Mapped[PhysicalObject] = relationship(back_populates="map_placements")
+
+
+class MapViewKey(StrEnum):
+    PHYSICAL = "L1/PHYSICAL_OBJECT"
+    LOGICAL = "L2/DEVICE"
+
+
+class MapViewPosition(Base):
+    """Presentation coordinates for one SavedMap membership in one network view."""
+
+    __tablename__ = "map_view_positions"
+    __table_args__ = (
+        UniqueConstraint("placement_id", "view_key", name="uq_map_view_positions_placement_view"),
+        CheckConstraint(
+            "view_key IN ('L1/PHYSICAL_OBJECT', 'L2/DEVICE')",
+            name="map_view_positions_view_key_valid",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    placement_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("map_placements.id", ondelete="CASCADE"), nullable=False
+    )
+    view_key: Mapped[MapViewKey] = mapped_column(String(32), nullable=False)
+    x: Mapped[float] = mapped_column(Float, nullable=False)
+    y: Mapped[float] = mapped_column(Float, nullable=False)
+    placement: Mapped[MapPlacement] = relationship(back_populates="view_positions")
 
 
 class ConnectionPoint(Base):

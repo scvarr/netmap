@@ -2,10 +2,10 @@ import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ModelError, ValidationError
-from app.models import MapPlacement, PhysicalObject, SavedMap
+from app.models import MapPlacement, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -49,12 +49,17 @@ class SavedMapCatalog:
             raise ModelError("PhysicalObject is already placed on SavedMap", {
                 "reason": "MAP_PLACEMENT_CONFLICT", "map_id": str(map_id), "physical_object_id": str(physical_object_id),
             })
-        placement = MapPlacement(map_id=map_id, physical_object_id=physical_object_id, x=x, y=y)
+        placement = MapPlacement(map_id=map_id, physical_object_id=physical_object_id)
+        placement.view_positions.append(MapViewPosition(view_key=MapViewKey.PHYSICAL, x=x, y=y))
         self.session.add(placement)
         self.session.flush()
         return placement
 
     def move_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, x: float, y: float) -> MapPlacement:
+        """Compatibility operation: update the physical presentation position only."""
+        return self.set_view_position(map_id, physical_object_id, MapViewKey.PHYSICAL, x, y)
+
+    def set_view_position(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, x: float, y: float) -> MapPlacement:
         self._require_map(map_id)
         placement = self.session.scalar(select(MapPlacement).where(
             MapPlacement.map_id == map_id, MapPlacement.physical_object_id == physical_object_id
@@ -63,7 +68,11 @@ class SavedMapCatalog:
             raise ValidationError("MapPlacement does not exist", {
                 "map_id": str(map_id), "physical_object_id": str(physical_object_id),
             })
-        placement.x, placement.y = x, y
+        position = next((item for item in placement.view_positions if item.view_key == view_key), None)
+        if position is None:
+            placement.view_positions.append(MapViewPosition(view_key=view_key, x=x, y=y))
+        else:
+            position.x, position.y = x, y
         self.session.flush()
         return placement
 
@@ -89,6 +98,6 @@ class SavedMapCatalog:
         return saved_map
 
     def _placements(self, map_id: uuid.UUID) -> tuple[MapPlacement, ...]:
-        return tuple(self.session.scalars(select(MapPlacement).where(
+        return tuple(self.session.scalars(select(MapPlacement).options(selectinload(MapPlacement.view_positions)).where(
             MapPlacement.map_id == map_id
         ).order_by(MapPlacement.physical_object_id)))

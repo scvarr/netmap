@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 
 from app.database import SessionLocal
 from app.main import app
-from app.models import Connection, MapPlacement, PhysicalObject, SavedMap
+from app.models import Connection, MapPlacement, MapViewPosition, PhysicalObject, SavedMap
 from app.repository import CanonicalRepository, ConnectionMemberInput
 
 
@@ -62,7 +62,7 @@ def test_create_list_and_detail_saved_maps_are_empty_and_use_presentation_refs()
     assert client.post("/v1/maps", json={"name": "   "}).status_code == 422
 
 
-def test_placements_are_per_map_and_can_move_independently():
+def test_placements_are_per_map_and_keep_physical_and_logical_positions_independent():
     physical = create_object("PP1")
     first, second = create_map("Этаж 1"), create_map("Здание")
     first_id, second_id, physical_id = map_id(first), map_id(second), object_id(physical)
@@ -73,7 +73,7 @@ def test_placements_are_per_map_and_can_move_independently():
     assert response.status_code == 201
     assert response.json()["placements"] == [{
         "physical_object_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": physical_id},
-        "x": 120.0, "y": 200.0,
+        "positions": {"L1/PHYSICAL_OBJECT": {"x": 120.0, "y": 200.0}},
     }]
     duplicate = client.post(f"/v1/maps/{first_id}/placements", json={
         "physical_object_id": physical_id, "x": 0, "y": 0,
@@ -83,16 +83,28 @@ def test_placements_are_per_map_and_can_move_independently():
     assert client.post(f"/v1/maps/{second_id}/placements", json={
         "physical_object_id": physical_id, "x": 600, "y": 80,
     }).status_code == 201
-    assert placements(second_id)[0]["x"] == 600.0
+    assert placements(second_id)[0]["positions"] == {"L1/PHYSICAL_OBJECT": {"x": 600.0, "y": 80.0}}
 
+    logical = client.put(f"/v1/maps/{first_id}/placements/{physical_id}/positions/logical", json={"x": 300, "y": 120})
+    assert logical.status_code == 200
+    assert placements(first_id)[0]["positions"] == {
+        "L1/PHYSICAL_OBJECT": {"x": 120.0, "y": 200.0},
+        "L2/DEVICE": {"x": 300.0, "y": 120.0},
+    }
     moved = client.put(f"/v1/maps/{first_id}/placements/{physical_id}", json={"x": 180, "y": 340})
     assert moved.status_code == 200
-    assert placements(first_id)[0]["x"] == 180.0
-    assert placements(first_id)[0]["y"] == 340.0
-    assert placements(second_id)[0]["x"] == 600.0
+    assert placements(first_id)[0]["positions"] == {
+        "L1/PHYSICAL_OBJECT": {"x": 180.0, "y": 340.0},
+        "L2/DEVICE": {"x": 300.0, "y": 120.0},
+    }
+    assert placements(second_id)[0]["positions"] == {"L1/PHYSICAL_OBJECT": {"x": 600.0, "y": 80.0}}
 
     for invalid in ({"x": "NaN", "y": 1}, {"x": "Infinity", "y": 1}):
         assert client.put(f"/v1/maps/{first_id}/placements/{physical_id}", json=invalid).status_code == 422
+    assert placements(first_id)[0]["positions"]["L1/PHYSICAL_OBJECT"] == {"x": 180.0, "y": 340.0}
+    assert client.put(f"/v1/maps/{first_id}/placements/{physical_id}/positions/unknown", json={"x": 1, "y": 2}).status_code == 422
+    assert client.put(f"/v1/maps/{first_id}/placements/{uuid.uuid4()}/positions/logical", json={"x": 1, "y": 2}).status_code == 422
+    assert client.put(f"/v1/maps/{uuid.uuid4()}/placements/{physical_id}/positions/logical", json={"x": 1, "y": 2}).status_code == 422
 
 
 def test_removing_or_deleting_a_map_leaves_canonical_topology_untouched():
@@ -106,9 +118,11 @@ def test_removing_or_deleting_a_map_leaves_canonical_topology_untouched():
     saved_map = create_map("Связь")
     saved_map_id = map_id(saved_map)
     assert client.post(f"/v1/maps/{saved_map_id}/placements", json={"physical_object_id": str(left_id), "x": 1, "y": 2}).status_code == 201
+    assert client.put(f"/v1/maps/{saved_map_id}/placements/{left_id}/positions/logical", json={"x": 3, "y": 4}).status_code == 200
     assert client.delete(f"/v1/maps/{saved_map_id}/placements/{left_id}").status_code == 204
     with SessionLocal() as session:
         assert session.get(PhysicalObject, left_id) is not None
+        assert session.scalar(select(func.count()).select_from(MapViewPosition)) == 0
         assert session.scalar(select(func.count()).select_from(Connection)) == 1
 
     assert client.post(f"/v1/maps/{saved_map_id}/placements", json={"physical_object_id": str(left_id), "x": 3, "y": 4}).status_code == 201
@@ -116,6 +130,7 @@ def test_removing_or_deleting_a_map_leaves_canonical_topology_untouched():
     with SessionLocal() as session:
         assert session.get(SavedMap, uuid.UUID(saved_map_id)) is None
         assert session.scalar(select(func.count()).select_from(MapPlacement)) == 0
+        assert session.scalar(select(func.count()).select_from(MapViewPosition)) == 0
         assert session.get(PhysicalObject, left_id) is not None
         assert session.get(PhysicalObject, right_id) is not None
         assert session.scalar(select(func.count()).select_from(Connection)) == 1
@@ -126,8 +141,11 @@ def test_canonical_object_delete_cascades_its_placement_and_unknown_object_is_re
     saved_map = create_map("Удаление")
     physical_id, saved_map_id = object_id(physical), map_id(saved_map)
     assert client.post(f"/v1/maps/{saved_map_id}/placements", json={"physical_object_id": physical_id, "x": 1, "y": 2}).status_code == 201
+    assert client.put(f"/v1/maps/{saved_map_id}/placements/{physical_id}/positions/logical", json={"x": 3, "y": 4}).status_code == 200
     assert client.delete(f"/v1/topology/physical-objects/{physical_id}").status_code == 204
     assert placements(saved_map_id) == []
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(MapViewPosition)) == 0
     unknown = client.post(f"/v1/maps/{saved_map_id}/placements", json={"physical_object_id": str(uuid.uuid4()), "x": 1, "y": 2})
     assert unknown.status_code == 422
 
@@ -148,5 +166,6 @@ def test_maps_do_not_change_projection_or_l1_trace():
     before_trace = client.post("/v1/traces/l1", json=trace_query).json()
     saved_map = create_map("Invariant")
     assert client.post(f"/v1/maps/{map_id(saved_map)}/placements", json={"physical_object_id": object_id(left), "x": 10, "y": 20}).status_code == 201
+    assert client.put(f"/v1/maps/{map_id(saved_map)}/placements/{object_id(left)}/positions/logical", json={"x": 30, "y": 40}).status_code == 200
     assert client.post("/v1/topology/projection", json=projection_query).json() == before_projection
     assert client.post("/v1/traces/l1", json=trace_query).json() == before_trace
