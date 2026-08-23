@@ -582,6 +582,7 @@ def create_physical_endpoint_connection(
             endpoint(query.source),
             endpoint(query.target),
             query.cable_display_name,
+            (query.cable_blueprint.blueprint_id, query.cable_blueprint.version_id) if query.cable_blueprint else None,
         )
         return PhysicalEndpointConnectionCreationDocument(
             source=materialization(created.source),

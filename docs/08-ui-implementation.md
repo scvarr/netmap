@@ -603,3 +603,12 @@ Each aggregate edge expands only in the presentation layer into its exact member
 segments; segment clicks still select the aggregate projection edge. A segment is
 trace-emphasized only when public evidence includes its ConnectionMember. Manual
 objects and unknown endpoints retain generic node/floating-boundary fallback.
+
+## MAP-CONNECT.1a — blueprint-backed cable composition
+
+`POST /v1/topology/physical-connections` optionally accepts an exact blueprint
+and version for a simple inline cable: exactly two CONNECTION_POINT slots and one
+link between them. Slot key order provides stable undirected source/target
+assignment; anchors and classes do not determine L1 semantics. The operation
+atomically materializes that version, its internal link, and two external links;
+legacy generic-cable requests remain unchanged.

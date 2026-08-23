@@ -37,6 +37,7 @@ class MaterializedBlueprintInstance:
     version_id: uuid.UUID
     physical_object_id: uuid.UUID
     slots: tuple[MaterializedSlot, ...]
+    internal_connection_ids: tuple[uuid.UUID, ...]
 
 
 @dataclass(frozen=True)
@@ -328,19 +329,22 @@ class ObjectBlueprintCatalog:
                 network_interface_id=interface_id,
             ))
             materialized[slot.id] = MaterializedSlot(slot.slot_key, point.id, interface_id)
+        internal_connection_ids: list[uuid.UUID] = []
         for link in links:
-            repository.add_connection(
+            connection, _ = repository.add_connection(
                 materialized[link.slot_a_id].connection_point_id,
                 materialized[link.slot_b_id].connection_point_id,
                 cardinality=1,
                 members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
             )
+            internal_connection_ids.append(connection.id)
         self.session.flush()
         return MaterializedBlueprintInstance(
             blueprint_id=blueprint_id,
             version_id=version_id,
             physical_object_id=physical_object.id,
             slots=tuple(materialized[slot.id] for slot in slots),
+            internal_connection_ids=tuple(internal_connection_ids),
         )
 
     def _metadata(

@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ValidationError
 from app.models import ConnectionPoint, EntityMetadata, NetworkInterface
+from app.models import BlueprintEndpointSlot, BlueprintInternalLink, ObjectBlueprintVersion
+from app.blueprint_catalog import ObjectBlueprintCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
 
 
@@ -87,6 +89,7 @@ class PhysicalConnectionCatalog:
         source: PhysicalEndpoint,
         target: PhysicalEndpoint,
         cable_display_name: str | None = None,
+        cable_blueprint: tuple[uuid.UUID, uuid.UUID] | None = None,
     ) -> CreatedEndpointPhysicalConnection:
         if source == target:
             raise ValidationError(
@@ -176,29 +179,46 @@ class PhysicalConnectionCatalog:
                 {"connection_point_ids": [str(value) for value in unsupported_points]},
             )
 
+        blueprint_instance = None
+        if cable_blueprint is not None:
+            blueprint_id, version_id = cable_blueprint
+            version = self.session.get(ObjectBlueprintVersion, version_id)
+            if version is None or version.blueprint_id != blueprint_id:
+                raise ValidationError("ObjectBlueprintVersion does not belong to ObjectBlueprint")
+            slots = tuple(self.session.scalars(select(BlueprintEndpointSlot).where(BlueprintEndpointSlot.blueprint_version_id == version_id).order_by(BlueprintEndpointSlot.slot_key)))
+            links = tuple(self.session.scalars(select(BlueprintInternalLink).where(BlueprintInternalLink.blueprint_version_id == version_id)))
+            if len(slots) != 2 or any(slot.kind != "CONNECTION_POINT" for slot in slots) or len(links) != 1 or {links[0].slot_a_id, links[0].slot_b_id} != {slots[0].id, slots[1].id}:
+                raise ValidationError("Cable blueprint version must have exactly two CONNECTION_POINT slots and one link between them")
+            blueprint_instance = ObjectBlueprintCatalog(self.session).instantiate(blueprint_id, version_id, cable_display_name or "Cable")
+
         source_materialized = self._materialize_endpoint(
             source, repository, owners
         )
-
-        cable = repository.add_physical_object()
-        self.session.add(
-            EntityMetadata(
-                physical_object_id=cable.id,
-                key=PHYSICAL_OBJECT_CLASS_KEY,
-                value="cable",
-            )
-        )
-        if cable_display_name is not None:
+        if blueprint_instance is not None:
+            materialized_slots = tuple(sorted(blueprint_instance.slots, key=lambda slot: slot.slot_key))
+            cable_id = blueprint_instance.physical_object_id
+            cable_a_id, cable_b_id = materialized_slots[0].connection_point_id, materialized_slots[1].connection_point_id
+        else:
+            cable = repository.add_physical_object()
             self.session.add(
                 EntityMetadata(
                     physical_object_id=cable.id,
-                    key=DISPLAY_ALIAS_KEY,
-                    value=cable_display_name,
+                    key=PHYSICAL_OBJECT_CLASS_KEY,
+                    value="cable",
                 )
             )
-        self.session.flush()
-        cable_a = repository.add_connection_point(cable.id, cardinality=1)
-        cable_b = repository.add_connection_point(cable.id, cardinality=1)
+            if cable_display_name is not None:
+                self.session.add(
+                    EntityMetadata(
+                        physical_object_id=cable.id,
+                        key=DISPLAY_ALIAS_KEY,
+                        value=cable_display_name,
+                    )
+                )
+            self.session.flush()
+            cable_a = repository.add_connection_point(cable.id, cardinality=1)
+            cable_b = repository.add_connection_point(cable.id, cardinality=1)
+            cable_id, cable_a_id, cable_b_id = cable.id, cable_a.id, cable_b.id
 
         target_materialized = self._materialize_endpoint(
             target, repository, owners
@@ -209,18 +229,17 @@ class PhysicalConnectionCatalog:
         ]
         source_connection, _ = repository.add_connection(
             source_materialized.connection_point_id,
-            cable_a.id,
+            cable_a_id,
             cardinality=1,
             members=member,
         )
-        internal_connection, _ = repository.add_connection(
-            cable_a.id,
-            cable_b.id,
-            cardinality=1,
-            members=member,
-        )
+        if blueprint_instance is None:
+            internal_connection, _ = repository.add_connection(cable_a_id, cable_b_id, cardinality=1, members=member)
+            internal_connection_id = internal_connection.id
+        else:
+            internal_connection_id = blueprint_instance.internal_connection_ids[0]
         target_connection, _ = repository.add_connection(
-            cable_b.id,
+            cable_b_id,
             target_materialized.connection_point_id,
             cardinality=1,
             members=member,
@@ -229,10 +248,10 @@ class PhysicalConnectionCatalog:
         return CreatedEndpointPhysicalConnection(
             source=source_materialized,
             target=target_materialized,
-            cable_id=cable.id,
+            cable_id=cable_id,
             connection_ids=(
                 source_connection.id,
-                internal_connection.id,
+                internal_connection_id,
                 target_connection.id,
             ),
         )

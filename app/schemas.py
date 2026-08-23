@@ -505,6 +505,14 @@ class CreatePhysicalEndpointConnectionRequest(BaseModel):
     source: PhysicalEndpointRequest
     target: PhysicalEndpointRequest
     cable_display_name: str | None = Field(default=None, min_length=1, max_length=255)
+    cable_blueprint: "CableBlueprintRequest | None" = None
+
+
+class CableBlueprintRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    blueprint_id: uuid.UUID
+    version_id: uuid.UUID
 
 
 class PhysicalEndpointMaterialization(BaseModel):

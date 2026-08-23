@@ -186,6 +186,21 @@ def test_existing_connection_point_can_be_connected_again():
     assert details["connection_points"][0]["incident_connection_count"] == 2
 
 
+def test_endpoint_connection_materializes_exact_simple_cable_blueprint():
+    blueprint = client.post("/v1/library/object-blueprints", json={"name": "Thin cable", "body": {"kind": "RECTANGLE", "width": 120, "height": 6, "fill_color": "#123456"}, "slots": [{"key": "A", "display_name": "A", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .5}}, {"key": "B", "display_name": "B", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .5}}], "internal_links": [{"from_slot_key": "A", "to_slot_key": "B"}]}).json()
+    source_id, source_point = create_physical_object("Source", "S")
+    target_id, target_point = create_physical_object("Target", "T")
+    response = client.post("/v1/topology/physical-connections", json={"source": point_endpoint(source_point), "target": point_endpoint(target_point), "cable_display_name": "cable-01", "cable_blueprint": {"blueprint_id": blueprint["blueprint_ref"]["entity_id"], "version_id": blueprint["version_ref"]["entity_id"]}})
+    assert response.status_code == 201, response.text
+    created = response.json()
+    assert len(created["connection_refs"]) == 3
+    projection = physical_projection()
+    cable = next(node for node in projection["nodes"] if any(ref["entity_id"] == created["cable_ref"]["entity_id"] for ref in node["source_refs"]))
+    assert cable["attributes"]["blueprint_presentation"]["version_ref"]["entity_id"] == blueprint["version_ref"]["entity_id"]
+    trace = client.post("/v1/traces/l1", json={"from": {"point_id": source_point, "member_index": 1}, "to": {"point_id": target_point, "member_index": 1}})
+    assert trace.status_code == 200 and trace.json()["verdict"] == "REACHABLE"
+
+
 def test_endpoint_connection_rejects_same_or_unknown_connection_point():
     _, point_id = create_physical_object("Outlet1", "Port")
 
