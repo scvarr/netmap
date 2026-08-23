@@ -11,6 +11,7 @@ import type {
   ObjectBlueprintCreationDocument,
   ObjectBlueprintDataSource,
   ObjectBlueprintListDocument,
+  ObjectBlueprintInstantiationDocument,
   ObjectBlueprintVersionDocument,
 } from './objectBlueprintTypes';
 
@@ -25,6 +26,11 @@ const parseRef = (value: unknown, path: string, type: LibraryRef['entity_type'])
   if (ref.ref_type !== 'LIBRARY_RECORD') malformed(`${path}.ref_type must be "LIBRARY_RECORD".`);
   if (ref.entity_type !== type) malformed(`${path}.entity_type must be "${type}".`);
   return { ref_type: 'LIBRARY_RECORD', entity_type: type, entity_id: requireString(ref.entity_id, `${path}.entity_id`) };
+};
+const parseCanonicalRef = <T extends 'PhysicalObject' | 'ConnectionPoint' | 'NetworkInterface'>(value: unknown, path: string, type: T): { ref_type: 'CANONICAL_FACT'; entity_type: T; entity_id: string } => {
+  const ref = requireObject(value, path);
+  if (ref.ref_type !== 'CANONICAL_FACT' || ref.entity_type !== type) malformed(`${path} must be a CANONICAL_FACT ${type} ref.`);
+  return { ref_type: 'CANONICAL_FACT' as const, entity_type: type, entity_id: requireString(ref.entity_id, `${path}.entity_id`) };
 };
 
 const parseBody = (value: unknown, path: string): BlueprintBody => {
@@ -87,6 +93,12 @@ export const parseObjectBlueprintCreationDocument = (value: unknown): ObjectBlue
   if (document.schema_version !== '1.0') malformed('schema_version must be "1.0".');
   return { schema_version: '1.0', blueprint_ref: parseRef(document.blueprint_ref, 'blueprint_ref', 'ObjectBlueprint'), version_ref: parseRef(document.version_ref, 'version_ref', 'ObjectBlueprintVersion') };
 };
+export const parseObjectBlueprintInstantiationDocument = (value: unknown): ObjectBlueprintInstantiationDocument => {
+  const document = requireObject(value, 'document');
+  if (document.schema_version !== '1.0' || !Array.isArray(document.slots)) malformed('instantiation document has invalid shape.');
+  const slots = document.slots as unknown[];
+  return { schema_version: '1.0', blueprint_ref: parseRef(document.blueprint_ref, 'blueprint_ref', 'ObjectBlueprint'), version_ref: parseRef(document.version_ref, 'version_ref', 'ObjectBlueprintVersion'), physical_object_ref: parseCanonicalRef(document.physical_object_ref, 'physical_object_ref', 'PhysicalObject'), slots: slots.map((value, index) => { const slot = requireObject(value, `slots[${index}]`); return { slot_key: requireString(slot.slot_key, `slots[${index}].slot_key`), connection_point_ref: parseCanonicalRef(slot.connection_point_ref, `slots[${index}].connection_point_ref`, 'ConnectionPoint'), network_interface_ref: slot.network_interface_ref == null ? slot.network_interface_ref as null | undefined : parseCanonicalRef(slot.network_interface_ref, `slots[${index}].network_interface_ref`, 'NetworkInterface') }; }) };
+};
 
 const backendError = async (response: Response): Promise<Error> => {
   try { const body: unknown = await response.json(); if (isObject(body) && isObject(body.error) && typeof body.error.code === 'string' && typeof body.error.message === 'string') return new Error(`${body.error.code}: ${body.error.message}`); } catch { /* generic below */ }
@@ -117,5 +129,10 @@ export class ApiObjectBlueprintDataSource implements ObjectBlueprintDataSource {
   }
   async deleteObjectBlueprint(blueprintId: string): Promise<void> {
     const response = await fetch(`${this.endpoint}/${encodeURIComponent(blueprintId)}`, { method: 'DELETE' }); if (!response.ok) throw await backendError(response);
+  }
+  async instantiateObjectBlueprint(blueprintId: string, versionId: string, request: { display_name: string }): Promise<ObjectBlueprintInstantiationDocument> {
+    const response = await fetch(`${this.endpoint}/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}/instantiate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }); if (!response.ok) throw await backendError(response);
+    let body: unknown; try { body = await response.json(); } catch { return malformed('response body must be valid JSON.'); }
+    return parseObjectBlueprintInstantiationDocument(body);
   }
 }

@@ -576,3 +576,11 @@ structured editor and is never guessed from slot names. Save produces vN+1 via
 the bounded version operation, preserving vN. An optional `blueprint_name` is
 renamed atomically with that new version. Delete always reloads the authoritative
 library and conflict leaves both the card and all canonical topology untouched.
+
+## BLUEPRINT.4a — instantiate from Object Library
+
+Library instantiation targets exactly the latest card's displayed immutable
+`version_ref` through one public instantiate request. The dialog accepts only an
+instance display name. Its strictly validated authoritative `physical_object_ref`
+opens Object Detail; the frontend never synthesizes interfaces, points, or
+connections. Materialization does not change blueprint versions or card state.

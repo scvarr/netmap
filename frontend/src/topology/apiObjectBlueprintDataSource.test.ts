@@ -26,4 +26,12 @@ describe('ApiObjectBlueprintDataSource', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/v1/library/object-blueprints/bp/versions', expect.objectContaining({ method: 'POST' }));
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/library/object-blueprints/bp', { method: 'DELETE' });
   });
+  it('instantiates exactly one latest-version request and rejects malformed canonical refs', async () => {
+    const instance = { schema_version: '1.0', blueprint_ref: ref('ObjectBlueprint', 'bp'), version_ref: ref('ObjectBlueprintVersion', 'v2'), physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'po' }, slots: [{ slot_key: 'eth1', connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'cp' }, network_interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: 'ni' } }] };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(instance), { status: 201 })); vi.stubGlobal('fetch', fetchMock);
+    await expect(new ApiObjectBlueprintDataSource().instantiateObjectBlueprint('bp', 'v2', { display_name: 'SW1' })).resolves.toEqual(instance);
+    expect(fetchMock).toHaveBeenCalledTimes(1); expect(fetchMock).toHaveBeenCalledWith('/api/v1/library/object-blueprints/bp/versions/v2/instantiate', expect.objectContaining({ method: 'POST', body: JSON.stringify({ display_name: 'SW1' }) }));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ ...instance, physical_object_ref: { ...instance.physical_object_ref, entity_type: 'NetworkInterface' } }), { status: 201 })));
+    await expect(new ApiObjectBlueprintDataSource().instantiateObjectBlueprint('bp', 'v2', { display_name: 'SW1' })).rejects.toThrow('Malformed object blueprint response');
+  });
 });

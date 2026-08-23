@@ -90,10 +90,25 @@ export interface ObjectBlueprintCreationDocument {
   version_ref: LibraryRef;
 }
 
+export interface CanonicalBlueprintInstanceRef {
+  ref_type: 'CANONICAL_FACT';
+  entity_type: 'PhysicalObject' | 'ConnectionPoint' | 'NetworkInterface';
+  entity_id: string;
+}
+
+export interface ObjectBlueprintInstantiationDocument {
+  schema_version: '1.0';
+  blueprint_ref: LibraryRef;
+  version_ref: LibraryRef;
+  physical_object_ref: CanonicalBlueprintInstanceRef & { entity_type: 'PhysicalObject' };
+  slots: Array<{ slot_key: string; connection_point_ref: CanonicalBlueprintInstanceRef & { entity_type: 'ConnectionPoint' }; network_interface_ref?: (CanonicalBlueprintInstanceRef & { entity_type: 'NetworkInterface' }) | null }>;
+}
+
 export interface ObjectBlueprintDataSource {
   loadObjectBlueprints(): Promise<ObjectBlueprintListDocument>;
   loadObjectBlueprintVersion(blueprintId: string, versionId: string): Promise<ObjectBlueprintVersionDocument>;
   createObjectBlueprint(request: CreateObjectBlueprintRequest): Promise<ObjectBlueprintCreationDocument>;
   createObjectBlueprintVersion?(blueprintId: string, request: CreateObjectBlueprintVersionRequest): Promise<ObjectBlueprintCreationDocument>;
   deleteObjectBlueprint?(blueprintId: string): Promise<void>;
+  instantiateObjectBlueprint?(blueprintId: string, versionId: string, request: { display_name: string }): Promise<ObjectBlueprintInstantiationDocument>;
 }
