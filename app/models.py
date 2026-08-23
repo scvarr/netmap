@@ -1,6 +1,7 @@
 import uuid
+from datetime import datetime
 
-from sqlalchemy import CheckConstraint, Float, ForeignKey, Index, Integer, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import CIDR, INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -15,6 +16,53 @@ class PhysicalObject(Base):
     network_interface_owners: Mapped[list["NetworkInterfacePhysicalOwner"]] = relationship(
         back_populates="physical_object"
     )
+    map_placements: Mapped[list["MapPlacement"]] = relationship(
+        back_populates="physical_object", passive_deletes=True
+    )
+
+
+class SavedMap(Base):
+    """Presentation scope in the application's current implicit workspace."""
+
+    __tablename__ = "saved_maps"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),
+        UniqueConstraint("name", name="uq_saved_maps_name"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
+    placements: Mapped[list["MapPlacement"]] = relationship(
+        back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class MapPlacement(Base):
+    """Coordinates of one canonical PhysicalObject within one SavedMap."""
+
+    __tablename__ = "map_placements"
+    __table_args__ = (
+        UniqueConstraint("map_id", "physical_object_id", name="uq_map_placements_map_object"),
+        Index("ix_map_placements_physical_object_id", "physical_object_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    map_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False
+    )
+    physical_object_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("physical_objects.id", ondelete="CASCADE"), nullable=False
+    )
+    x: Mapped[float] = mapped_column(Float, nullable=False)
+    y: Mapped[float] = mapped_column(Float, nullable=False)
+    saved_map: Mapped[SavedMap] = relationship(back_populates="placements")
+    physical_object: Mapped[PhysicalObject] = relationship(back_populates="map_placements")
 
 
 class ConnectionPoint(Base):

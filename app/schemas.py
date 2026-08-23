@@ -3,8 +3,9 @@ from __future__ import annotations
 import uuid
 from enum import StrEnum
 from typing import Annotated, Any, Literal
+from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, IPvAnyAddress, model_validator
 from pydantic_core import PydanticCustomError
 
 
@@ -30,6 +31,70 @@ class ProjectionSourceRef(BaseModel):
     ref_type: Literal["CANONICAL_FACT"]
     entity_type: str = Field(min_length=1)
     entity_id: uuid.UUID
+
+
+class SavedMapRef(BaseModel):
+    """Presentation identity; deliberately not a ProjectionSourceRef."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity_type: Literal["SavedMap"] = "SavedMap"
+    entity_id: uuid.UUID
+
+
+class CreateSavedMapRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=255)
+
+
+class CreateMapPlacementRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    physical_object_id: uuid.UUID
+    x: FiniteFloat
+    y: FiniteFloat
+
+
+class MoveMapPlacementRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: FiniteFloat
+    y: FiniteFloat
+
+
+class MapPlacementDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    physical_object_ref: ProjectionSourceRef
+    x: FiniteFloat
+    y: FiniteFloat
+
+
+class SavedMapSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    map_ref: SavedMapRef
+    name: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SavedMapDocument(SavedMapSummary):
+    placements: list[MapPlacementDocument]
+
+
+class SavedMapListDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    maps: list[SavedMapSummary]
+
+
+class MapPlacementsDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    map_ref: SavedMapRef
+    placements: list[MapPlacementDocument]
 
 
 class TopologyProjectionScope(BaseModel):

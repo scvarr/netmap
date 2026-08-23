@@ -111,6 +111,20 @@ POLICY_ORDER_INCOMPLETE
 
 Aggregate presentation object не становится canonical network entity.
 
+## Persisted SavedMap scope
+
+Current application deployment has one implicit `NetworkWorkspace`; it is not a
+persisted table or a foreign key on canonical facts. `SavedMap` belongs to that
+implicit workspace and is a presentation scope, not a canonical network fact.
+When `NetworkWorkspace` becomes a persisted boundary, a separate migration adds
+the explicit `workspace_id` to `SavedMap`.
+
+`MapPlacement` stores only presentation coordinates for one canonical
+`PhysicalObject` in one `SavedMap`. Canonical existence does not imply a map
+placement, and removing a placement never deletes or changes canonical topology.
+Deleting a canonical PhysicalObject may safely remove its dependent placements.
+Resolvers, projections, and traces neither read nor expose SavedMap state.
+
 Aggregate edge не должен визуально или семантически утверждать наличие одного canonical `Connection`, если он на самом деле представляет несколько supporting paths/relations.
 
 По запросу пользователя meaningful aggregate должен раскрываться до supporting canonical/evidence refs.

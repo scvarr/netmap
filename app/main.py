@@ -35,6 +35,7 @@ from app.physical_object_details_resolver import ConfiguredPhysicalObjectDetails
 from app.physical_object_deletion import PhysicalObjectDeletionCatalog
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
+from app.saved_map_catalog import SavedMapCatalog
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
 from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolver
@@ -42,6 +43,7 @@ from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
     CreateConnectionPointRequest,
+    CreateMapPlacementRequest,
     CreateObjectBlueprintRequest,
     CreateObjectBlueprintVersionRequest,
     CreateDeviceInterfaceRequest,
@@ -49,6 +51,7 @@ from app.schemas import (
     CreatePhysicalEndpointConnectionRequest,
     CreatePhysicalLinkRequest,
     CreatePhysicalObjectRequest,
+    CreateSavedMapRequest,
     CreateL2ForwardingContextRequest,
     DeviceDetailsDocument,
     ErrorResponse,
@@ -60,6 +63,7 @@ from app.schemas import (
     L2ReachabilityQuery,
     L2ReachabilityTraceArtifact,
     L2ForwardingContextCreationDocument,
+    MapPlacementsDocument,
     L3ReachabilityArtifact,
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
@@ -84,6 +88,7 @@ from app.schemas import (
     PhysicalObjectDetailsDocument,
     NATEvaluationArtifact,
     NATEvaluationQuery,
+    MoveMapPlacementRequest,
     RouteDecisionArtifact,
     RouteDecisionQuery,
     RoutingPolicyEvaluationArtifact,
@@ -93,6 +98,8 @@ from app.schemas import (
     SecurityEvaluationArtifact,
     SecurityEvaluationQuery,
     SetPhysicalObjectClassRequest,
+    SavedMapDocument,
+    SavedMapListDocument,
     StructuralAdjacencyArtifact,
     StructuralAdjacencyQuery,
     TopologyProjectionDocument,
@@ -106,6 +113,28 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message
 logger = logging.getLogger("netmap")
 
 app = FastAPI(title="NetMap", version="0.1.0")
+
+
+def _saved_map_document(detail) -> dict[str, object]:
+    saved_map = detail.saved_map
+    return {
+        "map_ref": {"entity_type": "SavedMap", "entity_id": saved_map.id},
+        "name": saved_map.name,
+        "created_at": saved_map.created_at,
+        "updated_at": saved_map.updated_at,
+        "placements": [
+            {
+                "physical_object_ref": {
+                    "ref_type": "CANONICAL_FACT",
+                    "entity_type": "PhysicalObject",
+                    "entity_id": placement.physical_object_id,
+                },
+                "x": placement.x,
+                "y": placement.y,
+            }
+            for placement in detail.placements
+        ],
+    }
 
 
 @app.exception_handler(NetMapError)
@@ -133,6 +162,67 @@ async def request_validation_error_handler(
 def health(session: Session = Depends(get_session)) -> dict[str, str]:
     session.execute(text("SELECT 1"))
     return {"status": "ok"}
+
+
+@app.get("/v1/maps", response_model=SavedMapListDocument)
+def list_saved_maps(session: Session = Depends(get_session)) -> SavedMapListDocument:
+    maps = SavedMapCatalog(session).list()
+    return {"maps": [
+        {"map_ref": {"entity_type": "SavedMap", "entity_id": saved_map.id}, "name": saved_map.name,
+         "created_at": saved_map.created_at, "updated_at": saved_map.updated_at}
+        for saved_map in maps
+    ]}
+
+
+@app.post("/v1/maps", response_model=SavedMapDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
+def create_saved_map(query: CreateSavedMapRequest, session: Session = Depends(get_session)) -> SavedMapDocument:
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        saved_map = catalog.create(query.name)
+        return _saved_map_document(catalog.detail(saved_map.id))
+
+
+@app.get("/v1/maps/{map_id}", response_model=SavedMapDocument, responses={422: {"model": ErrorResponse}})
+def get_saved_map(map_id: uuid.UUID, session: Session = Depends(get_session)) -> SavedMapDocument:
+    return _saved_map_document(SavedMapCatalog(session).detail(map_id))
+
+
+@app.delete("/v1/maps/{map_id}", status_code=204, responses={422: {"model": ErrorResponse}})
+def delete_saved_map(map_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        SavedMapCatalog(session).delete(map_id)
+
+
+def _map_placements_document(detail) -> dict[str, object]:
+    document = _saved_map_document(detail)
+    return {"map_ref": document["map_ref"], "placements": document["placements"]}
+
+
+@app.get("/v1/maps/{map_id}/placements", response_model=MapPlacementsDocument, responses={422: {"model": ErrorResponse}})
+def list_map_placements(map_id: uuid.UUID, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+    return _map_placements_document(SavedMapCatalog(session).placements(map_id))
+
+
+@app.post("/v1/maps/{map_id}/placements", response_model=MapPlacementsDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
+def add_map_placement(map_id: uuid.UUID, query: CreateMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog.add_placement(map_id, query.physical_object_id, query.x, query.y)
+        return _map_placements_document(catalog.placements(map_id))
+
+
+@app.put("/v1/maps/{map_id}/placements/{physical_object_id}", response_model=MapPlacementsDocument, responses={422: {"model": ErrorResponse}})
+def move_map_placement(map_id: uuid.UUID, physical_object_id: uuid.UUID, query: MoveMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog.move_placement(map_id, physical_object_id, query.x, query.y)
+        return _map_placements_document(catalog.placements(map_id))
+
+
+@app.delete("/v1/maps/{map_id}/placements/{physical_object_id}", status_code=204, responses={422: {"model": ErrorResponse}})
+def delete_map_placement(map_id: uuid.UUID, physical_object_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        SavedMapCatalog(session).remove_placement(map_id, physical_object_id)
 
 
 @app.post(
