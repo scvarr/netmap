@@ -26,12 +26,28 @@ export interface BlueprintInternalLink {
   to_slot_key: string;
 }
 
+export interface BlueprintAuthoringEndpointGroup {
+  group_id: string;
+  key_prefix: string;
+  display_prefix: string;
+  kind: BlueprintSlotKind;
+  side: BlueprintAnchorSide;
+  count: number;
+  starting_number: number;
+}
+
+export interface BlueprintAuthoringRecipe {
+  endpoint_groups: BlueprintAuthoringEndpointGroup[];
+  pair_recipes: { group_a_id: string; group_b_id: string }[];
+}
+
 export interface CreateObjectBlueprintRequest {
   name: string;
   default_physical_object_class?: string;
   body: BlueprintBody;
   slots: BlueprintSlot[];
   internal_links: BlueprintInternalLink[];
+  authoring_recipe?: BlueprintAuthoringRecipe;
 }
 
 export interface ObjectBlueprintListItem {
@@ -43,6 +59,7 @@ export interface ObjectBlueprintListItem {
   body: BlueprintBody;
   slot_count: number;
   internal_link_count: number;
+  version_count: number;
 }
 
 export interface ObjectBlueprintListDocument {
@@ -60,6 +77,7 @@ export interface ObjectBlueprintVersionDocument {
   body: BlueprintBody;
   slots: BlueprintSlot[];
   internal_links: BlueprintInternalLink[];
+  authoring_recipe?: BlueprintAuthoringRecipe | null;
 }
 
 export interface ObjectBlueprintCreationDocument {

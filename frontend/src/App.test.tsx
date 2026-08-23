@@ -337,7 +337,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
       blueprints: [{
         blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp-1' },
         name: 'Generic cable', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v-1' }, version_number: 1,
-        default_physical_object_class: 'cable', body: { kind: 'RECTANGLE' as const, width: 120, height: 6, fill_color: '#123456' }, slot_count: 2, internal_link_count: 1,
+        default_physical_object_class: 'cable', body: { kind: 'RECTANGLE' as const, width: 120, height: 6, fill_color: '#123456' }, slot_count: 2, internal_link_count: 1, version_count: 1,
       }],
     };
     const objectBlueprintDataSource = {
@@ -357,6 +357,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     await waitFor(() => expect(objectBlueprintDataSource.createObjectBlueprint).toHaveBeenCalled());
     expect(objectBlueprintDataSource.createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Cable from editor', slots: expect.arrayContaining([expect.objectContaining({ key: 'A01' })]), internal_links: [],
+      authoring_recipe: { endpoint_groups: [expect.objectContaining({ group_id: 'group-1', key_prefix: 'A' })], pair_recipes: [] },
     }));
     expect(await screen.findByTestId('location')).toHaveTextContent('/library/object-blueprints');
     expect(objectBlueprintDataSource.loadObjectBlueprints).toHaveBeenCalledTimes(2);

@@ -245,6 +245,50 @@ class BlueprintInternalLinkRequest(BaseModel):
     to_slot_key: str = Field(min_length=1, max_length=255)
 
 
+class BlueprintAuthoringEndpointGroup(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    group_id: str = Field(min_length=1, max_length=255)
+    key_prefix: str = Field(min_length=1, max_length=255)
+    display_prefix: str = Field(min_length=1, max_length=255)
+    kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
+    side: Literal["LEFT", "RIGHT", "TOP", "BOTTOM"]
+    count: int = Field(ge=1)
+    starting_number: int = Field(ge=0)
+
+
+class BlueprintAuthoringPairRecipe(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    group_a_id: str = Field(min_length=1, max_length=255)
+    group_b_id: str = Field(min_length=1, max_length=255)
+
+
+class BlueprintAuthoringRecipe(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    endpoint_groups: list[BlueprintAuthoringEndpointGroup]
+    pair_recipes: list[BlueprintAuthoringPairRecipe] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_groups(self) -> "BlueprintAuthoringRecipe":
+        group_ids = [group.group_id for group in self.endpoint_groups]
+        if len(group_ids) != len(set(group_ids)):
+            raise PydanticCustomError("blueprint_duplicate_group_id", "Blueprint authoring group ids must be unique")
+        known = set(group_ids)
+        pairs: set[tuple[str, str]] = set()
+        for pair in self.pair_recipes:
+            if pair.group_a_id not in known or pair.group_b_id not in known:
+                raise PydanticCustomError("blueprint_unknown_pair_group", "Blueprint pair refers to an unknown group")
+            if pair.group_a_id == pair.group_b_id:
+                raise PydanticCustomError("blueprint_self_pair", "Blueprint pair cannot refer to the same group")
+            key = tuple(sorted((pair.group_a_id, pair.group_b_id)))
+            if key in pairs:
+                raise PydanticCustomError("blueprint_duplicate_pair", "Blueprint authoring pairs must be unique")
+            pairs.add(key)
+        return self
+
+
 class CreateObjectBlueprintRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -253,6 +297,7 @@ class CreateObjectBlueprintRequest(BaseModel):
     body: BlueprintBody
     slots: list[BlueprintEndpointSlotRequest]
     internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
+    authoring_recipe: BlueprintAuthoringRecipe | None = None
 
     @model_validator(mode="after")
     def validate_slots_and_links(self) -> "CreateObjectBlueprintRequest":
@@ -280,6 +325,33 @@ class CreateObjectBlueprintRequest(BaseModel):
                     "blueprint_duplicate_internal_link",
                     "Blueprint internal links must be unique as unordered pairs",
                 )
+            pairs.add(pair)
+        return self
+
+
+class CreateObjectBlueprintVersionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
+    body: BlueprintBody
+    slots: list[BlueprintEndpointSlotRequest]
+    internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
+    authoring_recipe: BlueprintAuthoringRecipe | None = None
+
+    @model_validator(mode="after")
+    def validate_slots_and_links(self) -> "CreateObjectBlueprintVersionRequest":
+        keys = [slot.key for slot in self.slots]
+        if len(keys) != len(set(keys)):
+            raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
+        known = set(keys); pairs: set[tuple[str, str]] = set()
+        for link in self.internal_links:
+            if link.from_slot_key not in known or link.to_slot_key not in known:
+                raise PydanticCustomError("blueprint_unknown_internal_link_slot", "Blueprint internal link refers to an unknown slot key")
+            if link.from_slot_key == link.to_slot_key:
+                raise PydanticCustomError("blueprint_self_internal_link", "Blueprint internal link cannot refer to the same slot")
+            pair = tuple(sorted((link.from_slot_key, link.to_slot_key)))
+            if pair in pairs:
+                raise PydanticCustomError("blueprint_duplicate_internal_link", "Blueprint internal links must be unique as unordered pairs")
             pairs.add(pair)
         return self
 
@@ -344,6 +416,7 @@ class ObjectBlueprintListItemDocument(BaseModel):
     body: ObjectBlueprintBodyDocument
     slot_count: int = Field(ge=0)
     internal_link_count: int = Field(ge=0)
+    version_count: int = Field(ge=1)
 
 
 class ObjectBlueprintListDocument(BaseModel):
@@ -381,6 +454,7 @@ class ObjectBlueprintVersionDocument(BaseModel):
     body: ObjectBlueprintBodyDocument
     slots: list[ObjectBlueprintSlotDocument]
     internal_links: list[ObjectBlueprintInternalLinkDocument]
+    authoring_recipe: BlueprintAuthoringRecipe | None = None
 
 
 class CreatePhysicalLinkRequest(BaseModel):

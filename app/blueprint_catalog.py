@@ -1,7 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
@@ -52,6 +52,7 @@ class BlueprintListItem:
     fill_color: str | None
     slot_count: int
     internal_link_count: int
+    version_count: int
 
 
 @dataclass(frozen=True)
@@ -67,6 +68,7 @@ class BlueprintVersionDetail:
     fill_color: str | None
     slots: tuple[BlueprintEndpointSlot, ...]
     internal_links: tuple[tuple[str, str], ...]
+    authoring_recipe: dict | None
 
 
 class ObjectBlueprintCatalog:
@@ -79,14 +81,34 @@ class ObjectBlueprintCatalog:
         blueprint = ObjectBlueprint(name=query.name)
         self.session.add(blueprint)
         self.session.flush()
+        version = self._create_version(blueprint.id, 1, query)
+        return CreatedBlueprint(blueprint.id, version.id)
+
+    def create_next_version(self, blueprint_id: uuid.UUID, query: object) -> CreatedBlueprint:
+        blueprint = self.session.scalar(
+            select(ObjectBlueprint).where(ObjectBlueprint.id == blueprint_id).with_for_update()
+        )
+        if blueprint is None:
+            raise ValidationError("ObjectBlueprint was not found", {"blueprint_id": str(blueprint_id)})
+        current = self.session.scalar(
+            select(func.max(ObjectBlueprintVersion.version_number)).where(
+                ObjectBlueprintVersion.blueprint_id == blueprint_id
+            )
+        )
+        version = self._create_version(blueprint_id, (current or 0) + 1, query)
+        return CreatedBlueprint(blueprint_id, version.id)
+
+    def _create_version(self, blueprint_id: uuid.UUID, version_number: int, query: object) -> ObjectBlueprintVersion:
+        self._validate_recipe_snapshot(query)
         version = ObjectBlueprintVersion(
-            blueprint_id=blueprint.id,
-            version_number=1,
+            blueprint_id=blueprint_id,
+            version_number=version_number,
             default_physical_object_class=query.default_physical_object_class,
             body_kind=query.body.kind,
             width=query.body.width,
             height=query.body.height,
             fill_color=query.body.fill_color,
+            authoring_recipe=(query.authoring_recipe.model_dump(mode="json") if query.authoring_recipe else None),
         )
         self.session.add(version)
         self.session.flush()
@@ -114,14 +136,10 @@ class ObjectBlueprintCatalog:
                 slot_b_id=slot_b.id,
             ))
         self.session.flush()
-        return CreatedBlueprint(blueprint.id, version.id)
+        return version
 
     def list_blueprints(self) -> tuple[BlueprintListItem, ...]:
-        rows = tuple(self.session.execute(
-            select(ObjectBlueprint, ObjectBlueprintVersion)
-            .join(ObjectBlueprintVersion, ObjectBlueprintVersion.blueprint_id == ObjectBlueprint.id)
-            .order_by(ObjectBlueprint.name, ObjectBlueprint.id, ObjectBlueprintVersion.version_number)
-        ))
+        blueprints = tuple(self.session.scalars(select(ObjectBlueprint).order_by(ObjectBlueprint.name, ObjectBlueprint.id)))
         return tuple(
             BlueprintListItem(
                 blueprint_id=blueprint.id,
@@ -143,8 +161,16 @@ class ObjectBlueprintCatalog:
                         BlueprintInternalLink.blueprint_version_id == version.id
                     )
                 ))),
+                version_count=self.session.scalar(select(func.count()).select_from(ObjectBlueprintVersion).where(
+                    ObjectBlueprintVersion.blueprint_id == blueprint.id
+                )) or 0,
             )
-            for blueprint, version in rows
+            for blueprint in blueprints
+            for version in [self.session.scalar(
+                select(ObjectBlueprintVersion).where(ObjectBlueprintVersion.blueprint_id == blueprint.id)
+                .order_by(ObjectBlueprintVersion.version_number.desc()).limit(1)
+            )]
+            if version is not None
         )
 
     def get_version_detail(
@@ -185,7 +211,74 @@ class ObjectBlueprintCatalog:
             fill_color=version.fill_color,
             slots=slots,
             internal_links=links,
+            authoring_recipe=version.authoring_recipe,
         )
+
+    def delete_blueprint(self, blueprint_id: uuid.UUID) -> None:
+        blueprint = self.session.scalar(
+            select(ObjectBlueprint).where(ObjectBlueprint.id == blueprint_id).with_for_update()
+        )
+        if blueprint is None:
+            raise ValidationError("ObjectBlueprint was not found", {"blueprint_id": str(blueprint_id)})
+        version_ids = tuple(self.session.scalars(select(ObjectBlueprintVersion.id).where(
+            ObjectBlueprintVersion.blueprint_id == blueprint_id
+        )))
+        instance_id = self.session.scalar(select(BlueprintInstance.id).where(
+            BlueprintInstance.blueprint_version_id.in_(version_ids)
+        ).limit(1)) if version_ids else None
+        if instance_id is not None:
+            from app.errors import ModelError
+            raise ModelError("ObjectBlueprint cannot be deleted because it has materialized instances", {"blueprint_id": str(blueprint_id)})
+        slot_ids = tuple(self.session.scalars(select(BlueprintEndpointSlot.id).where(
+            BlueprintEndpointSlot.blueprint_version_id.in_(version_ids)
+        ))) if version_ids else ()
+        if slot_ids:
+            self.session.execute(delete(BlueprintInternalLink).where(
+                BlueprintInternalLink.blueprint_version_id.in_(version_ids)
+            ))
+            self.session.execute(delete(BlueprintEndpointSlot).where(BlueprintEndpointSlot.id.in_(slot_ids)))
+        self.session.execute(delete(ObjectBlueprintVersion).where(ObjectBlueprintVersion.id.in_(version_ids)))
+        self.session.delete(blueprint)
+
+    @staticmethod
+    def _validate_recipe_snapshot(query: object) -> None:
+        recipe = query.authoring_recipe
+        if recipe is None:
+            return
+        expected_slots: dict[str, tuple[str, str, str, float]] = {}
+        sides = ("LEFT", "RIGHT", "TOP", "BOTTOM")
+        for side in sides:
+            groups = [group for group in recipe.endpoint_groups if group.side == side]
+            expanded = [(group, index) for group in groups for index in range(group.count)]
+            for position, (group, index) in enumerate(expanded):
+                width = max(2, len(str(group.starting_number + group.count - 1)))
+                suffix = str(group.starting_number + index).zfill(width)
+                expected_slots[f"{group.key_prefix}{suffix}"] = (
+                    f"{group.display_prefix}{suffix}", group.kind, side,
+                    .5 if len(expanded) == 1 else position / (len(expanded) - 1),
+                )
+        actual_slots = {slot.key: (slot.display_name, slot.kind, slot.anchor.side, slot.anchor.offset) for slot in query.slots}
+        if set(expected_slots) != set(actual_slots) or any(
+            actual[:3] != expected[:3] or abs(actual[3] - expected[3]) > 1e-9
+            for key, expected in expected_slots.items() for actual in [actual_slots[key]]
+        ):
+            raise ValidationError("Authoring recipe does not match explicit blueprint slots")
+        groups_by_id = {group.group_id: group for group in recipe.endpoint_groups}
+        expected_links: set[tuple[str, str]] = set()
+        for pair in recipe.pair_recipes:
+            left, right = groups_by_id[pair.group_a_id], groups_by_id[pair.group_b_id]
+            if left.count != right.count:
+                raise ValidationError("Authoring pair groups must have equal counts")
+            left_width = max(2, len(str(left.starting_number + left.count - 1)))
+            right_width = max(2, len(str(right.starting_number + right.count - 1)))
+            for index in range(left.count):
+                expected_links.add(tuple(sorted((
+                    f"{left.key_prefix}{str(left.starting_number + index).zfill(left_width)}",
+                    f"{right.key_prefix}{str(right.starting_number + index).zfill(right_width)}",
+                ))))
+        actual_links = {tuple(sorted((link.from_slot_key, link.to_slot_key))) for link in query.internal_links}
+        if actual_links != expected_links:
+            raise ValidationError("Authoring recipe does not match explicit blueprint internal links")
 
     def instantiate(
         self, blueprint_id: uuid.UUID, version_id: uuid.UUID, display_name: str,

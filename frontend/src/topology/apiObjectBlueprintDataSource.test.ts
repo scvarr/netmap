@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiObjectBlueprintDataSource } from './apiObjectBlueprintDataSource';
 
 const ref = (entity_type: 'ObjectBlueprint' | 'ObjectBlueprintVersion', entity_id: string) => ({ ref_type: 'LIBRARY_RECORD', entity_type, entity_id });
-const list = { schema_version: '1.0', blueprints: [{ blueprint_ref: ref('ObjectBlueprint', 'bp'), name: 'Cable', version_ref: ref('ObjectBlueprintVersion', 'v1'), version_number: 1, body: { kind: 'RECTANGLE', width: 120, height: 6, fill_color: '#123456' }, slot_count: 2, internal_link_count: 1 }] };
+const list = { schema_version: '1.0', blueprints: [{ blueprint_ref: ref('ObjectBlueprint', 'bp'), name: 'Cable', version_ref: ref('ObjectBlueprintVersion', 'v1'), version_number: 1, body: { kind: 'RECTANGLE', width: 120, height: 6, fill_color: '#123456' }, slot_count: 2, internal_link_count: 1, version_count: 1 }] };
 afterEach(() => vi.unstubAllGlobals());
 describe('ApiObjectBlueprintDataSource', () => {
   it('reads the public library list and rejects malformed library refs', async () => {

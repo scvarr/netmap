@@ -545,3 +545,24 @@ Geometry и side anchor никогда не создают connectivity. `Bluepr
 изолированный SVG renderer geometry/slots/links, не зависящий от ReactFlow и
 готовый для будущего map-node use. После save Library перечитывается авторитетно;
 optimistic invented blueprint отсутствует.
+
+## BLUEPRINT.3a — viewport and version lifecycle foundation
+
+`BlueprintPreview` остаётся reusable renderer. Editor помещает его в bounded
+presentation viewport: Fit показывает весь real-ratio rectangle, zoom влияет
+только на preview scale и никогда не меняет persisted width/height. Library cards
+auto-fit в собственном bounded surface без controls.
+
+Каждая immutable version может опционально хранить bounded authoring recipe:
+ordered endpoint groups и pair recipes. Это library metadata, не topology fact,
+не resolver/materialization semantics и не замена authoritative explicit
+slots/internal links. Public create/version operations validate recipe against
+generated explicit slots and link pairs; старые versions без recipe сохраняют
+read/materialization behavior без попытки reconstruction.
+
+`POST /v1/library/object-blueprints/{blueprint_id}/versions` creates a locked,
+next immutable snapshot. List returns one deterministic item per blueprint using
+its latest version plus `version_count`; historical details remain addressable.
+`DELETE /v1/library/object-blueprints/{blueprint_id}` removes only unused library
+records and rejects a blueprint with any materialized instance; it never cascades
+into canonical topology.

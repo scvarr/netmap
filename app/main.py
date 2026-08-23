@@ -42,6 +42,7 @@ from app.schemas import (
     AdjacencyCandidatesQuery,
     CreateConnectionPointRequest,
     CreateObjectBlueprintRequest,
+    CreateObjectBlueprintVersionRequest,
     CreateDeviceInterfaceRequest,
     CreateNetworkDeviceRequest,
     CreatePhysicalEndpointConnectionRequest,
@@ -261,10 +262,30 @@ def list_object_blueprints(
                 },
                 "slot_count": item.slot_count,
                 "internal_link_count": item.internal_link_count,
+                "version_count": item.version_count,
             }
             for item in blueprints
         ],
     }
+
+
+@app.post(
+    "/v1/library/object-blueprints/{blueprint_id}/versions",
+    response_model=ObjectBlueprintCreationDocument,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}},
+)
+def create_object_blueprint_version(
+    blueprint_id: uuid.UUID,
+    query: CreateObjectBlueprintVersionRequest,
+    session: Session = Depends(get_session),
+) -> ObjectBlueprintCreationDocument:
+    with session.begin():
+        created = ObjectBlueprintCatalog(session).create_next_version(blueprint_id, query)
+        return {
+            "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
+            "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},
+        }
 
 
 @app.get(
@@ -299,7 +320,21 @@ def get_object_blueprint_version(
             {"from_slot_key": left, "to_slot_key": right}
             for left, right in version.internal_links
         ],
+        "authoring_recipe": version.authoring_recipe,
     }
+
+
+@app.delete(
+    "/v1/library/object-blueprints/{blueprint_id}",
+    status_code=204,
+    responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+)
+def delete_object_blueprint(
+    blueprint_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        ObjectBlueprintCatalog(session).delete_blueprint(blueprint_id)
 
 
 @app.post(

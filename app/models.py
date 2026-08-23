@@ -191,6 +191,7 @@ class ObjectBlueprintVersion(Base):
     width: Mapped[float] = mapped_column(Float, nullable=False)
     height: Mapped[float] = mapped_column(Float, nullable=False)
     fill_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    authoring_recipe: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
 class BlueprintEndpointSlot(Base):

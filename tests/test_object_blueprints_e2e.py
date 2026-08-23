@@ -205,6 +205,65 @@ def test_blueprint_library_read_rejects_missing_or_mismatched_version():
     assert client.get(
         f"/v1/library/object-blueprints/00000000-0000-0000-0000-000000000001/versions/{version_id}"
     ).status_code == 422
+
+
+def version_snapshot(left: str, right: str) -> dict:
+    recipe = {
+        "endpoint_groups": [
+            {"group_id": "left", "key_prefix": left, "display_prefix": left, "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1},
+            {"group_id": "right", "key_prefix": right, "display_prefix": right, "kind": "CONNECTION_POINT", "side": "RIGHT", "count": 1, "starting_number": 1},
+        ],
+        "pair_recipes": [{"group_a_id": "left", "group_b_id": "right"}],
+    }
+    return {
+        "default_physical_object_class": "cable",
+        "body": {"kind": "RECTANGLE", "width": 120, "height": 6, "fill_color": "#123456"},
+        "slots": [
+            {"key": f"{left}01", "display_name": f"{left}01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .5}},
+            {"key": f"{right}01", "display_name": f"{right}01", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .5}},
+        ],
+        "internal_links": [{"from_slot_key": f"{left}01", "to_slot_key": f"{right}01"}],
+        "authoring_recipe": recipe,
+    }
+
+
+def test_blueprint_versions_are_immutable_latest_is_listed_and_recipe_round_trips():
+    first = version_snapshot("A", "B")
+    response = client.post("/v1/library/object-blueprints", json={"name": "Versioned cable", **first})
+    assert response.status_code == 201
+    blueprint_id, v1_id = response.json()["blueprint_ref"]["entity_id"], response.json()["version_ref"]["entity_id"]
+    second = version_snapshot("C", "D")
+    v2 = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json=second)
+    assert v2.status_code == 201
+    v2_id = v2.json()["version_ref"]["entity_id"]
+    first_detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v1_id}").json()
+    second_detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v2_id}").json()
+    assert first_detail["version_number"] == 1 and [slot["key"] for slot in first_detail["slots"]] == ["A01", "B01"]
+    assert first_detail["authoring_recipe"] == first["authoring_recipe"]
+    assert second_detail["version_number"] == 2 and [slot["key"] for slot in second_detail["slots"]] == ["C01", "D01"]
+    listing = client.get("/v1/library/object-blueprints").json()["blueprints"]
+    item = next(item for item in listing if item["blueprint_ref"]["entity_id"] == blueprint_id)
+    assert item["version_ref"]["entity_id"] == v2_id and item["version_count"] == 2
+    old_instance = instantiate(blueprint_id, v1_id, "old cable")
+    new_instance = instantiate(blueprint_id, v2_id, "new cable")
+    assert old_instance["slots"][0]["slot_key"] == "A01"
+    assert new_instance["slots"][0]["slot_key"] == "C01"
+
+
+def test_blueprint_version_creation_is_atomic_and_delete_is_safe():
+    blueprint_id, version_id = create_blueprint([slot("A")], name="Disposable")
+    invalid = version_snapshot("C", "D")
+    invalid["slots"] = invalid["slots"][:1]
+    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json=invalid).status_code == 422
+    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}").status_code == 200
+    assert client.delete(f"/v1/library/object-blueprints/{blueprint_id}").status_code == 204
+    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}").status_code == 422
+    protected_id, protected_version = create_blueprint([slot("P")], name="Protected")
+    instance = instantiate(protected_id, protected_version, "materialized")
+    assert client.delete(f"/v1/library/object-blueprints/{protected_id}").status_code == 409
+    assert client.get(f"/v1/library/object-blueprints/{protected_id}/versions/{protected_version}").status_code == 200
+    with SessionLocal() as session:
+        assert session.get(PhysicalObject, uuid.UUID(instance["physical_object_ref"]["entity_id"])) is not None
     assert client.get(
         f"/v1/library/object-blueprints/{blueprint_id}/versions/00000000-0000-0000-0000-000000000002"
     ).status_code == 422

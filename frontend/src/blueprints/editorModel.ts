@@ -1,4 +1,4 @@
-import type { BlueprintAnchorSide, BlueprintInternalLink, BlueprintSlot, BlueprintSlotKind, CreateObjectBlueprintRequest } from '../topology/objectBlueprintTypes';
+import type { BlueprintAnchorSide, BlueprintAuthoringRecipe, BlueprintInternalLink, BlueprintSlot, BlueprintSlotKind, CreateObjectBlueprintRequest } from '../topology/objectBlueprintTypes';
 
 export interface EndpointGroup {
   id: string;
@@ -79,5 +79,9 @@ export const generateBlueprint = (state: BlueprintEditorState): GeneratedBluepri
 export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateObjectBlueprintRequest; errors: string[] } => {
   const generated = generateBlueprint(state);
   if (generated.errors.length) return { errors: generated.errors };
-  return { errors: [], request: { name: normalized(state.name), ...(normalized(state.defaultClass) ? { default_physical_object_class: normalized(state.defaultClass) } : {}), body: { kind: 'RECTANGLE', width: state.width, height: state.height, ...(state.fillColor ? { fill_color: state.fillColor } : {}) }, slots: generated.slots, internal_links: generated.internalLinks } };
+  const authoring_recipe: BlueprintAuthoringRecipe = {
+    endpoint_groups: state.groups.map((group) => ({ group_id: group.id, key_prefix: normalized(group.keyPrefix), display_prefix: normalized(group.displayPrefix), kind: group.kind, side: group.side, count: group.count, starting_number: group.startingNumber })),
+    pair_recipes: state.pairs.map((pair) => ({ group_a_id: pair.leftGroupId, group_b_id: pair.rightGroupId })),
+  };
+  return { errors: [], request: { name: normalized(state.name), ...(normalized(state.defaultClass) ? { default_physical_object_class: normalized(state.defaultClass) } : {}), body: { kind: 'RECTANGLE', width: state.width, height: state.height, ...(state.fillColor ? { fill_color: state.fillColor } : {}) }, slots: generated.slots, internal_links: generated.internalLinks, authoring_recipe } };
 };
