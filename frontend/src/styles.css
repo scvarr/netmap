@@ -274,6 +274,23 @@ a { color: inherit; }
 .map-page__canvas { position: absolute; inset: 0; }
 .map-page__canvas .topology-canvas { height: 100%; }
 .map-page__toolbar { position: absolute; z-index: 12; top: 16px; left: 50%; transform: translateX(-50%); box-shadow: 0 10px 35px rgba(0, 0, 0, .35); }
+.trace-command { position: absolute; z-index: 12; top: 16px; left: 16px; width: min(430px, calc(100% - 32px)); padding: 8px; border: 1px solid #294145; border-radius: 9px; background: rgba(9, 22, 25, .96); box-shadow: 0 10px 35px rgba(0, 0, 0, .35); backdrop-filter: blur(12px); }
+.trace-command form { display: flex; gap: 7px; }
+.trace-command form label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+.trace-command input, .trace-command select { min-width: 0; border: 1px solid #2a4448; border-radius: 6px; color: #e7f4f1; background: #081315; outline: none; }
+.trace-command input { flex: 1; padding: 8px 9px; font: 11px ui-monospace, "Cascadia Code", monospace; }
+.trace-command button { padding: 8px 10px; border: 1px solid #3a7968; border-radius: 6px; color: #dff7ef; background: #15372f; cursor: pointer; font-size: 10px; font-weight: 700; }
+.trace-command button:disabled { cursor: not-allowed; opacity: .5; }
+.trace-command__message, .trace-result, .trace-command__choices { margin: 7px 0 0; padding: 8px; border-radius: 6px; font-size: 10px; line-height: 1.45; }
+.trace-command__message { border: 1px solid #594437; color: #e1b193; background: rgba(29, 22, 18, .95); }
+.trace-command__choices { display: grid; gap: 7px; border: 1px solid #315256; background: #0c191c; }
+.trace-command__choices label { display: grid; grid-template-columns: 1fr minmax(0, 1.4fr); align-items: center; gap: 8px; color: #a6bab8; }
+.trace-command__choices select { padding: 6px; }
+.trace-result { display: grid; gap: 3px; border: 1px solid #315256; color: #b9cdca; background: #0c191c; }
+.trace-result strong { color: #dff7ef; font-size: 11px; }
+.trace-result--reachable { border-color: #3a7968; }
+.trace-result--unknown { border-color: #9a7442; }
+.trace-result--unknown strong { color: #f1c78d; }
 .map-page__notices { position: absolute; z-index: 11; top: 62px; left: 16px; max-width: min(520px, calc(100% - 32px)); display: flex; flex-direction: column; gap: 6px; pointer-events: none; }
 .map-page__notices p { margin: 0; padding: 8px 11px; border: 1px solid #3b3c2d; border-radius: 7px; color: #c3bd83; background: rgba(24, 25, 17, .94); font-size: 10px; }
 .map-page__notices .map-page__notice--gap { border-color: #594437; color: #e1b193; background: rgba(29, 22, 18, .95); }

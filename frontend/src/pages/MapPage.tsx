@@ -2,6 +2,7 @@ import { ReactFlowProvider } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { QuickInspector } from '../components/QuickInspector';
+import { TraceCommandBar } from '../components/TraceCommandBar';
 import { TopologyCanvas } from '../components/TopologyCanvas';
 import { ViewState } from '../components/ViewState';
 import {
@@ -11,6 +12,8 @@ import {
   type TopologyViewMode,
 } from '../topology/projection';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
+import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
+import type { InterfacePhysicalTraceDataSource } from '../topology/interfacePhysicalTraceTypes';
 import type {
   TopologyDataSource,
   TopologyProjectionDocument,
@@ -19,6 +22,8 @@ import type {
 
 interface MapPageProps {
   dataSource: TopologyDataSource;
+  deviceDetailsDataSource: DeviceDetailsDataSource;
+  traceDataSource?: InterfacePhysicalTraceDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
 }
 
@@ -26,7 +31,7 @@ const viewFrom = (value: string | null): TopologyViewMode => (
   value === 'physical' ? 'physical' : 'logical'
 );
 
-export function MapPage({ dataSource, topologyLayoutStore }: MapPageProps) {
+export function MapPage({ dataSource, deviceDetailsDataSource, traceDataSource, topologyLayoutStore }: MapPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const viewMode = viewFrom(searchParams.get('view'));
   const focusId = searchParams.get('focus');
@@ -114,6 +119,11 @@ export function MapPage({ dataSource, topologyLayoutStore }: MapPageProps) {
           Физическая
         </button>
       </div>
+      <TraceCommandBar
+        document={document}
+        deviceDetailsDataSource={deviceDetailsDataSource}
+        traceDataSource={traceDataSource}
+      />
       {(document?.warnings.length || document?.gaps.length || focusMissing) && (
         <div className="map-page__notices" aria-label="Сообщения проекции">
           {document?.warnings.map((warning, index) => <p key={`warning-${index}-${warning}`}>{warning}</p>)}

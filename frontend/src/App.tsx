@@ -15,10 +15,12 @@ import type { PhysicalObjectClassWriteDataSource } from './topology/physicalObje
 import type { PhysicalObjectDetailsDataSource } from './topology/physicalObjectDetailsTypes';
 import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
 import type { TopologyDataSource } from './topology/types';
+import type { InterfacePhysicalTraceDataSource } from './topology/interfacePhysicalTraceTypes';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
   deviceDetailsDataSource: DeviceDetailsDataSource;
+  traceDataSource?: InterfacePhysicalTraceDataSource;
   deviceWriteDataSource?: DeviceWriteDataSource;
   deviceInterfaceWriteDataSource?: DeviceInterfaceWriteDataSource;
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
@@ -37,7 +39,12 @@ export function App(props: AppProps) {
         <Route index element={<Navigate replace to="/map" />} />
         <Route
           path="map"
-          element={<MapPage dataSource={props.dataSource} topologyLayoutStore={props.topologyLayoutStore} />}
+          element={<MapPage
+            dataSource={props.dataSource}
+            deviceDetailsDataSource={props.deviceDetailsDataSource}
+            traceDataSource={props.traceDataSource}
+            topologyLayoutStore={props.topologyLayoutStore}
+          />}
         />
         <Route
           path="infrastructure/objects"

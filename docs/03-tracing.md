@@ -8,7 +8,24 @@
 
 ## Ветки
 
-- 03.1 L1 Trace — будет формализован отдельно.
+- 03.1 L1 Trace — существует bounded public interface-physical trace boundary:
+
+  ```text
+  POST /v1/traces/interfaces/physical
+      InterfacePhysicalTraceQuery
+          from_interface_id
+          to_interface_id
+      -> InterfacePhysicalTraceArtifact
+  ```
+
+  Контракт принимает именно canonical `NetworkInterface` IDs. Результат имеет
+  только verdict `REACHABLE` или `UNKNOWN`: `REACHABLE` доказывает физический
+  L1 путь, а `UNKNOWN` означает, что он не доказан и не является `UNREACHABLE`.
+  Public artifact может содержать factual `branches`, public L1 gap codes
+  (`INTERFACE_PHYSICAL_BINDING_UNKNOWN`,
+  `INTERFACE_PHYSICAL_REALIZATION_UNKNOWN`, `L1_TOPOLOGY_INCOMPLETE`) и warnings.
+  Он не сохраняет достаточную partial frontier, чтобы UI мог делать выводы о
+  блокировке на портах или необходимости перехода к L2.
 - [[03-02-l2-trace|03.2 L2 Trace]]
 - [[03-03-l3-trace|03.3 L3 Trace]]
 - [[03-04-packet-flow-trace|03.4 Packet Flow Trace]]
