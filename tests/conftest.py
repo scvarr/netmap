@@ -1,5 +1,8 @@
+import os
+
 import pytest
 from sqlalchemy import delete
+from sqlalchemy.engine import make_url
 
 from app.database import SessionLocal
 from app.models import (
@@ -39,8 +42,40 @@ from app.models import (
 )
 
 
+TEST_DATABASE_NAME = "netmap_test"
+TEST_DATABASE_MARKER = "NETMAP_TEST_DATABASE"
+
+
+def require_confirmed_test_database(
+    database_url: str | None = None,
+    test_database_marker: str | None = None,
+) -> None:
+    """Reject destructive test cleanup unless the process targets netmap_test."""
+    marker = test_database_marker if test_database_marker is not None else os.environ.get(TEST_DATABASE_MARKER)
+    url_value = database_url if database_url is not None else os.environ.get("DATABASE_URL")
+    if marker != "1":
+        raise pytest.UsageError(
+            f"Refusing destructive tests: set {TEST_DATABASE_MARKER}=1 for the isolated test database."
+        )
+    if not url_value:
+        raise pytest.UsageError("Refusing destructive tests: DATABASE_URL is not configured.")
+    try:
+        url = make_url(url_value)
+    except Exception as error:
+        raise pytest.UsageError("Refusing destructive tests: DATABASE_URL is invalid.") from error
+    if url.database != TEST_DATABASE_NAME:
+        raise pytest.UsageError(
+            f"Refusing destructive tests: DATABASE_URL must target {TEST_DATABASE_NAME!r}, not {url.database!r}."
+        )
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    require_confirmed_test_database()
+
+
 @pytest.fixture(autouse=True)
 def clean_database():
+    require_confirmed_test_database()
     with SessionLocal.begin() as session:
         session.execute(delete(PacketProcessingPlanAttachment))
         session.execute(delete(PacketProcessingPlanAttachmentSet))

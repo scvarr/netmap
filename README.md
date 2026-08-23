@@ -33,14 +33,24 @@ Example query body:
 
 ## Migrations and tests
 
-All commands run inside the backend container:
+Apply migrations to the running development backend only when needed:
 
 ```sh
 docker compose exec backend alembic upgrade head
-docker compose exec backend pytest
-docker compose exec backend alembic downgrade base
-docker compose exec backend alembic upgrade head
 ```
+
+Run the full backend suite only through the isolated test stack:
+
+```sh
+docker compose -f compose.test.yaml up --build --force-recreate --abort-on-container-exit --exit-code-from test-runner test-runner
+```
+
+This command creates an internal `test-db` with the fixed `netmap_test`
+database, an internal `test-backend`, and a `test-runner`. HTTP e2e tests use
+`http://test-backend:8000`; they never target the runtime backend or its
+persistent development database. Test cleanup is intentionally destructive, and
+pytest refuses to run it unless both `NETMAP_TEST_DATABASE=1` and a
+`DATABASE_URL` for `netmap_test` are present.
 
 Stop the application while keeping database data:
 
