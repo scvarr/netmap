@@ -39,6 +39,36 @@ class MaterializedBlueprintInstance:
     slots: tuple[MaterializedSlot, ...]
 
 
+@dataclass(frozen=True)
+class BlueprintListItem:
+    blueprint_id: uuid.UUID
+    name: str
+    version_id: uuid.UUID
+    version_number: int
+    default_physical_object_class: str | None
+    body_kind: str
+    width: float
+    height: float
+    fill_color: str | None
+    slot_count: int
+    internal_link_count: int
+
+
+@dataclass(frozen=True)
+class BlueprintVersionDetail:
+    blueprint_id: uuid.UUID
+    name: str
+    version_id: uuid.UUID
+    version_number: int
+    default_physical_object_class: str | None
+    body_kind: str
+    width: float
+    height: float
+    fill_color: str | None
+    slots: tuple[BlueprintEndpointSlot, ...]
+    internal_links: tuple[tuple[str, str], ...]
+
+
 class ObjectBlueprintCatalog:
     """Authoring records that materialize, but never alter, L1 semantics."""
 
@@ -85,6 +115,77 @@ class ObjectBlueprintCatalog:
             ))
         self.session.flush()
         return CreatedBlueprint(blueprint.id, version.id)
+
+    def list_blueprints(self) -> tuple[BlueprintListItem, ...]:
+        rows = tuple(self.session.execute(
+            select(ObjectBlueprint, ObjectBlueprintVersion)
+            .join(ObjectBlueprintVersion, ObjectBlueprintVersion.blueprint_id == ObjectBlueprint.id)
+            .order_by(ObjectBlueprint.name, ObjectBlueprint.id, ObjectBlueprintVersion.version_number)
+        ))
+        return tuple(
+            BlueprintListItem(
+                blueprint_id=blueprint.id,
+                name=blueprint.name,
+                version_id=version.id,
+                version_number=version.version_number,
+                default_physical_object_class=version.default_physical_object_class,
+                body_kind=version.body_kind,
+                width=version.width,
+                height=version.height,
+                fill_color=version.fill_color,
+                slot_count=len(tuple(self.session.scalars(
+                    select(BlueprintEndpointSlot.id).where(
+                        BlueprintEndpointSlot.blueprint_version_id == version.id
+                    )
+                ))),
+                internal_link_count=len(tuple(self.session.scalars(
+                    select(BlueprintInternalLink.id).where(
+                        BlueprintInternalLink.blueprint_version_id == version.id
+                    )
+                ))),
+            )
+            for blueprint, version in rows
+        )
+
+    def get_version_detail(
+        self, blueprint_id: uuid.UUID, version_id: uuid.UUID,
+    ) -> BlueprintVersionDetail:
+        version = self.session.get(ObjectBlueprintVersion, version_id)
+        blueprint = self.session.get(ObjectBlueprint, blueprint_id)
+        if blueprint is None:
+            raise ValidationError("ObjectBlueprint was not found", {"blueprint_id": str(blueprint_id)})
+        if version is None or version.blueprint_id != blueprint_id:
+            raise ValidationError(
+                "ObjectBlueprintVersion does not belong to ObjectBlueprint",
+                {"blueprint_id": str(blueprint_id), "version_id": str(version_id)},
+            )
+        slots = tuple(self.session.scalars(
+            select(BlueprintEndpointSlot)
+            .where(BlueprintEndpointSlot.blueprint_version_id == version.id)
+            .order_by(BlueprintEndpointSlot.slot_key)
+        ))
+        keys_by_id = {slot.id: slot.slot_key for slot in slots}
+        links = tuple(
+            (keys_by_id[link.slot_a_id], keys_by_id[link.slot_b_id])
+            for link in self.session.scalars(
+                select(BlueprintInternalLink)
+                .where(BlueprintInternalLink.blueprint_version_id == version.id)
+                .order_by(BlueprintInternalLink.id)
+            )
+        )
+        return BlueprintVersionDetail(
+            blueprint_id=blueprint.id,
+            name=blueprint.name,
+            version_id=version.id,
+            version_number=version.version_number,
+            default_physical_object_class=version.default_physical_object_class,
+            body_kind=version.body_kind,
+            width=version.width,
+            height=version.height,
+            fill_color=version.fill_color,
+            slots=slots,
+            internal_links=links,
+        )
 
     def instantiate(
         self, blueprint_id: uuid.UUID, version_id: uuid.UUID, display_name: str,

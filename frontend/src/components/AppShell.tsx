@@ -34,6 +34,13 @@ export function AppShell() {
               <span className="shell-nav__label">Объекты</span>
             </NavLink>
           </div>
+          <div className="shell-nav__group">
+            <span className="shell-nav__group-label">Библиотека</span>
+            <NavLink className={navClassName} to="/library/object-blueprints">
+              <span className="shell-nav__icon" aria-hidden="true">▤</span>
+              <span className="shell-nav__label">Шаблоны объектов</span>
+            </NavLink>
+          </div>
         </nav>
         <div className="sidebar__health"><HealthIndicator /></div>
       </aside>

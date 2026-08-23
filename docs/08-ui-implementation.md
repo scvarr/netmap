@@ -527,4 +527,21 @@ Instantiate атомарно materializes отдельный canonical `Physical
 ConnectionPoints, а для `NETWORK_PORT` — NetworkInterface, owner и direct physical binding.
 Explicit internal links materialize ordinary canonical `Connection`/`ConnectionMember`; geometry
 или стороны anchors никогда не создают L1 связи. Persisted slot-to-canonical endpoint mappings
-сохраняют provenance каждого instance. List/detail/editor и новые version отсутствуют в этом slice.
+сохраняют provenance каждого instance. В BLUEPRINT.1 list/detail/editor и новые
+version отсутствовали; library read/editor добавлены отдельно в BLUEPRINT.2.
+
+## BLUEPRINT.2 — Object Library and visual editor
+
+Object Library читает только public `GET /v1/library/object-blueprints` и exact
+immutable version detail. Все refs library records остаются `LIBRARY_RECORD`, а
+read operations не materialize topology. Library показывает schematic preview и не
+предлагает edit/delete/instantiate.
+
+Visual editor создаёт только `RECTANGLE` presentation body с bounded dimensions,
+fill `#RRGGBB`, endpoint groups и explicit pair-by-index operation. Groups не
+являются persisted backend model: перед `POST` editor детерминированно разворачивает
+их в explicit slots с non-overlapping anchor offsets и explicit internal links.
+Geometry и side anchor никогда не создают connectivity. `BlueprintPreview` —
+изолированный SVG renderer geometry/slots/links, не зависящий от ReactFlow и
+готовый для будущего map-node use. После save Library перечитывается авторитетно;
+optimistic invented blueprint отсутствует.

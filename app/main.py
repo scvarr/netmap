@@ -74,6 +74,8 @@ from app.schemas import (
     PacketFlowEvaluationQuery,
     ObjectBlueprintCreationDocument,
     ObjectBlueprintInstantiationDocument,
+    ObjectBlueprintListDocument,
+    ObjectBlueprintVersionDocument,
     PhysicalConnectionCreationDocument,
     PhysicalEndpointConnectionCreationDocument,
     PhysicalEndpointMaterialization,
@@ -235,6 +237,69 @@ def create_object_blueprint(
             "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
             "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},
         }
+
+
+@app.get(
+    "/v1/library/object-blueprints",
+    response_model=ObjectBlueprintListDocument,
+)
+def list_object_blueprints(
+    session: Session = Depends(get_session),
+) -> ObjectBlueprintListDocument:
+    blueprints = ObjectBlueprintCatalog(session).list_blueprints()
+    return {
+        "blueprints": [
+            {
+                "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": item.blueprint_id},
+                "name": item.name,
+                "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": item.version_id},
+                "version_number": item.version_number,
+                "default_physical_object_class": item.default_physical_object_class,
+                "body": {
+                    "kind": item.body_kind, "width": item.width,
+                    "height": item.height, "fill_color": item.fill_color,
+                },
+                "slot_count": item.slot_count,
+                "internal_link_count": item.internal_link_count,
+            }
+            for item in blueprints
+        ],
+    }
+
+
+@app.get(
+    "/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}",
+    response_model=ObjectBlueprintVersionDocument,
+    responses={422: {"model": ErrorResponse}},
+)
+def get_object_blueprint_version(
+    blueprint_id: uuid.UUID,
+    version_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> ObjectBlueprintVersionDocument:
+    version = ObjectBlueprintCatalog(session).get_version_detail(blueprint_id, version_id)
+    return {
+        "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": version.blueprint_id},
+        "name": version.name,
+        "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": version.version_id},
+        "version_number": version.version_number,
+        "default_physical_object_class": version.default_physical_object_class,
+        "body": {
+            "kind": version.body_kind, "width": version.width,
+            "height": version.height, "fill_color": version.fill_color,
+        },
+        "slots": [
+            {
+                "key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind,
+                "anchor": {"side": slot.anchor_side, "offset": slot.anchor_offset},
+            }
+            for slot in version.slots
+        ],
+        "internal_links": [
+            {"from_slot_key": left, "to_slot_key": right}
+            for left, right in version.internal_links
+        ],
+    }
 
 
 @app.post(

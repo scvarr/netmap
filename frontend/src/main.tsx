@@ -15,6 +15,7 @@ import { BrowserTopologyLayoutStore } from './topology/layoutStore';
 import { ApiConnectionPointWriteDataSource } from './topology/apiConnectionPointWriteDataSource';
 import { ApiInterfacePhysicalTraceDataSource } from './topology/apiInterfacePhysicalTraceDataSource';
 import { ApiL2ForwardingContextWriteDataSource } from './topology/apiL2ForwardingContextWriteDataSource';
+import { ApiObjectBlueprintDataSource } from './topology/apiObjectBlueprintDataSource';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -33,6 +34,7 @@ createRoot(document.getElementById('root')!).render(
         physicalObjectClassWriteDataSource={new ApiPhysicalObjectClassWriteDataSource()}
         connectionPointWriteDataSource={new ApiConnectionPointWriteDataSource()}
         l2ForwardingContextWriteDataSource={new ApiL2ForwardingContextWriteDataSource()}
+        objectBlueprintDataSource={new ApiObjectBlueprintDataSource()}
         topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
       />
     </BrowserRouter>

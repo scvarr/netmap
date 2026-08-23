@@ -324,6 +324,65 @@ class ObjectBlueprintInstantiationDocument(BaseModel):
     slots: list[ObjectBlueprintInstantiationSlot]
 
 
+class ObjectBlueprintBodyDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["RECTANGLE"]
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+    fill_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+class ObjectBlueprintListItemDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    blueprint_ref: BlueprintLibraryRef
+    name: str = Field(min_length=1)
+    version_ref: BlueprintLibraryRef
+    version_number: int = Field(ge=1)
+    default_physical_object_class: str | None = None
+    body: ObjectBlueprintBodyDocument
+    slot_count: int = Field(ge=0)
+    internal_link_count: int = Field(ge=0)
+
+
+class ObjectBlueprintListDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    blueprints: list[ObjectBlueprintListItemDocument]
+
+
+class ObjectBlueprintSlotDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    key: str = Field(min_length=1)
+    display_name: str = Field(min_length=1)
+    kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
+    anchor: BlueprintAnchor
+
+
+class ObjectBlueprintInternalLinkDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_slot_key: str = Field(min_length=1)
+    to_slot_key: str = Field(min_length=1)
+
+
+class ObjectBlueprintVersionDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    blueprint_ref: BlueprintLibraryRef
+    name: str = Field(min_length=1)
+    version_ref: BlueprintLibraryRef
+    version_number: int = Field(ge=1)
+    default_physical_object_class: str | None = None
+    body: ObjectBlueprintBodyDocument
+    slots: list[ObjectBlueprintSlotDocument]
+    internal_links: list[ObjectBlueprintInternalLinkDocument]
+
+
 class CreatePhysicalLinkRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

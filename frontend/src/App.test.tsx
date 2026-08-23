@@ -330,4 +330,44 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     });
     expect(await screen.findByText('В этом scope пока пусто')).toBeInTheDocument();
   });
+
+  it('routes the Object Library, renders saved blueprints, and saves explicit editor output', async () => {
+    const blueprint = {
+      schema_version: '1.0' as const,
+      blueprints: [{
+        blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp-1' },
+        name: 'Generic cable', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v-1' }, version_number: 1,
+        default_physical_object_class: 'cable', body: { kind: 'RECTANGLE' as const, width: 120, height: 6, fill_color: '#123456' }, slot_count: 2, internal_link_count: 1,
+      }],
+    };
+    const objectBlueprintDataSource = {
+      loadObjectBlueprints: vi.fn().mockResolvedValue(blueprint),
+      loadObjectBlueprintVersion: vi.fn().mockResolvedValue({ ...blueprint.blueprints[0], slots: [
+        { key: 'A01', display_name: 'A01', kind: 'CONNECTION_POINT' as const, anchor: { side: 'LEFT' as const, offset: .5 } },
+        { key: 'B01', display_name: 'B01', kind: 'CONNECTION_POINT' as const, anchor: { side: 'RIGHT' as const, offset: .5 } },
+      ], internal_links: [{ from_slot_key: 'A01', to_slot_key: 'B01' }] }),
+      createObjectBlueprint: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprint_ref: blueprint.blueprints[0].blueprint_ref, version_ref: blueprint.blueprints[0].version_ref }),
+    };
+    renderApp('/library/object-blueprints', { objectBlueprintDataSource });
+    expect(await screen.findByRole('heading', { name: 'Generic cable' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Шаблоны объектов' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('link', { name: 'Создать шаблон' }));
+    await userEvent.type(screen.getByLabelText('Название шаблона'), 'Cable from editor');
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
+    await waitFor(() => expect(objectBlueprintDataSource.createObjectBlueprint).toHaveBeenCalled());
+    expect(objectBlueprintDataSource.createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Cable from editor', slots: expect.arrayContaining([expect.objectContaining({ key: 'A01' })]), internal_links: [],
+    }));
+    expect(await screen.findByTestId('location')).toHaveTextContent('/library/object-blueprints');
+    expect(objectBlueprintDataSource.loadObjectBlueprints).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows an empty Object Library and keeps its API error visible', async () => {
+    const emptySource = { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprints: [] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() };
+    renderApp('/library/object-blueprints', { objectBlueprintDataSource: emptySource });
+    expect(await screen.findByText('В этом scope пока пусто')).toBeInTheDocument();
+    const failingSource = { ...emptySource, loadObjectBlueprints: vi.fn().mockRejectedValue(new Error('library unavailable')) };
+    renderApp('/library/object-blueprints', { objectBlueprintDataSource: failingSource });
+    expect(await screen.findByText('library unavailable')).toBeInTheDocument();
+  });
 });

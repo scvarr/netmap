@@ -166,3 +166,45 @@ def test_blueprint_request_validation_rejects_invalid_authoring_without_writes(p
     with SessionLocal() as session:
         assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 0
         assert session.scalar(select(func.count()).select_from(BlueprintInstance)) == 0
+
+
+def test_blueprint_library_list_is_stable_and_version_detail_is_exact_without_canonical_rows():
+    cable_id, cable_version = create_blueprint(
+        [slot("A"), slot("B")], [{"from_slot_key": "A", "to_slot_key": "B"}],
+        name="Z Cable", body={"kind": "RECTANGLE", "width": 120, "height": 6, "fill_color": "#123456"},
+        default_physical_object_class="cable",
+    )
+    panel_id, panel_version = create_blueprint(
+        [slot("front01"), slot("rear01")], [{"from_slot_key": "front01", "to_slot_key": "rear01"}],
+        name="A Panel",
+    )
+    response = client.get("/v1/library/object-blueprints")
+    assert response.status_code == 200
+    document = response.json()
+    assert [item["name"] for item in document["blueprints"]] == ["A Panel", "Z Cable"]
+    assert all(item["blueprint_ref"]["ref_type"] == "LIBRARY_RECORD" for item in document["blueprints"])
+    assert all(item["version_ref"]["ref_type"] == "LIBRARY_RECORD" for item in document["blueprints"])
+    cable = next(item for item in document["blueprints"] if item["blueprint_ref"]["entity_id"] == cable_id)
+    assert cable["version_ref"]["entity_id"] == cable_version
+    assert cable["slot_count"] == 2 and cable["internal_link_count"] == 1
+    detail = client.get(f"/v1/library/object-blueprints/{panel_id}/versions/{panel_version}")
+    assert detail.status_code == 200
+    assert detail.json()["body"] == {"kind": "RECTANGLE", "width": 100.0, "height": 40.0, "fill_color": None}
+    assert detail.json()["slots"] == [
+        {"key": "front01", "display_name": "front01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": 0.5}},
+        {"key": "rear01", "display_name": "rear01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": 0.5}},
+    ]
+    assert detail.json()["internal_links"] == [{"from_slot_key": "front01", "to_slot_key": "rear01"}]
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 0
+        assert session.scalar(select(func.count()).select_from(ConnectionPoint)) == 0
+
+
+def test_blueprint_library_read_rejects_missing_or_mismatched_version():
+    blueprint_id, version_id = create_blueprint([slot("A")])
+    assert client.get(
+        f"/v1/library/object-blueprints/00000000-0000-0000-0000-000000000001/versions/{version_id}"
+    ).status_code == 422
+    assert client.get(
+        f"/v1/library/object-blueprints/{blueprint_id}/versions/00000000-0000-0000-0000-000000000002"
+    ).status_code == 422

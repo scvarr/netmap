@@ -4,6 +4,8 @@ import { InfrastructureObjectDetailPage } from './pages/InfrastructureObjectDeta
 import { InfrastructureObjectsPage } from './pages/InfrastructureObjectsPage';
 import { MapPage } from './pages/MapPage';
 import { NewInfrastructureObjectPage } from './pages/NewInfrastructureObjectPage';
+import { NewObjectBlueprintPage } from './pages/NewObjectBlueprintPage';
+import { ObjectBlueprintLibraryPage } from './pages/ObjectBlueprintLibraryPage';
 import type { ConnectionPointWriteDataSource } from './topology/connectionPointWriteTypes';
 import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
 import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
@@ -17,6 +19,7 @@ import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWri
 import type { TopologyDataSource } from './topology/types';
 import type { InterfacePhysicalTraceDataSource } from './topology/interfacePhysicalTraceTypes';
 import type { L2ForwardingContextWriteDataSource } from './topology/l2ForwardingContextWriteTypes';
+import type { ObjectBlueprintDataSource } from './topology/objectBlueprintTypes';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
@@ -32,6 +35,7 @@ export interface AppProps {
   connectionPointWriteDataSource?: ConnectionPointWriteDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
+  objectBlueprintDataSource?: ObjectBlueprintDataSource;
 }
 
 export function App(props: AppProps) {
@@ -52,6 +56,8 @@ export function App(props: AppProps) {
           path="infrastructure/objects"
           element={<InfrastructureObjectsPage dataSource={props.dataSource} />}
         />
+        <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
+        <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route
           path="infrastructure/objects/new"
           element={(
