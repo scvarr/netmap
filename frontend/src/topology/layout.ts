@@ -6,6 +6,7 @@ import type {
   TopologyProjectionEdge,
   TopologyProjectionNode,
 } from './types';
+import { physicalCablePresentation } from './physicalCablePresentation';
 
 export const LAYOUT_NODE_WIDTH = 212;
 export const LAYOUT_NODE_HEIGHT = 144;
@@ -27,6 +28,8 @@ export interface DeviceNodeData extends Record<string, unknown> {
 export interface LogicalEdgeData extends Record<string, unknown> {
   projection: TopologyProjectionEdge;
   endpointPair?: PhysicalEndpointPair;
+  cableNode?: TopologyProjectionNode;
+  supportingEdgeIds?: [string, string];
 }
 
 export type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
@@ -108,9 +111,11 @@ const orientLayoutEdges = (
 };
 
 export const toFlowProjection: TopologyLayoutEngine = async (document) => {
-  const orderedNodes = [...document.nodes].sort((left, right) => left.id.localeCompare(right.id));
-  const orderedEdges = [...document.edges].sort((left, right) => left.id.localeCompare(right.id));
-  const layoutEdges: ElkExtendedEdge[] = orientLayoutEdges(orderedNodes, orderedEdges).map((edge) => ({
+  const presentation = physicalCablePresentation(document);
+  const orderedNodes = [...presentation.nodes].sort((left, right) => left.id.localeCompare(right.id));
+  const orderedEdges = [...presentation.edges].sort((left, right) => left.id.localeCompare(right.id));
+  const synthetic = presentation.cables.map((cable) => ({ id: `layout:${cable.cable.id}`, from_node_id: cable.source, to_node_id: cable.target } as TopologyProjectionEdge));
+  const layoutEdges: ElkExtendedEdge[] = orientLayoutEdges(orderedNodes, [...orderedEdges, ...synthetic]).map((edge) => ({
     id: edge.id,
     sources: [edge.source],
     targets: [edge.target],
@@ -152,9 +157,9 @@ export const toFlowProjection: TopologyLayoutEngine = async (document) => {
       position: positions.get(projection.id) ?? { x: 0, y: 0 },
       data: { projection },
     })),
-    edges: orderedEdges.flatMap((projection) => {
+    edges: [...orderedEdges.flatMap((projection) => {
       const pairs = projection.attributes.endpoint_pairs;
       return pairs?.length ? pairs.map((endpointPair) => ({ id: `${projection.id}::member::${endpointPair.connection_member_id}`, source: projection.from_node_id, target: projection.to_node_id, type: 'floating' as const, data: { projection, endpointPair } })) : [{ id: projection.id, source: projection.from_node_id, target: projection.to_node_id, type: 'floating' as const, data: { projection } }];
-    }),
+    }), ...presentation.cables.map((cable) => ({ id: `collapsed-cable:${cable.cable.id}`, source: cable.source, target: cable.target, type: 'floating' as const, data: { projection: { id: `presentation:${cable.cable.id}`, from_node_id: cable.source, to_node_id: cable.target, kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, endpointPair: cable.endpointPair, cableNode: cable.cable, supportingEdgeIds: cable.supportingEdgeIds } }))],
   };
 };

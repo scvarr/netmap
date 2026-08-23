@@ -107,8 +107,8 @@ export function TopologyCanvas({
     selected: selection?.type === 'node' && selection.item.id === node.id,
   }));
   const edges = projection.edges.map((edge) => {
-    const isSelected = selection?.type === 'edge' && selection.item.id === edge.data?.projection.id;
-    const isTraced = edge.data?.endpointPair ? (traceOverlay?.highlightedConnectionMemberIds.has(edge.data.endpointPair.connection_member_id) ?? false) : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
+    const isSelected = edge.data?.cableNode ? selection?.type === 'node' && selection.item.id === edge.data.cableNode.id : selection?.type === 'edge' && selection.item.id === edge.data?.projection.id;
+    const isTraced = edge.data?.cableNode ? (edge.data.supportingEdgeIds?.every((id) => traceOverlay?.highlightedEdgeIds.has(id)) ?? false) : edge.data?.endpointPair ? (traceOverlay?.highlightedConnectionMemberIds.has(edge.data.endpointPair.connection_member_id) ?? false) : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
     return {
       ...edge,
       selected: isSelected,
@@ -122,7 +122,7 @@ export function TopologyCanvas({
   };
   const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (_, edge) => {
     const item = edge.data?.projection;
-    if (item) onSelectionChange({ type: 'edge', item });
+    if (edge.data?.cableNode) onSelectionChange({ type: 'node', item: edge.data.cableNode }); else if (item) onSelectionChange({ type: 'edge', item });
   };
   const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
     setProjection((current) => current ? {
