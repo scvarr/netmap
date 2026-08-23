@@ -442,6 +442,37 @@ class EncapsulationLabel(BaseModel):
     value: int
 
 
+class CreateL2ForwardingContextBindingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    interface_id: uuid.UUID
+    ingress_exact_stacks: list[list[EncapsulationLabel]] = Field(default_factory=list)
+    egress_emit_stack: list[EncapsulationLabel] | None = None
+
+
+class CreateL2ForwardingContextRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bindings: list[CreateL2ForwardingContextBindingRequest] = Field(min_length=1)
+
+
+class L2ForwardingContextBindingCreationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    interface_ref: ProjectionSourceRef
+    binding_ref: ProjectionSourceRef
+    ingress_rule_refs: list[ProjectionSourceRef]
+    egress_rule_ref: ProjectionSourceRef | None = None
+
+
+class L2ForwardingContextCreationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    forwarding_context_ref: ProjectionSourceRef
+    bindings: list[L2ForwardingContextBindingCreationDocument]
+
+
 class L2BoundaryQuery(BaseModel):
     interface_id: uuid.UUID
     encapsulation_stack: list[EncapsulationLabel]

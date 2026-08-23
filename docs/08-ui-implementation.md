@@ -479,3 +479,21 @@ POST /v1/topology/physical-objects/{physical_object_id}/connection-points
 использует authoritative details response на Object Detail Page, заново
 загружает L1 projection и сохраняет тот же canonical `PhysicalObject` route.
 Прежнее размещение в map inspector superseded.
+
+## L2.1a — создание одного forwarding context
+
+```text
+POST /v1/l2/forwarding-contexts
+    bindings[]
+        interface_id
+        ingress_exact_stacks[]
+        egress_emit_stack?
+    -> L2ForwardingContextCreationDocument
+```
+
+Одна transaction создаёт один `L2ForwardingContext`, по одному `L2Binding` на
+каждый уникальный interface и ровно запрошенные exact ingress/optional egress
+rules. Пустой stack `[]` означает untagged representation; `null` у
+`egress_emit_stack` означает отсутствие `L2EgressRule`. Response возвращает
+только authoritative refs созданных context/binding/rule facts. Операция не
+создаёт L1/L3/IP/MAC или canonical aliases и не меняет L2 resolver semantics.

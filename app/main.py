@@ -5,6 +5,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
@@ -14,6 +15,7 @@ from app.device_details_resolver import ConfiguredDeviceDetailsResolver
 from app.errors import NetMapError, ValidationError
 from app.interface_resolver import InterfacePhysicalResolver
 from app.l2_resolver import L2ReachabilityResolver
+from app.l2_catalog import L2Catalog, L2ForwardingContextBindingInput
 from app.l3_resolver import SelectedTableRouteDecisionResolver
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.next_hop_resolver import SelectedTableNextHopResolver
@@ -43,6 +45,7 @@ from app.schemas import (
     CreatePhysicalEndpointConnectionRequest,
     CreatePhysicalLinkRequest,
     CreatePhysicalObjectRequest,
+    CreateL2ForwardingContextRequest,
     DeviceDetailsDocument,
     ErrorResponse,
     EvaluationView,
@@ -51,6 +54,7 @@ from app.schemas import (
     L1TraceQuery,
     L2ReachabilityQuery,
     L2ReachabilityTraceArtifact,
+    L2ForwardingContextCreationDocument,
     L3ReachabilityArtifact,
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
@@ -273,6 +277,59 @@ def create_device_interface(
         return ConfiguredDeviceDetailsResolver(CanonicalRepository(session)).resolve(
             physical_object_id
         )
+
+
+@app.post(
+    "/v1/l2/forwarding-contexts",
+    response_model=L2ForwardingContextCreationDocument,
+    response_model_exclude_none=True,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def create_l2_forwarding_context(
+    query: CreateL2ForwardingContextRequest,
+    session: Session = Depends(get_session),
+) -> L2ForwardingContextCreationDocument:
+    def ref(entity_type: str, entity_id: uuid.UUID) -> dict[str, object]:
+        return {"ref_type": "CANONICAL_FACT", "entity_type": entity_type, "entity_id": entity_id}
+
+    try:
+        with session.begin():
+            created = L2Catalog(session).create_forwarding_context([
+                L2ForwardingContextBindingInput(
+                    interface_id=binding.interface_id,
+                    ingress_exact_stacks=[
+                        [label.model_dump() for label in stack]
+                        for stack in binding.ingress_exact_stacks
+                    ],
+                    egress_emit_stack=(
+                        [label.model_dump() for label in binding.egress_emit_stack]
+                        if binding.egress_emit_stack is not None
+                        else None
+                    ),
+                )
+                for binding in query.bindings
+            ])
+            return L2ForwardingContextCreationDocument(
+                forwarding_context_ref=ref("L2ForwardingContext", created.forwarding_context_id),
+                bindings=[
+                    {
+                        "interface_ref": ref("NetworkInterface", binding.interface_id),
+                        "binding_ref": ref("L2Binding", binding.binding_id),
+                        "ingress_rule_refs": [ref("L2IngressRule", rule_id) for rule_id in binding.ingress_rule_ids],
+                        "egress_rule_ref": (
+                            ref("L2EgressRule", binding.egress_rule_id)
+                            if binding.egress_rule_id is not None
+                            else None
+                        ),
+                    }
+                    for binding in created.bindings
+                ],
+            )
+    except IntegrityError as exc:
+        raise ValidationError(
+            "L2 forwarding context violates canonical uniqueness constraints"
+        ) from exc
 
 
 @app.post(
