@@ -33,6 +33,15 @@ class ProjectionSourceRef(BaseModel):
     entity_id: uuid.UUID
 
 
+class BlueprintLibraryRef(BaseModel):
+    """Library identity, deliberately distinct from canonical topology facts."""
+    model_config = ConfigDict(extra="forbid")
+
+    ref_type: Literal["LIBRARY_RECORD"] = "LIBRARY_RECORD"
+    entity_type: Literal["ObjectBlueprint", "ObjectBlueprintVersion"]
+    entity_id: uuid.UUID
+
+
 class SavedMapRef(BaseModel):
     """Presentation identity; deliberately not a ProjectionSourceRef."""
 
@@ -233,6 +242,56 @@ class PhysicalObjectDetails(BaseModel):
     class_: str | None = Field(default=None, alias="class", min_length=1, max_length=255)
 
 
+class BlueprintInstanceProvenance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    blueprint_ref: BlueprintLibraryRef
+    version_ref: BlueprintLibraryRef
+    version_number: int = Field(ge=1)
+
+
+class BlueprintSlotMetadata(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    slot_key: str = Field(min_length=1)
+    kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
+    anchor_side: Literal["LEFT", "RIGHT", "TOP", "BOTTOM"]
+    anchor_offset: float = Field(ge=0, le=1)
+
+
+class DirectInterfaceBindingDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    interface_ref: ProjectionSourceRef
+    label: str = Field(min_length=1)
+    label_source: Literal["TECHNICAL_FALLBACK"] | None = None
+    evidence_refs: list[ProjectionSourceRef]
+
+
+class InternalPhysicalCounterpartDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    connection_point_ref: ProjectionSourceRef
+    label: str = Field(min_length=1)
+    label_source: Literal["TECHNICAL_FALLBACK"] | None = None
+    connection_ref: ProjectionSourceRef
+    evidence_refs: list[ProjectionSourceRef]
+
+
+class ExternalPhysicalAttachmentDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["DIRECT_CONNECTION", "SIMPLE_CABLE", "UNRESOLVED"]
+    connection_ref: ProjectionSourceRef
+    evidence_refs: list[ProjectionSourceRef]
+    remote_physical_object_ref: ProjectionSourceRef | None = None
+    remote_physical_object_label: str | None = None
+    remote_connection_point_ref: ProjectionSourceRef | None = None
+    remote_connection_point_label: str | None = None
+    cable_ref: ProjectionSourceRef | None = None
+    cable_label: str | None = None
+
+
 class ConnectionPointDetails(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -243,6 +302,11 @@ class ConnectionPointDetails(BaseModel):
     incident_connection_count: int = Field(ge=0)
     external_connection_count: int = Field(ge=0)
     direct_interface_binding_count: int = Field(ge=0)
+    ordering_key: str = Field(min_length=1)
+    blueprint_slot: BlueprintSlotMetadata | None = None
+    direct_interface_bindings: list[DirectInterfaceBindingDetails]
+    internal_physical_counterparts: list[InternalPhysicalCounterpartDetails]
+    external_physical_attachments: list[ExternalPhysicalAttachmentDetails]
     source_refs: list[ProjectionSourceRef]
 
 
@@ -251,6 +315,7 @@ class PhysicalObjectDetailsDocument(BaseModel):
 
     schema_version: Literal["1.0"] = "1.0"
     physical_object: PhysicalObjectDetails
+    blueprint_provenance: BlueprintInstanceProvenance | None = None
     connection_points: list[ConnectionPointDetails]
     owned_interface_count: int = Field(ge=0)
     gaps: list[str]
@@ -452,14 +517,6 @@ class InstantiateObjectBlueprintRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     display_name: str = Field(min_length=1, max_length=255)
-
-
-class BlueprintLibraryRef(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    ref_type: Literal["LIBRARY_RECORD"] = "LIBRARY_RECORD"
-    entity_type: Literal["ObjectBlueprint", "ObjectBlueprintVersion"]
-    entity_id: uuid.UUID
 
 
 class ObjectBlueprintCreationDocument(BaseModel):

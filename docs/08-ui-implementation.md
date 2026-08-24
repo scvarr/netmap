@@ -444,7 +444,18 @@ POST /v1/topology/physical-objects
 `ConnectionPoint` с `cardinality=1` и её `alias.display`. Operation не создаёт
 `NetworkInterface`, binding, `Connection`, L2/L3/IP facts или новый canonical
 тип passive object. Details document возвращает factual counts для owned
-interfaces, incident connections и direct interface bindings.
+interfaces, incident connections и direct interface bindings. L1R.3a also
+returns an operational presentation read model: a materialized object has
+optional `blueprint_provenance` with `LIBRARY_RECORD` ObjectBlueprint and exact
+ObjectBlueprintVersion refs plus `version_number` (manual objects have none).
+Each ConnectionPoint retains its canonical ref/counts and adds `ordering_key`
+(the stable blueprint `slot_key` for instances), factual `blueprint_slot`
+(kind and anchor metadata), named direct interface bindings with evidence refs,
+direct internal counterparts, and structured external attachments. Attachments
+are exact `DIRECT_CONNECTION`, recognised `SIMPLE_CABLE` with cable and far
+endpoint, or honest `UNRESOLVED`; ambiguous/non-simple passive topology never
+gets a guessed far peer. The simple-cable predicate is shared with
+ConfiguredTopologyProjectionResolver/off-map continuations.
 
 UI предоставляет operation на full-page Catalog create flow, после success
 переходит на canonical Object Detail route и показывает именованную точку через

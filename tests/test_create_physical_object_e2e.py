@@ -195,7 +195,12 @@ def test_physical_object_details_reports_factual_connection_and_binding_counts()
     assert body["owned_interface_count"] == 1
     point = body["connection_points"][0]
     assert point["incident_connection_count"] == 1
+    assert point["external_connection_count"] == 1
     assert point["direct_interface_binding_count"] == 1
+    assert point["direct_interface_bindings"][0]["interface_ref"]["entity_id"] == str(interface.id)
+    attachment = point["external_physical_attachments"][0]
+    assert attachment["kind"] == "DIRECT_CONNECTION"
+    assert attachment["remote_connection_point_ref"]["entity_id"] == str(peer_point.id)
     refs = {(ref["entity_type"], ref["entity_id"]) for ref in point["source_refs"]}
     assert {
         ("ConnectionPoint", str(created.connection_point_id)),

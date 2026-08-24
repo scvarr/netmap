@@ -17,7 +17,7 @@ from app.models import (
     ObjectBlueprintVersion,
     PhysicalObject,
 )
-from app.repository import CanonicalRepository
+from app.repository import CanonicalRepository, ConnectionMemberInput
 
 
 client = TestClient(app)
@@ -113,6 +113,61 @@ def test_switch_ports_materialize_without_an_implicit_l1_connection():
         assert session.scalar(select(func.count()).select_from(ConnectionPoint)) == 2
         assert session.scalar(select(func.count()).select_from(InterfacePhysicalBinding)) == 2
         assert session.scalar(select(func.count()).select_from(Connection)) == 0
+
+
+def test_operational_details_expose_blueprint_ports_internal_pairs_and_no_manual_provenance():
+    blueprint_id, version_id = create_blueprint(
+        [slot("A01", "NETWORK_PORT"), slot("B01")],
+        [{"from_slot_key": "A01", "to_slot_key": "B01"}],
+    )
+    created = instantiate(blueprint_id, version_id, "Panel")
+    details = client.get(f"/v1/topology/physical-objects/{created['physical_object_ref']['entity_id']}").json()
+    assert details["blueprint_provenance"] == {
+        "blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprint", "entity_id": blueprint_id},
+        "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprintVersion", "entity_id": version_id},
+        "version_number": 1,
+    }
+    ports = {port["blueprint_slot"]["slot_key"]: port for port in details["connection_points"]}
+    assert list(port["ordering_key"] for port in details["connection_points"]) == ["A01", "B01"]
+    assert ports["A01"]["blueprint_slot"]["kind"] == "NETWORK_PORT"
+    assert ports["A01"]["direct_interface_bindings"][0]["label"] == "A01"
+    assert ports["A01"]["internal_physical_counterparts"][0]["label"] == "B01"
+    manual = client.post("/v1/topology/physical-objects", json={"display_name": "Manual", "initial_connection_point": {"display_name": "M1"}}).json()
+    assert "blueprint_provenance" not in manual
+
+
+def test_operational_details_resolve_only_recognised_simple_cables():
+    with SessionLocal.begin() as session:
+        repository, catalog = CanonicalRepository(session), None
+        from app.device_catalog import DeviceCatalog
+        catalog = DeviceCatalog(session)
+        source = catalog.create_physical_object("Source", "S1")
+        remote = catalog.create_physical_object("Remote", "R1")
+        cable = catalog.create_physical_object("Cable-1", "C1")
+        catalog.set_physical_object_class(cable.physical_object_id, "cable")
+        cable_second = catalog.create_connection_point(cable.physical_object_id, "C2")
+        first, _ = repository.add_connection(source.connection_point_id, cable.connection_point_id, 1, [ConnectionMemberInput(1, 1, 1)])
+        second, _ = repository.add_connection(cable_second.connection_point_id, remote.connection_point_id, 1, [ConnectionMemberInput(1, 1, 1)])
+    port = client.get(f"/v1/topology/physical-objects/{source.physical_object_id}").json()["connection_points"][0]
+    attachment = port["external_physical_attachments"][0]
+    assert attachment["kind"] == "SIMPLE_CABLE" and attachment["cable_label"] == "Cable-1"
+    assert attachment["remote_physical_object_label"] == "Remote" and attachment["remote_connection_point_label"] == "R1"
+    assert first.id and second.id
+
+
+def test_operational_details_do_not_guess_through_non_simple_cable_topology():
+    with SessionLocal.begin() as session:
+        from app.device_catalog import DeviceCatalog
+        repository, catalog = CanonicalRepository(session), DeviceCatalog(session)
+        source = catalog.create_physical_object("Source", "S1")
+        cable = catalog.create_physical_object("Cable", "C1")
+        catalog.set_physical_object_class(cable.physical_object_id, "cable")
+        catalog.create_connection_point(cable.physical_object_id, "C2")
+        catalog.create_connection_point(cable.physical_object_id, "C3")
+        repository.add_connection(source.connection_point_id, cable.connection_point_id, 1, [ConnectionMemberInput(1, 1, 1)])
+    attachment = client.get(f"/v1/topology/physical-objects/{source.physical_object_id}").json()["connection_points"][0]["external_physical_attachments"][0]
+    assert attachment["kind"] == "UNRESOLVED"
+    assert "cable_ref" not in attachment and attachment["remote_physical_object_label"] == "Cable"
 
 
 def test_one_version_materializes_separate_instances_with_persistent_slot_mappings():

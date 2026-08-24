@@ -44,6 +44,12 @@ const validateRefs = (value: unknown, path: string): void => {
   const refs = value as unknown[];
   refs.forEach((item, index) => validateRef(item, `${path}[${index}]`));
 };
+const validateLibraryRef = (value: unknown, path: string, entityType: string): void => {
+  requireObject(value, path);
+  if (value.ref_type !== 'LIBRARY_RECORD' || value.entity_type !== entityType) malformed(`${path} must be a LIBRARY_RECORD ${entityType} ref.`);
+  requireString(value.entity_id, `${path}.entity_id`);
+};
+const validateOptionalLabel = (value: unknown, path: string): void => { if (value !== undefined) requireString(value, path); };
 
 const validateLabel = (value: Record<string, unknown>, path: string): void => {
   requireString(value.label, `${path}.label`);
@@ -69,6 +75,12 @@ export const parsePhysicalObjectDetailsDocument = (
   if (value.physical_object.class !== undefined) {
     requireString(value.physical_object.class, 'physical_object.class');
   }
+  if (value.blueprint_provenance !== undefined) {
+    requireObject(value.blueprint_provenance, 'blueprint_provenance');
+    validateLibraryRef(value.blueprint_provenance.blueprint_ref, 'blueprint_provenance.blueprint_ref', 'ObjectBlueprint');
+    validateLibraryRef(value.blueprint_provenance.version_ref, 'blueprint_provenance.version_ref', 'ObjectBlueprintVersion');
+    requireCount(value.blueprint_provenance.version_number, 'blueprint_provenance.version_number', 1);
+  }
   if (!Array.isArray(value.connection_points)) malformed('connection_points must be an array.');
   const connectionPoints = value.connection_points as unknown[];
   connectionPoints.forEach((item, index) => {
@@ -80,6 +92,16 @@ export const parsePhysicalObjectDetailsDocument = (
     requireCount(item.incident_connection_count, `${path}.incident_connection_count`);
     requireCount(item.external_connection_count, `${path}.external_connection_count`);
     requireCount(item.direct_interface_binding_count, `${path}.direct_interface_binding_count`);
+    if (item.ordering_key !== undefined) requireString(item.ordering_key, `${path}.ordering_key`);
+    if (item.blueprint_slot !== undefined) {
+      requireObject(item.blueprint_slot, `${path}.blueprint_slot`); requireString(item.blueprint_slot.slot_key, `${path}.blueprint_slot.slot_key`);
+      if (!['CONNECTION_POINT', 'NETWORK_PORT'].includes(String(item.blueprint_slot.kind))) malformed(`${path}.blueprint_slot.kind is invalid.`);
+      if (!['LEFT', 'RIGHT', 'TOP', 'BOTTOM'].includes(String(item.blueprint_slot.anchor_side)) || typeof item.blueprint_slot.anchor_offset !== 'number' || item.blueprint_slot.anchor_offset < 0 || item.blueprint_slot.anchor_offset > 1) malformed(`${path}.blueprint_slot anchor is invalid.`);
+    }
+    const validateItems = (items: unknown, name: string, validate: (entry: Record<string, unknown>, entryPath: string) => void): void => { if (items !== undefined) { if (!Array.isArray(items)) malformed(`${path}.${name} must be an array.`); (items as unknown[]).forEach((entry, entryIndex) => { const entryPath = `${path}.${name}[${entryIndex}]`; requireObject(entry, entryPath); validate(entry, entryPath); }); } };
+    validateItems(item.direct_interface_bindings, 'direct_interface_bindings', (entry, entryPath) => { validateRef(entry.interface_ref, `${entryPath}.interface_ref`); validateLabel(entry, entryPath); validateRefs(entry.evidence_refs, `${entryPath}.evidence_refs`); });
+    validateItems(item.internal_physical_counterparts, 'internal_physical_counterparts', (entry, entryPath) => { validateRef(entry.connection_point_ref, `${entryPath}.connection_point_ref`); validateLabel(entry, entryPath); validateRef(entry.connection_ref, `${entryPath}.connection_ref`); validateRefs(entry.evidence_refs, `${entryPath}.evidence_refs`); });
+    validateItems(item.external_physical_attachments, 'external_physical_attachments', (entry, entryPath) => { if (!['DIRECT_CONNECTION', 'SIMPLE_CABLE', 'UNRESOLVED'].includes(String(entry.kind))) malformed(`${entryPath}.kind is invalid.`); validateRef(entry.connection_ref, `${entryPath}.connection_ref`); validateRefs(entry.evidence_refs, `${entryPath}.evidence_refs`); for (const key of ['remote_physical_object_ref', 'remote_connection_point_ref']) if (entry[key] !== undefined) validateRef(entry[key], `${entryPath}.${key}`); for (const key of ['remote_physical_object_label', 'remote_connection_point_label', 'cable_label']) validateOptionalLabel(entry[key], `${entryPath}.${key}`); if (entry.cable_ref !== undefined) validateRef(entry.cable_ref, `${entryPath}.cable_ref`); });
     validateRefs(item.source_refs, `${path}.source_refs`);
   });
   requireCount(value.owned_interface_count, 'owned_interface_count');
