@@ -2393,10 +2393,25 @@ class CanonicalRepository:
                     .order_by(ConnectionPoint.id)
                 )
             )
+        point_ids = [point.id for point in points]
+        participating_members = {
+            PointMember(point_id, member_index)
+            for point_id, member_index in self.session.execute(
+                select(Connection.point_a_id, ConnectionMember.point_a_member)
+                .join(ConnectionMember)
+                .where(Connection.point_a_id.in_(point_ids))
+                .union(
+                    select(Connection.point_b_id, ConnectionMember.point_b_member)
+                    .join(ConnectionMember)
+                    .where(Connection.point_b_id.in_(point_ids))
+                )
+            )
+        }
         return tuple(
             PointMember(point.id, member)
             for point in points
             for member in range(1, point.cardinality + 1)
+            if PointMember(point.id, member) in participating_members
         )
 
     def get_l1_adjacency(
