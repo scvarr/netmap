@@ -396,13 +396,13 @@ object на current map или открыть карту, где он уже р�
 
 ### Что уже работает
 
-`trace PC1 SW1 l1` способен доказать physical path и highlight его на Physical
-map. Вызов L1 trace из Logical view переключает Map в Physical view; сам physical
-result presentation полезен.
+Primary Trace Command Bar уже запускает `PhysicalObject -> PhysicalObject` L1
+trace и highlight выбранной доказанной ветви на Physical map. Вызов из Logical
+view переключает Map в Physical view; сам physical result presentation полезен.
 
 ### Согласованное направление
 
-Текстовая команда — developer scaffold. Product interaction ближе к:
+Product interaction использует:
 
 ```text
 Откуда: PC1
@@ -411,15 +411,15 @@ result presentation полезен.
 [Трассировать]
 ```
 
-Primary L1 trace должен принимать `PhysicalObject -> PhysicalObject` без
-обязательного exact interface selection. UI/resolver может рассмотреть
-applicable physically realized endpoints: одну proven branch показать сразу,
-несколько — как alternatives. Exact port/interface остаётся optional refinement.
-Evidence нельзя ослаблять или выдумывать «best» path.
+Primary L1 trace принимает `PhysicalObject -> PhysicalObject` без обязательного
+`NetworkInterface` selection. Каждый endpoint может быть опционально уточнён
+одним exact labeled `ConnectionPoint`; «Любой порт» оставляет object-level
+request без ограничения порта. UI/resolver может рассмотреть applicable
+physically realized endpoints: одну proven branch показать сразу, несколько —
+как explicit alternatives. Evidence нельзя ослаблять или выдумывать «best» path.
 
-Backend now materializes this bounded PhysicalObject L1 trace boundary; current
-Trace Command Bar remains interface-oriented and its product control is still
-future work.
+`PointMember` / `member_index` refinement остаётся future work; UI не дублирует
+backend ownership или participation semantics ConnectionPoint.
 
 Нужно различать одну branch, multiple endpoint branches, no proven path/unknown
 frontier и cycle evidence; не требуется enumerate every graph path в cyclic
