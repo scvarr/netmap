@@ -72,6 +72,7 @@ export function App(props: AppProps) {
             <NewInfrastructureObjectPage
               deviceWriteDataSource={props.deviceWriteDataSource}
               physicalObjectWriteDataSource={props.physicalObjectWriteDataSource}
+              objectBlueprintDataSource={props.objectBlueprintDataSource}
             />
           )}
         />

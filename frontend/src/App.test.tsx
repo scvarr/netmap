@@ -279,6 +279,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     renderApp('/infrastructure/objects/new', {
       deviceWriteDataSource: { createNetworkDevice },
     });
+    await userEvent.click(screen.getByRole('button', { name: 'Создать вручную' }));
     await userEvent.type(screen.getByLabelText('Название устройства'), ' CORE-NEW ');
     await userEvent.type(screen.getByLabelText('Первый интерфейс'), ' eth0 ');
     await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
@@ -297,6 +298,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     renderApp('/infrastructure/objects/new', {
       physicalObjectWriteDataSource: { createPhysicalObject },
     });
+    await userEvent.click(screen.getByRole('button', { name: 'Создать вручную' }));
     await userEvent.click(screen.getByRole('button', { name: /Физический объект/ }));
     await userEvent.type(screen.getByLabelText('Название'), 'Outlet1');
     await userEvent.type(screen.getByLabelText('Первая точка подключения'), 'Port');
@@ -306,6 +308,30 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
       display_name: 'Outlet1', initial_connection_point: { display_name: 'Port' }, class: 'outlet',
     });
     expect(await screen.findByTestId('location')).toHaveTextContent(`/infrastructure/objects/${createdId}`);
+  });
+
+  it('makes blueprint materialization the primary object creation flow', async () => {
+    const createdId = '00000000-0000-0000-0000-000000000503';
+    const blueprint = { schema_version: '1.0' as const, blueprints: [{ blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp-switch' }, name: 'Switch 24', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v-switch' }, version_number: 3, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, slot_count: 24, internal_link_count: 0, version_count: 3 }] };
+    const instantiateObjectBlueprint = vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprint_ref: blueprint.blueprints[0].blueprint_ref, version_ref: blueprint.blueprints[0].version_ref, physical_object_ref: physicalRef(createdId), slots: [] });
+    renderApp('/infrastructure/objects/new', { objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue(blueprint), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn(), instantiateObjectBlueprint } });
+    expect(await screen.findByRole('heading', { name: 'Switch 24' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Сетевое устройство/ })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Выбрать шаблон' }));
+    await userEvent.type(screen.getByLabelText('Имя экземпляра'), ' SW1 ');
+    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
+    expect(instantiateObjectBlueprint).toHaveBeenCalledWith('bp-switch', 'v-switch', { display_name: 'SW1' });
+    expect(await screen.findByTestId('location')).toHaveTextContent(`/infrastructure/objects/${createdId}`);
+  });
+
+  it('shows an actionable no-template state while keeping manual creation advanced', async () => {
+    const objectBlueprintDataSource = { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprints: [] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() };
+    renderApp('/infrastructure/objects/new', { objectBlueprintDataSource });
+    expect(await screen.findByRole('heading', { name: 'Сначала создайте шаблон' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Создать первый шаблон' })).toHaveAttribute('href', '/library/object-blueprints/new');
+    expect(screen.queryByLabelText('Тип ручного создания')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Создать вручную' }));
+    expect(screen.getByLabelText('Тип ручного создания')).toBeInTheDocument();
   });
 
   it('keeps loading, error, and empty map states working', async () => {
@@ -351,6 +377,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     renderApp('/library/object-blueprints', { objectBlueprintDataSource });
     expect(await screen.findByRole('heading', { name: 'Generic cable' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Шаблоны объектов' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Создать объект' })).toHaveAttribute('href', '/infrastructure/objects/new?blueprint=bp-1&version=v-1');
     await userEvent.click(screen.getByRole('link', { name: 'Создать шаблон' }));
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Cable from editor');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));

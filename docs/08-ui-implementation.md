@@ -102,9 +102,10 @@ server-side viewport persistence is not implemented.
 Первый Catalog list временно переиспользует public `L1 / PHYSICAL_OBJECT`
 projection как bounded object list. Object Detail загружает authoritative
 `PhysicalObjectDetailsDocument` и переиспользует W.2/W.3/W.6/W.6.1/W.7 detail
-sections/datasources. Full-page creation переиспользует W.1 и W.5 operations.
-Это frontend reuse текущих public boundaries, а не новый backend catalog API и
-не frontend raw join.
+sections/datasources. Primary full-page creation materializes exact immutable
+Object Blueprint version; W.1 и W.5 остаются явным advanced/manual path. Это
+frontend reuse текущих public boundaries, а не новый backend catalog API и не
+frontend raw join.
 
 Историческое размещение W.1-W.7 forms внутри большого map inspector superseded
 этим разделением. Их FIXED API, transaction и canonical identity semantics не
@@ -617,6 +618,21 @@ Library instantiation targets exactly the latest card's displayed immutable
 instance display name. Its strictly validated authoritative `physical_object_ref`
 opens Object Detail; the frontend never synthesizes interfaces, points, or
 connections. Materialization does not change blueprint versions or card state.
+
+## L1R.1 — template-first object lifecycle
+
+`/infrastructure/objects/new` is the primary Object Blueprint materialization
+surface: it loads available library items, lets the user select the exact listed
+immutable version, asks only for an instance name, then navigates to the returned
+canonical Object Detail. Library card action `Создать объект` is a shortcut to
+the same route with that exact blueprint/version preselected; materialization
+logic is not duplicated.
+
+If the library is empty, the primary CTA creates the first blueprint. Existing
+W.1 NetworkDevice and W.5 PhysicalObject creation forms remain available only
+under explicit `Создать вручную` advanced UI. This changes no backend/API/domain
+contract and does not assert that a canonical PhysicalObject must have a
+blueprint.
 
 Первый ручной проход по Object Library и Template Editor зафиксирован отдельно
 в [[09-ui-ux-review|рабочем L1 UI/UX review]]. Его findings — не изменение этого
