@@ -1,159 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  displayCount,
-  displayNodeLabel,
-  numericAttribute,
-  physicalClassPresentation,
-} from '../topology/presentation';
+import { displayNodeLabel, physicalClassPresentation } from '../topology/presentation';
 import { physicalObjectIdForNode } from '../topology/projection';
-import type {
-  TopologyProjectionDocument,
-  TopologyProjectionNode,
-  TopologySelection,
-} from '../topology/types';
+import type { CatalogInventoryDataSource, CatalogInventoryDocument } from '../topology/catalogInventoryTypes';
+import type { PhysicalObjectDetailsDataSource, PhysicalObjectDetailsDocument, ConnectionPointDetails } from '../topology/physicalObjectDetailsTypes';
+import type { TopologyProjectionDocument, TopologyProjectionNode, TopologyProjectionEdge, TopologySelection } from '../topology/types';
 
-interface QuickInspectorProps {
-  document: TopologyProjectionDocument | null;
-  selection: TopologySelection;
-  onSelectNode: (node: TopologyProjectionNode) => void;
-  onClose: () => void;
-  onDeletePhysicalObject?: (physicalObjectId: string) => Promise<void>;
-  onRemoveFromMap?: (physicalObjectId: string) => Promise<void>;
-  onAddContinuationToMap?: (physicalObjectId: string) => Promise<void>;
-}
+interface QuickInspectorProps { document: TopologyProjectionDocument | null; selection: TopologySelection; onSelectNode: (node: TopologyProjectionNode) => void; onClose: () => void; physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource; catalogInventoryDataSource?: CatalogInventoryDataSource; onDeletePhysicalObject?: (id: string) => Promise<void>; onRemoveFromMap?: (id: string) => Promise<void>; onAddContinuationToMap?: (id: string) => Promise<void>; }
+const natural = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+const url = (id: string) => `/infrastructure/objects/${encodeURIComponent(id)}`;
+const authoritative = (d: PhysicalObjectDetailsDocument) => d.connection_points.length > 0 && d.connection_points.every((p) => p.cardinality === 1 && Array.isArray(p.external_physical_attachments));
+const connections = (d: PhysicalObjectDetailsDocument) => d.connection_points.filter((p) => p.external_physical_attachments?.length).sort((a,b) => natural(a.ordering_key ?? a.label, b.ordering_key ?? b.label));
 
-const Metric = ({ label, value }: { label: string; value: string }) => (
-  <div><span>{label}</span><strong>{value}</strong></div>
-);
-
-export function QuickInspector({
-  document,
-  selection,
-  onSelectNode,
-  onClose,
-  onDeletePhysicalObject,
-  onRemoveFromMap,
-  onAddContinuationToMap,
-}: QuickInspectorProps) {
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+export function QuickInspector(props: QuickInspectorProps) {
+  const { document, selection, onClose, onSelectNode } = props;
+  const [details, setDetails] = useState<PhysicalObjectDetailsDocument | null>(null); const [detailError, setDetailError] = useState<string | null>(null); const [loading, setLoading] = useState(false); const [inventory, setInventory] = useState<CatalogInventoryDocument | null>(null); const [inventoryError, setInventoryError] = useState<string | null>(null); const [deleteError, setDeleteError] = useState<string | null>(null); const [removeError, setRemoveError] = useState<string | null>(null); const [pending, setPending] = useState<'delete'|'remove'|null>(null);
+  const node = selection?.type === 'node' ? selection.item : null; const id = node && physicalObjectIdForNode(node); const isL1 = document?.layer === 'L1'; const cable = Boolean(node && node.attributes.class === 'cable');
+  useEffect(() => { let active = true; setDetails(null); setDetailError(null); setLoading(false); setInventory(null); setInventoryError(null); if (!node || !id || !isL1) return () => { active = false; }; if (cable) { if (props.catalogInventoryDataSource) void props.catalogInventoryDataSource.loadCatalogInventory().then(x => active && setInventory(x), e => active && setInventoryError(e instanceof Error ? e.message : 'Не удалось загрузить кабели')); return () => { active = false; }; } if (!props.physicalObjectDetailsDataSource) return () => { active = false; }; setLoading(true); void props.physicalObjectDetailsDataSource.loadPhysicalObjectDetails(id).then(x => { if(active) { setDetails(x); setLoading(false); } }, e => { if(active) { setDetailError(e instanceof Error ? e.message : 'Не удалось загрузить подключения'); setLoading(false); } }); return () => { active = false; }; }, [id, isL1, cable, props.physicalObjectDetailsDataSource, props.catalogInventoryDataSource]);
   if (!selection) return null;
-  const nodesById = new Map(document?.nodes.map((node) => [node.id, node]) ?? []);
-
-  if (selection.type === 'continuation') {
-    const continuation = selection.item;
-    const remoteObjectId = continuation.remote_physical_object_ref.entity_id;
-    return (
-      <aside className="quick-inspector" aria-label="Быстрый инспектор">
-        <button className="quick-inspector__close" onClick={onClose} aria-label="Закрыть инспектор">×</button>
-        <span className="eyebrow">L1 continuation</span>
-        <h2>{continuation.local_connection_point_display_name} → {continuation.cable_display_name} → {continuation.remote_display_name}/{continuation.remote_connection_point_display_name}</h2>
-        <p className="quick-inspector__unavailable">Целевой объект не добавлен на эту карту.</p>
-        <Link className="quick-inspector__primary" to={`/infrastructure/objects/${encodeURIComponent(remoteObjectId)}`}>Открыть объект в Catalog</Link>
-        {onAddContinuationToMap && <button type="button" onClick={() => void onAddContinuationToMap(remoteObjectId)}>Добавить объект на карту</button>}
-        <details className="quick-inspector__technical">
-          <summary>Технические детали</summary>
-          <dl>
-            <div><dt>Local ConnectionPoint</dt><dd>{continuation.local_connection_point_ref.entity_id}</dd></div>
-            <div><dt>Cable</dt><dd>{continuation.cable_ref.entity_id}</dd></div>
-            <div><dt>Remote PhysicalObject</dt><dd>{remoteObjectId}</dd></div>
-            <div><dt>Remote ConnectionPoint</dt><dd>{continuation.remote_connection_point_ref.entity_id}</dd></div>
-          </dl>
-        </details>
-      </aside>
-    );
-  }
-
-  if (selection.type === 'node') {
-    const node = selection.item;
-    const physicalObjectId = physicalObjectIdForNode(node);
-    const incidentEdges = document?.edges.filter((edge) => (
-      edge.from_node_id === node.id || edge.to_node_id === node.id
-    )) ?? [];
-    const isPhysical = document?.layer === 'L1';
-    const classLabel = isPhysical
-      ? physicalClassPresentation(node.attributes.class).label
-      : node.attributes.class
-        ? physicalClassPresentation(node.attributes.class).label
-        : 'СЕТЕВОЙ ОБЪЕКТ';
-    const isCable = node.attributes.class === 'cable';
-    const deleteLabel = isCable
-      ? `Удалить кабель «${displayNodeLabel(node)}» и разорвать соединение?`
-      : `Удалить объект «${displayNodeLabel(node)}»?`;
-    const deleteObject = async () => {
-      if (!physicalObjectId || !onDeletePhysicalObject || !window.confirm(deleteLabel)) return;
-      setDeleteError(null);
-      try { await onDeletePhysicalObject(physicalObjectId); } catch (reason) {
-        setDeleteError(reason instanceof Error ? reason.message : 'Не удалось удалить объект');
-      }
-    };
-
-    return (
-      <aside className="quick-inspector" aria-label="Быстрый инспектор">
-        <button className="quick-inspector__close" onClick={onClose} aria-label="Закрыть инспектор">×</button>
-        <span className="eyebrow">{classLabel}</span>
-        <h2>{displayNodeLabel(node)}</h2>
-        <div className="quick-inspector__facts">
-          {isPhysical && (
-            <Metric
-              label="Точек подключения"
-              value={displayCount(numericAttribute(node, 'connection_point_count'))}
-            />
-          )}
-          <Metric
-            label="Интерфейсов"
-            value={displayCount(numericAttribute(node, 'owned_interface_count'))}
-          />
-          <Metric label={isPhysical ? 'Физических связей' : 'Связей'} value={String(incidentEdges.length)} />
-        </div>
-        {physicalObjectId ? (
-          <Link className="quick-inspector__primary" to={`/infrastructure/objects/${encodeURIComponent(physicalObjectId)}`}>
-            Открыть объект
-          </Link>
-        ) : (
-          <p className="quick-inspector__unavailable">У объекта нет однозначной canonical-ссылки.</p>
-        )}
-        {isPhysical && physicalObjectId && onDeletePhysicalObject && (
-          <button type="button" onClick={() => void deleteObject()}>Удалить</button>
-        )}
-        {isPhysical && physicalObjectId && onRemoveFromMap && (
-          <button type="button" onClick={() => void onRemoveFromMap(physicalObjectId)}>Убрать с карты</button>
-        )}
-        {deleteError && <p role="alert">{deleteError}</p>}
-        <details className="quick-inspector__technical">
-          <summary>Технические детали</summary>
-          <dl>
-            <div><dt>Projection ID</dt><dd>{node.id}</dd></div>
-            <div><dt>Kind</dt><dd>{node.kind}</dd></div>
-          </dl>
-        </details>
-      </aside>
-    );
-  }
-
-  const edge = selection.item;
-  const source = nodesById.get(edge.from_node_id);
-  const target = nodesById.get(edge.to_node_id);
-  return (
-    <aside className="quick-inspector" aria-label="Быстрый инспектор">
-      <button className="quick-inspector__close" onClick={onClose} aria-label="Закрыть инспектор">×</button>
-      <span className="eyebrow">Связь проекции</span>
-      <h2>{source ? displayNodeLabel(source) : 'Неизвестный объект'} ↔ {target ? displayNodeLabel(target) : 'Неизвестный объект'}</h2>
-      <div className="quick-inspector__facts">
-        <Metric label="Агрегированная" value={edge.aggregate ? 'Да' : 'Нет'} />
-        <Metric label="Source refs" value={String(edge.source_refs.length)} />
-      </div>
-      <div className="quick-inspector__endpoints">
-        {source && <button onClick={() => onSelectNode(source)}>{displayNodeLabel(source)}</button>}
-        {target && <button onClick={() => onSelectNode(target)}>{displayNodeLabel(target)}</button>}
-      </div>
-      <details className="quick-inspector__technical">
-        <summary>Технические детали</summary>
-        <dl>
-          <div><dt>Projection ID</dt><dd>{edge.id}</dd></div>
-          <div><dt>Kind</dt><dd>{edge.kind}</dd></div>
-        </dl>
-      </details>
-    </aside>
-  );
+  const shell = (children: React.ReactNode) => <aside className="quick-inspector" aria-label="Быстрый инспектор"><button className="quick-inspector__close" onClick={onClose} aria-label="Закрыть инспектор">×</button>{children}</aside>;
+  const technical = <details className="quick-inspector__technical"><summary>Технические детали</summary><dl>{node && <><div><dt>Projection ID</dt><dd>{node.id}</dd></div><div><dt>Kind</dt><dd>{node.kind}</dd></div></>}</dl></details>;
+  const remove = async () => { if (!id || !props.onRemoveFromMap || pending) return; setPending('remove'); setRemoveError(null); try { await props.onRemoveFromMap(id); } catch(e) { setRemoveError(e instanceof Error ? e.message : 'Не удалось убрать с карты'); } finally { setPending(null); } };
+  const destroy = async () => { if (!id || !props.onDeletePhysicalObject || pending) return; const message = cable ? `Удалить кабель «${displayNodeLabel(node!)}» и разорвать соединение?` : `Удалить объект «${displayNodeLabel(node!)}»?`; if (!window.confirm(message)) return; setPending('delete'); setDeleteError(null); try { await props.onDeletePhysicalObject(id); } catch(e) { setDeleteError(e instanceof Error ? e.message : 'Не удалось удалить объект'); } finally { setPending(null); } };
+  if (selection.type === 'continuation') { const c = selection.item; const remote = c.remote_physical_object_ref.entity_id; return shell(<><span className="eyebrow">ВНЕ КАРТЫ</span><h2>{c.remote_display_name}</h2><p>Подключено:</p><p>{c.local_connection_point_display_name}<br />→ {c.cable_display_name}<br />→ {c.remote_display_name} / {c.remote_connection_point_display_name}</p>{props.onAddContinuationToMap && <button onClick={() => void props.onAddContinuationToMap!(remote)}>Добавить на карту</button>}<Link to={url(remote)}>Открыть объект</Link></>); }
+  if (node && isL1 && cable && id) { const item = inventory?.cables.find(x => x.cable_ref.entity_id === id); return shell(<><span className="eyebrow">КАБЕЛЬ</span><h2>{displayNodeLabel(node)}</h2>{!inventory && !inventoryError && <p>Загружаем проверенные концы кабеля…</p>}{inventoryError && <p role="alert">{inventoryError}</p>}{item?.resolution === 'SIMPLE_CABLE' && item.endpoint_a && item.endpoint_b && <p><Link to={url(item.endpoint_a.remote_physical_object_ref.entity_id)}>{item.endpoint_a.remote_physical_object_label} / {item.endpoint_a.remote_connection_point_label}</Link><br />↕<br /><Link to={url(item.endpoint_b.remote_physical_object_ref.entity_id)}>{item.endpoint_b.remote_physical_object_label} / {item.endpoint_b.remote_connection_point_label}</Link></p>}{item?.resolution === 'UNRESOLVED' && <p>Концы кабеля не удалось однозначно определить.</p>}{inventory && !item && <p>Проверенные данные кабеля недоступны.</p>}<Link to={url(id)}>Открыть объект</Link>{props.onRemoveFromMap && <button disabled={pending !== null} onClick={() => void remove()}>Убрать с карты</button>}<details><summary>Дополнительные действия</summary>{props.onDeletePhysicalObject && <button onClick={() => void destroy()}>Удалить кабель и разорвать физическое соединение</button>}</details>{removeError && <p role="alert">{removeError}</p>}{deleteError && <p role="alert">{deleteError}</p>}{technical}</>); }
+  if (node && isL1 && id) { const attached = details ? connections(details) : []; return shell(<><span className="eyebrow">{physicalClassPresentation(details?.physical_object.class ?? node.attributes.class).label}</span><h2>{details?.physical_object.label ?? displayNodeLabel(node)}</h2>{loading && <p>Загружаем физические подключения…</p>}{detailError && <p role="alert">{detailError}</p>}{details && <><p>{details.connection_points.length === 0 ? 'Портов нет' : authoritative(details) ? `${details.connection_points.length} портов · ${attached.length} подключено · ${details.connection_points.length - attached.length} свободно` : `${details.connection_points.length} порта · Занятость не определена`}</p>{details.owned_interface_count > 0 && <p>Сетевых интерфейсов: {details.owned_interface_count}</p>}{attached.length === 0 ? <p>Физических подключений нет.</p> : <div>{attached.slice(0, 6).map((p: ConnectionPointDetails) => <div key={p.connection_point_ref.entity_id}><strong>{p.label}</strong>{p.external_physical_attachments!.map((a,i) => <p key={i}>→ {a.kind === 'UNRESOLVED' ? 'Физическая связь не разрешена' : `${a.remote_physical_object_label ?? 'Удалённый объект'} / ${a.remote_connection_point_label ?? 'порт'}${a.kind === 'SIMPLE_CABLE' ? ` через ${a.cable_label ?? 'кабель'}` : ''}`}</p>)}</div>)}{attached.length > 6 && <p>Ещё {attached.length - 6} подключений</p>}</div>}</>}<Link to={url(id)}>Открыть объект</Link>{props.onRemoveFromMap && <button disabled={pending !== null} onClick={() => void remove()}>Убрать с карты</button>}<details><summary>Дополнительные действия</summary>{props.onDeletePhysicalObject && <button onClick={() => void destroy()}>Удалить объект из NetMap</button>}</details>{removeError && <p role="alert">{removeError}</p>}{deleteError && <p role="alert">{deleteError}</p>}{technical}</>); }
+  if (node) return shell(<><span className="eyebrow">СЕТЕВОЙ ОБЪЕКТ</span><h2>{displayNodeLabel(node)}</h2>{id ? <Link to={url(id)}>Открыть объект</Link> : <p>У объекта нет однозначной canonical-ссылки.</p>}{technical}</>);
+  const edge = selection.item as TopologyProjectionEdge; const source = document?.nodes.find(n => n.id === edge.from_node_id); const target = document?.nodes.find(n => n.id === edge.to_node_id); return shell(<><span className="eyebrow">Связь</span><h2>{source ? displayNodeLabel(source) : 'Неизвестный объект'} ↔ {target ? displayNodeLabel(target) : 'Неизвестный объект'}</h2><div>{source && <button onClick={() => onSelectNode(source)}>{displayNodeLabel(source)}</button>}{target && <button onClick={() => onSelectNode(target)}>{displayNodeLabel(target)}</button>}</div>{technical}</>);
 }

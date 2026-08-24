@@ -12,6 +12,7 @@ import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { InterfacePhysicalTraceArtifact, InterfacePhysicalTraceDataSource } from '../topology/interfacePhysicalTraceTypes';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectDeleteTypes';
+import type { PhysicalObjectDetailsDataSource } from '../topology/physicalObjectDetailsTypes';
 import {
   nodeForPhysicalObject,
   physicalObjectIdForNode,
@@ -30,6 +31,7 @@ interface MapPageProps {
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
+  physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   traceDataSource?: InterfacePhysicalTraceDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
 }
@@ -58,6 +60,7 @@ export function MapPage({
   savedMapDataSource,
   catalogInventoryDataSource,
   physicalObjectDeleteDataSource,
+  physicalObjectDetailsDataSource,
   traceDataSource,
 }: MapPageProps) {
   const [params, setParams] = useSearchParams();
@@ -466,6 +469,8 @@ export function MapPage({
         onSelectNode={(node) => setSelection({ type: 'node', item: node })}
         onClose={() => setSelection(null)}
         onAddContinuationToMap={!legacy && viewMode === 'physical' ? addContinuationAtViewportCenter : undefined}
+        physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
+        catalogInventoryDataSource={catalogInventoryDataSource}
         onRemoveFromMap={!legacy && viewMode === 'physical' && ids.includes(physicalObjectIdForSelection(selection) ?? '') ? remove : undefined}
         onDeletePhysicalObject={physicalObjectDeleteDataSource ? async (id) => { await physicalObjectDeleteDataSource.deletePhysicalObject(id); setSelection(null); await reloadMap(); } : undefined}
       />

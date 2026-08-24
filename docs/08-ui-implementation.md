@@ -846,6 +846,11 @@ opens Quick Inspector details and permits only two bounded actions: add the
 remote object through the existing placement API, or open that canonical object
 in Catalog. Once added, the normal MAPS.2a collapse is used.
 
+Quick Inspector L1 object summaries use the authoritative
+`PhysicalObjectDetailsDocument`; cable endpoints are read only from proven
+`CatalogInventoryDocument` simple-cable resolution. Primary map removal affects
+only `MapPlacement`; canonical deletion remains an advanced destructive action.
+
 This is not generic continuation: no off-map normal node, L2/L3 continuation,
 multi-hop expansion, MapReference, regions, cable waypoints or map wiring is
 materialized.

@@ -60,6 +60,7 @@ export function App(props: AppProps) {
             traceDataSource={props.traceDataSource}
             topologyLayoutStore={props.topologyLayoutStore}
             physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource}
+            physicalObjectDetailsDataSource={props.physicalObjectDetailsDataSource}
             savedMapDataSource={props.savedMapDataSource}
             catalogInventoryDataSource={props.catalogInventoryDataSource}
           />}
