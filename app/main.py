@@ -102,6 +102,7 @@ from app.schemas import (
     SecurityEvaluationArtifact,
     SecurityEvaluationQuery,
     SetPhysicalObjectClassRequest,
+    SetPhysicalObjectDisplayNameRequest,
     SavedMapDocument,
     SavedMapListDocument,
     StructuralAdjacencyArtifact,
@@ -313,6 +314,26 @@ def delete_physical_object(
 ) -> None:
     with session.begin():
         PhysicalObjectDeletionCatalog(session).delete(physical_object_id)
+
+
+@app.put(
+    "/v1/topology/physical-objects/{physical_object_id}/display-name",
+    response_model=PhysicalObjectDetailsDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def set_physical_object_display_name(
+    physical_object_id: uuid.UUID,
+    query: SetPhysicalObjectDisplayNameRequest,
+    session: Session = Depends(get_session),
+) -> PhysicalObjectDetailsDocument:
+    with session.begin():
+        DeviceCatalog(session).set_physical_object_display_alias(
+            physical_object_id, query.display_name
+        )
+        return ConfiguredPhysicalObjectDetailsResolver(
+            CanonicalRepository(session)
+        ).resolve(physical_object_id)
 
 
 @app.put(

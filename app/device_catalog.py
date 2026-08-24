@@ -238,6 +238,36 @@ class DeviceCatalog:
         self.session.flush()
         return PhysicalObjectClassRecord(metadata.id, physical_object_id, metadata.value)
 
+    def set_physical_object_display_alias(
+        self, physical_object_id: uuid.UUID, value: str
+    ) -> DisplayAliasRecord:
+        if self.session.get(PhysicalObject, physical_object_id) is None:
+            raise ValidationError(
+                "PhysicalObject does not exist",
+                {"physical_object_id": str(physical_object_id)},
+            )
+        normalized = value.strip()
+        if not normalized:
+            raise ValidationError("Display name must not be blank")
+        if len(normalized) > 255:
+            raise ValidationError("Display name must not exceed 255 characters")
+        existing = self.session.scalar(
+            select(EntityMetadata).where(
+                EntityMetadata.physical_object_id == physical_object_id,
+                EntityMetadata.key == DISPLAY_ALIAS_KEY,
+            )
+        )
+        metadata = existing or EntityMetadata(
+            physical_object_id=physical_object_id,
+            key=DISPLAY_ALIAS_KEY,
+            value=normalized,
+        )
+        metadata.value = normalized
+        if existing is None:
+            self.session.add(metadata)
+        self.session.flush()
+        return DisplayAliasRecord(metadata.id, physical_object_id, metadata.value)
+
     def _add_display_alias(
         self,
         *,

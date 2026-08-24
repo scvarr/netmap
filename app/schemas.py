@@ -428,6 +428,12 @@ class SetPhysicalObjectClassRequest(BaseModel):
     value: str = Field(min_length=1, max_length=255)
 
 
+class SetPhysicalObjectDisplayNameRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    display_name: str = Field(min_length=1, max_length=255)
+
+
 class BlueprintAnchor(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

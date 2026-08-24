@@ -24,6 +24,7 @@ import type { ObjectBlueprintDataSource } from './topology/objectBlueprintTypes'
 import type { PhysicalObjectDeleteDataSource } from './topology/physicalObjectDeleteTypes';
 import type { SavedMapDataSource } from './topology/savedMapTypes';
 import type { CatalogInventoryDataSource } from './topology/catalogInventoryTypes';
+import type { PhysicalObjectDisplayNameWriteDataSource } from './topology/physicalObjectDisplayNameWriteTypes';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
@@ -43,6 +44,7 @@ export interface AppProps {
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource: CatalogInventoryDataSource;
+  physicalObjectDisplayNameWriteDataSource?: PhysicalObjectDisplayNameWriteDataSource;
 }
 
 export function App(props: AppProps) {
@@ -63,7 +65,7 @@ export function App(props: AppProps) {
         />
         <Route
           path="infrastructure/objects"
-          element={<InfrastructureObjectsPage catalogInventoryDataSource={props.catalogInventoryDataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} />}
+          element={<InfrastructureObjectsPage catalogInventoryDataSource={props.catalogInventoryDataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} physicalObjectDisplayNameWriteDataSource={props.physicalObjectDisplayNameWriteDataSource} />}
         />
         <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />

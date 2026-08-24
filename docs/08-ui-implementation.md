@@ -144,6 +144,17 @@ are client-side. Map links use the placed object and map identity directly:
 Deletion preserves the existing cable-specific confirmation and reloads the
 authoritative inventory only after a successful operation.
 
+Catalog additionally provides a bounded PhysicalObject display rename on both
+tabs. `PUT /v1/topology/physical-objects/<PhysicalObject UUID>/display-name`
+updates or creates exactly one `EntityMetadata(key="alias.display")` value;
+it never changes the canonical PhysicalObject UUID, class metadata, points,
+connections, blueprint provenance, or map placements. A successful Catalog
+write is followed by an authoritative inventory reload rather than a local row
+mutation, so labels, natural ordering, search, and simple-cable endpoint labels
+are refreshed together. If that reload fails, the last confirmed document is
+shown with an explicit retry/error state rather than presenting the rename as
+authoritatively refreshed.
+
 Object Detail загружает authoritative
 `PhysicalObjectDetailsDocument` и переиспользует W.2/W.3/W.6/W.6.1/W.7 detail
 sections/datasources. Primary full-page creation materializes exact immutable

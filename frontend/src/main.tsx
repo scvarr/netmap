@@ -19,6 +19,7 @@ import { ApiObjectBlueprintDataSource } from './topology/apiObjectBlueprintDataS
 import { ApiPhysicalObjectDeleteDataSource } from './topology/apiPhysicalObjectDeleteDataSource';
 import { ApiSavedMapDataSource } from './topology/apiSavedMapDataSource';
 import { ApiCatalogInventoryDataSource } from './topology/apiCatalogInventoryDataSource';
+import { ApiPhysicalObjectDisplayNameWriteDataSource } from './topology/apiPhysicalObjectDisplayNameWriteDataSource';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -41,6 +42,7 @@ createRoot(document.getElementById('root')!).render(
         physicalObjectDeleteDataSource={new ApiPhysicalObjectDeleteDataSource()}
         savedMapDataSource={new ApiSavedMapDataSource()}
         catalogInventoryDataSource={new ApiCatalogInventoryDataSource()}
+        physicalObjectDisplayNameWriteDataSource={new ApiPhysicalObjectDisplayNameWriteDataSource()}
         topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
       />
     </BrowserRouter>

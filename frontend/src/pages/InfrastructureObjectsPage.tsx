@@ -8,10 +8,18 @@ import type {
   CatalogInventoryEquipmentItem,
 } from '../topology/catalogInventoryTypes';
 import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectDeleteTypes';
+import type { PhysicalObjectDisplayNameWriteDataSource } from '../topology/physicalObjectDisplayNameWriteTypes';
 
 interface Props {
   catalogInventoryDataSource: CatalogInventoryDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
+  physicalObjectDisplayNameWriteDataSource?: PhysicalObjectDisplayNameWriteDataSource;
+}
+
+interface RenameTarget {
+  id: string;
+  label: string;
+  cable: boolean;
 }
 
 const collator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
@@ -49,6 +57,7 @@ function CatalogState({
 export function InfrastructureObjectsPage({
   catalogInventoryDataSource,
   physicalObjectDeleteDataSource,
+  physicalObjectDisplayNameWriteDataSource,
 }: Props) {
   const [document, setDocument] = useState<CatalogInventoryDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,9 +69,14 @@ export function InfrastructureObjectsPage({
   const [ports, setPorts] = useState('all');
   const [cableState, setCableState] = useState('all');
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [renameSavedPendingRefresh, setRenameSavedPendingRefresh] = useState(false);
   const sequence = useRef(0);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (): Promise<boolean> => {
     const current = ++sequence.current;
     setLoading(true);
     setError(null);
@@ -71,16 +85,19 @@ export function InfrastructureObjectsPage({
       const next = await catalogInventoryDataSource.loadCatalogInventory();
       if (current === sequence.current) {
         setDocument(next);
+        return true;
       }
     } catch (reason) {
       if (current === sequence.current) {
         setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
       }
+      return false;
     } finally {
       if (current === sequence.current) {
         setLoading(false);
       }
     }
+    return false;
   }, [catalogInventoryDataSource]);
 
   useEffect(() => {
@@ -102,6 +119,44 @@ export function InfrastructureObjectsPage({
       await reload();
     } catch (reason) {
       setDeleteError(reason instanceof Error ? reason.message : 'Не удалось удалить объект');
+    }
+  };
+
+  const openRename = (target: RenameTarget) => {
+    setRenameTarget(target);
+    setRenameValue(target.label);
+    setRenameError(null);
+    setRenameSavedPendingRefresh(false);
+  };
+
+  const rename = async () => {
+    if (!renameTarget || !physicalObjectDisplayNameWriteDataSource || renaming) {
+      return;
+    }
+    const displayName = renameValue.trim();
+    if (!displayName || displayName === renameTarget.label) {
+      return;
+    }
+    setRenaming(true);
+    setRenameError(null);
+    try {
+      await physicalObjectDisplayNameWriteDataSource.renamePhysicalObject(renameTarget.id, displayName);
+      if (await reload()) {
+        setRenameTarget(null);
+      } else {
+        setRenameSavedPendingRefresh(true);
+        setRenameError('Имя сохранено, но каталог не удалось обновить. Повторите обновление.');
+      }
+    } catch (reason) {
+      setRenameError(reason instanceof Error ? reason.message : 'Не удалось переименовать объект');
+    } finally {
+      setRenaming(false);
+    }
+  };
+
+  const retryRenameRefresh = async () => {
+    if (await reload()) {
+      setRenameTarget(null);
     }
   };
 
@@ -274,10 +329,18 @@ export function InfrastructureObjectsPage({
           <div className="catalog-state"><p>По заданным условиям ничего не найдено.</p></div>
         )}
         {document && shown > 0 && tab === 'equipment' && (
-          <Equipment rows={equipment} remove={physicalObjectDeleteDataSource ? remove : undefined} />
+          <Equipment
+            rows={equipment}
+            remove={physicalObjectDeleteDataSource ? remove : undefined}
+            onRename={physicalObjectDisplayNameWriteDataSource ? openRename : undefined}
+          />
         )}
         {document && shown > 0 && tab === 'cables' && (
-          <Cables rows={cables} remove={physicalObjectDeleteDataSource ? remove : undefined} />
+          <Cables
+            rows={cables}
+            remove={physicalObjectDeleteDataSource ? remove : undefined}
+            onRename={physicalObjectDisplayNameWriteDataSource ? openRename : undefined}
+          />
         )}
       </section>
 
@@ -304,16 +367,95 @@ export function InfrastructureObjectsPage({
           {gap}
         </p>
       ))}
+      {renameTarget && (
+        <RenameDialog
+          target={renameTarget}
+          value={renameValue}
+          error={renameError}
+          pending={renaming}
+          savedPendingRefresh={renameSavedPendingRefresh}
+          onChange={setRenameValue}
+          onCancel={() => setRenameTarget(null)}
+          onSave={() => void rename()}
+          onRetryRefresh={() => void retryRenameRefresh()}
+        />
+      )}
     </main>
+  );
+}
+
+function RenameDialog({
+  target,
+  value,
+  error,
+  pending,
+  savedPendingRefresh,
+  onChange,
+  onCancel,
+  onSave,
+  onRetryRefresh,
+}: {
+  target: RenameTarget;
+  value: string;
+  error: string | null;
+  pending: boolean;
+  savedPendingRefresh: boolean;
+  onChange: (value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+  onRetryRefresh: () => void;
+}) {
+  const normalized = value.trim();
+  const unchanged = normalized === target.label;
+
+  return (
+    <div className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title">
+      <form
+        className="catalog-dialog__surface"
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave();
+        }}
+      >
+        <h2 id="rename-title">{target.cable ? 'Переименовать кабель' : 'Переименовать объект'}</h2>
+        <label>
+          Название
+          <input
+            autoFocus
+            aria-label="Название"
+            value={value}
+            disabled={pending || savedPendingRefresh}
+            onChange={(event) => onChange(event.target.value)}
+          />
+        </label>
+        {error && <p className="catalog-dialog__error" role="alert">{error}</p>}
+        <div className="catalog-dialog__actions">
+          <button type="button" onClick={onCancel} disabled={pending}>
+            Отмена
+          </button>
+          {savedPendingRefresh ? (
+            <button type="button" onClick={onRetryRefresh} disabled={pending}>
+              Повторить обновление
+            </button>
+          ) : (
+            <button type="submit" disabled={pending || !normalized || unchanged}>
+              Сохранить
+            </button>
+          )}
+        </div>
+      </form>
+    </div>
   );
 }
 
 function Equipment({
   rows,
   remove,
+  onRename,
 }: {
   rows: CatalogInventoryEquipmentItem[];
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
+  onRename?: (target: RenameTarget) => void;
 }) {
   return (
     <div className="catalog-table-wrap">
@@ -363,7 +505,7 @@ function Equipment({
                           </Link>
                         ))}
                 </td>
-                <Actions id={id} label={item.label} cable={false} remove={remove} />
+                <Actions id={id} label={item.label} cable={false} remove={remove} onRename={onRename} />
               </tr>
             );
           })}
@@ -376,9 +518,11 @@ function Equipment({
 function Cables({
   rows,
   remove,
+  onRename,
 }: {
   rows: CatalogInventoryDocument['cables'];
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
+  onRename?: (target: RenameTarget) => void;
 }) {
   const part = (value?: CatalogInventoryCableEndpoint) =>
     value ? (
@@ -418,7 +562,7 @@ function Cables({
                   {item.resolution === 'SIMPLE_CABLE' ? part(item.endpoint_b) : '—'}
                 </td>
                 <td>{item.resolution === 'SIMPLE_CABLE' ? 'Разрешён' : 'Неоднозначно'}</td>
-                <Actions id={id} label={item.label} cable remove={remove} />
+                <Actions id={id} label={item.label} cable remove={remove} onRename={onRename} />
               </tr>
             );
           })}
@@ -433,17 +577,29 @@ function Actions({
   label,
   cable,
   remove,
+  onRename,
 }: {
   id: string;
   label: string;
   cable: boolean;
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
+  onRename?: (target: RenameTarget) => void;
 }) {
   return (
     <td className="catalog-table__actions">
       <Link className="catalog-table__open" aria-label={`Открыть ${label}`} to={objectLink(id)}>
         →
       </Link>
+      {onRename && (
+        <button
+          type="button"
+          className="catalog-table__rename"
+          aria-label={`Переименовать ${label}`}
+          onClick={() => onRename({ id, label, cable })}
+        >
+          Переименовать
+        </button>
+      )}
       {remove && (
         <button
           type="button"
