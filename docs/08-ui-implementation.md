@@ -463,6 +463,24 @@ bounded details API. Relevant `L1 / PHYSICAL_OBJECT` projection позднее
 загружается обычным read flow. Optimistic physical nodes не создаются. Прежнее
 размещение operation только в Physical map mode superseded.
 
+### L1R.3b — operational Object Detail / Ports
+
+Object Detail renders the existing `PhysicalObjectDetailsDocument` as a compact
+operational Ports table rather than a card per `ConnectionPoint`. Active rows
+show port, factual status, resolved external attachment(s), direct bound
+interface(s), connect action for an externally free cardinality-1 point, and
+collapsed technical refs. `ordering_key` is the primary natural ordering key;
+the human label is the deterministic legacy fallback. Cardinality above one
+shows factual connection counts only.
+
+When every point forms one reciprocal direct internal counterpart, the UI
+instead renders each exact pair once as a channel. Non-reciprocal or ambiguous
+internal topology remains in the ordinary Ports table. Blueprint instances show
+their exact version and link to that library version; they do not offer ordinary
+per-instance add-point. The existing add-point operation remains an explicitly
+manual/advanced action for non-blueprint objects. This UI consumes L1R.3a only;
+it introduces no API, domain, or connectivity semantics.
+
 ## W.6 — соединение физических endpoints
 
 **FIXED**

@@ -240,7 +240,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
       l2ForwardingContextWriteDataSource: { createL2ForwardingContext: vi.fn() },
     });
     expect(await screen.findByRole('heading', { name: 'PP1' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Port01' })).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: 'Port01' })).toBeInTheDocument();
     expect(loadPhysicalObjectDetails).toHaveBeenCalledWith(ppId);
     expect(screen.getByRole('link', { name: 'Показать на карте' })).toHaveAttribute(
       'href', `/map?view=physical&focus=${ppId}`,

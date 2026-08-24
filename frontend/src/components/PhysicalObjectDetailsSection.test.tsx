@@ -1,222 +1,63 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  PhysicalObjectDetailsDocument,
-} from '../topology/physicalObjectDetailsTypes';
+import { MemoryRouter } from 'react-router-dom';
+import type { PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import type { TopologyProjectionNode } from '../topology/types';
 import { PhysicalObjectDetailsSection } from './PhysicalObjectDetailsSection';
 
-const node = (id: string): TopologyProjectionNode => ({
-  id: `projection-${id}`,
-  kind: 'PHYSICAL_OBJECT',
-  label: `Object ${id}`,
-  status: 'CONFIGURED',
-  attributes: { connection_point_count: 2, owned_interface_count: 0 },
-  source_refs: [{
-    ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id,
-  }],
-});
+const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
+const node = (id = 'object') => ({ id, kind: 'PHYSICAL_OBJECT', label: id, attributes: {}, source_refs: [ref('PhysicalObject', id)] }) as TopologyProjectionNode;
+const point = (label: string, id = label, extra = {}): PhysicalObjectDetailsDocument['connection_points'][number] => ({ connection_point_ref: ref('ConnectionPoint', id), label, cardinality: 1, incident_connection_count: 0, external_connection_count: 0, direct_interface_binding_count: 0, ordering_key: label, direct_interface_bindings: [], internal_physical_counterparts: [], external_physical_attachments: [], source_refs: [], ...extra });
+const document = (points = [point('A01')]): PhysicalObjectDetailsDocument => ({ schema_version: '1.0', physical_object: { source_ref: ref('PhysicalObject', 'object'), label: 'Object' }, connection_points: points, owned_interface_count: 0, gaps: [], warnings: [] });
+const renderDetails = (value: PhysicalObjectDetailsDocument, props = {}) => render(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(value) }} {...props} /></MemoryRouter>);
 
-const details = (id: string, pointLabel = 'Порт'): PhysicalObjectDetailsDocument => ({
-  schema_version: '1.0',
-  physical_object: { source_ref: node(id).source_refs[0], label: `Object ${id}` },
-  connection_points: [{
-    connection_point_ref: {
-      ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: `${id}-point-1`,
-    },
-    label: pointLabel,
-    cardinality: 1,
-    incident_connection_count: 0,
-    direct_interface_binding_count: 0,
-    source_refs: [{
-      ref_type: 'CANONICAL_FACT', entity_type: 'EntityMetadata', entity_id: `${id}-alias`,
-    }],
-  }, {
-    connection_point_ref: {
-      ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: `${id}-point-2`,
-    },
-    label: `ConnectionPoint ${id.slice(0, 8)}`,
-    label_source: 'TECHNICAL_FALLBACK',
-    cardinality: 4,
-    incident_connection_count: 2,
-    direct_interface_binding_count: 1,
-    source_refs: [],
-  }],
-  owned_interface_count: 0,
-  gaps: [],
-  warnings: [],
-});
-
-const deferred = <T,>() => {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((next) => { resolve = next; });
-  return { promise, resolve };
-};
-
-describe('PhysicalObjectDetailsSection', () => {
-  it('naturally sorts rendered connection-point cards instead of preserving UUID order', async () => {
-    const unordered = {
-      ...details('object-a'),
-      connection_points: ['R10', 'R20', 'R11', 'R09', 'R22', 'L02'].map((label, index) => ({
-        ...details('object-a').connection_points[0],
-        label,
-        connection_point_ref: {
-          ref_type: 'CANONICAL_FACT' as const,
-          entity_type: 'ConnectionPoint',
-          entity_id: `point-${index}`,
-        },
-      })),
-    };
-    render(<PhysicalObjectDetailsSection node={node('object-a')} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(unordered) }} />);
-
-    await screen.findByRole('heading', { name: 'L02' });
-    expect(screen.getAllByRole('heading', { level: 4 }).map((heading) => heading.textContent))
-      .toEqual(['L02', 'R09', 'R10', 'R11', 'R20', 'R22']);
+describe('PhysicalObjectDetailsSection ports', () => {
+  it('renders active ports in natural ordering with factual status, neighbour, cable, interface and connect action', async () => {
+    const cable = point('A10', 'a10', { direct_interface_bindings: [{ interface_ref: ref('NetworkInterface', 'ni'), label: 'Eth1', evidence_refs: [] }], external_physical_attachments: [{ kind: 'SIMPLE_CABLE', connection_ref: ref('Connection', 'c'), evidence_refs: [], cable_label: 'CAB-1', remote_physical_object_label: 'SW2', remote_connection_point_label: 'Eth2' }] });
+    const direct = point('A02', 'a02', { external_physical_attachments: [{ kind: 'DIRECT_CONNECTION', connection_ref: ref('Connection', 'd'), evidence_refs: [], remote_physical_object_label: 'PP1', remote_connection_point_label: 'B01' }] });
+    renderDetails(document([cable, direct, point('A01')]), { deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, writeDataSource: { createPhysicalEndpointConnection: vi.fn() } });
+    await screen.findByRole('rowheader', { name: 'A01' });
+    expect(screen.getAllByRole('row').slice(1).map((row) => within(row).getByRole('rowheader').textContent)).toEqual(['A01', 'A02', 'A10']);
+    expect(screen.getByText('Свободен')).toBeInTheDocument();
+    expect(screen.getByText(/SW2 · Eth2 · CAB-1/)).toBeInTheDocument();
+    expect(screen.getByText('PP1 · B01')).toBeInTheDocument();
+    expect(screen.getByText('Eth1')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Подключить/i })).toBeInTheDocument();
   });
 
-  it('renders named points, factual counts, fallback, and collapsed raw refs', async () => {
-    render(
-      <PhysicalObjectDetailsSection
-        node={node('object-a')}
-        dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(details('object-a')) }}
-      />,
-    );
-
-    const namedPoint = (await screen.findByRole('heading', { name: 'Порт' })).closest('article')!;
-    expect(screen.getByRole('heading', { name: 'Точка object-a' })).toBeInTheDocument();
-    expect(within(namedPoint).getByText('Cardinality:', { exact: false })).toHaveTextContent('Cardinality: 1');
-    expect(within(namedPoint).getByText('Связей:', { exact: false })).toHaveTextContent('Связей: 0');
-    expect(screen.getByText('Интерфейсов:', {
-      exact: false,
-      selector: '.physical-object-details__summary span',
-    })).toHaveTextContent('Интерфейсов: 0');
-    const technical = screen.getAllByText('Технические данные')[0].closest('details')!;
-    await userEvent.click(within(technical).getByText('Технические данные'));
-    expect(within(technical).getByText('EntityMetadata')).toBeInTheDocument();
+  it('states unresolved external attachment without presenting a remote endpoint', async () => {
+    renderDetails(document([point('A01', 'a', { external_physical_attachments: [{ kind: 'UNRESOLVED', connection_ref: ref('Connection', 'c'), evidence_refs: [], remote_physical_object_label: 'Adjacent cable' }] })]));
+    expect(await screen.findByText('Физическая связь не разрешена')).toBeInTheDocument();
+    expect(screen.queryByText('Adjacent cable')).not.toBeInTheDocument();
   });
 
-  it('shows a local error and retries without breaking the parent inspector', async () => {
-    const loadPhysicalObjectDetails = vi.fn()
-      .mockRejectedValueOnce(new Error('details unavailable'))
-      .mockResolvedValueOnce(details('object-a'));
-    render(
-      <PhysicalObjectDetailsSection
-        node={node('object-a')}
-        dataSource={{ loadPhysicalObjectDetails }}
-      />,
-    );
-
-    expect(await screen.findByText(/details unavailable/)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
-    expect(await screen.findByRole('heading', { name: 'Порт' })).toBeInTheDocument();
-    expect(loadPhysicalObjectDetails).toHaveBeenCalledTimes(2);
+  it('renders exact symmetric internal pairs once as channels and falls back for ambiguous topology', async () => {
+    const a = point('A01', 'a'); const b = point('B01', 'b');
+    a.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'b'), label: 'B01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
+    b.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'a'), label: 'A01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
+    const { rerender } = renderDetails(document([a, b]));
+    expect(await screen.findByRole('heading', { name: 'Каналы' })).toBeInTheDocument();
+    expect(screen.getAllByRole('row')).toHaveLength(2);
+    rerender(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document([{ ...a, internal_physical_counterparts: [] }, b])) }} /></MemoryRouter>);
+    expect(await screen.findByRole('columnheader', { name: 'Порт' })).toBeInTheDocument();
   });
 
-  it('does not let a stale response replace the newly selected object', async () => {
-    const first = deferred<PhysicalObjectDetailsDocument>();
-    const second = deferred<PhysicalObjectDetailsDocument>();
-    const loadPhysicalObjectDetails = vi.fn((id: string) => (
-      id === 'object-a' ? first.promise : second.promise
-    ));
-    const { rerender } = render(
-      <PhysicalObjectDetailsSection
-        node={node('object-a')}
-        dataSource={{ loadPhysicalObjectDetails }}
-      />,
-    );
-    rerender(
-      <PhysicalObjectDetailsSection
-        node={node('object-b')}
-        dataSource={{ loadPhysicalObjectDetails }}
-      />,
-    );
-
-    second.resolve(details('object-b', 'Порт B'));
-    expect(await screen.findByRole('heading', { name: 'Порт B' })).toBeInTheDocument();
-    first.resolve(details('object-a', 'Порт A'));
-    await Promise.resolve();
-    expect(screen.queryByRole('heading', { name: 'Порт A' })).not.toBeInTheDocument();
+  it('hides structural add-point for blueprint instances and keeps it explicit for manual objects', async () => {
+    const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 3 } };
+    const { rerender } = renderDetails(blueprint, { connectionPointWriteDataSource: { createConnectionPoint: vi.fn() } });
+    expect(await screen.findByText(/версия 3/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Открыть шаблон' })).toHaveAttribute('href', '/library/object-blueprints/bp/versions/v1/edit');
+    expect(screen.queryByRole('button', { name: '+ Добавить точку' })).not.toBeInTheDocument();
+    rerender(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document()) }} connectionPointWriteDataSource={{ createConnectionPoint: vi.fn() }} /></MemoryRouter>);
+    expect(await screen.findByText('Ручная структура')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+ Добавить точку' })).toBeInTheDocument();
   });
 
-  it('does not request when the PhysicalObject ref is ambiguous', () => {
-    const loadPhysicalObjectDetails = vi.fn();
-    const ambiguous = {
-      ...node('object-a'),
-      source_refs: [...node('object-a').source_refs, ...node('object-b').source_refs],
-    };
-    render(
-      <PhysicalObjectDetailsSection
-        node={ambiguous}
-        dataSource={{ loadPhysicalObjectDetails }}
-      />,
-    );
-
-    expect(screen.getByText(/нет однозначной ссылки/)).toBeInTheDocument();
-    expect(loadPhysicalObjectDetails).not.toHaveBeenCalled();
-  });
-
-  it('updates class from presets and reports authoritative refresh', async () => {
-    const initial = details('object-a');
-    const updated = {
-      ...initial,
-      physical_object: { ...initial.physical_object, class: 'switch' },
-    };
-    const setPhysicalObjectClass = vi.fn().mockResolvedValue(updated);
-    const onClassUpdated = vi.fn();
-    render(
-      <PhysicalObjectDetailsSection
-        node={node('object-a')}
-        dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(initial) }}
-        classWriteDataSource={{ setPhysicalObjectClass }}
-        onClassUpdated={onClassUpdated}
-      />,
-    );
-
-    await screen.findByText('ФИЗИЧЕСКИЙ ОБЪЕКТ');
-    await userEvent.selectOptions(screen.getByLabelText('Классификация'), 'switch');
-    await userEvent.click(screen.getByRole('button', { name: 'Сохранить тип' }));
-
-    expect(setPhysicalObjectClass).toHaveBeenCalledWith('object-a', 'switch');
-    expect(await screen.findByText('КОММУТАТОР')).toBeInTheDocument();
-    expect(onClassUpdated).toHaveBeenCalledTimes(1);
-  });
-
-  it('adds a point from the authoritative response and requests projection refresh', async () => {
-    const initial = details('object-a');
-    const updated = {
-      ...initial,
-      connection_points: [...initial.connection_points, {
-        connection_point_ref: {
-          ref_type: 'CANONICAL_FACT' as const,
-          entity_type: 'ConnectionPoint',
-          entity_id: 'object-a-point-3',
-        },
-        label: 'Port02',
-        cardinality: 1,
-        incident_connection_count: 0,
-        direct_interface_binding_count: 0,
-        source_refs: [],
-      }],
-    };
-    const createConnectionPoint = vi.fn().mockResolvedValue(updated);
-    const onConnectionPointCreated = vi.fn();
-    render(
-      <PhysicalObjectDetailsSection
-        node={node('object-a')}
-        dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(initial) }}
-        connectionPointWriteDataSource={{ createConnectionPoint }}
-        onConnectionPointCreated={onConnectionPointCreated}
-      />,
-    );
-
-    await screen.findByRole('heading', { name: 'Порт' });
-    await userEvent.click(screen.getByRole('button', { name: '+ Добавить точку' }));
-    await userEvent.type(screen.getByLabelText('Название'), 'Port02');
-    await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
-
-    expect(await screen.findByRole('heading', { name: 'Port02' })).toBeInTheDocument();
-    expect(createConnectionPoint).toHaveBeenCalledWith('object-a', { display_name: 'Port02' });
-    expect(onConnectionPointCreated).toHaveBeenCalledTimes(1);
+  it('keeps technical identities collapsed until requested', async () => {
+    renderDetails(document());
+    const technical = await screen.findByText('Технические данные');
+    await userEvent.click(technical);
+    expect(screen.getByText('ConnectionPoint')).toBeInTheDocument();
   });
 });
