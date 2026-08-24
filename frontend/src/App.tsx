@@ -23,6 +23,7 @@ import type { L2ForwardingContextWriteDataSource } from './topology/l2Forwarding
 import type { ObjectBlueprintDataSource } from './topology/objectBlueprintTypes';
 import type { PhysicalObjectDeleteDataSource } from './topology/physicalObjectDeleteTypes';
 import type { SavedMapDataSource } from './topology/savedMapTypes';
+import type { CatalogInventoryDataSource } from './topology/catalogInventoryTypes';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
@@ -41,6 +42,7 @@ export interface AppProps {
   objectBlueprintDataSource?: ObjectBlueprintDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   savedMapDataSource?: SavedMapDataSource;
+  catalogInventoryDataSource: CatalogInventoryDataSource;
 }
 
 export function App(props: AppProps) {
@@ -61,7 +63,7 @@ export function App(props: AppProps) {
         />
         <Route
           path="infrastructure/objects"
-          element={<InfrastructureObjectsPage dataSource={props.dataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} />}
+          element={<InfrastructureObjectsPage catalogInventoryDataSource={props.catalogInventoryDataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} />}
         />
         <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { App, type AppProps } from './App';
 import type { DeviceDetailsDocument } from './topology/deviceDetailsTypes';
 import type { PhysicalObjectDetailsDocument } from './topology/physicalObjectDetailsTypes';
+import type { CatalogInventoryDocument } from './topology/catalogInventoryTypes';
 import {
   LOGICAL_PROJECTION_REQUEST,
   PHYSICAL_PROJECTION_REQUEST,
@@ -75,6 +76,12 @@ const logicalDocument: TopologyProjectionDocument = {
   edges: [], gaps: [], warnings: [],
 };
 
+const catalogDocument: CatalogInventoryDocument = {
+  schema_version: '1.0',
+  equipment: [{ physical_object_ref: physicalRef(ppId), label: 'PP1', class: 'patch_panel', occupancy: { total_ports: 2, connected_ports: 1, free_ports: 1 }, map_memberships: [] }, { physical_object_ref: physicalRef(swId), label: 'SW1', class: 'switch', occupancy: { total_ports: 2, connected_ports: 1, free_ports: 1 }, map_memberships: [] }],
+  cables: [], gaps: [], warnings: [],
+};
+
 const ppDetails: PhysicalObjectDetailsDocument = {
   schema_version: '1.0',
   physical_object: { source_ref: physicalRef(ppId), label: 'PP1', class: 'patch_panel' },
@@ -132,6 +139,7 @@ const renderApp = (route: string, overrides: Partial<AppProps> = {}) => {
     physicalObjectDetailsDataSource: {
       loadPhysicalObjectDetails: vi.fn((id) => Promise.resolve(id === swId ? swDetails : ppDetails)),
     },
+    catalogInventoryDataSource: { loadCatalogInventory: vi.fn().mockResolvedValue(catalogDocument) },
     ...overrides,
   };
   render(
@@ -218,12 +226,14 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     expect(screen.queryByText('Сохранить тип')).not.toBeInTheDocument();
   });
 
-  it('loads the catalog through L1 / PHYSICAL_OBJECT and renders factual columns', async () => {
-    const { dataSource } = renderApp('/infrastructure/objects');
-    expect(await screen.findByRole('heading', { name: 'Объекты' })).toBeInTheDocument();
+  it('loads the catalog through its inventory datasource without an L1 projection', async () => {
+    const inventory = { loadCatalogInventory: vi.fn().mockResolvedValue(catalogDocument) };
+    const { dataSource } = renderApp('/infrastructure/objects', { catalogInventoryDataSource: inventory });
+    expect(await screen.findByRole('heading', { name: 'Каталог' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'PP1' })).toBeInTheDocument();
     expect(screen.getByText('patch_panel')).toBeInTheDocument();
-    expect(dataSource.loadProjection).toHaveBeenCalledWith(PHYSICAL_PROJECTION_REQUEST);
+    expect(inventory.loadCatalogInventory).toHaveBeenCalledTimes(1);
+    expect(dataSource.loadProjection).not.toHaveBeenCalled();
   });
 
   it('links an object row to the canonical detail URL', async () => {
@@ -340,7 +350,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     };
     const { unmount } = render(
       <MemoryRouter initialEntries={['/map']}>
-        <App dataSource={pending} deviceDetailsDataSource={{ loadDeviceDetails: vi.fn() }} />
+      <App dataSource={pending} deviceDetailsDataSource={{ loadDeviceDetails: vi.fn() }} catalogInventoryDataSource={{ loadCatalogInventory: vi.fn() }} />
       </MemoryRouter>,
     );
     expect(screen.getByText('Загружаем topology projection')).toBeInTheDocument();
@@ -352,9 +362,9 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
 
   it('renders the catalog empty state without inventing objects', async () => {
     renderApp('/infrastructure/objects', {
-      dataSource: { loadProjection: vi.fn().mockResolvedValue({ ...physicalDocument, nodes: [], edges: [] }) },
+      catalogInventoryDataSource: { loadCatalogInventory: vi.fn().mockResolvedValue({ ...catalogDocument, equipment: [], cables: [] }) },
     });
-    expect(await screen.findByText('В этом scope пока пусто')).toBeInTheDocument();
+    expect(await screen.findByText('Каталог пока пуст.')).toBeInTheDocument();
   });
 
   it('routes the Object Library, renders saved blueprints, and saves explicit editor output', async () => {

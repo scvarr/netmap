@@ -1,106 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ViewState } from '../components/ViewState';
-import { displayCount, displayNodeLabel, numericAttribute, physicalClassPresentation } from '../topology/presentation';
-import { PHYSICAL_PROJECTION_REQUEST, physicalObjectIdForNode } from '../topology/projection';
-import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
+import { physicalClassPresentation } from '../topology/presentation';
+import type { CatalogInventoryCableEndpoint, CatalogInventoryDataSource, CatalogInventoryDocument, CatalogInventoryEquipmentItem } from '../topology/catalogInventoryTypes';
 import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectDeleteTypes';
 
-interface InfrastructureObjectsPageProps {
-  dataSource: TopologyDataSource;
-  physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
+interface Props { catalogInventoryDataSource: CatalogInventoryDataSource; physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource }
+const collator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
+const known = new Set(['workstation', 'switch', 'cable', 'outlet', 'patch_panel']);
+const q = (v: string) => v.trim().toLocaleLowerCase();
+const link = (id: string) => `/infrastructure/objects/${encodeURIComponent(id)}`;
+const mapLink = (map: string, object: string) => `/map?map=${encodeURIComponent(map)}&view=physical&focus=${encodeURIComponent(object)}`;
+const className = (v?: string) => v === undefined ? 'Без типа' : known.has(v) ? physicalClassPresentation(v).label : v;
+const matched = (query: string, values: Array<string | undefined>) => !query || values.some((value) => q(value ?? '').includes(query));
+const endpoint = (value?: CatalogInventoryCableEndpoint) => value ? <><Link to={link(value.remote_physical_object_ref.entity_id)}>{value.remote_physical_object_label}</Link><span className="catalog-endpoint__port"> / {value.remote_connection_point_label}</span></> : '—';
+
+export function InfrastructureObjectsPage({ catalogInventoryDataSource, physicalObjectDeleteDataSource }: Props) {
+  const [document, setDocument] = useState<CatalogInventoryDocument | null>(null); const [error, setError] = useState<string | null>(null); const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<'equipment' | 'cables'>('equipment'); const [search, setSearch] = useState(''); const [type, setType] = useState('all'); const [map, setMap] = useState('all'); const [ports, setPorts] = useState('all'); const [cableState, setCableState] = useState('all'); const [deleteError, setDeleteError] = useState<string | null>(null); const request = useRef(0);
+  const reload = useCallback(async () => { const current = ++request.current; setLoading(true); setError(null); try { const next = await catalogInventoryDataSource.loadCatalogInventory(); if (current === request.current) setDocument(next); } catch (reason) { if (current === request.current) setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка'); } finally { if (current === request.current) setLoading(false); } }, [catalogInventoryDataSource]);
+  useEffect(() => { void reload(); }, [reload]);
+  const remove = async (id: string, label: string, cable: boolean) => { if (!physicalObjectDeleteDataSource || !window.confirm(cable ? `Удалить кабель «${label}» и разорвать соединение?` : `Удалить объект «${label}»?`)) return; setDeleteError(null); try { await physicalObjectDeleteDataSource.deletePhysicalObject(id); await reload(); } catch (reason) { setDeleteError(reason instanceof Error ? reason.message : 'Не удалось удалить объект'); } };
+  const query = q(search); const allEquipment = document?.equipment ?? []; const allCables = document?.cables ?? [];
+  const equipment = allEquipment.filter((item) => { const occupancy = item.occupancy ?? undefined; return matched(query, [item.label, item.class, ...item.map_memberships.map((x) => x.name)]) && (type === 'all' || type === 'none' ? (type !== 'none' || item.class === undefined) : item.class === type) && (map === 'all' || map === 'none' ? (map !== 'none' || item.map_memberships.length === 0) : item.map_memberships.some((x) => x.map_ref.entity_id === map)) && (ports === 'all' || ports === 'connected' && !!occupancy && occupancy.connected_ports > 0 || ports === 'free' && !!occupancy && occupancy.free_ports > 0 || ports === 'busy' && !!occupancy && occupancy.total_ports > 0 && occupancy.free_ports === 0 || ports === 'unknown' && !occupancy); }).sort((a, b) => collator.compare(a.label, b.label));
+  const cables = allCables.filter((item) => matched(query, [item.label, item.endpoint_a?.remote_physical_object_label, item.endpoint_a?.remote_connection_point_label, item.endpoint_b?.remote_physical_object_label, item.endpoint_b?.remote_connection_point_label]) && (cableState === 'all' || item.resolution === cableState)).sort((a, b) => collator.compare(a.label, b.label));
+  const classes = [...new Set(allEquipment.flatMap((item) => item.class ? [item.class] : []))].sort(collator.compare); const maps = [...new Map(allEquipment.flatMap((item) => item.map_memberships.map((x) => [x.map_ref.entity_id, x.name] as const))).entries()].sort((a, b) => collator.compare(a[1], b[1])); const tabTotal = tab === 'equipment' ? allEquipment.length : allCables.length; const shown = tab === 'equipment' ? equipment.length : cables.length; const empty = !!document && allEquipment.length === 0 && allCables.length === 0;
+  return <main className="catalog-page"><header className="catalog-page__header"><div><span className="eyebrow">Инфраструктура</span><h1>Каталог</h1><p>Оборудование, кабели, физические порты и размещение на картах.</p></div>{tab === 'equipment' && <Link className="primary-action" to="/infrastructure/objects/new">Создать объект</Link>}</header><div className="catalog-tabs" role="tablist" aria-label="Разделы каталога"><button type="button" role="tab" aria-selected={tab === 'equipment'} onClick={() => setTab('equipment')}>Оборудование ({allEquipment.length})</button><button type="button" role="tab" aria-selected={tab === 'cables'} onClick={() => setTab('cables')}>Кабели ({allCables.length})</button></div><section className="catalog-controls" aria-label="Поиск и фильтры"><label>Поиск<input aria-label="Поиск" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={tab === 'equipment' ? 'Название, тип или карта' : 'Кабель, объект или порт'} /></label>{tab === 'equipment' ? <div className="catalog-controls__filters"><label>Тип<select aria-label="Тип" value={type} onChange={(e) => setType(e.target.value)}><option value="all">Все</option><option value="none">Без типа</option>{classes.map((v) => <option key={v} value={v}>{className(v)}</option>)}</select></label><label>Карта<select aria-label="Карта" value={map} onChange={(e) => setMap(e.target.value)}><option value="all">Все карты</option><option value="none">Без карты</option>{maps.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label><label>Порты<select aria-label="Порты" value={ports} onChange={(e) => setPorts(e.target.value)}><option value="all">Все</option><option value="connected">Есть подключения</option><option value="free">Есть свободные порты</option><option value="busy">Все порты заняты</option><option value="unknown">Состояние неизвестно</option></select></label></div> : <label>Состояние<select aria-label="Состояние кабеля" value={cableState} onChange={(e) => setCableState(e.target.value)}><option value="all">Все</option><option value="SIMPLE_CABLE">Разрешённые</option><option value="UNRESOLVED">Неоднозначные</option></select></label>}</section><section className="catalog-surface" aria-label="Список каталога">{loading && !document && <div className="catalog-state"><ViewState kind="loading" /></div>}{error && !document && <div className="catalog-state"><ViewState kind="error" message={error} onRetry={() => void reload()} /></div>}{empty && <div className="catalog-state"><p>Каталог пока пуст.</p></div>}{document && !empty && tabTotal === 0 && <div className="catalog-state"><p>{tab === 'equipment' ? 'Оборудование пока не создано.' : 'Кабели создаются через существующее физическое соединение.'}</p></div>}{document && !empty && tabTotal > 0 && shown === 0 && <div className="catalog-state"><p>По заданным условиям ничего не найдено.</p></div>}{document && shown > 0 && tab === 'equipment' && <Equipment rows={equipment} remove={physicalObjectDeleteDataSource ? remove : undefined} />}{document && shown > 0 && tab === 'cables' && <Cables rows={cables} remove={physicalObjectDeleteDataSource ? remove : undefined} />}</section>{error && document && <p className="catalog-note catalog-note--gap" role="alert">{error} <button type="button" onClick={() => void reload()}>Повторить</button></p>}{deleteError && <p className="catalog-note catalog-note--gap" role="alert">{deleteError}</p>}{document?.warnings.map((v, i) => <p className="catalog-note" key={`${i}-${v}`}>{v}</p>)}{document?.gaps.map((v, i) => <p className="catalog-note catalog-note--gap" key={`${i}-${v}`}>{v}</p>)}</main>;
 }
 
-export function InfrastructureObjectsPage({ dataSource, physicalObjectDeleteDataSource }: InfrastructureObjectsPageProps) {
-  const [document, setDocument] = useState<TopologyProjectionDocument | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [retryKey, setRetryKey] = useState(0);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let current = true;
-    setDocument(null);
-    setError(null);
-    void dataSource.loadProjection(PHYSICAL_PROJECTION_REQUEST).then(
-      (nextDocument) => { if (current) setDocument(nextDocument); },
-      (reason: unknown) => {
-        if (current) setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
-      },
-    );
-    return () => { current = false; };
-  }, [dataSource, retryKey]);
-
-  const objects = document?.nodes.flatMap((node) => {
-    const physicalObjectId = physicalObjectIdForNode(node);
-    return physicalObjectId ? [{ node, physicalObjectId }] : [];
-  }) ?? [];
-
-  const deleteObject = async (physicalObjectId: string, label: string, isCable: boolean) => {
-    if (!physicalObjectDeleteDataSource) return;
-    const confirmation = isCable
-      ? `Удалить кабель «${label}» и разорвать соединение?`
-      : `Удалить объект «${label}»?`;
-    if (!window.confirm(confirmation)) return;
-    setDeleteError(null);
-    try {
-      await physicalObjectDeleteDataSource.deletePhysicalObject(physicalObjectId);
-      setRetryKey((key) => key + 1);
-    } catch (reason) {
-      setDeleteError(reason instanceof Error ? reason.message : 'Не удалось удалить объект');
-    }
-  };
-
-  return (
-    <main className="catalog-page">
-      <header className="catalog-page__header">
-        <div>
-          <span className="eyebrow">Инфраструктура</span>
-          <h1>Объекты</h1>
-          <p>Canonical физические объекты, доступные в текущем workspace.</p>
-        </div>
-        <Link className="primary-action" to="/infrastructure/objects/new">Создать объект</Link>
-      </header>
-      <div className="catalog-filter-placeholder" aria-label="Область будущего поиска">
-        <span aria-hidden="true">⌕</span>
-        Поиск и фильтры появятся в следующих catalog slices
-      </div>
-      <section className="catalog-surface" aria-label="Список объектов">
-        {!document && !error && <div className="catalog-state"><ViewState kind="loading" /></div>}
-        {error && <div className="catalog-state"><ViewState kind="error" message={error} onRetry={() => setRetryKey((key) => key + 1)} /></div>}
-        {document && objects.length === 0 && <div className="catalog-state"><ViewState kind="empty" /></div>}
-        {document && objects.length > 0 && (
-          <div className="catalog-table-wrap">
-            <table className="catalog-table">
-              <thead><tr><th>Название</th><th>Класс</th><th>Точки</th><th>Интерфейсы</th><th><span className="sr-only">Действия</span></th></tr></thead>
-              <tbody>{objects.map(({ node, physicalObjectId }) => {
-                const classValue = typeof node.attributes.class === 'string' ? node.attributes.class : undefined;
-                return (
-                  <tr key={physicalObjectId}>
-                    <td><Link to={`/infrastructure/objects/${encodeURIComponent(physicalObjectId)}`}>{displayNodeLabel(node)}</Link></td>
-                    <td><strong>{physicalClassPresentation(classValue).label}</strong>{classValue && <code>{classValue}</code>}</td>
-                    <td>{displayCount(numericAttribute(node, 'connection_point_count'))}</td>
-                    <td>{displayCount(numericAttribute(node, 'owned_interface_count'))}</td>
-                    <td className="catalog-table__actions">
-                      <Link className="catalog-table__open" aria-label={`Открыть ${displayNodeLabel(node)}`} to={`/infrastructure/objects/${encodeURIComponent(physicalObjectId)}`}>→</Link>
-                      {physicalObjectDeleteDataSource && (
-                        <button
-                          type="button"
-                          className="catalog-table__delete"
-                          aria-label={`Удалить ${displayNodeLabel(node)}`}
-                          onClick={() => void deleteObject(physicalObjectId, displayNodeLabel(node), classValue === 'cable')}
-                        >⌫</button>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}</tbody>
-            </table>
-          </div>
-        )}
-      </section>
-      {deleteError && <p className="catalog-note catalog-note--gap" role="alert">{deleteError}</p>}
-      {document?.warnings.map((warning, index) => <p className="catalog-note" key={`warning-${index}-${warning}`}>{warning}</p>)}
-      {document?.gaps.map((gap, index) => <p className="catalog-note catalog-note--gap" key={`gap-${index}-${gap}`}>{gap}</p>)}
-    </main>
-  );
-}
+function Equipment({ rows, remove }: { rows: CatalogInventoryEquipmentItem[]; remove?: (id: string, label: string, cable: boolean) => Promise<void> }) { return <div className="catalog-table-wrap"><table className="catalog-table"><thead><tr><th>Название</th><th>Тип</th><th>Порты</th><th>Карты</th><th><span className="sr-only">Действия</span></th></tr></thead><tbody>{rows.map((item) => { const id = item.physical_object_ref.entity_id; const memberships = [...item.map_memberships].sort((a, b) => collator.compare(a.name, b.name)); return <tr key={id}><td><Link to={link(id)}>{item.label}</Link></td><td><strong>{className(item.class)}</strong>{item.class && known.has(item.class) && <code>{item.class}</code>}</td><td>{item.occupancy ? <><strong>{item.occupancy.connected_ports} / {item.occupancy.total_ports}</strong><small>{item.occupancy.free_ports} свободно</small></> : 'Состояние не определено'}</td><td>{memberships.length === 0 ? 'Нет' : memberships.map((m) => <Link className="catalog-map-link" key={m.map_ref.entity_id} to={mapLink(m.map_ref.entity_id, id)}>{m.name}</Link>)}</td><Actions id={id} label={item.label} cable={false} remove={remove} /></tr>; })}</tbody></table></div>; }
+function Cables({ rows, remove }: { rows: CatalogInventoryDocument['cables']; remove?: (id: string, label: string, cable: boolean) => Promise<void> }) { return <div className="catalog-table-wrap"><table className="catalog-table"><thead><tr><th>Название</th><th>Конец A</th><th>Конец B</th><th>Состояние</th><th><span className="sr-only">Действия</span></th></tr></thead><tbody>{rows.map((item) => { const id = item.cable_ref.entity_id; const resolved = item.resolution === 'SIMPLE_CABLE'; return <tr key={id}><td><Link to={link(id)}>{item.label}</Link></td><td className="catalog-endpoint">{resolved ? endpoint(item.endpoint_a) : '—'}</td><td className="catalog-endpoint">{resolved ? endpoint(item.endpoint_b) : '—'}</td><td>{resolved ? 'Разрешён' : 'Неоднозначно'}</td><Actions id={id} label={item.label} cable remove={remove} /></tr>; })}</tbody></table></div>; }
+function Actions({ id, label, cable, remove }: { id: string; label: string; cable: boolean; remove?: (id: string, label: string, cable: boolean) => Promise<void> }) { return <td className="catalog-table__actions"><Link className="catalog-table__open" aria-label={`Открыть ${label}`} to={link(id)}>→</Link>{remove && <button type="button" className="catalog-table__delete" aria-label={`Удалить ${label}`} onClick={() => void remove(id, label, cable)}>⌫</button>}</td>; }

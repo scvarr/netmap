@@ -18,6 +18,7 @@ import { ApiL2ForwardingContextWriteDataSource } from './topology/apiL2Forwardin
 import { ApiObjectBlueprintDataSource } from './topology/apiObjectBlueprintDataSource';
 import { ApiPhysicalObjectDeleteDataSource } from './topology/apiPhysicalObjectDeleteDataSource';
 import { ApiSavedMapDataSource } from './topology/apiSavedMapDataSource';
+import { ApiCatalogInventoryDataSource } from './topology/apiCatalogInventoryDataSource';
 import './styles.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -39,6 +40,7 @@ createRoot(document.getElementById('root')!).render(
         objectBlueprintDataSource={new ApiObjectBlueprintDataSource()}
         physicalObjectDeleteDataSource={new ApiPhysicalObjectDeleteDataSource()}
         savedMapDataSource={new ApiSavedMapDataSource()}
+        catalogInventoryDataSource={new ApiCatalogInventoryDataSource()}
         topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
       />
     </BrowserRouter>

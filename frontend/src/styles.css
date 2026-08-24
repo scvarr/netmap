@@ -352,8 +352,14 @@ a { color: inherit; }
 .primary-action, .secondary-action { display: inline-flex; align-items: center; justify-content: center; padding: 11px 16px; border: 1px solid #3a7968; border-radius: 8px; color: #e3f7f0; background: #15372f; text-decoration: none; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .secondary-action { border-color: #35575b; background: #102326; }
 .primary-action:hover, .primary-action:focus-visible, .secondary-action:hover, .secondary-action:focus-visible { border-color: #55e5b5; outline: none; }
-.catalog-filter-placeholder { margin: 30px 0 12px; padding: 11px 14px; border: 1px dashed #2a3e41; border-radius: 9px; color: #62787a; font-size: 11px; }
-.catalog-filter-placeholder span { margin-right: 8px; color: #789294; }
+.catalog-tabs { display: flex; gap: 8px; margin-top: 28px; }
+.catalog-tabs button { padding: 9px 13px; border: 1px solid #284247; border-radius: 8px; color: #94abaa; background: #0d1d20; cursor: pointer; font: 700 11px ui-monospace, "Cascadia Code", monospace; }
+.catalog-tabs button[aria-selected="true"] { border-color: #55e5b5; color: #e3f7f0; background: #15372f; }
+.catalog-controls { display: flex; align-items: end; gap: 12px; margin: 14px 0 12px; }
+.catalog-controls label { display: grid; gap: 5px; color: #829897; font-size: 10px; }
+.catalog-controls input, .catalog-controls select { min-height: 33px; padding: 6px 9px; border: 1px solid #294246; border-radius: 7px; color: #dceae7; background: #0b191b; font: 12px ui-monospace, "Cascadia Code", monospace; }
+.catalog-controls > label:first-child { min-width: 240px; flex: 1; }
+.catalog-controls__filters { display: flex; gap: 10px; }
 .catalog-surface, .detail-section, .creation-form-surface { border: 1px solid #203438; border-radius: 13px; background: #0a1719; overflow: hidden; }
 .catalog-state { position: relative; min-height: 360px; }
 .catalog-table-wrap { overflow-x: auto; }
@@ -365,6 +371,10 @@ a { color: inherit; }
 .catalog-table td:first-child a { color: #e0eeeb; font: 700 13px ui-monospace, "Cascadia Code", monospace; text-decoration: none; }
 .catalog-table td:nth-child(2) strong { display: block; color: #b8cbc8; font-size: 10px; }
 .catalog-table td:nth-child(2) code { display: block; margin-top: 4px; color: #647b7d; font-size: 9px; }
+.catalog-table td small { display: block; margin-top: 4px; color: #718785; font-size: 10px; }
+.catalog-map-link { display: block; width: fit-content; margin: 2px 0; color: #8dcfc0; text-decoration: none; }
+.catalog-endpoint a { color: #d8ebe6; text-decoration: none; }
+.catalog-endpoint__port { color: #8aa09d; }
 .catalog-table__open { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: #55e5b5; text-decoration: none; background: #112a25; }
 .catalog-table__actions { display: flex; justify-content: flex-end; gap: 8px; }
 .catalog-table__delete { width: 28px; height: 28px; border: 0; border-radius: 7px; color: #ff9f93; background: #351d20; cursor: pointer; font-size: 16px; }
@@ -414,6 +424,8 @@ a { color: inherit; }
   .sidebar__brand strong, .shell-nav__label, .shell-nav__group-label, .sidebar__health .health { width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
   .shell-nav__link { justify-content: center; padding-inline: 8px; }
   .catalog-page { padding: 28px 18px 48px; }
+  .catalog-controls, .catalog-controls__filters { align-items: stretch; flex-direction: column; }
+  .catalog-controls > label:first-child { min-width: 0; }
   .catalog-page__header, .object-detail-page__header { align-items: flex-start; flex-direction: column; }
   .creation-intents { grid-template-columns: 1fr; }
   .blueprint-editor-layout { grid-template-columns: 1fr; }.blueprint-editor-preview { position: static; }

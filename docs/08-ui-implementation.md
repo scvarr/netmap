@@ -132,7 +132,17 @@ existing `simple_cable_semantics` recognises the cable; otherwise the item is
 `UNRESOLVED` with no guessed endpoint. The endpoint order is stable but has no
 directional meaning. This read model is bulk-resolved from canonical and
 presentation query boundaries, not by L1 projection or per-object/map detail
-requests. The UI switch to this datasource remains a subsequent slice.
+requests. `/infrastructure/objects` now uses this datasource exclusively: one
+guarded inventory load per initial/retry/authoritative post-delete refresh, with
+no topology-projection fallback. The Catalog has Equipment and Cables tabs.
+Equipment shows class, trustworthy `connected / total` port occupancy (or an
+unknown state), explicit SavedMap links, and bounded client-side
+name/class/map search and filters. Cables show only proven simple-cable
+endpoints or an explicit unresolved state; cable search and resolution filtering
+are client-side. Map links use the placed object and map identity directly:
+`/map?map=<SavedMap UUID>&view=physical&focus=<PhysicalObject UUID>`.
+Deletion preserves the existing cable-specific confirmation and reloads the
+authoritative inventory only after a successful operation.
 
 Object Detail загружает authoritative
 `PhysicalObjectDetailsDocument` и переиспользует W.2/W.3/W.6/W.6.1/W.7 detail
