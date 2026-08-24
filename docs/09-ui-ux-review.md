@@ -417,6 +417,10 @@ applicable physically realized endpoints: одну proven branch показат�
 несколько — как alternatives. Exact port/interface остаётся optional refinement.
 Evidence нельзя ослаблять или выдумывать «best» path.
 
+Backend now materializes this bounded PhysicalObject L1 trace boundary; current
+Trace Command Bar remains interface-oriented and its product control is still
+future work.
+
 Нужно различать одну branch, multiple endpoint branches, no proven path/unknown
 frontier и cycle evidence; не требуется enumerate every graph path в cyclic
 graph. Physical cycle — самостоятельный diagnostic fact, отличный от future L2

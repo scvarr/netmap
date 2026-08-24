@@ -2359,6 +2359,46 @@ class CanonicalRepository:
             )
         self._validate_index(address.member_index, point, "member_index")
 
+    def get_l1_point_members_for_physical_object(
+        self,
+        physical_object_id: uuid.UUID,
+        connection_point_id: uuid.UUID | None = None,
+    ) -> tuple[PointMember, ...]:
+        if self.session.get(PhysicalObject, physical_object_id) is None:
+            raise ValidationError(
+                "PhysicalObject does not exist",
+                {"physical_object_id": str(physical_object_id)},
+            )
+        if connection_point_id is not None:
+            point = self.session.get(ConnectionPoint, connection_point_id)
+            if point is None:
+                raise ValidationError(
+                    "ConnectionPoint does not exist",
+                    {"connection_point_id": str(connection_point_id)},
+                )
+            if point.physical_object_id != physical_object_id:
+                raise ValidationError(
+                    "ConnectionPoint does not belong to the supplied PhysicalObject",
+                    {
+                        "physical_object_id": str(physical_object_id),
+                        "connection_point_id": str(connection_point_id),
+                    },
+                )
+            points = (point,)
+        else:
+            points = tuple(
+                self.session.scalars(
+                    select(ConnectionPoint)
+                    .where(ConnectionPoint.physical_object_id == physical_object_id)
+                    .order_by(ConnectionPoint.id)
+                )
+            )
+        return tuple(
+            PointMember(point.id, member)
+            for point in points
+            for member in range(1, point.cardinality + 1)
+        )
+
     def get_l1_adjacency(
         self, addresses: list[PointMember]
     ) -> dict[PointMember, list[L1AdjacencyEdge]]:

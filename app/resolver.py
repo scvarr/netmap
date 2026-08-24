@@ -87,6 +87,59 @@ class L1Resolver:
 
         return predecessors, discovery_order
 
+    def find_cycles(self, source: PointMember) -> list[list[TraversalStep]]:
+        visited = {source}
+        frontier = [source]
+        predecessors: dict[PointMember, tuple[PointMember, L1AdjacencyEdge]] = {}
+        cycles: list[list[TraversalStep]] = []
+        seen: set[tuple[str, ...]] = set()
+
+        while frontier:
+            adjacency = self.repository.get_l1_adjacency(frontier)
+            next_frontier: list[PointMember] = []
+            for current in frontier:
+                for edge in adjacency[current]:
+                    peer = PointMember(edge.peer_point_id, edge.peer_member)
+                    parent = predecessors.get(current, (None, None))[0]
+                    if peer not in visited:
+                        visited.add(peer)
+                        predecessors[peer] = (current, edge)
+                        next_frontier.append(peer)
+                    elif peer != parent:
+                        steps = self._cycle_steps(current, peer, edge, predecessors)
+                        key = tuple(sorted(str(step.edge.connection_member_id) for step in steps))
+                        if key not in seen:
+                            seen.add(key)
+                            cycles.append(steps)
+            frontier = next_frontier
+        return cycles
+
+    def _cycle_steps(
+        self,
+        current: PointMember,
+        peer: PointMember,
+        edge: L1AdjacencyEdge,
+        predecessors: dict[PointMember, tuple[PointMember, L1AdjacencyEdge]],
+    ) -> list[TraversalStep]:
+        current_ancestors = {current}
+        ancestor = current
+        while ancestor in predecessors:
+            ancestor = predecessors[ancestor][0]
+            current_ancestors.add(ancestor)
+        peer_path = [peer]
+        ancestor = peer
+        while ancestor not in current_ancestors:
+            ancestor = predecessors[ancestor][0]
+            peer_path.append(ancestor)
+        lca = ancestor
+        forward = self._path(lca, current, predecessors)
+        reverse_to_peer = self._path(lca, peer, predecessors)
+        return [
+            *forward,
+            TraversalStep(current, peer, edge),
+            *(TraversalStep(step.target, step.source, step.edge) for step in reversed(reverse_to_peer)),
+        ]
+
     @staticmethod
     def _path(
         source: PointMember,

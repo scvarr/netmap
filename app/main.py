@@ -35,6 +35,7 @@ from app.physical_connections import (
     PhysicalConnectionCatalog,
 )
 from app.physical_object_details_resolver import ConfiguredPhysicalObjectDetailsResolver
+from app.physical_object_l1_resolver import PhysicalObjectL1Resolver
 from app.physical_object_deletion import PhysicalObjectDeletionCatalog
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
@@ -64,6 +65,8 @@ from app.schemas import (
     InterfacePhysicalTraceQuery,
     InstantiateObjectBlueprintRequest,
     L1TraceQuery,
+    PhysicalObjectL1TraceArtifact,
+    PhysicalObjectL1TraceQuery,
     L2ReachabilityQuery,
     L2ReachabilityTraceArtifact,
     L2ForwardingContextCreationDocument,
@@ -832,6 +835,20 @@ def trace_interface_physical(
 ) -> InterfacePhysicalTraceArtifact:
     repository = CanonicalRepository(session)
     return InterfacePhysicalResolver(repository).resolve(query, EvaluationView())
+
+
+@app.post(
+    "/v1/traces/physical-objects/l1",
+    response_model=PhysicalObjectL1TraceArtifact,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def trace_physical_objects_l1(
+    query: PhysicalObjectL1TraceQuery,
+    session: Session = Depends(get_session),
+) -> PhysicalObjectL1TraceArtifact:
+    return PhysicalObjectL1Resolver(CanonicalRepository(session)).resolve(
+        query, EvaluationView()
+    )
 
 
 @app.post(

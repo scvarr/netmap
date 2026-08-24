@@ -827,6 +827,45 @@ class InterfacePhysicalTraceQuery(BaseModel):
     to_interface_id: uuid.UUID
 
 
+class PhysicalObjectL1TraceQuery(BaseModel):
+    from_physical_object_id: uuid.UUID
+    to_physical_object_id: uuid.UUID
+    from_connection_point_id: uuid.UUID | None = None
+    to_connection_point_id: uuid.UUID | None = None
+
+
+class PhysicalObjectL1TraceBranch(BaseModel):
+    branch_id: str
+    source: PointMemberAddress
+    target: PointMemberAddress
+    edge_ids: list[str]
+    evidence_refs: list[EvidenceRef]
+
+
+class PhysicalObjectL1TraceCycle(BaseModel):
+    cycle_id: str
+    state_node_ids: list[str]
+    edge_ids: list[str]
+    evidence_refs: list[EvidenceRef]
+
+
+class PhysicalObjectL1TraceArtifact(BaseModel):
+    schema_version: Literal[1] = 1
+    query: PhysicalObjectL1TraceQuery
+    evaluation_view: EvaluationView
+    resolver_version: Literal["physical-object-l1/1.0"] = "physical-object-l1/1.0"
+    verdict: Literal["REACHABLE", "UNKNOWN"]
+    source_candidates: list[PointMemberAddress]
+    target_candidates: list[PointMemberAddress]
+    branches: list[PhysicalObjectL1TraceBranch]
+    cycles: list[PhysicalObjectL1TraceCycle]
+    nodes: list[EvidenceNode]
+    edges: list[EvidenceEdge]
+    evidence_refs: list[EvidenceRef]
+    gaps: list[TraceGap]
+    warnings: list[dict[str, Any]]
+
+
 class RealizationCandidateStep(BaseModel):
     realization_id: uuid.UUID
     upper_interface_id: uuid.UUID

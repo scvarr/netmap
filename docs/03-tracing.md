@@ -26,6 +26,24 @@
   `INTERFACE_PHYSICAL_REALIZATION_UNKNOWN`, `L1_TOPOLOGY_INCOMPLETE`) и warnings.
   Он не сохраняет достаточную partial frontier, чтобы UI мог делать выводы о
   блокировке на портах или необходимости перехода к L2.
+- 03.1 L1 Trace также предоставляет object-level public boundary:
+
+  ```text
+  POST /v1/traces/physical-objects/l1
+      PhysicalObjectL1TraceQuery
+          from_physical_object_id
+          to_physical_object_id
+          from_connection_point_id?
+          to_connection_point_id?
+      -> PhysicalObjectL1TraceArtifact
+  ```
+
+  Он разворачивает каждый PhysicalObject в принадлежащие ему canonical
+  ConnectionPoint/PointMember candidates и применяет те же L1 traversal facts.
+  Все доказанные endpoint branches сохраняются отдельно; отсутствие доказанной
+  branch возвращает `UNKNOWN`. Exact point обязан принадлежать указанному object.
+  Physical cycle не скрывается: artifact возвращает отдельный `cycles` witness с
+  canonical Connection/ConnectionMember evidence. NetworkInterface не требуется.
 - [[03-02-l2-trace|03.2 L2 Trace]]
 - [[03-03-l3-trace|03.3 L3 Trace]]
 - [[03-04-packet-flow-trace|03.4 Packet Flow Trace]]
