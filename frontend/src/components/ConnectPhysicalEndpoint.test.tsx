@@ -43,4 +43,20 @@ describe('ConnectPhysicalEndpoint', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Подключить' })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'target'); await userEvent.selectOptions(await screen.findByLabelText('Свободный физический порт'), 'port'); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
     expect(await screen.findByRole('alert')).toHaveTextContent('порт уже занят'); expect(onConnected).not.toHaveBeenCalled();
   });
+
+  it('clears hidden primary selection after search and does not apply primary search to advanced candidates', async () => {
+    const devices = { loadDeviceDetails: vi.fn().mockResolvedValue({ schema_version: '1.0', device: { source_ref: ref('PhysicalObject', 'i'), label: 'I' }, interfaces: [], gaps: [], warnings: [] }) };
+    renderConnect({ topologyNodes: [node('target', 'Target', [{ connection_point_id: 'port', display_name: 'Port', cardinality: 1, external_connection_count: 0 }]), node('interface', 'Interface target', [], 1)], physicalDetailsDataSource: { loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document('target', [point('port')])) }, deviceDetailsDataSource: devices });
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить' })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'target'); await userEvent.selectOptions(await screen.findByLabelText('Свободный физический порт'), 'port');
+    expect(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)).toBeEnabled(); await userEvent.type(screen.getByLabelText('Поиск целевого физического объекта'), 'missing');
+    expect(screen.getByLabelText('Целевой физический объект')).toHaveValue(''); expect(screen.getByLabelText('Свободный физический порт')).toHaveValue(''); expect(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: /Дополнительно/ })); expect(screen.getByRole('option', { name: 'Interface target' })).toBeInTheDocument();
+  });
+
+  it('disables a pending submit and does not issue a second write', async () => {
+    let resolve!: (value: any) => void; const create = vi.fn(() => new Promise<any>((next) => { resolve = next; }));
+    renderConnect({ topologyNodes: [node('target', 'Target', [{ connection_point_id: 'port', display_name: 'Port', cardinality: 1, external_connection_count: 0 }])], physicalDetailsDataSource: { loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document('target', [point('port')])) }, writeDataSource: { createPhysicalEndpointConnection: create } });
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить' })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'target'); await userEvent.selectOptions(await screen.findByLabelText('Свободный физический порт'), 'port'); const submit = screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!;
+    await userEvent.click(submit); expect(submit).toBeDisabled(); await userEvent.click(submit); expect(create).toHaveBeenCalledTimes(1); resolve({});
+  });
 });
