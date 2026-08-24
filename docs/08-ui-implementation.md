@@ -481,6 +481,19 @@ per-instance add-point. The existing add-point operation remains an explicitly
 manual/advanced action for non-blueprint objects. This UI consumes L1R.3a only;
 it introduces no API, domain, or connectivity semantics.
 
+### L1R.4 — physical cabling lifecycle
+
+The primary W.6 UI is `source port → target PhysicalObject → free physical
+port → optional cable name → connect`. It always submits a `CONNECTION_POINT`
+endpoint with member `1`; canonical endpoint-kind selection is not exposed in
+the normal flow. Existing L1 projection `connection_points` pre-filters target
+objects to non-cable objects with a cardinality-1, externally free point other
+than the exact source point. The selected object's authoritative details then
+provide the naturally ordered, revalidated free-port picker. A label search
+filters that bounded projection list. `NETWORK_INTERFACE` remains only as an
+explicit advanced path for free interfaces. Backend occupancy errors remain
+authoritative and no optimistic connection is materialized.
+
 ## W.6 — соединение физических endpoints
 
 **FIXED**
