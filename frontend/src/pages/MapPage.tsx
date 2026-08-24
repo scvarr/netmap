@@ -48,6 +48,9 @@ const view = (value: string | null): TopologyViewMode => value === 'physical' ? 
 const savedMapViewKey = (value: SavedMapView): SavedMapViewKey => value === 'physical' ? 'L1/PHYSICAL_OBJECT' : 'L2/DEVICE';
 const natural = (left: string, right: string) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
 const errorMessage = (reason: unknown, fallback: string) => reason instanceof Error ? reason.message : fallback;
+const emptyPhysicalDocument: TopologyProjectionDocument = {
+  schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [],
+};
 
 export function MapPage({
   dataSource,
@@ -71,8 +74,9 @@ export function MapPage({
   const [name, setName] = useState('');
   const [insertion, setInsertion] = useState<InsertionState | null>(null);
   const [contextAnchor, setContextAnchor] = useState<ContextMenuState | null>(null);
-  const [pendingPhysicalToolbarInsertion, setPendingPhysicalToolbarInsertion] = useState(false);
+  const [pendingPhysicalToolbarInsertion, setPendingPhysicalToolbarInsertion] = useState<{ mapId: string } | null>(null);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] = useState(0);
+  const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
   const selectedMapId = useRef<string | null>(mapId);
   const insertionSequence = useRef(0);
   const viewportCenter = useRef<(() => XYPosition) | null>(null);
@@ -91,6 +95,7 @@ export function MapPage({
     setSceneDocument(null);
     setInsertion(null);
     setContextAnchor(null);
+    setPendingPhysicalToolbarInsertion(null);
     setParams((current) => {
       const next = new URLSearchParams(current);
       next.set('map', id);
@@ -146,8 +151,12 @@ export function MapPage({
   }, [mapId, maps, savedMapDataSource]);
 
   useEffect(() => {
-    if (savedMapDataSource && (!hasLoadedMap || ids.length === 0)) {
+    if (savedMapDataSource && !hasLoadedMap) {
       setSceneDocument(null);
+      return undefined;
+    }
+    if (savedMapDataSource && ids.length === 0) {
+      setSceneDocument(viewMode === 'physical' ? { sceneKey: presentationSceneKey, document: emptyPhysicalDocument } : null);
       return undefined;
     }
     let active = true;
@@ -161,14 +170,14 @@ export function MapPage({
   }, [dataSource, hasLoadedMap, placementMembershipKey, presentationSceneKey, savedMapDataSource, viewMode]);
 
   useEffect(() => {
-    if (savedMapDataSource ? !hasLoadedMap : viewMode === 'logical') return;
+    if (savedMapDataSource ? !hasLoadedMap || ids.length === 0 : viewMode === 'logical') return;
     let active = true;
     void dataSource.loadProjection(projectionRequestFor('logical')).then(
       (next) => active && setLogicalDocument(next),
       () => active && setLogicalDocument(null),
     );
     return () => { active = false; };
-  }, [dataSource, hasLoadedMap, mapId, savedMapDataSource, viewMode]);
+  }, [dataSource, hasLoadedMap, ids.length, mapId, savedMapDataSource, viewMode]);
 
   useEffect(() => {
     const focus = params.get('focus');
@@ -224,22 +233,31 @@ export function MapPage({
   }, [activeMap, catalogInventoryDataSource, mapId]);
 
   useEffect(() => {
-    if (!pendingPhysicalToolbarInsertion || viewMode !== 'physical' || !activeMap || (!document && ids.length > 0)) return;
-    setPendingPhysicalToolbarInsertion(false);
-    openInsertion(viewportCenter.current?.() ?? { x: 0, y: 0 });
-  }, [activeMap, document, ids.length, openInsertion, pendingPhysicalToolbarInsertion, viewMode]);
+    if (!pendingPhysicalToolbarInsertion) return;
+    if (pendingPhysicalToolbarInsertion.mapId !== mapId) {
+      setPendingPhysicalToolbarInsertion(null);
+      return;
+    }
+    if (viewMode !== 'physical' || !activeMap || !document || !viewportCenter.current) return;
+    setPendingPhysicalToolbarInsertion(null);
+    openInsertion(viewportCenter.current());
+  }, [activeMap, coordinateBridgeRevision, document, mapId, openInsertion, pendingPhysicalToolbarInsertion, viewMode]);
 
   const startToolbarInsertion = () => {
+    if (!mapId || !activeMap) return;
+    setPendingPhysicalToolbarInsertion({ mapId });
     if (viewMode === 'logical') {
-      setPendingPhysicalToolbarInsertion(true);
       setParams((current) => {
         const next = new URLSearchParams(current);
         next.set('view', 'physical');
         return next;
       });
-      return;
     }
-    openInsertion(viewportCenter.current?.() ?? { x: 0, y: 0 });
+  };
+
+  const setViewMode = (nextView: TopologyViewMode) => {
+    if (nextView !== 'physical') setPendingPhysicalToolbarInsertion(null);
+    setParams((current) => { const next = new URLSearchParams(current); next.set('view', nextView); return next; });
   };
 
   const submitInsertion = async (id: string, operation = insertion) => {
@@ -334,7 +352,9 @@ export function MapPage({
   const addContinuationAtViewportCenter = async (id: string) => {
     if (!savedMapDataSource || !mapId) return;
     const targetMapId = mapId;
-    const anchor = viewportCenter.current?.() ?? { x: 0, y: 0 };
+    const center = viewportCenter.current;
+    if (!center) return;
+    const anchor = center();
     try {
       await savedMapDataSource.addPlacement(targetMapId, id, anchor.x, anchor.y);
       await reloadMap(targetMapId);
@@ -356,6 +376,10 @@ export function MapPage({
   const draggableNodeIds = useMemo(() => new Set((activeMap?.placements ?? []).map((item) =>
     nodeForPhysicalObject(document?.nodes ?? [], item.physical_object_ref.entity_id)?.id,
   ).filter((id): id is string => Boolean(id))), [activeMap, document]);
+  const receiveViewportCenter = useCallback((getter: (() => XYPosition) | null) => {
+    viewportCenter.current = getter;
+    setCoordinateBridgeRevision((revision) => revision + 1);
+  }, []);
 
   return (
     <main className="map-page">
@@ -376,8 +400,8 @@ export function MapPage({
             </button>
           </>
         )}
-        <button type="button" aria-pressed={viewMode === 'logical'} onClick={() => setParams((current) => { const next = new URLSearchParams(current); next.set('view', 'logical'); return next; })}>Логическая</button>
-        <button type="button" aria-pressed={viewMode === 'physical'} onClick={() => setParams((current) => { const next = new URLSearchParams(current); next.set('view', 'physical'); return next; })}>Физическая</button>
+        <button type="button" aria-pressed={viewMode === 'logical'} onClick={() => setViewMode('logical')}>Логическая</button>
+        <button type="button" aria-pressed={viewMode === 'physical'} onClick={() => setViewMode('physical')}>Физическая</button>
       </div>
 
       {creating && (
@@ -409,18 +433,17 @@ export function MapPage({
       {document && params.get('focus') && !nodeForPhysicalObject(document.nodes, params.get('focus')!) && <p>Объект с указанной canonical-ссылкой отсутствует в этой проекции.</p>}
       {!legacy && maps?.length === 0 && <section><h2>Создайте первую карту</h2><button onClick={() => setCreating(true)}>Создать карту</button></section>}
       {!legacy && activeMap && ids.length === 0 && <section><h2>Карта «{activeMap.name}» пока пуста</h2><button onClick={startToolbarInsertion}>Добавить на карту</button></section>}
-      {(legacy || (activeMap && ids.length > 0)) && (
+      {(legacy || activeMap) && (
         <>
           <TraceCommandBar logicalDocument={logicalDocument} deviceDetailsDataSource={deviceDetailsDataSource} traceDataSource={traceDataSource} traceArtifact={traceArtifact} onTraceArtifact={(artifact) => { setTraceArtifact(artifact); if (artifact?.verdict === 'REACHABLE') setParams((current) => { const next = new URLSearchParams(current); next.set('view', 'physical'); return next; }); }} />
           <section className="map-page__canvas">
             {!document && <ViewState kind="loading" />}
-            {document?.nodes.length === 0 && <ViewState kind="empty" />}
-            {document && document.nodes.length > 0 && (
+            {document && (
               <ReactFlowProvider>
                 <TopologyCanvas
                   document={document}
                   selection={selection}
-                  onSelectionChange={setSelection}
+                  onSelectionChange={(nextSelection) => { setContextAnchor(null); setSelection(nextSelection); }}
                   sceneKey={presentationSceneKey}
                   positionOverrides={!legacy ? positions : undefined}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}
@@ -428,7 +451,7 @@ export function MapPage({
                   onPhysicalNodeDragStop={!legacy ? move : undefined}
                   disableAutoLayout={!legacy}
                   traceOverlay={physicalTraceOverlayFor(traceArtifact, document)}
-                  onViewportCenterReady={viewMode === 'physical' ? (getter) => { viewportCenter.current = getter; } : undefined}
+                  onViewportCenterReady={viewMode === 'physical' ? receiveViewportCenter : undefined}
                   onPhysicalPaneContextMenu={viewMode === 'physical' ? (anchor, screen) => setContextAnchor({ anchor, screen }) : undefined}
                   onPaneClick={() => { setContextAnchor(null); setSelection(null); }}
                 />

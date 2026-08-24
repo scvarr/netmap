@@ -79,6 +79,8 @@ export function TopologyCanvas({
   const fittedSceneKey = useRef<string | null>(null);
   const appliedAuthoritativePositionRevision = useRef(authoritativePositionRevision);
   const currentDocument = useRef(document);
+  const appliedSceneKey = useRef<string | null>(null);
+  const fittedSelectionKey = useRef<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { fitView, screenToFlowPosition } = useReactFlow();
   const selectedNodeId = selection?.type === 'node' ? selection.item.id : null;
@@ -89,7 +91,9 @@ export function TopologyCanvas({
 
   useEffect(() => {
     let current = true;
-    setProjection(null);
+    const sceneChanged = appliedSceneKey.current !== presentationSceneKey;
+    appliedSceneKey.current = presentationSceneKey;
+    if (sceneChanged) setProjection(null);
     setLayoutError(null);
     void layoutEngine(document).then(
       (nextProjection) => {
@@ -131,9 +135,15 @@ export function TopologyCanvas({
   }, [fitView, presentationSceneKey, projection]);
 
   useEffect(() => {
-    if (!projection || !selectedNodeId || !projection.nodes.some((node) => node.id === selectedNodeId)) return;
+    if (!selectedNodeId) {
+      fittedSelectionKey.current = null;
+      return;
+    }
+    const selectionKey = `${presentationSceneKey}/${selectedNodeId}`;
+    if (!projection || !projection.nodes.some((node) => node.id === selectedNodeId) || fittedSelectionKey.current === selectionKey) return;
+    fittedSelectionKey.current = selectionKey;
     void fitView({ nodes: [{ id: selectedNodeId }], duration: 300, maxZoom: 1.1, padding: 0.8 });
-  }, [fitView, projection, selectedNodeId]);
+  }, [fitView, presentationSceneKey, projection, selectedNodeId]);
 
   useEffect(() => {
     if (!onViewportCenterReady) return undefined;

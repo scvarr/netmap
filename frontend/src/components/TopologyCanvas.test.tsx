@@ -215,6 +215,40 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(screen.getByTestId('position-physical-A')).toHaveTextContent('1,2');
   });
 
+  it('keeps React Flow mounted and does not refit when a same-scene document refreshes', async () => {
+    fitViewMock.mockClear();
+    const first = documentFor('physical-A');
+    const refreshed = { ...documentFor('physical-A'), warnings: ['refreshed'] };
+    const next = deferred<FlowProjection>();
+    const layoutEngine: TopologyLayoutEngine = vi.fn((document) => document === first ? Promise.resolve(flowFor(document)) : next.promise);
+    const view = render(<TopologyCanvas document={first} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
+    await screen.findByTestId('flow');
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
+    view.rerender(<TopologyCanvas document={refreshed} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
+    expect(screen.getByTestId('flow')).toBeInTheDocument();
+    expect(fitViewMock).toHaveBeenCalledTimes(1);
+    await act(async () => { next.resolve(flowFor(refreshed)); });
+    await screen.findByTestId('flow');
+    expect(fitViewMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('fits a selected node once per effective selection, not per same-scene refresh', async () => {
+    fitViewMock.mockClear();
+    const first = documentFor('physical-A');
+    const selected = { type: 'node' as const, item: first.nodes[0] };
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async (document) => flowFor(document));
+    const view = render(<TopologyCanvas document={first} selection={selected} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
+    await screen.findByTestId('flow');
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(2));
+    const refreshed = { ...documentFor('physical-A'), warnings: ['refreshed'] };
+    view.rerender(<TopologyCanvas document={refreshed} selection={{ type: 'node', item: refreshed.nodes[0] }} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
+    await waitFor(() => expect(screen.getByTestId('flow')).toBeInTheDocument());
+    expect(fitViewMock).toHaveBeenCalledTimes(2);
+    const second = { ...refreshed, nodes: [...refreshed.nodes, { ...refreshed.nodes[0], id: 'physical-B' }] };
+    view.rerender(<TopologyCanvas document={second} selection={{ type: 'node', item: second.nodes[1] }} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(3));
+  });
+
   it('fits each new scene once and applies an explicit authoritative rollback without ELK', async () => {
     fitViewMock.mockClear();
     const document = documentFor('physical-A');
