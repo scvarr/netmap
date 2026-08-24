@@ -197,6 +197,15 @@ const canConnect = (point: ConnectionPointDetails): boolean => (
   point.cardinality === 1 && !(point.external_physical_attachments ?? []).length
 );
 
+interface PortActionProps extends Omit<PortRowProps, 'point'> { point: ConnectionPointDetails; }
+
+const PortActions = ({ point, topologyNodes, physicalDetailsDataSource, deviceDetailsDataSource, writeDataSource, onConnected }: PortActionProps) => <>
+  {canConnect(point) && deviceDetailsDataSource && writeDataSource && (
+    <ConnectPhysicalEndpoint sourcePoint={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} />
+  )}
+  <details className="interface-technical-details"><summary>Технические данные</summary><SourceRefs refs={[point.connection_point_ref, ...point.source_refs]} /></details>
+</>;
+
 const PortRow = ({
   point,
   topologyNodes,
@@ -208,25 +217,16 @@ const PortRow = ({
   <tr>
     <th scope="row">{displayPointLabel(point)}</th>
     <td>{statusLabel(point)}</td><td>{attachmentLabel(point)}</td><td>{interfaceLabel(point)}</td>
-    <td>{canConnect(point) && deviceDetailsDataSource && writeDataSource && (
-      <ConnectPhysicalEndpoint
-        sourcePoint={point}
-        topologyNodes={topologyNodes}
-        physicalDetailsDataSource={physicalDetailsDataSource}
-        deviceDetailsDataSource={deviceDetailsDataSource}
-        writeDataSource={writeDataSource}
-        onConnected={onConnected}
-      />
-    )}
-    <details className="interface-technical-details">
-      <summary>Технические данные</summary>
-      <SourceRefs refs={[point.connection_point_ref, ...point.source_refs]} />
-    </details></td>
+    <td><PortActions point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} /></td>
   </tr>
 );
 
 const pairedChannels = (points: ConnectionPointDetails[]): Array<[ConnectionPointDetails, ConnectionPointDetails]> | null => {
-  if (!points.length || points.some((point) => (point.internal_physical_counterparts ?? []).length !== 1)) return null;
+  if (!points.length || points.some((point) => (
+    (point.internal_physical_counterparts ?? []).length !== 1
+    || (point.direct_interface_bindings ?? []).length > 0
+    || point.blueprint_slot?.kind === 'NETWORK_PORT'
+  ))) return null;
   const byId = new Map(points.map((point) => [point.connection_point_ref.entity_id, point]));
   const seen = new Set<string>(); const pairs: Array<[ConnectionPointDetails, ConnectionPointDetails]> = [];
   for (const point of points) {
@@ -305,10 +305,9 @@ export function PhysicalObjectDetailsSection({
         <>
           <div className="physical-object-details__summary">
             <span>Портов: <strong>{state.document.connection_points.length}</strong></span>
-            {(() => {
-              const single = state.document.connection_points.filter((point) => point.cardinality === 1);
-              const connected = single.filter((point) => (point.external_physical_attachments ?? []).length).length;
-              return <><span>Подключено: <strong>{connected}</strong></span><span>Свободно: <strong>{single.length - connected}</strong></span></>;
+            {state.document.connection_points.length > 0 && state.document.connection_points.every((point) => point.cardinality === 1 && Array.isArray(point.external_physical_attachments)) && (() => {
+              const connected = state.document.connection_points.filter((point) => point.external_physical_attachments!.length > 0).length;
+              return <><span>Подключено: <strong>{connected}</strong></span><span>Свободно: <strong>{state.document.connection_points.length - connected}</strong></span></>;
             })()}
             <span>Интерфейсов: <strong>{state.document.owned_interface_count}</strong></span>
           </div>
@@ -334,7 +333,7 @@ export function PhysicalObjectDetailsSection({
           )}
           {state.document.connection_points.length ? (() => {
             const points = sortedConnectionPoints(state.document.connection_points); const channels = pairedChannels(points);
-            if (channels) return <div className="ports-table-wrap"><h4>Каналы</h4><table className="ports-table"><thead><tr><th>Канал</th><th>Порт A</th><th>Подключение A</th><th>Порт B</th><th>Подключение B</th></tr></thead><tbody>{channels.map(([left, right], index) => <tr key={left.connection_point_ref.entity_id}><th scope="row">{index + 1}</th><td>{displayPointLabel(left)}</td><td>{attachmentLabel(left)}</td><td>{displayPointLabel(right)}</td><td>{attachmentLabel(right)}</td></tr>)}</tbody></table></div>;
+            if (channels) return <div className="ports-table-wrap"><h4>Каналы</h4><table className="ports-table"><thead><tr><th>Канал</th><th>Порт A</th><th>Подключение A</th><th>Действия A</th><th>Порт B</th><th>Подключение B</th><th>Действия B</th></tr></thead><tbody>{channels.map(([left, right], index) => <tr key={left.connection_point_ref.entity_id}><th scope="row">{index + 1}</th><td>{displayPointLabel(left)}</td><td>{attachmentLabel(left)}</td><td><PortActions point={left} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td><td>{displayPointLabel(right)}</td><td>{attachmentLabel(right)}</td><td><PortActions point={right} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td></tr>)}</tbody></table></div>;
             return <div className="ports-table-wrap"><table className="ports-table"><thead><tr><th>Порт</th><th>Status</th><th>Connected to</th><th>Interface</th><th>Actions</th></tr></thead><tbody>{points.map((point) => <PortRow key={point.connection_point_ref.entity_id} point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} />)}</tbody></table></div>;
           })() : <p className="device-details-state">Точки подключения не заданы.</p>}
           <details className="technical-details physical-object-details__technical">
