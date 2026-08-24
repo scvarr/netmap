@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { QuickInspector } from './QuickInspector';
-import type { TopologyProjectionDocument, TopologyProjectionNode } from '../topology/types';
+import type { L1OffMapContinuation, TopologyProjectionDocument, TopologyProjectionNode } from '../topology/types';
 
 const node = (className?: string): TopologyProjectionNode => ({
   id: 'node', kind: 'PHYSICAL_OBJECT', label: className === 'cable' ? 'cable-01' : 'PC1',
@@ -35,5 +35,16 @@ describe('QuickInspector physical delete', () => {
     expect(screen.getByRole('heading', { name: 'cable-01' })).toBeInTheDocument();
     rerender(<BrowserRouter><QuickInspector document={document('L2')} selection={{ type: 'node', item: node() }} onClose={vi.fn()} onSelectNode={vi.fn()} onDeletePhysicalObject={remove} /></BrowserRouter>);
     expect(screen.queryByRole('button', { name: 'Удалить' })).not.toBeInTheDocument();
+  });
+
+  it('explains an off-map L1 continuation and can add or open its remote object', async () => {
+    const add = vi.fn().mockResolvedValue(undefined);
+    const continuation: L1OffMapContinuation = { id: 'continuation', local_node_id: 'node', local_physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'local' }, local_connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'local-cp' }, local_connection_point_display_name: 'Rear', cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'cable' }, cable_display_name: 'cable-17', remote_physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'remote' }, remote_display_name: 'PP1', remote_connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'remote-cp' }, remote_connection_point_display_name: 'A07', source_refs: [] };
+    render(<BrowserRouter><QuickInspector document={document('L1')} selection={{ type: 'continuation', item: continuation }} onClose={vi.fn()} onSelectNode={vi.fn()} onAddContinuationToMap={add} /></BrowserRouter>);
+    expect(screen.getByRole('heading', { name: 'Rear → cable-17 → PP1/A07' })).toBeInTheDocument();
+    expect(screen.getByText('Целевой объект не добавлен на эту карту.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Открыть объект в Catalog' })).toHaveAttribute('href', '/infrastructure/objects/remote');
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить объект на карту' }));
+    expect(add).toHaveBeenCalledWith('remote');
   });
 });

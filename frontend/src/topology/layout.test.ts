@@ -135,6 +135,26 @@ describe('ELK topology layout', () => {
     expect(flow.nodes.find((node) => node.id === 'manual')).toMatchObject({ width: undefined, height: undefined });
   });
 
+  it('keeps an off-map continuation as a presentation edge without adding a remote node', async () => {
+    const document = documentFor(['local'], [], 'L1', 'PHYSICAL_OBJECT');
+    document.l1_off_map_continuations = [{
+      id: 'local-cable-remote', local_node_id: 'local',
+      local_physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'local-object' },
+      local_connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'local-port' },
+      local_connection_point_display_name: 'Rear',
+      cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'cable' }, cable_display_name: 'cable-17',
+      remote_physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'remote-object' }, remote_display_name: 'PP1',
+      remote_connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'remote-port' }, remote_connection_point_display_name: 'A07',
+      source_refs: [],
+    }];
+    document.nodes[0].attributes.connection_points = [{ connection_point_id: 'local-port', display_name: 'Rear', cardinality: 1, external_connection_count: 1 }];
+
+    const flow = await toFlowProjection(document);
+
+    expect(flow.nodes.map((node) => node.id)).toEqual(['local']);
+    expect(flow.edges).toMatchObject([{ id: 'off-map-continuation:local-cable-remote', source: 'local', target: 'local', type: 'continuation', data: { continuation: { cable_display_name: 'cable-17', remote_display_name: 'PP1' } } }]);
+  });
+
   it.each([
     ['logical', 'L2', 'DEVICE'],
     ['physical', 'L1', 'PHYSICAL_OBJECT'],

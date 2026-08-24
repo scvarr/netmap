@@ -2,6 +2,7 @@ import type { ELK, ElkExtendedEdge, ElkNode } from 'elkjs';
 import type { Edge, Node } from '@xyflow/react';
 import type {
   PhysicalEndpointPair,
+  L1OffMapContinuation,
   TopologyProjectionDocument,
   TopologyProjectionEdge,
   TopologyProjectionNode,
@@ -30,6 +31,7 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   endpointPair?: PhysicalEndpointPair;
   cableNode?: TopologyProjectionNode;
   supportingEdgeIds?: [string, string];
+  continuation?: L1OffMapContinuation;
 }
 
 export type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
@@ -160,6 +162,6 @@ export const toFlowProjection: TopologyLayoutEngine = async (document) => {
     edges: [...orderedEdges.flatMap((projection) => {
       const pairs = projection.attributes.endpoint_pairs;
       return pairs?.length ? pairs.map((endpointPair) => ({ id: `${projection.id}::member::${endpointPair.connection_member_id}`, source: projection.from_node_id, target: projection.to_node_id, type: 'floating' as const, data: { projection, endpointPair } })) : [{ id: projection.id, source: projection.from_node_id, target: projection.to_node_id, type: 'floating' as const, data: { projection } }];
-    }), ...presentation.cables.map((cable) => ({ id: `collapsed-cable:${cable.cable.id}`, source: cable.source, target: cable.target, type: 'floating' as const, data: { projection: { id: `presentation:${cable.cable.id}`, from_node_id: cable.source, to_node_id: cable.target, kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, endpointPair: cable.endpointPair, cableNode: cable.cable, supportingEdgeIds: cable.supportingEdgeIds } }))],
+    }), ...presentation.cables.map((cable) => ({ id: `collapsed-cable:${cable.cable.id}`, source: cable.source, target: cable.target, type: 'floating' as const, data: { projection: { id: `presentation:${cable.cable.id}`, from_node_id: cable.source, to_node_id: cable.target, kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, endpointPair: cable.endpointPair, cableNode: cable.cable, supportingEdgeIds: cable.supportingEdgeIds } })), ...(document.l1_off_map_continuations ?? []).map((continuation) => ({ id: `off-map-continuation:${continuation.id}`, source: continuation.local_node_id, target: continuation.local_node_id, type: 'continuation' as const, data: { projection: { id: `presentation:${continuation.id}`, from_node_id: continuation.local_node_id, to_node_id: continuation.local_node_id, kind: 'L1_OFF_MAP_CONTINUATION', aggregate: false, source_refs: continuation.source_refs, attributes: {} }, continuation } }))],
   };
 };

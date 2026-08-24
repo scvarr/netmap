@@ -27,6 +27,7 @@ from app.schemas import (
     TopologyProjectionEdge,
     TopologyProjectionNode,
     TopologyProjectionRequest,
+    L1OffMapContinuation,
 )
 
 
@@ -166,7 +167,13 @@ class ConfiguredTopologyProjectionResolver:
 
         all_points = self.repository.get_all_connection_point_records()
         connection_members = self.repository.get_physical_connection_member_records()
+        continuations = []
         if request.include_interstitial_cables and explicit_ids:
+            continuations = self._off_map_continuations(
+                selected_object_ids,
+                all_points,
+                connection_members,
+            )
             selected_object_ids.update(
                 self._interstitial_cable_ids(
                     selected_object_ids,
@@ -248,6 +255,9 @@ class ConfiguredTopologyProjectionResolver:
             edges=edges,
             gaps=[],
             warnings=[],
+            l1_off_map_continuations=(
+                continuations if request.include_interstitial_cables else None
+            ),
         )
 
     def _interstitial_cable_ids(
@@ -265,13 +275,156 @@ class ConfiguredTopologyProjectionResolver:
                 candidates.add(member.object_b_id)
             if member.object_b_id in selected_object_ids and member.object_a_id not in selected_object_ids:
                 candidates.add(member.object_a_id)
+        simple_cables = self._simple_cable_members(
+            candidates,
+            all_points,
+            connection_members,
+        )
+        return {
+            cable_id
+            for cable_id, incident in simple_cables.items()
+            if {
+                member.object_b_id if member.object_a_id == cable_id else member.object_a_id
+                for member in incident
+            }.issubset(selected_object_ids)
+        }
+
+    def _off_map_continuations(
+        self,
+        selected_object_ids: set[uuid.UUID],
+        all_points: tuple[ConnectionPointRecord, ...],
+        connection_members: tuple[PhysicalConnectionMemberRecord, ...],
+    ) -> list[L1OffMapContinuation]:
+        candidates: set[uuid.UUID] = set()
+        for member in connection_members:
+            if member.object_a_id == member.object_b_id:
+                continue
+            if member.object_a_id in selected_object_ids:
+                candidates.add(member.object_b_id)
+            if member.object_b_id in selected_object_ids:
+                candidates.add(member.object_a_id)
+        simple_cables = self._simple_cable_members(
+            candidates,
+            all_points,
+            connection_members,
+        )
+        records: list[
+            tuple[uuid.UUID, PhysicalConnectionMemberRecord, PhysicalConnectionMemberRecord]
+        ] = []
+        for cable_id, incident in simple_cables.items():
+            local = [
+                member
+                for member in incident
+                if (
+                    member.object_b_id
+                    if member.object_a_id == cable_id
+                    else member.object_a_id
+                ) in selected_object_ids
+            ]
+            remote = [member for member in incident if member not in local]
+            if len(local) == len(remote) == 1:
+                records.append((cable_id, local[0], remote[0]))
+        if not records:
+            return []
+        object_ids = {cable_id for cable_id, _, _ in records}
+        point_ids: set[uuid.UUID] = set()
+        for cable_id, local, remote in records:
+            for member in (local, remote):
+                object_ids.add(
+                    member.object_b_id
+                    if member.object_a_id == cable_id
+                    else member.object_a_id
+                )
+                point_ids.add(
+                    member.point_b_id
+                    if member.object_a_id == cable_id
+                    else member.point_a_id
+                )
+        object_aliases = DeviceCatalog(self.repository.session).physical_object_display_aliases(
+            list(object_ids)
+        )
+        point_aliases = DeviceCatalog(self.repository.session).connection_point_display_aliases(
+            list(point_ids)
+        )
+        continuations: list[L1OffMapContinuation] = []
+        for cable_id, local, remote in records:
+            local_object_id = (
+                local.object_b_id if local.object_a_id == cable_id else local.object_a_id
+            )
+            local_point_id = (
+                local.point_b_id if local.object_a_id == cable_id else local.point_a_id
+            )
+            remote_object_id = (
+                remote.object_b_id
+                if remote.object_a_id == cable_id
+                else remote.object_a_id
+            )
+            remote_point_id = (
+                remote.point_b_id
+                if remote.object_a_id == cable_id
+                else remote.point_a_id
+            )
+            continuations.append(
+                L1OffMapContinuation(
+                    id=f"l1-off-map:{local_object_id}:{cable_id}:{remote_object_id}",
+                    local_node_id=self._physical_node_id(local_object_id),
+                    local_physical_object_ref=self._ref("PhysicalObject", local_object_id),
+                    local_connection_point_ref=self._ref("ConnectionPoint", local_point_id),
+                    local_connection_point_display_name=(
+                        point_aliases[local_point_id].value
+                        if local_point_id in point_aliases
+                        else f"ConnectionPoint {str(local_point_id)[:8]}"
+                    ),
+                    cable_ref=self._ref("PhysicalObject", cable_id),
+                    cable_display_name=(
+                        object_aliases[cable_id].value
+                        if cable_id in object_aliases
+                        else f"PhysicalObject {str(cable_id)[:8]}"
+                    ),
+                    remote_physical_object_ref=self._ref(
+                        "PhysicalObject", remote_object_id
+                    ),
+                    remote_display_name=(
+                        object_aliases[remote_object_id].value
+                        if remote_object_id in object_aliases
+                        else f"PhysicalObject {str(remote_object_id)[:8]}"
+                    ),
+                    remote_connection_point_ref=self._ref(
+                        "ConnectionPoint", remote_point_id
+                    ),
+                    remote_connection_point_display_name=(
+                        point_aliases[remote_point_id].value
+                        if remote_point_id in point_aliases
+                        else f"ConnectionPoint {str(remote_point_id)[:8]}"
+                    ),
+                    source_refs=self._dedupe_refs([
+                        self._ref("PhysicalObject", local_object_id),
+                        self._ref("ConnectionPoint", local_point_id),
+                        self._ref("PhysicalObject", cable_id),
+                        self._ref("PhysicalObject", remote_object_id),
+                        self._ref("ConnectionPoint", remote_point_id),
+                        self._ref("Connection", local.connection_id),
+                        self._ref("ConnectionMember", local.connection_member_id),
+                        self._ref("Connection", remote.connection_id),
+                        self._ref("ConnectionMember", remote.connection_member_id),
+                    ]),
+                )
+            )
+        return sorted(continuations, key=lambda value: value.id)
+
+    def _simple_cable_members(
+        self,
+        candidates: set[uuid.UUID],
+        all_points: tuple[ConnectionPointRecord, ...],
+        connection_members: tuple[PhysicalConnectionMemberRecord, ...],
+    ) -> dict[uuid.UUID, tuple[PhysicalConnectionMemberRecord, ...]]:
         classes = DeviceCatalog(self.repository.session).physical_object_classes(
             list(candidates)
         )
         points_by_object: dict[uuid.UUID, set[uuid.UUID]] = {}
         for point in all_points:
             points_by_object.setdefault(point.physical_object_id, set()).add(point.point_id)
-        included: set[uuid.UUID] = set()
+        simple: dict[uuid.UUID, tuple[PhysicalConnectionMemberRecord, ...]] = {}
         for cable_id in candidates:
             if classes.get(cable_id) is None or classes[cable_id].value != "cable":
                 continue
@@ -295,11 +448,10 @@ class ConfiguredTopologyProjectionResolver:
                 and len(incident) == 2
                 and len({member.connection_id for member in incident}) == 2
                 and len(set(neighbors)) == 2
-                and set(neighbors).issubset(selected_object_ids)
                 and incident_points == cable_points
             ):
-                included.add(cable_id)
-        return included
+                simple[cable_id] = tuple(incident)
+        return simple
 
     def _validate_request(self, request: TopologyProjectionRequest) -> None:
         if (request.layer, request.detail_level) not in {

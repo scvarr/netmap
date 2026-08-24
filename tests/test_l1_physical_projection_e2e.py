@@ -203,6 +203,7 @@ def test_scoped_projection_includes_only_a_simple_cable_between_two_selected_end
     ).json()
     assert {physical_object_id_for_node(node) for node in expanded["nodes"]} == {core_id, firewall_id, cable_id}
     assert len(expanded["edges"]) == 2
+    assert expanded["l1_off_map_continuations"] == []
     assert node_by_object(expanded, cable_id)["attributes"]["class"] == "cable"
     assert unrelated_link["cable_ref"]["entity_id"] not in str(expanded)
     assert physical_object_id(unrelated_left) not in str(expanded)
@@ -222,6 +223,19 @@ def test_scoped_projection_includes_only_a_simple_cable_between_two_selected_end
     ).json()
     assert [physical_object_id_for_node(node) for node in one_endpoint["nodes"]] == [core_id]
     assert one_endpoint["edges"] == []
+    assert len(one_endpoint["l1_off_map_continuations"]) == 1
+    continuation = one_endpoint["l1_off_map_continuations"][0]
+    assert continuation["local_node_id"] == node_by_object(one_endpoint, core_id)["id"]
+    assert continuation["local_physical_object_ref"]["entity_id"] == core_id
+    assert continuation["cable_ref"]["entity_id"] == cable_id
+    assert continuation["remote_physical_object_ref"]["entity_id"] == firewall_id
+    assert continuation["local_connection_point_ref"]["entity_type"] == "ConnectionPoint"
+    assert continuation["remote_connection_point_ref"]["entity_type"] == "ConnectionPoint"
+    assert {ref["entity_type"] for ref in continuation["source_refs"]} == {
+        "PhysicalObject", "ConnectionPoint", "Connection", "ConnectionMember"
+    }
+    assert cable_id not in {physical_object_id_for_node(node) for node in one_endpoint["nodes"]}
+    assert firewall_id not in {physical_object_id_for_node(node) for node in one_endpoint["nodes"]}
 
 
 def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():

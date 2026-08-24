@@ -14,6 +14,20 @@ export interface BlueprintPresentation {
 }
 export interface PhysicalEndpointPair { from_connection_point_id: string; from_member_index: number; to_connection_point_id: string; to_member_index: number; connection_id: string; connection_member_id: string; }
 export interface ConnectionPointPresentation { connection_point_id: string; display_name: string; cardinality: number; external_connection_count: number; }
+export interface L1OffMapContinuation {
+  id: string;
+  local_node_id: string;
+  local_physical_object_ref: ProjectionSourceRef;
+  local_connection_point_ref: ProjectionSourceRef;
+  local_connection_point_display_name: string;
+  cable_ref: ProjectionSourceRef;
+  cable_display_name: string;
+  remote_physical_object_ref: ProjectionSourceRef;
+  remote_display_name: string;
+  remote_connection_point_ref: ProjectionSourceRef;
+  remote_connection_point_display_name: string;
+  source_refs: ProjectionSourceRef[];
+}
 
 export interface TopologyProjectionScope {
   include_location_subtrees: ProjectionSourceRef[];
@@ -57,6 +71,7 @@ export interface TopologyProjectionDocument {
   edges: TopologyProjectionEdge[];
   gaps: string[];
   warnings: string[];
+  l1_off_map_continuations?: L1OffMapContinuation[];
 }
 
 export interface TopologyDataSource {
@@ -66,4 +81,5 @@ export interface TopologyDataSource {
 export type TopologySelection =
   | { type: 'node'; item: TopologyProjectionNode }
   | { type: 'edge'; item: TopologyProjectionEdge }
+  | { type: 'continuation'; item: L1OffMapContinuation }
   | null;

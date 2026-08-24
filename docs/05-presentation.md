@@ -130,6 +130,14 @@ canonical topology. Deleting a canonical `PhysicalObject` may safely remove its
 dependent placements and positions. Resolvers, projections, and traces neither
 read nor expose SavedMap state.
 
+An opt-in scoped `L1 / PHYSICAL_OBJECT` projection may additionally expose a
+presentation-only off-map continuation for a simple two-ended canonical cable
+whose local endpoint is in scope and remote endpoint is not. The continuation
+contains exact canonical refs for local/remote connection points, cable, and
+remote `PhysicalObject`, but neither the remote object nor the cable becomes
+SavedMap membership or a normal topology node. It is a one-hop L1 affordance,
+not L2/L3 inference, and does not affect traces.
+
 Aggregate edge не должен визуально или семантически утверждать наличие одного canonical `Connection`, если он на самом деле представляет несколько supporting paths/relations.
 
 По запросу пользователя meaningful aggregate должен раскрываться до supporting canonical/evidence refs.

@@ -20,6 +20,7 @@ interface QuickInspectorProps {
   onClose: () => void;
   onDeletePhysicalObject?: (physicalObjectId: string) => Promise<void>;
   onRemoveFromMap?: (physicalObjectId: string) => Promise<void>;
+  onAddContinuationToMap?: (physicalObjectId: string) => Promise<void>;
 }
 
 const Metric = ({ label, value }: { label: string; value: string }) => (
@@ -33,10 +34,35 @@ export function QuickInspector({
   onClose,
   onDeletePhysicalObject,
   onRemoveFromMap,
+  onAddContinuationToMap,
 }: QuickInspectorProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   if (!selection) return null;
   const nodesById = new Map(document?.nodes.map((node) => [node.id, node]) ?? []);
+
+  if (selection.type === 'continuation') {
+    const continuation = selection.item;
+    const remoteObjectId = continuation.remote_physical_object_ref.entity_id;
+    return (
+      <aside className="quick-inspector" aria-label="Быстрый инспектор">
+        <button className="quick-inspector__close" onClick={onClose} aria-label="Закрыть инспектор">×</button>
+        <span className="eyebrow">L1 continuation</span>
+        <h2>{continuation.local_connection_point_display_name} → {continuation.cable_display_name} → {continuation.remote_display_name}/{continuation.remote_connection_point_display_name}</h2>
+        <p className="quick-inspector__unavailable">Целевой объект не добавлен на эту карту.</p>
+        <Link className="quick-inspector__primary" to={`/infrastructure/objects/${encodeURIComponent(remoteObjectId)}`}>Открыть объект в Catalog</Link>
+        {onAddContinuationToMap && <button type="button" onClick={() => void onAddContinuationToMap(remoteObjectId)}>Добавить объект на карту</button>}
+        <details className="quick-inspector__technical">
+          <summary>Технические детали</summary>
+          <dl>
+            <div><dt>Local ConnectionPoint</dt><dd>{continuation.local_connection_point_ref.entity_id}</dd></div>
+            <div><dt>Cable</dt><dd>{continuation.cable_ref.entity_id}</dd></div>
+            <div><dt>Remote PhysicalObject</dt><dd>{remoteObjectId}</dd></div>
+            <div><dt>Remote ConnectionPoint</dt><dd>{continuation.remote_connection_point_ref.entity_id}</dd></div>
+          </dl>
+        </details>
+      </aside>
+    );
+  }
 
   if (selection.type === 'node') {
     const node = selection.item;

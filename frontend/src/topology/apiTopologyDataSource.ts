@@ -59,6 +59,8 @@ const validateEdge = (value: unknown, index: number): void => {
   if (!isObject(value.attributes)) malformed(`${path}.attributes must be an object.`);
   requireObject(value.attributes, `${path}.attributes`); if (value.attributes.endpoint_pairs != null) validateEndpointPairs(value.attributes.endpoint_pairs, `${path}.attributes.endpoint_pairs`);
 };
+const validateCanonicalRef = (value: unknown, path: string, entityType: string): void => { requireObject(value, path); if (value.ref_type !== 'CANONICAL_FACT' || value.entity_type !== entityType) malformed(`${path} must be a CANONICAL_FACT ${entityType} ref.`); requireString(value.entity_id, `${path}.entity_id`); };
+const validateOffMapContinuations = (value: unknown): void => { if (!Array.isArray(value)) malformed('l1_off_map_continuations must be an array.'); for (const [index, item] of (value as unknown[]).entries()) { const path = `l1_off_map_continuations[${index}]`; requireObject(item, path); for (const key of ['id', 'local_node_id', 'local_connection_point_display_name', 'cable_display_name', 'remote_display_name', 'remote_connection_point_display_name']) requireString(item[key], `${path}.${key}`); validateCanonicalRef(item.local_physical_object_ref, `${path}.local_physical_object_ref`, 'PhysicalObject'); validateCanonicalRef(item.local_connection_point_ref, `${path}.local_connection_point_ref`, 'ConnectionPoint'); validateCanonicalRef(item.cable_ref, `${path}.cable_ref`, 'PhysicalObject'); validateCanonicalRef(item.remote_physical_object_ref, `${path}.remote_physical_object_ref`, 'PhysicalObject'); validateCanonicalRef(item.remote_connection_point_ref, `${path}.remote_connection_point_ref`, 'ConnectionPoint'); if (!Array.isArray(item.source_refs)) malformed(`${path}.source_refs must be an array.`); } };
 
 const parseProjectionDocument = (value: unknown): TopologyProjectionDocument => {
   requireObject(value, 'document');
@@ -81,6 +83,7 @@ const parseProjectionDocument = (value: unknown): TopologyProjectionDocument => 
   requireStringArray(value.warnings, 'warnings');
   value.nodes.forEach(validateNode);
   value.edges.forEach(validateEdge);
+  if (value.l1_off_map_continuations != null) validateOffMapContinuations(value.l1_off_map_continuations);
   return value as unknown as TopologyProjectionDocument;
 };
 

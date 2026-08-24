@@ -29,6 +29,7 @@ import {
 } from '../topology/layoutStore';
 import { DeviceNode } from './DeviceNode';
 import { FloatingTopologyEdge } from './FloatingTopologyEdge';
+import { OffMapContinuationEdge } from './OffMapContinuationEdge';
 import type { PhysicalTraceOverlay } from '../topology/interfacePhysicalTraceOverlay';
 import { physicalObjectIdForNode } from '../topology/projection';
 import type { XYPosition } from '@xyflow/react';
@@ -49,7 +50,7 @@ interface TopologyCanvasProps {
 }
 
 const nodeTypes = { device: DeviceNode };
-const edgeTypes = { floating: FloatingTopologyEdge };
+const edgeTypes = { floating: FloatingTopologyEdge, continuation: OffMapContinuationEdge };
 
 export function TopologyCanvas({
   document,
@@ -141,7 +142,7 @@ export function TopologyCanvas({
     selected: selection?.type === 'node' && selection.item.id === node.id,
   }));
   const edges = projection.edges.map((edge) => {
-    const isSelected = edge.data?.cableNode ? selection?.type === 'node' && selection.item.id === edge.data.cableNode.id : selection?.type === 'edge' && selection.item.id === edge.data?.projection.id;
+    const isSelected = edge.data?.continuation ? selection?.type === 'continuation' && selection.item.id === edge.data.continuation.id : edge.data?.cableNode ? selection?.type === 'node' && selection.item.id === edge.data.cableNode.id : selection?.type === 'edge' && selection.item.id === edge.data?.projection.id;
     const isTraced = edge.data?.cableNode ? (edge.data.supportingEdgeIds?.every((id) => traceOverlay?.highlightedEdgeIds.has(id)) ?? false) : edge.data?.endpointPair ? (traceOverlay?.highlightedConnectionMemberIds.has(edge.data.endpointPair.connection_member_id) ?? false) : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
     return {
       ...edge,
@@ -156,7 +157,7 @@ export function TopologyCanvas({
   };
   const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (_, edge) => {
     const item = edge.data?.projection;
-    if (edge.data?.cableNode) onSelectionChange({ type: 'node', item: edge.data.cableNode }); else if (item) onSelectionChange({ type: 'edge', item });
+    if (edge.data?.continuation) onSelectionChange({ type: 'continuation', item: edge.data.continuation }); else if (edge.data?.cableNode) onSelectionChange({ type: 'node', item: edge.data.cableNode }); else if (item) onSelectionChange({ type: 'edge', item });
   };
   const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
     setProjection((current) => current ? {

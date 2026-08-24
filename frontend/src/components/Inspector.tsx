@@ -69,6 +69,7 @@ const PhysicalEdgeCounts = ({ edge }: { edge: TopologyProjectionEdge }) => (
 );
 
 const TechnicalDetails = ({ selection }: { selection: Exclude<TopologySelection, null> }) => {
+  if (selection.type === 'continuation') return null;
   const item = selection.item;
   return (
     <details className="technical-details">
@@ -141,6 +142,7 @@ export function Inspector({
       </aside>
     );
   }
+  if (selection.type === 'continuation') return null;
 
   const nodesById = new Map(document?.nodes.map((node) => [node.id, node]) ?? []);
 

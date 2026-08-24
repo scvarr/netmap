@@ -145,6 +145,23 @@ class TopologyProjectionEdge(BaseModel):
     status: str | None = None
 
 
+class L1OffMapContinuation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    local_node_id: str
+    local_physical_object_ref: ProjectionSourceRef
+    local_connection_point_ref: ProjectionSourceRef
+    local_connection_point_display_name: str
+    cable_ref: ProjectionSourceRef
+    cable_display_name: str
+    remote_physical_object_ref: ProjectionSourceRef
+    remote_display_name: str
+    remote_connection_point_ref: ProjectionSourceRef
+    remote_connection_point_display_name: str
+    source_refs: list[ProjectionSourceRef]
+
+
 class TopologyProjectionDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -155,6 +172,7 @@ class TopologyProjectionDocument(BaseModel):
     edges: list[TopologyProjectionEdge]
     gaps: list[str]
     warnings: list[str]
+    l1_off_map_continuations: list[L1OffMapContinuation] | None = None
 
 
 class InterfaceAddressDetails(BaseModel):
