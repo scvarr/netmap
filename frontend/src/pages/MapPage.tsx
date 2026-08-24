@@ -78,6 +78,7 @@ export function MapPage({
   const [insertion, setInsertion] = useState<InsertionState | null>(null);
   const [contextAnchor, setContextAnchor] = useState<ContextMenuState | null>(null);
   const [pendingPhysicalToolbarInsertion, setPendingPhysicalToolbarInsertion] = useState<{ mapId: string } | null>(null);
+  const [continuationAnchor, setContinuationAnchor] = useState<{ continuationId: string; mapId: string; anchor: XYPosition } | null>(null);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] = useState(0);
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
   const selectedMapId = useRef<string | null>(mapId);
@@ -99,6 +100,7 @@ export function MapPage({
     setInsertion(null);
     setContextAnchor(null);
     setPendingPhysicalToolbarInsertion(null);
+    setContinuationAnchor(null);
     setParams((current) => {
       const next = new URLSearchParams(current);
       next.set('map', id);
@@ -348,16 +350,17 @@ export function MapPage({
     const targetMapId = mapId;
     await savedMapDataSource.removePlacement(targetMapId, id);
     if (selectedMapId.current !== targetMapId) return;
-    setSelection(null);
     await reloadMap(targetMapId);
+    if (selectedMapId.current === targetMapId) setSelection(null);
   };
 
   const addContinuationAtViewportCenter = async (id: string) => {
     if (!savedMapDataSource || !mapId) return;
     const targetMapId = mapId;
     const center = viewportCenter.current;
-    if (!center) return;
-    const anchor = center();
+    const captured = continuationAnchor?.mapId === targetMapId && selection?.type === 'continuation' && continuationAnchor.continuationId === selection.item.id ? continuationAnchor.anchor : null;
+    if (!captured && !center) return;
+    const anchor = captured ?? center!();
     try {
       await savedMapDataSource.addPlacement(targetMapId, id, anchor.x, anchor.y);
       await reloadMap(targetMapId);
@@ -446,7 +449,7 @@ export function MapPage({
                 <TopologyCanvas
                   document={document}
                   selection={selection}
-                  onSelectionChange={(nextSelection) => { setContextAnchor(null); setSelection(nextSelection); }}
+                  onSelectionChange={(nextSelection) => { setContextAnchor(null); if (nextSelection?.type !== 'continuation') setContinuationAnchor(null); setSelection(nextSelection); }}
                   sceneKey={presentationSceneKey}
                   positionOverrides={!legacy ? positions : undefined}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}
@@ -457,6 +460,7 @@ export function MapPage({
                   onViewportCenterReady={viewMode === 'physical' ? receiveViewportCenter : undefined}
                   onPhysicalPaneContextMenu={viewMode === 'physical' ? (anchor, screen) => setContextAnchor({ anchor, screen }) : undefined}
                   onPaneClick={() => { setContextAnchor(null); setSelection(null); }}
+                  onContinuationClickAnchor={(continuationId, anchor) => mapId && setContinuationAnchor({ continuationId, mapId, anchor })}
                 />
               </ReactFlowProvider>
             )}

@@ -50,6 +50,7 @@ interface TopologyCanvasProps {
   onViewportCenterReady?: (getter: (() => XYPosition) | null) => void;
   onPhysicalPaneContextMenu?: (anchor: XYPosition, screen: XYPosition) => void;
   onPaneClick?: () => void;
+  onContinuationClickAnchor?: (continuationId: string, anchor: XYPosition) => void;
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -71,6 +72,7 @@ export function TopologyCanvas({
   onViewportCenterReady,
   onPhysicalPaneContextMenu,
   onPaneClick,
+  onContinuationClickAnchor,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -182,9 +184,12 @@ export function TopologyCanvas({
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
     onSelectionChange({ type: 'node', item: node.data.projection });
   };
-  const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (_, edge) => {
+  const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
     const item = edge.data?.projection;
-    if (edge.data?.continuation) onSelectionChange({ type: 'continuation', item: edge.data.continuation }); else if (edge.data?.cableNode) onSelectionChange({ type: 'node', item: edge.data.cableNode }); else if (item) onSelectionChange({ type: 'edge', item });
+    if (edge.data?.continuation) {
+      onContinuationClickAnchor?.(edge.data.continuation.id, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+      onSelectionChange({ type: 'continuation', item: edge.data.continuation });
+    } else if (edge.data?.cableNode) onSelectionChange({ type: 'node', item: edge.data.cableNode }); else if (item) onSelectionChange({ type: 'edge', item });
   };
   const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
     setProjection((current) => current ? {

@@ -850,6 +850,8 @@ Quick Inspector L1 object summaries use the authoritative
 `PhysicalObjectDetailsDocument`; cable endpoints are read only from proven
 `CatalogInventoryDocument` simple-cable resolution. Primary map removal affects
 only `MapPlacement`; canonical deletion remains an advanced destructive action.
+When a continuation is selected from its marker/edge, its placement uses the
+captured React Flow coordinate rather than a guessed topology coordinate.
 
 This is not generic continuation: no off-map normal node, L2/L3 continuation,
 multi-hop expansion, MapReference, regions, cable waypoints or map wiring is
