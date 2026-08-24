@@ -95,6 +95,7 @@ export function App(props: AppProps) {
               physicalObjectClassWriteDataSource={props.physicalObjectClassWriteDataSource}
               connectionPointWriteDataSource={props.connectionPointWriteDataSource}
               l2ForwardingContextWriteDataSource={props.l2ForwardingContextWriteDataSource}
+              catalogInventoryDataSource={props.catalogInventoryDataSource}
             />
           )}
         />

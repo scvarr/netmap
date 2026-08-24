@@ -5,6 +5,10 @@ import { PhysicalObjectDetailsSection } from '../components/PhysicalObjectDetail
 import { physicalClassPresentation } from '../topology/presentation';
 import { PHYSICAL_PROJECTION_REQUEST } from '../topology/projection';
 import type { ConnectionPointWriteDataSource } from '../topology/connectionPointWriteTypes';
+import type {
+  CatalogInventoryDataSource,
+  CatalogInventoryDocument,
+} from '../topology/catalogInventoryTypes';
 import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
 import type { L2ForwardingContextWriteDataSource } from '../topology/l2ForwardingContextWriteTypes';
@@ -27,7 +31,12 @@ interface InfrastructureObjectDetailPageProps {
   physicalObjectClassWriteDataSource?: PhysicalObjectClassWriteDataSource;
   connectionPointWriteDataSource?: ConnectionPointWriteDataSource;
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
+  catalogInventoryDataSource: CatalogInventoryDataSource;
 }
+
+const mapNameCollator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
+const mapLink = (mapId: string, objectId: string) =>
+  `/map?map=${encodeURIComponent(mapId)}&view=physical&focus=${encodeURIComponent(objectId)}`;
 
 export function InfrastructureObjectDetailPage({
   dataSource,
@@ -39,11 +48,15 @@ export function InfrastructureObjectDetailPage({
   physicalObjectClassWriteDataSource,
   connectionPointWriteDataSource,
   l2ForwardingContextWriteDataSource,
+  catalogInventoryDataSource,
 }: InfrastructureObjectDetailPageProps) {
   const { physicalObjectId = '' } = useParams();
   const [details, setDetails] = useState<PhysicalObjectDetailsDocument | null>(null);
   const [projection, setProjection] = useState<TopologyProjectionDocument | null>(null);
   const [projectionRevision, setProjectionRevision] = useState(0);
+  const [inventory, setInventory] = useState<CatalogInventoryDocument | null>(null);
+  const [inventoryError, setInventoryError] = useState<string | null>(null);
+  const [inventoryRevision, setInventoryRevision] = useState(0);
 
   useEffect(() => {
     let current = true;
@@ -57,6 +70,20 @@ export function InfrastructureObjectDetailPage({
   const refreshProjection = useCallback(() => {
     setProjectionRevision((revision) => revision + 1);
   }, []);
+
+  useEffect(() => {
+    let current = true;
+    setInventoryError(null);
+    void catalogInventoryDataSource.loadCatalogInventory().then(
+      (document) => { if (current) setInventory(document); },
+      (reason) => {
+        if (current) {
+          setInventoryError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+        }
+      },
+    );
+    return () => { current = false; };
+  }, [catalogInventoryDataSource, inventoryRevision, physicalObjectId]);
 
   const node = useMemo(() => ({
     id: `catalog-physical-object-${physicalObjectId}`,
@@ -75,6 +102,10 @@ export function InfrastructureObjectDetailPage({
       } : {}),
     },
   }), [details, physicalObjectId]);
+  const cable = details?.physical_object.class === 'cable';
+  const inventoryItem = inventory?.equipment.find(
+    (item) => item.physical_object_ref.entity_id === physicalObjectId,
+  );
 
   if (!physicalObjectId) {
     return <main className="catalog-page"><p className="catalog-note catalog-note--gap">Не указан canonical ID объекта.</p></main>;
@@ -92,9 +123,6 @@ export function InfrastructureObjectDetailPage({
           <span className="eyebrow">{details ? physicalClassPresentation(details.physical_object.class).label : 'ФИЗИЧЕСКИЙ ОБЪЕКТ'}</span>
           <h1>{details?.physical_object.label ?? 'Загружаем объект…'}</h1>
         </div>
-        <Link className="secondary-action" to={`/map?view=physical&focus=${encodeURIComponent(physicalObjectId)}`}>
-          Показать на карте
-        </Link>
       </header>
       {details?.warnings.map((warning, index) => <p className="catalog-note" key={`warning-${index}-${warning}`}>{warning}</p>)}
       {details?.gaps.map((gap, index) => <p className="catalog-note catalog-note--gap" key={`gap-${index}-${gap}`}>{gap}</p>)}
@@ -105,6 +133,38 @@ export function InfrastructureObjectDetailPage({
             <div><dt>Название</dt><dd>{details.physical_object.label}</dd></div>
             <div><dt>Класс</dt><dd>{details.physical_object.class ?? 'Не указан'}</dd></div>
           </dl>
+        </section>
+      )}
+      {details && (
+        <section className="detail-section" aria-labelledby="object-maps-heading">
+          <h2 id="object-maps-heading">Карты</h2>
+          {cable ? (
+            <p>Кабель отображается на физических картах через свои подключения и отдельно на карту не размещается.</p>
+          ) : inventoryError ? (
+            <>
+              <p role="alert">Не удалось загрузить данные о размещении на картах: {inventoryError}</p>
+              <button onClick={() => setInventoryRevision((revision) => revision + 1)}>Повторить</button>
+            </>
+          ) : !inventory ? (
+            <p>Загружаем данные о размещении на картах…</p>
+          ) : !inventoryItem ? (
+            <p>Данные о размещении на картах недоступны.</p>
+          ) : inventoryItem.map_memberships.length === 0 ? (
+            <p>На картах: нет</p>
+          ) : (
+            <>
+              <p>На картах:</p>
+              <ul>
+                {[...inventoryItem.map_memberships]
+                  .sort((left, right) => mapNameCollator.compare(left.name, right.name))
+                  .map((membership) => (
+                    <li key={membership.map_ref.entity_id}>
+                      <Link to={mapLink(membership.map_ref.entity_id, physicalObjectId)}>{membership.name}</Link>
+                    </li>
+                  ))}
+              </ul>
+            </>
+          )}
         </section>
       )}
       <section className="detail-section detail-section--operations">

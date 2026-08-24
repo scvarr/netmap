@@ -243,7 +243,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     );
   });
 
-  it('loads PhysicalObjectDetailsDocument on object detail and links back to canonical map focus', async () => {
+  it('loads PhysicalObjectDetailsDocument on object detail without inventing map membership', async () => {
     const loadPhysicalObjectDetails = vi.fn().mockResolvedValue(ppDetails);
     renderApp(`/infrastructure/objects/${ppId}`, {
       physicalObjectDetailsDataSource: { loadPhysicalObjectDetails },
@@ -252,9 +252,8 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     expect(await screen.findByRole('heading', { name: 'PP1' })).toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: 'Port01' })).toBeInTheDocument();
     expect(loadPhysicalObjectDetails).toHaveBeenCalledWith(ppId);
-    expect(screen.getByRole('link', { name: 'Показать на карте' })).toHaveAttribute(
-      'href', `/map?view=physical&focus=${ppId}`,
-    );
+    expect(await screen.findByText('На картах: нет')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Показать на карте' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'L2 forwarding' })).not.toBeInTheDocument();
   });
 

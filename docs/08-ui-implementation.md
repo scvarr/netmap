@@ -173,6 +173,11 @@ Object Blueprint version; W.1 и W.5 остаются явным advanced/manual
 frontend reuse текущих public boundaries, а не новый backend catalog API и не
 frontend raw join.
 
+Object Detail показывает Saved Map membership только из authoritative
+`CatalogInventoryDataSource.equipment[].map_memberships`: каждая map link несёт
+exact `SavedMap` identity, а отсутствие membership не превращается в generic
+focus link. Cables не имеют explicit `MapPlacement` UI.
+
 Историческое размещение W.1-W.7 forms внутри большого map inspector superseded
 этим разделением. Их FIXED API, transaction и canonical identity semantics не
 изменяются.
