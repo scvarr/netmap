@@ -12,6 +12,7 @@ import type {
 import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
 import type { DeviceInterfaceWriteDataSource } from '../topology/deviceInterfaceWriteTypes';
 import type { L2ForwardingContextWriteDataSource } from '../topology/l2ForwardingContextWriteTypes';
+import type { SavedMapDataSource, SavedMapSummary } from '../topology/savedMapTypes';
 import type { PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
 import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
 import type { PhysicalObjectClassWriteDataSource } from '../topology/physicalObjectClassWriteTypes';
@@ -32,11 +33,14 @@ interface InfrastructureObjectDetailPageProps {
   connectionPointWriteDataSource?: ConnectionPointWriteDataSource;
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
   catalogInventoryDataSource: CatalogInventoryDataSource;
+  savedMapDataSource?: SavedMapDataSource;
 }
 
 const mapNameCollator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
 const mapLink = (mapId: string, objectId: string) =>
   `/map?map=${encodeURIComponent(mapId)}&view=physical&focus=${encodeURIComponent(objectId)}`;
+const addMapLink = (mapId: string, objectId: string) =>
+  `/map?map=${encodeURIComponent(mapId)}&view=physical&add=${encodeURIComponent(objectId)}`;
 
 export function InfrastructureObjectDetailPage({
   dataSource,
@@ -49,6 +53,7 @@ export function InfrastructureObjectDetailPage({
   connectionPointWriteDataSource,
   l2ForwardingContextWriteDataSource,
   catalogInventoryDataSource,
+  savedMapDataSource,
 }: InfrastructureObjectDetailPageProps) {
   const { physicalObjectId = '' } = useParams();
   const [details, setDetails] = useState<PhysicalObjectDetailsDocument | null>(null);
@@ -57,6 +62,7 @@ export function InfrastructureObjectDetailPage({
   const [inventory, setInventory] = useState<CatalogInventoryDocument | null>(null);
   const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [inventoryRevision, setInventoryRevision] = useState(0);
+  const [mapChooser, setMapChooser] = useState<{ status: 'loading' | 'ready' | 'error'; maps: SavedMapSummary[]; error: string | null } | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -106,6 +112,14 @@ export function InfrastructureObjectDetailPage({
   const inventoryItem = inventory?.equipment.find(
     (item) => item.physical_object_ref.entity_id === physicalObjectId,
   );
+  const openMapChooser = () => {
+    if (!savedMapDataSource) return;
+    setMapChooser({ status: 'loading', maps: [], error: null });
+    void savedMapDataSource.listMaps().then(
+      (maps) => setMapChooser({ status: 'ready', maps, error: null }),
+      (reason) => setMapChooser({ status: 'error', maps: [], error: reason instanceof Error ? reason.message : 'Неизвестная ошибка' }),
+    );
+  };
 
   if (!physicalObjectId) {
     return <main className="catalog-page"><p className="catalog-note catalog-note--gap">Не указан canonical ID объекта.</p></main>;
@@ -165,6 +179,33 @@ export function InfrastructureObjectDetailPage({
               </ul>
             </>
           )}
+          {!cable && inventoryItem && savedMapDataSource && (
+            <button type="button" onClick={openMapChooser}>Добавить на карту</button>
+          )}
+        </section>
+      )}
+      {mapChooser && (
+        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Добавить на карту">
+          <div className="map-dialog__surface">
+            <h2>Добавить на карту</h2>
+            {mapChooser.status === 'loading' && <p role="status">Загружаем карты…</p>}
+            {mapChooser.status === 'error' && (
+              <>
+                <p role="alert">{mapChooser.error}</p>
+                <button type="button" onClick={openMapChooser}>Повторить</button>
+              </>
+            )}
+            {mapChooser.status === 'ready' && (() => {
+              const placed = new Set(inventoryItem?.map_memberships.map((membership) => membership.map_ref.entity_id));
+              const available = mapChooser.maps
+                .filter((map) => !placed.has(map.map_ref.entity_id))
+                .sort((left, right) => mapNameCollator.compare(left.name, right.name));
+              if (mapChooser.maps.length === 0) return <p>Карты пока не созданы.</p>;
+              if (available.length === 0) return <p>Объект уже размещён на всех доступных картах.</p>;
+              return <ul>{available.map((map) => <li key={map.map_ref.entity_id}><Link to={addMapLink(map.map_ref.entity_id, physicalObjectId)}>{map.name}</Link></li>)}</ul>;
+            })()}
+            <button type="button" onClick={() => setMapChooser(null)}>Закрыть</button>
+          </div>
         </section>
       )}
       <section className="detail-section detail-section--operations">

@@ -65,6 +65,7 @@ interface InsertionState {
   inventory: CatalogInventoryDocument | null;
   status: "loading" | "ready" | "saving" | "saved-refresh-failed";
   error: string | null;
+  requestedObjectId?: string;
 }
 interface ContextMenuState {
   anchor: XYPosition;
@@ -107,6 +108,7 @@ export function MapPage({
 }: MapPageProps) {
   const [params, setParams] = useSearchParams();
   const mapId = params.get("map");
+  const addIntent = mapId ? params.get("add") : null;
   const viewMode = view(params.get("view"));
   const [maps, setMaps] = useState<SavedMapSummary[] | null>(null);
   const [map, setMap] = useState<SavedMap | null>(null);
@@ -139,6 +141,7 @@ export function MapPage({
   const selectedMapId = useRef<string | null>(mapId);
   const insertionSequence = useRef(0);
   const viewportCenter = useRef<(() => XYPosition) | null>(null);
+  const consumedAddIntent = useRef<string | null>(null);
 
   selectedMapId.current = mapId;
   const legacy = !savedMapDataSource;
@@ -342,7 +345,7 @@ export function MapPage({
   };
 
   const openInsertion = useCallback(
-    (anchor: XYPosition) => {
+    (anchor: XYPosition, requestedObjectId?: string) => {
       if (!catalogInventoryDataSource || !mapId || !activeMap) return;
       const request = ++insertionSequence.current;
       setContextAnchor(null);
@@ -352,6 +355,7 @@ export function MapPage({
         inventory: null,
         status: "loading",
         error: null,
+        ...(requestedObjectId ? { requestedObjectId } : {}),
       });
       void catalogInventoryDataSource.loadCatalogInventory().then(
         (inventory) => {
@@ -414,6 +418,29 @@ export function MapPage({
     pendingPhysicalToolbarInsertion,
     viewMode,
   ]);
+
+  useEffect(() => {
+    if (!mapId || !addIntent) return;
+    const intentKey = `${mapId}/${addIntent}`;
+    if (consumedAddIntent.current === intentKey) return;
+    if (viewMode !== "physical") {
+      setParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("view", "physical");
+        return next;
+      }, { replace: true });
+      return;
+    }
+    if (!activeMap || !document || !viewportCenter.current) return;
+    consumedAddIntent.current = intentKey;
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("add");
+      if (ids.includes(addIntent)) next.set("focus", addIntent);
+      return next;
+    }, { replace: true });
+    if (!ids.includes(addIntent)) openInsertion(viewportCenter.current(), addIntent);
+  }, [activeMap, addIntent, coordinateBridgeRevision, document, ids, mapId, openInsertion, setParams, viewMode]);
 
   const startToolbarInsertion = () => {
     if (!mapId || !activeMap) return;
@@ -796,6 +823,7 @@ export function MapPage({
           onSelect={(candidate) => void submitInsertion(candidate.id)}
           onClose={() => setInsertion(null)}
           onRetryRefresh={() => void retryInsertionRefresh()}
+          requestedObjectId={insertion.requestedObjectId}
         />
       )}
       {contextAnchor && viewMode === "physical" && (

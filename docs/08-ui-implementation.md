@@ -178,6 +178,12 @@ Object Detail показывает Saved Map membership только из author
 exact `SavedMap` identity, а отсутствие membership не превращается в generic
 focus link. Cables не имеют explicit `MapPlacement` UI.
 
+Object Detail может передать existing equipment на explicit SavedMap через
+transient navigation intent `add=<PhysicalObject UUID>`. MapPage потребляет его
+только после готовности Physical scene и coordinate bridge, требует user
+confirmation и использует current viewport center; затем применяется existing
+insertion lifecycle. Cables не являются explicit placement candidates.
+
 Историческое размещение W.1-W.7 forms внутри большого map inspector superseded
 этим разделением. Их FIXED API, transaction и canonical identity semantics не
 изменяются.

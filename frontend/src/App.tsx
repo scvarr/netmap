@@ -96,6 +96,7 @@ export function App(props: AppProps) {
               connectionPointWriteDataSource={props.connectionPointWriteDataSource}
               l2ForwardingContextWriteDataSource={props.l2ForwardingContextWriteDataSource}
               catalogInventoryDataSource={props.catalogInventoryDataSource}
+              savedMapDataSource={props.savedMapDataSource}
             />
           )}
         />
