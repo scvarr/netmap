@@ -20,7 +20,7 @@ editor и bounded L1 interface-physical Trace Command Bar. Карта не вл�
 canonical topology: она читает public projection DTO и SavedMap presentation
 state.
 
-Связанные документы: [[05-presentation|05. Представление]], [[02-04-projections-aggregation|02.4 Projections]], [[07-workspaces|07. Workspace]], [[09-ui-ux-review|09. Рабочий UI/UX review]].
+Связанные документы: [[05-presentation|05. Представление]], [[02-04-projections-aggregation|02.4 Projections]], [[07-workspaces|07. Workspace]], [[09-ui-ux-review|09. Рабочий L1 UI/UX review]].
 
 ## Ownership
 
@@ -619,7 +619,7 @@ opens Object Detail; the frontend never synthesizes interfaces, points, or
 connections. Materialization does not change blueprint versions or card state.
 
 Первый ручной проход по Object Library и Template Editor зафиксирован отдельно
-в [[09-ui-ux-review|рабочем UI/UX review]]. Его findings — не изменение этого
+в [[09-ui-ux-review|рабочем L1 UI/UX review]]. Его findings — не изменение этого
 implementation contract и не объявление будущих product capabilities
 реализованными.
 

@@ -89,6 +89,8 @@ docker compose down
   contracts, Saved Map scope and explicit open work.
 - [`docs/08-ui-implementation.md`](docs/08-ui-implementation.md) — implemented
   frontend/API subset and its boundaries.
+- [`docs/09-ui-ux-review.md`](docs/09-ui-ux-review.md) — working L1 product/UX
+  review; its findings are implementation-pending, not runtime contracts.
 
 The architecture notes intentionally contain designs that are not yet product
 surfaces. Treat their status labels and the implementation-facing documents
