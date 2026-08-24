@@ -1,142 +1,15 @@
-import { useState, type FormEvent } from 'react';
-import type { DeviceDetailsDataSource, DeviceInterfaceDetails } from '../topology/deviceDetailsTypes';
-import type { InterfacePhysicalTraceArtifact, InterfacePhysicalTraceDataSource } from '../topology/interfacePhysicalTraceTypes';
-import { physicalObjectIdForNode } from '../topology/projection';
-import type { TopologyProjectionDocument, TopologyProjectionNode } from '../topology/types';
+import { useEffect, useState, type FormEvent } from 'react';
+import type { CatalogInventoryDataSource, CatalogInventoryEquipmentItem } from '../topology/catalogInventoryTypes';
+import type { PhysicalObjectL1TraceArtifact, PhysicalObjectL1TraceDataSource } from '../topology/physicalObjectL1TraceTypes';
 
-interface TraceCommandBarProps {
-  logicalDocument: TopologyProjectionDocument | null;
-  deviceDetailsDataSource: DeviceDetailsDataSource;
-  traceDataSource?: InterfacePhysicalTraceDataSource;
-  traceArtifact: InterfacePhysicalTraceArtifact | null;
-  onTraceArtifact: (artifact: InterfacePhysicalTraceArtifact | null) => void;
-}
-
-interface ParsedTraceCommand { sourceLabel: string; destinationLabel: string; }
-
-interface EndpointChoice { label: string; interfaces: DeviceInterfaceDetails[]; selectedId?: string; }
-
-interface PendingTrace { source: EndpointChoice; destination: EndpointChoice; }
-
-const interfaceLabelCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
-
-const sortInterfacesNaturally = (interfaces: DeviceInterfaceDetails[]) => interfaces
-  .map((item, index) => ({ item, index }))
-  .sort((left, right) => interfaceLabelCollator.compare(left.item.label, right.item.label) || left.index - right.index)
-  .map(({ item }) => item);
-
-export const parseTraceCommand = (input: string): ParsedTraceCommand | Error => {
-  const parts = input.trim().split(/\s+/);
-  if (parts.length !== 4 || parts[0].toLowerCase() !== 'trace' || parts[3].toLowerCase() !== 'l1') {
-    return new Error('Поддерживается только команда: trace <source> <destination> l1');
-  }
-  if (!parts[1] || !parts[2]) return new Error('Укажите source и destination устройства.');
-  return { sourceLabel: parts[1], destinationLabel: parts[2] };
-};
-
-const resolveDevice = (document: TopologyProjectionDocument, label: string): TopologyProjectionNode | Error => {
-  const matches = document.nodes.filter((node) => node.label === label);
-  if (matches.length === 0) return new Error(`Устройство «${label}» отсутствует в текущей логической схеме.`);
-  if (matches.length > 1) return new Error(`Устройство «${label}» неоднозначно: найдено несколько узлов.`);
-  if (!physicalObjectIdForNode(matches[0])) return new Error(`Узел «${label}» не содержит однозначной ссылки на PhysicalObject.`);
-  return matches[0];
-};
-
-const endpointChoice = (label: string, interfaces: DeviceInterfaceDetails[]): EndpointChoice | Error => {
-  if (interfaces.length === 0) return new Error(`У устройства «${label}» нет NetworkInterface для L1 trace.`);
-  const sortedInterfaces = sortInterfacesNaturally(interfaces);
-  return {
-    label,
-    interfaces: sortedInterfaces,
-    selectedId: sortedInterfaces.length === 1 ? sortedInterfaces[0].interface_ref.entity_id : undefined,
-  };
-};
-
+interface TraceCommandBarProps { catalogInventoryDataSource?: CatalogInventoryDataSource; traceDataSource?: PhysicalObjectL1TraceDataSource; traceArtifact: PhysicalObjectL1TraceArtifact | null; selectedBranchId: string | null; onSelectedBranchId: (branchId: string | null) => void; onTraceArtifact: (artifact: PhysicalObjectL1TraceArtifact | null) => void; }
 const warningText = (warning: Record<string, unknown>) => JSON.stringify(warning);
+const sortedEquipment = (items: CatalogInventoryEquipmentItem[]) => [...items].sort((left, right) => left.label.localeCompare(right.label, undefined, { numeric: true, sensitivity: 'base' }));
 
-export function TraceCommandBar({ logicalDocument, deviceDetailsDataSource, traceDataSource, traceArtifact, onTraceArtifact }: TraceCommandBarProps) {
-  const [command, setCommand] = useState('');
-  const [pending, setPending] = useState<PendingTrace | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const runTrace = async (sourceId: string, destinationId: string) => {
-    if (!traceDataSource) { setMessage('L1 trace datasource пока недоступен.'); return; }
-    setLoading(true); setMessage(null);
-    try {
-      onTraceArtifact(await traceDataSource.traceInterfacePhysical({ from_interface_id: sourceId, to_interface_id: destinationId }));
-      setPending(null);
-    } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : 'Не удалось выполнить L1 trace.');
-    } finally { setLoading(false); }
-  };
-
-  const submit = async (event: FormEvent) => {
-    event.preventDefault();
-    setMessage(null); onTraceArtifact(null); setPending(null);
-    const parsed = parseTraceCommand(command);
-    if (parsed instanceof Error) { setMessage(parsed.message); return; }
-    if (!logicalDocument || logicalDocument.layer !== 'L2' || logicalDocument.detail_level !== 'DEVICE') {
-      setMessage('Для trace нужна загруженная логическая DEVICE projection.'); return;
-    }
-    const sourceNode = resolveDevice(logicalDocument, parsed.sourceLabel);
-    const destinationNode = resolveDevice(logicalDocument, parsed.destinationLabel);
-    if (sourceNode instanceof Error) { setMessage(sourceNode.message); return; }
-    if (destinationNode instanceof Error) { setMessage(destinationNode.message); return; }
-    const sourceId = physicalObjectIdForNode(sourceNode);
-    const destinationId = physicalObjectIdForNode(destinationNode);
-    if (!sourceId || !destinationId) { setMessage('Невозможно разрешить выбранное устройство.'); return; }
-    setLoading(true);
-    try {
-      const [sourceDetails, destinationDetails] = await Promise.all([
-        deviceDetailsDataSource.loadDeviceDetails(sourceId),
-        deviceDetailsDataSource.loadDeviceDetails(destinationId),
-      ]);
-      const source = endpointChoice(parsed.sourceLabel, sourceDetails.interfaces);
-      const destination = endpointChoice(parsed.destinationLabel, destinationDetails.interfaces);
-      if (source instanceof Error) { setMessage(source.message); return; }
-      if (destination instanceof Error) { setMessage(destination.message); return; }
-      if (source.selectedId && destination.selectedId) await runTrace(source.selectedId, destination.selectedId);
-      else setPending({ source, destination });
-    } catch (reason) {
-      setMessage(reason instanceof Error ? reason.message : 'Не удалось загрузить Device Details.');
-    } finally { setLoading(false); }
-  };
-
-  const updateEndpoint = (key: keyof PendingTrace, selectedId: string) => setPending((current) => (
-    current ? { ...current, [key]: { ...current[key], selectedId } } : current
-  ));
-
-  const tracePending = () => {
-    if (pending?.source.selectedId && pending.destination.selectedId) {
-      void runTrace(pending.source.selectedId, pending.destination.selectedId);
-    }
-  };
-
-  return <section className="trace-command" aria-label="L1 trace command">
-    <form onSubmit={(event) => void submit(event)}>
-      <label htmlFor="trace-command-input">Trace command</label>
-      <input id="trace-command-input" value={command} onChange={(event) => setCommand(event.target.value)} placeholder="trace PC1 PC2 l1" />
-      <button type="submit" disabled={loading}>Trace</button>
-    </form>
-    {message && <p className="trace-command__message" role="alert">{message}</p>}
-    {pending && <div className="trace-command__choices" aria-label="Выбор интерфейсов">
-      {(['source', 'destination'] as const).map((key) => (
-        <label key={key}>{key === 'source' ? 'Интерфейс источника' : 'Интерфейс назначения'}
-          <select value={pending[key].selectedId ?? ''} onChange={(event) => updateEndpoint(key, event.target.value)}>
-            <option value="">Выберите интерфейс</option>
-            {pending[key].interfaces.map((item) => <option key={item.interface_ref.entity_id} value={item.interface_ref.entity_id}>{item.label}</option>)}
-          </select>
-        </label>
-      ))}
-      <button type="button" onClick={tracePending} disabled={loading || !pending.source.selectedId || !pending.destination.selectedId}>Трассировать L1</button>
-    </div>}
-    {traceArtifact && <div className={`trace-result trace-result--${traceArtifact.verdict.toLowerCase()}`} aria-label="Результат L1 trace">
-      <strong>{traceArtifact.verdict === 'REACHABLE' ? 'Физический L1-путь доказан' : 'Физический L1-путь не доказан'}</strong>
-      {traceArtifact.verdict === 'REACHABLE' && <span>Доказанных ветвей: {traceArtifact.branches.length}</span>}
-      {traceArtifact.gaps.length > 0 && <p>Gaps: {traceArtifact.gaps.map((gap) => gap.code).join(', ')}</p>}
-      {traceArtifact.warnings.length > 0 && <p>Warnings: {traceArtifact.warnings.map(warningText).join('; ')}</p>}
-      <button type="button" className="trace-result__clear" onClick={() => onTraceArtifact(null)}>Сбросить трассировку</button>
-    </div>}
-  </section>;
+export function TraceCommandBar({ catalogInventoryDataSource, traceDataSource, traceArtifact, selectedBranchId, onSelectedBranchId, onTraceArtifact }: TraceCommandBarProps) {
+  const [equipment, setEquipment] = useState<CatalogInventoryEquipmentItem[] | null>(null);
+  const [sourceId, setSourceId] = useState(''); const [destinationId, setDestinationId] = useState(''); const [message, setMessage] = useState<string | null>(null); const [loading, setLoading] = useState(false);
+  useEffect(() => { if (!catalogInventoryDataSource) return; let active = true; void Promise.resolve(catalogInventoryDataSource.loadCatalogInventory()).then((document) => active && document && setEquipment(sortedEquipment(document.equipment)), (reason) => active && setMessage(reason instanceof Error ? reason.message : 'Не удалось загрузить инвентарь оборудования.')); return () => { active = false; }; }, [catalogInventoryDataSource]);
+  const submit = async (event: FormEvent) => { event.preventDefault(); setMessage(null); if (!traceDataSource) { setMessage('L1 trace datasource пока недоступен.'); return; } if (!sourceId || !destinationId) { setMessage('Выберите PhysicalObject для «Откуда» и «Куда».'); return; } setLoading(true); onTraceArtifact(null); onSelectedBranchId(null); try { const artifact = await traceDataSource.tracePhysicalObjectsL1({ from_physical_object_id: sourceId, to_physical_object_id: destinationId }); onTraceArtifact(artifact); onSelectedBranchId(artifact.verdict === 'REACHABLE' ? artifact.branches[0]?.branch_id ?? null : null); } catch (reason) { setMessage(reason instanceof Error ? reason.message : 'Не удалось выполнить L1 trace.'); } finally { setLoading(false); } };
+  return <section className="trace-command" aria-label="L1 трассировка PhysicalObject"><form onSubmit={(event) => void submit(event)}><label>Откуда<select aria-label="Откуда" value={sourceId} onChange={(event) => setSourceId(event.target.value)} disabled={loading || !equipment}><option value="">Выберите PhysicalObject</option>{(equipment ?? []).map((item) => <option key={item.physical_object_ref.entity_id} value={item.physical_object_ref.entity_id}>{item.label}</option>)}</select></label><label>Куда<select aria-label="Куда" value={destinationId} onChange={(event) => setDestinationId(event.target.value)} disabled={loading || !equipment}><option value="">Выберите PhysicalObject</option>{(equipment ?? []).map((item) => <option key={item.physical_object_ref.entity_id} value={item.physical_object_ref.entity_id}>{item.label}</option>)}</select></label><span className="trace-command__level">Уровень: Physical / L1</span><button type="submit" disabled={loading || !equipment}>Трассировать</button></form>{message && <p className="trace-command__message" role="alert">{message}</p>}{traceArtifact && <div className={`trace-result trace-result--${traceArtifact.verdict.toLowerCase()}`} aria-label="Результат L1 trace"><strong>{traceArtifact.verdict === 'REACHABLE' ? 'Физический L1-путь доказан' : 'UNKNOWN: физический L1-путь не доказан'}</strong>{traceArtifact.verdict === 'REACHABLE' && <><span>Доказанных альтернатив: {traceArtifact.branches.length}</span>{traceArtifact.branches.length > 0 && <label>Показать альтернативу<select aria-label="Показать альтернативу" value={selectedBranchId ?? ''} onChange={(event) => onSelectedBranchId(event.target.value)}>{traceArtifact.branches.map((branch, index) => <option key={branch.branch_id} value={branch.branch_id}>Альтернатива {index + 1}</option>)}</select></label>}</>}{traceArtifact.cycles.length > 0 && <p>Обнаружены циклы: {traceArtifact.cycles.map((cycle) => cycle.cycle_id).join(', ')}</p>}{traceArtifact.gaps.length > 0 && <p>Gaps: {traceArtifact.gaps.map((gap) => gap.code).join(', ')}</p>}{traceArtifact.warnings.length > 0 && <p>Warnings: {traceArtifact.warnings.map(warningText).join('; ')}</p>}<button type="button" className="trace-result__clear" onClick={() => { onTraceArtifact(null); onSelectedBranchId(null); }}>Сбросить трассировку</button></div>}</section>;
 }

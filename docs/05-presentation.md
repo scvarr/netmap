@@ -293,7 +293,7 @@ MAP
     исследование topology через projection-oriented DTO
 
 TRACE COMMAND BAR
-    implemented bounded L1 interface-physical trace command
+    bounded PhysicalObject → PhysicalObject L1 trace command
 ```
 
 `Map` остаётся главным пространственным контекстом исследования сети, но не
@@ -313,11 +313,12 @@ operations размещаются на catalog create/detail pages. Большо
 использовавшийся в ранних W.1-W.7 frontend slices, является historical
 implementation placement и не архитектурным инвариантом.
 
-Текущий Trace Command Bar принимает только
-`trace <source> <destination> l1`, resolves canonical interfaces through public
-Device Details and calls the interface-physical trace API. Broader L2/L3,
-policy, group and packet-flow trace controls remain architectural/future work;
-они не должны считаться реализованными из-за существования resolver contracts.
+Trace Command Bar выбирает «Откуда» и «Куда» из authoritative Catalog Inventory
+как canonical `PhysicalObject`, показывает фиксированный «Physical / L1» и
+вызывает object-level L1 trace API без optional exact-port constraints. Для
+нескольких доказанных ветвей это альтернативы без preferred/best label; карта
+подсвечивает только выбранную canonical-evidence ветвь. Broader L2/L3, policy,
+group and packet-flow trace controls remain architectural/future work.
 
 ## Простая трассировка на основном экране
 

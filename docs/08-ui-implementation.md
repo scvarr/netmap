@@ -79,7 +79,7 @@ Catalog
     canonical data management через существующие public read/write operations
 
 Trace Command Bar
-    implemented bounded L1 interface-physical trace command
+    bounded PhysicalObject → PhysicalObject L1 trace command
 ```
 
 `/map?map=<SavedMap UUID>&view=physical` first loads its explicit SavedMap

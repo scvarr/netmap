@@ -1,4 +1,4 @@
-import type { InterfacePhysicalTraceArtifact, InterfaceTraceEvidenceRef } from './interfacePhysicalTraceTypes';
+import type { PhysicalObjectL1TraceArtifact, PhysicalTraceEvidenceRef } from './physicalObjectL1TraceTypes';
 import type { TopologyProjectionDocument } from './types';
 
 export interface PhysicalTraceOverlay {
@@ -9,21 +9,23 @@ export interface PhysicalTraceOverlay {
 
 const emptyOverlay = (): PhysicalTraceOverlay => ({ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set() });
 
-const sameEvidence = (left: InterfaceTraceEvidenceRef, right: { entity_type: string; entity_id: string }): boolean => (
+const sameEvidence = (left: PhysicalTraceEvidenceRef, right: { entity_type: string; entity_id: string }): boolean => (
   left.entity_type === right.entity_type && left.entity_id === right.entity_id
 );
 
 export const physicalTraceOverlayFor = (
-  artifact: InterfacePhysicalTraceArtifact | null,
+  artifact: PhysicalObjectL1TraceArtifact | null,
   document: TopologyProjectionDocument | null,
+  selectedBranchId: string | null,
 ): PhysicalTraceOverlay => {
   const overlay = emptyOverlay();
   if (!artifact || artifact.verdict !== 'REACHABLE' || !document || document.layer !== 'L1') return overlay;
 
   const traceEdges = new Map(artifact.edges.map((edge) => [edge.id, edge]));
   const traceNodes = new Map(artifact.nodes.map((node) => [node.id, node]));
-  const evidence: InterfaceTraceEvidenceRef[] = [];
-  for (const branch of artifact.branches) {
+  const evidence: PhysicalTraceEvidenceRef[] = [];
+  const branch = artifact.branches.find((item) => item.branch_id === selectedBranchId);
+  if (branch) {
     evidence.push(...branch.evidence_refs);
     for (const edgeId of branch.edge_ids) {
       const edge = traceEdges.get(edgeId);

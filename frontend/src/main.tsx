@@ -13,7 +13,7 @@ import { ApiPhysicalEndpointConnectionWriteDataSource } from './topology/apiPhys
 import { ApiPhysicalObjectClassWriteDataSource } from './topology/apiPhysicalObjectClassWriteDataSource';
 import { BrowserTopologyLayoutStore } from './topology/layoutStore';
 import { ApiConnectionPointWriteDataSource } from './topology/apiConnectionPointWriteDataSource';
-import { ApiInterfacePhysicalTraceDataSource } from './topology/apiInterfacePhysicalTraceDataSource';
+import { ApiPhysicalObjectL1TraceDataSource } from './topology/apiPhysicalObjectL1TraceDataSource';
 import { ApiL2ForwardingContextWriteDataSource } from './topology/apiL2ForwardingContextWriteDataSource';
 import { ApiObjectBlueprintDataSource } from './topology/apiObjectBlueprintDataSource';
 import { ApiPhysicalObjectDeleteDataSource } from './topology/apiPhysicalObjectDeleteDataSource';
@@ -28,7 +28,7 @@ createRoot(document.getElementById('root')!).render(
       <App
         dataSource={new ApiTopologyDataSource()}
         deviceDetailsDataSource={new ApiDeviceDetailsDataSource()}
-        traceDataSource={new ApiInterfacePhysicalTraceDataSource()}
+        traceDataSource={new ApiPhysicalObjectL1TraceDataSource()}
         deviceWriteDataSource={new ApiDeviceWriteDataSource()}
         deviceInterfaceWriteDataSource={new ApiDeviceInterfaceWriteDataSource()}
         physicalLinkWriteDataSource={new ApiPhysicalLinkWriteDataSource()}

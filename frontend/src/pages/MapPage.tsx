@@ -16,9 +16,9 @@ import type {
 } from "../topology/catalogInventoryTypes";
 import type { DeviceDetailsDataSource } from "../topology/deviceDetailsTypes";
 import type {
-  InterfacePhysicalTraceArtifact,
-  InterfacePhysicalTraceDataSource,
-} from "../topology/interfacePhysicalTraceTypes";
+  PhysicalObjectL1TraceArtifact,
+  PhysicalObjectL1TraceDataSource,
+} from "../topology/physicalObjectL1TraceTypes";
 import type { TopologyLayoutStore } from "../topology/layoutStore";
 import type { PhysicalObjectDeleteDataSource } from "../topology/physicalObjectDeleteTypes";
 import type { PhysicalObjectDetailsDataSource } from "../topology/physicalObjectDetailsTypes";
@@ -46,12 +46,13 @@ export { mapCandidateChoices } from "../components/MapInsertionPicker";
 
 interface MapPageProps {
   dataSource: TopologyDataSource;
-  deviceDetailsDataSource: DeviceDetailsDataSource;
+  /** Retained for callers that share App wiring; L1 object trace does not use it. */
+  deviceDetailsDataSource?: DeviceDetailsDataSource;
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
-  traceDataSource?: InterfacePhysicalTraceDataSource;
+  traceDataSource?: PhysicalObjectL1TraceDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
 }
 
@@ -99,7 +100,6 @@ const emptyPhysicalDocument: TopologyProjectionDocument = {
 
 export function MapPage({
   dataSource,
-  deviceDetailsDataSource,
   savedMapDataSource,
   catalogInventoryDataSource,
   physicalObjectDeleteDataSource,
@@ -118,7 +118,9 @@ export function MapPage({
   const [logicalDocument, setLogicalDocument] =
     useState<TopologyProjectionDocument | null>(null);
   const [traceArtifact, setTraceArtifact] =
-    useState<InterfacePhysicalTraceArtifact | null>(null);
+    useState<PhysicalObjectL1TraceArtifact | null>(null);
+  const [selectedTraceBranchId, setSelectedTraceBranchId] = useState<string | null>(null);
+  const [traceViewNotice, setTraceViewNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -864,20 +866,25 @@ export function MapPage({
       {(legacy || activeMap) && (
         <>
           <TraceCommandBar
-            logicalDocument={logicalDocument}
-            deviceDetailsDataSource={deviceDetailsDataSource}
+            catalogInventoryDataSource={catalogInventoryDataSource}
             traceDataSource={traceDataSource}
             traceArtifact={traceArtifact}
+            selectedBranchId={selectedTraceBranchId}
+            onSelectedBranchId={setSelectedTraceBranchId}
             onTraceArtifact={(artifact) => {
               setTraceArtifact(artifact);
-              if (artifact?.verdict === "REACHABLE")
+              setSelectedTraceBranchId(artifact?.verdict === "REACHABLE" ? artifact.branches[0]?.branch_id ?? null : null);
+              if (artifact?.verdict === "REACHABLE" && viewMode === "logical") {
+                setTraceViewNotice("L1 trace показан на физической карте.");
                 setParams((current) => {
                   const next = new URLSearchParams(current);
                   next.set("view", "physical");
                   return next;
                 });
+              }
             }}
           />
+          {traceViewNotice && viewMode === "physical" && <p className="map-page__trace-notice" role="status">{traceViewNotice}</p>}
           <section className="map-page__canvas">
             {!document && <ViewState kind="loading" />}
             {document && (
@@ -900,6 +907,7 @@ export function MapPage({
                   traceOverlay={physicalTraceOverlayFor(
                     traceArtifact,
                     document,
+                    selectedTraceBranchId,
                   )}
                   onViewportCenterReady={
                     viewMode === "physical" ? receiveViewportCenter : undefined

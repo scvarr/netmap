@@ -1,139 +1,15 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { useState } from 'react';
-import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
-import { TraceCommandBar, parseTraceCommand } from './TraceCommandBar';
-import type { DeviceDetailsDocument } from '../topology/deviceDetailsTypes';
-import type { InterfacePhysicalTraceArtifact, InterfacePhysicalTraceDataSource, InterfacePhysicalTraceQuery } from '../topology/interfacePhysicalTraceTypes';
-import type { TopologyProjectionDocument } from '../topology/types';
-
-const sourceId = '00000000-0000-0000-0000-000000000101';
-const targetId = '00000000-0000-0000-0000-000000000102';
-const interfaceId = (suffix: string) => `00000000-0000-0000-0000-000000000${suffix}`;
-const physicalRef = (entity_id: string) => ({ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id });
-const interfaceDetails = (deviceId: string, label: string, ids: string[], labels?: string[]): DeviceDetailsDocument => ({
-  schema_version: '1.0', device: { source_ref: physicalRef(deviceId), label },
-  interfaces: ids.map((id, index) => ({
-    interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: id },
-    label: labels?.[index] ?? `eth${index}`, addresses: [], l2_binding_count: 0, l3_binding_count: 0,
-    direct_physical_bindings: [], realization_down_count: 0, realization_up_count: 0, source_refs: [],
-  })), gaps: [], warnings: [],
-});
-const document: TopologyProjectionDocument = {
-  schema_version: '1.0', layer: 'L2', detail_level: 'DEVICE', edges: [], gaps: [], warnings: [],
-  nodes: [
-    { id: 'pc1', kind: 'NETWORK_DEVICE', label: 'PC1', source_refs: [physicalRef(sourceId)], attributes: {} },
-    { id: 'pc2', kind: 'NETWORK_DEVICE', label: 'PC2', source_refs: [physicalRef(targetId)], attributes: {} },
-  ],
-};
-const reachable: InterfacePhysicalTraceArtifact = {
-  schema_version: 1, query: { from_interface_id: interfaceId('201'), to_interface_id: interfaceId('202') },
-  verdict: 'REACHABLE', branches: [{ branch_id: 'branch-1', source_candidate_id: 'source', target_candidate_id: 'target', edge_ids: [], evidence_refs: [] }], nodes: [], edges: [], gaps: [], warnings: [],
-};
-
-const TraceHarness = ({ logicalDocument, deviceDetailsDataSource, traceDataSource, onTraceArtifact }: {
-  logicalDocument: TopologyProjectionDocument;
-  deviceDetailsDataSource: { loadDeviceDetails(id: string): Promise<DeviceDetailsDocument> };
-  traceDataSource: InterfacePhysicalTraceDataSource;
-  onTraceArtifact: (artifact: InterfacePhysicalTraceArtifact | null) => void;
-}) => {
-  const [traceArtifact, setTraceArtifact] = useState<InterfacePhysicalTraceArtifact | null>(null);
-  return <TraceCommandBar logicalDocument={logicalDocument} deviceDetailsDataSource={deviceDetailsDataSource} traceDataSource={traceDataSource} traceArtifact={traceArtifact} onTraceArtifact={(artifact) => { setTraceArtifact(artifact); onTraceArtifact(artifact); }} />;
-};
-
-const renderBar = (overrides: { document?: TopologyProjectionDocument; details?: Record<string, DeviceDetailsDocument>; result?: InterfacePhysicalTraceArtifact } = {}) => {
-  const details = overrides.details ?? {
-    [sourceId]: interfaceDetails(sourceId, 'PC1', [interfaceId('201')]),
-    [targetId]: interfaceDetails(targetId, 'PC2', [interfaceId('202')]),
-  };
-  const deviceDetailsDataSource = { loadDeviceDetails: vi.fn((id: string) => Promise.resolve(details[id])) };
-  const traceDataSource: InterfacePhysicalTraceDataSource = {
-    traceInterfacePhysical: vi.fn<(query: InterfacePhysicalTraceQuery) => Promise<InterfacePhysicalTraceArtifact>>().mockResolvedValue(overrides.result ?? reachable),
-  };
-  const onTraceArtifact = vi.fn();
-  render(<TraceHarness logicalDocument={overrides.document ?? document} deviceDetailsDataSource={deviceDetailsDataSource} traceDataSource={traceDataSource} onTraceArtifact={onTraceArtifact} />);
-  return { deviceDetailsDataSource, traceDataSource, onTraceArtifact };
-};
-
-const submit = async (value: string) => {
-  await userEvent.type(screen.getByLabelText('Trace command'), value);
-  await userEvent.click(screen.getByRole('button', { name: 'Trace' }));
-};
-
+import { useState } from 'react'; import userEvent from '@testing-library/user-event'; import { describe, expect, it, vi } from 'vitest';
+import { TraceCommandBar } from './TraceCommandBar';
+import type { PhysicalObjectL1TraceArtifact, PhysicalObjectL1TraceQuery } from '../topology/physicalObjectL1TraceTypes';
+const one = '00000000-0000-0000-0000-000000000001'; const two = '00000000-0000-0000-0000-000000000002';
+const inventory = { schema_version: '1.0' as const, equipment: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: one }, label: 'PC1', map_memberships: [] }, { physical_object_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: two }, label: 'PC2', map_memberships: [] }], cables: [], gaps: [], warnings: [] };
+const artifact = (options: Partial<PhysicalObjectL1TraceArtifact> = {}): PhysicalObjectL1TraceArtifact => ({ schema_version: 1, query: { from_physical_object_id: one, to_physical_object_id: two }, verdict: 'REACHABLE', source_candidates: [], target_candidates: [], branches: [{ branch_id: 'a', source: { point_id: 'p1', member_index: 1 }, target: { point_id: 'p2', member_index: 1 }, edge_ids: [], evidence_refs: [] }, { branch_id: 'b', source: { point_id: 'p3', member_index: 1 }, target: { point_id: 'p4', member_index: 1 }, edge_ids: [], evidence_refs: [] }], cycles: [], nodes: [], edges: [], evidence_refs: [], gaps: [], warnings: [], ...options });
+const Harness = ({ result, trace }: { result: PhysicalObjectL1TraceArtifact; trace: ReturnType<typeof vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>> }) => { const [current, setCurrent] = useState<PhysicalObjectL1TraceArtifact | null>(null); const [selected, setSelected] = useState<string | null>(null); return <><output data-testid="selected">{selected}</output><TraceCommandBar catalogInventoryDataSource={{ loadCatalogInventory: vi.fn().mockResolvedValue(inventory) }} traceDataSource={{ tracePhysicalObjectsL1: trace.mockResolvedValue(result) }} traceArtifact={current} selectedBranchId={selected} onSelectedBranchId={setSelected} onTraceArtifact={setCurrent} /></>; };
+const selectAndRun = async () => { await userEvent.selectOptions(await screen.findByLabelText('Откуда'), one); await userEvent.selectOptions(screen.getByLabelText('Куда'), two); await userEvent.click(screen.getByRole('button', { name: 'Трассировать' })); };
 describe('TraceCommandBar', () => {
-  it('parses the first supported L1 command only', () => {
-    expect(parseTraceCommand('trace PC1 PC2 l1')).toEqual({ sourceLabel: 'PC1', destinationLabel: 'PC2' });
-    expect(parseTraceCommand('trace PC1 PC2 l2')).toBeInstanceOf(Error);
-    expect(parseTraceCommand('PC1 PC2 l1')).toBeInstanceOf(Error);
-  });
-
-  it('resolves unique devices with one interface each and traces their exact IDs', async () => {
-    const { deviceDetailsDataSource, traceDataSource } = renderBar();
-    await submit('trace PC1 PC2 l1');
-    await waitFor(() => expect(traceDataSource.traceInterfacePhysical).toHaveBeenCalledWith({
-      from_interface_id: interfaceId('201'), to_interface_id: interfaceId('202'),
-    }));
-    expect(deviceDetailsDataSource.loadDeviceDetails).toHaveBeenCalledWith(sourceId);
-    expect(deviceDetailsDataSource.loadDeviceDetails).toHaveBeenCalledWith(targetId);
-    expect(await screen.findByText('Физический L1-путь доказан')).toBeInTheDocument();
-    expect(screen.getByText('Доказанных ветвей: 1')).toBeInTheDocument();
-  });
-
-  it('does not call the API for duplicate labels', async () => {
-    const duplicateDocument = { ...document, nodes: [...document.nodes, { ...document.nodes[0], id: 'pc1-copy' }] };
-    const { traceDataSource, deviceDetailsDataSource } = renderBar({ document: duplicateDocument });
-    await submit('trace PC1 PC2 l1');
-    expect(await screen.findByText(/неоднозначно/)).toBeInTheDocument();
-    expect(deviceDetailsDataSource.loadDeviceDetails).not.toHaveBeenCalled();
-    expect(traceDataSource.traceInterfacePhysical).not.toHaveBeenCalled();
-
-  });
-
-  it('does not call the API for malformed commands or a missing label', async () => {
-    const { traceDataSource } = renderBar();
-    await submit('trace PC1 PC2 l2');
-    expect(await screen.findByText(/Поддерживается только команда/)).toBeInTheDocument();
-    expect(traceDataSource.traceInterfacePhysical).not.toHaveBeenCalled();
-    await userEvent.clear(screen.getByLabelText('Trace command'));
-    await submit('trace absent PC2 l1');
-    expect(await screen.findByText(/отсутствует/)).toBeInTheDocument();
-    expect(traceDataSource.traceInterfacePhysical).not.toHaveBeenCalled();
-  });
-
-  it('requires an explicit interface choice for a multi-interface endpoint', async () => {
-    const { traceDataSource } = renderBar({ details: {
-      [sourceId]: interfaceDetails(sourceId, 'PC1', [interfaceId('211'), interfaceId('212')]),
-      [targetId]: interfaceDetails(targetId, 'PC2', [interfaceId('202')]),
-    } });
-    await submit('trace PC1 PC2 l1');
-    expect(await screen.findByLabelText('Интерфейс источника')).toBeInTheDocument();
-    expect(traceDataSource.traceInterfacePhysical).not.toHaveBeenCalled();
-    await userEvent.selectOptions(screen.getByLabelText('Интерфейс источника'), interfaceId('212'));
-    await userEvent.click(screen.getByRole('button', { name: 'Трассировать L1' }));
-    await waitFor(() => expect(traceDataSource.traceInterfacePhysical).toHaveBeenCalledWith({
-      from_interface_id: interfaceId('212'), to_interface_id: interfaceId('202'),
-    }));
-  });
-
-  it('sorts selectable interfaces in stable natural label order', async () => {
-    renderBar({ details: {
-      [sourceId]: interfaceDetails(sourceId, 'PC1', [interfaceId('211'), interfaceId('212'), interfaceId('213')], ['A10', 'A02', 'A01']),
-      [targetId]: interfaceDetails(targetId, 'PC2', [interfaceId('202')]),
-    } });
-    await submit('trace PC1 PC2 l1');
-    const selector = await screen.findByLabelText('Интерфейс источника') as HTMLSelectElement;
-    expect(Array.from(selector.options, (option) => option.text)).toEqual(['Выберите интерфейс', 'A01', 'A02', 'A10']);
-  });
-
-  it('presents UNKNOWN as not proven and exposes public gaps and warnings', async () => {
-    renderBar({ result: {
-      ...reachable, verdict: 'UNKNOWN', branches: [],
-      gaps: [{ code: 'L1_TOPOLOGY_INCOMPLETE' }], warnings: [{ code: 'OBSERVATION_STALE' }],
-    } });
-    await submit('trace PC1 PC2 l1');
-    expect(await screen.findByText('Физический L1-путь не доказан')).toBeInTheDocument();
-    expect(screen.queryByText(/unreachable/i)).not.toBeInTheDocument();
-    expect(screen.getByText('Gaps: L1_TOPOLOGY_INCOMPLETE')).toBeInTheDocument();
-    expect(screen.getByText('Warnings: {"code":"OBSERVATION_STALE"}')).toBeInTheDocument();
-  });
+  it('posts PhysicalObject IDs from authoritative inventory without a NetworkInterface lookup', async () => { const trace = vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>(); render(<Harness result={artifact()} trace={trace} />); await selectAndRun(); await waitFor(() => expect(trace).toHaveBeenCalledWith({ from_physical_object_id: one, to_physical_object_id: two })); expect(screen.queryByText(/интерфейс/i)).not.toBeInTheDocument(); });
+  it('auto-selects the first reachable branch and keeps others as alternatives', async () => { const trace = vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>(); render(<Harness result={artifact()} trace={trace} />); await selectAndRun(); expect(await screen.findByTestId('selected')).toHaveTextContent('a'); expect(screen.getByLabelText('Показать альтернативу')).toHaveTextContent('Альтернатива 1'); expect(screen.getByLabelText('Показать альтернативу')).toHaveTextContent('Альтернатива 2'); });
+  it('changes the selected branch without another trace request', async () => { const trace = vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>(); render(<Harness result={artifact()} trace={trace} />); await selectAndRun(); await userEvent.selectOptions(await screen.findByLabelText('Показать альтернативу'), 'b'); expect(screen.getByTestId('selected')).toHaveTextContent('b'); expect(trace).toHaveBeenCalledTimes(1); });
+  it('presents UNKNOWN explicitly and shows cycles, gaps, and warnings', async () => { const trace = vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>(); render(<Harness result={artifact({ verdict: 'UNKNOWN', branches: [], cycles: [{ cycle_id: 'cycle-1', state_node_ids: [], edge_ids: [], evidence_refs: [] }], gaps: [{ code: 'L1_TOPOLOGY_INCOMPLETE', evidence_refs: [] }], warnings: [{ code: 'STALE' }] })} trace={trace} />); await selectAndRun(); expect(await screen.findByText(/UNKNOWN:/)).toBeInTheDocument(); expect(screen.getByText('Обнаружены циклы: cycle-1')).toBeInTheDocument(); expect(screen.getByText('Gaps: L1_TOPOLOGY_INCOMPLETE')).toBeInTheDocument(); });
 });

@@ -1,0 +1,5 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiPhysicalObjectL1TraceDataSource } from './apiPhysicalObjectL1TraceDataSource';
+const query = { from_physical_object_id: 'object-a', to_physical_object_id: 'object-b' };
+const artifact = { schema_version: 1, query, verdict: 'UNKNOWN', source_candidates: [], target_candidates: [], branches: [], cycles: [], nodes: [], edges: [], evidence_refs: [], gaps: [], warnings: [] };
+describe('ApiPhysicalObjectL1TraceDataSource', () => { beforeEach(() => vi.stubGlobal('fetch', vi.fn())); afterEach(() => vi.unstubAllGlobals()); it('posts object IDs without optional exact connection-point constraints', async () => { vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify(artifact), { status: 200 })); await expect(new ApiPhysicalObjectL1TraceDataSource().tracePhysicalObjectsL1(query)).resolves.toEqual(artifact); expect(fetch).toHaveBeenCalledWith('/api/v1/traces/physical-objects/l1', expect.objectContaining({ method: 'POST', body: JSON.stringify(query) })); }); });

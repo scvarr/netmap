@@ -18,7 +18,7 @@ import type { PhysicalObjectClassWriteDataSource } from './topology/physicalObje
 import type { PhysicalObjectDetailsDataSource } from './topology/physicalObjectDetailsTypes';
 import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
 import type { TopologyDataSource } from './topology/types';
-import type { InterfacePhysicalTraceDataSource } from './topology/interfacePhysicalTraceTypes';
+import type { PhysicalObjectL1TraceDataSource } from './topology/physicalObjectL1TraceTypes';
 import type { L2ForwardingContextWriteDataSource } from './topology/l2ForwardingContextWriteTypes';
 import type { ObjectBlueprintDataSource } from './topology/objectBlueprintTypes';
 import type { PhysicalObjectDeleteDataSource } from './topology/physicalObjectDeleteTypes';
@@ -29,7 +29,7 @@ import type { PhysicalObjectDisplayNameWriteDataSource } from './topology/physic
 export interface AppProps {
   dataSource: TopologyDataSource;
   deviceDetailsDataSource: DeviceDetailsDataSource;
-  traceDataSource?: InterfacePhysicalTraceDataSource;
+  traceDataSource?: PhysicalObjectL1TraceDataSource;
   deviceWriteDataSource?: DeviceWriteDataSource;
   deviceInterfaceWriteDataSource?: DeviceInterfaceWriteDataSource;
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
@@ -56,7 +56,6 @@ export function App(props: AppProps) {
           path="map"
           element={<MapPage
             dataSource={props.dataSource}
-            deviceDetailsDataSource={props.deviceDetailsDataSource}
             traceDataSource={props.traceDataSource}
             topologyLayoutStore={props.topologyLayoutStore}
             physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource}
