@@ -2,7 +2,23 @@
 
 ## Статус
 
-Рабочий implementation contract frontend NetMap. Документ не меняет network semantics.
+Рабочий implementation contract frontend NetMap. Документ не меняет network
+semantics. Он фиксирует одновременно архитектурные boundaries и фактически
+materialized subset на `main` после MAPS.2b; текст о будущих controls не следует
+читать как описание уже существующего product surface.
+
+### Фактический срез реализации
+
+**IMPLEMENTED subset**
+
+Canonical/resolver core существенно опережает UI. Backend materializes и
+тестирует canonical L1/L2/L3, trace, routing, security, NAT, evidence и
+projection contracts, но frontend пока не является универсальным editor или
+trace workbench для всех этих domains. Реализованные UI surfaces: Saved Map
+Physical/Logical presentation, Catalog/Object Detail, Object Library/Blueprint
+editor и bounded L1 interface-physical Trace Command Bar. Карта не владеет
+canonical topology: она читает public projection DTO и SavedMap presentation
+state.
 
 Связанные документы: [[05-presentation|05. Представление]], [[02-04-projections-aggregation|02.4 Projections]], [[07-workspaces|07. Workspace]].
 
@@ -48,6 +64,9 @@ sidebar navigation. Текущие маршруты:
 /infrastructure/objects
 /infrastructure/objects/new
 /infrastructure/objects/:physicalObjectId
+/library/object-blueprints
+/library/object-blueprints/new
+/library/object-blueprints/:blueprintId/versions/:versionId/edit
 ```
 
 Текущая product model:
@@ -60,16 +79,25 @@ Catalog
     canonical data management через существующие public read/write operations
 
 Trace Command Bar
-    planned primary trace interaction surface; не реализован в UI-SHELL.1
+    implemented bounded L1 interface-physical trace command
 ```
 
 `/map?map=<SavedMap UUID>&view=physical` first loads its explicit SavedMap
 presentation scope, then obtains `TopologyProjectionDocument` only for its
-placed canonical `PhysicalObject` refs. SavedMap coordinates are server-owned
-and never overridden by frontend layout persistence; an empty map never sends
-an empty projection scope. It uses canonical `PhysicalObject` source refs for URL `focus` and
+placed canonical `PhysicalObject` refs. An empty map never sends an empty
+projection scope. The Saved Map is presentation state, not a canonical topology
+filter stored in resolvers: `MapPlacement` means explicit non-cable membership,
+and `MapViewPosition` holds independent `L1/PHYSICAL_OBJECT` and `L2/DEVICE`
+coordinates. It uses canonical `PhysicalObject` source refs for URL `focus` and
 переходов между projections/pages. Quick Inspector показывает bounded context и
 не содержит canonical create/edit forms.
+
+Physical and Logical are separate presentation scenes (`<map-id>/physical` and
+`<map-id>/logical`). Coordinate-only changes keep the same scene, viewport and
+ELK result; acknowledged per-view writes update local SavedMap state without a
+projection reload. Authoritative failed-write rollback reloads only the map
+positions. A map/view switch creates a new scene and performs one initial fit;
+server-side viewport persistence is not implemented.
 
 Первый Catalog list временно переиспользует public `L1 / PHYSICAL_OBJECT`
 projection как bounded object list. Object Detail загружает authoritative
@@ -125,15 +153,12 @@ TopologyDataSource
         -> TopologyProjectionDocument
 ```
 
-U.1 использует `FixtureTopologyDataSource` с deterministic local fixture.
-
-Позднее `ApiTopologyDataSource` заменяет fixture без изменения canvas/node/edge components.
-
-Fixture не является canonical source of truth.
+`ApiTopologyDataSource` is the current production adapter. Fixture data remains
+for isolated component tests and is not a canonical source of truth.
 
 ## B.UI.1 — public backend requirement
 
-**REQUIRED API/DTO; реализация принадлежит backend**
+**IMPLEMENTED bounded API/DTO; broader layer/detail combinations remain future work**
 
 UI требуется public topology projection API. Exact transport endpoint определяется backend milestone, но semantic DTO должен соответствовать existing projection contract.
 
@@ -148,13 +173,14 @@ TopologyProjectionRequest
     scope:
         include_location_subtrees[]
         include_entities[]
+    include_interstitial_cables: bool = false
     grouping?
     filters?
 ```
 
 `include_entities` содержит canonical refs. Scope entries образуют explicit include-set.
 
-Для первого B.UI.1 backend пустые `include_entities` и
+Текущий backend поддерживает `L1 / PHYSICAL_OBJECT` и `L2 / DEVICE`; пустые `include_entities` и
 `include_location_subtrees` означают unbounded scope только внутри canonical
 model, видимой уже выбранному workspace-scoped repository/session.
 
@@ -208,6 +234,7 @@ TopologyProjectionDocument
     edges[]
     gaps[]
     warnings[]
+    l1_off_map_continuations?[]
 ```
 
 ## Layout ownership
@@ -218,7 +245,9 @@ Logical topology API не возвращает обязательные screen c
 
 Backend определяет nodes/edges и supporting facts. UI определяет их размещение на canvas.
 
-`x/y/width/height` logical topology не являются canonical network facts. Saved/manual layout позднее может существовать как presentation state.
+`x/y/width/height` logical topology не являются canonical network facts. Saved
+Maps now persist only placement coordinates per supported view; ordinary legacy
+and fixture layouts remain frontend presentation state.
 
 ## Projection-oriented DTO
 
@@ -530,15 +559,16 @@ Instantiate атомарно materializes отдельный canonical `Physical
 ConnectionPoints, а для `NETWORK_PORT` — NetworkInterface, owner и direct physical binding.
 Explicit internal links materialize ordinary canonical `Connection`/`ConnectionMember`; geometry
 или стороны anchors никогда не создают L1 связи. Persisted slot-to-canonical endpoint mappings
-сохраняют provenance каждого instance. В BLUEPRINT.1 list/detail/editor и новые
-version отсутствовали; library read/editor добавлены отдельно в BLUEPRINT.2.
+сохраняют provenance каждого instance. Current UI/library work builds on this
+contract; it does not alter materialization or resolver semantics.
 
 ## BLUEPRINT.2 — Object Library and visual editor
 
-Object Library читает только public `GET /v1/library/object-blueprints` и exact
-immutable version detail. Все refs library records остаются `LIBRARY_RECORD`, а
-read operations не materialize topology. Library показывает schematic preview и не
-предлагает edit/delete/instantiate.
+Object Library читает public list и exact immutable version detail. Все refs
+library records остаются `LIBRARY_RECORD`, а read operations не materialize
+topology. Current UI provides list, create, latest-version edit, guarded delete
+and instantiate flows; each write uses the matching public operation and reloads
+authoritative library state. It does not expose a raw canonical join.
 
 Visual editor создаёт только `RECTANGLE` presentation body с bounded dimensions,
 fill `#RRGGBB`, endpoint groups и explicit pair-by-index operation. Groups не
@@ -615,3 +645,80 @@ link between them. Slot key order provides stable undirected source/target
 assignment; anchors and classes do not determine L1 semantics. The operation
 atomically materializes that version, its internal link, and two external links;
 legacy generic-cable requests remain unchanged.
+
+## MAPS.1 — persisted Saved Maps and scene lifecycle
+
+**IMPLEMENTED**
+
+Saved Maps are an explicit presentation scope over canonical
+`PhysicalObject` refs. `MapPlacement` is membership only and excludes cable
+objects; `MapViewPosition` is a separate row per placement/view key. The public
+map detail response exposes each placement as:
+
+```text
+physical_object_ref
+positions:
+    L1/PHYSICAL_OBJECT?: { x, y }
+    L2/DEVICE?: { x, y }
+```
+
+`POST /v1/maps/{map_id}/placements` retains the compatibility `x/y` payload and
+creates only the initial Physical position. `PUT .../positions/physical` and
+`PUT .../positions/logical` are the explicit per-view writes. Missing Logical
+coordinates mean frontend ELK initialization, not a copy of Physical position.
+
+`TopologyCanvas` remains presentation-only: it receives a scene key,
+position overrides and callbacks, not SavedMap API knowledge. Same-scene drag,
+selection and coordinate acknowledgement do not rerun layout or fit the
+viewport. A failed write obtains authoritative positions through SavedMap detail
+and applies an explicit rollback revision. Physical and Logical dragging are
+both supported and persist independently; no viewport is persisted on the
+server.
+
+## MAPS.2a — topology-derived cable visibility
+
+**IMPLEMENTED only for Saved Map Physical view**
+
+Saved Map Physical projection requests opt into
+`include_interstitial_cables`. The resolver admits a `class=cable` only when it
+is an unambiguous simple two-ended cable whose two external endpoint objects are
+already explicitly placed. Existing `physicalCablePresentation` then collapses
+the cable node into the familiar edge, retaining cable node identity and
+supporting edge IDs for existing selection and trace highlighting. No cable
+placement or cable position is created; the Logical view and canonical trace
+scope do not opt in.
+
+## MAPS.2b — L1 off-map continuation
+
+**IMPLEMENTED only for Saved Map Physical view**
+
+For the same simple cable with exactly one placed endpoint, the opt-in L1
+document returns `l1_off_map_continuations` with exact canonical refs for local
+object/ConnectionPoint, cable, and remote object/ConnectionPoint. The remote
+object is not a projection node and neither it nor the cable is added to map
+membership. A custom presentation edge anchors a compact marker to the actual
+local blueprint slot or generic ConnectionPoint where available. Selecting it
+opens Quick Inspector details and permits only two bounded actions: add the
+remote object through the existing placement API, or open that canonical object
+in Catalog. Once added, the normal MAPS.2a collapse is used.
+
+This is not generic continuation: no off-map normal node, L2/L3 continuation,
+multi-hop expansion, MapReference, regions, cable waypoints or map wiring is
+materialized.
+
+## Future Fibre Channel compatibility boundary
+
+**OPEN; no frontend/API/storage work is implied**
+
+The current Physical presentation and Object Library are intentionally usable
+with protocol-neutral `PhysicalObject`, `ConnectionPoint` and
+`NetworkInterface` facts. Future design must stress these surfaces with a SAN
+switch, storage array/storage controller and host HBA, while keeping their
+physical path in the existing L1 model.
+
+If a future Fibre Channel fabric view is added, it is a distinct presentation
+over a separate FC semantic domain, not a reinterpretation of the current
+Ethernet `L2/DEVICE` view. It may coexist conceptually with Physical and
+Ethernet/logical views of the same canonical objects, but this document does not
+reserve a new Saved Map view key, route, DTO, table or API. Ethernet L2
+encapsulation/MAC/FDB controls must not be exposed as surrogate FC controls.

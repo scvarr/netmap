@@ -25,9 +25,7 @@
   - [[03-02-l2-trace|03.2 L2 Trace]]
   - [[03-03-l3-trace|03.3 L3 Trace]]
   - [[03-04-packet-flow-trace|03.4 Packet Flow Trace]]
-- [[04-data-sources|04. Источники данных]]
 - [[05-presentation|05. Представление]]
-- [[06-history|06. Хранение и история]]
 - [[07-workspaces|07. Workspace и canonical isolation]]
 - [[08-ui-implementation|08. UI implementation contract]]
 
@@ -35,5 +33,9 @@
 
 - Backend хранит факты о сети, а L1/L2/L3/Security являются проекциями и вычисляемыми представлениями этих фактов.
 - Визуальное представление не является частью предметной модели.
+- Реализованный UI — bounded subset поверх существенно более широкого
+  canonical/resolver core. L1 physical presentation сейчас работает прежде
+  всего через Saved Maps; карта остаётся presentation scope, а не canonical
+  topology или хранилищем connectivity.
 - Человекочитаемые имена, типы, роли, производители и технологические классификации не определяют идентичность сущностей и хранятся как metadata/aliases.
 - Модель не зашивает фиксированные типы зданий, помещений, оборудования, кабелей или сред передачи.

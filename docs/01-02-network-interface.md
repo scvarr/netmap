@@ -8,6 +8,12 @@
 
 `NetworkInterface` — логическая точка, через которую сетевой стек, коммутатор, маршрутизатор, firewall или другой сетевой механизм принимает, передаёт или связывает сетевые данные.
 
+`NetworkInterface` не является Ethernet-only сущностью. Conceptually valid
+instances include an Ethernet NIC port, Fibre Channel HBA port, Fibre Channel
+switch port and storage-controller FC port. Ethernet-like names such as
+`Ethernet1/1`, VLAN subinterfaces and LAG below are examples of one already
+specified technology domain, not a type system restriction on the interface.
+
 `NetworkInterface` принципиально отличается от `ConnectionPoint`:
 
 ```text
@@ -32,6 +38,12 @@ NI-501 --physically bound to--> CP-101:1
 ```
 
 Это разделение позволяет не смешивать кабельную топологию с L2/L3-состоянием устройства.
+
+Для будущего Fibre Channel это же разделение остаётся применимым: FC port can
+be physically bound to a `ConnectionPoint`, and realization can describe its
+layering, without turning an FC identity, zoning or fabric state into a property
+of `NetworkInterface` itself. Такие semantics требуют отдельного structured
+domain поверх shared foundation.
 
 ## Минимальная сущность
 

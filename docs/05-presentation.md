@@ -111,7 +111,7 @@ POLICY_ORDER_INCOMPLETE
 
 Aggregate presentation object не становится canonical network entity.
 
-## Persisted SavedMap scope
+## Реализованный SavedMap presentation subset
 
 Current application deployment has one implicit `NetworkWorkspace`; it is not a
 persisted table or a foreign key on canonical facts. `SavedMap` belongs to that
@@ -127,8 +127,50 @@ of a view position means the frontend may initialize that view's layout, never
 that coordinates are copied from another view. Canonical existence does not
 imply map membership, and removing membership never deletes or changes
 canonical topology. Deleting a canonical `PhysicalObject` may safely remove its
-dependent placements and positions. Resolvers, projections, and traces neither
-read nor expose SavedMap state.
+dependent placements and positions. Resolvers and traces do not read SavedMap
+state; the Map page turns explicit placement refs into a bounded projection
+scope.
+
+### MAPS.1 — membership, scenes and per-view positions
+
+**IMPLEMENTED**
+
+`MapPlacement` is created only for an explicitly added non-cable
+`PhysicalObject`. `class=cable` stays excluded from the Add Object picker and
+is never made a placement by cable presentation. The same canonical object may
+have independent placements on different maps.
+
+Physical and Logical are different presentation scenes for the same SavedMap:
+
+```text
+<map-id>/physical    -> L1 / PHYSICAL_OBJECT
+<map-id>/logical     -> L2 / DEVICE
+```
+
+For one scene, drag acknowledgement, selection, coordinate-only SavedMap state
+updates and canonical projection refresh preserve the user's viewport. A new
+map or view scene receives one initial fit; viewport persistence is not stored
+on the server. Position writes use the per-view public endpoint. A successful
+write updates local presentation state without reloading the map/projection or
+rerunning ELK; a failed write reloads authoritative SavedMap positions and
+applies a targeted rollback.
+
+Logical positions may be absent. In that case the frontend uses initial ELK
+layout for `L2 / DEVICE` and does not copy the Physical coordinates; the first
+Logical drag persists a Logical position. There is no separate persisted
+viewport and no cross-view coordinate reuse.
+
+### MAPS.2a — derived cable collapse
+
+**IMPLEMENTED for Saved Map Physical view**
+
+When two explicitly placed objects are connected through one unambiguous simple
+two-ended canonical `class=cable`, the scoped L1 projection may include the
+cable solely to reuse existing collapse semantics. The canvas hides that cable
+node and renders the existing collapsed cable edge between the placed endpoints.
+The edge retains the cable node and supporting connection/member refs for
+selection and trace highlighting. The cable has no placement and no per-view
+position. Logical projection and trace scope are unchanged.
 
 An opt-in scoped `L1 / PHYSICAL_OBJECT` projection may additionally expose a
 presentation-only off-map continuation for a simple two-ended canonical cable
@@ -137,6 +179,46 @@ contains exact canonical refs for local/remote connection points, cable, and
 remote `PhysicalObject`, but neither the remote object nor the cable becomes
 SavedMap membership or a normal topology node. It is a one-hop L1 affordance,
 not L2/L3 inference, and does not affect traces.
+
+### MAPS.2b — one-hop L1 off-map continuation
+
+**IMPLEMENTED for Saved Map Physical view**
+
+If exactly one endpoint object of the same simple cable is placed, the scoped
+L1 response exposes a presentation-only continuation rather than adding either
+the cable or remote object. It carries exact refs for local PhysicalObject and
+ConnectionPoint, cable, remote PhysicalObject and remote ConnectionPoint.
+
+The canvas anchors a compact marker to the local blueprint slot or generic
+ConnectionPoint when that endpoint geometry is available. Its Quick Inspector
+shows a chain such as `Rear → cable-17 → PP1/A07`, says that the target is not
+on the map, and can add the remote PhysicalObject through the existing placement
+operation or open it in Catalog. After that explicit add, MAPS.2a collapse takes
+over. This is only direct one-cable L1 continuation: no remote normal node,
+multi-hop inference, MapReference, regions, cable waypoints or wiring is
+implemented.
+
+### Future technology views: Fibre Channel
+
+**OPEN compatibility boundary; not a materialized feature**
+
+The protocol-neutral canonical L1 foundation allows the same objects to appear
+in future Physical, Ethernet/logical and Fibre Channel fabric presentations.
+This does not reserve a new `MapViewKey` or add a current map mode: existing
+Saved Map keys remain only `L1/PHYSICAL_OBJECT` and `L2/DEVICE`.
+
+A future FC fabric presentation must use its own structured facts rather than
+pretending that Ethernet MAC/FDB or 802.1Q semantics apply. Its evidence and
+uncertainty must retain the NetMap distinction between a known negative and
+incomplete data: a proven physical FC path with missing zoning data is
+`UNKNOWN`, explicit zoning denial is a known negative, and stale/conflicting
+fabric observations stay distinguishable. These statements do not introduce an
+FC resolver, UI, persistence model or trace API.
+
+Object Library and topology presentation should retain future stress cases for a
+SAN switch, storage array/storage controller and host HBA. Their geometry,
+ports and labels may be authored as ordinary object blueprints; no FC-specific
+L1 primitive or automatic protocol semantics follows from that.
 
 Aggregate edge не должен визуально или семантически утверждать наличие одного canonical `Connection`, если он на самом деле представляет несколько supporting paths/relations.
 
@@ -211,7 +293,7 @@ MAP
     исследование topology через projection-oriented DTO
 
 TRACE COMMAND BAR
-    planned primary surface для формулировки сетевого вопроса
+    implemented bounded L1 interface-physical trace command
 ```
 
 `Map` остаётся главным пространственным контекстом исследования сети, но не
@@ -231,8 +313,11 @@ operations размещаются на catalog create/detail pages. Большо
 использовавшийся в ранних W.1-W.7 frontend slices, является historical
 implementation placement и не архитектурным инвариантом.
 
-Trace Command Bar не реализуется в UI-SHELL.1, но остаётся planned primary trace
-interaction surface. Точная компоновка будущих trace controls не фиксируется.
+Текущий Trace Command Bar принимает только
+`trace <source> <destination> l1`, resolves canonical interfaces through public
+Device Details and calls the interface-physical trace API. Broader L2/L3,
+policy, group and packet-flow trace controls remain architectural/future work;
+они не должны считаться реализованными из-за существования resolver contracts.
 
 ## Простая трассировка на основном экране
 

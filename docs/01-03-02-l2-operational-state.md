@@ -714,7 +714,7 @@ INELIGIBLE
 получены STP states для всех bindings Context A
 ```
 
-Модель coverage будет определена в [[04-data-sources|04. Источники данных]].
+Модель coverage остаётся отдельной будущей documentation/implementation задачей.
 
 До этого фиксируется правило:
 
