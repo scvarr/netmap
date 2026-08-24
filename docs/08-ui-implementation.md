@@ -99,8 +99,42 @@ projection reload. Authoritative failed-write rollback reloads only the map
 positions. A map/view switch creates a new scene and performs one initial fit;
 server-side viewport persistence is not implemented.
 
-Первый Catalog list временно переиспользует public `L1 / PHYSICAL_OBJECT`
-projection как bounded object list. Object Detail загружает authoritative
+Текущий `InfrastructureObjectsPage` временно продолжает переиспользовать public
+`L1 / PHYSICAL_OBJECT` projection как object list. Для следующего Catalog
+Equipment/Cables UI уже materialized отдельный inventory read model
+`GET /v1/catalog/inventory` (frontend transport: `/api/v1/catalog/inventory`):
+
+```text
+CatalogInventoryDocument
+    schema_version
+    equipment[]
+        physical_object_ref, label, label_source?, class?
+        occupancy? { total_ports, connected_ports, free_ports }
+        map_memberships[] { map_ref, name }
+    cables[]
+        cable_ref, label, label_source?, resolution
+        endpoint_a?/endpoint_b?
+            remote_physical_object_ref + label
+            remote_connection_point_ref + label
+            evidence_refs[]
+        gaps[], warnings[]
+    gaps[], warnings[]
+```
+
+Equipment is every `PhysicalObject` without an explicit `class="cable"`.
+Occupancy is emitted only when every owned `ConnectionPoint` has cardinality
+one; it counts points with external canonical `Connection` occupancy, excluding
+same-object internal links, and never counts `NetworkInterface`s. Map
+memberships are only explicit `MapPlacement` facts joined to `SavedMap`; they do
+not participate in topology resolution. Cables are only explicit
+`class="cable"` objects. Exact two endpoints are emitted solely when the
+existing `simple_cable_semantics` recognises the cable; otherwise the item is
+`UNRESOLVED` with no guessed endpoint. The endpoint order is stable but has no
+directional meaning. This read model is bulk-resolved from canonical and
+presentation query boundaries, not by L1 projection or per-object/map detail
+requests. The UI switch to this datasource remains a subsequent slice.
+
+Object Detail загружает authoritative
 `PhysicalObjectDetailsDocument` и переиспользует W.2/W.3/W.6/W.6.1/W.7 detail
 sections/datasources. Primary full-page creation materializes exact immutable
 Object Blueprint version; W.1 и W.5 остаются явным advanced/manual path. Это

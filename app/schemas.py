@@ -112,6 +112,65 @@ class MapPlacementsDocument(BaseModel):
     placements: list[MapPlacementDocument]
 
 
+class CatalogInventoryOccupancy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    total_ports: int = Field(ge=0)
+    connected_ports: int = Field(ge=0)
+    free_ports: int = Field(ge=0)
+
+
+class CatalogInventoryMapMembership(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    map_ref: SavedMapRef
+    name: str = Field(min_length=1)
+
+
+class CatalogInventoryEquipmentItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    physical_object_ref: ProjectionSourceRef
+    label: str = Field(min_length=1)
+    label_source: Literal["TECHNICAL_FALLBACK"] | None = None
+    class_: str | None = Field(default=None, alias="class", min_length=1, max_length=255)
+    occupancy: CatalogInventoryOccupancy | None = None
+    map_memberships: list[CatalogInventoryMapMembership]
+
+
+class CatalogInventoryCableEndpoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    remote_physical_object_ref: ProjectionSourceRef
+    remote_physical_object_label: str = Field(min_length=1)
+    remote_connection_point_ref: ProjectionSourceRef
+    remote_connection_point_label: str = Field(min_length=1)
+    evidence_refs: list[ProjectionSourceRef]
+
+
+class CatalogInventoryCableItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cable_ref: ProjectionSourceRef
+    label: str = Field(min_length=1)
+    label_source: Literal["TECHNICAL_FALLBACK"] | None = None
+    resolution: Literal["SIMPLE_CABLE", "UNRESOLVED"]
+    endpoint_a: CatalogInventoryCableEndpoint | None = None
+    endpoint_b: CatalogInventoryCableEndpoint | None = None
+    gaps: list[str]
+    warnings: list[str]
+
+
+class CatalogInventoryDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    equipment: list[CatalogInventoryEquipmentItem]
+    cables: list[CatalogInventoryCableItem]
+    gaps: list[str]
+    warnings: list[str]
+
+
 class TopologyProjectionScope(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

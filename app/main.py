@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.blueprint_catalog import ObjectBlueprintCatalog
+from app.catalog_inventory_resolver import CatalogInventoryResolver
 from app.database import get_session
 from app.device_catalog import DeviceCatalog
 from app.device_details_resolver import ConfiguredDeviceDetailsResolver
@@ -55,6 +56,7 @@ from app.schemas import (
     CreatePhysicalObjectRequest,
     CreateSavedMapRequest,
     CreateL2ForwardingContextRequest,
+    CatalogInventoryDocument,
     DeviceDetailsDocument,
     ErrorResponse,
     EvaluationView,
@@ -115,6 +117,16 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message
 logger = logging.getLogger("netmap")
 
 app = FastAPI(title="NetMap", version="0.1.0")
+
+
+@app.get(
+    "/v1/catalog/inventory",
+    response_model=CatalogInventoryDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def get_catalog_inventory(session: Session = Depends(get_session)) -> CatalogInventoryDocument:
+    return CatalogInventoryResolver(CanonicalRepository(session)).resolve()
 
 
 def _saved_map_document(detail) -> dict[str, object]:
