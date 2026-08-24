@@ -1,6 +1,8 @@
 export interface PhysicalObjectL1TraceQuery {
   from_physical_object_id: string;
   to_physical_object_id: string;
+  from_connection_point_id?: string;
+  to_connection_point_id?: string;
 }
 
 export interface PhysicalTraceEvidenceRef {

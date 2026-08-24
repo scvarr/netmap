@@ -867,6 +867,7 @@ export function MapPage({
         <>
           <TraceCommandBar
             catalogInventoryDataSource={catalogInventoryDataSource}
+            physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
             traceDataSource={traceDataSource}
             traceArtifact={traceArtifact}
             selectedBranchId={selectedTraceBranchId}

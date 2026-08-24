@@ -79,7 +79,8 @@ Catalog
     canonical data management через существующие public read/write operations
 
 Trace Command Bar
-    bounded PhysicalObject → PhysicalObject L1 trace command
+    current PhysicalObject → PhysicalObject L1 trace command,
+    optionally refined by exact ConnectionPoint
 ```
 
 `/map?map=<SavedMap UUID>&view=physical` first loads its explicit SavedMap

@@ -314,11 +314,13 @@ operations размещаются на catalog create/detail pages. Большо
 implementation placement и не архитектурным инвариантом.
 
 Trace Command Bar выбирает «Откуда» и «Куда» из authoritative Catalog Inventory
-как canonical `PhysicalObject`, показывает фиксированный «Physical / L1» и
-вызывает object-level L1 trace API без optional exact-port constraints. Для
-нескольких доказанных ветвей это альтернативы без preferred/best label; карта
-подсвечивает только выбранную canonical-evidence ветвь. Broader L2/L3, policy,
-group and packet-flow trace controls remain architectural/future work.
+как canonical `PhysicalObject`, показывает фиксированный «Physical / L1». Каждый
+endpoint может быть опционально уточнён существующим labeled `ConnectionPoint`;
+«Любой порт» сохраняет object-level запрос без port constraint. UI не вводит
+`NetworkInterface` или `member_index` selection и не повторяет backend ownership/
+participation semantics. Для нескольких доказанных ветвей это альтернативы без
+preferred/best label; карта подсвечивает только выбранную canonical-evidence ветвь.
+Broader L2/L3, policy, group and packet-flow trace controls remain future work.
 
 ## Простая трассировка на основном экране
 
@@ -345,7 +347,7 @@ Conceptual control:
 
 UI не должен автоматически переводить пользователя на максимальную детализацию только потому, что trace содержит интерфейсы/правила/кабели.
 
-Для interface-physical L1 trace доказанный `REACHABLE` result может переключить
+Для PhysicalObject L1 trace доказанный `REACHABLE` result может переключить
 карту на существующую L1 / PHYSICAL_OBJECT projection. Overlay сопоставляется
 только с `source_refs` этой projection по canonical evidence refs selected
 reachable branch edges (union branch допустим). UI не строит путь по geometry,
