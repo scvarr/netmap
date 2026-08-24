@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 import {
   applyNodeChanges,
   Background,
@@ -12,27 +12,30 @@ import {
   type NodeMouseHandler,
   type OnNodeDrag,
   type OnNodesChange,
-} from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
+} from "@xyflow/react";
+import "@xyflow/react/dist/style.css";
 import {
   toFlowProjection,
   type DeviceFlowNode,
   type FlowProjection,
   type LogicalFlowEdge,
   type TopologyLayoutEngine,
-} from '../topology/layout';
-import type { TopologyProjectionDocument, TopologySelection } from '../topology/types';
+} from "../topology/layout";
+import type {
+  TopologyProjectionDocument,
+  TopologySelection,
+} from "../topology/types";
 import {
   applyTopologyPositionOverrides,
   topologyLayoutViewKey,
   type TopologyLayoutStore,
-} from '../topology/layoutStore';
-import { DeviceNode } from './DeviceNode';
-import { FloatingTopologyEdge } from './FloatingTopologyEdge';
-import { OffMapContinuationEdge } from './OffMapContinuationEdge';
-import type { PhysicalTraceOverlay } from '../topology/interfacePhysicalTraceOverlay';
-import { physicalObjectIdForNode } from '../topology/projection';
-import type { XYPosition } from '@xyflow/react';
+} from "../topology/layoutStore";
+import { DeviceNode } from "./DeviceNode";
+import { FloatingTopologyEdge } from "./FloatingTopologyEdge";
+import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
+import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
+import { physicalObjectIdForNode } from "../topology/projection";
+import type { XYPosition } from "@xyflow/react";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -45,16 +48,25 @@ interface TopologyCanvasProps {
   positionOverrides?: Record<string, XYPosition>;
   draggableNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
-  onPhysicalNodeDragStop?: (physicalObjectId: string, position: XYPosition) => void;
+  onPhysicalNodeDragStop?: (
+    physicalObjectId: string,
+    position: XYPosition,
+  ) => void;
   disableAutoLayout?: boolean;
   onViewportCenterReady?: (getter: (() => XYPosition) | null) => void;
   onPhysicalPaneContextMenu?: (anchor: XYPosition, screen: XYPosition) => void;
   onPaneClick?: () => void;
-  onContinuationClickAnchor?: (continuationId: string, anchor: XYPosition) => void;
+  onContinuationClickAnchor?: (
+    continuationId: string,
+    anchor: XYPosition,
+  ) => void;
 }
 
 const nodeTypes = { device: DeviceNode };
-const edgeTypes = { floating: FloatingTopologyEdge, continuation: OffMapContinuationEdge };
+const edgeTypes = {
+  floating: FloatingTopologyEdge,
+  continuation: OffMapContinuationEdge,
+};
 
 export function TopologyCanvas({
   document,
@@ -79,13 +91,15 @@ export function TopologyCanvas({
   const [layoutRevision, setLayoutRevision] = useState(0);
   const fitAfterLayout = useRef(false);
   const fittedSceneKey = useRef<string | null>(null);
-  const appliedAuthoritativePositionRevision = useRef(authoritativePositionRevision);
+  const appliedAuthoritativePositionRevision = useRef(
+    authoritativePositionRevision,
+  );
   const currentDocument = useRef(document);
   const appliedSceneKey = useRef<string | null>(null);
   const fittedSelectionKey = useRef<string | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { fitView, screenToFlowPosition } = useReactFlow();
-  const selectedNodeId = selection?.type === 'node' ? selection.item.id : null;
+  const selectedNodeId = selection?.type === "node" ? selection.item.id : null;
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
 
@@ -100,36 +114,59 @@ export function TopologyCanvas({
     void layoutEngine(document).then(
       (nextProjection) => {
         if (!current || currentDocument.current !== document) return;
-        const storedPositions = positionOverrides ?? layoutStore?.load(viewKey) ?? {};
+        const storedPositions =
+          positionOverrides ?? layoutStore?.load(viewKey) ?? {};
         setProjection({
           ...nextProjection,
-          nodes: applyTopologyPositionOverrides(nextProjection.nodes, storedPositions),
+          nodes: applyTopologyPositionOverrides(
+            nextProjection.nodes,
+            storedPositions,
+          ),
         });
       },
       (reason: unknown) => {
         if (!current) return;
-        setLayoutError(reason instanceof Error ? reason.message : 'Не удалось расположить топологию');
+        setLayoutError(
+          reason instanceof Error
+            ? reason.message
+            : "Не удалось расположить топологию",
+        );
       },
     );
-    return () => { current = false; };
+    return () => {
+      current = false;
+    };
   }, [document, layoutEngine, layoutRevision, layoutStore, viewKey]);
 
   // A position acknowledgement is already reflected by React Flow's drag state.
   // Only an explicit authoritative revision (for example, a failed persistence rollback)
   // may replace positions without rebuilding the layout scene.
   useEffect(() => {
-    if (appliedAuthoritativePositionRevision.current === authoritativePositionRevision) return;
-    appliedAuthoritativePositionRevision.current = authoritativePositionRevision;
+    if (
+      appliedAuthoritativePositionRevision.current ===
+      authoritativePositionRevision
+    )
+      return;
+    appliedAuthoritativePositionRevision.current =
+      authoritativePositionRevision;
     if (!positionOverrides) return;
-    setProjection((current) => current ? {
-      ...current,
-      nodes: applyTopologyPositionOverrides(current.nodes, positionOverrides),
-    } : current);
+    setProjection((current) =>
+      current
+        ? {
+            ...current,
+            nodes: applyTopologyPositionOverrides(
+              current.nodes,
+              positionOverrides,
+            ),
+          }
+        : current,
+    );
   }, [authoritativePositionRevision]);
 
   useEffect(() => {
     if (!projection) return;
-    const shouldFit = fitAfterLayout.current || fittedSceneKey.current !== presentationSceneKey;
+    const shouldFit =
+      fitAfterLayout.current || fittedSceneKey.current !== presentationSceneKey;
     if (!shouldFit) return;
     fitAfterLayout.current = false;
     fittedSceneKey.current = presentationSceneKey;
@@ -142,9 +179,19 @@ export function TopologyCanvas({
       return;
     }
     const selectionKey = `${presentationSceneKey}/${selectedNodeId}`;
-    if (!projection || !projection.nodes.some((node) => node.id === selectedNodeId) || fittedSelectionKey.current === selectionKey) return;
+    if (
+      !projection ||
+      !projection.nodes.some((node) => node.id === selectedNodeId) ||
+      fittedSelectionKey.current === selectionKey
+    )
+      return;
     fittedSelectionKey.current = selectionKey;
-    void fitView({ nodes: [{ id: selectedNodeId }], duration: 300, maxZoom: 1.1, padding: 0.8 });
+    void fitView({
+      nodes: [{ id: selectedNodeId }],
+      duration: 300,
+      maxZoom: 1.1,
+      padding: 0.8,
+    });
   }, [fitView, presentationSceneKey, projection, selectedNodeId]);
 
   useEffect(() => {
@@ -152,54 +199,101 @@ export function TopologyCanvas({
     onViewportCenterReady(() => {
       const bounds = canvasRef.current?.getBoundingClientRect();
       if (!bounds) return { x: 0, y: 0 };
-      return screenToFlowPosition({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
+      return screenToFlowPosition({
+        x: bounds.left + bounds.width / 2,
+        y: bounds.top + bounds.height / 2,
+      });
     });
     return () => onViewportCenterReady(null);
   }, [onViewportCenterReady, screenToFlowPosition]);
 
   if (layoutError) {
-    return <div className="topology-layout-state" role="alert">{layoutError}</div>;
+    return (
+      <div className="topology-layout-state" role="alert">
+        {layoutError}
+      </div>
+    );
   }
   if (!projection) {
-    return <div className="topology-layout-state" role="status">Располагаем топологию…</div>;
+    return (
+      <div className="topology-layout-state" role="status">
+        Располагаем топологию…
+      </div>
+    );
   }
 
   const nodes = projection.nodes.map((node) => ({
     ...node,
     draggable: draggableNodeIds?.has(node.id),
-    data: { ...node.data, traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false },
-    selected: selection?.type === 'node' && selection.item.id === node.id,
+    data: {
+      ...node.data,
+      traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
+    },
+    selected: selection?.type === "node" && selection.item.id === node.id,
   }));
   const edges = projection.edges.map((edge) => {
-    const isSelected = edge.data?.continuation ? selection?.type === 'continuation' && selection.item.id === edge.data.continuation.id : edge.data?.cableNode ? selection?.type === 'node' && selection.item.id === edge.data.cableNode.id : selection?.type === 'edge' && selection.item.id === edge.data?.projection.id;
-    const isTraced = edge.data?.cableNode ? (edge.data.supportingEdgeIds?.every((id) => traceOverlay?.highlightedEdgeIds.has(id)) ?? false) : edge.data?.endpointPair ? (traceOverlay?.highlightedConnectionMemberIds.has(edge.data.endpointPair.connection_member_id) ?? false) : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
+    const isSelected = edge.data?.continuation
+      ? selection?.type === "continuation" &&
+        selection.item.id === edge.data.continuation.id
+      : edge.data?.cableNode
+        ? selection?.type === "node" &&
+          selection.item.id === edge.data.cableNode.id
+        : selection?.type === "edge" &&
+          selection.item.id === edge.data?.projection.id;
+    const isTraced = edge.data?.cableNode
+      ? (edge.data.supportingEdgeIds?.every((id) =>
+          traceOverlay?.highlightedEdgeIds.has(id),
+        ) ?? false)
+      : edge.data?.endpointPair
+        ? (traceOverlay?.highlightedConnectionMemberIds.has(
+            edge.data.endpointPair.connection_member_id,
+          ) ?? false)
+        : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
     return {
       ...edge,
       selected: isSelected,
       animated: isSelected || isTraced,
-      style: { stroke: isSelected ? '#54e3b4' : isTraced ? '#f0bd66' : '#52676b', strokeWidth: isSelected ? 3 : isTraced ? 4 : 2, opacity: isTraced ? 1 : 0.72 },
+      style: {
+        stroke: isSelected ? "#54e3b4" : isTraced ? "#f0bd66" : "#52676b",
+        strokeWidth: isSelected ? 3 : isTraced ? 4 : 2,
+        opacity: isTraced ? 1 : 0.72,
+      },
     };
   });
 
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
-    onSelectionChange({ type: 'node', item: node.data.projection });
+    onSelectionChange({ type: "node", item: node.data.projection });
   };
   const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
     const item = edge.data?.projection;
     if (edge.data?.continuation) {
-      onContinuationClickAnchor?.(edge.data.continuation.id, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
-      onSelectionChange({ type: 'continuation', item: edge.data.continuation });
-    } else if (edge.data?.cableNode) onSelectionChange({ type: 'node', item: edge.data.cableNode }); else if (item) onSelectionChange({ type: 'edge', item });
+      onContinuationClickAnchor?.(
+        edge.data.continuation.id,
+        screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+      );
+      onSelectionChange({ type: "continuation", item: edge.data.continuation });
+    } else if (edge.data?.cableNode)
+      onSelectionChange({ type: "node", item: edge.data.cableNode });
+    else if (item) onSelectionChange({ type: "edge", item });
   };
   const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
-    setProjection((current) => current ? {
-      ...current,
-      nodes: applyNodeChanges(changes, current.nodes),
-    } : current);
+    setProjection((current) =>
+      current
+        ? {
+            ...current,
+            nodes: applyNodeChanges(changes, current.nodes),
+          }
+        : current,
+    );
   };
   const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
-    const physicalObjectId = physicalObjectIdForNode(draggedNode.data.projection);
-    if (onPhysicalNodeDragStop && physicalObjectId) { onPhysicalNodeDragStop(physicalObjectId, draggedNode.position); return; }
+    const physicalObjectId = physicalObjectIdForNode(
+      draggedNode.data.projection,
+    );
+    if (onPhysicalNodeDragStop && physicalObjectId) {
+      onPhysicalNodeDragStop(physicalObjectId, draggedNode.position);
+      return;
+    }
     if (!layoutStore) return;
     layoutStore.save(viewKey, {
       ...layoutStore.load(viewKey),
@@ -215,7 +309,11 @@ export function TopologyCanvas({
   return (
     <div
       className="topology-canvas"
-      aria-label={document.layer === 'L1' ? 'Физическая схема сети' : 'Логическая схема сети'}
+      aria-label={
+        document.layer === "L1"
+          ? "Физическая схема сети"
+          : "Логическая схема сети"
+      }
       ref={canvasRef}
     >
       <ReactFlow
@@ -227,7 +325,10 @@ export function TopologyCanvas({
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
-        onPaneClick={() => { onSelectionChange(null); onPaneClick?.(); }}
+        onPaneClick={() => {
+          onSelectionChange(null);
+          onPaneClick?.();
+        }}
         onPaneContextMenu={(event) => {
           if (!onPhysicalPaneContextMenu) return;
           event.preventDefault();
@@ -237,18 +338,37 @@ export function TopologyCanvas({
           );
         }}
         fitView={false}
-        fitViewOptions={{ padding: 0.2, maxZoom: document.layer === 'L1' ? 4 : 1.1 }}
+        fitViewOptions={{
+          padding: 0.2,
+          maxZoom: document.layer === "L1" ? 4 : 1.1,
+        }}
         minZoom={0.35}
-        maxZoom={document.layer === 'L1' ? 4 : 1.8}
-        nodesDraggable={Boolean(onPhysicalNodeDragStop) || (!disableAutoLayout && document.layer === 'L1')}
+        maxZoom={document.layer === "L1" ? 4 : 1.8}
+        nodesDraggable={
+          Boolean(onPhysicalNodeDragStop) ||
+          (!disableAutoLayout && document.layer === "L1")
+        }
         nodesConnectable={false}
         elementsSelectable
         proOptions={{ hideAttribution: true }}
       >
         <Panel position="top-left">
-          {!disableAutoLayout && <button type="button" className="topology-auto-layout" onClick={resetLayout}>Авторазмещение</button>}
+          {!disableAutoLayout && (
+            <button
+              type="button"
+              className="topology-auto-layout"
+              onClick={resetLayout}
+            >
+              Авторазмещение
+            </button>
+          )}
         </Panel>
-        <Background variant={BackgroundVariant.Dots} gap={24} size={1.4} color="#25383c" />
+        <Background
+          variant={BackgroundVariant.Dots}
+          gap={24}
+          size={1.4}
+          color="#25383c"
+        />
         <MiniMap
           pannable
           zoomable

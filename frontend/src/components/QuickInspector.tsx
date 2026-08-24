@@ -31,6 +31,13 @@ interface QuickInspectorProps {
   onDeletePhysicalObject?: (id: string) => Promise<void>;
   onRemoveFromMap?: (id: string) => Promise<void>;
   onAddContinuationToMap?: (id: string) => Promise<void>;
+  mapOperation?: {
+    kind: "remove" | "add" | "delete";
+    id: string;
+    status: "pending" | "refresh-failed";
+    message?: string;
+  } | null;
+  onRetryMapRefresh?: () => Promise<void>;
 }
 const natural = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
@@ -51,11 +58,20 @@ const endpointLabels = (
   edge: TopologyProjectionEdge,
   source?: TopologyProjectionNode,
   target?: TopologyProjectionNode,
-) => (edge.attributes.endpoint_pairs ?? []).flatMap((pair) => {
-  const from = source?.attributes.connection_points?.find((point) => point.connection_point_id === pair.from_connection_point_id);
-  const to = target?.attributes.connection_points?.find((point) => point.connection_point_id === pair.to_connection_point_id);
-  return from && to ? [`${displayNodeLabel(source!)} / ${from.display_name} ↔ ${displayNodeLabel(target!)} / ${to.display_name}`] : [];
-});
+) =>
+  (edge.attributes.endpoint_pairs ?? []).flatMap((pair) => {
+    const from = source?.attributes.connection_points?.find(
+      (point) => point.connection_point_id === pair.from_connection_point_id,
+    );
+    const to = target?.attributes.connection_points?.find(
+      (point) => point.connection_point_id === pair.to_connection_point_id,
+    );
+    return from && to
+      ? [
+          `${displayNodeLabel(source!)} / ${from.display_name} ↔ ${displayNodeLabel(target!)} / ${to.display_name}`,
+        ]
+      : [];
+  });
 
 export function QuickInspector(props: QuickInspectorProps) {
   const { document, selection, onClose, onSelectNode } = props;
@@ -175,8 +191,13 @@ export function QuickInspector(props: QuickInspectorProps) {
       </dl>
     </details>
   );
+  const operationFor = (kind: "remove" | "add" | "delete", objectId: string) =>
+    props.mapOperation?.kind === kind && props.mapOperation.id === objectId
+      ? props.mapOperation
+      : null;
   const remove = async () => {
-    if (!id || !props.onRemoveFromMap || pending) return;
+    if (!id || !props.onRemoveFromMap || pending || operationFor("remove", id))
+      return;
     setPending("remove");
     setRemoveError(null);
     try {
@@ -190,7 +211,13 @@ export function QuickInspector(props: QuickInspectorProps) {
     }
   };
   const destroy = async () => {
-    if (!id || !props.onDeletePhysicalObject || pending) return;
+    if (
+      !id ||
+      !props.onDeletePhysicalObject ||
+      pending ||
+      operationFor("delete", id)
+    )
+      return;
     const message = cable
       ? `Удалить кабель «${displayNodeLabel(node!)}» и разорвать соединение?`
       : `Удалить объект «${displayNodeLabel(node!)}»?`;
@@ -217,15 +244,27 @@ export function QuickInspector(props: QuickInspectorProps) {
         <h2>{c.remote_display_name}</h2>
         <p>Подключено:</p>
         <p>
-          {local ? `${displayNodeLabel(local)} / ` : ""}{c.local_connection_point_display_name}
+          {local ? `${displayNodeLabel(local)} / ` : ""}
+          {c.local_connection_point_display_name}
           <br />→ {c.cable_display_name}
           <br />→ {c.remote_display_name} /{" "}
           {c.remote_connection_point_display_name}
         </p>
         {props.onAddContinuationToMap && (
-          <button onClick={() => void props.onAddContinuationToMap!(remote)}>
+          <button
+            disabled={Boolean(operationFor("add", remote))}
+            onClick={() => void props.onAddContinuationToMap!(remote)}
+          >
             Добавить на карту
           </button>
+        )}
+        {operationFor("add", remote)?.status === "refresh-failed" && (
+          <>
+            <p role="alert">{operationFor("add", remote)?.message}</p>
+            <button onClick={() => void props.onRetryMapRefresh?.()}>
+              Повторить обновление
+            </button>
+          </>
         )}
         <Link to={url(remote)}>Открыть объект</Link>
       </>,
@@ -268,13 +307,17 @@ export function QuickInspector(props: QuickInspectorProps) {
         {item?.resolution === "UNRESOLVED" && (
           <p>Концы кабеля не удалось однозначно определить.</p>
         )}
-        {item && [...item.warnings, ...item.gaps].map((notice) => (
-          <p key={notice}>{notice}</p>
-        ))}
+        {item &&
+          [...item.warnings, ...item.gaps].map((notice) => (
+            <p key={notice}>{notice}</p>
+          ))}
         {inventory && !item && <p>Проверенные данные кабеля недоступны.</p>}
         <Link to={url(id)}>Открыть объект</Link>
         {props.onRemoveFromMap && (
-          <button disabled={pending !== null} onClick={() => void remove()}>
+          <button
+            disabled={pending !== null || Boolean(operationFor("remove", id))}
+            onClick={() => void remove()}
+          >
             Убрать с карты
           </button>
         )}
@@ -287,6 +330,14 @@ export function QuickInspector(props: QuickInspectorProps) {
           )}
         </details>
         {removeError && <p role="alert">{removeError}</p>}
+        {operationFor("remove", id)?.status === "refresh-failed" && (
+          <>
+            <p role="alert">{operationFor("remove", id)?.message}</p>
+            <button onClick={() => void props.onRetryMapRefresh?.()}>
+              Повторить обновление
+            </button>
+          </>
+        )}
         {deleteError && <p role="alert">{deleteError}</p>}
         {technical}
       </>,
@@ -352,7 +403,10 @@ export function QuickInspector(props: QuickInspectorProps) {
         )}
         <Link to={url(id)}>Открыть объект</Link>
         {props.onRemoveFromMap && (
-          <button disabled={pending !== null} onClick={() => void remove()}>
+          <button
+            disabled={pending !== null || Boolean(operationFor("remove", id))}
+            onClick={() => void remove()}
+          >
             Убрать с карты
           </button>
         )}
@@ -366,6 +420,22 @@ export function QuickInspector(props: QuickInspectorProps) {
         </details>
         {removeError && <p role="alert">{removeError}</p>}
         {deleteError && <p role="alert">{deleteError}</p>}
+        {operationFor("remove", id)?.status === "refresh-failed" && (
+          <>
+            <p role="alert">{operationFor("remove", id)?.message}</p>
+            <button onClick={() => void props.onRetryMapRefresh?.()}>
+              Повторить обновление
+            </button>
+          </>
+        )}
+        {operationFor("delete", id)?.status === "refresh-failed" && (
+          <>
+            <p role="alert">{operationFor("delete", id)?.message}</p>
+            <button onClick={() => void props.onRetryMapRefresh?.()}>
+              Повторить обновление
+            </button>
+          </>
+        )}
         {technical}
       </>,
     );
@@ -406,8 +476,30 @@ export function QuickInspector(props: QuickInspectorProps) {
           </button>
         )}
       </div>
-      {pairs.map((pair) => <p key={pair}>{pair}</p>)}
-      {technical}
+      {pairs.map((pair) => (
+        <p key={pair}>{pair}</p>
+      ))}
+      <details className="quick-inspector__technical">
+        <summary>Технические детали</summary>
+        <dl>
+          <div>
+            <dt>Projection ID</dt>
+            <dd>{edge.id}</dd>
+          </div>
+          <div>
+            <dt>Kind</dt>
+            <dd>{edge.kind}</dd>
+          </div>
+          {edge.source_refs.map((ref) => (
+            <div key={`${ref.entity_type}/${ref.entity_id}`}>
+              <dt>Source ref</dt>
+              <dd>
+                {ref.entity_type}: {ref.entity_id}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </details>
     </>,
   );
 }
