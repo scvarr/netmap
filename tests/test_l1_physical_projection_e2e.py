@@ -10,7 +10,7 @@ from app.repository import CanonicalRepository, ConnectionMemberInput
 client = TestClient(app)
 
 
-def projection_query(object_ids: list[str] | None = None) -> dict:
+def projection_query(object_ids: list[str] | None = None, include_interstitial_cables: bool = False) -> dict:
     return {
         "layer": "L1",
         "detail_level": "PHYSICAL_OBJECT",
@@ -25,6 +25,7 @@ def projection_query(object_ids: list[str] | None = None) -> dict:
                 for object_id in (object_ids or [])
             ],
         },
+        **({"include_interstitial_cables": True} if include_interstitial_cables else {}),
     }
 
 
@@ -80,6 +81,10 @@ def edge_object_pair(edge: dict) -> frozenset[str]:
         for ref in edge["source_refs"]
         if ref["entity_type"] == "PhysicalObject"
     )
+
+
+def physical_object_id_for_node(node: dict) -> str:
+    return next(ref["entity_id"] for ref in node["source_refs"] if ref["entity_type"] == "PhysicalObject")
 
 
 def test_w3_link_projects_core_cable_firewall_with_canonical_evidence():
@@ -185,6 +190,38 @@ def test_parallel_connections_aggregate_counts_and_scope_is_induced():
     assert len(scoped["edges"]) == 1
     assert edge_object_pair(scoped["edges"][0]) == frozenset((str(core_id), str(cable_id)))
     assert physical_object_id(firewall) not in str(scoped)
+
+
+def test_scoped_projection_includes_only_a_simple_cable_between_two_selected_endpoints():
+    core, firewall, link = create_w3_link()
+    unrelated_left, unrelated_right, unrelated_link = create_w3_link()
+    core_id, firewall_id, cable_id = physical_object_id(core), physical_object_id(firewall), link["cable_ref"]["entity_id"]
+
+    expanded = client.post(
+        "/v1/topology/projection",
+        json=projection_query([core_id, firewall_id], include_interstitial_cables=True),
+    ).json()
+    assert {physical_object_id_for_node(node) for node in expanded["nodes"]} == {core_id, firewall_id, cable_id}
+    assert len(expanded["edges"]) == 2
+    assert node_by_object(expanded, cable_id)["attributes"]["class"] == "cable"
+    assert unrelated_link["cable_ref"]["entity_id"] not in str(expanded)
+    assert physical_object_id(unrelated_left) not in str(expanded)
+    assert physical_object_id(unrelated_right) not in str(expanded)
+
+    saved_map = client.post("/v1/maps", json={"name": "Cable scope"}).json()
+    saved_map_id = saved_map["map_ref"]["entity_id"]
+    for object_id in (core_id, firewall_id):
+        assert client.post(f"/v1/maps/{saved_map_id}/placements", json={"physical_object_id": object_id, "x": 1, "y": 2}).status_code == 201
+    placement_ids = {node["physical_object_ref"]["entity_id"] for node in client.get(f"/v1/maps/{saved_map_id}").json()["placements"]}
+    assert placement_ids == {core_id, firewall_id}
+    assert cable_id not in placement_ids
+
+    one_endpoint = client.post(
+        "/v1/topology/projection",
+        json=projection_query([core_id], include_interstitial_cables=True),
+    ).json()
+    assert [physical_object_id_for_node(node) for node in one_endpoint["nodes"]] == [core_id]
+    assert one_endpoint["edges"] == []
 
 
 def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():

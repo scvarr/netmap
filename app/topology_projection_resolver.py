@@ -12,6 +12,7 @@ from app.errors import ModelError, ValidationError
 from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, ObjectBlueprint, ObjectBlueprintVersion
 from app.repository import (
     CanonicalRepository,
+    ConnectionPointRecord,
     L1AdjacencyEdge,
     NetworkInterfacePhysicalOwnerRecord,
     PhysicalConnectionMemberRecord,
@@ -163,8 +164,18 @@ class ConfiguredTopologyProjectionResolver:
             if owner.physical_object_id in selected_object_ids:
                 owners_by_object.setdefault(owner.physical_object_id, []).append(owner)
 
-        points_by_object: dict[uuid.UUID, list] = {}
         all_points = self.repository.get_all_connection_point_records()
+        connection_members = self.repository.get_physical_connection_member_records()
+        if request.include_interstitial_cables and explicit_ids:
+            selected_object_ids.update(
+                self._interstitial_cable_ids(
+                    selected_object_ids,
+                    all_points,
+                    connection_members,
+                )
+            )
+
+        points_by_object: dict[uuid.UUID, list] = {}
         for point in all_points:
             if point.physical_object_id not in selected_object_ids:
                 continue
@@ -174,7 +185,7 @@ class ConfiguredTopologyProjectionResolver:
             [point.point_id for point in all_points if point.physical_object_id in selected_object_ids]
         )
         external_connection_ids_by_point: dict[uuid.UUID, set[uuid.UUID]] = {}
-        for member in self.repository.get_physical_connection_member_records():
+        for member in connection_members:
             if member.object_a_id == member.object_b_id:
                 continue
             external_connection_ids_by_point.setdefault(member.point_a_id, set()).add(member.connection_id)
@@ -204,7 +215,7 @@ class ConfiguredTopologyProjectionResolver:
         members_by_pair: dict[
             tuple[uuid.UUID, uuid.UUID], list[PhysicalConnectionMemberRecord]
         ] = {}
-        for member in self.repository.get_physical_connection_member_records():
+        for member in connection_members:
             if member.object_a_id == member.object_b_id:
                 continue
             if not {
@@ -239,6 +250,57 @@ class ConfiguredTopologyProjectionResolver:
             warnings=[],
         )
 
+    def _interstitial_cable_ids(
+        self,
+        selected_object_ids: set[uuid.UUID],
+        all_points: tuple[ConnectionPointRecord, ...],
+        connection_members: tuple[PhysicalConnectionMemberRecord, ...],
+    ) -> set[uuid.UUID]:
+        """Return only simple cable objects whose two endpoints are already in scope."""
+        candidates: set[uuid.UUID] = set()
+        for member in connection_members:
+            if member.object_a_id == member.object_b_id:
+                continue
+            if member.object_a_id in selected_object_ids and member.object_b_id not in selected_object_ids:
+                candidates.add(member.object_b_id)
+            if member.object_b_id in selected_object_ids and member.object_a_id not in selected_object_ids:
+                candidates.add(member.object_a_id)
+        classes = DeviceCatalog(self.repository.session).physical_object_classes(
+            list(candidates)
+        )
+        points_by_object: dict[uuid.UUID, set[uuid.UUID]] = {}
+        for point in all_points:
+            points_by_object.setdefault(point.physical_object_id, set()).add(point.point_id)
+        included: set[uuid.UUID] = set()
+        for cable_id in candidates:
+            if classes.get(cable_id) is None or classes[cable_id].value != "cable":
+                continue
+            cable_points = points_by_object.get(cable_id, set())
+            incident = [
+                member
+                for member in connection_members
+                if cable_id in (member.object_a_id, member.object_b_id)
+                and member.object_a_id != member.object_b_id
+            ]
+            neighbors = [
+                member.object_b_id if member.object_a_id == cable_id else member.object_a_id
+                for member in incident
+            ]
+            incident_points = {
+                member.point_a_id if member.object_a_id == cable_id else member.point_b_id
+                for member in incident
+            }
+            if (
+                len(cable_points) == 2
+                and len(incident) == 2
+                and len({member.connection_id for member in incident}) == 2
+                and len(set(neighbors)) == 2
+                and set(neighbors).issubset(selected_object_ids)
+                and incident_points == cable_points
+            ):
+                included.add(cable_id)
+        return included
+
     def _validate_request(self, request: TopologyProjectionRequest) -> None:
         if (request.layer, request.detail_level) not in {
             ("L1", "PHYSICAL_OBJECT"),
@@ -251,6 +313,14 @@ class ConfiguredTopologyProjectionResolver:
                     "layer": request.layer,
                     "detail_level": request.detail_level,
                 },
+            )
+        if request.include_interstitial_cables and (
+            request.layer,
+            request.detail_level,
+        ) != ("L1", "PHYSICAL_OBJECT"):
+            raise ValidationError(
+                "Interstitial cable expansion supports only L1 physical projection",
+                {"reason": "PROJECTION_INTERSTITIAL_CABLES_UNSUPPORTED"},
             )
         if request.scope.include_location_subtrees:
             raise ValidationError(

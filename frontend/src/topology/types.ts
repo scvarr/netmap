@@ -24,6 +24,7 @@ export interface TopologyProjectionRequest {
   layer: TopologyLayer;
   detail_level: TopologyDetailLevel;
   scope: TopologyProjectionScope;
+  include_interstitial_cables?: boolean;
   grouping?: Record<string, unknown>;
   filters?: Record<string, unknown>;
 }

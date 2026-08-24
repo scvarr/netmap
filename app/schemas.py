@@ -116,6 +116,7 @@ class TopologyProjectionRequest(BaseModel):
     layer: Literal["L1", "L2", "L3"]
     detail_level: Literal["DEVICE", "PHYSICAL_OBJECT"]
     scope: TopologyProjectionScope
+    include_interstitial_cables: bool = False
     grouping: dict[str, Any] | None = None
     filters: dict[str, Any] | None = None
 
