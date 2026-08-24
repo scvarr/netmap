@@ -61,6 +61,7 @@ export function App(props: AppProps) {
             topologyLayoutStore={props.topologyLayoutStore}
             physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource}
             savedMapDataSource={props.savedMapDataSource}
+            catalogInventoryDataSource={props.catalogInventoryDataSource}
           />}
         />
         <Route

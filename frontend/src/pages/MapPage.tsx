@@ -1,62 +1,451 @@
-import { ReactFlowProvider } from '@xyflow/react';
+import { ReactFlowProvider, type XYPosition } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { MapInsertionPicker, mapCandidateChoices } from '../components/MapInsertionPicker';
 import { QuickInspector } from '../components/QuickInspector';
 import { TraceCommandBar } from '../components/TraceCommandBar';
 import { TopologyCanvas } from '../components/TopologyCanvas';
 import { ViewState } from '../components/ViewState';
-import { displayNodeLabel } from '../topology/presentation';
-import { nodeForPhysicalObject, physicalObjectIdForNode, physicalObjectIdForSelection, projectionRequestFor, type TopologyViewMode } from '../topology/projection';
-import type { SavedMap, SavedMapDataSource, SavedMapSummary, SavedMapView, SavedMapViewKey } from '../topology/savedMapTypes';
-import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
-import type { InterfacePhysicalTraceDataSource } from '../topology/interfacePhysicalTraceTypes';
-import type { InterfacePhysicalTraceArtifact } from '../topology/interfacePhysicalTraceTypes';
 import { physicalTraceOverlayFor } from '../topology/interfacePhysicalTraceOverlay';
+import type { CatalogInventoryDataSource, CatalogInventoryDocument } from '../topology/catalogInventoryTypes';
+import type { DeviceDetailsDataSource } from '../topology/deviceDetailsTypes';
+import type { InterfacePhysicalTraceArtifact, InterfacePhysicalTraceDataSource } from '../topology/interfacePhysicalTraceTypes';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectDeleteTypes';
-import type { TopologyDataSource, TopologyProjectionDocument, TopologyProjectionNode, TopologySelection } from '../topology/types';
+import {
+  nodeForPhysicalObject,
+  physicalObjectIdForNode,
+  physicalObjectIdForSelection,
+  projectionRequestFor,
+  type TopologyViewMode,
+} from '../topology/projection';
+import type { SavedMap, SavedMapDataSource, SavedMapSummary, SavedMapView, SavedMapViewKey } from '../topology/savedMapTypes';
+import type { TopologyDataSource, TopologyProjectionDocument, TopologySelection } from '../topology/types';
 
-interface MapPageProps { dataSource: TopologyDataSource; deviceDetailsDataSource: DeviceDetailsDataSource; savedMapDataSource?: SavedMapDataSource; physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource; traceDataSource?: InterfacePhysicalTraceDataSource; topologyLayoutStore?: TopologyLayoutStore }
+export { mapCandidateChoices } from '../components/MapInsertionPicker';
+
+interface MapPageProps {
+  dataSource: TopologyDataSource;
+  deviceDetailsDataSource: DeviceDetailsDataSource;
+  savedMapDataSource?: SavedMapDataSource;
+  catalogInventoryDataSource?: CatalogInventoryDataSource;
+  physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
+  traceDataSource?: InterfacePhysicalTraceDataSource;
+  topologyLayoutStore?: TopologyLayoutStore;
+}
+
 interface SceneDocument { sceneKey: string; document: TopologyProjectionDocument }
+interface InsertionState {
+  mapId: string;
+  anchor: XYPosition;
+  inventory: CatalogInventoryDocument | null;
+  status: 'loading' | 'ready' | 'saving' | 'saved-refresh-failed';
+  error: string | null;
+}
+interface ContextMenuState { anchor: XYPosition; screen: XYPosition }
+
 const view = (value: string | null): TopologyViewMode => value === 'physical' ? 'physical' : 'logical';
 const savedMapViewKey = (value: SavedMapView): SavedMapViewKey => value === 'physical' ? 'L1/PHYSICAL_OBJECT' : 'L2/DEVICE';
-const natural = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-export const mapCandidateChoices = (nodes: TopologyProjectionNode[], placedIds: string[]) => nodes.map((node) => ({ id: physicalObjectIdForNode(node), label: displayNodeLabel(node), className: node.attributes.class })).filter((item): item is { id: string; label: string; className: unknown } => item.id !== null && item.className !== 'cable' && !placedIds.includes(item.id)).sort((a, b) => natural(a.label, b.label));
+const natural = (left: string, right: string) => left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+const errorMessage = (reason: unknown, fallback: string) => reason instanceof Error ? reason.message : fallback;
 
-export function MapPage({ dataSource, deviceDetailsDataSource, savedMapDataSource, physicalObjectDeleteDataSource, traceDataSource }: MapPageProps) {
-  const [params, setParams] = useSearchParams(); const mapId = params.get('map'); const viewMode = view(params.get('view'));
-  const [maps, setMaps] = useState<SavedMapSummary[] | null>(null); const [map, setMap] = useState<SavedMap | null>(null); const [sceneDocument, setSceneDocument] = useState<SceneDocument | null>(null); const [logicalDocument, setLogicalDocument] = useState<TopologyProjectionDocument | null>(null); const [traceArtifact, setTraceArtifact] = useState<InterfacePhysicalTraceArtifact | null>(null); const [selection, setSelection] = useState<TopologySelection>(null); const [error, setError] = useState<string | null>(null); const [creating, setCreating] = useState(false); const [name, setName] = useState(''); const [candidates, setCandidates] = useState<TopologyProjectionDocument | null>(null);
-  const selectedMapId = useRef<string | null>(mapId); selectedMapId.current = mapId;
+export function MapPage({
+  dataSource,
+  deviceDetailsDataSource,
+  savedMapDataSource,
+  catalogInventoryDataSource,
+  physicalObjectDeleteDataSource,
+  traceDataSource,
+}: MapPageProps) {
+  const [params, setParams] = useSearchParams();
+  const mapId = params.get('map');
+  const viewMode = view(params.get('view'));
+  const [maps, setMaps] = useState<SavedMapSummary[] | null>(null);
+  const [map, setMap] = useState<SavedMap | null>(null);
+  const [sceneDocument, setSceneDocument] = useState<SceneDocument | null>(null);
+  const [logicalDocument, setLogicalDocument] = useState<TopologyProjectionDocument | null>(null);
+  const [traceArtifact, setTraceArtifact] = useState<InterfacePhysicalTraceArtifact | null>(null);
+  const [selection, setSelection] = useState<TopologySelection>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [name, setName] = useState('');
+  const [insertion, setInsertion] = useState<InsertionState | null>(null);
+  const [contextAnchor, setContextAnchor] = useState<ContextMenuState | null>(null);
+  const [pendingPhysicalToolbarInsertion, setPendingPhysicalToolbarInsertion] = useState(false);
+  const [authoritativePositionRevision, setAuthoritativePositionRevision] = useState(0);
+  const selectedMapId = useRef<string | null>(mapId);
+  const insertionSequence = useRef(0);
+  const viewportCenter = useRef<(() => XYPosition) | null>(null);
+
+  selectedMapId.current = mapId;
   const legacy = !savedMapDataSource;
   const presentationSceneKey = !legacy && mapId ? `${mapId}/${viewMode}` : `legacy/${viewMode}`;
   const activeMap = !legacy && map?.map_ref.entity_id === mapId ? map : null;
   const document = sceneDocument?.sceneKey === presentationSceneKey ? sceneDocument.document : null;
-  const selectMap = useCallback((id: string) => { setSelection(null); setSceneDocument(null); setParams((current) => { const next = new URLSearchParams(current); next.set('map', id); next.set('view', next.get('view') ?? 'physical'); next.delete('focus'); return next; }); }, [setParams]);
-  const reloadMap = useCallback(async () => { if (!savedMapDataSource || !mapId) return; const detail = await savedMapDataSource.loadMap(mapId); if (selectedMapId.current === mapId) setMap(detail); return detail; }, [mapId, savedMapDataSource]);
-  useEffect(() => { if (!savedMapDataSource) return; let active = true; void savedMapDataSource.listMaps().then((items) => { if (!active) return; const sorted = [...items].sort((a, b) => natural(a.name, b.name)); setMaps(sorted); if (!mapId && sorted[0]) selectMap(sorted[0].map_ref.entity_id); }, (reason) => active && setError(reason instanceof Error ? reason.message : 'Не удалось загрузить карты')); return () => { active = false; }; }, [mapId, savedMapDataSource, selectMap]);
-  useEffect(() => { if (!savedMapDataSource || !mapId) { setMap(null); setSceneDocument(null); return; } if (maps && !maps.some((item) => item.map_ref.entity_id === mapId)) { setMap(null); setSceneDocument(null); setSelection(null); setError('Выбранная карта не найдена.'); return; } let active = true; setError(null); void savedMapDataSource.loadMap(mapId).then((detail) => { if (active) setMap(detail); }, (reason) => active && setError(reason instanceof Error ? reason.message : 'Не удалось загрузить карту')); return () => { active = false; }; }, [mapId, maps, savedMapDataSource]);
   const ids = activeMap?.placements.map((item) => item.physical_object_ref.entity_id) ?? [];
-  // Coordinates are deliberately excluded: topology projection membership is only the placed object set.
   const placementMembershipKey = ids.join(',');
   const hasLoadedMap = legacy || Boolean(activeMap);
-  const [authoritativePositionRevision, setAuthoritativePositionRevision] = useState(0);
-  useEffect(() => { if (savedMapDataSource && (!hasLoadedMap || ids.length === 0)) { setSceneDocument(null); return; } let active = true; void dataSource.loadProjection(projectionRequestFor(viewMode, savedMapDataSource ? ids : undefined, Boolean(savedMapDataSource && viewMode === 'physical'))).then((next) => { if (active) setSceneDocument({ sceneKey: presentationSceneKey, document: next }); }, (reason) => active && setError(reason instanceof Error ? reason.message : 'Не удалось загрузить projection')); return () => { active = false; }; }, [dataSource, hasLoadedMap, placementMembershipKey, presentationSceneKey, savedMapDataSource, viewMode]);
-  useEffect(() => { if (savedMapDataSource ? !hasLoadedMap : viewMode === 'logical') return; void dataSource.loadProjection(projectionRequestFor('logical')).then(setLogicalDocument, () => setLogicalDocument(null)); }, [dataSource, hasLoadedMap, mapId, savedMapDataSource, viewMode]);
-  useEffect(() => { const focus = params.get('focus'); if (!document || !focus) return; const node = nodeForPhysicalObject(document.nodes, focus); setSelection(node ? { type: 'node', item: node } : null); }, [document, params]);
-  useEffect(() => { if (!document) return; setSelection((current) => { if (!current) return null; if (current.type === 'edge') return document.edges.some((edge) => edge.id === current.item.id) ? current : null; if (current.type === 'continuation') return document.l1_off_map_continuations?.some((item) => item.id === current.item.id) ? current : null; const id = physicalObjectIdForSelection(current); const node = id ? nodeForPhysicalObject(document.nodes, id) : null; return node ? { type: 'node', item: node } : null; }); }, [document]);
-  const create = async () => { if (!savedMapDataSource || !name.trim()) return; try { const created = await savedMapDataSource.createMap(name.trim()); setMaps([...await savedMapDataSource.listMaps()].sort((a, b) => natural(a.name, b.name))); setName(''); setCreating(false); selectMap(created.map_ref.entity_id); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось создать карту'); } };
-  const loadCandidates = async () => { try { setCandidates(await dataSource.loadProjection(projectionRequestFor('physical'))); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось загрузить объекты'); } };
-  const add = async (id: string) => { if (!savedMapDataSource || !mapId) return; const n = ids.length; await savedMapDataSource.addPlacement(mapId, id, 80 + n % 5 * 180, 80 + Math.floor(n / 5) * 120); await reloadMap(); setCandidates(null); };
-  const move = async (id: string, p: { x: number; y: number }) => { if (!savedMapDataSource || !mapId) return; const positionKey = savedMapViewKey(viewMode); try { await savedMapDataSource.movePosition(mapId, id, viewMode, p.x, p.y); if (selectedMapId.current === mapId) setMap((current) => current?.map_ref.entity_id === mapId ? { ...current, placements: current.placements.map((placement) => placement.physical_object_ref.entity_id === id ? { ...placement, positions: { ...placement.positions, [positionKey]: { x: p.x, y: p.y } } } : placement) } : current); } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось сохранить позицию'); await reloadMap(); if (selectedMapId.current === mapId) setAuthoritativePositionRevision((revision) => revision + 1); } };
-  const remove = async (id: string) => { if (!savedMapDataSource || !mapId) return; await savedMapDataSource.removePlacement(mapId, id); setSelection(null); await reloadMap(); };
-  const positions = useMemo(() => { const positionKey = savedMapViewKey(viewMode); return Object.fromEntries((activeMap?.placements ?? []).map((item) => { const node = nodeForPhysicalObject(document?.nodes ?? [], item.physical_object_ref.entity_id); const position = item.positions[positionKey]; return node && position ? [node.id, position] : null; }).filter((item): item is [string, { x: number; y: number }] => item !== null)); }, [activeMap, document, viewMode]);
-  const draggableNodeIds = useMemo(() => new Set((activeMap?.placements ?? []).map((item) => nodeForPhysicalObject(document?.nodes ?? [], item.physical_object_ref.entity_id)?.id).filter((id): id is string => Boolean(id))), [activeMap, document]);
-  const choices = mapCandidateChoices(candidates?.nodes ?? [], ids);
-  return <main className="map-page"><div className="map-page__toolbar topology-mode-switch"><label>Карты: {legacy ? '—' : <select aria-label="Карты" value={mapId ?? ''} onChange={(e) => selectMap(e.target.value)}><option value="" disabled>Выберите карту</option>{(maps ?? []).map((item) => <option key={item.map_ref.entity_id} value={item.map_ref.entity_id}>{item.name}</option>)}</select>}</label>{!legacy && <><button type="button" onClick={() => setCreating(true)}>+ Новая карта</button><button type="button" onClick={() => void loadCandidates()} disabled={!activeMap}>+ Добавить объект</button></>}<button type="button" aria-pressed={viewMode === 'logical'} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('view', 'logical'); return n; })}>Логическая</button><button type="button" aria-pressed={viewMode === 'physical'} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('view', 'physical'); return n; })}>Физическая</button></div>
-    {creating && <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Новая карта"><div className="map-dialog__surface"><label>Название<input autoFocus value={name} onChange={(e) => setName(e.target.value)} /></label><button type="button" onClick={() => setCreating(false)}>Отмена</button><button type="button" onClick={() => void create()}>Создать</button></div></section>}
-    {candidates && <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Добавить объект"><div className="map-dialog__surface"><h2>Добавить объект</h2>{choices.map((item) => <button key={item.id} type="button" onClick={() => void add(item.id)}>{item.label}</button>)}{choices.length === 0 && <p>Все доступные объекты уже на карте.</p>}<button type="button" onClick={() => setCandidates(null)}>Закрыть</button></div></section>}
-    {error && <p role="alert">{error}</p>}{document && params.get('focus') && !nodeForPhysicalObject(document.nodes, params.get('focus')!) && <p>Объект с указанной canonical-ссылкой отсутствует в этой проекции.</p>}{!legacy && maps?.length === 0 && <section><h2>Создайте первую карту</h2><button onClick={() => setCreating(true)}>Создать карту</button></section>}{!legacy && activeMap && ids.length === 0 && <section><h2>Карта «{activeMap.name}» пока пуста</h2><button onClick={() => void loadCandidates()}>Добавить объект</button></section>}
-    {(legacy || (activeMap && ids.length > 0)) && <><TraceCommandBar logicalDocument={logicalDocument} deviceDetailsDataSource={deviceDetailsDataSource} traceDataSource={traceDataSource} traceArtifact={traceArtifact} onTraceArtifact={(artifact) => { setTraceArtifact(artifact); if (artifact?.verdict === 'REACHABLE') setParams((current) => { const next = new URLSearchParams(current); next.set('view', 'physical'); return next; }); }} /><section className="map-page__canvas">{!document && <ViewState kind="loading" />}{document?.nodes.length === 0 && <ViewState kind="empty" />}{document && document.nodes.length > 0 && <ReactFlowProvider><TopologyCanvas document={document} selection={selection} onSelectionChange={setSelection} sceneKey={presentationSceneKey} positionOverrides={!legacy ? positions : undefined} draggableNodeIds={!legacy ? draggableNodeIds : undefined} authoritativePositionRevision={authoritativePositionRevision} onPhysicalNodeDragStop={!legacy ? move : undefined} disableAutoLayout={!legacy} traceOverlay={physicalTraceOverlayFor(traceArtifact, document)} /></ReactFlowProvider>}</section></>}
-    <QuickInspector document={document} selection={selection} onSelectNode={(node) => setSelection({ type: 'node', item: node })} onClose={() => setSelection(null)} onAddContinuationToMap={!legacy && viewMode === 'physical' ? async (id) => add(id) : undefined} onRemoveFromMap={!legacy && viewMode === 'physical' && ids.includes(physicalObjectIdForSelection(selection) ?? '') ? remove : undefined} onDeletePhysicalObject={physicalObjectDeleteDataSource ? async (id) => { await physicalObjectDeleteDataSource.deletePhysicalObject(id); setSelection(null); await reloadMap(); } : undefined} />
-  </main>;
+
+  const selectMap = useCallback((id: string) => {
+    setSelection(null);
+    setSceneDocument(null);
+    setInsertion(null);
+    setContextAnchor(null);
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('map', id);
+      next.set('view', next.get('view') ?? 'physical');
+      next.delete('focus');
+      return next;
+    });
+  }, [setParams]);
+
+  const reloadMap = useCallback(async (targetMapId = mapId): Promise<boolean> => {
+    if (!savedMapDataSource || !targetMapId) return false;
+    const detail = await savedMapDataSource.loadMap(targetMapId);
+    if (selectedMapId.current !== targetMapId) return false;
+    setMap(detail);
+    return true;
+  }, [mapId, savedMapDataSource]);
+
+  useEffect(() => {
+    if (!savedMapDataSource) return undefined;
+    let active = true;
+    void savedMapDataSource.listMaps().then(
+      (items) => {
+        if (!active) return;
+        const sorted = [...items].sort((left, right) => natural(left.name, right.name));
+        setMaps(sorted);
+        if (!mapId && sorted[0]) selectMap(sorted[0].map_ref.entity_id);
+      },
+      (reason) => active && setError(errorMessage(reason, 'Не удалось загрузить карты')),
+    );
+    return () => { active = false; };
+  }, [mapId, savedMapDataSource, selectMap]);
+
+  useEffect(() => {
+    if (!savedMapDataSource || !mapId) {
+      setMap(null);
+      setSceneDocument(null);
+      return undefined;
+    }
+    if (maps && !maps.some((item) => item.map_ref.entity_id === mapId)) {
+      setMap(null);
+      setSceneDocument(null);
+      setSelection(null);
+      setError('Выбранная карта не найдена.');
+      return undefined;
+    }
+    let active = true;
+    setError(null);
+    void savedMapDataSource.loadMap(mapId).then(
+      (detail) => active && setMap(detail),
+      (reason) => active && setError(errorMessage(reason, 'Не удалось загрузить карту')),
+    );
+    return () => { active = false; };
+  }, [mapId, maps, savedMapDataSource]);
+
+  useEffect(() => {
+    if (savedMapDataSource && (!hasLoadedMap || ids.length === 0)) {
+      setSceneDocument(null);
+      return undefined;
+    }
+    let active = true;
+    void dataSource.loadProjection(
+      projectionRequestFor(viewMode, savedMapDataSource ? ids : undefined, Boolean(savedMapDataSource && viewMode === 'physical')),
+    ).then(
+      (next) => active && setSceneDocument({ sceneKey: presentationSceneKey, document: next }),
+      (reason) => active && setError(errorMessage(reason, 'Не удалось загрузить projection')),
+    );
+    return () => { active = false; };
+  }, [dataSource, hasLoadedMap, placementMembershipKey, presentationSceneKey, savedMapDataSource, viewMode]);
+
+  useEffect(() => {
+    if (savedMapDataSource ? !hasLoadedMap : viewMode === 'logical') return;
+    let active = true;
+    void dataSource.loadProjection(projectionRequestFor('logical')).then(
+      (next) => active && setLogicalDocument(next),
+      () => active && setLogicalDocument(null),
+    );
+    return () => { active = false; };
+  }, [dataSource, hasLoadedMap, mapId, savedMapDataSource, viewMode]);
+
+  useEffect(() => {
+    const focus = params.get('focus');
+    if (!document || !focus) return;
+    const node = nodeForPhysicalObject(document.nodes, focus);
+    setSelection(node ? { type: 'node', item: node } : null);
+  }, [document, params]);
+
+  useEffect(() => {
+    if (!document) return;
+    setSelection((current) => {
+      if (!current) return null;
+      if (current.type === 'edge') return document.edges.some((edge) => edge.id === current.item.id) ? current : null;
+      if (current.type === 'continuation') return document.l1_off_map_continuations?.some((item) => item.id === current.item.id) ? current : null;
+      const id = physicalObjectIdForSelection(current);
+      const node = id ? nodeForPhysicalObject(document.nodes, id) : null;
+      return node ? { type: 'node', item: node } : null;
+    });
+  }, [document]);
+
+  const create = async () => {
+    if (!savedMapDataSource || !name.trim()) return;
+    try {
+      const created = await savedMapDataSource.createMap(name.trim());
+      setMaps([...await savedMapDataSource.listMaps()].sort((left, right) => natural(left.name, right.name)));
+      setName('');
+      setCreating(false);
+      selectMap(created.map_ref.entity_id);
+    } catch (reason) {
+      setError(errorMessage(reason, 'Не удалось создать карту'));
+    }
+  };
+
+  const openInsertion = useCallback((anchor: XYPosition) => {
+    if (!catalogInventoryDataSource || !mapId || !activeMap) return;
+    const request = ++insertionSequence.current;
+    setContextAnchor(null);
+    setInsertion({ mapId, anchor, inventory: null, status: 'loading', error: null });
+    void catalogInventoryDataSource.loadCatalogInventory().then(
+      (inventory) => {
+        if (request !== insertionSequence.current || selectedMapId.current !== mapId) return;
+        setInsertion((current) => current?.mapId === mapId ? { ...current, inventory, status: 'ready' } : current);
+      },
+      (reason) => {
+        if (request !== insertionSequence.current || selectedMapId.current !== mapId) return;
+        setInsertion((current) => current?.mapId === mapId ? {
+          ...current,
+          status: 'ready',
+          error: errorMessage(reason, 'Не удалось загрузить оборудование'),
+        } : current);
+      },
+    );
+  }, [activeMap, catalogInventoryDataSource, mapId]);
+
+  useEffect(() => {
+    if (!pendingPhysicalToolbarInsertion || viewMode !== 'physical' || !activeMap || (!document && ids.length > 0)) return;
+    setPendingPhysicalToolbarInsertion(false);
+    openInsertion(viewportCenter.current?.() ?? { x: 0, y: 0 });
+  }, [activeMap, document, ids.length, openInsertion, pendingPhysicalToolbarInsertion, viewMode]);
+
+  const startToolbarInsertion = () => {
+    if (viewMode === 'logical') {
+      setPendingPhysicalToolbarInsertion(true);
+      setParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set('view', 'physical');
+        return next;
+      });
+      return;
+    }
+    openInsertion(viewportCenter.current?.() ?? { x: 0, y: 0 });
+  };
+
+  const submitInsertion = async (id: string, operation = insertion) => {
+    if (!savedMapDataSource || !operation || operation.status !== 'ready') return;
+    const request = ++insertionSequence.current;
+    const targetMapId = operation.mapId;
+    setInsertion((current) => current?.mapId === targetMapId ? { ...current, status: 'saving', error: null } : current);
+    try {
+      await savedMapDataSource.addPlacement(targetMapId, id, operation.anchor.x, operation.anchor.y);
+    } catch (reason) {
+      if (request !== insertionSequence.current || selectedMapId.current !== targetMapId) return;
+      setInsertion((current) => current?.mapId === targetMapId ? {
+        ...current,
+        status: 'ready',
+        error: errorMessage(reason, 'Не удалось добавить на карту'),
+      } : current);
+      return;
+    }
+    try {
+      const refreshed = await reloadMap(targetMapId);
+      if (request !== insertionSequence.current || selectedMapId.current !== targetMapId) return;
+      if (refreshed) setInsertion(null);
+      else setInsertion((current) => current?.mapId === targetMapId ? {
+        ...current,
+        status: 'saved-refresh-failed',
+        error: 'Размещение сохранено, но карту не удалось обновить.',
+      } : current);
+    } catch (reason) {
+      if (request !== insertionSequence.current || selectedMapId.current !== targetMapId) return;
+      setInsertion((current) => current?.mapId === targetMapId ? {
+        ...current,
+        status: 'saved-refresh-failed',
+        error: errorMessage(reason, 'Размещение сохранено, но карту не удалось обновить'),
+      } : current);
+    }
+  };
+
+  const retryInsertionRefresh = async () => {
+    if (!insertion || insertion.status !== 'saved-refresh-failed') return;
+    const targetMapId = insertion.mapId;
+    setInsertion((current) => current?.mapId === targetMapId ? { ...current, status: 'saving', error: null } : current);
+    try {
+      const refreshed = await reloadMap(targetMapId);
+      if (selectedMapId.current === targetMapId && refreshed) setInsertion(null);
+    } catch (reason) {
+      if (selectedMapId.current === targetMapId) {
+        setInsertion((current) => current?.mapId === targetMapId ? {
+          ...current,
+          status: 'saved-refresh-failed',
+          error: errorMessage(reason, 'Не удалось обновить карту'),
+        } : current);
+      }
+    }
+  };
+
+  const move = async (id: string, position: XYPosition) => {
+    if (!savedMapDataSource || !mapId) return;
+    const targetMapId = mapId;
+    const positionKey = savedMapViewKey(viewMode);
+    try {
+      await savedMapDataSource.movePosition(targetMapId, id, viewMode, position.x, position.y);
+      if (selectedMapId.current === targetMapId) {
+        setMap((current) => current?.map_ref.entity_id === targetMapId ? {
+          ...current,
+          placements: current.placements.map((placement) => placement.physical_object_ref.entity_id === id ? {
+            ...placement,
+            positions: { ...placement.positions, [positionKey]: position },
+          } : placement),
+        } : current);
+      }
+    } catch (reason) {
+      if (selectedMapId.current !== targetMapId) return;
+      setError(errorMessage(reason, 'Не удалось сохранить позицию'));
+      try {
+        await reloadMap(targetMapId);
+      } catch {
+        // The original persistence error remains the bounded user-facing failure.
+      }
+      if (selectedMapId.current === targetMapId) setAuthoritativePositionRevision((revision) => revision + 1);
+    }
+  };
+
+  const remove = async (id: string) => {
+    if (!savedMapDataSource || !mapId) return;
+    const targetMapId = mapId;
+    await savedMapDataSource.removePlacement(targetMapId, id);
+    if (selectedMapId.current !== targetMapId) return;
+    setSelection(null);
+    await reloadMap(targetMapId);
+  };
+
+  const addContinuationAtViewportCenter = async (id: string) => {
+    if (!savedMapDataSource || !mapId) return;
+    const targetMapId = mapId;
+    const anchor = viewportCenter.current?.() ?? { x: 0, y: 0 };
+    try {
+      await savedMapDataSource.addPlacement(targetMapId, id, anchor.x, anchor.y);
+      await reloadMap(targetMapId);
+    } catch (reason) {
+      if (selectedMapId.current === targetMapId) {
+        setError(errorMessage(reason, 'Не удалось добавить на карту'));
+      }
+    }
+  };
+
+  const positions = useMemo(() => {
+    const positionKey = savedMapViewKey(viewMode);
+    return Object.fromEntries((activeMap?.placements ?? []).map((item) => {
+      const node = nodeForPhysicalObject(document?.nodes ?? [], item.physical_object_ref.entity_id);
+      const position = item.positions[positionKey];
+      return node && position ? [node.id, position] : null;
+    }).filter((item): item is [string, XYPosition] => item !== null));
+  }, [activeMap, document, viewMode]);
+  const draggableNodeIds = useMemo(() => new Set((activeMap?.placements ?? []).map((item) =>
+    nodeForPhysicalObject(document?.nodes ?? [], item.physical_object_ref.entity_id)?.id,
+  ).filter((id): id is string => Boolean(id))), [activeMap, document]);
+
+  return (
+    <main className="map-page">
+      <div className="map-page__toolbar topology-mode-switch">
+        <label>
+          Карты: {legacy ? '—' : (
+            <select aria-label="Карты" value={mapId ?? ''} onChange={(event) => selectMap(event.target.value)}>
+              <option value="" disabled>Выберите карту</option>
+              {(maps ?? []).map((item) => <option key={item.map_ref.entity_id} value={item.map_ref.entity_id}>{item.name}</option>)}
+            </select>
+          )}
+        </label>
+        {!legacy && (
+          <>
+            <button type="button" onClick={() => setCreating(true)}>+ Новая карта</button>
+            <button type="button" onClick={startToolbarInsertion} disabled={!activeMap || !catalogInventoryDataSource}>
+              + Добавить на карту
+            </button>
+          </>
+        )}
+        <button type="button" aria-pressed={viewMode === 'logical'} onClick={() => setParams((current) => { const next = new URLSearchParams(current); next.set('view', 'logical'); return next; })}>Логическая</button>
+        <button type="button" aria-pressed={viewMode === 'physical'} onClick={() => setParams((current) => { const next = new URLSearchParams(current); next.set('view', 'physical'); return next; })}>Физическая</button>
+      </div>
+
+      {creating && (
+        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Новая карта">
+          <div className="map-dialog__surface">
+            <label>Название<input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></label>
+            <button type="button" onClick={() => setCreating(false)}>Отмена</button>
+            <button type="button" onClick={() => void create()}>Создать</button>
+          </div>
+        </section>
+      )}
+      {insertion && insertion.mapId === mapId && (
+        <MapInsertionPicker
+          inventory={insertion.inventory}
+          placedIds={ids}
+          status={insertion.status}
+          error={insertion.error}
+          onSelect={(candidate) => void submitInsertion(candidate.id)}
+          onClose={() => setInsertion(null)}
+          onRetryRefresh={() => void retryInsertionRefresh()}
+        />
+      )}
+      {contextAnchor && viewMode === 'physical' && (
+        <div className="map-context-menu" role="menu" style={{ left: contextAnchor.screen.x, top: contextAnchor.screen.y }}>
+          <button type="button" role="menuitem" onClick={() => openInsertion(contextAnchor.anchor)}>Добавить на карту…</button>
+        </div>
+      )}
+      {error && <p role="alert">{error}</p>}
+      {document && params.get('focus') && !nodeForPhysicalObject(document.nodes, params.get('focus')!) && <p>Объект с указанной canonical-ссылкой отсутствует в этой проекции.</p>}
+      {!legacy && maps?.length === 0 && <section><h2>Создайте первую карту</h2><button onClick={() => setCreating(true)}>Создать карту</button></section>}
+      {!legacy && activeMap && ids.length === 0 && <section><h2>Карта «{activeMap.name}» пока пуста</h2><button onClick={startToolbarInsertion}>Добавить на карту</button></section>}
+      {(legacy || (activeMap && ids.length > 0)) && (
+        <>
+          <TraceCommandBar logicalDocument={logicalDocument} deviceDetailsDataSource={deviceDetailsDataSource} traceDataSource={traceDataSource} traceArtifact={traceArtifact} onTraceArtifact={(artifact) => { setTraceArtifact(artifact); if (artifact?.verdict === 'REACHABLE') setParams((current) => { const next = new URLSearchParams(current); next.set('view', 'physical'); return next; }); }} />
+          <section className="map-page__canvas">
+            {!document && <ViewState kind="loading" />}
+            {document?.nodes.length === 0 && <ViewState kind="empty" />}
+            {document && document.nodes.length > 0 && (
+              <ReactFlowProvider>
+                <TopologyCanvas
+                  document={document}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                  sceneKey={presentationSceneKey}
+                  positionOverrides={!legacy ? positions : undefined}
+                  draggableNodeIds={!legacy ? draggableNodeIds : undefined}
+                  authoritativePositionRevision={authoritativePositionRevision}
+                  onPhysicalNodeDragStop={!legacy ? move : undefined}
+                  disableAutoLayout={!legacy}
+                  traceOverlay={physicalTraceOverlayFor(traceArtifact, document)}
+                  onViewportCenterReady={viewMode === 'physical' ? (getter) => { viewportCenter.current = getter; } : undefined}
+                  onPhysicalPaneContextMenu={viewMode === 'physical' ? (anchor, screen) => setContextAnchor({ anchor, screen }) : undefined}
+                  onPaneClick={() => { setContextAnchor(null); setSelection(null); }}
+                />
+              </ReactFlowProvider>
+            )}
+          </section>
+        </>
+      )}
+      <QuickInspector
+        document={document}
+        selection={selection}
+        onSelectNode={(node) => setSelection({ type: 'node', item: node })}
+        onClose={() => setSelection(null)}
+        onAddContinuationToMap={!legacy && viewMode === 'physical' ? addContinuationAtViewportCenter : undefined}
+        onRemoveFromMap={!legacy && viewMode === 'physical' && ids.includes(physicalObjectIdForSelection(selection) ?? '') ? remove : undefined}
+        onDeletePhysicalObject={physicalObjectDeleteDataSource ? async (id) => { await physicalObjectDeleteDataSource.deletePhysicalObject(id); setSelection(null); await reloadMap(); } : undefined}
+      />
+    </main>
+  );
 }

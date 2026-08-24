@@ -47,6 +47,9 @@ interface TopologyCanvasProps {
   authoritativePositionRevision?: number;
   onPhysicalNodeDragStop?: (physicalObjectId: string, position: XYPosition) => void;
   disableAutoLayout?: boolean;
+  onViewportCenterReady?: (getter: (() => XYPosition) | null) => void;
+  onPhysicalPaneContextMenu?: (anchor: XYPosition, screen: XYPosition) => void;
+  onPaneClick?: () => void;
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -65,6 +68,9 @@ export function TopologyCanvas({
   authoritativePositionRevision,
   onPhysicalNodeDragStop,
   disableAutoLayout,
+  onViewportCenterReady,
+  onPhysicalPaneContextMenu,
+  onPaneClick,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -73,7 +79,8 @@ export function TopologyCanvas({
   const fittedSceneKey = useRef<string | null>(null);
   const appliedAuthoritativePositionRevision = useRef(authoritativePositionRevision);
   const currentDocument = useRef(document);
-  const { fitView } = useReactFlow();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const { fitView, screenToFlowPosition } = useReactFlow();
   const selectedNodeId = selection?.type === 'node' ? selection.item.id : null;
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
@@ -127,6 +134,16 @@ export function TopologyCanvas({
     if (!projection || !selectedNodeId || !projection.nodes.some((node) => node.id === selectedNodeId)) return;
     void fitView({ nodes: [{ id: selectedNodeId }], duration: 300, maxZoom: 1.1, padding: 0.8 });
   }, [fitView, projection, selectedNodeId]);
+
+  useEffect(() => {
+    if (!onViewportCenterReady) return undefined;
+    onViewportCenterReady(() => {
+      const bounds = canvasRef.current?.getBoundingClientRect();
+      if (!bounds) return { x: 0, y: 0 };
+      return screenToFlowPosition({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 });
+    });
+    return () => onViewportCenterReady(null);
+  }, [onViewportCenterReady, screenToFlowPosition]);
 
   if (layoutError) {
     return <div className="topology-layout-state" role="alert">{layoutError}</div>;
@@ -184,6 +201,7 @@ export function TopologyCanvas({
     <div
       className="topology-canvas"
       aria-label={document.layer === 'L1' ? 'Физическая схема сети' : 'Логическая схема сети'}
+      ref={canvasRef}
     >
       <ReactFlow
         nodes={nodes}
@@ -194,7 +212,15 @@ export function TopologyCanvas({
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
-        onPaneClick={() => onSelectionChange(null)}
+        onPaneClick={() => { onSelectionChange(null); onPaneClick?.(); }}
+        onPaneContextMenu={(event) => {
+          if (!onPhysicalPaneContextMenu) return;
+          event.preventDefault();
+          onPhysicalPaneContextMenu(
+            screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+            { x: event.clientX, y: event.clientY },
+          );
+        }}
         fitView={false}
         fitViewOptions={{ padding: 0.2, maxZoom: document.layer === 'L1' ? 4 : 1.1 }}
         minZoom={0.35}

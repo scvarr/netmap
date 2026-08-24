@@ -99,6 +99,17 @@ projection reload. Authoritative failed-write rollback reloads only the map
 positions. A map/view switch creates a new scene and performs one initial fit;
 server-side viewport persistence is not implemented.
 
+On a Physical Saved Map, the user action is «Добавить на карту»: it creates a
+`MapPlacement` for an existing PhysicalObject and its initial physical
+position; it never creates or clones topology. The shared searchable picker
+loads candidates exclusively from `CatalogInventoryDataSource.equipment`, so
+cables are unavailable and already placed objects are excluded. Toolbar
+insertion captures the current Physical React Flow viewport center; an
+empty-pane context action captures the cursor's converted flow coordinate.
+After the placement write, the current Saved Map is authoritatively reloaded;
+the picker stays open with a refresh-only retry if that reload fails. A
+same-scene insertion does not refit the viewport or change map/view identity.
+
 Текущий `InfrastructureObjectsPage` временно продолжает переиспользовать public
 `L1 / PHYSICAL_OBJECT` projection как object list. Для следующего Catalog
 Equipment/Cables UI уже materialized отдельный inventory read model
