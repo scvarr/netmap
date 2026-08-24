@@ -88,6 +88,9 @@ export function QuickInspector(props: QuickInspectorProps) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [pending, setPending] = useState<"delete" | "remove" | null>(null);
+  const [continuationError, setContinuationError] = useState<string | null>(
+    null,
+  );
   const node = selection?.type === "node" ? selection.item : null;
   const id = node && physicalObjectIdForNode(node);
   const isL1 = document?.layer === "L1";
@@ -195,6 +198,8 @@ export function QuickInspector(props: QuickInspectorProps) {
     props.mapOperation?.kind === kind && props.mapOperation.id === objectId
       ? props.mapOperation
       : null;
+  const activeOperationFor = (objectId: string) =>
+    props.mapOperation?.id === objectId ? props.mapOperation : null;
   const remove = async () => {
     if (!id || !props.onRemoveFromMap || pending || operationFor("remove", id))
       return;
@@ -215,7 +220,7 @@ export function QuickInspector(props: QuickInspectorProps) {
       !id ||
       !props.onDeletePhysicalObject ||
       pending ||
-      operationFor("delete", id)
+      activeOperationFor(id)
     )
       return;
     const message = cable
@@ -238,6 +243,19 @@ export function QuickInspector(props: QuickInspectorProps) {
     const c = selection.item;
     const remote = c.remote_physical_object_ref.entity_id;
     const local = document?.nodes.find((item) => item.id === c.local_node_id);
+    const add = async () => {
+      if (!props.onAddContinuationToMap || activeOperationFor(remote)) return;
+      setContinuationError(null);
+      try {
+        await props.onAddContinuationToMap(remote);
+      } catch (reason) {
+        setContinuationError(
+          reason instanceof Error
+            ? reason.message
+            : "Не удалось добавить на карту",
+        );
+      }
+    };
     return shell(
       <>
         <span className="eyebrow">ВНЕ КАРТЫ</span>
@@ -252,8 +270,8 @@ export function QuickInspector(props: QuickInspectorProps) {
         </p>
         {props.onAddContinuationToMap && (
           <button
-            disabled={Boolean(operationFor("add", remote))}
-            onClick={() => void props.onAddContinuationToMap!(remote)}
+            disabled={Boolean(activeOperationFor(remote))}
+            onClick={() => void add()}
           >
             Добавить на карту
           </button>
@@ -266,7 +284,37 @@ export function QuickInspector(props: QuickInspectorProps) {
             </button>
           </>
         )}
+        {continuationError && <p role="alert">{continuationError}</p>}
         <Link to={url(remote)}>Открыть объект</Link>
+        <details className="quick-inspector__technical">
+          <summary>Технические детали</summary>
+          <dl>
+            <div>
+              <dt>Continuation</dt>
+              <dd>{c.id}</dd>
+            </div>
+            <div>
+              <dt>Local PhysicalObject</dt>
+              <dd>{c.local_physical_object_ref.entity_id}</dd>
+            </div>
+            <div>
+              <dt>Local ConnectionPoint</dt>
+              <dd>{c.local_connection_point_ref.entity_id}</dd>
+            </div>
+            <div>
+              <dt>Cable</dt>
+              <dd>{c.cable_ref.entity_id}</dd>
+            </div>
+            <div>
+              <dt>Remote PhysicalObject</dt>
+              <dd>{c.remote_physical_object_ref.entity_id}</dd>
+            </div>
+            <div>
+              <dt>Remote ConnectionPoint</dt>
+              <dd>{c.remote_connection_point_ref.entity_id}</dd>
+            </div>
+          </dl>
+        </details>
       </>,
     );
   }
@@ -315,7 +363,7 @@ export function QuickInspector(props: QuickInspectorProps) {
         <Link to={url(id)}>Открыть объект</Link>
         {props.onRemoveFromMap && (
           <button
-            disabled={pending !== null || Boolean(operationFor("remove", id))}
+            disabled={pending !== null || Boolean(activeOperationFor(id))}
             onClick={() => void remove()}
           >
             Убрать с карты
@@ -324,7 +372,10 @@ export function QuickInspector(props: QuickInspectorProps) {
         <details>
           <summary>Дополнительные действия</summary>
           {props.onDeletePhysicalObject && (
-            <button onClick={() => void destroy()}>
+            <button
+              disabled={Boolean(activeOperationFor(id))}
+              onClick={() => void destroy()}
+            >
               Удалить кабель и разорвать физическое соединение
             </button>
           )}
@@ -404,7 +455,7 @@ export function QuickInspector(props: QuickInspectorProps) {
         <Link to={url(id)}>Открыть объект</Link>
         {props.onRemoveFromMap && (
           <button
-            disabled={pending !== null || Boolean(operationFor("remove", id))}
+            disabled={pending !== null || Boolean(activeOperationFor(id))}
             onClick={() => void remove()}
           >
             Убрать с карты
@@ -413,7 +464,10 @@ export function QuickInspector(props: QuickInspectorProps) {
         <details>
           <summary>Дополнительные действия</summary>
           {props.onDeletePhysicalObject && (
-            <button onClick={() => void destroy()}>
+            <button
+              disabled={Boolean(activeOperationFor(id))}
+              onClick={() => void destroy()}
+            >
               Удалить объект из NetMap
             </button>
           )}
