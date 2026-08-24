@@ -39,12 +39,12 @@ export const generateBlueprint = (state: BlueprintEditorState): GeneratedBluepri
   const prefixes = new Set<string>();
   state.groups.forEach((group) => {
     const prefix = normalized(group.keyPrefix);
-    if (!prefix) errors.push('Укажите key prefix каждой группы.');
-    else if (prefixes.has(prefix)) errors.push(`Повторяется key prefix: ${prefix}.`);
+    if (!prefix) errors.push('Укажите префикс ключа каждой группы.');
+    else if (prefixes.has(prefix)) errors.push(`Повторяется префикс ключа: ${prefix}.`);
     prefixes.add(prefix);
-    if (!normalized(group.displayPrefix)) errors.push('Укажите display prefix каждой группы.');
+    if (!normalized(group.displayPrefix)) errors.push('Укажите префикс отображаемого имени каждой группы.');
     if (!Number.isInteger(group.count) || group.count < 1) errors.push('Количество портов в группе должно быть не меньше 1.');
-    if (!Number.isInteger(group.startingNumber) || group.startingNumber < 0) errors.push('Starting number должен быть целым числом от 0.');
+    if (!Number.isInteger(group.startingNumber) || group.startingNumber < 0) errors.push('Начальный номер должен быть целым числом от 0.');
   });
 
   const slots: BlueprintSlot[] = [];
@@ -59,18 +59,18 @@ export const generateBlueprint = (state: BlueprintEditorState): GeneratedBluepri
     });
   }
   const slotKeys = slots.map((slot) => slot.key);
-  if (new Set(slotKeys).size !== slotKeys.length) errors.push('Сгенерированы duplicate slot keys. Измените группы.');
+  if (new Set(slotKeys).size !== slotKeys.length) errors.push('Получились повторяющиеся идентификаторы портов. Измените группы.');
 
   const groupsById = new Map(state.groups.map((group) => [group.id, group]));
   const links: BlueprintInternalLink[] = [];
   const pairs = new Set<string>();
   for (const pair of state.pairs) {
     const left = groupsById.get(pair.leftGroupId); const right = groupsById.get(pair.rightGroupId);
-    if (!left || !right) { errors.push('Pairing ссылается на отсутствующую группу.'); continue; }
-    if (left.count !== right.count) { errors.push('Pairing групп возможен только при одинаковом количестве портов.'); continue; }
+    if (!left || !right) { errors.push('Правило внутренних пар ссылается на отсутствующую группу.'); continue; }
+    if (left.count !== right.count) { errors.push('Внутренние пары возможны только при одинаковом количестве портов в группах.'); continue; }
     generatedGroupKeys(left).forEach((from_slot_key, index) => {
       const to_slot_key = generatedGroupKeys(right)[index]; const key = [from_slot_key, to_slot_key].sort().join('\u0000');
-      if (pairs.has(key)) errors.push('Сгенерирована duplicate internal link.'); else { pairs.add(key); links.push({ from_slot_key, to_slot_key }); }
+      if (pairs.has(key)) errors.push('Сгенерирована повторяющаяся внутренняя связь.'); else { pairs.add(key); links.push({ from_slot_key, to_slot_key }); }
     });
   }
   return { slots, internalLinks: links, errors };

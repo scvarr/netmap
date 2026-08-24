@@ -611,6 +611,21 @@ the bounded version operation, preserving vN. An optional `blueprint_name` is
 renamed atomically with that new version. Delete always reloads the authoritative
 library and conflict leaves both the card and all canonical topology untouched.
 
+## L1R.2 — Blueprint editor usability
+
+The editor keeps its existing `BlueprintEditorState`, authoring recipe and
+explicit generated slots/internal links, but its primary labels are
+human-facing Russian: object type, schematic width/height, color and port
+groups. `RECTANGLE` remains the sole current body form and is not a primary
+control. A visual color picker and exact `#RRGGBB` input write the same existing
+`fill_color` value. UI enum labels do not alter persisted slot kind or anchor
+side values.
+
+Pair-by-index is presented as an internal port-pair rule: port N in one group
+connects to port N in another. It still produces the existing explicit internal
+links and retains current validation. Preview zoom/Fit remains presentation-only
+and its counts are Russian user-facing summaries.
+
 ## BLUEPRINT.4a — instantiate from Object Library
 
 Library instantiation targets exactly the latest card's displayed immutable
