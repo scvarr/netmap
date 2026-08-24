@@ -390,6 +390,14 @@ export function QuickInspector(props: QuickInspectorProps) {
           </>
         )}
         {deleteError && <p role="alert">{deleteError}</p>}
+        {operationFor("delete", id)?.status === "refresh-failed" && (
+          <>
+            <p role="alert">{operationFor("delete", id)?.message}</p>
+            <button onClick={() => void props.onRetryMapRefresh?.()}>
+              Повторить обновление
+            </button>
+          </>
+        )}
         {technical}
       </>,
     );
