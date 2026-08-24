@@ -42,6 +42,7 @@ interface TopologyCanvasProps {
   traceOverlay?: PhysicalTraceOverlay;
   sceneKey?: string;
   positionOverrides?: Record<string, XYPosition>;
+  draggableNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
   onPhysicalNodeDragStop?: (physicalObjectId: string, position: XYPosition) => void;
   disableAutoLayout?: boolean;
@@ -59,6 +60,7 @@ export function TopologyCanvas({
   traceOverlay,
   sceneKey,
   positionOverrides,
+  draggableNodeIds,
   authoritativePositionRevision,
   onPhysicalNodeDragStop,
   disableAutoLayout,
@@ -134,6 +136,7 @@ export function TopologyCanvas({
 
   const nodes = projection.nodes.map((node) => ({
     ...node,
+    draggable: draggableNodeIds?.has(node.id),
     data: { ...node.data, traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false },
     selected: selection?.type === 'node' && selection.item.id === node.id,
   }));
