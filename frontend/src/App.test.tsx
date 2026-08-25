@@ -408,4 +408,20 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     renderApp('/library/object-blueprints', { objectBlueprintDataSource: failingSource });
     expect(await screen.findByText('library unavailable')).toBeInTheDocument();
   });
+
+  it('keeps the blueprint library usable when one preview version cannot be read', async () => {
+    const source = {
+      loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprints: [{
+        blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'broken-bp' },
+        name: 'Несовместимый шаблон', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'broken-v' }, version_number: 1,
+        body: { kind: 'RECTANGLE' as const, width: 100, height: 40 }, slot_count: 1, internal_link_count: 0, version_count: 1,
+      }]}),
+      loadObjectBlueprintVersion: vi.fn().mockRejectedValue(new Error('VALIDATION_ERROR: Сохранённый рецепт шаблона несовместим с текущим редактором')),
+      createObjectBlueprint: vi.fn(), deleteObjectBlueprint: vi.fn(),
+    };
+    renderApp('/library/object-blueprints', { objectBlueprintDataSource: source });
+    expect(await screen.findByRole('heading', { name: 'Несовместимый шаблон' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Удалить' })).toBeInTheDocument();
+    expect(screen.queryByText(/Не удалось загрузить схему/)).not.toBeInTheDocument();
+  });
 });

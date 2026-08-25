@@ -1,6 +1,7 @@
 import uuid
 from dataclasses import dataclass
 
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -16,6 +17,7 @@ from app.models import (
     ObjectBlueprintVersion,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from app.schemas import BlueprintAuthoringRecipe
 
 
 @dataclass(frozen=True)
@@ -202,6 +204,15 @@ class ObjectBlueprintCatalog:
                 .order_by(BlueprintInternalLink.id)
             )
         )
+        authoring_recipe = version.authoring_recipe
+        if authoring_recipe is not None:
+            try:
+                BlueprintAuthoringRecipe.model_validate(authoring_recipe)
+            except PydanticValidationError as exc:
+                raise ValidationError(
+                    "Сохранённый рецепт шаблона несовместим с текущим редактором",
+                    {"reason": "BLUEPRINT_RECIPE_INCOMPATIBLE", "errors": exc.errors()},
+                ) from exc
         return BlueprintVersionDetail(
             blueprint_id=blueprint.id,
             name=blueprint.name,
@@ -214,7 +225,7 @@ class ObjectBlueprintCatalog:
             fill_color=version.fill_color,
             slots=slots,
             internal_links=links,
-            authoring_recipe=version.authoring_recipe,
+            authoring_recipe=authoring_recipe,
         )
 
     def delete_blueprint(self, blueprint_id: uuid.UUID) -> None:

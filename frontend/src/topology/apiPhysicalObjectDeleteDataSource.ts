@@ -4,7 +4,6 @@ const DEFAULT_ENDPOINT = '/api/v1/topology/physical-objects';
 
 const blockerLabels: Record<string, string> = {
   EXTERNAL_PHYSICAL_CONNECTION: 'внешние физические соединения',
-  L2_BINDING: 'привязки L2',
   L3_BINDING: 'привязки L3',
   EXTERNAL_NETWORK_INTERFACE_REALIZATION: 'внешние реализации интерфейсов',
   EXTERNAL_INTERFACE_PHYSICAL_BINDING: 'внешние физические привязки интерфейсов',

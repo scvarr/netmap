@@ -262,6 +262,23 @@ def test_blueprint_library_read_rejects_missing_or_mismatched_version():
     ).status_code == 422
 
 
+def test_blueprint_library_read_rejects_incompatible_stored_recipe_without_server_error():
+    blueprint_id, version_id = create_blueprint([slot("A")])
+    with SessionLocal.begin() as session:
+        version = session.get(ObjectBlueprintVersion, uuid.UUID(version_id))
+        version.authoring_recipe = {
+            "endpoint_groups": [{
+                "group_id": "old", "key_prefix": "A", "display_prefix": "A",
+                "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1,
+                "starting_number": 1,
+            }],
+            "pair_recipes": [],
+        }
+    response = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
+    assert response.status_code == 422
+    assert response.json()["error"]["details"]["reason"] == "BLUEPRINT_RECIPE_INCOMPATIBLE"
+
+
 def version_snapshot(left: str, right: str) -> dict:
     recipe = {
         "endpoint_groups": [

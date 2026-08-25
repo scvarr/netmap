@@ -9,6 +9,7 @@ from app.errors import ModelError, ValidationError
 from app.models import (
     BlueprintInstance, BlueprintInstanceSlot, Connection, ConnectionMember,
     ConnectionPoint, EntityMetadata, InterfacePhysicalBinding, L2Binding,
+    L2EgressRule, L2ForwardingContext, L2IngressRule,
     L3Binding, NetworkInterface, NetworkInterfacePhysicalOwner,
     NetworkInterfaceRealization, PhysicalObject,
     MapCableRoute, MapPlacement,
@@ -49,6 +50,7 @@ class PhysicalObjectDeletionCatalog:
                 "PhysicalObject is in use",
                 {"reason": "PHYSICAL_OBJECT_IN_USE", "blockers": blockers},
             )
+        self._delete_owned_l2_configuration(interface_ids)
         internal_connection_ids = self._connection_ids_between(point_ids, point_ids)
         self._delete_aggregate(object_, point_ids, interface_ids, internal_connection_ids)
 
@@ -58,10 +60,7 @@ class PhysicalObjectDeletionCatalog:
             if connection.point_a_id not in point_ids or connection.point_b_id not in point_ids:
                 blockers["EXTERNAL_PHYSICAL_CONNECTION"] += 1
         if interface_ids:
-            l2_count = self._count(L2Binding, L2Binding.interface_id.in_(interface_ids))
             l3_count = self._count(L3Binding, L3Binding.interface_id.in_(interface_ids))
-            if l2_count:
-                blockers["L2_BINDING"] += l2_count
             if l3_count:
                 blockers["L3_BINDING"] += l3_count
             for realization in self.session.scalars(select(NetworkInterfaceRealization).where(or_(NetworkInterfaceRealization.upper_interface_id.in_(interface_ids), NetworkInterfaceRealization.lower_interface_id.in_(interface_ids)))):
@@ -79,6 +78,32 @@ class PhysicalObjectDeletionCatalog:
             if slot.connection_point_id not in point_ids or (slot.network_interface_id is not None and slot.network_interface_id not in interface_ids):
                 blockers["EXTERNAL_BLUEPRINT_INSTANCE_SLOT"] += 1
         return dict(sorted(blockers.items()))
+
+    def _delete_owned_l2_configuration(self, interface_ids: tuple[uuid.UUID, ...]) -> None:
+        if not interface_ids:
+            return
+        bindings = tuple(self.session.scalars(
+            select(L2Binding).where(L2Binding.interface_id.in_(interface_ids)).with_for_update()
+        ))
+        if not bindings:
+            return
+        binding_ids = tuple(binding.id for binding in bindings)
+        context_ids = tuple({binding.forwarding_context_id for binding in bindings})
+        for rule in self.session.scalars(select(L2IngressRule).where(L2IngressRule.binding_id.in_(binding_ids))):
+            self.session.delete(rule)
+        for rule in self.session.scalars(select(L2EgressRule).where(L2EgressRule.binding_id.in_(binding_ids))):
+            self.session.delete(rule)
+        for binding in bindings:
+            self.session.delete(binding)
+        self.session.flush()
+        for context in self.session.scalars(
+            select(L2ForwardingContext).where(L2ForwardingContext.id.in_(context_ids)).with_for_update()
+        ):
+            has_bindings = self.session.scalar(
+                select(L2Binding.id).where(L2Binding.forwarding_context_id == context.id).limit(1)
+            ) is not None
+            if not has_bindings:
+                self.session.delete(context)
 
     def _simple_cable_connections(self, object_id: uuid.UUID, point_ids: tuple[uuid.UUID, ...]) -> tuple[uuid.UUID, ...]:
         # Cable shape is canonical topology, never a projection/geometry inference.

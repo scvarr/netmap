@@ -7,7 +7,8 @@ from app.database import SessionLocal
 from app.main import app
 from app.models import (
     BlueprintInstance, BlueprintInstanceSlot, Connection, ConnectionMember,
-    ConnectionPoint, L2Binding, L2ForwardingContext, L3Binding, NetworkInterface,
+    ConnectionPoint, InterfacePhysicalBinding, L2Binding, L2EgressRule,
+    L2ForwardingContext, L2IngressRule, L3Binding, NetworkInterface,
     PhysicalObject, RoutingContext,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
@@ -74,17 +75,86 @@ def test_rejects_external_connection_without_partial_delete():
         assert session.scalar(select(func.count()).select_from(Connection)) == 1
 
 
-def test_rejects_l2_bound_owned_interface():
+def test_deletes_owned_l2_configuration_and_empty_forwarding_context():
     device = create_device('switch')
     interface_id = uuid.UUID(device['interfaces'][0]['interface_ref']['entity_id'])
     with SessionLocal.begin() as session:
         context = L2ForwardingContext()
         session.add(context)
         session.flush()
-        session.add(L2Binding(interface_id=interface_id, forwarding_context_id=context.id))
+        binding = L2Binding(interface_id=interface_id, forwarding_context_id=context.id)
+        session.add(binding)
+        session.flush()
+        ingress = L2IngressRule(binding_id=binding.id, exact_stack=[])
+        egress = L2EgressRule(binding_id=binding.id, emit_stack=[])
+        session.add_all((ingress, egress))
+        session.flush()
+        context_id, binding_id, ingress_id, egress_id = context.id, binding.id, ingress.id, egress.id
     response = client.delete(f"/v1/topology/physical-objects/{device['device']['source_ref']['entity_id']}")
+    assert response.status_code == 204
+    with SessionLocal() as session:
+        assert session.get(L2Binding, binding_id) is None
+        assert session.get(L2IngressRule, ingress_id) is None
+        assert session.get(L2EgressRule, egress_id) is None
+        assert session.get(L2ForwardingContext, context_id) is None
+
+
+def test_deletes_only_owned_l2_binding_and_preserves_shared_forwarding_context():
+    deleted, survivor = create_device('deleted-switch'), create_device('surviving-switch')
+    deleted_interface = uuid.UUID(deleted['interfaces'][0]['interface_ref']['entity_id'])
+    survivor_interface = uuid.UUID(survivor['interfaces'][0]['interface_ref']['entity_id'])
+    with SessionLocal.begin() as session:
+        context = L2ForwardingContext()
+        session.add(context)
+        session.flush()
+        removed_binding = L2Binding(interface_id=deleted_interface, forwarding_context_id=context.id)
+        survivor_binding = L2Binding(interface_id=survivor_interface, forwarding_context_id=context.id)
+        session.add_all((removed_binding, survivor_binding))
+        session.flush()
+        context_id, removed_binding_id, survivor_binding_id = context.id, removed_binding.id, survivor_binding.id
+    assert client.delete(f"/v1/topology/physical-objects/{deleted['device']['source_ref']['entity_id']}").status_code == 204
+    with SessionLocal() as session:
+        assert session.get(L2Binding, removed_binding_id) is None
+        assert session.get(L2ForwardingContext, context_id) is not None
+        surviving = session.get(L2Binding, survivor_binding_id)
+        assert surviving is not None
+        assert surviving.interface_id == survivor_interface
+        assert surviving.forwarding_context_id == context_id
+
+
+def test_external_blocker_rolls_back_owned_l2_cleanup():
+    device, external = create_device('blocked-switch'), manual_object('external')
+    object_id_ = uuid.UUID(device['device']['source_ref']['entity_id'])
+    interface_id = uuid.UUID(device['interfaces'][0]['interface_ref']['entity_id'])
+    external_point_id = uuid.UUID(external['connection_points'][0]['connection_point_ref']['entity_id'])
+    with SessionLocal.begin() as session:
+        context = L2ForwardingContext()
+        session.add(context)
+        session.flush()
+        binding = L2Binding(interface_id=interface_id, forwarding_context_id=context.id)
+        session.add(binding)
+        session.flush()
+        ingress = L2IngressRule(binding_id=binding.id, exact_stack=[])
+        egress = L2EgressRule(binding_id=binding.id, emit_stack=[])
+        session.add_all((ingress, egress))
+        device_point_id = session.scalar(select(InterfacePhysicalBinding.point_id).where(
+            InterfacePhysicalBinding.interface_id == interface_id
+        ))
+        CanonicalRepository(session).add_connection(
+            device_point_id, external_point_id, 1,
+            [ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+        )
+        session.flush()
+        context_id, binding_id, ingress_id, egress_id = context.id, binding.id, ingress.id, egress.id
+    response = client.delete(f'/v1/topology/physical-objects/{object_id_}')
     assert response.status_code == 409
-    assert response.json()['error']['details']['blockers'] == {'L2_BINDING': 1}
+    assert response.json()['error']['details']['blockers'] == {'EXTERNAL_PHYSICAL_CONNECTION': 1}
+    with SessionLocal() as session:
+        assert session.get(PhysicalObject, object_id_) is not None
+        assert session.get(L2ForwardingContext, context_id) is not None
+        assert session.get(L2Binding, binding_id) is not None
+        assert session.get(L2IngressRule, ingress_id) is not None
+        assert session.get(L2EgressRule, egress_id) is not None
 
 
 def test_rejects_l3_bound_owned_interface():
