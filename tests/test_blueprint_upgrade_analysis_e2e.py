@@ -1,7 +1,10 @@
+import uuid
+
 from sqlalchemy import func, select
 
 from app.database import SessionLocal
-from app.models import BlueprintInstance, BlueprintInstanceSlot, Connection, ConnectionPoint, EntityMetadata, NetworkInterface
+from app.models import BlueprintInstance, BlueprintInstanceSlot, Connection, ConnectionMember, ConnectionPoint, EntityMetadata, NetworkInterface, NetworkInterfacePhysicalOwner
+from app.repository import CanonicalRepository, ConnectionMemberInput
 from tests.test_object_blueprints_e2e import client, create_blueprint, instantiate, slot
 
 
@@ -42,3 +45,36 @@ def test_upgrade_analysis_reports_version_and_all_compatibility_and_blocker_code
     document = analysis(object_id)
     assert document["target_version_ref"]["entity_id"] == v3
     assert {item["code"] for item in document["blockers"]} == {"SLOT_REMOVED", "SLOT_KIND_CHANGED", "INTERNAL_LINK_REMOVED"}
+
+
+def test_network_port_owner_mismatch_is_model_inconsistency():
+    blueprint_id, v1 = create_blueprint([slot("P", "NETWORK_PORT")])
+    instance = instantiate(blueprint_id, v1, "port")
+    object_id = instance["physical_object_ref"]["entity_id"]
+    manual = client.post("/v1/topology/physical-objects", json={"display_name": "other", "initial_connection_point": {"display_name": "P"}}).json()
+    with SessionLocal.begin() as session:
+        mapping = session.scalar(select(BlueprintInstanceSlot).join(BlueprintInstance).where(BlueprintInstance.physical_object_id == object_id))
+        owner = session.scalar(select(NetworkInterfacePhysicalOwner).where(NetworkInterfacePhysicalOwner.interface_id == mapping.network_interface_id))
+        owner.physical_object_id = manual["physical_object"]["source_ref"]["entity_id"]
+    document = analysis(object_id)
+    assert document["status"] == "MODEL_INCONSISTENT" and document["blockers"] == [{"code": "INSTANCE_MAPPING_INCONSISTENT", "details": "NETWORK_PORT_OWNER_MISMATCH"}]
+
+
+def test_added_internal_link_uses_canonical_runtime_evidence():
+    blueprint_id, v1 = create_blueprint([slot("A"), slot("B")])
+    instance = instantiate(blueprint_id, v1, "panel")
+    object_id = instance["physical_object_ref"]["entity_id"]
+    points = {item["slot_key"]: uuid.UUID(item["connection_point_ref"]["entity_id"]) for item in instance["slots"]}
+    next_version(blueprint_id, [slot("A"), slot("B")], [{"from_slot_key": "A", "to_slot_key": "B"}])
+    with SessionLocal.begin() as session:
+        CanonicalRepository(session).add_connection(points["A"], points["B"], 1, [ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)])
+    document = analysis(object_id)
+    assert {item["code"] for item in document["compatible_changes"]} >= {"INTERNAL_LINK_ALREADY_SATISFIED"}
+    assert "INTERNAL_LINK_ADDED" not in {item["code"] for item in document["compatible_changes"]}
+    with SessionLocal.begin() as session:
+        session.add(Connection(point_a_id=points["A"], point_b_id=points["B"], cardinality=1))
+        session.flush()
+        connection = session.scalar(select(Connection).where(Connection.point_a_id == points["A"], Connection.point_b_id == points["B"]).order_by(Connection.id.desc()))
+        session.add(ConnectionMember(connection_id=connection.id, index=1, point_a_member=1, point_b_member=1))
+    document = analysis(object_id)
+    assert {item["code"] for item in document["blockers"]} >= {"INTERNAL_LINK_RUNTIME_CONFLICT"}

@@ -1,10 +1,10 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintInternalLink, ConnectionPoint, InterfacePhysicalBinding, ObjectBlueprintVersion
+from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintInternalLink, Connection, ConnectionMember, ConnectionPoint, InterfacePhysicalBinding, NetworkInterfacePhysicalOwner, ObjectBlueprintVersion
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,7 @@ class BlueprintUpgradeAnalyzer:
             base = (current.blueprint_id, current.id, current.version_number, target.id if target else None, target.version_number if target else None)
             if target is None:
                 return BlueprintUpgradeAnalysis("MODEL_INCONSISTENT", *base, (), ({"code": "INSTANCE_MAPPING_INCONSISTENT"},))
-            inconsistency = self._mapping_inconsistency(instance.id, current.id, physical_object_id)
+            inconsistency, mapped_points = self._mapping_inconsistency(instance.id, current.id, physical_object_id)
             if inconsistency:
                 return BlueprintUpgradeAnalysis("MODEL_INCONSISTENT", *base, (), ({"code": "INSTANCE_MAPPING_INCONSISTENT", "details": inconsistency},))
             if current.id == target.id:
@@ -55,7 +55,15 @@ class BlueprintUpgradeAnalyzer:
                 compatible.append({"code": "SLOT_ADDED", "slot_key": key, "kind": target_slots[key].kind})
             if (current.body_kind, current.width, current.height, current.fill_color) != (target.body_kind, target.width, target.height, target.fill_color) or any((current_slots[key].display_name, current_slots[key].anchor_side, current_slots[key].anchor_offset) != (target_slots[key].display_name, target_slots[key].anchor_side, target_slots[key].anchor_offset) for key in set(current_slots) & set(target_slots)):
                 compatible.append({"code": "PRESENTATION_CHANGED"})
-            for link in sorted(target_links - current_links): compatible.append({"code": "INTERNAL_LINK_ADDED", "slot_keys": list(link)})
+            for link in sorted(target_links - current_links):
+                mapped_a, mapped_b = mapped_points.get(link[0]), mapped_points.get(link[1])
+                if mapped_a is None or mapped_b is None:
+                    compatible.append({"code": "INTERNAL_LINK_ADDED", "slot_keys": list(link)})
+                    continue
+                runtime = self._canonical_link_state(mapped_a, mapped_b)
+                if runtime == "SATISFIED": compatible.append({"code": "INTERNAL_LINK_ALREADY_SATISFIED", "slot_keys": list(link)})
+                elif runtime == "MISSING": compatible.append({"code": "INTERNAL_LINK_ADDED", "slot_keys": list(link)})
+                else: blockers.append({"code": "INTERNAL_LINK_RUNTIME_CONFLICT", "slot_keys": list(link)})
             for link in sorted(current_links - target_links): blockers.append({"code": "INTERNAL_LINK_REMOVED", "slot_keys": list(link)})
             return BlueprintUpgradeAnalysis("OUTDATED", *base, tuple(compatible), tuple(blockers))
 
@@ -66,15 +74,23 @@ class BlueprintUpgradeAnalyzer:
         by_id = {slot.id: key for key, slot in slots.items()}
         return {tuple(sorted((by_id[link.slot_a_id], by_id[link.slot_b_id]))) for link in self.session.scalars(select(BlueprintInternalLink).where(BlueprintInternalLink.blueprint_version_id == version_id)) if link.slot_a_id in by_id and link.slot_b_id in by_id}
 
-    def _mapping_inconsistency(self, instance_id: uuid.UUID, version_id: uuid.UUID, object_id: uuid.UUID) -> str | None:
+    def _mapping_inconsistency(self, instance_id: uuid.UUID, version_id: uuid.UUID, object_id: uuid.UUID) -> tuple[str | None, dict[str, uuid.UUID]]:
         source_slots = self._slots(version_id)
         mappings = tuple(self.session.scalars(select(BlueprintInstanceSlot).where(BlueprintInstanceSlot.blueprint_instance_id == instance_id)))
-        if len(mappings) != len(source_slots) or {item.blueprint_slot_id for item in mappings} != {slot.id for slot in source_slots.values()}: return "SLOT_MAPPING_SET_MISMATCH"
+        if len(mappings) != len(source_slots) or {item.blueprint_slot_id for item in mappings} != {slot.id for slot in source_slots.values()}: return "SLOT_MAPPING_SET_MISMATCH", {}
         slots_by_id = {slot.id: slot for slot in source_slots.values()}
         for item in mappings:
             point, slot = self.session.get(ConnectionPoint, item.connection_point_id), slots_by_id[item.blueprint_slot_id]
-            if point is None or point.physical_object_id != object_id: return "CONNECTION_POINT_OWNERSHIP_MISMATCH"
+            if point is None or point.physical_object_id != object_id: return "CONNECTION_POINT_OWNERSHIP_MISMATCH", {}
             if slot.kind == "NETWORK_PORT":
-                if item.network_interface_id is None or self.session.scalar(select(InterfacePhysicalBinding.id).where(InterfacePhysicalBinding.interface_id == item.network_interface_id, InterfacePhysicalBinding.point_id == item.connection_point_id)) is None: return "NETWORK_PORT_BINDING_MISMATCH"
-            elif item.network_interface_id is not None: return "CONNECTION_POINT_HAS_INTERFACE_MAPPING"
-        return None
+                if item.network_interface_id is None or self.session.scalar(select(InterfacePhysicalBinding.id).where(InterfacePhysicalBinding.interface_id == item.network_interface_id, InterfacePhysicalBinding.point_id == item.connection_point_id)) is None: return "NETWORK_PORT_BINDING_MISMATCH", {}
+                if self.session.scalar(select(NetworkInterfacePhysicalOwner.id).where(NetworkInterfacePhysicalOwner.interface_id == item.network_interface_id, NetworkInterfacePhysicalOwner.physical_object_id == object_id)) is None: return "NETWORK_PORT_OWNER_MISMATCH", {}
+            elif item.network_interface_id is not None: return "CONNECTION_POINT_HAS_INTERFACE_MAPPING", {}
+        return None, {slots_by_id[item.blueprint_slot_id].slot_key: item.connection_point_id for item in mappings}
+
+    def _canonical_link_state(self, point_a_id: uuid.UUID, point_b_id: uuid.UUID) -> str:
+        connections = tuple(self.session.scalars(select(Connection).where(or_(and_(Connection.point_a_id == point_a_id, Connection.point_b_id == point_b_id), and_(Connection.point_a_id == point_b_id, Connection.point_b_id == point_a_id)))))
+        if not connections: return "MISSING"
+        if len(connections) != 1: return "CONFLICT"
+        members = tuple(self.session.scalars(select(ConnectionMember).where(ConnectionMember.connection_id == connections[0].id)))
+        return "SATISFIED" if connections[0].cardinality == 1 and len(members) == 1 and members[0].point_a_member == 1 and members[0].point_b_member == 1 else "CONFLICT"

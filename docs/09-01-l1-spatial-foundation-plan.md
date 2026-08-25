@@ -223,15 +223,20 @@ The next bounded product step is `L1S.6 — Controlled Blueprint instance upgrad
 
 **IMPLEMENTED**
 
+- Object Detail reads the existing authoritative latest-Blueprint listing to show
+  an outdated instance before a dry-run. Current Blueprint instances stay
+  uncluttered and offer no compatibility action.
 - Read-only `GET /v1/topology/physical-objects/{id}/blueprint-upgrade-analysis`
-  compares a materialized instance with the latest immutable version of its own
-  `ObjectBlueprint`; manual objects are `NOT_APPLICABLE` and current instances
-  are `UP_TO_DATE`.
+  is invoked only by the explicit dry-run action and compares immutable snapshots
+  with canonical instance and internal-link evidence.
 - `OUTDATED` analysis identifies matching slots solely by stable `slot_key` plus
   unchanged kind. Added slots/internal links and body/anchor/presentation changes
   are compatible; removed slots, kind changes, removed internal links and any
-  inconsistent instance mapping are explicit blockers. Recipe data is provenance,
-  never runtime-topology evidence. The dry-run performs no writes.
+  inconsistent instance mapping (including missing/wrong NetworkInterface owner)
+  are explicit blockers. An added internal link already proven by its exact
+  canonical `Connection`/`ConnectionMember` is already satisfied; ambiguous or
+  conflicting canonical evidence is a blocker. Recipe data is provenance, never
+  runtime-topology evidence. The dry-run performs no writes.
 - Object Detail shows only Blueprint-instance visibility, then performs analysis
   only on the user’s explicit action. Results are localized at the typed RU/EN UI
   boundary; API codes remain locale-neutral. There is deliberately no Apply action.

@@ -100,6 +100,7 @@ export function App(props: AppProps) {
               catalogInventoryDataSource={props.catalogInventoryDataSource}
               savedMapDataSource={props.savedMapDataSource}
               blueprintUpgradeDataSource={props.blueprintUpgradeDataSource}
+              objectBlueprintDataSource={props.objectBlueprintDataSource}
             />
           )}
         />
