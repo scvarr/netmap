@@ -44,9 +44,13 @@ export function AppShell() {
             </NavLink>
           </div>
         </nav>
-        <label className="sidebar__locale">{t('language.label')}<select value={locale} onChange={(event) => setLocale(event.target.value as typeof locale)} aria-label={t('language.label')}><option value="ru">{t('language.ru')}</option><option value="en">{t('language.en')}</option></select></label>
         <div className="sidebar__health"><HealthIndicator /></div>
       </aside>
+      <div className="shell-locale" role="group" aria-label={t('language.label')}>
+        <button type="button" className={`shell-locale__option${locale === 'ru' ? ' shell-locale__option--active' : ''}`} aria-label={`${t('language.label')}: ${t('language.ru')}`} aria-pressed={locale === 'ru'} onClick={() => setLocale('ru')}>RU</button>
+        <span className="shell-locale__divider" aria-hidden="true">/</span>
+        <button type="button" className={`shell-locale__option${locale === 'en' ? ' shell-locale__option--active' : ''}`} aria-label={`${t('language.label')}: ${t('language.en')}`} aria-pressed={locale === 'en'} onClick={() => setLocale('en')}>EN</button>
+      </div>
       <div className="route-content"><Outlet /></div>
     </div>
   );
