@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MapPage } from './MapPage';
 
-vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (p: any) => <div data-testid="canvas"><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'a', connectionPointId: 'a-cp', label: 'A01' })}>blueprint port</button><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'b', connectionPointId: 'b-cp', label: 'B01' })}>generic port</button><span data-states={JSON.stringify(p.physicalPortStates)} /></div> }));
+vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (p: any) => <div data-testid="canvas"><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'a', connectionPointId: 'a-cp', label: 'A01' })}>blueprint port</button><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'b', connectionPointId: 'b-cp', label: 'B01' })}>generic port</button><button onClick={() => p.onPaneClick?.({ x: 10, y: 20 })}>pane 1</button><button onClick={() => p.onPaneClick?.({ x: 30, y: 40 })}>pane 2</button><button onClick={() => p.wiringRoute?.onWaypointMove(0, { x: 99, y: 88 })}>drag waypoint</button><span data-states={JSON.stringify(p.physicalPortStates)} data-waypoints={JSON.stringify(p.wiringRoute?.waypoints)} /></div> }));
 const map = { map_ref: { entity_type: 'SavedMap', entity_id: 'map-1' }, name: 'M1', placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'a' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0 } } }, { physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'b' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 1, y: 1 } } }] } as any;
 const node = (id: string, label: string, cp: string, count = 0) => ({ id, kind: 'PHYSICAL_OBJECT', label, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: { class: 'switch', connection_points: [{ connection_point_id: cp, display_name: cp === 'a-cp' ? 'A01' : 'B01', cardinality: 1, external_connection_count: count }] } });
 const doc = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [node('a', 'Source', 'a-cp'), node('b', 'Target', 'b-cp')], edges: [], gaps: [], warnings: [] } as any;
@@ -34,5 +34,23 @@ describe('MapPage visual wiring', () => {
     const write = vi.fn().mockResolvedValue(creation); let physicalReads = 0; const loadProjection = vi.fn((request: any) => request.layer === 'L1' && ++physicalReads === 2 ? Promise.reject(new Error('refresh')) : Promise.resolve(doc));
     renderPage(write, loadProjection); await screen.findByTestId('canvas'); fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     expect(await screen.findByText('Кабель и трасса сохранены, но карту не удалось обновить.')).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' })); await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+  });
+
+  it('keeps ordered pane route draft across confirmation and persists it against returned cable identity', async () => {
+    const { write, setCableRoute } = renderPage(); await screen.findByTestId('canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' }));
+    expect(screen.getByTestId('canvas').querySelector('span')).toHaveAttribute('data-waypoints', '[]');
+    fireEvent.click(screen.getByRole('button', { name: 'pane 1' })); fireEvent.click(screen.getByRole('button', { name: 'pane 2' }));
+    expect(screen.getByText('Точек трассы: 2')).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Назад' })); expect(screen.getByText('Точек трассы: 2')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    await waitFor(() => expect(write).toHaveBeenCalledTimes(1)); expect(setCableRoute).toHaveBeenCalledWith('map-1', 'cable-1', [{ x: 10, y: 20 }, { x: 30, y: 40 }]);
+  });
+
+  it('does not write during route drafting and retries only route persistence after its failure', async () => {
+    const setCableRoute = vi.fn().mockRejectedValueOnce(new Error('route')).mockResolvedValue(map); const { write } = renderPage(vi.fn().mockResolvedValue(creation), vi.fn().mockResolvedValue(doc), setCableRoute); await screen.findByTestId('canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'pane 1' })); fireEvent.click(screen.getByRole('button', { name: 'drag waypoint' }));
+    expect(write).not.toHaveBeenCalled(); expect(setCableRoute).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    expect(await screen.findByText('Кабель создан, но трассу не удалось сохранить.')).toBeInTheDocument(); expect(setCableRoute).toHaveBeenLastCalledWith('map-1', 'cable-1', [{ x: 99, y: 88 }]); fireEvent.click(screen.getByRole('button', { name: 'Повторить сохранение трассы' })); await waitFor(() => expect(setCableRoute).toHaveBeenCalledTimes(2)); expect(write).toHaveBeenCalledTimes(1);
   });
 });
