@@ -520,8 +520,8 @@ class BlueprintAuthoringEndpointGroup(BaseModel):
     side: Literal["LEFT", "RIGHT", "TOP", "BOTTOM"]
     count: int = Field(ge=1)
     starting_number: int = Field(ge=0)
-    placement_offset: FiniteFloat = Field(default=0, ge=0, le=1)
-    placement_span: FiniteFloat = Field(default=1, gt=0, le=1)
+    placement_offset: FiniteFloat = Field(ge=0, le=1)
+    placement_span: FiniteFloat = Field(gt=0, le=1)
 
     @model_validator(mode="after")
     def validate_placement_range(self) -> "BlueprintAuthoringEndpointGroup":

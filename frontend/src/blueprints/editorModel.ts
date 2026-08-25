@@ -38,7 +38,7 @@ export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocum
   if (!recipe) return null;
   return {
     name: version.name, defaultClass: version.default_physical_object_class ?? '', width: version.body.width, height: version.body.height, fillColor: version.body.fill_color ?? '#28565a',
-    groups: recipe.endpoint_groups.map((group) => ({ id: group.group_id, keyPrefix: group.key_prefix, displayPrefix: group.display_prefix, kind: group.kind, side: group.side, count: group.count, startingNumber: group.starting_number, placementOffset: group.placement_offset ?? 0, placementSpan: group.placement_span ?? 1 })),
+    groups: recipe.endpoint_groups.map((group) => ({ id: group.group_id, keyPrefix: group.key_prefix, displayPrefix: group.display_prefix, kind: group.kind, side: group.side, count: group.count, startingNumber: group.starting_number, placementOffset: group.placement_offset, placementSpan: group.placement_span })),
     pairs: recipe.pair_recipes.map((pair) => ({ leftGroupId: pair.group_a_id, rightGroupId: pair.group_b_id })),
   };
 };

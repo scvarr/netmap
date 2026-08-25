@@ -160,7 +160,7 @@ complete. L1S.5 is not included in this slice.
   `placement_span`; explicit canonical `BlueprintSlot.anchor.side + offset`
   remains unchanged.
 - Generated group slots are deterministic within that range; a one-port group
-  is centered. Historical recipes without placement load as full-side `0..1`.
+  is centered.
 - The Blueprint editor exposes compact range start/span controls and validates
   that a positive range stays within `0..1`.
 

@@ -64,8 +64,8 @@ const parseRecipe = (value: unknown, path: string): BlueprintAuthoringRecipe | n
       const group = requireObject(value, `${path}.endpoint_groups[${index}]`);
       if (group.kind !== 'CONNECTION_POINT' && group.kind !== 'NETWORK_PORT') malformed(`${path}.endpoint_groups[${index}].kind is unsupported.`);
       if (!['LEFT', 'RIGHT', 'TOP', 'BOTTOM'].includes(String(group.side)) || !Number.isInteger(group.count) || (group.count as number) < 1 || !Number.isInteger(group.starting_number) || (group.starting_number as number) < 0) malformed(`${path}.endpoint_groups[${index}] is invalid.`);
-      const placement_offset = group.placement_offset ?? 0;
-      const placement_span = group.placement_span ?? 1;
+      const placement_offset = group.placement_offset;
+      const placement_span = group.placement_span;
       if (typeof placement_offset !== 'number' || !Number.isFinite(placement_offset) || placement_offset < 0 || placement_offset > 1 || typeof placement_span !== 'number' || !Number.isFinite(placement_span) || placement_span <= 0 || placement_span > 1 || placement_offset + placement_span > 1) malformed(`${path}.endpoint_groups[${index}].placement is invalid.`);
       return { group_id: requireString(group.group_id, `${path}.endpoint_groups[${index}].group_id`), key_prefix: requireString(group.key_prefix, `${path}.endpoint_groups[${index}].key_prefix`), display_prefix: requireString(group.display_prefix, `${path}.endpoint_groups[${index}].display_prefix`), kind: group.kind as BlueprintSlotKind, side: group.side as BlueprintAnchorSide, count: group.count as number, starting_number: group.starting_number as number, placement_offset: placement_offset as number, placement_span: placement_span as number };
     }),

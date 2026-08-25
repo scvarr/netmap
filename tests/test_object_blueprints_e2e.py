@@ -323,21 +323,8 @@ def test_blueprint_group_placement_round_trips_and_rejects_invalid_ranges():
     assert detail.json()["authoring_recipe"] == recipe
     invalid = {**recipe, "endpoint_groups": [{**recipe["endpoint_groups"][0], "placement_offset": .8, "placement_span": .3}]}
     assert client.post("/v1/library/object-blueprints", json={"name": "Bad range", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [], "authoring_recipe": invalid}).status_code == 422
-
-
-def test_historical_recipe_without_group_placement_hydrates_to_full_side_defaults():
-    blueprint_id, version_id = create_blueprint([slot("A01")], authoring_recipe={
-        "endpoint_groups": [{"group_id": "a", "key_prefix": "A", "display_prefix": "A", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1}],
-        "pair_recipes": [],
-    })
-    with SessionLocal.begin() as session:
-        version = session.get(ObjectBlueprintVersion, uuid.UUID(version_id))
-        assert version is not None
-        version.authoring_recipe = {"endpoint_groups": [{"group_id": "a", "key_prefix": "A", "display_prefix": "A", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1}], "pair_recipes": []}
-    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
-    assert detail.status_code == 200
-    assert detail.json()["authoring_recipe"]["endpoint_groups"][0]["placement_offset"] == 0
-    assert detail.json()["authoring_recipe"]["endpoint_groups"][0]["placement_span"] == 1
+    missing_placement = {**recipe, "endpoint_groups": [{key: value for key, value in recipe["endpoint_groups"][0].items() if key not in {"placement_offset", "placement_span"}}]}
+    assert client.post("/v1/library/object-blueprints", json={"name": "Missing placement", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [], "authoring_recipe": missing_placement}).status_code == 422
 
 
 def test_blueprint_version_creation_is_atomic_and_delete_is_safe():

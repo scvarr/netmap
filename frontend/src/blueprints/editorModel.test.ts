@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createBlueprintRequest, generateBlueprint, hydrateBlueprintEditorState, type BlueprintEditorState } from './editorModel';
+import { createBlueprintRequest, generateBlueprint, type BlueprintEditorState } from './editorModel';
 
 const base = (groups: BlueprintEditorState['groups']): BlueprintEditorState => ({ name: 'Example', defaultClass: '', width: 120, height: 60, fillColor: '#123456', groups, pairs: [] });
 const group = (id: string, keyPrefix: string, kind: 'CONNECTION_POINT' | 'NETWORK_PORT', side: 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM', count = 1) => ({ id, keyPrefix, displayPrefix: keyPrefix, kind, side, count, startingNumber: 1, placementOffset: 0, placementSpan: 1 });
@@ -36,10 +36,6 @@ describe('Blueprint editor group expansion', () => {
     expect(createBlueprintRequest(state).request?.authoring_recipe?.endpoint_groups[0]).toMatchObject({ placement_offset: .25, placement_span: .5 });
     state.groups[0].placementOffset = .8;
     expect(createBlueprintRequest(state).errors).toContain('Диапазон группы должен находиться в пределах 0–1 и иметь положительную длину.');
-  });
-  it('hydrates a historical recipe without placement using the deterministic full-side default', () => {
-    const version = { name: 'Legacy', version_number: 1, default_physical_object_class: null, body: { kind: 'RECTANGLE', width: 100, height: 40, fill_color: null }, authoring_recipe: { endpoint_groups: [{ group_id: 'a', key_prefix: 'A', display_prefix: 'A', kind: 'CONNECTION_POINT', side: 'LEFT', count: 1, starting_number: 1 }], pair_recipes: [] } } as unknown as Parameters<typeof hydrateBlueprintEditorState>[0];
-    expect(hydrateBlueprintEditorState(version)?.groups[0]).toMatchObject({ placementOffset: 0, placementSpan: 1 });
   });
   it('blocks unequal pairing and never creates a request with editor groups', () => {
     const state = base([group('front', 'front', 'CONNECTION_POINT', 'LEFT', 24), group('rear', 'rear', 'CONNECTION_POINT', 'RIGHT', 12)]); state.pairs = [{ leftGroupId: 'front', rightGroupId: 'rear' }];
