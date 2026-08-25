@@ -551,6 +551,9 @@ class BlueprintAuthoringRecipe(BaseModel):
         group_ids = [group.group_id for group in self.endpoint_groups]
         if len(group_ids) != len(set(group_ids)):
             raise PydanticCustomError("blueprint_duplicate_group_id", "Blueprint authoring group ids must be unique")
+        stable_keys = [group.key_prefix for group in self.endpoint_groups]
+        if len(stable_keys) != len(set(stable_keys)):
+            raise PydanticCustomError("blueprint_duplicate_group_key", "Blueprint authoring group stable keys must be unique")
         known = set(group_ids)
         pairs: set[tuple[str, str]] = set()
         for pair in self.pair_recipes:

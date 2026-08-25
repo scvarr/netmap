@@ -168,6 +168,19 @@ complete. L1S.5 is not included in this slice.
 - Inspect/edit individual arbitrary internal mappings.
 - Pair-by-index остаётся bulk generator, но не единственной моделью.
 
+#### L1S.5b — Stable slot identity and key UX cleanup
+
+**IMPLEMENTED**
+
+- Canonical key generated slot is `stable_group_key:ordinal`; stable group key
+  is an opaque persisted authoring value and ordinal is 1-based without padding.
+- Display prefix, visible starting number, side, placement and kind no longer
+  participate in canonical slot identity; growing a group appends ordinals.
+- Primary editor does not expose internal stable keys and shows visible port
+  labels in group summaries.
+- New groups use one browser-generated UUID for both persisted group id and
+  opaque stable key; hydration retains both values.
+
 ### L1S.6 — Controlled Blueprint instance upgrade
 
 - Показывать instances на старой version и выполнять dry-run compatibility analysis.

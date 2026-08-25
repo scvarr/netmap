@@ -264,14 +264,14 @@ class ObjectBlueprintCatalog:
         for side in sides:
             groups = [group for group in recipe.endpoint_groups if group.side == side]
             for group in groups:
-                width = max(2, len(str(group.starting_number + group.count - 1)))
+                display_width = max(2, len(str(group.starting_number + group.count - 1)))
                 for index in range(group.count):
-                    suffix = str(group.starting_number + index).zfill(width)
+                    display_suffix = str(group.starting_number + index).zfill(display_width)
                     offset = group.placement_offset + group.placement_span * (
                         .5 if group.count == 1 else index / (group.count - 1)
                     )
-                    expected_slots[f"{group.key_prefix}{suffix}"] = (
-                        f"{group.display_prefix}{suffix}", group.kind, side, offset,
+                    expected_slots[f"{group.key_prefix}:{index + 1}"] = (
+                        f"{group.display_prefix}{display_suffix}", group.kind, side, offset,
                     )
         actual_slots = {slot.key: (slot.display_name, slot.kind, slot.anchor.side, slot.anchor.offset) for slot in query.slots}
         if set(expected_slots) != set(actual_slots) or any(
@@ -285,12 +285,10 @@ class ObjectBlueprintCatalog:
             left, right = groups_by_id[pair.group_a_id], groups_by_id[pair.group_b_id]
             if left.count != right.count:
                 raise ValidationError("Authoring pair groups must have equal counts")
-            left_width = max(2, len(str(left.starting_number + left.count - 1)))
-            right_width = max(2, len(str(right.starting_number + right.count - 1)))
             for index in range(left.count):
                 expected_links.add(tuple(sorted((
-                    f"{left.key_prefix}{str(left.starting_number + index).zfill(left_width)}",
-                    f"{right.key_prefix}{str(right.starting_number + index).zfill(right_width)}",
+                    f"{left.key_prefix}:{index + 1}",
+                    f"{right.key_prefix}:{index + 1}",
                 ))))
         actual_links = {tuple(sorted((link.from_slot_key, link.to_slot_key))) for link in query.internal_links}
         if actual_links != expected_links:

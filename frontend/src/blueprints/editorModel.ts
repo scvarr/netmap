@@ -29,8 +29,12 @@ const pad = (value: number, width: number) => String(value).padStart(width, '0')
 const normalized = (value: string) => value.trim();
 
 export const generatedGroupKeys = (group: EndpointGroup): string[] => {
+  return Array.from({ length: Math.max(0, group.count) }, (_, index) => `${normalized(group.keyPrefix)}:${index + 1}`);
+};
+
+export const generatedGroupDisplayNames = (group: EndpointGroup): string[] => {
   const width = Math.max(2, String(group.startingNumber + Math.max(group.count - 1, 0)).length);
-  return Array.from({ length: Math.max(0, group.count) }, (_, index) => `${normalized(group.keyPrefix)}${pad(group.startingNumber + index, width)}`);
+  return Array.from({ length: Math.max(0, group.count) }, (_, index) => `${normalized(group.displayPrefix)}${pad(group.startingNumber + index, width)}`);
 };
 
 export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocument): BlueprintEditorState | null => {
@@ -48,12 +52,12 @@ export const generateBlueprint = (state: BlueprintEditorState): GeneratedBluepri
   if (!normalized(state.name)) errors.push('Укажите название шаблона.');
   if (!Number.isFinite(state.width) || state.width <= 0 || !Number.isFinite(state.height) || state.height <= 0) errors.push('Ширина и высота должны быть больше нуля.');
   if (state.fillColor && !/^#[0-9A-Fa-f]{6}$/.test(state.fillColor)) errors.push('Цвет должен быть в формате #RRGGBB.');
-  const prefixes = new Set<string>();
+  const stableKeys = new Set<string>();
   state.groups.forEach((group) => {
-    const prefix = normalized(group.keyPrefix);
-    if (!prefix) errors.push('Укажите префикс ключа каждой группы.');
-    else if (prefixes.has(prefix)) errors.push(`Повторяется префикс ключа: ${prefix}.`);
-    prefixes.add(prefix);
+    const stableKey = normalized(group.keyPrefix);
+    if (!stableKey) errors.push('Не удалось создать стабильный идентификатор группы.');
+    else if (stableKeys.has(stableKey)) errors.push('Не удалось создать уникальные стабильные идентификаторы групп.');
+    stableKeys.add(stableKey);
     if (!normalized(group.displayPrefix)) errors.push('Укажите префикс отображаемого имени каждой группы.');
     if (!Number.isInteger(group.count) || group.count < 1) errors.push('Количество портов в группе должно быть не меньше 1.');
     if (!Number.isInteger(group.startingNumber) || group.startingNumber < 0) errors.push('Начальный номер должен быть целым числом от 0.');
@@ -65,9 +69,7 @@ export const generateBlueprint = (state: BlueprintEditorState): GeneratedBluepri
   for (const group of state.groups) groupsBySide.set(group.side, [...(groupsBySide.get(group.side) ?? []), group]);
   for (const [side, groups] of groupsBySide) {
     groups.forEach((group) => generatedGroupKeys(group).forEach((key, index) => {
-      const width = Math.max(2, String(group.startingNumber + Math.max(group.count - 1, 0)).length);
-      const number = pad(group.startingNumber + index, width);
-      slots.push({ key, display_name: `${normalized(group.displayPrefix)}${number}`, kind: group.kind, anchor: { side, offset: group.placementOffset + group.placementSpan * (group.count === 1 ? .5 : index / (group.count - 1)) } });
+      slots.push({ key, display_name: generatedGroupDisplayNames(group)[index], kind: group.kind, anchor: { side, offset: group.placementOffset + group.placementSpan * (group.count === 1 ? .5 : index / (group.count - 1)) } });
     }));
   }
   const slotKeys = slots.map((slot) => slot.key);

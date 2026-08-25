@@ -291,10 +291,10 @@ def version_snapshot(left: str, right: str) -> dict:
         "default_physical_object_class": "cable",
         "body": {"kind": "RECTANGLE", "width": 120, "height": 6, "fill_color": "#123456"},
         "slots": [
-            {"key": f"{left}01", "display_name": f"{left}01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .5}},
-            {"key": f"{right}01", "display_name": f"{right}01", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .5}},
+            {"key": f"{left}:1", "display_name": f"{left}01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .5}},
+            {"key": f"{right}:1", "display_name": f"{right}01", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .5}},
         ],
-        "internal_links": [{"from_slot_key": f"{left}01", "to_slot_key": f"{right}01"}],
+        "internal_links": [{"from_slot_key": f"{left}:1", "to_slot_key": f"{right}:1"}],
         "authoring_recipe": recipe,
     }
 
@@ -310,7 +310,7 @@ def test_blueprint_versions_are_immutable_latest_is_listed_and_recipe_round_trip
     v2_id = v2.json()["version_ref"]["entity_id"]
     first_detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v1_id}").json()
     second_detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v2_id}").json()
-    assert first_detail["version_number"] == 1 and [slot["key"] for slot in first_detail["slots"]] == ["A01", "B01"]
+    assert first_detail["version_number"] == 1 and [slot["key"] for slot in first_detail["slots"]] == ["A:1", "B:1"]
     assert first_detail["authoring_recipe"] == first["authoring_recipe"]
     assert second_detail["version_number"] == 2 and [slot["key"] for slot in second_detail["slots"]] == ["C01", "D01"]
     listing = client.get("/v1/library/object-blueprints").json()["blueprints"]
@@ -318,7 +318,7 @@ def test_blueprint_versions_are_immutable_latest_is_listed_and_recipe_round_trip
     assert item["version_ref"]["entity_id"] == v2_id and item["version_count"] == 2
     old_instance = instantiate(blueprint_id, v1_id, "old cable")
     new_instance = instantiate(blueprint_id, v2_id, "new cable")
-    assert old_instance["slots"][0]["slot_key"] == "A01"
+    assert old_instance["slots"][0]["slot_key"] == "A:1"
     assert new_instance["slots"][0]["slot_key"] == "C01"
 
 
@@ -331,9 +331,9 @@ def test_blueprint_group_placement_round_trips_and_rejects_invalid_ranges():
         "pair_recipes": [],
     }
     blueprint_id, version_id = create_blueprint([
-        {**slot("U01"), "anchor": {"side": "LEFT", "offset": .1}},
-        {**slot("U02"), "anchor": {"side": "LEFT", "offset": .3}},
-        {**slot("L01"), "anchor": {"side": "LEFT", "offset": .7}},
+        {**slot("U:1"), "display_name": "U01", "anchor": {"side": "LEFT", "offset": .1}},
+        {**slot("U:2"), "display_name": "U02", "anchor": {"side": "LEFT", "offset": .3}},
+        {**slot("L:1"), "display_name": "L01", "anchor": {"side": "LEFT", "offset": .7}},
     ], authoring_recipe=recipe)
     detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
     assert detail.status_code == 200
@@ -342,6 +342,28 @@ def test_blueprint_group_placement_round_trips_and_rejects_invalid_ranges():
     assert client.post("/v1/library/object-blueprints", json={"name": "Bad range", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [], "authoring_recipe": invalid}).status_code == 422
     missing_placement = {**recipe, "endpoint_groups": [{key: value for key, value in recipe["endpoint_groups"][0].items() if key not in {"placement_offset", "placement_span"}}]}
     assert client.post("/v1/library/object-blueprints", json={"name": "Missing placement", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [], "authoring_recipe": missing_placement}).status_code == 422
+
+
+def test_recipe_snapshot_uses_stable_group_key_ordinals_independent_of_presentation():
+    recipe = {
+        "endpoint_groups": [
+            {"group_id": "left", "key_prefix": "stable-left", "display_prefix": "П", "kind": "NETWORK_PORT", "side": "BOTTOM", "count": 2, "starting_number": 20, "placement_offset": .25, "placement_span": .5},
+            {"group_id": "right", "key_prefix": "stable-right", "display_prefix": "Р", "kind": "CONNECTION_POINT", "side": "TOP", "count": 2, "starting_number": 7, "placement_offset": 0, "placement_span": 1},
+        ],
+        "pair_recipes": [{"group_a_id": "left", "group_b_id": "right"}],
+    }
+    slots = [
+        {**slot("stable-left:1", "NETWORK_PORT"), "display_name": "П20", "anchor": {"side": "BOTTOM", "offset": .25}},
+        {**slot("stable-left:2", "NETWORK_PORT"), "display_name": "П21", "anchor": {"side": "BOTTOM", "offset": .75}},
+        {**slot("stable-right:1"), "display_name": "Р07", "anchor": {"side": "TOP", "offset": 0}},
+        {**slot("stable-right:2"), "display_name": "Р08", "anchor": {"side": "TOP", "offset": 1}},
+    ]
+    response = client.post("/v1/library/object-blueprints", json={
+        "name": "Stable recipe", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": slots,
+        "internal_links": [{"from_slot_key": "stable-left:1", "to_slot_key": "stable-right:1"}, {"from_slot_key": "stable-left:2", "to_slot_key": "stable-right:2"}],
+        "authoring_recipe": recipe,
+    })
+    assert response.status_code == 201
 
 
 def test_blueprint_version_creation_is_atomic_and_delete_is_safe():
@@ -375,7 +397,7 @@ def test_next_version_can_rename_atomically_without_mutating_v1():
     )
     assert response.status_code == 201
     v2_id = response.json()["version_ref"]["entity_id"]
-    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v1_id}").json()["slots"][0]["key"] == "A01"
+    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v1_id}").json()["slots"][0]["key"] == "A:1"
     assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v2_id}").json()["name"] == "Renamed"
     invalid = version_snapshot("E", "F"); invalid["slots"] = invalid["slots"][:1]
     assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"blueprint_name": "Should not persist", **invalid}).status_code == 422
