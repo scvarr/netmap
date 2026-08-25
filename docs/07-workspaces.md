@@ -253,21 +253,146 @@ Adapter/background job, создающий canonical/observed facts, имеет 
 
 ## Access model
 
-**FIXED minimum capability; exact ACL OPEN**
+**FIXED product direction; exact ACL OPEN**
 
-Минимально:
+Authentication отвечает на вопрос:
+
+> кто пользователь?
+
+Authorization отвечает на вопрос:
+
+> что ему разрешено в данном workspace?
+
+Exact auth provider остаётся OPEN. Допустимые будущие направления — local
+accounts для standalone deployment и OIDC для нормальной multi-user/corporate
+установки; конкретный provider сейчас не фиксируется.
+
+Минимальная пользовательская ролевая модель может быть такой:
 
 ```text
-private workspace
-shared workspace
-
-VIEW
-EDIT
+OWNER
+EDITOR
+COMMENTER
+VIEWER
 ```
 
-Пользователь может иметь несколько workspace.
+Это удобные presets над permissions, а не network-domain semantics. Conceptual
+permissions:
 
-Точная users/groups/roles model определяется вместе с authentication/application layer.
+```text
+workspace.read
+workspace.comment
+workspace.edit
+workspace.manage_access
+workspace.delete
+```
+
+Ожидаемая семантика:
+
+- `OWNER`: полный контроль над workspace и sharing/access management;
+- `EDITOR`: read, изменение canonical/presentation state и comments, без
+  обязательного права управлять доступом;
+- `COMMENTER`: read и comments/annotations без topology/presentation edit;
+- `VIEWER`: только read.
+
+Точные ACL schema, role inheritance и groups остаются OPEN.
+
+### Visibility и membership
+
+**FIXED direction**
+
+Общая visibility и пользовательская ACL/membership — разные concerns.
+Conceptual visibility может включать:
+
+```text
+PRIVATE
+SHARED
+PUBLIC_READ
+```
+
+Точные enum и API не фиксируются. Visibility отвечает за то, кто workspace в
+принципе может видеть; membership/ACL — за полномочия конкретного user/group.
+
+### Comments и annotations
+
+**FIXED future collaboration capability**
+
+Пользователь с `workspace.read` и `workspace.comment` может оставлять
+замечания, не меняя canonical topology. Annotation/comment не является
+canonical network fact; у неё есть author, timestamp, workspace scope,
+target/context и lifecycle `OPEN`/`RESOLVED` или эквивалент. Позже допустимы
+replies/threading.
+
+Будущая annotation может относиться к `PhysicalObject`, `ConnectionPoint`,
+cable/`Connection`, `SavedMap`, `Region`, `MapReference` и другим
+canonical/presentation targets по реальной потребности. Polymorphic DB schema
+сейчас не фиксируется.
+
+UX direction: badge/open-comments indication на карте, список открытых
+замечаний и возможность owner/editor увидеть и resolve замечание.
+
+### Activity и audit
+
+**FIXED product requirement после multi-user writes**
+
+Система должна уметь ответить: кто, что, когда изменил и в каком workspace.
+Нужна append-only activity/audit capability, особенно для canonical topology
+mutations, destructive actions, access-control changes и workspace lifecycle
+operations. Это не означает проектирование event sourcing.
+
+Связанное post-L1 направление описано в
+[[09-02-post-l1-product-roadmap|09.2 Post-L1 product roadmap]].
+
+## Workspace portability
+
+**FIXED direction; format details OPEN**
+
+Workspace export/import — не database dump и не сериализация текущих ORM
+tables, а отдельный versioned public exchange model. Conceptual manifest:
+
+```text
+format = netmap-workspace
+format_version = N
+```
+
+Self-contained workspace export в перспективе переносит необходимое состояние:
+workspace metadata, canonical topology, EntityMetadata/aliases, Saved Maps,
+MapPlacements, per-view positions/locks, cable route geometry, regions,
+MapReferences, необходимые Blueprint definitions/versions и другие
+presentation objects, если они являются частью workspace.
+
+Exact archive format остаётся OPEN. Пользовательский файл `.netmap` позже
+может быть container/archive, но ZIP/JSON/storage layout сейчас не фиксируются.
+Observed/runtime telemetry не обязана входить в обычный workspace export.
+
+Совпадение UUID не даёт права overwrite существующий workspace. Первый
+безопасный product direction — import self-contained package как новый
+isolated workspace; restore/merge semantics проектируются отдельно, automatic
+merge не требуется.
+
+## Blueprint library packages
+
+**FIXED direction; не часть workspace export**
+
+Отдельный versioned exchange contract conceptually имеет формат:
+
+```text
+netmap-blueprint-library
+```
+
+Package может содержать Blueprint definitions, immutable versions,
+presentation geometry, endpoint groups/slots, internal link authoring rules и
+metadata. Он не содержит instances `PhysicalObject` конкретной сети. Один
+package может включать несколько связанных Blueprint.
+
+Use cases: generic patch-panel library, generic servers, vendor/device-family
+libraries и перенос пользовательских Blueprint между установками. Exact package
+storage format и versioning mechanics остаются OPEN, кроме требования
+versioned exchange contract.
+
+Возможен будущий третий механизм — Map template / clone для повторного
+использования presentation structure. Он не смешивается ни с Blueprint library,
+ни с workspace snapshot.
 
 ## Workspace и Map
 
@@ -330,3 +455,11 @@ Workspace management остаётся application module существующе�
 18. Workspace и presentation map/projection — разные сущности.
 19. PostgreSQL schema per workspace — preferred first storage hypothesis, а не обязательный implementation mechanism.
 20. Workspace management остаётся частью modular monolith.
+21. Authentication и authorization разделены: права оцениваются в контексте выбранного workspace.
+22. Роли являются presets над application permissions, а не network-domain semantics.
+23. Visibility определяет принципиальную видимость workspace, membership/ACL — права конкретного user/group.
+24. Comments/annotations не изменяют canonical topology и имеют workspace scope.
+25. Multi-user writes оставляют append-only activity/audit след.
+26. Workspace export/import использует отдельный versioned public exchange model, а не ORM/database dump.
+27. Обычный import создаёт новый isolated workspace; совпавший UUID не разрешает overwrite.
+28. Blueprint library package является отдельным versioned exchange contract и не содержит instances конкретной сети.

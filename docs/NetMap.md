@@ -29,6 +29,8 @@
 - [[07-workspaces|07. Workspace и canonical isolation]]
 - [[08-ui-implementation|08. UI implementation contract]]
 - [[09-ui-ux-review|09. Рабочий L1 UI/UX review]]
+- [[09-01-l1-spatial-foundation-plan|09.1 План завершения L1 spatial foundation]]
+- [[09-02-post-l1-product-roadmap|09.2 Post-L1 product roadmap]]
 
 ## Базовые принципы
 
