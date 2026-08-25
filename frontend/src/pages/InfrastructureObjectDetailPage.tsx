@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { DeviceInterfacesSection } from '../components/DeviceInterfacesSection';
 import { PhysicalObjectDetailsSection } from '../components/PhysicalObjectDetailsSection';
-import { physicalClassPresentation } from '../topology/presentation';
+import { physicalClassPresentationForLocale } from '../topology/presentation';
 import { PHYSICAL_PROJECTION_REQUEST } from '../topology/projection';
 import type { ConnectionPointWriteDataSource } from '../topology/connectionPointWriteTypes';
 import type {
@@ -21,6 +21,7 @@ import type {
   PhysicalObjectDetailsDocument,
 } from '../topology/physicalObjectDetailsTypes';
 import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
+import { useI18n } from '../i18n';
 
 interface InfrastructureObjectDetailPageProps {
   dataSource: TopologyDataSource;
@@ -36,7 +37,6 @@ interface InfrastructureObjectDetailPageProps {
   savedMapDataSource?: SavedMapDataSource;
 }
 
-const mapNameCollator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
 const mapLink = (mapId: string, objectId: string) =>
   `/map?map=${encodeURIComponent(mapId)}&view=physical&focus=${encodeURIComponent(objectId)}`;
 const addMapLink = (mapId: string, objectId: string) =>
@@ -55,6 +55,7 @@ export function InfrastructureObjectDetailPage({
   catalogInventoryDataSource,
   savedMapDataSource,
 }: InfrastructureObjectDetailPageProps) {
+  const { collator, locale, t } = useI18n();
   const { physicalObjectId = '' } = useParams();
   const [details, setDetails] = useState<PhysicalObjectDetailsDocument | null>(null);
   const [projection, setProjection] = useState<TopologyProjectionDocument | null>(null);
@@ -127,15 +128,15 @@ export function InfrastructureObjectDetailPage({
 
   return (
     <main className="catalog-page object-detail-page">
-      <nav className="breadcrumbs" aria-label="Хлебные крошки">
-        <Link to="/infrastructure/objects">Инфраструктура</Link><span>/</span>
-        <Link to="/infrastructure/objects">Объекты</Link><span>/</span>
-        <span>{details?.physical_object.label ?? 'Загрузка…'}</span>
+      <nav className="breadcrumbs" aria-label={t('object.breadcrumbs')}>
+        <Link to="/infrastructure/objects">{t('catalog.infrastructure')}</Link><span>/</span>
+        <Link to="/infrastructure/objects">{t('nav.objects')}</Link><span>/</span>
+        <span>{details?.physical_object.label ?? t('object.loading')}</span>
       </nav>
       <header className="object-detail-page__header">
         <div>
-          <span className="eyebrow">{details ? physicalClassPresentation(details.physical_object.class).label : 'ФИЗИЧЕСКИЙ ОБЪЕКТ'}</span>
-          <h1>{details?.physical_object.label ?? 'Загружаем объект…'}</h1>
+          <span className="eyebrow">{physicalClassPresentationForLocale(details?.physical_object.class, locale).label}</span>
+          <h1>{details?.physical_object.label ?? t('object.loadingTitle')}</h1>
         </div>
       </header>
       {details?.warnings.map((warning, index) => <p className="catalog-note" key={`warning-${index}-${warning}`}>{warning}</p>)}
@@ -170,7 +171,7 @@ export function InfrastructureObjectDetailPage({
               <p>На картах:</p>
               <ul>
                 {[...inventoryItem.map_memberships]
-                  .sort((left, right) => mapNameCollator.compare(left.name, right.name))
+                  .sort((left, right) => collator.compare(left.name, right.name))
                   .map((membership) => (
                     <li key={membership.map_ref.entity_id}>
                       <Link to={mapLink(membership.map_ref.entity_id, physicalObjectId)}>{membership.name}</Link>
@@ -199,7 +200,7 @@ export function InfrastructureObjectDetailPage({
               const placed = new Set(inventoryItem?.map_memberships.map((membership) => membership.map_ref.entity_id));
               const available = mapChooser.maps
                 .filter((map) => !placed.has(map.map_ref.entity_id))
-                .sort((left, right) => mapNameCollator.compare(left.name, right.name));
+                .sort((left, right) => collator.compare(left.name, right.name));
               if (mapChooser.maps.length === 0) return <p>Карты пока не созданы.</p>;
               if (available.length === 0) return <p>Объект уже размещён на всех доступных картах.</p>;
               return <ul>{available.map((map) => <li key={map.map_ref.entity_id}><Link to={addMapLink(map.map_ref.entity_id, physicalObjectId)}>{map.name}</Link></li>)}</ul>;

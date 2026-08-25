@@ -6,6 +6,7 @@ import { CreatePhysicalObject } from '../components/CreatePhysicalObject';
 import type { DeviceWriteDataSource } from '../topology/deviceWriteTypes';
 import type { ObjectBlueprintDataSource, ObjectBlueprintListDocument } from '../topology/objectBlueprintTypes';
 import type { PhysicalObjectWriteDataSource } from '../topology/physicalObjectWriteTypes';
+import { useI18n } from '../i18n';
 
 interface NewInfrastructureObjectPageProps {
   deviceWriteDataSource?: DeviceWriteDataSource;
@@ -20,6 +21,7 @@ export function NewInfrastructureObjectPage({
   physicalObjectWriteDataSource,
   objectBlueprintDataSource,
 }: NewInfrastructureObjectPageProps) {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [intent, setIntent] = useState<CreationIntent>('device');
@@ -34,13 +36,13 @@ export function NewInfrastructureObjectPage({
 
   return (
     <main className="catalog-page create-object-page">
-      <nav className="breadcrumbs" aria-label="Хлебные крошки">
-        <Link to="/infrastructure/objects">Инфраструктура</Link><span>/</span>
-        <Link to="/infrastructure/objects">Объекты</Link><span>/</span>
-        <span>Создать</span>
+      <nav className="breadcrumbs" aria-label={t('object.breadcrumbs')}>
+        <Link to="/infrastructure/objects">{t('catalog.infrastructure')}</Link><span>/</span>
+        <Link to="/infrastructure/objects">{t('nav.objects')}</Link><span>/</span>
+        <span>{t('create.create')}</span>
       </nav>
       <header className="catalog-page__header">
-        <div><span className="eyebrow">Инфраструктура</span><h1>Создать объект</h1><p>Выберите шаблон, затем задайте имя экземпляра.</p></div>
+        <div><span className="eyebrow">{t('catalog.infrastructure')}</span><h1>{t('catalog.createObject')}</h1><p>{t('create.physicalObject')}</p></div>
       </header>
       <section className="creation-form-surface" aria-label="Шаблоны объектов">
         {!objectBlueprintDataSource && <p className="catalog-note catalog-note--gap">Библиотека шаблонов не настроена.</p>}
@@ -51,7 +53,7 @@ export function NewInfrastructureObjectPage({
       </section>
       <section className="creation-form-surface" aria-label="Создать вручную">
         {!manualOpen && <button type="button" className="secondary-action" onClick={() => setManualOpen(true)}>Создать вручную</button>}
-        {manualOpen && <><h2>Создать вручную</h2><p className="catalog-note">Расширенный путь для объектов без шаблона.</p><section className="creation-intents" aria-label="Тип ручного создания"><button type="button" aria-pressed={intent === 'device'} onClick={() => setIntent('device')}><strong>Сетевое устройство</strong><span>PhysicalObject, первый NetworkInterface и explicit owner relation</span></button><button type="button" aria-pressed={intent === 'physical'} onClick={() => setIntent('physical')}><strong>Физический объект</strong><span>PhysicalObject, optional class и первая ConnectionPoint</span></button></section>
+        {manualOpen && <><h2>Создать вручную</h2><p className="catalog-note">Расширенный путь для объектов без шаблона.</p><section className="creation-intents" aria-label="Тип ручного создания"><button type="button" aria-pressed={intent === 'device'} onClick={() => setIntent('device')}><strong>{t('create.networkDevice')}</strong><span>PhysicalObject, первый NetworkInterface и explicit owner relation</span></button><button type="button" aria-pressed={intent === 'physical'} onClick={() => setIntent('physical')}><strong>{t('create.physicalObject')}</strong><span>PhysicalObject, optional class и первая ConnectionPoint</span></button></section>
         {intent === 'device' && deviceWriteDataSource && (
           <CreateNetworkDevice
             variant="page"

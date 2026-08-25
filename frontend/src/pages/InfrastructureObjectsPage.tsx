@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { physicalClassPresentation } from '../topology/presentation';
+import { physicalClassPresentationForLocale } from '../topology/presentation';
 import type {
   CatalogInventoryCableEndpoint,
   CatalogInventoryDataSource,
@@ -30,7 +30,7 @@ const objectLink = (id: string) => `/infrastructure/objects/${encodeURIComponent
 const mapLink = (map: string, object: string) =>
   `/map?map=${encodeURIComponent(map)}&view=physical&focus=${encodeURIComponent(object)}`;
 const classLabel = (value?: string) =>
-  value === undefined ? 'Без типа' : known.has(value) ? physicalClassPresentation(value).label : value;
+  value === undefined ? 'Без типа' : known.has(value) ? physicalClassPresentationForLocale(value, 'ru').label : value;
 
 function CatalogState({
   kind,
@@ -41,15 +41,16 @@ function CatalogState({
   message?: string;
   onRetry?: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <div
       className={`catalog-state view-state view-state--${kind}`}
       role={kind === 'error' ? 'alert' : 'status'}
     >
       <div className="view-state__signal">{kind === 'loading' ? <span className="spinner" /> : '!'}</div>
-      <h2>{kind === 'loading' ? 'Загружаем каталог' : 'Не удалось загрузить каталог'}</h2>
-      <p>{kind === 'loading' ? 'Получаем инвентарный список оборудования и кабелей…' : message}</p>
-      {kind === 'error' && onRetry && <button onClick={onRetry}>Повторить</button>}
+      <h2>{kind === 'loading' ? t('catalog.loading.title') : t('catalog.error.title')}</h2>
+      <p>{kind === 'loading' ? t('catalog.loading.body') : message}</p>
+      {kind === 'error' && onRetry && <button onClick={onRetry}>{t('action.retry')}</button>}
     </div>
   );
 }
@@ -59,7 +60,7 @@ export function InfrastructureObjectsPage({
   physicalObjectDeleteDataSource,
   physicalObjectDisplayNameWriteDataSource,
 }: Props) {
-  const { collator } = useI18n();
+  const { collator, locale, t } = useI18n();
   const [document, setDocument] = useState<CatalogInventoryDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
