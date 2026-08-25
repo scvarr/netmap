@@ -37,7 +37,9 @@ vi.mock('@xyflow/react', () => ({
         <div key={node.id}>
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
           <span data-testid={`position-${node.id}`}>{node.position.x},{node.position.y}</span>
+          <span data-testid={`draggable-${node.id}`}>{String(node.draggable !== false)}</span>
           <button onClick={() => {
+            if (node.draggable === false) return;
             const dragged = { ...node, position: { x: 42, y: 84 } };
             onNodesChange([{ id: node.id, type: 'position', position: dragged.position }]);
             onNodeDragStop({}, dragged);
@@ -253,6 +255,50 @@ describe('TopologyCanvas async layout boundary', () => {
 
     view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
     expect(fitViewMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a locked node selectable but prevents its drag without rebuilding the scene', async () => {
+    const document = {
+      ...documentFor('physical-A'),
+      nodes: [{ ...documentFor('physical-A').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'object-a' }] }],
+    };
+    const onSelectionChange = vi.fn();
+    const onPhysicalNodeDragStop = vi.fn();
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async (input) => flowFor(input));
+    const view = render(
+      <TopologyCanvas
+        document={document}
+        selection={null}
+        onSelectionChange={onSelectionChange}
+        layoutEngine={layoutEngine}
+        draggableNodeIds={new Set(['physical-A'])}
+        lockedNodeIds={new Set(['physical-A'])}
+        onPhysicalNodeDragStop={onPhysicalNodeDragStop}
+      />,
+    );
+
+    await screen.findByRole('button', { name: 'physical-A' });
+    expect(screen.getByTestId('draggable-physical-A')).toHaveTextContent('false');
+    fireEvent.click(screen.getByRole('button', { name: 'physical-A' }));
+    expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: document.nodes[0] });
+    fireEvent.click(screen.getByRole('button', { name: 'drag physical-A' }));
+    expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
+
+    view.rerender(
+      <TopologyCanvas
+        document={document}
+        selection={null}
+        onSelectionChange={onSelectionChange}
+        layoutEngine={layoutEngine}
+        draggableNodeIds={new Set(['physical-A'])}
+        lockedNodeIds={new Set()}
+        onPhysicalNodeDragStop={onPhysicalNodeDragStop}
+      />,
+    );
+    expect(screen.getByTestId('draggable-physical-A')).toHaveTextContent('true');
+    fireEvent.click(screen.getByRole('button', { name: 'drag physical-A' }));
+    expect(onPhysicalNodeDragStop).toHaveBeenCalledWith('object-a', { x: 42, y: 84 });
+    expect(layoutEngine).toHaveBeenCalledTimes(1);
   });
 
   it('fits each new scene once and applies an explicit authoritative rollback without ELK', async () => {

@@ -73,7 +73,7 @@ def test_placements_are_per_map_and_keep_physical_and_logical_positions_independ
     assert response.status_code == 201
     assert response.json()["placements"] == [{
         "physical_object_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": physical_id},
-        "positions": {"L1/PHYSICAL_OBJECT": {"x": 120.0, "y": 200.0}},
+        "positions": {"L1/PHYSICAL_OBJECT": {"x": 120.0, "y": 200.0, "locked": False}},
     }]
     duplicate = client.post(f"/v1/maps/{first_id}/placements", json={
         "physical_object_id": physical_id, "x": 0, "y": 0,
@@ -83,28 +83,56 @@ def test_placements_are_per_map_and_keep_physical_and_logical_positions_independ
     assert client.post(f"/v1/maps/{second_id}/placements", json={
         "physical_object_id": physical_id, "x": 600, "y": 80,
     }).status_code == 201
-    assert placements(second_id)[0]["positions"] == {"L1/PHYSICAL_OBJECT": {"x": 600.0, "y": 80.0}}
+    assert placements(second_id)[0]["positions"] == {"L1/PHYSICAL_OBJECT": {"x": 600.0, "y": 80.0, "locked": False}}
 
     logical = client.put(f"/v1/maps/{first_id}/placements/{physical_id}/positions/logical", json={"x": 300, "y": 120})
     assert logical.status_code == 200
     assert placements(first_id)[0]["positions"] == {
-        "L1/PHYSICAL_OBJECT": {"x": 120.0, "y": 200.0},
-        "L2/DEVICE": {"x": 300.0, "y": 120.0},
+        "L1/PHYSICAL_OBJECT": {"x": 120.0, "y": 200.0, "locked": False},
+        "L2/DEVICE": {"x": 300.0, "y": 120.0, "locked": False},
     }
     moved = client.put(f"/v1/maps/{first_id}/placements/{physical_id}", json={"x": 180, "y": 340})
     assert moved.status_code == 200
     assert placements(first_id)[0]["positions"] == {
-        "L1/PHYSICAL_OBJECT": {"x": 180.0, "y": 340.0},
-        "L2/DEVICE": {"x": 300.0, "y": 120.0},
+        "L1/PHYSICAL_OBJECT": {"x": 180.0, "y": 340.0, "locked": False},
+        "L2/DEVICE": {"x": 300.0, "y": 120.0, "locked": False},
     }
-    assert placements(second_id)[0]["positions"] == {"L1/PHYSICAL_OBJECT": {"x": 600.0, "y": 80.0}}
+    assert placements(second_id)[0]["positions"] == {"L1/PHYSICAL_OBJECT": {"x": 600.0, "y": 80.0, "locked": False}}
 
     for invalid in ({"x": "NaN", "y": 1}, {"x": "Infinity", "y": 1}):
         assert client.put(f"/v1/maps/{first_id}/placements/{physical_id}", json=invalid).status_code == 422
-    assert placements(first_id)[0]["positions"]["L1/PHYSICAL_OBJECT"] == {"x": 180.0, "y": 340.0}
+    assert placements(first_id)[0]["positions"]["L1/PHYSICAL_OBJECT"] == {"x": 180.0, "y": 340.0, "locked": False}
     assert client.put(f"/v1/maps/{first_id}/placements/{physical_id}/positions/unknown", json={"x": 1, "y": 2}).status_code == 422
     assert client.put(f"/v1/maps/{first_id}/placements/{uuid.uuid4()}/positions/logical", json={"x": 1, "y": 2}).status_code == 422
     assert client.put(f"/v1/maps/{uuid.uuid4()}/placements/{physical_id}/positions/logical", json={"x": 1, "y": 2}).status_code == 422
+
+
+def test_per_view_placement_locks_preserve_coordinates_and_validate_scope():
+    physical = create_object("SW1")
+    saved_map = create_map("Locks")
+    saved_map_id, physical_id = map_id(saved_map), object_id(physical)
+    assert client.post(f"/v1/maps/{saved_map_id}/placements", json={"physical_object_id": physical_id, "x": 120, "y": 200}).status_code == 201
+    assert client.put(f"/v1/maps/{saved_map_id}/placements/{physical_id}/positions/logical", json={"x": 300, "y": 400}).status_code == 200
+
+    locked = client.put(f"/v1/maps/{saved_map_id}/placements/{physical_id}/locks/physical", json={"locked": True})
+    assert locked.status_code == 200
+    assert placements(saved_map_id)[0]["positions"] == {
+        "L1/PHYSICAL_OBJECT": {"x": 120.0, "y": 200.0, "locked": True},
+        "L2/DEVICE": {"x": 300.0, "y": 400.0, "locked": False},
+    }
+    unlocked = client.put(f"/v1/maps/{saved_map_id}/placements/{physical_id}/locks/logical", json={"locked": True})
+    assert unlocked.status_code == 200
+    assert placements(saved_map_id)[0]["positions"] == {
+        "L1/PHYSICAL_OBJECT": {"x": 120.0, "y": 200.0, "locked": True},
+        "L2/DEVICE": {"x": 300.0, "y": 400.0, "locked": True},
+    }
+    assert client.put(f"/v1/maps/{saved_map_id}/placements/{physical_id}/locks/physical", json={"locked": False}).status_code == 200
+    assert placements(saved_map_id)[0]["positions"]["L1/PHYSICAL_OBJECT"] == {"x": 120.0, "y": 200.0, "locked": False}
+    assert placements(saved_map_id)[0]["positions"]["L2/DEVICE"] == {"x": 300.0, "y": 400.0, "locked": True}
+
+    assert client.put(f"/v1/maps/{saved_map_id}/placements/{physical_id}/locks/unknown", json={"locked": True}).status_code == 422
+    assert client.put(f"/v1/maps/{saved_map_id}/placements/{uuid.uuid4()}/locks/physical", json={"locked": True}).status_code == 422
+    assert client.put(f"/v1/maps/{uuid.uuid4()}/placements/{physical_id}/locks/physical", json={"locked": True}).status_code == 422
 
 
 def test_removing_or_deleting_a_map_leaves_canonical_topology_untouched():

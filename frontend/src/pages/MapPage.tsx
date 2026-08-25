@@ -588,7 +588,11 @@ export function MapPage({
                         ...placement,
                         positions: {
                           ...placement.positions,
-                          [positionKey]: position,
+                          [positionKey]: {
+                            ...placement.positions[positionKey],
+                            ...position,
+                            locked: placement.positions[positionKey]?.locked ?? false,
+                          },
                         },
                       }
                     : placement,
@@ -608,6 +612,32 @@ export function MapPage({
       if (selectedMapId.current === targetMapId)
         setAuthoritativePositionRevision((revision) => revision + 1);
     }
+  };
+
+  const setPlacementLock = async (id: string, locked: boolean) => {
+    if (!savedMapDataSource || !mapId) return;
+    const targetMapId = mapId;
+    const positionKey = savedMapViewKey(viewMode);
+    await savedMapDataSource.setPositionLock(targetMapId, id, viewMode, locked);
+    if (selectedMapId.current !== targetMapId) return;
+    setMap((current) =>
+      current?.map_ref.entity_id === targetMapId
+        ? {
+            ...current,
+            placements: current.placements.map((placement) =>
+              placement.physical_object_ref.entity_id === id && placement.positions[positionKey]
+                ? {
+                    ...placement,
+                    positions: {
+                      ...placement.positions,
+                      [positionKey]: { ...placement.positions[positionKey], locked },
+                    },
+                  }
+                : placement,
+            ),
+          }
+        : current,
+    );
   };
 
   const remove = async (id: string) => {
@@ -706,7 +736,7 @@ export function MapPage({
             item.physical_object_ref.entity_id,
           );
           const position = item.positions[positionKey];
-          return node && position ? [node.id, position] : null;
+          return node && position ? [node.id, { x: position.x, y: position.y }] : null;
         })
         .filter((item): item is [string, XYPosition] => item !== null),
     );
@@ -726,6 +756,20 @@ export function MapPage({
       ),
     [activeMap, document],
   );
+  const lockedNodeIds = useMemo(() => {
+    const positionKey = savedMapViewKey(viewMode);
+    return new Set(
+      (activeMap?.placements ?? [])
+        .filter((item) => item.positions[positionKey]?.locked)
+        .map((item) => nodeForPhysicalObject(document?.nodes ?? [], item.physical_object_ref.entity_id)?.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+  }, [activeMap, document, viewMode]);
+  const selectedPlacementPosition = useMemo(() => {
+    const id = physicalObjectIdForSelection(selection);
+    return activeMap?.placements.find((item) => item.physical_object_ref.entity_id === id)
+      ?.positions[savedMapViewKey(viewMode)];
+  }, [activeMap, selection, viewMode]);
   const receiveViewportCenter = useCallback(
     (getter: (() => XYPosition) | null) => {
       viewportCenter.current = getter;
@@ -902,6 +946,7 @@ export function MapPage({
                   sceneKey={presentationSceneKey}
                   positionOverrides={!legacy ? positions : undefined}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}
+                  lockedNodeIds={!legacy ? lockedNodeIds : undefined}
                   authoritativePositionRevision={authoritativePositionRevision}
                   onPhysicalNodeDragStop={!legacy ? move : undefined}
                   disableAutoLayout={!legacy}
@@ -949,6 +994,12 @@ export function MapPage({
           viewMode === "physical" &&
           ids.includes(physicalObjectIdForSelection(selection) ?? "")
             ? remove
+            : undefined
+        }
+        placementLocked={selectedPlacementPosition?.locked}
+        onSetPlacementLock={
+          !legacy && selectedPlacementPosition && physicalObjectIdForSelection(selection)
+            ? (locked) => setPlacementLock(physicalObjectIdForSelection(selection)!, locked)
             : undefined
         }
         onDeletePhysicalObject={

@@ -76,6 +76,24 @@ class SavedMapCatalog:
         self.session.flush()
         return placement
 
+    def set_view_lock(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, locked: bool) -> MapPlacement:
+        self._require_map(map_id)
+        placement = self.session.scalar(select(MapPlacement).where(
+            MapPlacement.map_id == map_id, MapPlacement.physical_object_id == physical_object_id
+        ).with_for_update())
+        if placement is None:
+            raise ValidationError("MapPlacement does not exist", {
+                "map_id": str(map_id), "physical_object_id": str(physical_object_id),
+            })
+        position = next((item for item in placement.view_positions if item.view_key == view_key), None)
+        if position is None:
+            raise ValidationError("MapViewPosition does not exist", {
+                "map_id": str(map_id), "physical_object_id": str(physical_object_id), "view_key": str(view_key),
+            })
+        position.locked = locked
+        self.session.flush()
+        return placement
+
     def remove_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID) -> None:
         self._require_map(map_id)
         placement = self.session.scalar(select(MapPlacement).where(

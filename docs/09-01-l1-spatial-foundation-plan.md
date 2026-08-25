@@ -21,8 +21,17 @@ explicit user layout/navigation actions may still change it.
 
 ### L1S.2 — Stable placement
 
-- Per-view placement lock.
-- Locked objects не draggable.
+#### L1S.2a — per-view placement lock
+
+**IMPLEMENTED**
+
+`MapViewPosition` хранит presentation-only состояние `locked` независимо для
+каждого SavedMap placement и view. Зафиксированный node остаётся selectable и
+visible, но его нельзя перетащить; смена lock не перемещает node и не
+пересобирает scene.
+
+#### L1S.2b — collision-safe placement
+
 - Collision-free final drag и insertion.
 - Nearest-free placement около занятого insertion anchor.
 

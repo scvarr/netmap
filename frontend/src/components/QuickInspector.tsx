@@ -31,6 +31,8 @@ interface QuickInspectorProps {
   onDeletePhysicalObject?: (id: string) => Promise<void>;
   onRemoveFromMap?: (id: string) => Promise<void>;
   onAddContinuationToMap?: (id: string) => Promise<void>;
+  placementLocked?: boolean;
+  onSetPlacementLock?: (locked: boolean) => Promise<void>;
   mapOperation?: {
     kind: "remove" | "add" | "delete";
     id: string;
@@ -91,6 +93,8 @@ export function QuickInspector(props: QuickInspectorProps) {
   const [continuationError, setContinuationError] = useState<string | null>(
     null,
   );
+  const [lockError, setLockError] = useState<string | null>(null);
+  const [lockPending, setLockPending] = useState(false);
   const node = selection?.type === "node" ? selection.item : null;
   const id = node && physicalObjectIdForNode(node);
   const isL1 = document?.layer === "L1";
@@ -239,6 +243,28 @@ export function QuickInspector(props: QuickInspectorProps) {
       setPending(null);
     }
   };
+  const togglePlacementLock = async () => {
+    if (!props.onSetPlacementLock || lockPending) return;
+    setLockPending(true);
+    setLockError(null);
+    try {
+      await props.onSetPlacementLock(!props.placementLocked);
+    } catch (reason) {
+      setLockError(
+        reason instanceof Error ? reason.message : "Не удалось изменить фиксацию положения",
+      );
+    } finally {
+      setLockPending(false);
+    }
+  };
+  const placementLockAction = props.onSetPlacementLock ? (
+    <>
+      <button disabled={lockPending} onClick={() => void togglePlacementLock()}>
+        {props.placementLocked ? "Разблокировать положение" : "Зафиксировать положение"}
+      </button>
+      {lockError && <p role="alert">{lockError}</p>}
+    </>
+  ) : null;
   if (selection.type === "continuation") {
     const c = selection.item;
     const remote = c.remote_physical_object_ref.entity_id;
@@ -361,6 +387,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           ))}
         {inventory && !item && <p>Проверенные данные кабеля недоступны.</p>}
         <Link to={url(id)}>Открыть объект</Link>
+        {placementLockAction}
         {props.onRemoveFromMap && (
           <button
             disabled={pending !== null || Boolean(activeOperationFor(id))}
@@ -461,6 +488,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           </>
         )}
         <Link to={url(id)}>Открыть объект</Link>
+        {placementLockAction}
         {props.onRemoveFromMap && (
           <button
             disabled={pending !== null || Boolean(activeOperationFor(id))}
@@ -512,6 +540,7 @@ export function QuickInspector(props: QuickInspectorProps) {
         ) : (
           <p>У объекта нет однозначной canonical-ссылки.</p>
         )}
+        {placementLockAction}
         {technical}
       </>,
     );

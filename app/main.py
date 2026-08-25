@@ -96,6 +96,7 @@ from app.schemas import (
     NATEvaluationArtifact,
     NATEvaluationQuery,
     MoveMapPlacementRequest,
+    SetMapViewLockRequest,
     RouteDecisionArtifact,
     RouteDecisionQuery,
     RoutingPolicyEvaluationArtifact,
@@ -148,7 +149,7 @@ def _saved_map_document(detail) -> dict[str, object]:
                     "entity_id": placement.physical_object_id,
                 },
                 "positions": {
-                    str(position.view_key): {"x": position.x, "y": position.y}
+                    str(position.view_key): {"x": position.x, "y": position.y, "locked": position.locked}
                     for position in placement.view_positions
                 },
             }
@@ -250,6 +251,19 @@ def set_map_view_position(map_id: uuid.UUID, physical_object_id: uuid.UUID, view
             MapViewKey.PHYSICAL if view_key == "physical" else MapViewKey.LOGICAL,
             query.x,
             query.y,
+        )
+        return _map_placements_document(catalog.placements(map_id))
+
+
+@app.put("/v1/maps/{map_id}/placements/{physical_object_id}/locks/{view_key}", response_model=MapPlacementsDocument, responses={422: {"model": ErrorResponse}})
+def set_map_view_lock(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: SetMapViewLockRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog.set_view_lock(
+            map_id,
+            physical_object_id,
+            MapViewKey.PHYSICAL if view_key == "physical" else MapViewKey.LOGICAL,
+            query.locked,
         )
         return _map_placements_document(catalog.placements(map_id))
 

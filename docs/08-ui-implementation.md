@@ -817,14 +817,20 @@ map detail response exposes each placement as:
 ```text
 physical_object_ref
 positions:
-    L1/PHYSICAL_OBJECT?: { x, y }
-    L2/DEVICE?: { x, y }
+    L1/PHYSICAL_OBJECT?: { x, y, locked }
+    L2/DEVICE?: { x, y, locked }
 ```
 
 `POST /v1/maps/{map_id}/placements` retains the compatibility `x/y` payload and
 creates only the initial Physical position. `PUT .../positions/physical` and
 `PUT .../positions/logical` are the explicit per-view writes. Missing Logical
 coordinates mean frontend ELK initialization, not a copy of Physical position.
+
+`locked` — presentation-only состояние конкретного placement/view со значением
+по умолчанию `false`. `PUT .../locks/physical` и `PUT .../locks/logical`
+меняют только этот флаг, не coordinates и не canonical topology. Locked node
+остаётся selectable и inspectable, но React Flow отключает его drag; успешная
+lock write обновляет local SavedMap state без reload projection или scene.
 
 `TopologyCanvas` remains presentation-only: it receives a scene key,
 position overrides and callbacks, not SavedMap API knowledge. Viewport control

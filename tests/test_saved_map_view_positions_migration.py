@@ -20,6 +20,6 @@ def test_upgrade_backfills_legacy_physical_positions_without_changing_membership
 
     with SessionLocal() as session:
         membership = session.execute(text("SELECT map_id, physical_object_id FROM map_placements WHERE id = :id"), {"id": placement_id}).one()
-        position = session.execute(text("SELECT view_key, x, y FROM map_view_positions WHERE placement_id = :id"), {"id": placement_id}).one()
+        position = session.execute(text("SELECT view_key, x, y, locked FROM map_view_positions WHERE placement_id = :id"), {"id": placement_id}).one()
     assert membership == (map_id, object_id)
-    assert position == ("L1/PHYSICAL_OBJECT", 12.0, 34.0)
+    assert position == ("L1/PHYSICAL_OBJECT", 12.0, 34.0, False)

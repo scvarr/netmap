@@ -73,7 +73,7 @@ class MapViewKey(StrEnum):
 
 
 class MapViewPosition(Base):
-    """Presentation coordinates for one SavedMap membership in one network view."""
+    """Presentation coordinates and lock state for one SavedMap membership in one network view."""
 
     __tablename__ = "map_view_positions"
     __table_args__ = (
@@ -91,6 +91,7 @@ class MapViewPosition(Base):
     view_key: Mapped[MapViewKey] = mapped_column(String(32), nullable=False)
     x: Mapped[float] = mapped_column(Float, nullable=False)
     y: Mapped[float] = mapped_column(Float, nullable=False)
+    locked: Mapped[bool] = mapped_column(nullable=False, server_default="false")
     placement: Mapped[MapPlacement] = relationship(back_populates="view_positions")
 
 

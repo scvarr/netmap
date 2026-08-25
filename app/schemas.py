@@ -72,11 +72,18 @@ class MoveMapPlacementRequest(BaseModel):
     y: FiniteFloat
 
 
+class SetMapViewLockRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    locked: bool
+
+
 class MapViewPositionDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     x: FiniteFloat
     y: FiniteFloat
+    locked: bool = False
 
 
 class MapPlacementDocument(BaseModel):
