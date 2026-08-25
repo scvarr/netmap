@@ -42,7 +42,7 @@ export function MapInsertionPicker({
 }: {
   inventory: CatalogInventoryDocument | null;
   placedIds: string[];
-  status: 'loading' | 'ready' | 'saving' | 'saved-refresh-failed';
+  status: 'loading' | 'ready' | 'resolving' | 'saving' | 'saved-refresh-failed';
   error: string | null;
   onSelect: (candidate: MapInsertionCandidate) => void;
   onClose: () => void;
@@ -66,6 +66,7 @@ export function MapInsertionPicker({
       <div className="map-dialog__surface map-insertion-picker">
         <h2>Добавить на карту</h2>
         {status === 'loading' && <p role="status">Загружаем оборудование…</p>}
+        {status === 'resolving' && <p role="status">Определяем место на карте…</p>}
         {status === 'ready' && requestedObjectId && !error && !requested && <p>Объект недоступен для размещения.</p>}
         {status === 'ready' && requested && !error && (
           <>

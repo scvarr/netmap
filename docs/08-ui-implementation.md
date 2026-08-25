@@ -837,7 +837,16 @@ Final SavedMap drag проверяется локально в flow coordinates 
 существующие layout dimensions. Overlap при drop не начинает position write,
 немедленно возвращает node к последней подтверждённой позиции и показывает
 короткое сообщение; viewport и selection не меняются. Touching boundaries
-допустимы. Collision-safe insertion и nearest-free placement ещё не реализованы.
+допустимы.
+
+Добавление на Physical Saved Map использует тот же footprint/intersection
+contract. Toolbar, context menu, Object Detail и off-map continuation сначала
+сохраняют свой requested anchor; для выбранного PhysicalObject frontend получает
+scoped L1/PHYSICAL_OBJECT projection и берёт blueprint body или generic layout
+footprint. Если anchor занят, deterministic bounded nearest-free search в flow
+coordinates выбирает ближайшую свободную позицию, не двигая viewport и не меняя
+существующие objects. Preflight не пишет placement при ошибке geometry/поиска;
+после успешного write retry обновляет только SavedMap detail, без нового POST.
 
 `TopologyCanvas` remains presentation-only: it receives a scene key,
 position overrides and callbacks, not SavedMap API knowledge. Viewport control

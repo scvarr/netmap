@@ -10,6 +10,12 @@ import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
 import { ViewState } from "../components/ViewState";
 import { physicalTraceOverlayFor } from "../topology/interfacePhysicalTraceOverlay";
+import {
+  footprintDimensionsForProjectionNode,
+  nearestFreePosition,
+  projectionNodeFootprint,
+  type FlowRectangle,
+} from "../topology/nodeFootprint";
 import type {
   CatalogInventoryDataSource,
   CatalogInventoryDocument,
@@ -64,7 +70,7 @@ interface InsertionState {
   mapId: string;
   anchor: XYPosition;
   inventory: CatalogInventoryDocument | null;
-  status: "loading" | "ready" | "saving" | "saved-refresh-failed";
+  status: "loading" | "ready" | "resolving" | "saving" | "saved-refresh-failed";
   error: string | null;
   requestedObjectId?: string;
 }
@@ -162,6 +168,7 @@ export function MapPage({
 
   const selectMap = useCallback(
     (id: string) => {
+      insertionSequence.current += 1;
       setSelection(null);
       setSceneDocument(null);
       setInsertion(null);
@@ -465,6 +472,41 @@ export function MapPage({
     });
   };
 
+  const resolveInsertionPosition = async (
+    id: string,
+    anchor: XYPosition,
+  ): Promise<XYPosition | null> => {
+    const candidateDocument = await dataSource.loadProjection(
+      projectionRequestFor("physical", [id]),
+    );
+    const candidates = candidateDocument.nodes.filter(
+      (node) =>
+        node.kind === "PHYSICAL_OBJECT" &&
+        node.attributes.class !== "cable" &&
+        physicalObjectIdForNode(node) === id,
+    );
+    if (candidates.length !== 1)
+      throw new Error("Не удалось определить размеры объекта для размещения.");
+
+    const occupied: FlowRectangle[] = (activeMap?.placements ?? []).flatMap(
+      (placement) => {
+        const node = nodeForPhysicalObject(
+          document?.nodes ?? [],
+          placement.physical_object_ref.entity_id,
+        );
+        const position = placement.positions["L1/PHYSICAL_OBJECT"];
+        return node && position && node.kind === "PHYSICAL_OBJECT" && node.attributes.class !== "cable"
+          ? [projectionNodeFootprint(node, position)]
+          : [];
+      },
+    );
+    return nearestFreePosition(
+      anchor,
+      footprintDimensionsForProjectionNode(candidates[0]),
+      occupied,
+    );
+  };
+
   const submitInsertion = async (id: string, operation = insertion) => {
     if (!savedMapDataSource || !operation || operation.status !== "ready")
       return;
@@ -472,15 +514,41 @@ export function MapPage({
     const targetMapId = operation.mapId;
     setInsertion((current) =>
       current?.mapId === targetMapId
-        ? { ...current, status: "saving", error: null }
+        ? { ...current, status: "resolving", error: null }
         : current,
     );
+    let position: XYPosition | null;
+    let preflightComplete = false;
     try {
+      position = await resolveInsertionPosition(id, operation.anchor);
+      preflightComplete = true;
+      if (
+        request !== insertionSequence.current ||
+        selectedMapId.current !== targetMapId
+      )
+        return;
+      if (!position) {
+        setInsertion((current) =>
+          current?.mapId === targetMapId
+            ? {
+                ...current,
+                status: "ready",
+                error: "Рядом нет свободного места для объекта.",
+              }
+            : current,
+        );
+        return;
+      }
+      setInsertion((current) =>
+        current?.mapId === targetMapId
+          ? { ...current, status: "saving" }
+          : current,
+      );
       await savedMapDataSource.addPlacement(
         targetMapId,
         id,
-        operation.anchor.x,
-        operation.anchor.y,
+        position.x,
+        position.y,
       );
     } catch (reason) {
       if (
@@ -493,7 +561,9 @@ export function MapPage({
           ? {
               ...current,
               status: "ready",
-              error: errorMessage(reason, "Не удалось добавить на карту"),
+              error: preflightComplete
+                ? errorMessage(reason, "Не удалось добавить на карту")
+                : "Не удалось определить размеры объекта для размещения.",
             }
           : current,
       );
@@ -687,16 +757,24 @@ export function MapPage({
     if (!captured && !center) return;
     const anchor = captured ?? center!();
     setMapOperation({ kind: "add", id, mapId: targetMapId, status: "pending" });
+    let preflightComplete = false;
     try {
+      const position = await resolveInsertionPosition(id, anchor);
+      preflightComplete = true;
+      if (selectedMapId.current !== targetMapId) return;
+      if (!position)
+        throw new Error("Рядом нет свободного места для объекта.");
       await savedMapDataSource.addPlacement(
         targetMapId,
         id,
-        anchor.x,
-        anchor.y,
+        position.x,
+        position.y,
       );
     } catch (reason) {
       if (selectedMapId.current === targetMapId) setMapOperation(null);
-      throw reason;
+      throw preflightComplete
+        ? reason
+        : new Error("Не удалось определить размеры объекта для размещения.");
     }
     try {
       await reloadMap(targetMapId);
@@ -868,7 +946,10 @@ export function MapPage({
           status={insertion.status}
           error={insertion.error}
           onSelect={(candidate) => void submitInsertion(candidate.id)}
-          onClose={() => setInsertion(null)}
+          onClose={() => {
+            insertionSequence.current += 1;
+            setInsertion(null);
+          }}
           onRetryRefresh={() => void retryInsertionRefresh()}
           requestedObjectId={insertion.requestedObjectId}
         />

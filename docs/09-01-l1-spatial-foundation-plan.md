@@ -21,6 +21,8 @@ explicit user layout/navigation actions may still change it.
 
 ### L1S.2 — Stable placement
 
+**IMPLEMENTED**
+
 #### L1S.2a — per-view placement lock
 
 **IMPLEMENTED**
@@ -40,10 +42,13 @@ coordinates. Overlap локально отклоняется без write, а no
 
 #### L1S.2c — collision-safe insertion
 
-**OPEN**
+**IMPLEMENTED**
 
-- Collision-safe insertion.
-- Nearest-free placement около занятого insertion anchor.
+- Collision-safe insertion для toolbar, context menu, Object Detail и off-map
+  continuation.
+- Deterministic nearest-free placement около занятого requested anchor.
+- Footprint кандидата берётся только из bounded `PhysicalObject` projection:
+  blueprint body или generic layout fallback, без guessed Catalog dimensions.
 
 ### L1S.3 — Internal continuity
 
