@@ -41,7 +41,9 @@ import type {
   SavedMapSummary,
   SavedMapView,
   SavedMapViewKey,
+  MapCableRouteWaypoint,
 } from "../topology/savedMapTypes";
+import { physicalCablePresentation } from "../topology/physicalCablePresentation";
 import type {
   TopologyDataSource,
   TopologyProjectionDocument,
@@ -85,6 +87,18 @@ interface MapOperation {
   status: "pending" | "refresh-failed";
   message?: string;
 }
+interface CableRouteEditState {
+  mapId: string;
+  cablePhysicalObjectId: string;
+  originalRoutePresent: boolean;
+  originalWaypoints: MapCableRouteWaypoint[];
+  draftWaypoints: MapCableRouteWaypoint[];
+  selectedWaypointIndex: number | null;
+  addingWaypoint: boolean;
+  status: "editing" | "saving";
+  error: string | null;
+}
+interface CableRouteResetOperation { mapId: string; cablePhysicalObjectId: string; status: "pending" | "refresh-failed"; message?: string; }
 
 const view = (value: string | null): TopologyViewMode =>
   value === "physical" ? "physical" : "logical";
@@ -143,6 +157,8 @@ export function MapPage({
     anchor: XYPosition;
   } | null>(null);
   const [mapOperation, setMapOperation] = useState<MapOperation | null>(null);
+  const [cableRouteEdit, setCableRouteEdit] = useState<CableRouteEditState | null>(null);
+  const [cableRouteReset, setCableRouteReset] = useState<CableRouteResetOperation | null>(null);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
@@ -170,6 +186,22 @@ export function MapPage({
   const placementMembershipKey = ids.join(",");
   const hasLoadedMap = legacy || Boolean(activeMap);
 
+  const selectedCableId = selection?.type === "node" && selection.item.attributes.class === "cable"
+    ? physicalObjectIdForNode(selection.item)
+    : null;
+  const drawableSelectedCable = Boolean(
+    selectedCableId && document && viewMode === "physical" && physicalCablePresentation(document).cables.some((item) => physicalObjectIdForNode(item.cable) === selectedCableId),
+  );
+  const selectedCableRoute = selectedCableId
+    ? (activeMap?.cable_routes ?? []).find((route) => route.cable_ref.entity_id === selectedCableId)
+    : undefined;
+
+  useEffect(() => {
+    if (!cableRouteEdit) return;
+    if (viewMode !== "physical" || mapId !== cableRouteEdit.mapId || selectedCableId !== cableRouteEdit.cablePhysicalObjectId)
+      setCableRouteEdit(null);
+  }, [cableRouteEdit, mapId, selectedCableId, viewMode]);
+
   const selectMap = useCallback(
     (id: string) => {
       insertionSequence.current += 1;
@@ -180,6 +212,8 @@ export function MapPage({
       setPendingPhysicalToolbarInsertion(null);
       setContinuationAnchor(null);
       setMapOperation(null);
+      setCableRouteEdit(null);
+      setCableRouteReset(null);
       setParams((current) => {
         const next = new URLSearchParams(current);
         next.set("map", id);
@@ -809,6 +843,46 @@ export function MapPage({
     }
   };
 
+  const beginCableRouteEdit = () => {
+    if (!activeMap || !selectedCableId || !drawableSelectedCable || viewMode !== "physical") return;
+    const existing = (activeMap.cable_routes ?? []).find((route) => route.cable_ref.entity_id === selectedCableId);
+    const copied = existing?.waypoints.map((point) => ({ ...point })) ?? [];
+    setCableRouteEdit({ mapId: activeMap.map_ref.entity_id, cablePhysicalObjectId: selectedCableId, originalRoutePresent: Boolean(existing), originalWaypoints: copied, draftWaypoints: copied, selectedWaypointIndex: null, addingWaypoint: false, status: "editing", error: null });
+  };
+  const saveCableRoute = async () => {
+    if (!savedMapDataSource || !cableRouteEdit || cableRouteEdit.status === "saving") return;
+    const operation = cableRouteEdit;
+    setCableRouteEdit({ ...operation, status: "saving", error: null });
+    try {
+      const saved = await savedMapDataSource.setCableRoute(operation.mapId, operation.cablePhysicalObjectId, operation.draftWaypoints);
+      if (selectedMapId.current !== operation.mapId) return;
+      setMap(saved);
+      setCableRouteEdit(null);
+    } catch (reason) {
+      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cablePhysicalObjectId === operation.cablePhysicalObjectId ? { ...current, status: "editing", error: errorMessage(reason, "Не удалось сохранить трассу") } : current);
+    }
+  };
+  const resetCableRoute = async () => {
+    if (!savedMapDataSource || !activeMap || !selectedCableId || !selectedCableRoute) return;
+    const operation = { mapId: activeMap.map_ref.entity_id, cablePhysicalObjectId: selectedCableId, status: "pending" as const };
+    setCableRouteReset(operation);
+    try { await savedMapDataSource.deleteCableRoute(operation.mapId, operation.cablePhysicalObjectId); }
+    catch (reason) { if (selectedMapId.current === operation.mapId) setCableRouteReset(null); setError(errorMessage(reason, "Не удалось сбросить трассу")); return; }
+    try {
+      const refreshed = await reloadMap(operation.mapId);
+      if (selectedMapId.current === operation.mapId && refreshed) setCableRouteReset(null);
+    } catch {
+      if (selectedMapId.current === operation.mapId) setCableRouteReset({ ...operation, status: "refresh-failed", message: "Трасса сброшена, но карту не удалось обновить." });
+    }
+  };
+  const retryCableRouteResetRefresh = async () => {
+    if (!cableRouteReset || cableRouteReset.status !== "refresh-failed") return;
+    const operation = cableRouteReset;
+    setCableRouteReset({ ...operation, status: "pending" });
+    try { if (await reloadMap(operation.mapId)) setCableRouteReset(null); }
+    catch { if (selectedMapId.current === operation.mapId) setCableRouteReset(operation); }
+  };
+
   const positions = useMemo(() => {
     const positionKey = savedMapViewKey(viewMode);
     return Object.fromEntries(
@@ -1047,6 +1121,9 @@ export function MapPage({
                   cableRoutes={
                     viewMode === "physical" ? activeMap?.cable_routes : undefined
                   }
+                  cableRouteDraft={cableRouteEdit ? { cablePhysicalObjectId: cableRouteEdit.cablePhysicalObjectId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}
+                  addCableRouteWaypointArmed={cableRouteEdit?.addingWaypoint}
+                  onAddCableRouteWaypoint={(waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints, waypoint], selectedWaypointIndex: current.draftWaypoints.length, addingWaypoint: false } : current)}
                   onViewportCenterReady={
                     viewMode === "physical" ? receiveViewportCenter : undefined
                   }
@@ -1074,6 +1151,14 @@ export function MapPage({
         selection={selection}
         onSelectNode={(node) => setSelection({ type: "node", item: node })}
         onClose={() => setSelection(null)}
+        cableRoutePresentation={(!legacy && viewMode === "physical" && selectedCableId && drawableSelectedCable) ? { present: Boolean(selectedCableRoute), waypointCount: selectedCableRoute?.waypoints.length ?? 0, editing: Boolean(cableRouteEdit), selectedWaypointIndex: cableRouteEdit?.selectedWaypointIndex ?? null, savePending: cableRouteEdit?.status === "saving", error: cableRouteEdit?.error ?? null, resetPending: cableRouteReset?.status === "pending", resetRefreshFailed: cableRouteReset?.status === "refresh-failed" } : undefined}
+        onEditCableRoute={beginCableRouteEdit}
+        onCancelCableRouteEdit={() => setCableRouteEdit(null)}
+        onAddCableRouteWaypoint={() => setCableRouteEdit((current) => current ? { ...current, addingWaypoint: true } : current)}
+        onDeleteCableRouteWaypoint={() => setCableRouteEdit((current) => current && current.selectedWaypointIndex !== null ? { ...current, draftWaypoints: current.draftWaypoints.filter((_, index) => index !== current.selectedWaypointIndex), selectedWaypointIndex: null } : current)}
+        onSaveCableRoute={() => void saveCableRoute()}
+        onResetCableRoute={() => void resetCableRoute()}
+        onRetryCableRouteReset={() => void retryCableRouteResetRefresh()}
         onAddContinuationToMap={
           !legacy && viewMode === "physical"
             ? addContinuationAtViewportCenter

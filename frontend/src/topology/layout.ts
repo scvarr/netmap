@@ -9,6 +9,7 @@ import type {
 } from './types';
 import { physicalCablePresentation } from './physicalCablePresentation';
 import type { MapCableRoute } from './savedMapTypes';
+import type { MapCableRouteWaypoint } from './savedMapTypes';
 
 export const LAYOUT_NODE_WIDTH = 212;
 export const LAYOUT_NODE_HEIGHT = 144;
@@ -35,6 +36,13 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   supportingEdgeIds?: [string, string];
   /** Authoritative SavedMap state, enriched after topology-derived layout. */
   cableRoute?: MapCableRoute;
+  cableRouteDraft?: {
+    cablePhysicalObjectId: string;
+    waypoints: readonly MapCableRouteWaypoint[];
+    selectedWaypointIndex: number | null;
+    onWaypointSelect: (index: number) => void;
+    onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void;
+  };
   continuation?: L1OffMapContinuation;
 }
 

@@ -101,10 +101,16 @@ coordinates. Overlap локально отклоняется без write, а no
 
 #### L1S.4b.2 — Waypoint editing and reset
 
-**OPEN**
+**IMPLEMENTED**
 
-- Add, move and delete waypoint interaction.
-- Reset route and its mutation lifecycle without topology mutations.
+- Edit existing route with ordered add/move/delete waypoint draft state, including
+  an explicit zero-waypoint route.
+- Save performs one full-list PUT; drag performs no writes. Reset deletes only
+  the custom record and has a refresh-only retry lifecycle.
+- Draft state is local to the exact map/cable and is invalidated on map, view or
+  cable selection changes.
+
+**L1S.4b — IMPLEMENTED**
 
 ### L1S.4c — Visual port-to-port wiring
 

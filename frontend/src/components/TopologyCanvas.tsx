@@ -39,6 +39,8 @@ import type { XYPosition } from "@xyflow/react";
 import { overlapsAnyNode } from "../topology/nodeFootprint";
 import type { MapCableRoute } from "../topology/savedMapTypes";
 import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation";
+import { physicalObjectIdForNode as cablePhysicalObjectIdForNode } from "../topology/projection";
+import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -66,6 +68,9 @@ interface TopologyCanvasProps {
     anchor: XYPosition,
   ) => void;
   cableRoutes?: readonly MapCableRoute[];
+  cableRouteDraft?: { cablePhysicalObjectId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; };
+  addCableRouteWaypointArmed?: boolean;
+  onAddCableRouteWaypoint?: (waypoint: MapCableRouteWaypoint) => void;
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -94,6 +99,9 @@ export function TopologyCanvas({
   onPaneClick,
   onContinuationClickAnchor,
   cableRoutes,
+  cableRouteDraft,
+  addCableRouteWaypointArmed,
+  onAddCableRouteWaypoint,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -232,6 +240,11 @@ export function TopologyCanvas({
     const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
       : undefined;
+    const matchingDraft = edge.data?.cableNode
+      && cableRouteDraft
+      && cablePhysicalObjectIdForNode(edge.data.cableNode) === cableRouteDraft.cablePhysicalObjectId
+      ? cableRouteDraft
+      : undefined;
     const isSelected = edge.data?.continuation
       ? selection?.type === "continuation" &&
         selection.item.id === edge.data.continuation.id
@@ -251,7 +264,7 @@ export function TopologyCanvas({
         : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
     return {
       ...edge,
-      data: cableRoute && edge.data ? { ...edge.data, cableRoute } : edge.data,
+      data: edge.data ? { ...edge.data, ...(cableRoute ? { cableRoute } : {}), ...(matchingDraft ? { cableRouteDraft: matchingDraft } : {}) } : edge.data,
       selected: isSelected,
       animated: isSelected || isTraced,
       style: {
@@ -354,7 +367,11 @@ export function TopologyCanvas({
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
-        onPaneClick={() => {
+        onPaneClick={(event) => {
+          if (addCableRouteWaypointArmed && onAddCableRouteWaypoint) {
+            onAddCableRouteWaypoint(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+            return;
+          }
           onSelectionChange(null);
           onPaneClick?.();
         }}

@@ -32,7 +32,12 @@ of `MapPlacement` and canonical topology. In a Physical SavedMap, a collapsed
 cable with the exact canonical cable identity renders that current route after
 topology layout: its known endpoint anchors (or existing truthful floating
 fallback) are joined through the stored waypoints in order. Rendering does not
-write or infer geometry; waypoint editing and reset are not implemented yet.
+write or infer geometry. The selected drawable cable exposes a bounded route
+editor: add point then click the canvas appends before the target, drag moves a
+draft point, delete removes the selected draft point, and Save issues one full
+route PUT. Cancel leaves the authoritative map untouched; an empty saved draft
+is an explicit straight route. Reset deletes only the route record, with a
+refresh-only retry after a successful DELETE.
 
 Связанные документы: [[05-presentation|05. Представление]], [[02-04-projections-aggregation|02.4 Projections]], [[07-workspaces|07. Workspace]], [[09-ui-ux-review|09. Рабочий L1 UI/UX review]], [[09-01-l1-spatial-foundation-plan|09.1 План завершения L1 spatial foundation]].
 

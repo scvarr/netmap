@@ -2,6 +2,7 @@ import {
   BaseEdge,
   Position,
   getStraightPath,
+  useReactFlow,
   useInternalNode,
   type EdgeProps,
   type InternalNode,
@@ -100,6 +101,7 @@ export function FloatingTopologyEdge({
   interactionWidth,
   data,
 }: EdgeProps<LogicalFlowEdge>) {
+  const { screenToFlowPosition } = useReactFlow();
   const sourceNode = useInternalNode<DeviceFlowNode>(source);
   const targetNode = useInternalNode<DeviceFlowNode>(target);
   if (!sourceNode || !targetNode) return null;
@@ -114,17 +116,26 @@ export function FloatingTopologyEdge({
     targetX: endpoints.target.x,
     targetY: endpoints.target.y,
   });
-  const path = data?.cableRoute
-    ? routedCablePath(endpoints.source, endpoints.target, data.cableRoute.waypoints)
+  const draft = data?.cableRouteDraft;
+  const waypoints = draft?.waypoints ?? data?.cableRoute?.waypoints;
+  const path = waypoints
+    ? routedCablePath(endpoints.source, endpoints.target, waypoints)
     : straightPath;
   return (
-    <BaseEdge
-      id={id}
-      path={path}
-      style={style}
-      markerStart={markerStart}
-      markerEnd={markerEnd}
-      interactionWidth={interactionWidth}
-    />
+    <>
+      <BaseEdge id={id} path={path} style={style} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={interactionWidth} />
+      {draft?.waypoints.map((waypoint, index) => (
+        <circle
+          key={`${id}:waypoint:${index}`}
+          className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`}
+          cx={waypoint.x}
+          cy={waypoint.y}
+          r={6}
+          onPointerDown={(event) => { event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }}
+          onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); draft.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }}
+          onPointerUp={(event) => { event.stopPropagation(); event.currentTarget.releasePointerCapture(event.pointerId); }}
+        />
+      ))}
+    </>
   );
 }

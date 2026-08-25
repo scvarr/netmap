@@ -40,6 +40,14 @@ interface QuickInspectorProps {
     message?: string;
   } | null;
   onRetryMapRefresh?: () => Promise<void>;
+  cableRoutePresentation?: { present: boolean; waypointCount: number; editing: boolean; selectedWaypointIndex: number | null; savePending: boolean; error: string | null; resetPending: boolean; resetRefreshFailed: boolean };
+  onEditCableRoute?: () => void;
+  onCancelCableRouteEdit?: () => void;
+  onAddCableRouteWaypoint?: () => void;
+  onDeleteCableRouteWaypoint?: () => void;
+  onSaveCableRoute?: () => void;
+  onResetCableRoute?: () => void;
+  onRetryCableRouteReset?: () => void;
 }
 const natural = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
@@ -386,6 +394,24 @@ export function QuickInspector(props: QuickInspectorProps) {
             <p key={notice}>{notice}</p>
           ))}
         {inventory && !item && <p>Проверенные данные кабеля недоступны.</p>}
+        {props.cableRoutePresentation && (
+          <section className="quick-inspector__cable-route">
+            <h3>Трасса на карте</h3>
+            {props.cableRoutePresentation.present ? <p>Точек: {props.cableRoutePresentation.waypointCount}</p> : <p>Пользовательская трасса не задана</p>}
+            {!props.cableRoutePresentation.editing ? <>
+              <button onClick={props.onEditCableRoute}>Редактировать трассу</button>
+              {props.cableRoutePresentation.present && <button disabled={props.cableRoutePresentation.resetPending} onClick={props.onResetCableRoute}>Сбросить трассу</button>}
+              {props.cableRoutePresentation.resetRefreshFailed && <><p role="alert">Трасса сброшена, но карту не удалось обновить.</p><button onClick={props.onRetryCableRouteReset}>Повторить обновление</button></>}
+            </> : <>
+              <p>Редактирование черновика: точки сохраняются только по кнопке.</p>
+              <button onClick={props.onAddCableRouteWaypoint}>Добавить точку</button>
+              <button disabled={props.cableRoutePresentation.selectedWaypointIndex === null} onClick={props.onDeleteCableRouteWaypoint}>Удалить выбранную точку</button>
+              <button disabled={props.cableRoutePresentation.savePending} onClick={props.onSaveCableRoute}>Сохранить трассу</button>
+              <button disabled={props.cableRoutePresentation.savePending} onClick={props.onCancelCableRouteEdit}>Отменить</button>
+              {props.cableRoutePresentation.error && <p role="alert">{props.cableRoutePresentation.error}</p>}
+            </>}
+          </section>
+        )}
         <Link to={url(id)}>Открыть объект</Link>
         {placementLockAction}
         {props.onRemoveFromMap && (
