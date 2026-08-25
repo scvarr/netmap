@@ -12,10 +12,12 @@ persistence schema. Product invariants — в [[05-presentation|05. Предст
 
 ### L1S.1 — Canvas control
 
-- Убрать selection-driven viewport movement.
-- Selection не делает pan/center/fit.
-- Initial scene fit остаётся допустимым.
-- Explicit user fit/navigation остаётся допустимым.
+**IMPLEMENTED**
+
+Selection-driven viewport movement removed. Selection changes (including URL
+focus and trace highlighting) update presentation state only and never pan,
+center or fit the viewport. One initial fit remains allowed for each new scene;
+explicit user layout/navigation actions may still change it.
 
 ### L1S.2 — Stable placement
 

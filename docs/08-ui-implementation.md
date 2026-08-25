@@ -827,8 +827,10 @@ creates only the initial Physical position. `PUT .../positions/physical` and
 coordinates mean frontend ELK initialization, not a copy of Physical position.
 
 `TopologyCanvas` remains presentation-only: it receives a scene key,
-position overrides and callbacks, not SavedMap API knowledge. Same-scene drag,
-selection and coordinate acknowledgement do not rerun layout or fit the
+position overrides and callbacks, not SavedMap API knowledge. Viewport control
+belongs to scene initialization and explicit user layout/navigation actions,
+never selection: same-scene drag, selection (including URL focus and trace
+branch changes) and coordinate acknowledgement do not rerun layout or fit the
 viewport. A failed write obtains authoritative positions through SavedMap detail
 and applies an explicit rollback revision. Physical and Logical dragging are
 both supported and persist independently; no viewport is persisted on the
