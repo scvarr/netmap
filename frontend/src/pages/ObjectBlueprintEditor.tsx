@@ -43,6 +43,10 @@ const colorValue = (value: string) =>
   /^#[0-9A-Fa-f]{6}$/.test(value) ? value : "#28565a";
 const groupLabel = (group: EndpointGroup, index?: number) =>
   group.displayPrefix || `Группа ${(index ?? 0) + 1}`;
+const slotBelongsToGroup = (slotKey: string, stableGroupKey: string) => {
+  const prefix = `${stableGroupKey}:`;
+  return slotKey.startsWith(prefix) && /^[1-9]\d*$/.test(slotKey.slice(prefix.length));
+};
 export const newBlueprintEditorState = (): BlueprintEditorState => ({
   name: "",
   defaultClass: "",
@@ -86,7 +90,7 @@ export function ObjectBlueprintEditor({
   const portChoices = editor.groups.flatMap((group, groupIndex) =>
     generatedGroupKeys(group).map((key, index) => ({
       key,
-      label: `${groupLabel(group, groupIndex)} — ${generatedGroupDisplayNames(group)[index]}`,
+      label: `Группа ${groupIndex + 1}: ${groupLabel(group, groupIndex)} — ${generatedGroupDisplayNames(group)[index]}`,
     })),
   );
   const updateIndividualLink = (
@@ -330,7 +334,6 @@ export function ObjectBlueprintEditor({
                 type="button"
                 onClick={() =>
                   setEditor((s) => {
-                    const stablePrefix = `${g.keyPrefix}:`;
                     return {
                       ...s,
                       groups: s.groups.filter((x) => x.id !== g.id),
@@ -338,7 +341,7 @@ export function ObjectBlueprintEditor({
                         (p) => p.leftGroupId !== g.id && p.rightGroupId !== g.id,
                       ),
                       individualLinks: s.individualLinks.filter(
-                        (link) => !link.from_slot_key.startsWith(stablePrefix) && !link.to_slot_key.startsWith(stablePrefix),
+                        (link) => !slotBelongsToGroup(link.from_slot_key, g.keyPrefix) && !slotBelongsToGroup(link.to_slot_key, g.keyPrefix),
                       ),
                     };
                   })
