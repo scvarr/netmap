@@ -1044,6 +1044,9 @@ export function MapPage({
                     document,
                     selectedTraceBranchId,
                   )}
+                  cableRoutes={
+                    viewMode === "physical" ? activeMap?.cable_routes : undefined
+                  }
                   onViewportCenterReady={
                     viewMode === "physical" ? receiveViewportCenter : undefined
                   }

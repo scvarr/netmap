@@ -88,10 +88,23 @@ coordinates. Overlap локально отклоняется без write, а no
 
 **OPEN**
 
-- Exact port anchors, где они известны.
-- Отображение сохранённой трассы.
-- Добавление, перемещение и удаление waypoint.
-- Выпрямление/reset route без topology mutations.
+#### L1S.4b.1 — Authoritative SavedMap route rendering
+
+**IMPLEMENTED**
+
+- Physical collapsed-cable rendering overlays the active SavedMap route after
+  topology-derived layout, matching the canonical cable identity exactly.
+- Known port anchors remain exact; ordered persisted flow-coordinate waypoints
+  are rendered literally. Moving a node changes only its endpoint segment.
+- No-route floating/straight fallback is preserved, while an explicit empty
+  route remains distinguishable in presentation data.
+
+#### L1S.4b.2 — Waypoint editing and reset
+
+**OPEN**
+
+- Add, move and delete waypoint interaction.
+- Reset route and its mutation lifecycle without topology mutations.
 
 ### L1S.4c — Visual port-to-port wiring
 

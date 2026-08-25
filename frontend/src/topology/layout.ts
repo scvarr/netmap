@@ -8,6 +8,7 @@ import type {
   TopologyProjectionNode,
 } from './types';
 import { physicalCablePresentation } from './physicalCablePresentation';
+import type { MapCableRoute } from './savedMapTypes';
 
 export const LAYOUT_NODE_WIDTH = 212;
 export const LAYOUT_NODE_HEIGHT = 144;
@@ -32,6 +33,8 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   endpointPair?: PhysicalEndpointPair;
   cableNode?: TopologyProjectionNode;
   supportingEdgeIds?: [string, string];
+  /** Authoritative SavedMap state, enriched after topology-derived layout. */
+  cableRoute?: MapCableRoute;
   continuation?: L1OffMapContinuation;
 }
 

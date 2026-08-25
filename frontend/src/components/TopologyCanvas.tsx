@@ -37,6 +37,8 @@ import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOve
 import { physicalObjectIdForNode } from "../topology/projection";
 import type { XYPosition } from "@xyflow/react";
 import { overlapsAnyNode } from "../topology/nodeFootprint";
+import type { MapCableRoute } from "../topology/savedMapTypes";
+import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -63,6 +65,7 @@ interface TopologyCanvasProps {
     continuationId: string,
     anchor: XYPosition,
   ) => void;
+  cableRoutes?: readonly MapCableRoute[];
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -90,6 +93,7 @@ export function TopologyCanvas({
   onPhysicalPaneContextMenu,
   onPaneClick,
   onContinuationClickAnchor,
+  cableRoutes,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -225,6 +229,9 @@ export function TopologyCanvas({
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));
   const edges = projection.edges.map((edge) => {
+    const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
+      ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
+      : undefined;
     const isSelected = edge.data?.continuation
       ? selection?.type === "continuation" &&
         selection.item.id === edge.data.continuation.id
@@ -244,6 +251,7 @@ export function TopologyCanvas({
         : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
     return {
       ...edge,
+      data: cableRoute && edge.data ? { ...edge.data, cableRoute } : edge.data,
       selected: isSelected,
       animated: isSelected || isTraced,
       style: {

@@ -34,6 +34,7 @@ vi.mock('@xyflow/react', () => ({
   }) => (
     <div data-testid="flow">
       <svg>{edges.map((edge) => <path key={edge.id} data-testid={`svg-path-${edge.id}`} d="M0,0L1,1" />)}</svg>
+      {edges.map((edge) => <output key={`route-${edge.id}`} data-testid={`route-${edge.id}`}>{edge.data?.cableRoute ? JSON.stringify(edge.data.cableRoute.waypoints) : 'no-route'}</output>)}
       {nodes.map((node) => (
         <div key={node.id}>
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
@@ -84,6 +85,35 @@ const deferred = <T,>() => {
 };
 
 describe('TopologyCanvas async layout boundary', () => {
+  it('enriches only a collapsed cable edge from current SavedMap routes without rerunning layout', async () => {
+    const document: TopologyProjectionDocument = {
+      ...documentFor('physical-route'),
+      nodes: [
+        { id: 'left', kind: 'PHYSICAL_OBJECT', label: 'left', source_refs: [], attributes: {} },
+        { id: 'right', kind: 'PHYSICAL_OBJECT', label: 'right', source_refs: [], attributes: {} },
+      ],
+    };
+    const cableNode = {
+      id: 'cable-node', kind: 'PHYSICAL_OBJECT', label: 'not-an-identity',
+      source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'cable-id' }],
+      attributes: { class: 'cable' },
+    };
+    const cableEdge = {
+      id: 'collapsed-cable:cable-node', source: 'left', target: 'right', type: 'floating' as const,
+      data: { projection: { id: 'presentation:cable-node', from_node_id: 'left', to_node_id: 'right', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableNode },
+    };
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async () => ({
+      nodes: document.nodes.map((projection) => ({ id: projection.id, type: 'device' as const, position: { x: 0, y: 0 }, data: { projection } })),
+      edges: [cableEdge],
+    }));
+    const explicitStraightRoute = { cable_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'cable-id' }, view: 'L1/PHYSICAL_OBJECT' as const, waypoints: [] };
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} cableRoutes={[explicitStraightRoute]} />);
+    expect(await screen.findByTestId('route-collapsed-cable:cable-node')).toHaveTextContent('[]');
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} cableRoutes={[]} />);
+    expect(screen.getByTestId('route-collapsed-cable:cable-node')).toHaveTextContent('no-route');
+    expect(layoutEngine).toHaveBeenCalledTimes(1);
+  });
+
   it.each([
     ['blueprint to blueprint', false, false],
     ['blueprint to generic', false, true],

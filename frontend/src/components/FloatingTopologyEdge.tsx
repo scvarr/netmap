@@ -13,6 +13,7 @@ import {
   type LogicalFlowEdge,
 } from '../topology/layout';
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
+import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 
 export interface NodeRectangle {
   x: number;
@@ -81,6 +82,14 @@ export const getConnectionPointEndpoint = (
   const points = genericConnectionPoints(projection); const index = points.findIndex((point) => point.connection_point_id === connectionPointId); return index < 0 ? null : { x: box.x + box.width, y: box.y + box.height * genericEndpointOffset(index, points.length), side: Position.Right };
 };
 
+export const routedCablePath = (
+  source: FloatingEndpoint,
+  target: FloatingEndpoint,
+  waypoints: readonly MapCableRouteWaypoint[],
+): string => [source, ...waypoints, target]
+  .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
+  .join(' ');
+
 export function FloatingTopologyEdge({
   id,
   source,
@@ -99,12 +108,15 @@ export function FloatingTopologyEdge({
   const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => getConnectionPointEndpoint(node.data.projection, rectangle(node), connectionPointId);
   const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
   const endpoints = { source: exact(sourceNode, pair?.from_connection_point_id) ?? floating.source, target: exact(targetNode, pair?.to_connection_point_id) ?? floating.target };
-  const [path] = getStraightPath({
+  const [straightPath] = getStraightPath({
     sourceX: endpoints.source.x,
     sourceY: endpoints.source.y,
     targetX: endpoints.target.x,
     targetY: endpoints.target.y,
   });
+  const path = data?.cableRoute
+    ? routedCablePath(endpoints.source, endpoints.target, data.cableRoute.waypoints)
+    : straightPath;
   return (
     <BaseEdge
       id={id}

@@ -1,11 +1,27 @@
 import { Position } from '@xyflow/react';
 import { describe, expect, it } from 'vitest';
-import { getConnectionPointEndpoint, getFloatingEndpoints, type NodeRectangle } from './FloatingTopologyEdge';
+import { getConnectionPointEndpoint, getFloatingEndpoints, routedCablePath, type NodeRectangle } from './FloatingTopologyEdge';
 import type { TopologyProjectionNode } from '../topology/types';
 
 const node = (x: number, y: number): NodeRectangle => ({ x, y, width: 200, height: 100 });
 
 describe('floating topology edge geometry', () => {
+  it('uses persisted waypoints literally and in their stored order', () => {
+    expect(routedCablePath(
+      { x: 10, y: 20, side: Position.Right },
+      { x: 90, y: 80, side: Position.Left },
+      [{ x: 50, y: -1 }, { x: -4, y: 12 }, { x: 33.5, y: 7 }],
+    )).toBe('M 10 20 L 50 -1 L -4 12 L 33.5 7 L 90 80');
+  });
+
+  it('keeps an explicit zero-waypoint route as the exact endpoint-to-endpoint path', () => {
+    expect(routedCablePath(
+      { x: 10, y: 20, side: Position.Right },
+      { x: 90, y: 80, side: Position.Left },
+      [],
+    )).toBe('M 10 20 L 90 80');
+  });
+
   it('lands on the exact generic rail marker identified by canonical ConnectionPoint UUID', () => {
     const projection: TopologyProjectionNode = { id: 'manual', kind: 'PHYSICAL_OBJECT', label: 'Outlet', source_refs: [], attributes: { connection_points: [
       { connection_point_id: 'port-10', display_name: 'Port10', cardinality: 1, external_connection_count: 0 },
@@ -14,6 +30,16 @@ describe('floating topology edge geometry', () => {
     ] } };
     expect(getConnectionPointEndpoint(projection, node(10, 20), 'port-1')).toMatchObject({ x: 210, y: 45, side: Position.Right });
     expect(getConnectionPointEndpoint(projection, node(10, 20), 'port-10')).toMatchObject({ x: 210, y: 95, side: Position.Right });
+  });
+
+  it('keeps a Blueprint slot anchor exact when a cable path is routed', () => {
+    const projection: TopologyProjectionNode = { id: 'blueprint', kind: 'PHYSICAL_OBJECT', label: 'Patch panel', source_refs: [], attributes: {
+      blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, slots: [{ slot_key: 'rear01', display_name: 'rear01', kind: 'CONNECTION_POINT', connection_point_id: 'rear-01', anchor: { side: 'TOP', offset: .25 } }] },
+    } };
+    const endpoint = getConnectionPointEndpoint(projection, node(10, 20), 'rear-01');
+    expect(endpoint).toMatchObject({ x: 60, y: 20, side: Position.Top });
+    expect(routedCablePath(endpoint!, { x: 300, y: 200, side: Position.Left }, [{ x: 80, y: 30 }]))
+      .toBe('M 60 20 L 80 30 L 300 200');
   });
 
   it('uses nearest horizontal sides even when raw source is geometrically right of target', () => {
