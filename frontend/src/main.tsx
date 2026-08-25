@@ -21,11 +21,12 @@ import { ApiSavedMapDataSource } from './topology/apiSavedMapDataSource';
 import { ApiCatalogInventoryDataSource } from './topology/apiCatalogInventoryDataSource';
 import { ApiPhysicalObjectDisplayNameWriteDataSource } from './topology/apiPhysicalObjectDisplayNameWriteDataSource';
 import './styles.css';
+import { I18nProvider } from './i18n';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
-      <App
+      <I18nProvider><App
         dataSource={new ApiTopologyDataSource()}
         deviceDetailsDataSource={new ApiDeviceDetailsDataSource()}
         traceDataSource={new ApiPhysicalObjectL1TraceDataSource()}
@@ -44,7 +45,7 @@ createRoot(document.getElementById('root')!).render(
         catalogInventoryDataSource={new ApiCatalogInventoryDataSource()}
         physicalObjectDisplayNameWriteDataSource={new ApiPhysicalObjectDisplayNameWriteDataSource()}
         topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
-      />
+      /></I18nProvider>
     </BrowserRouter>
   </StrictMode>,
 );

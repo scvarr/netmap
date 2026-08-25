@@ -71,6 +71,18 @@ React + TypeScript + Vite
 React Flow (@xyflow/react)
 ```
 
+## Frontend localization
+
+The frontend owns a small typed localization boundary in
+`frontend/src/i18n.tsx`. It supports `ru` (the default) and `en`, persists the
+user choice in `localStorage`, updates `<html lang>`, and exposes `useI18n()`
+for translated presentation strings, interpolation, and locale-aware sorting.
+Do not add a general i18n framework unless the supported locales or formatting
+requirements make this boundary insufficient. New user-facing frontend strings
+must be added as message keys and rendered through this boundary. Canonical
+tokens, UUIDs, API fields, routes, enum values, and backend-provided names,
+warnings, and errors remain locale-neutral data.
+
 Первому UI не требуется SSR/full-stack frontend framework.
 
 ## UI-SHELL.1 — application shell и product surfaces

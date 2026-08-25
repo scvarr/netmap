@@ -9,6 +9,7 @@ import type {
 } from '../topology/catalogInventoryTypes';
 import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectDeleteTypes';
 import type { PhysicalObjectDisplayNameWriteDataSource } from '../topology/physicalObjectDisplayNameWriteTypes';
+import { useI18n } from '../i18n';
 
 interface Props {
   catalogInventoryDataSource: CatalogInventoryDataSource;
@@ -22,7 +23,6 @@ interface RenameTarget {
   cable: boolean;
 }
 
-const collator = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
 const known = new Set(['workstation', 'switch', 'cable', 'outlet', 'patch_panel']);
 
 const fold = (value: string) => value.trim().toLocaleLowerCase();
@@ -59,6 +59,7 @@ export function InfrastructureObjectsPage({
   physicalObjectDeleteDataSource,
   physicalObjectDisplayNameWriteDataSource,
 }: Props) {
+  const { collator } = useI18n();
   const [document, setDocument] = useState<CatalogInventoryDocument | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -457,6 +458,7 @@ function Equipment({
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
   onRename?: (target: RenameTarget) => void;
 }) {
+  const { collator } = useI18n();
   return (
     <div className="catalog-table-wrap">
       <table className="catalog-table">
