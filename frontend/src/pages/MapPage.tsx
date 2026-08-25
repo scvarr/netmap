@@ -169,6 +169,7 @@ export function MapPage({
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
+  const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
   const selectedMapId = useRef<string | null>(mapId);
   const insertionSequence = useRef(0);
@@ -328,6 +329,7 @@ export function MapPage({
     hasLoadedMap,
     placementMembershipKey,
     presentationSceneKey,
+    canonicalDeleteRevision,
     savedMapDataSource,
     viewMode,
   ]);
@@ -1297,6 +1299,7 @@ export function MapPage({
                 try {
                   await reloadMap(targetMapId);
                   if (selectedMapId.current === targetMapId) {
+                    setCanonicalDeleteRevision((revision) => revision + 1);
                     setMapOperation(null);
                     setSelection(null);
                   }

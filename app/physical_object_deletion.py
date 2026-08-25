@@ -11,6 +11,7 @@ from app.models import (
     ConnectionPoint, EntityMetadata, InterfacePhysicalBinding, L2Binding,
     L3Binding, NetworkInterface, NetworkInterfacePhysicalOwner,
     NetworkInterfaceRealization, PhysicalObject,
+    MapCableRoute, MapPlacement,
 )
 
 
@@ -100,6 +101,12 @@ class PhysicalObjectDeletionCatalog:
 
     def _delete_aggregate(self, object_: PhysicalObject, point_ids: tuple[uuid.UUID, ...], interface_ids: tuple[uuid.UUID, ...], connection_ids: tuple[uuid.UUID, ...]) -> None:
         instance_ids = self._ids(BlueprintInstance.id, BlueprintInstance.physical_object_id == object_.id)
+        # Presentation records have no topology meaning, but must not outlive their
+        # exact canonical object. They are deleted in this same transaction.
+        for route in self.session.scalars(select(MapCableRoute).where(MapCableRoute.cable_physical_object_id == object_.id)):
+            self.session.delete(route)
+        for placement in self.session.scalars(select(MapPlacement).where(MapPlacement.physical_object_id == object_.id)):
+            self.session.delete(placement)
         if connection_ids:
             for member in self.session.scalars(select(ConnectionMember).where(ConnectionMember.connection_id.in_(connection_ids))): self.session.delete(member)
             for connection in self.session.scalars(select(Connection).where(Connection.id.in_(connection_ids))): self.session.delete(connection)

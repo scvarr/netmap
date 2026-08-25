@@ -161,3 +161,17 @@ def test_saved_map_and_canonical_cable_deletes_cascade_route_rows():
     assert client.delete(f"/v1/topology/physical-objects/{cable_id}").status_code == 204
     with SessionLocal() as session:
         assert session.scalar(select(func.count()).select_from(MapCableRoute)) == 0
+
+
+def test_canonical_delete_removes_only_its_exact_saved_map_presentation():
+    deleted_cable_id, surviving_cable_id = create_simple_cable("Delete me"), create_simple_cable("Keep me")
+    saved_map = create_map("Selective cleanup")
+    saved_map_id = map_id(saved_map)
+    route(saved_map_id, deleted_cable_id, [{"x": 1, "y": 2}])
+    route(saved_map_id, surviving_cable_id, [{"x": 3, "y": 4}])
+    for object_identifier, x in ((deleted_cable_id, 10), (surviving_cable_id, 20)):
+        assert client.post(f"/v1/maps/{saved_map_id}/placements", json={"physical_object_id": object_identifier, "x": x, "y": 0}).status_code == 201
+    assert client.delete(f"/v1/topology/physical-objects/{deleted_cable_id}").status_code == 204
+    detail = client.get(f"/v1/maps/{saved_map_id}").json()
+    assert [item["cable_ref"]["entity_id"] for item in detail["cable_routes"]] == [surviving_cable_id]
+    assert [item["physical_object_ref"]["entity_id"] for item in detail["placements"]] == [surviving_cable_id]
