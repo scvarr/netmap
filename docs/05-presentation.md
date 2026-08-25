@@ -27,6 +27,7 @@ OPEN
 - [[03-03-l3-trace|03.3 L3 Trace]];
 - [[03-04-packet-flow-trace|03.4 Packet Flow Trace]];
 - [[00-implementation-constraints|00. Ограничения реализации]].
+- [[09-01-l1-spatial-foundation-plan|09.1 План завершения L1 spatial foundation]].
 
 ## Назначение UI
 
@@ -1253,3 +1254,125 @@ UI должен позволять как минимум:
 37. UI должен позволять раскрыть normalized representation сложной сетевой настройки.
 38. Один PhysicalObject может одновременно участвовать в L1/L2/L3/Security/NAT projections; единственная жёсткая network role не требуется.
 39. L2/L3/Security/NAT facts можно добавлять постепенно поверх ранее созданной физической модели без изменения identity существующих объектов.
+
+## Граница L1 spatial foundation перед L2
+
+Конечный рабочий порядок L1 spatial foundation зафиксирован в
+[[09-01-l1-spatial-foundation-plan|плане L1S]]. Этот раздел фиксирует product и
+presentation invariants; окончательные storage shape, API, DTO и interaction
+детали остаются **OPEN** до соответствующих bounded milestones.
+
+### Владение viewport пользователем
+
+**FIXED**
+
+Выбор node, cable, edge, continuation или trace result меняет только
+selection/highlight/inspector и не должен автоматически pan, center или fit
+viewport. Один initial fit допустим при входе в новую map/view scene. Viewport
+может изменить только явная команда пользователя «показать», «вписать» или
+«перейти»; сам факт выбора объекта этого не делает.
+
+### Стабильное размещение объектов
+
+**FIXED**
+
+- Lock положения является SavedMap presentation state, а не topology-свойством
+  `PhysicalObject`.
+- Lock независим для Physical и Logical view; locked object нельзя случайно
+  переместить drag'ом.
+- После завершённого placement/drag объекты не остаются наложенными друг на друга.
+- Collision handling — presentation policy, а не canonical network invariant.
+- При insertion в занятую точку около cursor anchor выбирается ближайшее свободное
+  место, а не молчаливое наложение.
+
+Окончательная persistence/API форма lock и collision policy остаётся **OPEN**.
+
+### Геометрия трассы физического кабеля
+
+**FIXED**
+
+Canonical cable/connectivity и нарисованная на Saved Map трасса кабеля — разные
+сущности. Waypoints являются presentation-only: они не становятся
+`PhysicalObject`, `ConnectionPoint`, `Connection` или `ConnectionMember` и не
+создают topology semantics. Один canonical cable может иметь разную route geometry
+на разных Saved Maps; она относится к Physical/L1 presentation. При отсутствии
+сохранённой geometry renderer использует deterministic fallback. Изменение
+waypoint никогда не меняет canonical topology.
+
+### Visual wiring
+
+**FIXED целевой сценарий**
+
+```text
+exact source ConnectionPoint
+    -> zero or more canvas waypoints
+    -> exact destination ConnectionPoint
+    -> canonical physical cable/connection
+    -> сохранение presentation route
+```
+
+Canonical write и persistence presentation route — разные lifecycle steps. Если
+canonical cable создан успешно, а route persistence завершился ошибкой, Retry не
+создаёт второй cable.
+
+### Внутренняя физическая continuity объекта
+
+**FIXED**
+
+Внутренние физические связи внутри `PhysicalObject` показываются только из
+materialized canonical `Connection`/`ConnectionMember` evidence, а не из authoring
+rules Blueprint. Если geometry обоих endpoints известна, renderer может показать
+внутри корпуса тонкую, заметную линию: в normal state она не конкурирует с внешними
+cable routes, а в selection/trace/visual wiring — подсвечивается сильнее.
+
+Особенно для passive objects, например patch panel, пользователь должен ясно
+видеть доказанный путь `входной порт -> внутренняя canonical связь -> выходной
+порт`. При начале visual wiring UI может подсветить доказанную continuity и
+соответствующий выход. Ветвящаяся canonical internal topology показывает все
+доказанные варианты без invented preferred/best exit. При неизвестной geometry
+endpoints UI ничего не выдумывает.
+
+### Regions / areas
+
+**FIXED направление; persistence и interaction — OPEN**
+
+Saved Map в будущем может содержать presentation-only regions: помещение, стойку,
+функциональную зону или произвольную визуальную область. Region не создаёт topology
+fact, connectivity или `PhysicalObject`.
+
+### MapReference и иерархические карты
+
+**FIXED направление; persistence и interaction — OPEN**
+
+Saved Map может содержать presentation object со ссылкой на другую Saved Map.
+Это navigation/presentation hierarchy, а не canonical topology entity и не
+утверждение network connectivity. Это основной предполагаемый способ
+масштабирования детальных L1 «точечных» карт: карта этажа ведёт на подробную карту
+помещения, стойки или узла.
+
+## Будущая L2 semantic aggregation
+
+**FIXED product/presentation principle; grouping heuristics — OPEN до L2 UI work**
+
+L2 — отдельная semantic projection, а не L1 map с VLAN labels. Несколько canonical
+endpoints/interfaces могут collapse в один presentation aggregate, только если они
+семантически эквивалентны для текущего L2 view, а не просто визуально похожи.
+
+Например 24 PC через access paths к `SW1 Gi0/1-24` в access VLAN 20 могут быть
+показаны как компактный aggregate «24 × PC, VLAN 20» с physical context и диапазоном
+интерфейсов `Gi0/1-24 ACCESS VLAN 20`. Passive patch panel на L2 может стать
+компактным physical-path context, а switch — агрегировать диапазоны configuration:
+
+```text
+Gi0/1-24   ACCESS   VLAN 20
+Gi0/25-46  ACCESS   VLAN 30
+Gi0/47-48  TRUNK    20,30,...
+```
+
+Каждый presentation aggregate сохраняет supporting canonical/evidence refs,
+объясним и раскрывается до individual endpoints/interfaces/facts. Aggregation не
+создаёт canonical group, не объединяет реальные `PhysicalObject` и не уничтожает
+underlying identities.
+
+Концептуально L1 масштабируется прежде всего через spatial hierarchy и детальные
+Saved Maps, а L2 — через semantic aggregation/collapse.

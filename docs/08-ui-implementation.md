@@ -16,11 +16,13 @@ Canonical/resolver core существенно опережает UI. Backend ma
 projection contracts, но frontend пока не является универсальным editor или
 trace workbench для всех этих domains. Реализованные UI surfaces: Saved Map
 Physical/Logical presentation, Catalog/Object Detail, Object Library/Blueprint
-editor и bounded L1 interface-physical Trace Command Bar. Карта не владеет
+editor и bounded `PhysicalObject -> PhysicalObject` L1 Trace Command Bar с
+опциональным уточнением exact `ConnectionPoint`, явными alternatives и
+evidence-based overlay на Physical map. Карта не владеет
 canonical topology: она читает public projection DTO и SavedMap presentation
 state.
 
-Связанные документы: [[05-presentation|05. Представление]], [[02-04-projections-aggregation|02.4 Projections]], [[07-workspaces|07. Workspace]], [[09-ui-ux-review|09. Рабочий L1 UI/UX review]].
+Связанные документы: [[05-presentation|05. Представление]], [[02-04-projections-aggregation|02.4 Projections]], [[07-workspaces|07. Workspace]], [[09-ui-ux-review|09. Рабочий L1 UI/UX review]], [[09-01-l1-spatial-foundation-plan|09.1 План завершения L1 spatial foundation]].
 
 ## Ownership
 
@@ -769,10 +771,11 @@ under explicit `Создать вручную` advanced UI. This changes no back
 contract and does not assert that a canonical PhysicalObject must have a
 blueprint.
 
-Первый ручной проход по Object Library и Template Editor зафиксирован отдельно
-в [[09-ui-ux-review|рабочем L1 UI/UX review]]. Его findings — не изменение этого
-implementation contract и не объявление будущих product capabilities
-реализованными.
+История ручного прохода по Object Library и Template Editor зафиксирована отдельно
+в [[09-ui-ux-review|рабочем L1 UI/UX review]]. Открытая последовательность работ
+по spatial foundation — в [[09-01-l1-spatial-foundation-plan|плане L1S]]. Ни один
+из этих документов не меняет implementation contract и не объявляет будущие
+product capabilities реализованными.
 
 ## MAP-BLUEPRINT.1a — Physical projection presentation enrichment
 
