@@ -152,8 +152,18 @@ complete. L1S.5 is not included in this slice.
 
 ### L1S.5 — Blueprint authoring completion
 
-- Более точное размещение endpoint groups: position/offset/span или эквивалент.
-- Визуально различимые несколько groups на одной стороне.
+#### L1S.5a — Blueprint endpoint-group spatial placement
+
+**IMPLEMENTED**
+
+- Authoring recipe stores each endpoint group's normalized `placement_offset` and
+  `placement_span`; explicit canonical `BlueprintSlot.anchor.side + offset`
+  remains unchanged.
+- Generated group slots are deterministic within that range; a one-port group
+  is centered. Historical recipes without placement load as full-side `0..1`.
+- The Blueprint editor exposes compact range start/span controls and validates
+  that a positive range stays within `0..1`.
+
 - Скрыть или генерировать stable keys в primary UX там, где это безопасно.
 - Inspect/edit individual arbitrary internal mappings.
 - Pair-by-index остаётся bulk generator, но не единственной моделью.

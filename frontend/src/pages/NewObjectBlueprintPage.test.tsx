@@ -28,6 +28,8 @@ describe('NewObjectBlueprintPage preview viewport', () => {
     expect(screen.getByRole('heading', { name: 'Группы портов' })).toBeInTheDocument();
     expect(screen.getByLabelText('Тип порта 1')).toHaveTextContent('Точка подключения');
     expect(screen.getByLabelText('Сторона схемы 1')).toHaveTextContent('Слева');
+    expect(screen.getByLabelText('Начало диапазона 1')).toHaveValue(0);
+    expect(screen.getByLabelText('Длина диапазона 1')).toHaveValue(1);
     const picker = screen.getByLabelText('Выбор цвета'); const hex = screen.getByLabelText('Цвет (hex)');
     fireEvent.change(hex, { target: { value: '#112233' } }); expect(picker).toHaveValue('#112233');
     fireEvent.change(picker, { target: { value: '#445566' } }); expect(hex).toHaveValue('#445566');

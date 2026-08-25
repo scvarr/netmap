@@ -34,6 +34,8 @@ export interface BlueprintAuthoringEndpointGroup {
   side: BlueprintAnchorSide;
   count: number;
   starting_number: number;
+  placement_offset: number;
+  placement_span: number;
 }
 
 export interface BlueprintAuthoringRecipe {

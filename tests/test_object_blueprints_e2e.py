@@ -265,8 +265,8 @@ def test_blueprint_library_read_rejects_missing_or_mismatched_version():
 def version_snapshot(left: str, right: str) -> dict:
     recipe = {
         "endpoint_groups": [
-            {"group_id": "left", "key_prefix": left, "display_prefix": left, "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1},
-            {"group_id": "right", "key_prefix": right, "display_prefix": right, "kind": "CONNECTION_POINT", "side": "RIGHT", "count": 1, "starting_number": 1},
+            {"group_id": "left", "key_prefix": left, "display_prefix": left, "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1, "placement_offset": 0, "placement_span": 1},
+            {"group_id": "right", "key_prefix": right, "display_prefix": right, "kind": "CONNECTION_POINT", "side": "RIGHT", "count": 1, "starting_number": 1, "placement_offset": 0, "placement_span": 1},
         ],
         "pair_recipes": [{"group_a_id": "left", "group_b_id": "right"}],
     }
@@ -303,6 +303,41 @@ def test_blueprint_versions_are_immutable_latest_is_listed_and_recipe_round_trip
     new_instance = instantiate(blueprint_id, v2_id, "new cable")
     assert old_instance["slots"][0]["slot_key"] == "A01"
     assert new_instance["slots"][0]["slot_key"] == "C01"
+
+
+def test_blueprint_group_placement_round_trips_and_rejects_invalid_ranges():
+    recipe = {
+        "endpoint_groups": [
+            {"group_id": "upper", "key_prefix": "U", "display_prefix": "U", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 2, "starting_number": 1, "placement_offset": .1, "placement_span": .2},
+            {"group_id": "lower", "key_prefix": "L", "display_prefix": "L", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1, "placement_offset": .6, "placement_span": .2},
+        ],
+        "pair_recipes": [],
+    }
+    blueprint_id, version_id = create_blueprint([
+        {**slot("U01"), "anchor": {"side": "LEFT", "offset": .1}},
+        {**slot("U02"), "anchor": {"side": "LEFT", "offset": .3}},
+        {**slot("L01"), "anchor": {"side": "LEFT", "offset": .7}},
+    ], authoring_recipe=recipe)
+    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
+    assert detail.status_code == 200
+    assert detail.json()["authoring_recipe"] == recipe
+    invalid = {**recipe, "endpoint_groups": [{**recipe["endpoint_groups"][0], "placement_offset": .8, "placement_span": .3}]}
+    assert client.post("/v1/library/object-blueprints", json={"name": "Bad range", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [], "authoring_recipe": invalid}).status_code == 422
+
+
+def test_historical_recipe_without_group_placement_hydrates_to_full_side_defaults():
+    blueprint_id, version_id = create_blueprint([slot("A01")], authoring_recipe={
+        "endpoint_groups": [{"group_id": "a", "key_prefix": "A", "display_prefix": "A", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1}],
+        "pair_recipes": [],
+    })
+    with SessionLocal.begin() as session:
+        version = session.get(ObjectBlueprintVersion, uuid.UUID(version_id))
+        assert version is not None
+        version.authoring_recipe = {"endpoint_groups": [{"group_id": "a", "key_prefix": "A", "display_prefix": "A", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1}], "pair_recipes": []}
+    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
+    assert detail.status_code == 200
+    assert detail.json()["authoring_recipe"]["endpoint_groups"][0]["placement_offset"] == 0
+    assert detail.json()["authoring_recipe"]["endpoint_groups"][0]["placement_span"] == 1
 
 
 def test_blueprint_version_creation_is_atomic_and_delete_is_safe():

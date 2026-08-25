@@ -252,14 +252,16 @@ class ObjectBlueprintCatalog:
         sides = ("LEFT", "RIGHT", "TOP", "BOTTOM")
         for side in sides:
             groups = [group for group in recipe.endpoint_groups if group.side == side]
-            expanded = [(group, index) for group in groups for index in range(group.count)]
-            for position, (group, index) in enumerate(expanded):
+            for group in groups:
                 width = max(2, len(str(group.starting_number + group.count - 1)))
-                suffix = str(group.starting_number + index).zfill(width)
-                expected_slots[f"{group.key_prefix}{suffix}"] = (
-                    f"{group.display_prefix}{suffix}", group.kind, side,
-                    .5 if len(expanded) == 1 else position / (len(expanded) - 1),
-                )
+                for index in range(group.count):
+                    suffix = str(group.starting_number + index).zfill(width)
+                    offset = group.placement_offset + group.placement_span * (
+                        .5 if group.count == 1 else index / (group.count - 1)
+                    )
+                    expected_slots[f"{group.key_prefix}{suffix}"] = (
+                        f"{group.display_prefix}{suffix}", group.kind, side, offset,
+                    )
         actual_slots = {slot.key: (slot.display_name, slot.kind, slot.anchor.side, slot.anchor.offset) for slot in query.slots}
         if set(expected_slots) != set(actual_slots) or any(
             actual[:3] != expected[:3] or abs(actual[3] - expected[3]) > 1e-9

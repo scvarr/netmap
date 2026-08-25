@@ -520,6 +520,17 @@ class BlueprintAuthoringEndpointGroup(BaseModel):
     side: Literal["LEFT", "RIGHT", "TOP", "BOTTOM"]
     count: int = Field(ge=1)
     starting_number: int = Field(ge=0)
+    placement_offset: FiniteFloat = Field(default=0, ge=0, le=1)
+    placement_span: FiniteFloat = Field(default=1, gt=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_placement_range(self) -> "BlueprintAuthoringEndpointGroup":
+        if self.placement_offset + self.placement_span > 1:
+            raise PydanticCustomError(
+                "blueprint_invalid_group_placement",
+                "Blueprint endpoint-group placement must remain within the normalized side range",
+            )
+        return self
 
 
 class BlueprintAuthoringPairRecipe(BaseModel):
