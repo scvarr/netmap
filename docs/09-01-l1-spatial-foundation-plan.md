@@ -52,6 +52,8 @@ coordinates. Overlap локально отклоняется без write, а no
 
 ### L1S.3 — Internal continuity
 
+**IMPLEMENTED**
+
 #### L1S.3a — canonical internal continuity projection
 
 **IMPLEMENTED**
@@ -61,12 +63,15 @@ coordinates. Overlap локально отклоняется без write, а no
 
 #### L1S.3b — internal continuity presentation
 
-**OPEN**
+**IMPLEMENTED**
 
-- Показывать тонкие internal links внутри объекта при известной endpoint geometry.
-- Поддержать selection/trace/wiring highlight.
-- Geometry-aware display and branched continuity rendering without an invented
-  preferred path remain frontend work.
+- Blueprint `PhysicalObject` rendering draws each geometry-proven canonical
+  internal member as an undirected SVG segment between its exact slot anchors.
+- Selection emphasizes every rendered internal segment. Trace emphasizes only
+  the segment whose `ConnectionMember` is in the selected branch evidence.
+- The same exact-member presentation mechanism is reusable by L1S.4c for a
+  wiring-time highlight once wiring interaction state exists; it does not add
+  that state now.
 
 ### L1S.4a — Cable route presentation contract
 

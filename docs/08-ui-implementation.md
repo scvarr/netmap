@@ -803,6 +803,16 @@ segments; segment clicks still select the aggregate projection edge. A segment i
 trace-emphasized only when public evidence includes its ConnectionMember. Manual
 objects and unknown endpoints retain generic node/floating-boundary fallback.
 
+For each Blueprint node, the renderer also reads only
+`attributes.internal_l1_links`: a same-object member becomes an internal,
+non-interactive SVG segment only when both canonical ConnectionPoint IDs map to
+known persisted slot anchors. Side/offset is converted directly into the exact
+body coordinate; missing geometry emits no guessed segment. The segment is
+undirected, branches remain separate, selection emphasizes all rendered segments,
+and selected-branch trace evidence emphasizes only the exact
+`connection_member_id`. This presentation mechanism is intentionally reusable by
+future L1S.4c wiring highlight, without introducing wiring state here.
+
 ## MAP-CONNECT.1a — blueprint-backed cable composition
 
 `POST /v1/topology/physical-connections` optionally accepts an exact blueprint

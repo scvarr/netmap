@@ -9,4 +9,21 @@ describe('physicalTraceOverlayFor', () => {
   it('maps only selected branch canonical evidence to projection refs', () => { expect(physicalTraceOverlayFor(artifact(), physical, 'first').highlightedEdgeIds).toEqual(new Set(['a-b'])); });
   it('changes overlays between alternatives without rerunning trace data', () => { const result = artifact(); expect(physicalTraceOverlayFor(result, physical, 'second').highlightedEdgeIds).toEqual(new Set(['b-c'])); });
   it('never creates an overlay for UNKNOWN', () => { expect(physicalTraceOverlayFor(artifact('UNKNOWN'), physical, 'first').highlightedEdgeIds).toEqual(new Set()); });
+  it('maps exact internal ConnectionMember evidence without highlighting sibling panel links', () => {
+    const document = {
+      ...physical,
+      nodes: [{
+        id: 'panel', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [ref('PhysicalObject', 'panel')],
+        attributes: { internal_l1_links: [
+          { from_connection_point_id: 'front-01', from_member_index: 1, to_connection_point_id: 'rear-01', to_member_index: 1, connection_id: 'panel-connection', connection_member_id: 'member-1', source_refs: [] },
+          { from_connection_point_id: 'front-02', from_member_index: 1, to_connection_point_id: 'rear-02', to_member_index: 1, connection_id: 'panel-connection', connection_member_id: 'member-2', source_refs: [] },
+        ] },
+      }],
+    } satisfies TopologyProjectionDocument;
+    const result = artifact();
+    result.branches[0] = { ...result.branches[0], edge_ids: [], evidence_refs: [ref('ConnectionMember', 'member-1')] };
+    const overlay = physicalTraceOverlayFor(result, document, 'first');
+    expect(overlay.highlightedConnectionMemberIds).toEqual(new Set(['member-1']));
+    expect(overlay.highlightedNodeIds).toEqual(new Set(['panel']));
+  });
 });

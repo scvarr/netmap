@@ -219,6 +219,8 @@ export function TopologyCanvas({
     data: {
       ...node.data,
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
+      traceHighlightedConnectionMemberIds:
+        traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));

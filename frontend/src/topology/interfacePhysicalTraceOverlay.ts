@@ -46,6 +46,15 @@ export const physicalTraceOverlayFor = (
     overlay.highlightedNodeIds.add(edge.to_node_id);
   }
   for (const node of document.nodes) {
+    for (const link of node.attributes.internal_l1_links ?? []) {
+      if (evidence.some((item) => (
+        item.entity_type === 'ConnectionMember'
+        && item.entity_id === link.connection_member_id
+      ))) {
+        overlay.highlightedConnectionMemberIds.add(link.connection_member_id);
+        overlay.highlightedNodeIds.add(node.id);
+      }
+    }
     if (node.source_refs.some((ref) => evidence.some((item) => sameEvidence(item, ref)))) {
       overlay.highlightedNodeIds.add(node.id);
     }

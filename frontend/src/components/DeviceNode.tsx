@@ -3,6 +3,8 @@ import type { Node } from '@xyflow/react';
 import type { DeviceNodeData } from '../topology/layout';
 import { displayNodeLabel, physicalClassPresentation } from '../topology/presentation';
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
+import { internalL1Segments } from '../topology/internalL1Presentation';
+import { InternalL1Continuity } from './InternalL1Continuity';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
@@ -11,10 +13,21 @@ export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
   const physical = projection.kind === 'PHYSICAL_OBJECT';
   const classPresentation = physicalClassPresentation(projection.attributes.class);
   const blueprint = projection.attributes.blueprint_presentation;
+  const internalSegments = internalL1Segments(
+    projection,
+    selected,
+    data.traceHighlightedConnectionMemberIds,
+  );
+  const traceHighlightedConnectionPointIds = new Set(
+    internalSegments
+      .filter((segment) => segment.state === 'trace-highlighted')
+      .flatMap((segment) => [segment.fromConnectionPointId, segment.toConnectionPointId]),
+  );
   if (physical && blueprint) return <div className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: blueprint.body.width, height: blueprint.body.height, background: blueprint.body.fill_color ?? '#18383a' }}>
     <Handle type="target" position={Position.Top} className="device-node__handle" />
+    <InternalL1Continuity width={blueprint.body.width} height={blueprint.body.height} segments={internalSegments} />
     <strong className="blueprint-map-node__label">{displayNodeLabel(projection)}</strong>
-    {blueprint.slots.map((slot) => { const style = slot.anchor.side === 'LEFT' ? { left: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(-50%, -50%)' } : slot.anchor.side === 'RIGHT' ? { right: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(50%, -50%)' } : slot.anchor.side === 'TOP' ? { left: `${slot.anchor.offset * 100}%`, top: 0, transform: 'translate(-50%, -50%)' } : { left: `${slot.anchor.offset * 100}%`, bottom: 0, transform: 'translate(-50%, 50%)' }; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} />; })}
+    {blueprint.slots.map((slot) => { const style = slot.anchor.side === 'LEFT' ? { left: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(-50%, -50%)' } : slot.anchor.side === 'RIGHT' ? { right: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(50%, -50%)' } : slot.anchor.side === 'TOP' ? { left: `${slot.anchor.offset * 100}%`, top: 0, transform: 'translate(-50%, -50%)' } : { left: `${slot.anchor.offset * 100}%`, bottom: 0, transform: 'translate(-50%, 50%)' }; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} />; })}
     <Handle type="source" position={Position.Top} className="device-node__handle" />
   </div>;
   const genericPoints = physical ? genericConnectionPoints(projection) : [];

@@ -38,6 +38,7 @@ vi.mock('@xyflow/react', () => ({
         <div key={node.id}>
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
           <span data-testid={`position-${node.id}`}>{node.position.x},{node.position.y}</span>
+          <span data-testid={`highlighted-members-${node.id}`}>{[...(node.data.traceHighlightedConnectionMemberIds ?? [])].join(',')}</span>
           <span data-testid={`draggable-${node.id}`}>{String(node.draggable !== false)}</span>
           <button onClick={() => {
             if (node.draggable === false) return;
@@ -257,6 +258,19 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(fitViewMock).toHaveBeenCalledTimes(1);
 
     view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
+    expect(fitViewMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes exact trace-member highlighting without rerunning layout or fitting the scene', async () => {
+    fitViewMock.mockClear();
+    const document = documentFor('physical-A');
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async (input) => flowFor(input));
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
+    await screen.findByTestId('flow');
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(['physical-A']), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(['member-1']) }} />);
+    expect(screen.getByTestId('highlighted-members-physical-A')).toHaveTextContent('member-1');
+    expect(layoutEngine).toHaveBeenCalledTimes(1);
     expect(fitViewMock).toHaveBeenCalledTimes(1);
   });
 
