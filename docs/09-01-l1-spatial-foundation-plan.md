@@ -52,11 +52,21 @@ coordinates. Overlap локально отклоняется без write, а no
 
 ### L1S.3 — Internal continuity
 
-- Расширить L1 projection ровно настолько, чтобы renderer получил canonical
-  internal `Connection`/`ConnectionMember` evidence.
+#### L1S.3a — canonical internal continuity projection
+
+**IMPLEMENTED**
+
+- L1 `PHYSICAL_OBJECT` projection exposes canonical same-object
+  `Connection`/`ConnectionMember` evidence in `attributes.internal_l1_links`.
+
+#### L1S.3b — internal continuity presentation
+
+**OPEN**
+
 - Показывать тонкие internal links внутри объекта при известной endpoint geometry.
 - Поддержать selection/trace/wiring highlight.
-- Показывать branched continuity без invented preferred path.
+- Geometry-aware display and branched continuity rendering without an invented
+  preferred path remain frontend work.
 
 ### L1S.4a — Cable route presentation contract
 

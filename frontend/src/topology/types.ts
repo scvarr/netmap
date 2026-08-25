@@ -13,6 +13,7 @@ export interface BlueprintPresentation {
   slots: Array<{ slot_key: string; display_name: string; kind: 'CONNECTION_POINT' | 'NETWORK_PORT'; anchor: { side: 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM'; offset: number }; connection_point_id: string; network_interface_id?: string | null }>;
 }
 export interface PhysicalEndpointPair { from_connection_point_id: string; from_member_index: number; to_connection_point_id: string; to_member_index: number; connection_id: string; connection_member_id: string; }
+export interface PhysicalInternalL1Link extends PhysicalEndpointPair { source_refs: ProjectionSourceRef[]; }
 export interface ConnectionPointPresentation { connection_point_id: string; display_name: string; cardinality: number; external_connection_count: number; }
 export interface L1OffMapContinuation {
   id: string;
@@ -48,7 +49,7 @@ export interface TopologyProjectionNode {
   kind: string;
   label: string;
   source_refs: ProjectionSourceRef[];
-  attributes: Record<string, unknown> & { blueprint_presentation?: BlueprintPresentation; connection_points?: ConnectionPointPresentation[] };
+  attributes: Record<string, unknown> & { blueprint_presentation?: BlueprintPresentation; connection_points?: ConnectionPointPresentation[]; internal_l1_links?: PhysicalInternalL1Link[] };
   status?: string;
 }
 

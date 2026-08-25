@@ -108,9 +108,10 @@ def test_create_physical_object_is_atomic_and_visible_only_in_l1_projection():
             "display_name": "Порт",
             "cardinality": 1,
             "external_connection_count": 0,
-        }],
-        "owned_interface_count": 0,
-    }
+            }],
+            "owned_interface_count": 0,
+            "internal_l1_links": [],
+        }
     logical = client.post(
         "/v1/topology/projection",
         json=projection_query("L2", "DEVICE"),

@@ -784,8 +784,15 @@ Only `L1 / PHYSICAL_OBJECT` nodes for materialized instances expose bounded
 body, and persisted slot-to-canonical CP/optional NI mappings. Library refs never
 enter `source_refs`. Physical aggregate edges expose deterministic endpoint pairs
 oriented to `from_node_id` and `to_node_id`; these are canonical connection/member
-facts, not geometry-derived handles. Internal links remain internal and do not
-create a self-edge.
+facts, not geometry-derived handles. Every L1 `PHYSICAL_OBJECT` node additionally
+exposes `attributes.internal_l1_links: []`, one record per canonical same-object
+`ConnectionMember`: exact endpoint CP UUIDs/member indices, `connection_id`,
+`connection_member_id`, and canonical `source_refs` for the object, both points,
+connection, and member. The stored Connection A/B order is presentation-only;
+it is not network direction. This field is independent of
+`blueprint_presentation`, so manual objects and arbitrary/branched internal
+topology use the same contract. Internal links remain internal and do not create
+a self-edge.
 
 ## MAP-BLUEPRINT.1b — Physical map rendering
 

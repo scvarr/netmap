@@ -196,6 +196,20 @@ class TopologyProjectionRequest(BaseModel):
     filters: dict[str, Any] | None = None
 
 
+class PhysicalInternalL1Link(BaseModel):
+    """Canonical same-object L1 continuity carried by a physical node."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    from_connection_point_id: uuid.UUID
+    from_member_index: int = Field(ge=1)
+    to_connection_point_id: uuid.UUID
+    to_member_index: int = Field(ge=1)
+    connection_id: uuid.UUID
+    connection_member_id: uuid.UUID
+    source_refs: list[ProjectionSourceRef]
+
+
 class TopologyProjectionNode(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -29,6 +29,7 @@ from app.schemas import (
     TopologyProjectionNode,
     TopologyProjectionRequest,
     L1OffMapContinuation,
+    PhysicalInternalL1Link,
 )
 
 
@@ -206,6 +207,13 @@ class ConfiguredTopologyProjectionResolver:
             list(selected_object_ids)
         )
         presentations = self._blueprint_presentations(selected_object_ids)
+        internal_members_by_object: dict[uuid.UUID, list[PhysicalConnectionMemberRecord]] = {}
+        for member in connection_members:
+            if (
+                member.object_a_id == member.object_b_id
+                and member.object_a_id in selected_object_ids
+            ):
+                internal_members_by_object.setdefault(member.object_a_id, []).append(member)
         nodes = [
             self._physical_node(
                 object_id,
@@ -216,6 +224,7 @@ class ConfiguredTopologyProjectionResolver:
                 aliases.get(object_id),
                 classes.get(object_id),
                 presentations.get(object_id),
+                tuple(internal_members_by_object.get(object_id, [])),
             )
             for object_id in sorted(selected_object_ids, key=self._physical_node_id)
         ]
@@ -483,6 +492,7 @@ class ConfiguredTopologyProjectionResolver:
         display_alias: DisplayAliasRecord | None,
         object_class: PhysicalObjectClassRecord | None,
         blueprint_presentation: dict | None = None,
+        internal_members: tuple[PhysicalConnectionMemberRecord, ...] = (),
     ) -> TopologyProjectionNode:
         refs = [self._ref("PhysicalObject", physical_object_id)]
         if display_alias is not None:
@@ -527,11 +537,42 @@ class ConfiguredTopologyProjectionResolver:
                     for point in sorted(points, key=lambda value: str(value.point_id))
                 ],
                 "owned_interface_count": len(owners),
+                "internal_l1_links": [
+                    self._internal_l1_link(physical_object_id, member)
+                    for member in sorted(
+                        internal_members,
+                        key=lambda value: (
+                            str(value.connection_id),
+                            str(value.connection_member_id),
+                        ),
+                    )
+                ],
                 **({"class": object_class.value} if object_class is not None else {}),
                 **({"blueprint_presentation": blueprint_presentation} if blueprint_presentation is not None else {}),
             },
             status="CONFIGURED",
         )
+
+    def _internal_l1_link(
+        self,
+        physical_object_id: uuid.UUID,
+        member: PhysicalConnectionMemberRecord,
+    ) -> dict:
+        return PhysicalInternalL1Link(
+            from_connection_point_id=member.point_a_id,
+            from_member_index=member.point_a_member,
+            to_connection_point_id=member.point_b_id,
+            to_member_index=member.point_b_member,
+            connection_id=member.connection_id,
+            connection_member_id=member.connection_member_id,
+            source_refs=self._dedupe_refs([
+                self._ref("PhysicalObject", physical_object_id),
+                self._ref("ConnectionPoint", member.point_a_id),
+                self._ref("ConnectionPoint", member.point_b_id),
+                self._ref("Connection", member.connection_id),
+                self._ref("ConnectionMember", member.connection_member_id),
+            ]),
+        ).model_dump(mode="json")
 
     def _physical_edge(
         self,

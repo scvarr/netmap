@@ -153,7 +153,99 @@ def test_passive_and_fallback_physical_objects_are_valid_isolated_nodes():
         "connection_point_count": 0,
         "connection_points": [],
         "owned_interface_count": 0,
+        "internal_l1_links": [],
     }
+
+
+def test_manual_same_object_members_are_node_internal_links_with_canonical_evidence():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        panel = repository.add_physical_object()
+        remote = repository.add_physical_object()
+        front = repository.add_connection_point(panel.id, 4)
+        rear = repository.add_connection_point(panel.id, 4)
+        remote_point = repository.add_connection_point(remote.id, 1)
+        internal_connection, internal_members = repository.add_connection(
+            front.id,
+            rear.id,
+            2,
+            [
+                ConnectionMemberInput(index=7, point_a_member=3, point_b_member=2),
+                ConnectionMemberInput(index=9, point_a_member=4, point_b_member=1),
+            ],
+        )
+        external_connection, external_members = repository.add_connection(
+            front.id,
+            remote_point.id,
+            1,
+            [ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+        )
+
+    body = client.post("/v1/topology/projection", json=projection_query()).json()
+    panel_node = node_by_object(body, str(panel.id))
+    links = panel_node["attributes"]["internal_l1_links"]
+    expected_by_member_id = {
+        str(internal_members[0].id): (str(front.id), 3, str(rear.id), 2),
+        str(internal_members[1].id): (str(front.id), 4, str(rear.id), 1),
+    }
+    assert [(link["connection_id"], link["connection_member_id"]) for link in links] == sorted(
+        (link["connection_id"], link["connection_member_id"]) for link in links
+    )
+    assert len(links) == 2
+    for link in links:
+        member_id = link["connection_member_id"]
+        assert (
+            link["from_connection_point_id"],
+            link["from_member_index"],
+            link["to_connection_point_id"],
+            link["to_member_index"],
+        ) == expected_by_member_id[member_id]
+        assert link["connection_id"] == str(internal_connection.id)
+        assert {(ref["entity_type"], ref["entity_id"]) for ref in link["source_refs"]} == {
+            ("PhysicalObject", str(panel.id)),
+            ("ConnectionPoint", str(front.id)),
+            ("ConnectionPoint", str(rear.id)),
+            ("Connection", str(internal_connection.id)),
+            ("ConnectionMember", member_id),
+        }
+    assert all(edge["from_node_id"] != edge["to_node_id"] for edge in body["edges"])
+    assert all(str(internal_connection.id) not in str(edge) for edge in body["edges"])
+    assert any(str(external_connection.id) in str(edge) for edge in body["edges"])
+    assert all(str(external_members[0].id) not in str(link) for link in links)
+
+    scoped = client.post(
+        "/v1/topology/projection", json=projection_query([str(panel.id)])
+    ).json()
+    assert scoped["edges"] == []
+    assert node_by_object(scoped, str(panel.id))["attributes"]["internal_l1_links"] == links
+
+
+def test_internal_links_keep_all_branched_members_and_respect_object_scope():
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        panel = repository.add_physical_object()
+        other = repository.add_physical_object()
+        point_a = repository.add_connection_point(panel.id, 1)
+        point_b = repository.add_connection_point(panel.id, 1)
+        point_c = repository.add_connection_point(panel.id, 1)
+        other_a = repository.add_connection_point(other.id, 1)
+        other_b = repository.add_connection_point(other.id, 1)
+        first, first_members = repository.add_connection(point_a.id, point_b.id, 1, [ConnectionMemberInput(1, 1, 1)])
+        second, second_members = repository.add_connection(point_a.id, point_c.id, 1, [ConnectionMemberInput(1, 1, 1)])
+        foreign, _ = repository.add_connection(other_a.id, other_b.id, 1, [ConnectionMemberInput(1, 1, 1)])
+
+    scoped = client.post(
+        "/v1/topology/projection", json=projection_query([str(panel.id)])
+    ).json()
+    links = node_by_object(scoped, str(panel.id))["attributes"]["internal_l1_links"]
+    assert {(link["connection_id"], link["connection_member_id"]) for link in links} == {
+        (str(first.id), str(first_members[0].id)),
+        (str(second.id), str(second_members[0].id)),
+    }
+    assert [(link["connection_id"], link["connection_member_id"]) for link in links] == sorted(
+        (link["connection_id"], link["connection_member_id"]) for link in links
+    )
+    assert str(foreign.id) not in str(scoped)
 
 
 def test_parallel_connections_aggregate_counts_and_scope_is_induced():
@@ -253,6 +345,14 @@ def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
     assert [(slot["slot_key"], slot["anchor"]["side"], slot["anchor"]["offset"]) for slot in presentation["slots"]] == [("front01", "LEFT", .25), ("rear01", "RIGHT", .75)]
     assert {slot["connection_point_id"] for slot in presentation["slots"]} == {slot["connection_point_ref"]["entity_id"] for slot in instance["slots"]}
     assert all(ref["ref_type"] == "CANONICAL_FACT" for ref in node["source_refs"])
+    internal = node["attributes"]["internal_l1_links"]
+    assert len(internal) == 1
+    assert {internal[0]["from_connection_point_id"], internal[0]["to_connection_point_id"]} == {
+        slot["connection_point_ref"]["entity_id"] for slot in instance["slots"]
+    }
+    assert {ref["entity_type"] for ref in internal[0]["source_refs"]} == {
+        "PhysicalObject", "ConnectionPoint", "Connection", "ConnectionMember"
+    }
 
 
 def test_switch_blueprint_exposes_network_port_mapping_without_self_edge():
