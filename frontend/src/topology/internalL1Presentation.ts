@@ -4,7 +4,7 @@ import type {
   TopologyProjectionNode,
 } from './types';
 
-export type InternalL1PresentationState = 'normal' | 'selected' | 'trace-highlighted';
+export type InternalL1PresentationState = 'normal' | 'selected' | 'trace-highlighted' | 'wiring-highlighted';
 
 export interface InternalL1Segment {
   connectionMemberId: string;
@@ -37,6 +37,7 @@ export const internalL1Segments = (
   node: TopologyProjectionNode,
   selected: boolean,
   highlightedConnectionMemberIds: ReadonlySet<string> = new Set(),
+  wiringHighlightedConnectionMemberIds: ReadonlySet<string> = new Set(),
 ): InternalL1Segment[] => {
   const blueprint = node.attributes.blueprint_presentation;
   if (node.kind !== 'PHYSICAL_OBJECT' || !blueprint) return [];
@@ -58,6 +59,8 @@ export const internalL1Segments = (
         to: anchorPoint(blueprint, toSlot.anchor),
         state: highlightedConnectionMemberIds.has(link.connection_member_id)
           ? 'trace-highlighted'
+          : wiringHighlightedConnectionMemberIds.has(link.connection_member_id)
+            ? 'wiring-highlighted'
           : selected ? 'selected' : 'normal',
       }];
     });

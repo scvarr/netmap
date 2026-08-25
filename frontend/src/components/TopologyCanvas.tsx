@@ -31,7 +31,7 @@ import {
   type TopologyLayoutStore,
 } from "../topology/layoutStore";
 import { DeviceNode } from "./DeviceNode";
-import { FloatingTopologyEdge } from "./FloatingTopologyEdge";
+import { FloatingTopologyEdge, WiringRoute } from "./FloatingTopologyEdge";
 import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
 import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
 import { physicalObjectIdForNode } from "../topology/projection";
@@ -62,7 +62,7 @@ interface TopologyCanvasProps {
   disableAutoLayout?: boolean;
   onViewportCenterReady?: (getter: (() => XYPosition) | null) => void;
   onPhysicalPaneContextMenu?: (anchor: XYPosition, screen: XYPosition) => void;
-  onPaneClick?: () => void;
+  onPaneClick?: (anchor: XYPosition) => void;
   onContinuationClickAnchor?: (
     continuationId: string,
     anchor: XYPosition,
@@ -71,6 +71,9 @@ interface TopologyCanvasProps {
   cableRouteDraft?: { cablePhysicalObjectId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
+  wiringRoute?: { source: { physicalObjectId: string; connectionPointId: string }; target?: { physicalObjectId: string; connectionPointId: string }; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; };
+  wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
+  wiringContinuationConnectionPointIds?: ReadonlySet<string>;
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -102,6 +105,9 @@ export function TopologyCanvas({
   cableRouteDraft,
   physicalPortStates,
   onPhysicalPortClick,
+  wiringRoute,
+  wiringHighlightedConnectionMemberIds,
+  wiringContinuationConnectionPointIds,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -233,6 +239,8 @@ export function TopologyCanvas({
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
       traceHighlightedConnectionMemberIds:
         traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
+      wiringHighlightedConnectionMemberIds,
+      wiringContinuationConnectionPointIds,
       physicalPortStates,
       onPhysicalPortClick,
     },
@@ -369,9 +377,9 @@ export function TopologyCanvas({
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
-        onPaneClick={() => {
+        onPaneClick={(event) => {
           onSelectionChange(null);
-          onPaneClick?.();
+          onPaneClick?.(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
         }}
         onPaneContextMenu={(event) => {
           if (!onPhysicalPaneContextMenu) return;
@@ -422,6 +430,7 @@ export function TopologyCanvas({
           ariaLabel="Мини-карта"
         />
         <Controls showInteractive={false} position="bottom-left" />
+        {wiringRoute && <WiringRoute {...wiringRoute} />}
       </ReactFlow>
     </div>
   );

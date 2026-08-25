@@ -835,6 +835,17 @@ and selected-branch trace evidence emphasizes only the exact
 `connection_member_id`. This presentation mechanism is intentionally reusable by
 future L1S.4c wiring highlight, without introducing wiring state here.
 
+## MAP-CONNECT.1b — route-aware visual wiring
+
+Physical-map wiring keeps a local flow-coordinate waypoint draft after source
+port selection. Pane clicks append draft waypoints; port/panel clicks do not.
+Confirmation first creates the canonical cable, then persists the explicit
+route (including `[]`) by the returned canonical cable ref. These are separate
+writes: route retry never repeats canonical creation, and a failed projection
+refresh retries only the projection read. During endpoint choice, only exact
+same-object `internal_l1_links` adjacent to the source are highlighted as a
+passive continuity hint; they do not change the canonical source endpoint.
+
 ## MAP-CONNECT.1a — blueprint-backed cable composition
 
 `POST /v1/topology/physical-connections` optionally accepts an exact blueprint

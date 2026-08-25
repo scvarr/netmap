@@ -4,6 +4,7 @@ import {
   getStraightPath,
   useReactFlow,
   useInternalNode,
+  useNodes,
   type EdgeProps,
   type InternalNode,
 } from '@xyflow/react';
@@ -90,6 +91,35 @@ export const routedCablePath = (
 ): string => [source, ...waypoints, target]
   .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
   .join(' ');
+
+/** Presentation-only route used while the user is drawing a new cable. */
+export function WiringRoute(props: {
+  source: { physicalObjectId: string; connectionPointId: string };
+  target?: { physicalObjectId: string; connectionPointId: string };
+  waypoints: readonly MapCableRouteWaypoint[];
+  selectedWaypointIndex: number | null;
+  onWaypointSelect: (index: number) => void;
+  onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void;
+}) {
+  const { screenToFlowPosition } = useReactFlow();
+  const nodes = useNodes<DeviceFlowNode>();
+  const sourceFlowId = nodes.find((node) => node.data.projection.source_refs.some((ref) => ref.entity_type === 'PhysicalObject' && ref.entity_id === props.source.physicalObjectId))?.id;
+  const targetFlowId = props.target && nodes.find((node) => node.data.projection.source_refs.some((ref) => ref.entity_type === 'PhysicalObject' && ref.entity_id === props.target!.physicalObjectId))?.id;
+  const sourceNode = useInternalNode<DeviceFlowNode>(sourceFlowId ?? '__none__');
+  const targetNode = useInternalNode<DeviceFlowNode>(targetFlowId ?? '__none__');
+  if (!sourceNode) return null;
+  const source = getConnectionPointEndpoint(sourceNode.data.projection, rectangle(sourceNode), props.source.connectionPointId);
+  const target = props.target && targetNode
+    ? getConnectionPointEndpoint(targetNode.data.projection, rectangle(targetNode), props.target.connectionPointId)
+    : undefined;
+  if (!source) return null;
+  const points = target ? [source, ...props.waypoints, target] : [source, ...props.waypoints];
+  const path = points.length > 1 ? points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ') : '';
+  return <>
+    {path && <path className="wiring-route-preview" d={path} fill="none" stroke="#8d7aff" strokeWidth={3} pointerEvents="none" />}
+    {props.waypoints.map((waypoint, index) => <circle key={`wiring-route:${index}`} className={`cable-route-waypoint wiring-route-waypoint${props.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={6} style={{ pointerEvents: 'all' }} onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); props.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); props.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }} onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} />)}
+  </>;
+}
 
 export function FloatingTopologyEdge({
   id,

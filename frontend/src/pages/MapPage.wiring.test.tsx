@@ -7,7 +7,8 @@ vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (p: any) => <di
 const map = { map_ref: { entity_type: 'SavedMap', entity_id: 'map-1' }, name: 'M1', placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'a' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0 } } }, { physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'b' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 1, y: 1 } } }] } as any;
 const node = (id: string, label: string, cp: string, count = 0) => ({ id, kind: 'PHYSICAL_OBJECT', label, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: { class: 'switch', connection_points: [{ connection_point_id: cp, display_name: cp === 'a-cp' ? 'A01' : 'B01', cardinality: 1, external_connection_count: count }] } });
 const doc = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [node('a', 'Source', 'a-cp'), node('b', 'Target', 'b-cp')], edges: [], gaps: [], warnings: [] } as any;
-const renderPage = (write = vi.fn().mockResolvedValue({}), loadProjection = vi.fn().mockResolvedValue(doc)) => { const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn() }; render(<MemoryRouter initialEntries={['/map?map=map-1&view=physical']}><MapPage dataSource={{ loadProjection }} savedMapDataSource={maps} physicalEndpointConnectionWriteDataSource={{ createPhysicalEndpointConnection: write }} /></MemoryRouter>); return { write, loadProjection, maps }; };
+const creation = { cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'cable-1' }, source: {}, target: {}, connection_refs: [] } as any;
+const renderPage = (write = vi.fn().mockResolvedValue(creation), loadProjection = vi.fn().mockResolvedValue(doc), setCableRoute = vi.fn().mockResolvedValue(map)) => { const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn(), setCableRoute }; render(<MemoryRouter initialEntries={['/map?map=map-1&view=physical']}><MapPage dataSource={{ loadProjection }} savedMapDataSource={maps} physicalEndpointConnectionWriteDataSource={{ createPhysicalEndpointConnection: write }} /></MemoryRouter>); return { write, loadProjection, maps, setCableRoute }; };
 
 describe('MapPage visual wiring', () => {
   it('uses a non-modal selecting panel, keeps canvas clickable, then writes exact ports once', async () => {
@@ -30,8 +31,8 @@ describe('MapPage visual wiring', () => {
   });
 
   it('retries only projection refresh after a successful write', async () => {
-    const write = vi.fn().mockResolvedValue({}); let physicalReads = 0; const loadProjection = vi.fn((request: any) => request.layer === 'L1' && ++physicalReads === 2 ? Promise.reject(new Error('refresh')) : Promise.resolve(doc));
+    const write = vi.fn().mockResolvedValue(creation); let physicalReads = 0; const loadProjection = vi.fn((request: any) => request.layer === 'L1' && ++physicalReads === 2 ? Promise.reject(new Error('refresh')) : Promise.resolve(doc));
     renderPage(write, loadProjection); await screen.findByTestId('canvas'); fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
-    expect(await screen.findByText('Кабель создан, но карту не удалось обновить.')).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' })); await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Кабель и трасса сохранены, но карту не удалось обновить.')).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' })); await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
   });
 });

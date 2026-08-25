@@ -27,6 +27,8 @@ export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
   traceHighlighted?: boolean;
   traceHighlightedConnectionMemberIds?: ReadonlySet<string>;
+  wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
+  wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
 }

@@ -130,15 +130,25 @@ coordinates. Overlap локально отклоняется без write, а no
 
 #### L1S.4c.2 — route-aware wiring
 
-**OPEN**
+**IMPLEMENTED**
 
-- Waypoints during wiring; route persistence after canonical creation; route
-  retry without duplicate cable; proven passive internal continuity highlight.
+- Route draft during visual wiring, including an explicit zero-waypoint route.
+- Route persistence uses the exact returned `cable_ref`; canonical creation is
+  exactly-once, route persistence retries do not repeat it, and refresh retries
+  do not repeat either write.
+- The wiring source highlights only proven canonical same-object
+  `internal_l1_links`, including every exact branch.
 
 - Выбрать source port, проложить zero or more waypoints и выбрать destination port.
 - Подсвечивать proven internal passive continuity.
 - Создать canonical cable ровно один раз и отдельно сохранить presentation route.
 - Retry persistence route не повторяет canonical write.
+
+**L1S.4c — IMPLEMENTED**
+
+**L1S.4 — IMPLEMENTED**: route persistence contract, existing route
+rendering/editing, visual direct wiring and route-aware create lifecycle are
+complete. L1S.5 is not included in this slice.
 
 ### L1S.5 — Blueprint authoring completion
 
