@@ -12,19 +12,10 @@ import type {
   BlueprintAnchorSide,
   BlueprintSlotKind,
 } from "../topology/objectBlueprintTypes";
+import { useI18n, type MessageKey } from '../i18n';
 
 const sides: BlueprintAnchorSide[] = ["LEFT", "RIGHT", "TOP", "BOTTOM"];
 const kinds: BlueprintSlotKind[] = ["CONNECTION_POINT", "NETWORK_PORT"];
-const sideLabel: Record<BlueprintAnchorSide, string> = {
-  LEFT: "Слева",
-  RIGHT: "Справа",
-  TOP: "Сверху",
-  BOTTOM: "Снизу",
-};
-const kindLabel: Record<BlueprintSlotKind, string> = {
-  CONNECTION_POINT: "Точка подключения",
-  NETWORK_PORT: "Сетевой порт",
-};
 export const newEndpointGroup = (displayPrefix = ""): EndpointGroup => {
   const stableId = globalThis.crypto.randomUUID();
   return {
@@ -41,8 +32,9 @@ export const newEndpointGroup = (displayPrefix = ""): EndpointGroup => {
 };
 const colorValue = (value: string) =>
   /^#[0-9A-Fa-f]{6}$/.test(value) ? value : "#28565a";
-const groupLabel = (group: EndpointGroup, index?: number) =>
-  group.displayPrefix || `Группа ${(index ?? 0) + 1}`;
+const validationKey: Record<string, MessageKey> = {
+  nameRequired: 'blueprint.validation.nameRequired', dimensionsPositive: 'blueprint.validation.dimensionsPositive', colorFormat: 'blueprint.validation.colorFormat', stableGroupId: 'blueprint.validation.stableGroupId', uniqueStableGroupIds: 'blueprint.validation.uniqueStableGroupIds', groupDisplayPrefix: 'blueprint.validation.groupDisplayPrefix', groupPortCount: 'blueprint.validation.groupPortCount', groupStartingNumber: 'blueprint.validation.groupStartingNumber', groupRange: 'blueprint.validation.groupRange', duplicateSlotKeys: 'blueprint.validation.duplicateSlotKeys', pairMissingGroup: 'blueprint.validation.pairMissingGroup', pairSameGroup: 'blueprint.validation.pairSameGroup', pairCountMismatch: 'blueprint.validation.pairCountMismatch', duplicateInternalLink: 'blueprint.validation.duplicateInternalLink', individualSelfLink: 'blueprint.validation.individualSelfLink', individualMissingPort: 'blueprint.validation.individualMissingPort', duplicateIndividualLink: 'blueprint.validation.duplicateIndividualLink', individualDuplicatesPair: 'blueprint.validation.individualDuplicatesPair',
+};
 const slotBelongsToGroup = (slotKey: string, stableGroupKey: string) => {
   const prefix = `${stableGroupKey}:`;
   return slotKey.startsWith(prefix) && /^[1-9]\d*$/.test(slotKey.slice(prefix.length));
@@ -73,6 +65,7 @@ export function ObjectBlueprintEditor({
   versionNotice?: string;
   onSave: (state: BlueprintEditorState) => Promise<void>;
 }) {
+  const { t } = useI18n();
   const [editor, setEditor] = useState(initialState);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasAttemptedSave, setHasAttemptedSave] = useState(false);
@@ -88,10 +81,13 @@ export function ObjectBlueprintEditor({
       ...s,
       groups: s.groups.map((g) => (g.id === id ? { ...g, [field]: value } : g)),
     }));
+  const sideLabel = (side: BlueprintAnchorSide) => t(`blueprint.side.${side}` as MessageKey);
+  const kindLabel = (kind: BlueprintSlotKind) => t(`blueprint.kind.${kind}` as MessageKey);
+  const groupLabel = (group: EndpointGroup, index: number) => group.displayPrefix || t('blueprint.editor.group', { index: index + 1 });
   const portChoices = editor.groups.flatMap((group, groupIndex) =>
     generatedGroupKeys(group).map((key, index) => ({
       key,
-      label: `Группа ${groupIndex + 1}: ${groupLabel(group, groupIndex)} — ${generatedGroupDisplayNames(group)[index]}`,
+      label: t('blueprint.editor.groupPort', { index: groupIndex + 1, group: groupLabel(group, groupIndex), port: generatedGroupDisplayNames(group)[index] }),
     })),
   );
   const updateIndividualLink = (
@@ -119,7 +115,7 @@ export function ObjectBlueprintEditor({
       setSaveError(
         reason instanceof Error
           ? reason.message
-          : "Не удалось сохранить шаблон.",
+          : t('blueprint.library.deleteFailed'),
       );
     } finally {
       setSaving(false);
@@ -129,7 +125,7 @@ export function ObjectBlueprintEditor({
     <>
       <header className="catalog-page__header">
         <div>
-          <span className="shell-nav__group-label">Визуальный редактор</span>
+          <span className="shell-nav__group-label">{t('blueprint.editor.section')}</span>
           <h1>{title}</h1>
           <p>{description}</p>
           {versionNotice && (
@@ -140,31 +136,31 @@ export function ObjectBlueprintEditor({
       <div className="blueprint-editor-layout">
         <section className="blueprint-editor-controls">
           <label>
-            Название шаблона
+            {t('blueprint.editor.name')}
             <input
-              aria-label="Название шаблона"
+              aria-label={t('blueprint.editor.name')}
               value={editor.name}
               onChange={(e) => setEditor({ ...editor, name: e.target.value })}
             />
           </label>
           <label>
-            Тип объекта
+            {t('blueprint.editor.class')}
             <input
-              aria-label="Тип объекта"
+              aria-label={t('blueprint.editor.class')}
               value={editor.defaultClass}
               onChange={(e) =>
                 setEditor({ ...editor, defaultClass: e.target.value })
               }
             />
             <span className="blueprint-editor__hint">
-              Необязательная классификация, например switch или patch_panel.
+              {t('blueprint.editor.classHint')}
             </span>
           </label>
           <div className="blueprint-editor-controls__row">
             <label>
-              Ширина
+              {t('blueprint.editor.width')}
               <input
-                aria-label="Ширина"
+                aria-label={t('blueprint.editor.width')}
                 type="number"
                 value={editor.width}
                 onChange={(e) =>
@@ -173,9 +169,9 @@ export function ObjectBlueprintEditor({
               />
             </label>
             <label>
-              Высота
+              {t('blueprint.editor.height')}
               <input
-                aria-label="Высота"
+                aria-label={t('blueprint.editor.height')}
                 type="number"
                 value={editor.height}
                 onChange={(e) =>
@@ -185,14 +181,13 @@ export function ObjectBlueprintEditor({
             </label>
           </div>
           <p className="blueprint-editor__hint">
-            Это схематическая форма шаблона; размер на карте определяет
-            отображение карты.
+            {t('blueprint.editor.sizeHint')}
           </p>
           <div className="blueprint-editor-color">
             <label>
-              Цвет
+              {t('blueprint.editor.color')}
               <input
-                aria-label="Выбор цвета"
+                aria-label={t('blueprint.editor.colorPicker')}
                 type="color"
                 value={colorValue(editor.fillColor)}
                 onChange={(e) =>
@@ -201,9 +196,9 @@ export function ObjectBlueprintEditor({
               />
             </label>
             <label>
-              Точный цвет (hex)
+              {t('blueprint.editor.colorExact')}
               <input
-                aria-label="Цвет (hex)"
+                aria-label={t('blueprint.editor.colorHex')}
                 value={editor.fillColor}
                 onChange={(e) =>
                   setEditor({ ...editor, fillColor: e.target.value })
@@ -211,25 +206,23 @@ export function ObjectBlueprintEditor({
               />
             </label>
           </div>
-          <h2>Группы портов</h2>
+          <h2>{t('blueprint.editor.groups')}</h2>
           <p className="blueprint-editor__hint">
-            Группа создаёт последовательность портов с общей маркировкой и
-            расположением на схеме.
+            {t('blueprint.editor.groupsHint')}
           </p>
-          {editor.groups.length === 0 && <p className="blueprint-editor__hint">Группы портов необязательны. Добавьте группу, если у объекта есть порты.</p>}
+          {editor.groups.length === 0 && <p className="blueprint-editor__hint">{t('blueprint.editor.groupsEmpty')}</p>}
           {editor.groups.map((g, i) => (
             <fieldset className="endpoint-group" key={g.id}>
               <legend>
-                Группа {i + 1}: {groupLabel(g, i)}
+                {t('blueprint.editor.group', { index: i + 1 })}: {groupLabel(g, i)}
               </legend>
               <p className="endpoint-group__summary">
-                {generatedGroupDisplayNames(g).join(", ")} · {kindLabel[g.kind]}{" "}
-                · {sideLabel[g.side]}
+                {generatedGroupDisplayNames(g).join(", ")} · {kindLabel(g.kind)} · {sideLabel(g.side)}
               </p>
               <label>
-                Префикс отображаемого имени
+                {t('blueprint.editor.displayPrefix')}
                 <input
-                  aria-label={`Префикс отображаемого имени ${i + 1}`}
+                  aria-label={t('blueprint.editor.displayPrefixIndexed', { index: i + 1 })}
                   value={g.displayPrefix}
                   onChange={(e) =>
                     update(g.id, "displayPrefix", e.target.value)
@@ -238,9 +231,9 @@ export function ObjectBlueprintEditor({
               </label>
               <div className="blueprint-editor-controls__row">
                 <label>
-                  Тип порта
+                  {t('blueprint.editor.portKind')}
                   <select
-                    aria-label={`Тип порта ${i + 1}`}
+                    aria-label={t('blueprint.editor.portKindIndexed', { index: i + 1 })}
                     value={g.kind}
                     onChange={(e) =>
                       update(g.id, "kind", e.target.value as BlueprintSlotKind)
@@ -248,15 +241,15 @@ export function ObjectBlueprintEditor({
                   >
                     {kinds.map((x) => (
                       <option key={x} value={x}>
-                        {kindLabel[x]}
+                        {kindLabel(x)}
                       </option>
                     ))}
                   </select>
                 </label>
                 <label>
-                  Сторона схемы
+                  {t('blueprint.editor.anchorSide')}
                   <select
-                    aria-label={`Сторона схемы ${i + 1}`}
+                    aria-label={t('blueprint.editor.anchorSideIndexed', { index: i + 1 })}
                     value={g.side}
                     onChange={(e) =>
                       update(
@@ -268,7 +261,7 @@ export function ObjectBlueprintEditor({
                   >
                     {sides.map((x) => (
                       <option key={x} value={x}>
-                        {sideLabel[x]}
+                        {sideLabel(x)}
                       </option>
                     ))}
                   </select>
@@ -276,9 +269,9 @@ export function ObjectBlueprintEditor({
               </div>
               <div className="blueprint-editor-controls__row">
                 <label>
-                  Количество портов
+                  {t('blueprint.editor.portCount')}
                   <input
-                    aria-label={`Количество портов ${i + 1}`}
+                    aria-label={t('blueprint.editor.portCountIndexed', { index: i + 1 })}
                     type="number"
                     value={g.count}
                     onChange={(e) =>
@@ -287,9 +280,9 @@ export function ObjectBlueprintEditor({
                   />
                 </label>
                 <label>
-                  Начать с номера
+                  {t('blueprint.editor.startingNumber')}
                   <input
-                    aria-label={`Начать с номера ${i + 1}`}
+                    aria-label={t('blueprint.editor.startingNumberIndexed', { index: i + 1 })}
                     type="number"
                     value={g.startingNumber}
                     onChange={(e) =>
@@ -300,9 +293,9 @@ export function ObjectBlueprintEditor({
               </div>
               <div className="blueprint-editor-controls__row">
                 <label>
-                  Начало диапазона (0–1)
+                  {t('blueprint.editor.rangeStart')}
                   <input
-                    aria-label={`Начало диапазона ${i + 1}`}
+                    aria-label={t('blueprint.editor.rangeStartIndexed', { index: i + 1 })}
                     type="number"
                     min="0"
                     max="1"
@@ -314,9 +307,9 @@ export function ObjectBlueprintEditor({
                   />
                 </label>
                 <label>
-                  Длина диапазона (0–1)
+                  {t('blueprint.editor.rangeLength')}
                   <input
-                    aria-label={`Длина диапазона ${i + 1}`}
+                    aria-label={t('blueprint.editor.rangeLengthIndexed', { index: i + 1 })}
                     type="number"
                     min="0.01"
                     max="1"
@@ -329,8 +322,7 @@ export function ObjectBlueprintEditor({
                 </label>
               </div>
               <span className="blueprint-editor__hint">
-                Порты равномерно располагаются внутри этого диапазона выбранной
-                стороны.
+                {t('blueprint.editor.rangeHint')}
               </span>
               <button
                 type="button"
@@ -349,7 +341,7 @@ export function ObjectBlueprintEditor({
                   })
                 }
               >
-                Удалить группу
+                {t('blueprint.editor.removeGroup')}
               </button>
             </fieldset>
           ))}
@@ -363,39 +355,37 @@ export function ObjectBlueprintEditor({
               }))
             }
           >
-            Добавить группу портов
+            {t('blueprint.editor.addGroup')}
           </button>
-          <h2>Индивидуальные внутренние связи</h2>
+          <h2>{t('blueprint.editor.individualLinks')}</h2>
           <p className="blueprint-editor__hint">
-            Соедините любые два конкретных порта. Такие связи дополняют правила
-            пар по номеру.
+            {t('blueprint.editor.individualLinksHint')}
           </p>
-          {editor.individualLinks.length === 0 && <p className="blueprint-editor__hint">Пока нет индивидуальных внутренних связей.</p>}
+          {editor.individualLinks.length === 0 && <p className="blueprint-editor__hint">{t('blueprint.editor.individualLinksEmpty')}</p>}
           {editor.individualLinks.map((link, i) => (
             <div className="blueprint-pair" key={`${link.from_slot_key}-${link.to_slot_key}-${i}`}>
               <label>
-                <span className="sr-only">Первый порт индивидуальной связи {i + 1}</span>
-                <select aria-label={`Первый порт индивидуальной связи ${i + 1}`} value={link.from_slot_key} onChange={(e) => updateIndividualLink(i, 'from_slot_key', e.target.value)}>
-                  {!portChoices.some((port) => port.key === link.from_slot_key) && <option value={link.from_slot_key}>Недоступный порт</option>}
+                <span className="sr-only">{t('blueprint.editor.firstLinkPort', { index: i + 1 })}</span>
+                <select aria-label={t('blueprint.editor.firstLinkPort', { index: i + 1 })} value={link.from_slot_key} onChange={(e) => updateIndividualLink(i, 'from_slot_key', e.target.value)}>
+                  {!portChoices.some((port) => port.key === link.from_slot_key) && <option value={link.from_slot_key}>{t('blueprint.editor.unavailablePort')}</option>}
                   {portChoices.map((port) => <option key={port.key} value={port.key}>{port.label}</option>)}
                 </select>
               </label>
               <span>↔</span>
               <label>
-                <span className="sr-only">Второй порт индивидуальной связи {i + 1}</span>
-                <select aria-label={`Второй порт индивидуальной связи ${i + 1}`} value={link.to_slot_key} onChange={(e) => updateIndividualLink(i, 'to_slot_key', e.target.value)}>
-                  {!portChoices.some((port) => port.key === link.to_slot_key) && <option value={link.to_slot_key}>Недоступный порт</option>}
+                <span className="sr-only">{t('blueprint.editor.secondLinkPort', { index: i + 1 })}</span>
+                <select aria-label={t('blueprint.editor.secondLinkPort', { index: i + 1 })} value={link.to_slot_key} onChange={(e) => updateIndividualLink(i, 'to_slot_key', e.target.value)}>
+                  {!portChoices.some((port) => port.key === link.to_slot_key) && <option value={link.to_slot_key}>{t('blueprint.editor.unavailablePort')}</option>}
                   {portChoices.map((port) => <option key={port.key} value={port.key}>{port.label}</option>)}
                 </select>
               </label>
-              <button type="button" aria-label={`Удалить индивидуальную связь ${i + 1}`} onClick={() => setEditor((s) => ({ ...s, individualLinks: s.individualLinks.filter((_, current) => current !== i) }))}>Удалить</button>
+              <button type="button" aria-label={t('blueprint.editor.removeIndividualLink', { index: i + 1 })} onClick={() => setEditor((s) => ({ ...s, individualLinks: s.individualLinks.filter((_, current) => current !== i) }))}>{t('blueprint.editor.remove')}</button>
             </div>
           ))}
-          <button type="button" className="secondary-action" disabled={portChoices.length < 2} onClick={() => setEditor((s) => portChoices.length < 2 ? s : { ...s, individualLinks: [...s.individualLinks, { from_slot_key: portChoices[0].key, to_slot_key: portChoices[1].key }] })}>Добавить индивидуальную связь</button>
-          <h2>Внутренние пары портов</h2>
+          <button type="button" className="secondary-action" disabled={portChoices.length < 2} onClick={() => setEditor((s) => portChoices.length < 2 ? s : { ...s, individualLinks: [...s.individualLinks, { from_slot_key: portChoices[0].key, to_slot_key: portChoices[1].key }] })}>{t('blueprint.editor.addIndividualLink')}</button>
+          <h2>{t('blueprint.editor.pairs')}</h2>
           <p className="blueprint-editor__hint">
-            Правило соединяет порт 1 одной группы с портом 1 другой группы,
-            затем порт 2 с портом 2.
+            {t('blueprint.editor.pairsHint')}
           </p>
           {editor.pairs.map((p, i) => (
             <div
@@ -403,9 +393,9 @@ export function ObjectBlueprintEditor({
               key={`${p.leftGroupId}-${p.rightGroupId}-${i}`}
             >
               <label>
-                <span className="sr-only">Первая группа правила {i + 1}</span>
+                <span className="sr-only">{t('blueprint.editor.firstPairGroup', { index: i + 1 })}</span>
                 <select
-                  aria-label={`Первая группа правила ${i + 1}`}
+                  aria-label={t('blueprint.editor.firstPairGroup', { index: i + 1 })}
                   value={p.leftGroupId}
                   onChange={(e) =>
                     setEditor((s) => ({
@@ -425,9 +415,9 @@ export function ObjectBlueprintEditor({
               </label>
               <span>↔</span>
               <label>
-                <span className="sr-only">Вторая группа правила {i + 1}</span>
+                <span className="sr-only">{t('blueprint.editor.secondPairGroup', { index: i + 1 })}</span>
                 <select
-                  aria-label={`Вторая группа правила ${i + 1}`}
+                  aria-label={t('blueprint.editor.secondPairGroup', { index: i + 1 })}
                   value={p.rightGroupId}
                   onChange={(e) =>
                     setEditor((s) => ({
@@ -447,7 +437,7 @@ export function ObjectBlueprintEditor({
               </label>
               <button
                 type="button"
-                aria-label={`Удалить правило ${i + 1}`}
+                aria-label={t('blueprint.editor.removePair', { index: i + 1 })}
                 onClick={() =>
                   setEditor((s) => ({
                     ...s,
@@ -455,7 +445,7 @@ export function ObjectBlueprintEditor({
                   }))
                 }
               >
-                Удалить
+                {t('blueprint.editor.remove')}
               </button>
             </div>
           ))}
@@ -480,46 +470,46 @@ export function ObjectBlueprintEditor({
               )
             }
           >
-            Добавить правило пар по номеру
+            {t('blueprint.editor.addPair')}
           </button>
-          {hasAttemptedSave && generated.errors.length > 0 && <p role="alert" className="blueprint-editor__error">{generated.errors.join(" ")}</p>}
-          {saveError && <p role="alert" className="blueprint-editor__error">Не удалось сохранить шаблон: {saveError}</p>}
+          {hasAttemptedSave && generated.validationErrors.length > 0 && <p role="alert" className="blueprint-editor__error">{generated.validationErrors.map((error) => t(validationKey[error])).join(' ')}</p>}
+          {saveError && <p role="alert" className="blueprint-editor__error">{t('blueprint.editor.saveFailed', { error: saveError })}</p>}
           <button
             type="button"
             className="primary-action"
             disabled={saving}
             onClick={() => void save()}
           >
-            {saving ? "Сохраняем…" : saveLabel}
+            {saving ? t('blueprint.editor.saving') : saveLabel}
           </button>
         </section>
         <section className="blueprint-editor-preview">
           <div className="blueprint-editor-preview__heading">
-            <h2>Предпросмотр схемы</h2>
+            <h2>{t('blueprint.editor.preview')}</h2>
             <div>
               <button
                 type="button"
-                aria-label="Уменьшить масштаб"
+                aria-label={t('blueprint.editor.zoomOut')}
                 onClick={() => setZoom((v) => Math.max(0.25, v - 0.25))}
               >
                 −
               </button>
               <button
                 type="button"
-                aria-label="Сбросить масштаб"
+                aria-label={t('blueprint.editor.resetZoom')}
                 onClick={() => setZoom(1)}
               >
                 {Math.round(zoom * 100)}%
               </button>
               <button
                 type="button"
-                aria-label="Увеличить масштаб"
+                aria-label={t('blueprint.editor.zoomIn')}
                 onClick={() => setZoom((v) => Math.min(2, v + 0.25))}
               >
                 +
               </button>
               <button type="button" onClick={() => setZoom(1)}>
-                Вписать
+                {t('blueprint.editor.fit')}
               </button>
             </div>
           </div>
@@ -535,8 +525,7 @@ export function ObjectBlueprintEditor({
             scale={zoom}
           />
           <p>
-            Портов: {generated.slots.length} · внутренних связей:{" "}
-            {generated.internalLinks.length}
+            {t('blueprint.editor.summary', { ports: generated.slots.length, links: generated.internalLinks.length })}
           </p>
         </section>
       </div>

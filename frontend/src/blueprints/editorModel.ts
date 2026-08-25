@@ -24,7 +24,11 @@ export interface BlueprintEditorState {
   individualLinks: BlueprintInternalLink[];
 }
 
-export interface GeneratedBlueprint { slots: BlueprintSlot[]; internalLinks: BlueprintInternalLink[]; errors: string[]; }
+export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'stableGroupId' | 'uniqueStableGroupIds' | 'groupDisplayPrefix' | 'groupPortCount' | 'groupStartingNumber' | 'groupRange' | 'duplicateSlotKeys' | 'pairMissingGroup' | 'pairSameGroup' | 'pairCountMismatch' | 'duplicateInternalLink' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink' | 'individualDuplicatesPair';
+export interface GeneratedBlueprint { slots: BlueprintSlot[]; internalLinks: BlueprintInternalLink[]; errors: string[]; validationErrors: BlueprintValidationError[]; }
+const validationErrorText: Record<BlueprintValidationError, string> = {
+  nameRequired: 'Укажите название шаблона.', dimensionsPositive: 'Ширина и высота должны быть больше нуля.', colorFormat: 'Цвет должен быть в формате #RRGGBB.', stableGroupId: 'Не удалось создать стабильный идентификатор группы.', uniqueStableGroupIds: 'Не удалось создать уникальные стабильные идентификаторы групп.', groupDisplayPrefix: 'Укажите префикс отображаемого имени каждой группы.', groupPortCount: 'Количество портов в группе должно быть не меньше 1.', groupStartingNumber: 'Начальный номер должен быть целым числом от 0.', groupRange: 'Диапазон группы должен находиться в пределах 0–1 и иметь положительную длину.', duplicateSlotKeys: 'Получились повторяющиеся идентификаторы портов. Измените группы.', pairMissingGroup: 'Правило внутренних пар ссылается на отсутствующую группу.', pairSameGroup: 'Правило внутренних пар должно соединять две разные группы.', pairCountMismatch: 'Внутренние пары возможны только при одинаковом количестве портов в группах.', duplicateInternalLink: 'Сгенерирована повторяющаяся внутренняя связь.', individualSelfLink: 'Индивидуальная внутренняя связь не может соединять порт с самим собой.', individualMissingPort: 'Индивидуальная внутренняя связь ссылается на отсутствующий порт.', duplicateIndividualLink: 'Повторяется индивидуальная внутренняя связь.', individualDuplicatesPair: 'Индивидуальная связь повторяет правило пар по номеру.',
+};
 
 const pad = (value: number, width: number) => String(value).padStart(width, '0');
 const normalized = (value: string) => value.trim();
@@ -50,20 +54,20 @@ export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocum
 };
 
 export const generateBlueprint = (state: BlueprintEditorState): GeneratedBlueprint => {
-  const errors: string[] = [];
-  if (!normalized(state.name)) errors.push('Укажите название шаблона.');
-  if (!Number.isFinite(state.width) || state.width <= 0 || !Number.isFinite(state.height) || state.height <= 0) errors.push('Ширина и высота должны быть больше нуля.');
-  if (state.fillColor && !/^#[0-9A-Fa-f]{6}$/.test(state.fillColor)) errors.push('Цвет должен быть в формате #RRGGBB.');
+  const errors: BlueprintValidationError[] = [];
+  if (!normalized(state.name)) errors.push('nameRequired');
+  if (!Number.isFinite(state.width) || state.width <= 0 || !Number.isFinite(state.height) || state.height <= 0) errors.push('dimensionsPositive');
+  if (state.fillColor && !/^#[0-9A-Fa-f]{6}$/.test(state.fillColor)) errors.push('colorFormat');
   const stableKeys = new Set<string>();
   state.groups.forEach((group) => {
     const stableKey = normalized(group.keyPrefix);
-    if (!stableKey) errors.push('Не удалось создать стабильный идентификатор группы.');
-    else if (stableKeys.has(stableKey)) errors.push('Не удалось создать уникальные стабильные идентификаторы групп.');
+    if (!stableKey) errors.push('stableGroupId');
+    else if (stableKeys.has(stableKey)) errors.push('uniqueStableGroupIds');
     stableKeys.add(stableKey);
-    if (!normalized(group.displayPrefix)) errors.push('Укажите префикс отображаемого имени каждой группы.');
-    if (!Number.isInteger(group.count) || group.count < 1) errors.push('Количество портов в группе должно быть не меньше 1.');
-    if (!Number.isInteger(group.startingNumber) || group.startingNumber < 0) errors.push('Начальный номер должен быть целым числом от 0.');
-    if (!Number.isFinite(group.placementOffset) || group.placementOffset < 0 || group.placementOffset > 1 || !Number.isFinite(group.placementSpan) || group.placementSpan <= 0 || group.placementSpan > 1 || group.placementOffset + group.placementSpan > 1) errors.push('Диапазон группы должен находиться в пределах 0–1 и иметь положительную длину.');
+    if (!normalized(group.displayPrefix)) errors.push('groupDisplayPrefix');
+    if (!Number.isInteger(group.count) || group.count < 1) errors.push('groupPortCount');
+    if (!Number.isInteger(group.startingNumber) || group.startingNumber < 0) errors.push('groupStartingNumber');
+    if (!Number.isFinite(group.placementOffset) || group.placementOffset < 0 || group.placementOffset > 1 || !Number.isFinite(group.placementSpan) || group.placementSpan <= 0 || group.placementSpan > 1 || group.placementOffset + group.placementSpan > 1) errors.push('groupRange');
   });
 
   const slots: BlueprintSlot[] = [];
@@ -75,7 +79,7 @@ export const generateBlueprint = (state: BlueprintEditorState): GeneratedBluepri
     }));
   }
   const slotKeys = slots.map((slot) => slot.key);
-  if (new Set(slotKeys).size !== slotKeys.length) errors.push('Получились повторяющиеся идентификаторы портов. Измените группы.');
+  if (new Set(slotKeys).size !== slotKeys.length) errors.push('duplicateSlotKeys');
 
   const groupsById = new Map(state.groups.map((group) => [group.id, group]));
   const links: BlueprintInternalLink[] = [];
@@ -83,26 +87,26 @@ export const generateBlueprint = (state: BlueprintEditorState): GeneratedBluepri
   const linkKey = (from: string, to: string) => [from, to].sort().join('\u0000');
   for (const pair of state.pairs) {
     const left = groupsById.get(pair.leftGroupId); const right = groupsById.get(pair.rightGroupId);
-    if (!left || !right) { errors.push('Правило внутренних пар ссылается на отсутствующую группу.'); continue; }
-    if (left.id === right.id) { errors.push('Правило внутренних пар должно соединять две разные группы.'); continue; }
-    if (left.count !== right.count) { errors.push('Внутренние пары возможны только при одинаковом количестве портов в группах.'); continue; }
+    if (!left || !right) { errors.push('pairMissingGroup'); continue; }
+    if (left.id === right.id) { errors.push('pairSameGroup'); continue; }
+    if (left.count !== right.count) { errors.push('pairCountMismatch'); continue; }
     generatedGroupKeys(left).forEach((from_slot_key, index) => {
       const to_slot_key = generatedGroupKeys(right)[index]; const key = linkKey(from_slot_key, to_slot_key);
-      if (linkSources.has(key)) errors.push('Сгенерирована повторяющаяся внутренняя связь.'); else { linkSources.set(key, 'pair'); links.push({ from_slot_key, to_slot_key }); }
+      if (linkSources.has(key)) errors.push('duplicateInternalLink'); else { linkSources.set(key, 'pair'); links.push({ from_slot_key, to_slot_key }); }
     });
   }
   const generatedSlotKeys = new Set(slotKeys);
   for (const link of state.individualLinks) {
     const { from_slot_key, to_slot_key } = link;
-    if (from_slot_key === to_slot_key) { errors.push('Индивидуальная внутренняя связь не может соединять порт с самим собой.'); continue; }
-    if (!generatedSlotKeys.has(from_slot_key) || !generatedSlotKeys.has(to_slot_key)) { errors.push('Индивидуальная внутренняя связь ссылается на отсутствующий порт.'); continue; }
+    if (from_slot_key === to_slot_key) { errors.push('individualSelfLink'); continue; }
+    if (!generatedSlotKeys.has(from_slot_key) || !generatedSlotKeys.has(to_slot_key)) { errors.push('individualMissingPort'); continue; }
     const key = linkKey(from_slot_key, to_slot_key);
     const source = linkSources.get(key);
-    if (source === 'individual') errors.push('Повторяется индивидуальная внутренняя связь.');
-    else if (source === 'pair') errors.push('Индивидуальная связь повторяет правило пар по номеру.');
+    if (source === 'individual') errors.push('duplicateIndividualLink');
+    else if (source === 'pair') errors.push('individualDuplicatesPair');
     else { linkSources.set(key, 'individual'); links.push(link); }
   }
-  return { slots, internalLinks: links, errors };
+  return { slots, internalLinks: links, errors: errors.map((error) => validationErrorText[error]), validationErrors: errors };
 };
 
 export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateObjectBlueprintRequest; errors: string[] } => {
