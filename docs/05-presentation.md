@@ -132,6 +132,13 @@ dependent placements and positions. Resolvers and traces do not read SavedMap
 state; the Map page turns explicit placement refs into a bounded projection
 scope.
 
+`MapCableRoute` is separate SavedMap-owned Physical/L1 presentation state,
+keyed by `(map, canonical cable PhysicalObject, view)`. It stores only ordered
+flow-coordinate `{x, y}` waypoints: endpoints are not persisted, no route row
+is distinct from an explicit empty waypoint list, and it does not require a
+`MapPlacement`. SavedMap/cable deletion cascades route removal; placement and
+topology changes do not derive or mutate the route.
+
 ### MAPS.1 — membership, scenes and per-view positions
 
 **IMPLEMENTED**

@@ -75,11 +75,18 @@ coordinates. Overlap локально отклоняется без write, а no
 
 ### L1S.4a — Cable route presentation contract
 
-- Persisted SavedMap Physical/L1 route geometry и ordered waypoints.
-- Определить read/write boundary.
-- Сохранить независимость route geometry от canonical topology.
+**IMPLEMENTED**
+
+- `SavedMap` Physical/L1 presentation route persistence uses canonical cable
+  identity, ordered flow-coordinate waypoints and an explicit view key.
+- `cable_routes` is returned by the authoritative SavedMap document; no route
+  row is distinct from a persisted route with `waypoints=[]`.
+- Full-replacement PUT and reset/delete are independent from `MapPlacement` and
+  canonical topology.
 
 ### L1S.4b — Existing cable route rendering/editing
+
+**OPEN**
 
 - Exact port anchors, где они известны.
 - Отображение сохранённой трассы.
@@ -87,6 +94,8 @@ coordinates. Overlap локально отклоняется без write, а no
 - Выпрямление/reset route без topology mutations.
 
 ### L1S.4c — Visual port-to-port wiring
+
+**OPEN**
 
 - Выбрать source port, проложить zero or more waypoints и выбрать destination port.
 - Подсвечивать proven internal passive continuity.

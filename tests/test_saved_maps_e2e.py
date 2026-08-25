@@ -49,6 +49,7 @@ def test_create_list_and_detail_saved_maps_are_empty_and_use_presentation_refs()
     assert created["name"] == "Серверная"
     assert created["map_ref"] == {"entity_type": "SavedMap", "entity_id": map_id(created)}
     assert created["placements"] == []
+    assert created["cable_routes"] == []
     assert "ref_type" not in created["map_ref"]
 
     listed = client.get("/v1/maps")

@@ -93,6 +93,28 @@ class MapPlacementDocument(BaseModel):
     positions: dict[Literal["L1/PHYSICAL_OBJECT", "L2/DEVICE"], MapViewPositionDocument]
 
 
+class MapCableRouteWaypoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: FiniteFloat
+    y: FiniteFloat
+
+
+class SetMapCableRouteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    view: Literal["physical"]
+    waypoints: list[MapCableRouteWaypoint]
+
+
+class MapCableRouteDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cable_ref: ProjectionSourceRef
+    view: Literal["L1/PHYSICAL_OBJECT"]
+    waypoints: list[MapCableRouteWaypoint]
+
+
 class SavedMapSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -104,6 +126,7 @@ class SavedMapSummary(BaseModel):
 
 class SavedMapDocument(SavedMapSummary):
     placements: list[MapPlacementDocument]
+    cable_routes: list[MapCableRouteDocument]
 
 
 class SavedMapListDocument(BaseModel):

@@ -1,17 +1,21 @@
+from __future__ import annotations
+
 import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.device_catalog import DeviceCatalog
 from app.errors import ModelError, ValidationError
-from app.models import MapPlacement, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import MapCableRoute, MapPlacement, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
 class SavedMapDetail:
     saved_map: SavedMap
     placements: tuple[MapPlacement, ...]
+    cable_routes: tuple[MapCableRoute, ...]
 
 
 class SavedMapCatalog:
@@ -33,7 +37,7 @@ class SavedMapCatalog:
 
     def detail(self, map_id: uuid.UUID) -> SavedMapDetail:
         saved_map = self._require_map(map_id)
-        return SavedMapDetail(saved_map, self._placements(map_id))
+        return SavedMapDetail(saved_map, self._placements(map_id), self._cable_routes(map_id))
 
     def delete(self, map_id: uuid.UUID) -> None:
         self.session.delete(self._require_map(map_id))
@@ -106,6 +110,52 @@ class SavedMapCatalog:
         self.session.delete(placement)
         self.session.flush()
 
+    def set_cable_route(
+        self,
+        map_id: uuid.UUID,
+        cable_physical_object_id: uuid.UUID,
+        waypoints: list[dict[str, float]],
+    ) -> MapCableRoute:
+        self._require_map(map_id)
+        self._require_cable(cable_physical_object_id)
+        route = self.session.scalar(
+            select(MapCableRoute)
+            .where(
+                MapCableRoute.map_id == map_id,
+                MapCableRoute.cable_physical_object_id == cable_physical_object_id,
+                MapCableRoute.view_key == MapViewKey.PHYSICAL,
+            )
+            .with_for_update()
+        )
+        if route is None:
+            route = MapCableRoute(
+                map_id=map_id,
+                cable_physical_object_id=cable_physical_object_id,
+                view_key=MapViewKey.PHYSICAL,
+            )
+            self.session.add(route)
+        route.waypoints = [{"x": point["x"], "y": point["y"]} for point in waypoints]
+        self.session.flush()
+        return route
+
+    def delete_cable_route(self, map_id: uuid.UUID, cable_physical_object_id: uuid.UUID) -> None:
+        self._require_map(map_id)
+        route = self.session.scalar(
+            select(MapCableRoute)
+            .where(
+                MapCableRoute.map_id == map_id,
+                MapCableRoute.cable_physical_object_id == cable_physical_object_id,
+                MapCableRoute.view_key == MapViewKey.PHYSICAL,
+            )
+            .with_for_update()
+        )
+        if route is None:
+            raise ValidationError("MapCableRoute does not exist", {
+                "map_id": str(map_id), "cable_physical_object_id": str(cable_physical_object_id),
+            })
+        self.session.delete(route)
+        self.session.flush()
+
     def placements(self, map_id: uuid.UUID) -> SavedMapDetail:
         return self.detail(map_id)
 
@@ -119,3 +169,19 @@ class SavedMapCatalog:
         return tuple(self.session.scalars(select(MapPlacement).options(selectinload(MapPlacement.view_positions)).where(
             MapPlacement.map_id == map_id
         ).order_by(MapPlacement.physical_object_id)))
+
+    def _cable_routes(self, map_id: uuid.UUID) -> tuple[MapCableRoute, ...]:
+        return tuple(self.session.scalars(
+            select(MapCableRoute)
+            .where(MapCableRoute.map_id == map_id)
+            .order_by(MapCableRoute.cable_physical_object_id, MapCableRoute.view_key)
+        ))
+
+    def _require_cable(self, physical_object_id: uuid.UUID) -> None:
+        if self.session.get(PhysicalObject, physical_object_id) is None:
+            raise ValidationError("PhysicalObject does not exist", {"physical_object_id": str(physical_object_id)})
+        object_class = DeviceCatalog(self.session).physical_object_classes([physical_object_id]).get(physical_object_id)
+        if object_class is None or object_class.value != "cable":
+            raise ValidationError("PhysicalObject is not a cable", {
+                "reason": "MAP_CABLE_ROUTE_OBJECT_NOT_CABLE", "physical_object_id": str(physical_object_id),
+            })

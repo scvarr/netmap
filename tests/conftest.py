@@ -27,6 +27,7 @@ from app.models import (
     PacketProcessingPlanAttachmentSet,
     ObjectBlueprint,
     ObjectBlueprintVersion,
+    MapCableRoute,
     MapPlacement,
     MapViewPosition,
     PhysicalObject,
@@ -86,6 +87,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
 def clean_database():
     require_confirmed_test_database()
     with SessionLocal.begin() as session:
+        session.execute(delete(MapCableRoute))
         session.execute(delete(MapViewPosition))
         session.execute(delete(MapPlacement))
         session.execute(delete(SavedMap))

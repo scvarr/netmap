@@ -20,6 +20,9 @@ class PhysicalObject(Base):
     map_placements: Mapped[list["MapPlacement"]] = relationship(
         back_populates="physical_object", passive_deletes=True
     )
+    map_cable_routes: Mapped[list["MapCableRoute"]] = relationship(
+        back_populates="cable_physical_object", passive_deletes=True
+    )
 
 
 class SavedMap(Base):
@@ -40,6 +43,9 @@ class SavedMap(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
     placements: Mapped[list["MapPlacement"]] = relationship(
+        back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
+    )
+    cable_routes: Mapped[list["MapCableRoute"]] = relationship(
         back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
     )
 
@@ -93,6 +99,25 @@ class MapViewPosition(Base):
     y: Mapped[float] = mapped_column(Float, nullable=False)
     locked: Mapped[bool] = mapped_column(nullable=False, server_default="false")
     placement: Mapped[MapPlacement] = relationship(back_populates="view_positions")
+
+
+class MapCableRoute(Base):
+    """SavedMap-owned Physical/L1 cable route geometry, never canonical topology."""
+
+    __tablename__ = "map_cable_routes"
+    __table_args__ = (
+        UniqueConstraint("map_id", "cable_physical_object_id", "view_key", name="uq_map_cable_routes_map_cable_view"),
+        CheckConstraint("view_key = 'L1/PHYSICAL_OBJECT'", name="map_cable_routes_view_key_physical_only"),
+        Index("ix_map_cable_routes_cable_physical_object_id", "cable_physical_object_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
+    cable_physical_object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("physical_objects.id", ondelete="CASCADE"), nullable=False)
+    view_key: Mapped[MapViewKey] = mapped_column(String(32), nullable=False)
+    waypoints: Mapped[list[dict[str, float]]] = mapped_column(JSONB, nullable=False, default=list)
+    saved_map: Mapped[SavedMap] = relationship(back_populates="cable_routes")
+    cable_physical_object: Mapped[PhysicalObject] = relationship(back_populates="map_cable_routes")
 
 
 class ConnectionPoint(Base):

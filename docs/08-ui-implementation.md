@@ -22,6 +22,15 @@ evidence-based overlay на Physical map. Карта не владеет
 canonical topology: она читает public projection DTO и SavedMap presentation
 state.
 
+The authoritative SavedMap read also contains `cable_routes`: each record is a
+canonical `PhysicalObject` cable ref, explicit `L1/PHYSICAL_OBJECT` view and an
+ordered list of finite flow-coordinate `{x, y}` waypoints. `PUT
+/v1/maps/{map_id}/cable-routes/{cable_id}` replaces the complete list (including
+an explicit empty list); DELETE removes the record, so no-route remains distinct
+from zero waypoints. The route is SavedMap-owned presentation state, independent
+of `MapPlacement` and canonical topology. UI rendering and editing of it are not
+implemented yet.
+
 Связанные документы: [[05-presentation|05. Представление]], [[02-04-projections-aggregation|02.4 Projections]], [[07-workspaces|07. Workspace]], [[09-ui-ux-review|09. Рабочий L1 UI/UX review]], [[09-01-l1-spatial-foundation-plan|09.1 План завершения L1 spatial foundation]].
 
 ## Ownership

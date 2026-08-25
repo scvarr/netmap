@@ -96,6 +96,7 @@ from app.schemas import (
     NATEvaluationArtifact,
     NATEvaluationQuery,
     MoveMapPlacementRequest,
+    SetMapCableRouteRequest,
     SetMapViewLockRequest,
     RouteDecisionArtifact,
     RouteDecisionQuery,
@@ -154,6 +155,18 @@ def _saved_map_document(detail) -> dict[str, object]:
                 },
             }
             for placement in detail.placements
+        ],
+        "cable_routes": [
+            {
+                "cable_ref": {
+                    "ref_type": "CANONICAL_FACT",
+                    "entity_type": "PhysicalObject",
+                    "entity_id": route.cable_physical_object_id,
+                },
+                "view": str(route.view_key),
+                "waypoints": route.waypoints,
+            }
+            for route in detail.cable_routes
         ],
     }
 
@@ -272,6 +285,33 @@ def set_map_view_lock(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key
 def delete_map_placement(map_id: uuid.UUID, physical_object_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
     with session.begin():
         SavedMapCatalog(session).remove_placement(map_id, physical_object_id)
+
+
+@app.put("/v1/maps/{map_id}/cable-routes/{cable_physical_object_id}", response_model=SavedMapDocument, responses={422: {"model": ErrorResponse}})
+def set_map_cable_route(
+    map_id: uuid.UUID,
+    cable_physical_object_id: uuid.UUID,
+    query: SetMapCableRouteRequest,
+    session: Session = Depends(get_session),
+) -> SavedMapDocument:
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog.set_cable_route(
+            map_id,
+            cable_physical_object_id,
+            [waypoint.model_dump() for waypoint in query.waypoints],
+        )
+        return _saved_map_document(catalog.detail(map_id))
+
+
+@app.delete("/v1/maps/{map_id}/cable-routes/{cable_physical_object_id}", status_code=204, responses={422: {"model": ErrorResponse}})
+def delete_map_cable_route(
+    map_id: uuid.UUID,
+    cable_physical_object_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        SavedMapCatalog(session).delete_cable_route(map_id, cable_physical_object_id)
 
 
 @app.post(
