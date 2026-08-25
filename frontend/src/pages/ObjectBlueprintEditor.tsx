@@ -53,7 +53,7 @@ export const newBlueprintEditorState = (): BlueprintEditorState => ({
   width: 120,
   height: 60,
   fillColor: "#28565a",
-  groups: [newEndpointGroup("A")],
+  groups: [],
   pairs: [],
   individualLinks: [],
 });
@@ -75,6 +75,7 @@ export function ObjectBlueprintEditor({
 }) {
   const [editor, setEditor] = useState(initialState);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [hasAttemptedSave, setHasAttemptedSave] = useState(false);
   const [saving, setSaving] = useState(false);
   const [zoom, setZoom] = useState(1);
   const generated = useMemo(() => generateBlueprint(editor), [editor]);
@@ -106,8 +107,8 @@ export function ObjectBlueprintEditor({
     }));
   const save = async () => {
     const result = createBlueprintRequest(editor);
+    setHasAttemptedSave(true);
     if (!result.request) {
-      setSaveError(result.errors.join(" "));
       return;
     }
     setSaveError(null);
@@ -185,7 +186,7 @@ export function ObjectBlueprintEditor({
           </div>
           <p className="blueprint-editor__hint">
             Это схематическая форма шаблона; размер на карте определяет
-            renderer.
+            отображение карты.
           </p>
           <div className="blueprint-editor-color">
             <label>
@@ -215,6 +216,7 @@ export function ObjectBlueprintEditor({
             Группа создаёт последовательность портов с общей маркировкой и
             расположением на схеме.
           </p>
+          {editor.groups.length === 0 && <p className="blueprint-editor__hint">Группы портов необязательны. Добавьте группу, если у объекта есть порты.</p>}
           {editor.groups.map((g, i) => (
             <fieldset className="endpoint-group" key={g.id}>
               <legend>
@@ -368,6 +370,7 @@ export function ObjectBlueprintEditor({
             Соедините любые два конкретных порта. Такие связи дополняют правила
             пар по номеру.
           </p>
+          {editor.individualLinks.length === 0 && <p className="blueprint-editor__hint">Пока нет индивидуальных внутренних связей.</p>}
           {editor.individualLinks.map((link, i) => (
             <div className="blueprint-pair" key={`${link.from_slot_key}-${link.to_slot_key}-${i}`}>
               <label>
@@ -479,11 +482,8 @@ export function ObjectBlueprintEditor({
           >
             Добавить правило пар по номеру
           </button>
-          {(saveError || generated.errors.length > 0) && (
-            <p role="alert" className="blueprint-editor__error">
-              {saveError || generated.errors.join(" ")}
-            </p>
-          )}
+          {hasAttemptedSave && generated.errors.length > 0 && <p role="alert" className="blueprint-editor__error">{generated.errors.join(" ")}</p>}
+          {saveError && <p role="alert" className="blueprint-editor__error">Не удалось сохранить шаблон: {saveError}</p>}
           <button
             type="button"
             className="primary-action"

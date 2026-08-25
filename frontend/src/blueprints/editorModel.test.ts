@@ -5,6 +5,12 @@ const base = (groups: BlueprintEditorState['groups']): BlueprintEditorState => (
 const group = (id: string, keyPrefix: string, kind: 'CONNECTION_POINT' | 'NETWORK_PORT', side: 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM', count = 1) => ({ id, keyPrefix, displayPrefix: keyPrefix, kind, side, count, startingNumber: 1, placementOffset: 0, placementSpan: 1 });
 
 describe('Blueprint editor group expansion', () => {
+  it('creates a valid zero-group Blueprint request', () => {
+    const state = base([]);
+    const request = createBlueprintRequest(state).request;
+    expect(request?.slots).toEqual([]); expect(request?.internal_links).toEqual([]);
+    expect(request?.authoring_recipe).toEqual({ endpoint_groups: [], pair_recipes: [], individual_links: [] });
+  });
   it('creates a cable as two CP slots plus one explicit link', () => {
     const state = base([group('a', 'A', 'CONNECTION_POINT', 'LEFT'), group('b', 'B', 'CONNECTION_POINT', 'RIGHT')]); state.pairs = [{ leftGroupId: 'a', rightGroupId: 'b' }];
     const generated = generateBlueprint(state);
@@ -41,6 +47,11 @@ describe('Blueprint editor group expansion', () => {
     const state = base([group('front', 'front', 'CONNECTION_POINT', 'LEFT', 24), group('rear', 'rear', 'CONNECTION_POINT', 'RIGHT', 12)]); state.pairs = [{ leftGroupId: 'front', rightGroupId: 'rear' }];
     const result = createBlueprintRequest(state);
     expect(result.request).toBeUndefined(); expect(result.errors).toEqual([expect.stringContaining('одинаковом количестве')]);
+  });
+  it('blocks a pair rule that selects the same group without generating self-links', () => {
+    const state = base([group('same', 'same', 'CONNECTION_POINT', 'LEFT', 2)]); state.pairs = [{ leftGroupId: 'same', rightGroupId: 'same' }];
+    const result = createBlueprintRequest(state);
+    expect(result.request).toBeUndefined(); expect(result.errors).toContain('Правило внутренних пар должно соединять две разные группы.');
   });
   it('keeps canonical keys through presentation and kind edits, then appends or removes only trailing ordinals', () => {
     const original = group('stable-group', 'opaque-group', 'CONNECTION_POINT', 'LEFT', 2);

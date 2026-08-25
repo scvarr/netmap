@@ -390,11 +390,13 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     expect(screen.getByRole('link', { name: 'Создать объект' })).toHaveAttribute('href', '/infrastructure/objects/new?blueprint=bp-1&version=v-1');
     await userEvent.click(screen.getByRole('link', { name: 'Создать шаблон' }));
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Cable from editor');
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить группу портов' }));
+    await userEvent.type(screen.getByLabelText('Префикс отображаемого имени 1'), 'A');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
     await waitFor(() => expect(objectBlueprintDataSource.createObjectBlueprint).toHaveBeenCalled());
     expect(objectBlueprintDataSource.createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'Cable from editor', slots: expect.arrayContaining([expect.objectContaining({ key: 'A01' })]), internal_links: [],
-      authoring_recipe: { endpoint_groups: [expect.objectContaining({ group_id: 'group-1', key_prefix: 'A' })], pair_recipes: [] },
+      name: 'Cable from editor', slots: expect.arrayContaining([expect.objectContaining({ key: expect.stringMatching(/^group-.*:1$/), display_name: 'A01' })]), internal_links: [],
+      authoring_recipe: { endpoint_groups: [expect.objectContaining({ display_prefix: 'A' })], pair_recipes: [], individual_links: [] },
     }));
     expect(await screen.findByTestId('location')).toHaveTextContent('/library/object-blueprints');
     expect(objectBlueprintDataSource.loadObjectBlueprints).toHaveBeenCalledTimes(2);

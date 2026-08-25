@@ -152,6 +152,8 @@ complete. L1S.5 is not included in this slice.
 
 ### L1S.5 — Blueprint authoring completion
 
+**IMPLEMENTED**
+
 #### L1S.5a — Blueprint endpoint-group spatial placement
 
 **IMPLEMENTED**
@@ -189,6 +191,20 @@ complete. L1S.5 is not included in this slice.
 - The editor shows Russian human-facing port labels, preserves mappings across
   presentation edits, blocks save if a reduced group removes a referenced
   ordinal, and removes affected mappings only when its entire group is deleted.
+
+#### L1S.5d — Blueprint authoring polish and completion
+
+**IMPLEMENTED**
+
+- Новый редактор начинается без групп и портов; группы, bulk-пары и
+  индивидуальные связи добавляются только по явному действию.
+- Empty state и локальная валидация не показывают ошибку до первой попытки
+  сохранить; invalid authoring не выполняет write.
+- Pair-by-index локально требует две разные группы, а удаление последней группы
+  возвращает все authoring collections к пустому состоянию.
+
+Следующий bounded repository/product шаг до L1S.6 — foundation для RU/EN
+локализации. Он не входит в L1S.5 и не меняет Blueprint authoring contract.
 
 ### L1S.6 — Controlled Blueprint instance upgrade
 

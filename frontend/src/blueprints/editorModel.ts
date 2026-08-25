@@ -84,6 +84,7 @@ export const generateBlueprint = (state: BlueprintEditorState): GeneratedBluepri
   for (const pair of state.pairs) {
     const left = groupsById.get(pair.leftGroupId); const right = groupsById.get(pair.rightGroupId);
     if (!left || !right) { errors.push('Правило внутренних пар ссылается на отсутствующую группу.'); continue; }
+    if (left.id === right.id) { errors.push('Правило внутренних пар должно соединять две разные группы.'); continue; }
     if (left.count !== right.count) { errors.push('Внутренние пары возможны только при одинаковом количестве портов в группах.'); continue; }
     generatedGroupKeys(left).forEach((from_slot_key, index) => {
       const to_slot_key = generatedGroupKeys(right)[index]; const key = linkKey(from_slot_key, to_slot_key);

@@ -3,10 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { newBlueprintEditorState, newEndpointGroup, ObjectBlueprintEditor } from './ObjectBlueprintEditor';
 
 describe('ObjectBlueprintEditor stable group identity', () => {
-  it('does not expose an editable canonical key prefix in the primary editor', () => {
+  it('starts empty without an editable canonical key prefix or generated ports', () => {
     render(<ObjectBlueprintEditor initialState={newBlueprintEditorState()} title="Шаблон" description="Описание" saveLabel="Сохранить" onSave={async () => {}} />);
     expect(screen.queryByLabelText(/Префикс ключа/)).not.toBeInTheDocument();
-    expect(screen.getByText('A01')).toBeInTheDocument();
+    expect(screen.queryByText('A01')).not.toBeInTheDocument();
+    expect(screen.getByText('Группы портов необязательны. Добавьте группу, если у объекта есть порты.')).toBeInTheDocument();
+  });
+
+  it('adds the first group explicitly and returns to an empty state when it is deleted', () => {
+    render(<ObjectBlueprintEditor initialState={newBlueprintEditorState()} title="Шаблон" description="Описание" saveLabel="Сохранить" onSave={async () => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить группу портов' }));
+    expect(screen.getByText('Группа 1: Группа 1')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить группу' }));
+    expect(screen.queryByRole('button', { name: 'Удалить группу' })).not.toBeInTheDocument();
+    expect(screen.getByText('Группы портов необязательны. Добавьте группу, если у объекта есть порты.')).toBeInTheDocument();
   });
 
   it('creates collision-safe distinct persisted identities without a module sequence', () => {

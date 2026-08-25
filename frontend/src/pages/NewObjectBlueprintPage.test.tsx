@@ -26,6 +26,8 @@ describe('NewObjectBlueprintPage preview viewport', () => {
     expect(screen.getByLabelText('Тип объекта')).toBeInTheDocument();
     expect(screen.queryByText(/Body kind/)).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Группы портов' })).toBeInTheDocument();
+    expect(screen.queryByText('A01')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить группу портов' }));
     expect(screen.getByLabelText('Тип порта 1')).toHaveTextContent('Точка подключения');
     expect(screen.getByLabelText('Сторона схемы 1')).toHaveTextContent('Слева');
     expect(screen.getByLabelText('Начало диапазона 1')).toHaveValue(0);
@@ -38,5 +40,18 @@ describe('NewObjectBlueprintPage preview viewport', () => {
     expect(screen.getByText(/Правило соединяет порт 1 одной группы/)).toBeInTheDocument();
     expect(screen.getByLabelText('Первая группа правила 1')).toBeInTheDocument();
     expect(screen.getByLabelText('Вторая группа правила 1')).toBeInTheDocument();
+  });
+
+  it('shows local validation only after save and never writes an invalid fresh form', async () => {
+    const source = dataSource();
+    render(<MemoryRouter><NewObjectBlueprintPage dataSource={source} /></MemoryRouter>);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Укажите название шаблона.');
+    expect(source.createObjectBlueprint).not.toHaveBeenCalled();
+    await userEvent.type(screen.getByLabelText('Название шаблона'), 'Без портов');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
+    expect(source.createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({ slots: [], internal_links: [], authoring_recipe: { endpoint_groups: [], pair_recipes: [], individual_links: [] } }));
   });
 });
