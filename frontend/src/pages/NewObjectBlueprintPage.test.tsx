@@ -35,7 +35,7 @@ describe('NewObjectBlueprintPage preview viewport', () => {
     fireEvent.change(picker, { target: { value: '#445566' } }); expect(hex).toHaveValue('#445566');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить группу портов' }));
     await userEvent.click(screen.getByRole('button', { name: 'Добавить правило пар по номеру' }));
-    expect(screen.getByText(/Правило соединяет порт N одной группы/)).toBeInTheDocument();
+    expect(screen.getByText(/Правило соединяет порт 1 одной группы/)).toBeInTheDocument();
     expect(screen.getByLabelText('Первая группа правила 1')).toBeInTheDocument();
     expect(screen.getByLabelText('Вторая группа правила 1')).toBeInTheDocument();
   });

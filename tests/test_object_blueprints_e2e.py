@@ -312,14 +312,16 @@ def test_blueprint_versions_are_immutable_latest_is_listed_and_recipe_round_trip
     second_detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v2_id}").json()
     assert first_detail["version_number"] == 1 and [slot["key"] for slot in first_detail["slots"]] == ["A:1", "B:1"]
     assert first_detail["authoring_recipe"] == first["authoring_recipe"]
-    assert second_detail["version_number"] == 2 and [slot["key"] for slot in second_detail["slots"]] == ["C01", "D01"]
+    assert second_detail["version_number"] == 2
+    assert [slot["key"] for slot in second_detail["slots"]] == ["C:1", "D:1"]
+    assert [slot["display_name"] for slot in second_detail["slots"]] == ["C01", "D01"]
     listing = client.get("/v1/library/object-blueprints").json()["blueprints"]
     item = next(item for item in listing if item["blueprint_ref"]["entity_id"] == blueprint_id)
     assert item["version_ref"]["entity_id"] == v2_id and item["version_count"] == 2
     old_instance = instantiate(blueprint_id, v1_id, "old cable")
     new_instance = instantiate(blueprint_id, v2_id, "new cable")
     assert old_instance["slots"][0]["slot_key"] == "A:1"
-    assert new_instance["slots"][0]["slot_key"] == "C01"
+    assert new_instance["slots"][0]["slot_key"] == "C:1"
 
 
 def test_blueprint_group_placement_round_trips_and_rejects_invalid_ranges():
