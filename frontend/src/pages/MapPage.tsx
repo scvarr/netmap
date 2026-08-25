@@ -51,6 +51,7 @@ import type {
 } from "../topology/types";
 import type { PhysicalEndpointConnectionCreationDocument, PhysicalEndpointConnectionWriteDataSource } from "../topology/physicalEndpointConnectionWriteTypes";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
+import { useI18n } from "../i18n";
 
 export { mapCandidateChoices } from "../components/MapInsertionPicker";
 
@@ -139,6 +140,7 @@ export function MapPage({
   physicalEndpointConnectionWriteDataSource,
   traceDataSource,
 }: MapPageProps) {
+  const { t } = useI18n();
   const [params, setParams] = useSearchParams();
   const mapId = params.get("map");
   const addIntent = mapId ? params.get("add") : null;
@@ -292,7 +294,7 @@ export function MapPage({
         setMaps(sorted);
         if (!mapId && sorted[0]) selectMap(sorted[0].map_ref.entity_id);
       },
-      (reason) => active && request === mapListRequest.current && setError(errorMessage(reason, "Не удалось загрузить карты")),
+      (reason) => active && request === mapListRequest.current && setError(errorMessage(reason, t("view.error.title"))),
     );
     return () => {
       active = false;
@@ -309,7 +311,7 @@ export function MapPage({
       setMap(null);
       setSceneDocument(null);
       setSelection(null);
-      setError("Выбранная карта не найдена.");
+      setError(t("map.choose"));
       return undefined;
     }
     let active = true;
@@ -317,7 +319,7 @@ export function MapPage({
     void savedMapDataSource.loadMap(mapId).then(
       (detail) => active && selectedMapId.current === mapId && !deletedMapIds.current.has(mapId) && setMap(detail),
       (reason) =>
-        active && setError(errorMessage(reason, "Не удалось загрузить карту")),
+        active && setError(errorMessage(reason, t("view.error.title"))),
     );
     return () => {
       active = false;
@@ -352,7 +354,7 @@ export function MapPage({
           setSceneDocument({ sceneKey: presentationSceneKey, document: next }),
         (reason) =>
           active &&
-          setError(errorMessage(reason, "Не удалось загрузить projection")),
+          setError(errorMessage(reason, t("view.error.title"))),
       );
     return () => {
       active = false;
@@ -431,7 +433,7 @@ export function MapPage({
       setCreating(false);
       selectMap(created.map_ref.entity_id);
     } catch (reason) {
-      setError(errorMessage(reason, "Не удалось создать карту"));
+      setError(errorMessage(reason, t("map.create")));
     }
   };
 
@@ -449,7 +451,7 @@ export function MapPage({
       }
       setMapDeletion(null);
     } catch (reason) {
-      setMapDeletion({ ...operation, status: "refresh-failed", error: errorMessage(reason, "Карта удалена, но список карт не удалось обновить.") });
+      setMapDeletion({ ...operation, status: "refresh-failed", error: errorMessage(reason, t("map.wiringRefreshFailed")) });
     }
   };
 
@@ -460,7 +462,7 @@ export function MapPage({
     try {
       await savedMapDataSource.deleteMap(operation.mapId);
     } catch (reason) {
-      setMapDeletion({ ...operation, status: "confirming", error: errorMessage(reason, "Не удалось удалить карту") });
+      setMapDeletion({ ...operation, status: "confirming", error: errorMessage(reason, t("map.delete")) });
       return;
     }
     deletedMapIds.current.add(operation.mapId);
@@ -511,7 +513,7 @@ export function MapPage({
                   status: "ready",
                   error: errorMessage(
                     reason,
-                    "Не удалось загрузить оборудование",
+                    t("insert.loading"),
                   ),
                 }
               : current,
@@ -644,7 +646,7 @@ export function MapPage({
     setWiring({ ...operation, status: "route-saving", error: null });
     let saved: SavedMap;
     try { saved = await savedMapDataSource.setCableRoute(operation.mapId, operation.canonicalResult.cable_ref.entity_id, operation.draftWaypoints); }
-    catch (reason) { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "route-failed", error: errorMessage(reason, "Не удалось сохранить трассу") }); return; }
+    catch (reason) { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "route-failed", error: errorMessage(reason, t("map.routeFailed")) }); return; }
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
     setMap(saved);
     try { if (await refreshWiringProjection(operation)) setWiring({ status: "idle" }); }
@@ -653,11 +655,11 @@ export function MapPage({
   const createWiring = async () => {
     if (!physicalEndpointConnectionWriteDataSource || wiring.status !== "confirming") return;
     const operation = wiring;
-    if (!endpointFor({ physicalObjectId: operation.source.physicalObjectId, connectionPointId: operation.source.connectionPointId, label: operation.source.portLabel }) || !endpointFor({ physicalObjectId: operation.target.physicalObjectId, connectionPointId: operation.target.connectionPointId, label: operation.target.portLabel }, operation.source.connectionPointId)) { setWiring({ ...operation, error: "Выбранный порт больше не свободен. Выберите порты заново." }); return; }
+    if (!endpointFor({ physicalObjectId: operation.source.physicalObjectId, connectionPointId: operation.source.connectionPointId, label: operation.source.portLabel }) || !endpointFor({ physicalObjectId: operation.target.physicalObjectId, connectionPointId: operation.target.connectionPointId, label: operation.target.portLabel }, operation.source.connectionPointId)) { setWiring({ ...operation, error: t("map.wiring.source") }); return; }
     setWiring({ ...operation, status: "creating", error: null });
     let canonicalResult: PhysicalEndpointConnectionCreationDocument;
     try { canonicalResult = await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection({ source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: 1 }, target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: 1 }, ...(operation.cableName.trim() ? { cable_display_name: operation.cableName.trim() } : {}) }); }
-    catch (reason) { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, error: errorMessage(reason, "Не удалось создать кабель") }); return; }
+    catch (reason) { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, error: errorMessage(reason, t("map.createCable")) }); return; }
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
     await saveWiringRoute({ ...operation, canonicalResult });
   };
@@ -678,7 +680,7 @@ export function MapPage({
         physicalObjectIdForNode(node) === id,
     );
     if (candidates.length !== 1)
-      throw new Error("Не удалось определить размеры объекта для размещения.");
+      throw new Error(t("map.geometryUnavailable"));
 
     const occupied: FlowRectangle[] = (latestActiveMap.current?.placements ?? []).flatMap(
       (placement) => {
@@ -725,7 +727,7 @@ export function MapPage({
             ? {
                 ...current,
                 status: "ready",
-                error: "Рядом нет свободного места для объекта.",
+                error: t("view.empty.body"),
               }
             : current,
         );
@@ -754,8 +756,8 @@ export function MapPage({
               ...current,
               status: "ready",
               error: preflightComplete
-                ? errorMessage(reason, "Не удалось добавить на карту")
-                : "Не удалось определить размеры объекта для размещения.",
+                ? errorMessage(reason, t("map.add"))
+                : t("map.geometryUnavailable"),
             }
           : current,
       );
@@ -775,7 +777,7 @@ export function MapPage({
             ? {
                 ...current,
                 status: "saved-refresh-failed",
-                error: "Размещение сохранено, но карту не удалось обновить.",
+                error: t("map.wiringRefreshFailed"),
               }
             : current,
         );
@@ -792,7 +794,7 @@ export function MapPage({
               status: "saved-refresh-failed",
               error: errorMessage(
                 reason,
-                "Размещение сохранено, но карту не удалось обновить",
+                t("map.wiringRefreshFailed"),
               ),
             }
           : current,
@@ -819,7 +821,7 @@ export function MapPage({
             ? {
                 ...current,
                 status: "saved-refresh-failed",
-                error: errorMessage(reason, "Не удалось обновить карту"),
+                error: errorMessage(reason, t("view.error.title")),
               }
             : current,
         );
@@ -866,7 +868,7 @@ export function MapPage({
       }
     } catch (reason) {
       if (selectedMapId.current !== targetMapId) return;
-      setError(errorMessage(reason, "Не удалось сохранить позицию"));
+      setError(errorMessage(reason, t("view.error.title")));
       try {
         await reloadMap(targetMapId);
       } catch {
@@ -931,7 +933,7 @@ export function MapPage({
           id,
           mapId: targetMapId,
           status: "refresh-failed",
-          message: "Объект убран с карты, но карту не удалось обновить.",
+          message: t("map.removeRefreshFailed"),
         });
     }
   };
@@ -955,7 +957,7 @@ export function MapPage({
       preflightComplete = true;
       if (selectedMapId.current !== targetMapId) return;
       if (!position)
-        throw new Error("Рядом нет свободного места для объекта.");
+        throw new Error(t("view.empty.body"));
       await savedMapDataSource.addPlacement(
         targetMapId,
         id,
@@ -966,7 +968,7 @@ export function MapPage({
       if (selectedMapId.current === targetMapId) setMapOperation(null);
       throw preflightComplete
         ? reason
-        : new Error("Не удалось определить размеры объекта для размещения.");
+        : new Error(t("map.geometryUnavailable"));
     }
     try {
       await reloadMap(targetMapId);
@@ -978,7 +980,7 @@ export function MapPage({
           id,
           mapId: targetMapId,
           status: "refresh-failed",
-          message: "Объект добавлен, но карту не удалось обновить.",
+          message: t("map.addRefreshFailed"),
         });
     }
   };
@@ -1013,7 +1015,7 @@ export function MapPage({
       setMap(saved);
       setCableRouteEdit(null);
     } catch (reason) {
-      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cablePhysicalObjectId === operation.cablePhysicalObjectId ? { ...current, status: "editing", error: errorMessage(reason, "Не удалось сохранить трассу") } : current);
+      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cablePhysicalObjectId === operation.cablePhysicalObjectId ? { ...current, status: "editing", error: errorMessage(reason, t("map.routeFailed")) } : current);
     }
   };
   const resetCableRoute = async () => {
@@ -1021,12 +1023,12 @@ export function MapPage({
     const operation = { mapId: activeMap.map_ref.entity_id, cablePhysicalObjectId: selectedCableId, status: "pending" as const };
     setCableRouteReset(operation);
     try { await savedMapDataSource.deleteCableRoute(operation.mapId, operation.cablePhysicalObjectId); }
-    catch (reason) { if (selectedMapId.current === operation.mapId) setCableRouteReset(null); setError(errorMessage(reason, "Не удалось сбросить трассу")); return; }
+    catch (reason) { if (selectedMapId.current === operation.mapId) setCableRouteReset(null); setError(errorMessage(reason, t("inspector.resetRoute"))); return; }
     try {
       const refreshed = await reloadMap(operation.mapId);
       if (selectedMapId.current === operation.mapId && refreshed) setCableRouteReset(null);
     } catch {
-      if (selectedMapId.current === operation.mapId) setCableRouteReset({ ...operation, status: "refresh-failed", message: "Трасса сброшена, но карту не удалось обновить." });
+      if (selectedMapId.current === operation.mapId) setCableRouteReset({ ...operation, status: "refresh-failed", message: t("inspector.routeResetFailed") });
     }
   };
   const retryCableRouteResetRefresh = async () => {
@@ -1093,17 +1095,17 @@ export function MapPage({
     <main className="map-page">
       <div className="map-page__toolbar topology-mode-switch">
         <label>
-          Карты:{" "}
+          {t("map.maps")}:{" "}
           {legacy ? (
             "—"
           ) : (
             <select
-              aria-label="Карты"
+              aria-label={t("map.maps")}
               value={mapId ?? ""}
               onChange={(event) => selectMap(event.target.value)}
             >
               <option value="" disabled>
-                Выберите карту
+                {t("map.choose")}
               </option>
               {(maps ?? []).map((item) => (
                 <option
@@ -1119,23 +1121,23 @@ export function MapPage({
         {!legacy && (
           <>
             <button type="button" onClick={() => setCreating(true)}>
-              + Новая карта
+              + {t("map.new")}
             </button>
             <button
               type="button"
               onClick={() => activeMap && setMapDeletion({ mapId: activeMap.map_ref.entity_id, mapName: activeMap.name, status: "confirming", error: null })}
               disabled={!activeMap}
             >
-              Удалить карту
+              {t("map.delete")}
             </button>
             <button
               type="button"
               onClick={startToolbarInsertion}
               disabled={!activeMap || !catalogInventoryDataSource}
             >
-              + Добавить на карту
+              + {t("map.add")}
             </button>
-            <button type="button" onClick={() => activeMap && setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id })} disabled={!activeMap || viewMode !== "physical" || !document || !physicalEndpointConnectionWriteDataSource}>Соединить порты</button>
+            <button type="button" onClick={() => activeMap && setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id })} disabled={!activeMap || viewMode !== "physical" || !document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
           </>
         )}
         <button
@@ -1143,14 +1145,14 @@ export function MapPage({
           aria-pressed={viewMode === "logical"}
           onClick={() => setViewMode("logical")}
         >
-          Логическая
+          {t("map.logical")}
         </button>
         <button
           type="button"
           aria-pressed={viewMode === "physical"}
           onClick={() => setViewMode("physical")}
         >
-          Физическая
+          {t("map.physical")}
         </button>
       </div>
 
@@ -1159,11 +1161,11 @@ export function MapPage({
           className="map-dialog"
           role="dialog"
           aria-modal="true"
-          aria-label="Новая карта"
+          aria-label={t("map.createTitle")}
         >
           <div className="map-dialog__surface">
             <label>
-              Название
+              {t("map.name")}
               <input
                 autoFocus
                 value={name}
@@ -1171,29 +1173,29 @@ export function MapPage({
               />
             </label>
             <button type="button" onClick={() => setCreating(false)}>
-              Отмена
+              {t("map.cancel")}
             </button>
             <button type="button" onClick={() => void create()}>
-              Создать
+              {t("map.create")}
             </button>
           </div>
         </section>
       )}
       {mapDeletion && (
-        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Удалить карту">
+        <section className="map-dialog" role="dialog" aria-modal="true" aria-label={t("map.delete")}>
           <div className="map-dialog__surface">
             {mapDeletion.status === "confirming" && <>
-              <p>Удалить карту «{mapDeletion.mapName}»?</p>
-              <p>Будут удалены только размещения, позиции и трассы этой карты. Физические объекты и каноническая топология останутся без изменений.</p>
+              <p>{t("map.delete.confirm", { name: mapDeletion.mapName })}</p>
+              <p>{t("map.delete.description")}</p>
               {mapDeletion.error && <p role="alert">{mapDeletion.error}</p>}
-              <button type="button" onClick={() => setMapDeletion(null)}>Отмена</button>
-              <button type="button" onClick={() => void deleteMap()}>Удалить карту</button>
+              <button type="button" onClick={() => setMapDeletion(null)}>{t("map.cancel")}</button>
+              <button type="button" onClick={() => void deleteMap()}>{t("map.delete")}</button>
             </>}
-            {mapDeletion.status === "deleting" && <p role="status">Удаляем карту…</p>}
-            {mapDeletion.status === "refreshing" && <p role="status">Обновляем список карт…</p>}
+            {mapDeletion.status === "deleting" && <p role="status">{t("map.deleting")}</p>}
+            {mapDeletion.status === "refreshing" && <p role="status">{t("map.refreshing")}</p>}
             {mapDeletion.status === "refresh-failed" && <>
-              <p role="alert">{mapDeletion.error ?? "Карта удалена, но список карт не удалось обновить."}</p>
-              <button type="button" onClick={() => void refreshAfterMapDeletion(mapDeletion)}>Повторить обновление</button>
+              <p role="alert">{mapDeletion.error ?? t("map.wiringRefreshFailed")}</p>
+              <button type="button" onClick={() => void refreshAfterMapDeletion(mapDeletion)}>{t("map.retryRefresh")}</button>
             </>}
           </div>
         </section>
@@ -1213,16 +1215,16 @@ export function MapPage({
           requestedObjectId={insertion.requestedObjectId}
         />
       )}
-      {(wiring.status === "selecting-source" || wiring.status === "selecting-target") && wiring.mapId === mapId && <aside className="map-wiring-panel" aria-label="Соединить порты">
-        {wiring.status === "selecting-source" && <p role="status">Выберите исходный свободный порт</p>}
-        {wiring.status === "selecting-target" && <><p role="status">Выберите конечный свободный порт</p><p>Клик по свободному полю добавляет точку трассы.</p><p>Источник: {wiring.source.objectLabel} / {wiring.source.portLabel}</p><p>Точек трассы: {wiring.draftWaypoints.length}</p>{wiring.selectedWaypointIndex !== null && <button type="button" onClick={() => setWiring((current) => current.status === "selecting-target" ? { ...current, draftWaypoints: current.draftWaypoints.filter((_, index) => index !== current.selectedWaypointIndex), selectedWaypointIndex: null } : current)}>Удалить точку трассы</button>}</>}
-        <button type="button" onClick={() => setWiring({ status: "idle" })}>Отмена</button>
+      {(wiring.status === "selecting-source" || wiring.status === "selecting-target") && wiring.mapId === mapId && <aside className="map-wiring-panel" aria-label={t("map.connectPorts")}>
+        {wiring.status === "selecting-source" && <p role="status">{t("map.wiring.source")}</p>}
+        {wiring.status === "selecting-target" && <><p role="status">{t("map.wiring.target")}</p><p>{t("map.wiring.clickRoute")}</p><p>{t("map.wiring.sourceLabel", { object: wiring.source.objectLabel, port: wiring.source.portLabel })}</p><p>{t("map.wiring.points", { count: wiring.draftWaypoints.length })}</p>{wiring.selectedWaypointIndex !== null && <button type="button" onClick={() => setWiring((current) => current.status === "selecting-target" ? { ...current, draftWaypoints: current.draftWaypoints.filter((_, index) => index !== current.selectedWaypointIndex), selectedWaypointIndex: null } : current)}>{t("map.wiring.deletePoint")}</button>}</>}
+        <button type="button" onClick={() => setWiring({ status: "idle" })}>{t("map.cancel")}</button>
       </aside>}
-      {(wiring.status === "confirming" || wiring.status === "creating" || wiring.status === "route-saving" || wiring.status === "route-failed" || wiring.status === "refresh-failed") && wiring.mapId === mapId && <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Соединить порты"><div className="map-dialog__surface">
-        {(wiring.status === "confirming" || wiring.status === "creating") && <><p>Источник: {wiring.source.objectLabel} / {wiring.source.portLabel}</p><p>Назначение: {wiring.target.objectLabel} / {wiring.target.portLabel}</p><p>Точек трассы: {wiring.draftWaypoints.length}</p><label>Название кабеля<input aria-label="Название кабеля" disabled={wiring.status === "creating"} value={wiring.cableName} onChange={(event) => setWiring((current) => current.status === "confirming" ? { ...current, cableName: event.target.value } : current)} /></label>{wiring.error && <p role="alert">{wiring.error}</p>}<button type="button" disabled={wiring.status === "creating"} onClick={() => setWiring({ status: "selecting-target", mapId: wiring.mapId, source: wiring.source, draftWaypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex })}>Назад</button><button type="button" disabled={wiring.status === "creating"} onClick={() => setWiring({ status: "idle" })}>Отмена</button><button type="button" disabled={wiring.status === "creating"} onClick={() => void createWiring()}>{wiring.status === "creating" ? "Создаём…" : wiring.error ? "Повторить" : "Создать кабель"}</button></>}
-        {wiring.status === "route-saving" && <p role="status">Сохраняем трассу…</p>}
-        {wiring.status === "route-failed" && <><p role="alert">Кабель создан, но трассу не удалось сохранить.</p><button type="button" onClick={() => void retryWiringRoute()}>Повторить сохранение трассы</button><button type="button" onClick={() => setWiring({ status: "idle" })}>Закрыть</button></>}
-        {wiring.status === "refresh-failed" && <><p role="alert">Кабель и трасса сохранены, но карту не удалось обновить.</p><button type="button" onClick={() => void retryWiringRefresh()}>Повторить обновление</button></>}
+      {(wiring.status === "confirming" || wiring.status === "creating" || wiring.status === "route-saving" || wiring.status === "route-failed" || wiring.status === "refresh-failed") && wiring.mapId === mapId && <section className="map-dialog" role="dialog" aria-modal="true" aria-label={t("map.connectPorts")}><div className="map-dialog__surface">
+        {(wiring.status === "confirming" || wiring.status === "creating") && <><p>{t("map.wiring.sourceLabel", { object: wiring.source.objectLabel, port: wiring.source.portLabel })}</p><p>{t("map.wiring.destinationLabel", { object: wiring.target.objectLabel, port: wiring.target.portLabel })}</p><p>{t("map.wiring.points", { count: wiring.draftWaypoints.length })}</p><label>{t("map.wiring.cableName")}<input aria-label={t("map.wiring.cableName")} disabled={wiring.status === "creating"} value={wiring.cableName} onChange={(event) => setWiring((current) => current.status === "confirming" ? { ...current, cableName: event.target.value } : current)} /></label>{wiring.error && <p role="alert">{wiring.error}</p>}<button type="button" disabled={wiring.status === "creating"} onClick={() => setWiring({ status: "selecting-target", mapId: wiring.mapId, source: wiring.source, draftWaypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex })}>{t("map.back")}</button><button type="button" disabled={wiring.status === "creating"} onClick={() => setWiring({ status: "idle" })}>{t("map.cancel")}</button><button type="button" disabled={wiring.status === "creating"} onClick={() => void createWiring()}>{wiring.status === "creating" ? t("map.creating") : wiring.error ? t("action.retry") : t("map.createCable")}</button></>}
+        {wiring.status === "route-saving" && <p role="status">{t("map.savingRoute")}</p>}
+        {wiring.status === "route-failed" && <><p role="alert">{t("map.routeFailed")}</p><button type="button" onClick={() => void retryWiringRoute()}>{t("map.retrySaveRoute")}</button><button type="button" onClick={() => setWiring({ status: "idle" })}>{t("action.close")}</button></>}
+        {wiring.status === "refresh-failed" && <><p role="alert">{t("map.wiringRefreshFailed")}</p><button type="button" onClick={() => void retryWiringRefresh()}>{t("map.retryRefresh")}</button></>}
       </div></section>}
       {contextAnchor && viewMode === "physical" && (
         <div
@@ -1249,14 +1251,14 @@ export function MapPage({
         )}
       {!legacy && maps?.length === 0 && (
         <section>
-          <h2>Создайте первую карту</h2>
-          <button onClick={() => setCreating(true)}>Создать карту</button>
+          <h2>{t("map.empty.title")}</h2>
+          <button onClick={() => setCreating(true)}>{t("map.create")}</button>
         </section>
       )}
       {!legacy && activeMap && ids.length === 0 && (
         <section>
-          <h2>Карта «{activeMap.name}» пока пуста</h2>
-          <button onClick={startToolbarInsertion}>Добавить на карту</button>
+          <h2>{t("map.empty.active", { name: activeMap.name })}</h2>
+          <button onClick={startToolbarInsertion}>{t("map.add")}</button>
         </section>
       )}
       {(legacy || activeMap) && (
@@ -1302,7 +1304,7 @@ export function MapPage({
                   authoritativePositionRevision={authoritativePositionRevision}
                   onPhysicalNodeDragStop={!legacy ? move : undefined}
                   onNodeCollisionRejected={() =>
-                    setError("Объекты нельзя размещать друг на друге.")
+                    setError(t("map.collision"))
                   }
                   disableAutoLayout={!legacy}
                   traceOverlay={physicalTraceOverlayFor(
@@ -1406,7 +1408,7 @@ export function MapPage({
                       id,
                       mapId: targetMapId,
                       status: "refresh-failed",
-                      message: "Объект удалён, но карту не удалось обновить.",
+                      message: t("map.deleteRefreshFailed"),
                     });
                 }
               }

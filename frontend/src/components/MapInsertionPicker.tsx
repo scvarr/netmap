@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { physicalClassPresentation } from '../topology/presentation';
 import type { CatalogInventoryDocument, CatalogInventoryEquipmentItem } from '../topology/catalogInventoryTypes';
+import { useI18n } from '../i18n';
 
 export interface MapInsertionCandidate {
   id: string;
@@ -49,6 +50,7 @@ export function MapInsertionPicker({
   onRetryRefresh: () => void;
   requestedObjectId?: string;
 }) {
+  const { t } = useI18n();
   const [query, setQuery] = useState('');
   const candidates = useMemo(
     () => mapCandidateChoices(inventory?.equipment ?? [], placedIds),
@@ -62,22 +64,22 @@ export function MapInsertionPicker({
     : null;
 
   return (
-    <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Добавить на карту">
+    <section className="map-dialog" role="dialog" aria-modal="true" aria-label={t('map.add')}>
       <div className="map-dialog__surface map-insertion-picker">
-        <h2>Добавить на карту</h2>
-        {status === 'loading' && <p role="status">Загружаем оборудование…</p>}
-        {status === 'resolving' && <p role="status">Определяем место на карте…</p>}
-        {status === 'ready' && requestedObjectId && !error && !requested && <p>Объект недоступен для размещения.</p>}
+        <h2>{t('map.add')}</h2>
+        {status === 'loading' && <p role="status">{t('insert.loading')}</p>}
+        {status === 'resolving' && <p role="status">{t('insert.resolving')}</p>}
+        {status === 'ready' && requestedObjectId && !error && !requested && <p>{t('insert.unavailable')}</p>}
         {status === 'ready' && requested && !error && (
           <>
             <p><strong>{requested.label}</strong><br />{classLabel(requested.class)}</p>
-            <button type="button" onClick={() => onSelect({ id: requested.physical_object_ref.entity_id, label: requested.label, className: requested.class })}>Добавить</button>
+            <button type="button" onClick={() => onSelect({ id: requested.physical_object_ref.entity_id, label: requested.label, className: requested.class })}>{t('action.add')}</button>
           </>
         )}
         {status !== 'loading' && !error && !requestedObjectId && (
           <label>
-            Поиск
-            <input aria-label="Поиск оборудования" value={query} onChange={(event) => setQuery(event.target.value)} disabled={status !== 'ready'} />
+            {t('insert.search')}
+            <input aria-label={t('insert.searchEquipment')} value={query} onChange={(event) => setQuery(event.target.value)} disabled={status !== 'ready'} />
           </label>
         )}
         {status === 'ready' && error && <p role="alert">{error}</p>}
@@ -88,22 +90,22 @@ export function MapInsertionPicker({
           </button>
         ))}
         {status === 'ready' && !requestedObjectId && candidates.length === 0 && inventory?.equipment.length === 0 && (
-          <p>Оборудование пока не создано.</p>
+          <p>{t('insert.noneCreated')}</p>
         )}
         {status === 'ready' && !requestedObjectId && candidates.length === 0 && inventory && inventory.equipment.length > 0 && (
-          <p>Всё оборудование уже размещено на этой карте.</p>
+          <p>{t('insert.allPlaced')}</p>
         )}
         {status === 'ready' && !requestedObjectId && candidates.length > 0 && visible.length === 0 && (
-          <p>По заданному запросу ничего не найдено.</p>
+          <p>{t('insert.noResults')}</p>
         )}
-        {status === 'saving' && <p role="status">Добавляем на карту…</p>}
+        {status === 'saving' && <p role="status">{t('insert.saving')}</p>}
         {status === 'saved-refresh-failed' && (
           <>
             <p role="alert">{error}</p>
-            <button type="button" onClick={onRetryRefresh}>Повторить обновление</button>
+            <button type="button" onClick={onRetryRefresh}>{t('map.retryRefresh')}</button>
           </>
         )}
-        {status !== 'saving' && <button type="button" onClick={onClose}>Закрыть</button>}
+        {status !== 'saving' && <button type="button" onClick={onClose}>{t('action.close')}</button>}
       </div>
     </section>
   );

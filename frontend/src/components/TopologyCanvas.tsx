@@ -41,6 +41,7 @@ import type { MapCableRoute } from "../topology/savedMapTypes";
 import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation";
 import { physicalObjectIdForNode as cablePhysicalObjectIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
+import { useI18n } from "../i18n";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -109,6 +110,7 @@ export function TopologyCanvas({
   wiringHighlightedConnectionMemberIds,
   wiringContinuationConnectionPointIds,
 }: TopologyCanvasProps) {
+  const { t } = useI18n();
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
@@ -155,14 +157,14 @@ export function TopologyCanvas({
         setLayoutError(
           reason instanceof Error
             ? reason.message
-            : "Не удалось расположить топологию",
+            : t("canvas.layoutFailed"),
         );
       },
     );
     return () => {
       current = false;
     };
-  }, [document, layoutEngine, layoutRevision, layoutStore, viewKey]);
+  }, [document, layoutEngine, layoutRevision, layoutStore, t, viewKey]);
 
   // A position acknowledgement is already reflected by React Flow's drag state.
   // Only an explicit authoritative revision (for example, a failed persistence rollback)
@@ -222,7 +224,7 @@ export function TopologyCanvas({
   if (!projection) {
     return (
       <div className="topology-layout-state" role="status">
-        Располагаем топологию…
+        {t("canvas.layouting")}
       </div>
     );
   }
@@ -362,8 +364,8 @@ export function TopologyCanvas({
       className="topology-canvas"
       aria-label={
         document.layer === "L1"
-          ? "Физическая схема сети"
-          : "Логическая схема сети"
+          ? t("canvas.physical")
+          : t("canvas.logical")
       }
       ref={canvasRef}
     >
@@ -411,7 +413,7 @@ export function TopologyCanvas({
               className="topology-auto-layout"
               onClick={resetLayout}
             >
-              Авторазмещение
+              {t("canvas.autoLayout")}
             </button>
           )}
         </Panel>
@@ -427,7 +429,7 @@ export function TopologyCanvas({
           position="top-right"
           nodeColor="#183b3b"
           maskColor="rgba(5, 13, 15, 0.72)"
-          ariaLabel="Мини-карта"
+          ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
         {wiringRoute && <WiringRoute {...wiringRoute} />}

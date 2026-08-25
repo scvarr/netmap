@@ -5,6 +5,7 @@ import {
   physicalClassPresentation,
 } from "../topology/presentation";
 import { physicalObjectIdForNode } from "../topology/projection";
+import { useI18n } from "../i18n";
 import type {
   CatalogInventoryDataSource,
   CatalogInventoryDocument,
@@ -83,6 +84,7 @@ const endpointLabels = (
   });
 
 export function QuickInspector(props: QuickInspectorProps) {
+  const { t } = useI18n();
   const { document, selection, onClose, onSelectNode } = props;
   const [details, setDetails] = useState<PhysicalObjectDetailsDocument | null>(
     null,
@@ -124,7 +126,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           (e) =>
             active &&
             setInventoryError(
-              e instanceof Error ? e.message : "Не удалось загрузить кабели",
+              e instanceof Error ? e.message : t("catalog.error.title"),
             ),
         );
       return () => {
@@ -150,7 +152,7 @@ export function QuickInspector(props: QuickInspectorProps) {
             setDetailError(
               e instanceof Error
                 ? e.message
-                : "Не удалось загрузить подключения",
+                : t("view.error.title"),
             );
             setLoading(false);
           }
@@ -169,11 +171,11 @@ export function QuickInspector(props: QuickInspectorProps) {
   ]);
   if (!selection) return null;
   const shell = (children: React.ReactNode) => (
-    <aside className="quick-inspector" aria-label="Быстрый инспектор">
+    <aside className="quick-inspector" aria-label={t("inspector.label")}>
       <button
         className="quick-inspector__close"
         onClick={onClose}
-        aria-label="Закрыть инспектор"
+        aria-label={t("inspector.close")}
       >
         ×
       </button>
@@ -182,7 +184,7 @@ export function QuickInspector(props: QuickInspectorProps) {
   );
   const technical = (
     <details className="quick-inspector__technical">
-      <summary>Технические детали</summary>
+      <summary>{t("inspector.technical")}</summary>
       <dl>
         {node && (
           <>
@@ -220,7 +222,7 @@ export function QuickInspector(props: QuickInspectorProps) {
       await props.onRemoveFromMap(id);
     } catch (e) {
       setRemoveError(
-        e instanceof Error ? e.message : "Не удалось убрать с карты",
+        e instanceof Error ? e.message : t("inspector.remove"),
       );
     } finally {
       setPending(null);
@@ -244,7 +246,7 @@ export function QuickInspector(props: QuickInspectorProps) {
       await props.onDeletePhysicalObject(id);
     } catch (e) {
       setDeleteError(
-        e instanceof Error ? e.message : "Не удалось удалить объект",
+        e instanceof Error ? e.message : t("map.delete"),
       );
     } finally {
       setPending(null);
@@ -258,7 +260,7 @@ export function QuickInspector(props: QuickInspectorProps) {
       await props.onSetPlacementLock(!props.placementLocked);
     } catch (reason) {
       setLockError(
-        reason instanceof Error ? reason.message : "Не удалось изменить фиксацию положения",
+        reason instanceof Error ? reason.message : t("view.error.title"),
       );
     } finally {
       setLockPending(false);
@@ -267,7 +269,7 @@ export function QuickInspector(props: QuickInspectorProps) {
   const placementLockAction = props.onSetPlacementLock ? (
     <>
       <button disabled={lockPending} onClick={() => void togglePlacementLock()}>
-        {props.placementLocked ? "Разблокировать положение" : "Зафиксировать положение"}
+        {props.placementLocked ? t("inspector.unlock") : t("inspector.lock")}
       </button>
       {lockError && <p role="alert">{lockError}</p>}
     </>
@@ -285,15 +287,15 @@ export function QuickInspector(props: QuickInspectorProps) {
         setContinuationError(
           reason instanceof Error
             ? reason.message
-            : "Не удалось добавить на карту",
+            : t("map.add"),
         );
       }
     };
     return shell(
       <>
-        <span className="eyebrow">ВНЕ КАРТЫ</span>
+        <span className="eyebrow">{t("inspector.offMap")}</span>
         <h2>{c.remote_display_name}</h2>
-        <p>Подключено:</p>
+        <p>{t("inspector.connected")}</p>
         <p>
           {local ? `${displayNodeLabel(local)} / ` : ""}
           {c.local_connection_point_display_name}
@@ -306,7 +308,7 @@ export function QuickInspector(props: QuickInspectorProps) {
             disabled={Boolean(activeOperationFor(remote))}
             onClick={() => void add()}
           >
-            Добавить на карту
+            {t("map.add")}
           </button>
         )}
         {operationFor("add", remote)?.status === "refresh-failed" && (
@@ -318,9 +320,9 @@ export function QuickInspector(props: QuickInspectorProps) {
           </>
         )}
         {continuationError && <p role="alert">{continuationError}</p>}
-        <Link to={url(remote)}>Открыть объект</Link>
+        <Link to={url(remote)}>{t("inspector.open")}</Link>
         <details className="quick-inspector__technical">
-          <summary>Технические детали</summary>
+          <summary>{t("inspector.technical")}</summary>
           <dl>
             <div>
               <dt>Continuation</dt>
@@ -355,10 +357,10 @@ export function QuickInspector(props: QuickInspectorProps) {
     const item = inventory?.cables.find((x) => x.cable_ref.entity_id === id);
     return shell(
       <>
-        <span className="eyebrow">КАБЕЛЬ</span>
+        <span className="eyebrow">{t("inspector.cable")}</span>
         <h2>{displayNodeLabel(node)}</h2>
         {!inventory && !inventoryError && (
-          <p>Загружаем проверенные концы кабеля…</p>
+          <p>{t("inspector.loadingCable")}</p>
         )}
         {inventoryError && <p role="alert">{inventoryError}</p>}
         {inventoryError && (
@@ -386,31 +388,31 @@ export function QuickInspector(props: QuickInspectorProps) {
             </p>
           )}
         {item?.resolution === "UNRESOLVED" && (
-          <p>Концы кабеля не удалось однозначно определить.</p>
+          <p>{t("inspector.cableUnresolved")}</p>
         )}
         {item &&
           [...item.warnings, ...item.gaps].map((notice) => (
             <p key={notice}>{notice}</p>
           ))}
-        {inventory && !item && <p>Проверенные данные кабеля недоступны.</p>}
+        {inventory && !item && <p>{t("inspector.cableUnavailable")}</p>}
         {props.cableRoutePresentation && (
           <section className="quick-inspector__cable-route">
-            <h3>Трасса на карте</h3>
-            {props.cableRoutePresentation.present ? <p>Точек: {props.cableRoutePresentation.waypointCount}</p> : <p>Пользовательская трасса не задана</p>}
+            <h3>{t("inspector.route")}</h3>
+            {props.cableRoutePresentation.present ? <p>{t("inspector.routePoints", { count: props.cableRoutePresentation.waypointCount })}</p> : <p>{t("inspector.noRoute")}</p>}
             {!props.cableRoutePresentation.editing ? <>
-              <button onClick={props.onEditCableRoute}>Редактировать трассу</button>
-              {props.cableRoutePresentation.present && <button disabled={props.cableRoutePresentation.resetPending} onClick={props.onResetCableRoute}>Сбросить трассу</button>}
-              {props.cableRoutePresentation.resetRefreshFailed && <><p role="alert">Трасса сброшена, но карту не удалось обновить.</p><button onClick={props.onRetryCableRouteReset}>Повторить обновление</button></>}
+              <button onClick={props.onEditCableRoute}>{t("inspector.editRoute")}</button>
+              {props.cableRoutePresentation.present && <button disabled={props.cableRoutePresentation.resetPending} onClick={props.onResetCableRoute}>{t("inspector.resetRoute")}</button>}
+              {props.cableRoutePresentation.resetRefreshFailed && <><p role="alert">{t("inspector.routeResetFailed")}</p><button onClick={props.onRetryCableRouteReset}>{t("map.retryRefresh")}</button></>}
             </> : <>
-              <p>Перетащите точку или нажмите на участок трассы, чтобы вставить новую.</p>
-              <button disabled={props.cableRoutePresentation.selectedWaypointIndex === null} onClick={props.onDeleteCableRouteWaypoint}>Удалить выбранную точку</button>
-              <button disabled={props.cableRoutePresentation.savePending} onClick={props.onSaveCableRoute}>Сохранить трассу</button>
-              <button disabled={props.cableRoutePresentation.savePending} onClick={props.onCancelCableRouteEdit}>Отменить</button>
+              <p>{t("inspector.routeEditHelp")}</p>
+              <button disabled={props.cableRoutePresentation.selectedWaypointIndex === null} onClick={props.onDeleteCableRouteWaypoint}>{t("inspector.deleteSelectedPoint")}</button>
+              <button disabled={props.cableRoutePresentation.savePending} onClick={props.onSaveCableRoute}>{t("inspector.saveRoute")}</button>
+              <button disabled={props.cableRoutePresentation.savePending} onClick={props.onCancelCableRouteEdit}>{t("action.cancel")}</button>
               {props.cableRoutePresentation.error && <p role="alert">{props.cableRoutePresentation.error}</p>}
             </>}
           </section>
         )}
-        <Link to={url(id)}>Открыть объект</Link>
+        <Link to={url(id)}>{t("inspector.open")}</Link>
         {placementLockAction}
         {props.onRemoveFromMap && (
           <button
@@ -421,7 +423,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           </button>
         )}
         <details>
-          <summary>Дополнительные действия</summary>
+          <summary>{t("inspector.actions")}</summary>
           {props.onDeletePhysicalObject && (
             <button
               disabled={Boolean(activeOperationFor(id))}
@@ -465,7 +467,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           }
         </span>
         <h2>{details?.physical_object.label ?? displayNodeLabel(node)}</h2>
-        {loading && <p>Загружаем физические подключения…</p>}
+        {loading && <p>{t("inspector.loadingConnections")}</p>}
         {detailError && <p role="alert">{detailError}</p>}
         {detailError && (
           <button onClick={() => setReadRevision((revision) => revision + 1)}>
@@ -476,16 +478,16 @@ export function QuickInspector(props: QuickInspectorProps) {
           <>
             <p>
               {details.connection_points.length === 0
-                ? "Портов нет"
+                ? t("inspector.noPorts")
                 : authoritative(details)
-                  ? `${details.connection_points.length} портов · ${attached.length} подключено · ${details.connection_points.length - attached.length} свободно`
-                  : `${details.connection_points.length} порта · Занятость не определена`}
+                  ? t("inspector.portSummary", { ports: details.connection_points.length, attached: attached.length, free: details.connection_points.length - attached.length })
+                  : t("inspector.portOccupancyUnknown", { ports: details.connection_points.length })}
             </p>
             {details.owned_interface_count > 0 && (
-              <p>Сетевых интерфейсов: {details.owned_interface_count}</p>
+              <p>{t("inspector.interfaces", { count: details.owned_interface_count })}</p>
             )}
             {attached.length === 0 ? (
-              <p>Физических подключений нет.</p>
+              <p>{t("inspector.noConnections")}</p>
             ) : (
               <div>
                 {attached.slice(0, 6).map((p: ConnectionPointDetails) => (
@@ -495,14 +497,14 @@ export function QuickInspector(props: QuickInspectorProps) {
                       <p key={i}>
                         →{" "}
                         {a.kind === "UNRESOLVED"
-                          ? "Физическая связь не разрешена"
-                          : `${a.remote_physical_object_label ?? "Удалённый объект"} / ${a.remote_connection_point_label ?? "порт"}${a.kind === "SIMPLE_CABLE" ? ` через ${a.cable_label ?? "кабель"}` : ""}`}
+                          ? t("inspector.unresolvedConnection")
+                          : `${a.remote_physical_object_label ?? t("inspector.remoteObject")} / ${a.remote_connection_point_label ?? t("inspector.port")}${a.kind === "SIMPLE_CABLE" ? t("inspector.viaCable", { cable: a.cable_label ?? "cable" }) : ""}`}
                       </p>
                     ))}
                   </div>
                 ))}
                 {attached.length > 6 && (
-                  <p>Ещё {attached.length - 6} подключений</p>
+                  <p>{t("inspector.moreConnections", { count: attached.length - 6 })}</p>
                 )}
               </div>
             )}
@@ -511,7 +513,7 @@ export function QuickInspector(props: QuickInspectorProps) {
             ))}
           </>
         )}
-        <Link to={url(id)}>Открыть объект</Link>
+        <Link to={url(id)}>{t("inspector.open")}</Link>
         {placementLockAction}
         {props.onRemoveFromMap && (
           <button
@@ -522,7 +524,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           </button>
         )}
         <details>
-          <summary>Дополнительные действия</summary>
+          <summary>{t("inspector.actions")}</summary>
           {props.onDeletePhysicalObject && (
             <button
               disabled={Boolean(activeOperationFor(id))}
@@ -557,12 +559,12 @@ export function QuickInspector(props: QuickInspectorProps) {
   if (node)
     return shell(
       <>
-        <span className="eyebrow">СЕТЕВОЙ ОБЪЕКТ</span>
+        <span className="eyebrow">{t("inspector.networkObject")}</span>
         <h2>{displayNodeLabel(node)}</h2>
         {id ? (
-          <Link to={url(id)}>Открыть объект</Link>
+          <Link to={url(id)}>{t("inspector.open")}</Link>
         ) : (
-          <p>У объекта нет однозначной canonical-ссылки.</p>
+          <p>{t("inspector.noCanonicalRef")}</p>
         )}
         {placementLockAction}
         {technical}
@@ -574,10 +576,10 @@ export function QuickInspector(props: QuickInspectorProps) {
   const pairs = endpointLabels(edge, source, target).slice(0, 6);
   return shell(
     <>
-      <span className="eyebrow">Связь</span>
+      <span className="eyebrow">{t("inspector.connection")}</span>
       <h2>
-        {source ? displayNodeLabel(source) : "Неизвестный объект"} ↔{" "}
-        {target ? displayNodeLabel(target) : "Неизвестный объект"}
+        {source ? displayNodeLabel(source) : t("inspector.unknownObject")} ↔{" "}
+        {target ? displayNodeLabel(target) : t("inspector.unknownObject")}
       </h2>
       <div>
         {source && (
@@ -595,7 +597,7 @@ export function QuickInspector(props: QuickInspectorProps) {
         <p key={pair}>{pair}</p>
       ))}
       <details className="quick-inspector__technical">
-        <summary>Технические детали</summary>
+        <summary>{t("inspector.technical")}</summary>
         <dl>
           <div>
             <dt>Projection ID</dt>
