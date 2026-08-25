@@ -125,6 +125,8 @@ coordinates. Overlap локально отклоняется без write, а no
   `PhysicalEndpointConnection` write boundary.
 - Authoritative free cardinality=1 port semantics, confirmation before write,
   and exactly-once creation with refresh-only retry.
+- Source/target selection uses a non-modal canvas control panel; modal
+  confirmation appears only after both endpoints have been selected.
 
 #### L1S.4c.2 — route-aware wiring
 

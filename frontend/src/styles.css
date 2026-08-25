@@ -449,3 +449,4 @@ a { color: inherit; }
 .blueprint-map-node__port--wiring-source, .generic-map-node__endpoint--wiring-source { border-color: #fff; background: #d65cff; box-shadow: 0 0 0 4px #d65cff; }
 .blueprint-map-node__port--wiring-destination, .generic-map-node__endpoint--wiring-destination { border-color: #fff; background: #54e3b4; box-shadow: 0 0 0 4px #54e3b4; }
 .blueprint-map-node__port--wiring-unavailable, .generic-map-node__endpoint--wiring-unavailable { opacity: .35; cursor: not-allowed; }
+.map-wiring-panel { position: fixed; z-index: 40; left: 16px; bottom: 16px; max-width: 300px; padding: 12px; border: 1px solid #54e3b4; border-radius: 6px; background: #102326; box-shadow: 0 8px 24px rgb(0 0 0 / .35); }

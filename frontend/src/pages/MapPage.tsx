@@ -1085,12 +1085,14 @@ export function MapPage({
           requestedObjectId={insertion.requestedObjectId}
         />
       )}
-      {wiring.status !== "idle" && wiring.mapId === mapId && <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Соединить порты"><div className="map-dialog__surface">
+      {(wiring.status === "selecting-source" || wiring.status === "selecting-target") && wiring.mapId === mapId && <aside className="map-wiring-panel" aria-label="Соединить порты">
         {wiring.status === "selecting-source" && <p role="status">Выберите исходный свободный порт</p>}
         {wiring.status === "selecting-target" && <><p role="status">Выберите конечный свободный порт</p><p>Источник: {wiring.source.objectLabel} / {wiring.source.portLabel}</p></>}
+        <button type="button" onClick={() => setWiring({ status: "idle" })}>Отмена</button>
+      </aside>}
+      {(wiring.status === "confirming" || wiring.status === "creating" || wiring.status === "created-refresh-failed") && wiring.mapId === mapId && <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Соединить порты"><div className="map-dialog__surface">
         {(wiring.status === "confirming" || wiring.status === "creating") && <><p>Источник: {wiring.source.objectLabel} / {wiring.source.portLabel}</p><p>Назначение: {wiring.target.objectLabel} / {wiring.target.portLabel}</p><label>Название кабеля<input aria-label="Название кабеля" disabled={wiring.status === "creating"} value={wiring.cableName} onChange={(event) => setWiring((current) => current.status === "confirming" ? { ...current, cableName: event.target.value } : current)} /></label>{wiring.error && <p role="alert">{wiring.error}</p>}<button type="button" disabled={wiring.status === "creating"} onClick={() => setWiring({ status: "selecting-target", mapId: wiring.mapId, source: wiring.source })}>Назад</button><button type="button" disabled={wiring.status === "creating"} onClick={() => setWiring({ status: "idle" })}>Отмена</button><button type="button" disabled={wiring.status === "creating"} onClick={() => void createWiring()}>{wiring.status === "creating" ? "Создаём…" : wiring.error ? "Повторить" : "Создать кабель"}</button></>}
         {wiring.status === "created-refresh-failed" && <><p role="alert">Кабель создан, но карту не удалось обновить.</p><button type="button" onClick={() => void retryWiringRefresh()}>Повторить обновление</button></>}
-        {(wiring.status === "selecting-source" || wiring.status === "selecting-target") && <button type="button" onClick={() => setWiring({ status: "idle" })}>Отмена</button>}
       </div></section>}
       {contextAnchor && viewMode === "physical" && (
         <div
