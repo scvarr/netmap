@@ -90,6 +90,12 @@ interface MapOperation {
   status: "pending" | "refresh-failed";
   message?: string;
 }
+interface MapDeletionOperation {
+  mapId: string;
+  mapName: string;
+  status: "confirming" | "deleting" | "refreshing" | "refresh-failed";
+  error: string | null;
+}
 interface CableRouteEditState {
   mapId: string;
   cablePhysicalObjectId: string;
@@ -164,6 +170,7 @@ export function MapPage({
     anchor: XYPosition;
   } | null>(null);
   const [mapOperation, setMapOperation] = useState<MapOperation | null>(null);
+  const [mapDeletion, setMapDeletion] = useState<MapDeletionOperation | null>(null);
   const [cableRouteEdit, setCableRouteEdit] = useState<CableRouteEditState | null>(null);
   const [cableRouteReset, setCableRouteReset] = useState<CableRouteResetOperation | null>(null);
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
@@ -172,6 +179,8 @@ export function MapPage({
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
   const selectedMapId = useRef<string | null>(mapId);
+  const deletedMapIds = useRef(new Set<string>());
+  const mapListRequest = useRef(0);
   const insertionSequence = useRef(0);
   const latestActiveMap = useRef<SavedMap | null>(null);
   const latestPhysicalDocument = useRef<TopologyProjectionDocument | null>(null);
@@ -214,6 +223,7 @@ export function MapPage({
   const selectMap = useCallback(
     (id: string) => {
       insertionSequence.current += 1;
+      selectedMapId.current = id;
       setSelection(null);
       setSceneDocument(null);
       setInsertion(null);
@@ -235,6 +245,29 @@ export function MapPage({
     [setParams],
   );
 
+  const clearMapSelection = useCallback(() => {
+    insertionSequence.current += 1;
+    selectedMapId.current = null;
+    setSelection(null);
+    setMap(null);
+    setSceneDocument(null);
+    setInsertion(null);
+    setContextAnchor(null);
+    setPendingPhysicalToolbarInsertion(null);
+    setContinuationAnchor(null);
+    setMapOperation(null);
+    setCableRouteEdit(null);
+    setCableRouteReset(null);
+    setWiring({ status: "idle" });
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("map");
+      next.delete("focus");
+      next.delete("add");
+      return next;
+    });
+  }, [setParams]);
+
   const reloadMap = useCallback(
     async (targetMapId = mapId): Promise<boolean> => {
       if (!savedMapDataSource || !targetMapId) return false;
@@ -249,17 +282,17 @@ export function MapPage({
   useEffect(() => {
     if (!savedMapDataSource) return undefined;
     let active = true;
+    const request = ++mapListRequest.current;
     void savedMapDataSource.listMaps().then(
       (items) => {
-        if (!active) return;
-        const sorted = [...items].sort((left, right) =>
+        if (!active || request !== mapListRequest.current) return;
+        const sorted = items.filter((item) => !deletedMapIds.current.has(item.map_ref.entity_id)).sort((left, right) =>
           natural(left.name, right.name),
         );
         setMaps(sorted);
         if (!mapId && sorted[0]) selectMap(sorted[0].map_ref.entity_id);
       },
-      (reason) =>
-        active && setError(errorMessage(reason, "Не удалось загрузить карты")),
+      (reason) => active && request === mapListRequest.current && setError(errorMessage(reason, "Не удалось загрузить карты")),
     );
     return () => {
       active = false;
@@ -282,7 +315,7 @@ export function MapPage({
     let active = true;
     setError(null);
     void savedMapDataSource.loadMap(mapId).then(
-      (detail) => active && setMap(detail),
+      (detail) => active && selectedMapId.current === mapId && !deletedMapIds.current.has(mapId) && setMap(detail),
       (reason) =>
         active && setError(errorMessage(reason, "Не удалось загрузить карту")),
     );
@@ -400,6 +433,43 @@ export function MapPage({
     } catch (reason) {
       setError(errorMessage(reason, "Не удалось создать карту"));
     }
+  };
+
+  const refreshAfterMapDeletion = async (operation: MapDeletionOperation) => {
+    if (!savedMapDataSource) return;
+    setMapDeletion({ ...operation, status: "refreshing", error: null });
+    try {
+      const refreshed = (await savedMapDataSource.listMaps())
+        .filter((item) => !deletedMapIds.current.has(item.map_ref.entity_id))
+        .sort((left, right) => natural(left.name, right.name));
+      setMaps(refreshed);
+      if (!refreshed.some((item) => item.map_ref.entity_id === selectedMapId.current)) {
+        if (refreshed[0]) selectMap(refreshed[0].map_ref.entity_id);
+        else clearMapSelection();
+      }
+      setMapDeletion(null);
+    } catch (reason) {
+      setMapDeletion({ ...operation, status: "refresh-failed", error: errorMessage(reason, "Карта удалена, но список карт не удалось обновить.") });
+    }
+  };
+
+  const deleteMap = async () => {
+    if (!savedMapDataSource || !mapDeletion || mapDeletion.status !== "confirming") return;
+    const operation = { ...mapDeletion, status: "deleting" as const, error: null };
+    setMapDeletion(operation);
+    try {
+      await savedMapDataSource.deleteMap(operation.mapId);
+    } catch (reason) {
+      setMapDeletion({ ...operation, status: "confirming", error: errorMessage(reason, "Не удалось удалить карту") });
+      return;
+    }
+    deletedMapIds.current.add(operation.mapId);
+    mapListRequest.current += 1;
+    const remaining = (maps ?? []).filter((item) => item.map_ref.entity_id !== operation.mapId);
+    setMaps(remaining);
+    if (remaining[0]) selectMap(remaining[0].map_ref.entity_id);
+    else clearMapSelection();
+    await refreshAfterMapDeletion(operation);
   };
 
   const openInsertion = useCallback(
@@ -1053,6 +1123,13 @@ export function MapPage({
             </button>
             <button
               type="button"
+              onClick={() => activeMap && setMapDeletion({ mapId: activeMap.map_ref.entity_id, mapName: activeMap.name, status: "confirming", error: null })}
+              disabled={!activeMap}
+            >
+              Удалить карту
+            </button>
+            <button
+              type="button"
               onClick={startToolbarInsertion}
               disabled={!activeMap || !catalogInventoryDataSource}
             >
@@ -1099,6 +1176,25 @@ export function MapPage({
             <button type="button" onClick={() => void create()}>
               Создать
             </button>
+          </div>
+        </section>
+      )}
+      {mapDeletion && (
+        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Удалить карту">
+          <div className="map-dialog__surface">
+            {mapDeletion.status === "confirming" && <>
+              <p>Удалить карту «{mapDeletion.mapName}»?</p>
+              <p>Будут удалены только размещения, позиции и трассы этой карты. Физические объекты и каноническая топология останутся без изменений.</p>
+              {mapDeletion.error && <p role="alert">{mapDeletion.error}</p>}
+              <button type="button" onClick={() => setMapDeletion(null)}>Отмена</button>
+              <button type="button" onClick={() => void deleteMap()}>Удалить карту</button>
+            </>}
+            {mapDeletion.status === "deleting" && <p role="status">Удаляем карту…</p>}
+            {mapDeletion.status === "refreshing" && <p role="status">Обновляем список карт…</p>}
+            {mapDeletion.status === "refresh-failed" && <>
+              <p role="alert">{mapDeletion.error ?? "Карта удалена, но список карт не удалось обновить."}</p>
+              <button type="button" onClick={() => void refreshAfterMapDeletion(mapDeletion)}>Повторить обновление</button>
+            </>}
           </div>
         </section>
       )}

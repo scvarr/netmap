@@ -12,6 +12,7 @@ export interface SavedMapSummary { map_ref: SavedMapRef; name: string; created_a
 export interface SavedMapDataSource {
   listMaps(): Promise<SavedMapSummary[]>;
   createMap(name: string): Promise<SavedMap>;
+  deleteMap(mapId: string): Promise<void>;
   loadMap(mapId: string): Promise<SavedMap>;
   addPlacement(mapId: string, physicalObjectId: string, x: number, y: number): Promise<void>;
   movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number): Promise<void>;
