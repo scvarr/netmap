@@ -51,9 +51,9 @@ export function NewInfrastructureObjectPage({
         {blueprints?.blueprints.length === 0 && <div className="catalog-note"><h2>Сначала создайте шаблон</h2><p>Обычный объект создаётся из Object Blueprint. Шаблон задаёт его структуру и версию materialization.</p><Link className="primary-action" to="/library/object-blueprints/new">Создать первый шаблон</Link></div>}
         {blueprints && blueprints.blueprints.length > 0 && <div className="blueprint-library-grid">{blueprints.blueprints.map((blueprint) => <article className="blueprint-card" key={blueprint.blueprint_ref.entity_id}><h2>{blueprint.name}</h2><p>Версия: v{blueprint.version_number}{blueprint.default_physical_object_class ? ` · ${blueprint.default_physical_object_class}` : ''}</p><p>Портов: {blueprint.slot_count} · внутренних связей: {blueprint.internal_link_count}</p><button type="button" className="primary-action" onClick={() => setTarget({ id: blueprint.blueprint_ref.entity_id, versionId: blueprint.version_ref.entity_id, name: blueprint.name, versionNumber: blueprint.version_number })}>Выбрать шаблон</button></article>)}</div>}
       </section>
-      <section className="creation-form-surface" aria-label="Создать вручную">
-        {!manualOpen && <button type="button" className="secondary-action" onClick={() => setManualOpen(true)}>Создать вручную</button>}
-        {manualOpen && <><h2>Создать вручную</h2><p className="catalog-note">Расширенный путь для объектов без шаблона.</p><section className="creation-intents" aria-label="Тип ручного создания"><button type="button" aria-pressed={intent === 'device'} onClick={() => setIntent('device')}><strong>{t('create.networkDevice')}</strong><span>PhysicalObject, первый NetworkInterface и explicit owner relation</span></button><button type="button" aria-pressed={intent === 'physical'} onClick={() => setIntent('physical')}><strong>{t('create.physicalObject')}</strong><span>PhysicalObject, optional class и первая ConnectionPoint</span></button></section>
+      <section className="creation-form-surface" aria-label={t('create.manual')}>
+        {!manualOpen && <button type="button" className="secondary-action" onClick={() => setManualOpen(true)}>{t('create.manual')}</button>}
+        {manualOpen && <><h2>{t('create.manual')}</h2><p className="catalog-note">{t('create.manualHint')}</p><section className="creation-intents" aria-label={t('create.manualType')}><button type="button" aria-pressed={intent === 'device'} onClick={() => setIntent('device')}><strong>{t('create.networkDevice')}</strong><span>{t('create.deviceIntent')}</span></button><button type="button" aria-pressed={intent === 'physical'} onClick={() => setIntent('physical')}><strong>{t('create.physicalObject')}</strong><span>{t('create.physicalIntent')}</span></button></section>
         {intent === 'device' && deviceWriteDataSource && (
           <CreateNetworkDevice
             variant="page"
@@ -69,7 +69,7 @@ export function NewInfrastructureObjectPage({
           />
         )}
         {((intent === 'device' && !deviceWriteDataSource) || (intent === 'physical' && !physicalObjectWriteDataSource)) && (
-          <p className="catalog-note catalog-note--gap">Public write datasource для выбранной операции не настроен.</p>
+          <p className="catalog-note catalog-note--gap">{t('create.datasourceUnavailable')}</p>
         )}
         </>}
       </section>

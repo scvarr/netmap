@@ -85,12 +85,12 @@ export function InfrastructureObjectDetailPage({
       (document) => { if (current) setInventory(document); },
       (reason) => {
         if (current) {
-          setInventoryError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+          setInventoryError(reason instanceof Error ? reason.message : t('catalog.unknownError'));
         }
       },
     );
     return () => { current = false; };
-  }, [catalogInventoryDataSource, inventoryRevision, physicalObjectId]);
+  }, [catalogInventoryDataSource, inventoryRevision, physicalObjectId, t]);
 
   const node = useMemo(() => ({
     id: `catalog-physical-object-${physicalObjectId}`,
@@ -118,12 +118,12 @@ export function InfrastructureObjectDetailPage({
     setMapChooser({ status: 'loading', maps: [], error: null });
     void savedMapDataSource.listMaps().then(
       (maps) => setMapChooser({ status: 'ready', maps, error: null }),
-      (reason) => setMapChooser({ status: 'error', maps: [], error: reason instanceof Error ? reason.message : 'Неизвестная ошибка' }),
+      (reason) => setMapChooser({ status: 'error', maps: [], error: reason instanceof Error ? reason.message : t('catalog.unknownError') }),
     );
   };
 
   if (!physicalObjectId) {
-    return <main className="catalog-page"><p className="catalog-note catalog-note--gap">Не указан canonical ID объекта.</p></main>;
+    return <main className="catalog-page"><p className="catalog-note catalog-note--gap">{t('object.missingId')}</p></main>;
   }
 
   return (
@@ -143,32 +143,32 @@ export function InfrastructureObjectDetailPage({
       {details?.gaps.map((gap, index) => <p className="catalog-note catalog-note--gap" key={`gap-${index}-${gap}`}>{gap}</p>)}
       {details && (
         <section className="detail-section" aria-labelledby="object-main-heading">
-          <h2 id="object-main-heading">Основное</h2>
+          <h2 id="object-main-heading">{t('object.main')}</h2>
           <dl className="detail-fields">
-            <div><dt>Название</dt><dd>{details.physical_object.label}</dd></div>
-            <div><dt>Класс</dt><dd>{details.physical_object.class ?? 'Не указан'}</dd></div>
+            <div><dt>{t('catalog.name')}</dt><dd>{details.physical_object.label}</dd></div>
+            <div><dt>{t('object.class')}</dt><dd>{details.physical_object.class ?? t('object.notSpecified')}</dd></div>
           </dl>
         </section>
       )}
       {details && (
         <section className="detail-section" aria-labelledby="object-maps-heading">
-          <h2 id="object-maps-heading">Карты</h2>
+          <h2 id="object-maps-heading">{t('object.maps')}</h2>
           {cable ? (
-            <p>Кабель отображается на физических картах через свои подключения и отдельно на карту не размещается.</p>
+            <p>{t('object.cableMapsHint')}</p>
           ) : inventoryError ? (
             <>
-              <p role="alert">Не удалось загрузить данные о размещении на картах: {inventoryError}</p>
-              <button onClick={() => setInventoryRevision((revision) => revision + 1)}>Повторить</button>
+              <p role="alert">{t('object.mapLoadError', { error: inventoryError })}</p>
+              <button onClick={() => setInventoryRevision((revision) => revision + 1)}>{t('action.retry')}</button>
             </>
           ) : !inventory ? (
-            <p>Загружаем данные о размещении на картах…</p>
+            <p>{t('object.mapLoading')}</p>
           ) : !inventoryItem ? (
-            <p>Данные о размещении на картах недоступны.</p>
+            <p>{t('object.mapUnavailable')}</p>
           ) : inventoryItem.map_memberships.length === 0 ? (
-            <p>На картах: нет</p>
+            <p>{t('object.noMaps')}</p>
           ) : (
             <>
-              <p>На картах:</p>
+              <p>{t('object.onMaps')}</p>
               <ul>
                 {[...inventoryItem.map_memberships]
                   .sort((left, right) => collator.compare(left.name, right.name))
@@ -181,19 +181,19 @@ export function InfrastructureObjectDetailPage({
             </>
           )}
           {!cable && inventoryItem && savedMapDataSource && (
-            <button type="button" onClick={openMapChooser}>Добавить на карту</button>
+            <button type="button" onClick={openMapChooser}>{t('object.addToMap')}</button>
           )}
         </section>
       )}
       {mapChooser && (
-        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Добавить на карту">
+        <section className="map-dialog" role="dialog" aria-modal="true" aria-label={t('object.addToMap')}>
           <div className="map-dialog__surface">
-            <h2>Добавить на карту</h2>
-            {mapChooser.status === 'loading' && <p role="status">Загружаем карты…</p>}
+            <h2>{t('object.addToMap')}</h2>
+            {mapChooser.status === 'loading' && <p role="status">{t('map.refreshing')}</p>}
             {mapChooser.status === 'error' && (
               <>
                 <p role="alert">{mapChooser.error}</p>
-                <button type="button" onClick={openMapChooser}>Повторить</button>
+                <button type="button" onClick={openMapChooser}>{t('action.retry')}</button>
               </>
             )}
             {mapChooser.status === 'ready' && (() => {
@@ -201,11 +201,11 @@ export function InfrastructureObjectDetailPage({
               const available = mapChooser.maps
                 .filter((map) => !placed.has(map.map_ref.entity_id))
                 .sort((left, right) => collator.compare(left.name, right.name));
-              if (mapChooser.maps.length === 0) return <p>Карты пока не созданы.</p>;
-              if (available.length === 0) return <p>Объект уже размещён на всех доступных картах.</p>;
+              if (mapChooser.maps.length === 0) return <p>{t('object.mapsEmpty')}</p>;
+              if (available.length === 0) return <p>{t('object.alreadyOnMaps')}</p>;
               return <ul>{available.map((map) => <li key={map.map_ref.entity_id}><Link to={addMapLink(map.map_ref.entity_id, physicalObjectId)}>{map.name}</Link></li>)}</ul>;
             })()}
-            <button type="button" onClick={() => setMapChooser(null)}>Закрыть</button>
+            <button type="button" onClick={() => setMapChooser(null)}>{t('action.close')}</button>
           </div>
         </section>
       )}

@@ -29,8 +29,8 @@ const fold = (value: string) => value.trim().toLocaleLowerCase();
 const objectLink = (id: string) => `/infrastructure/objects/${encodeURIComponent(id)}`;
 const mapLink = (map: string, object: string) =>
   `/map?map=${encodeURIComponent(map)}&view=physical&focus=${encodeURIComponent(object)}`;
-const classLabel = (value?: string) =>
-  value === undefined ? 'Без типа' : known.has(value) ? physicalClassPresentationForLocale(value, 'ru').label : value;
+const classLabel = (value: string | undefined, locale: 'ru' | 'en', t: ReturnType<typeof useI18n>['t']) =>
+  value === undefined ? t('catalog.untype') : known.has(value) ? physicalClassPresentationForLocale(value, locale).label : value;
 
 function CatalogState({
   kind,
@@ -91,7 +91,7 @@ export function InfrastructureObjectsPage({
       }
     } catch (reason) {
       if (current === sequence.current) {
-        setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+        setError(reason instanceof Error ? reason.message : t('catalog.unknownError'));
       }
       return false;
     } finally {
@@ -100,7 +100,7 @@ export function InfrastructureObjectsPage({
       }
     }
     return false;
-  }, [catalogInventoryDataSource]);
+  }, [catalogInventoryDataSource, t]);
 
   useEffect(() => {
     void reload();
@@ -109,7 +109,7 @@ export function InfrastructureObjectsPage({
   const remove = async (id: string, label: string, cable: boolean) => {
     if (
       !physicalObjectDeleteDataSource ||
-      !window.confirm(cable ? `Удалить кабель «${label}» и разорвать соединение?` : `Удалить объект «${label}»?`)
+      !window.confirm(cable ? t('catalog.deleteCableConfirm', { name: label }) : t('catalog.deleteObjectConfirm', { name: label }))
     ) {
       return;
     }
@@ -120,7 +120,7 @@ export function InfrastructureObjectsPage({
       await physicalObjectDeleteDataSource.deletePhysicalObject(id);
       await reload();
     } catch (reason) {
-      setDeleteError(reason instanceof Error ? reason.message : 'Не удалось удалить объект');
+      setDeleteError(reason instanceof Error ? reason.message : t('catalog.error.title'));
     }
   };
 
@@ -147,10 +147,10 @@ export function InfrastructureObjectsPage({
         setRenameTarget(null);
       } else {
         setRenameSavedPendingRefresh(true);
-        setRenameError('Имя сохранено, но каталог не удалось обновить. Повторите обновление.');
+        setRenameError(t('catalog.renameRefreshError'));
       }
     } catch (reason) {
-      setRenameError(reason instanceof Error ? reason.message : 'Не удалось переименовать объект');
+      setRenameError(reason instanceof Error ? reason.message : t('catalog.renameObject'));
     } finally {
       setRenaming(false);
     }
@@ -226,25 +226,25 @@ export function InfrastructureObjectsPage({
     <main className="catalog-page">
       <header className="catalog-page__header">
         <div>
-          <span className="eyebrow">Инфраструктура</span>
-          <h1>Каталог</h1>
-          <p>Оборудование, кабели, физические порты и размещение на картах.</p>
+          <span className="eyebrow">{t('catalog.infrastructure')}</span>
+          <h1>{t('catalog.title')}</h1>
+          <p>{t('catalog.description')}</p>
         </div>
         {tab === 'equipment' && (
           <Link className="primary-action" to="/infrastructure/objects/new">
-            Создать объект
+            {t('catalog.createObject')}
           </Link>
         )}
       </header>
 
-      <div className="catalog-tabs" role="tablist" aria-label="Разделы каталога">
+      <div className="catalog-tabs" role="tablist" aria-label={t('catalog.sections')}>
         <button
           type="button"
           role="tab"
           aria-selected={tab === 'equipment'}
           onClick={() => setTab('equipment')}
         >
-          Оборудование ({equipmentAll.length})
+          {t('catalog.equipment', { count: equipmentAll.length })}
         </button>
         <button
           type="button"
@@ -252,34 +252,34 @@ export function InfrastructureObjectsPage({
           aria-selected={tab === 'cables'}
           onClick={() => setTab('cables')}
         >
-          Кабели ({cablesAll.length})
+          {t('catalog.cables', { count: cablesAll.length })}
         </button>
       </div>
 
-      <section className="catalog-controls" aria-label="Поиск и фильтры">
+      <section className="catalog-controls" aria-label={t('catalog.searchFilters')}>
         <label>
-          Поиск
-          <input aria-label="Поиск" value={search} onChange={(event) => setSearch(event.target.value)} />
+          {t('catalog.search')}
+          <input aria-label={t('catalog.search')} value={search} onChange={(event) => setSearch(event.target.value)} />
         </label>
         {tab === 'equipment' ? (
           <div className="catalog-controls__filters">
             <label>
-              Тип
-              <select aria-label="Тип" value={type} onChange={(event) => setType(event.target.value)}>
-                <option value="all">Все</option>
-                <option value="none">Без типа</option>
+              {t('catalog.type')}
+              <select aria-label={t('catalog.type')} value={type} onChange={(event) => setType(event.target.value)}>
+                <option value="all">{t('catalog.all')}</option>
+                <option value="none">{t('catalog.untype')}</option>
                 {classes.map((value) => (
                   <option key={value} value={value}>
-                    {classLabel(value)}
+                    {classLabel(value, locale, t)}
                   </option>
                 ))}
               </select>
             </label>
             <label>
-              Карта
-              <select aria-label="Карта" value={map} onChange={(event) => setMap(event.target.value)}>
-                <option value="all">Все карты</option>
-                <option value="none">Без карты</option>
+              {t('catalog.map')}
+              <select aria-label={t('catalog.map')} value={map} onChange={(event) => setMap(event.target.value)}>
+                <option value="all">{t('catalog.allMaps')}</option>
+                <option value="none">{t('catalog.noMap')}</option>
                 {maps.map(([id, name]) => (
                   <option key={id} value={id}>
                     {name}
@@ -288,47 +288,40 @@ export function InfrastructureObjectsPage({
               </select>
             </label>
             <label>
-              Порты
-              <select aria-label="Порты" value={ports} onChange={(event) => setPorts(event.target.value)}>
-                <option value="all">Все</option>
-                <option value="connected">Есть подключения</option>
-                <option value="free">Есть свободные порты</option>
-                <option value="busy">Все порты заняты</option>
-                <option value="unknown">Состояние неизвестно</option>
+              {t('catalog.ports')}
+              <select aria-label={t('catalog.ports')} value={ports} onChange={(event) => setPorts(event.target.value)}>
+                <option value="all">{t('catalog.all')}</option><option value="connected">{t('catalog.connectedPorts')}</option><option value="free">{t('catalog.freePorts')}</option><option value="busy">{t('catalog.busyPorts')}</option><option value="unknown">{t('catalog.occupancyUnknown')}</option>
               </select>
             </label>
           </div>
         ) : (
           <label>
-            Состояние
+            {t('catalog.status')}
             <select
-              aria-label="Состояние кабеля"
+              aria-label={t('catalog.cableState')}
               value={cableState}
               onChange={(event) => setCableState(event.target.value)}
             >
-              <option value="all">Все</option>
-              <option value="SIMPLE_CABLE">Разрешённые</option>
-              <option value="UNRESOLVED">Неоднозначные</option>
+              <option value="all">{t('catalog.all')}</option><option value="SIMPLE_CABLE">{t('catalog.resolved')}</option><option value="UNRESOLVED">Неоднозначные</option>
             </select>
           </label>
         )}
       </section>
 
-      <section className="catalog-surface" aria-label="Список каталога">
+      <section className="catalog-surface" aria-label={t('catalog.list')}>
         {loading && !document && <CatalogState kind="loading" />}
         {error && !document && <CatalogState kind="error" message={error} onRetry={() => void reload()} />}
-        {inventoryEmpty && <div className="catalog-state"><p>Каталог пока пуст.</p></div>}
+        {inventoryEmpty && <div className="catalog-state"><p>{t('catalog.empty')}</p></div>}
         {document && !inventoryEmpty && currentTotal === 0 && (
           <div className="catalog-state">
             <p>
               {tab === 'equipment'
-                ? 'Оборудование пока не создано.'
-                : 'Кабели создаются через существующее физическое соединение.'}
+                ? t('catalog.noEquipment') : t('catalog.cablesHint')}
             </p>
           </div>
         )}
         {document && !inventoryEmpty && currentTotal > 0 && shown === 0 && (
-          <div className="catalog-state"><p>По заданным условиям ничего не найдено.</p></div>
+          <div className="catalog-state"><p>{t('catalog.noResults')}</p></div>
         )}
         {document && shown > 0 && tab === 'equipment' && (
           <Equipment
@@ -348,9 +341,9 @@ export function InfrastructureObjectsPage({
 
       {error && document && (
         <p className="catalog-note catalog-note--gap" role="alert">
-          Не удалось обновить каталог: {error}{' '}
+          {t('catalog.refreshError', { error })}{' '}
           <button type="button" onClick={() => void reload()}>
-            Повторить
+            {t('action.retry')}
           </button>
         </p>
       )}
@@ -407,6 +400,7 @@ function RenameDialog({
   onSave: () => void;
   onRetryRefresh: () => void;
 }) {
+  const { t } = useI18n();
   const normalized = value.trim();
   const unchanged = normalized === target.label;
 
@@ -419,12 +413,12 @@ function RenameDialog({
           onSave();
         }}
       >
-        <h2 id="rename-title">{target.cable ? 'Переименовать кабель' : 'Переименовать объект'}</h2>
+        <h2 id="rename-title">{target.cable ? t('catalog.renameCable') : t('catalog.renameObject')}</h2>
         <label>
-          Название
+          {t('catalog.name')}
           <input
             autoFocus
-            aria-label="Название"
+            aria-label={t('catalog.name')}
             value={value}
             disabled={pending || savedPendingRefresh}
             onChange={(event) => onChange(event.target.value)}
@@ -433,15 +427,15 @@ function RenameDialog({
         {error && <p className="catalog-dialog__error" role="alert">{error}</p>}
         <div className="catalog-dialog__actions">
           <button type="button" onClick={onCancel} disabled={pending}>
-            Отмена
+            {t('map.cancel')}
           </button>
           {savedPendingRefresh ? (
             <button type="button" onClick={onRetryRefresh} disabled={pending}>
-              Повторить обновление
+              {t('catalog.retryRefresh')}
             </button>
           ) : (
             <button type="submit" disabled={pending || !normalized || unchanged}>
-              Сохранить
+              {t('catalog.save')}
             </button>
           )}
         </div>
@@ -459,17 +453,13 @@ function Equipment({
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
   onRename?: (target: RenameTarget) => void;
 }) {
-  const { collator } = useI18n();
+  const { collator, locale, t } = useI18n();
   return (
     <div className="catalog-table-wrap">
       <table className="catalog-table">
         <thead>
           <tr>
-            <th>Название</th>
-            <th>Тип</th>
-            <th>Порты</th>
-            <th>Карты</th>
-            <th><span className="sr-only">Действия</span></th>
+            <th>{t('catalog.name')}</th><th>{t('catalog.type')}</th><th>{t('catalog.ports')}</th><th>{t('object.maps')}</th><th><span className="sr-only">{t('catalog.actions')}</span></th>
           </tr>
         </thead>
         <tbody>
@@ -480,22 +470,22 @@ function Equipment({
               <tr key={id}>
                 <td><Link to={objectLink(id)}>{item.label}</Link></td>
                 <td>
-                  <strong>{classLabel(item.class)}</strong>
+                  <strong>{classLabel(item.class, locale, t)}</strong>
                   {item.class && known.has(item.class) && <code>{item.class}</code>}
                 </td>
                 <td>
                   {item.occupancy ? (
                     <>
                       <strong>{item.occupancy.connected_ports} / {item.occupancy.total_ports}</strong>
-                      <small>{item.occupancy.free_ports} свободно</small>
+                      <small>{t('catalog.freeCount', { count: item.occupancy.free_ports })}</small>
                     </>
                   ) : (
-                    'Состояние не определено'
+                    t('catalog.undefined')
                   )}
                 </td>
                 <td>
                   {item.map_memberships.length === 0
-                    ? 'Нет'
+                    ? t('catalog.notAvailable')
                     : [...item.map_memberships]
                         .sort((a, b) => collator.compare(a.name, b.name))
                         .map((membership) => (
@@ -527,6 +517,7 @@ function Cables({
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
   onRename?: (target: RenameTarget) => void;
 }) {
+  const { t } = useI18n();
   const part = (value?: CatalogInventoryCableEndpoint) =>
     value ? (
       <>
@@ -544,11 +535,7 @@ function Cables({
       <table className="catalog-table">
         <thead>
           <tr>
-            <th>Название</th>
-            <th>Конец A</th>
-            <th>Конец B</th>
-            <th>Состояние</th>
-            <th><span className="sr-only">Действия</span></th>
+            <th>{t('catalog.name')}</th><th>{t('catalog.endpointA')}</th><th>{t('catalog.endpointB')}</th><th>{t('catalog.status')}</th><th><span className="sr-only">{t('catalog.actions')}</span></th>
           </tr>
         </thead>
         <tbody>
@@ -564,7 +551,7 @@ function Cables({
                 <td className="catalog-endpoint">
                   {item.resolution === 'SIMPLE_CABLE' ? part(item.endpoint_b) : '—'}
                 </td>
-                <td>{item.resolution === 'SIMPLE_CABLE' ? 'Разрешён' : 'Неоднозначно'}</td>
+                <td>{item.resolution === 'SIMPLE_CABLE' ? t('catalog.resolved') : t('catalog.unresolved')}</td>
                 <Actions id={id} label={item.label} cable remove={remove} onRename={onRename} />
               </tr>
             );
@@ -588,26 +575,27 @@ function Actions({
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
   onRename?: (target: RenameTarget) => void;
 }) {
+  const { t } = useI18n();
   return (
     <td className="catalog-table__actions">
-      <Link className="catalog-table__open" aria-label={`Открыть ${label}`} to={objectLink(id)}>
+      <Link className="catalog-table__open" aria-label={`${t('inspector.open')} ${label}`} to={objectLink(id)}>
         →
       </Link>
       {onRename && (
         <button
           type="button"
           className="catalog-table__rename"
-          aria-label={`Переименовать ${label}`}
+          aria-label={`${t('catalog.rename')} ${label}`}
           onClick={() => onRename({ id, label, cable })}
         >
-          Переименовать
+          {t('catalog.rename')}
         </button>
       )}
       {remove && (
         <button
           type="button"
           className="catalog-table__delete"
-          aria-label={`Удалить ${label}`}
+          aria-label={`${t('catalog.delete')} ${label}`}
           onClick={() => void remove(id, label, cable)}
         >
           ⌫

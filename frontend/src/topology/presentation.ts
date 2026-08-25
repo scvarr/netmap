@@ -28,6 +28,10 @@ export const physicalClassPresentationForLocale = (value: unknown, locale: Local
 };
 
 export const displayNodeLabel = (node: TopologyProjectionNode): string => {
+  return displayNodeLabelForLocale(node, 'ru');
+};
+
+export const displayNodeLabelForLocale = (node: TopologyProjectionNode, locale: Locale): string => {
   const technicalMatch = node.label.match(TECHNICAL_DEVICE_LABEL);
   if (node.attributes.label_source !== 'TECHNICAL_FALLBACK' && !technicalMatch) {
     return node.label;
@@ -37,18 +41,18 @@ export const displayNodeLabel = (node: TopologyProjectionNode): string => {
     (sourceRef) => sourceRef.entity_type === 'PhysicalObject',
   );
   const identifier = physicalObjectRef?.entity_id ?? technicalMatch?.[1] ?? node.id;
-  return node.kind === 'PHYSICAL_OBJECT'
-    ? `Объект ${shortId(identifier)}`
-    : `Устройство ${shortId(identifier)}`;
+  const labels = locale === 'en' ? { object: 'Object', device: 'Device' } : { object: 'Объект', device: 'Устройство' };
+  return `${node.kind === 'PHYSICAL_OBJECT' ? labels.object : labels.device} ${shortId(identifier)}`;
 };
 
-export const displayStatus = (status?: string): string => ({
-  CONFIGURED: 'Настроено',
-  ACTIVE: 'Работает',
-  INACTIVE: 'Неактивно',
-  DOWN: 'Недоступно',
-  UNKNOWN: 'Статус неизвестен',
-}[status ?? 'UNKNOWN'] ?? 'Статус не определён');
+export const displayStatus = (status?: string): string => displayStatusForLocale(status, 'ru');
+export const displayStatusForLocale = (status: string | undefined, locale: Locale): string => {
+  const labels = locale === 'en'
+    ? { CONFIGURED: 'Configured', ACTIVE: 'Active', INACTIVE: 'Inactive', DOWN: 'Down', UNKNOWN: 'Status unknown', fallback: 'Status unavailable' }
+    : { CONFIGURED: 'Настроено', ACTIVE: 'Работает', INACTIVE: 'Неактивно', DOWN: 'Недоступно', UNKNOWN: 'Статус неизвестен', fallback: 'Статус не определён' };
+  const key = status ?? 'UNKNOWN';
+  return key in labels ? labels[key as keyof typeof labels] : labels.fallback;
+};
 
 export const numericAttribute = (
   item: TopologyProjectionNode | TopologyProjectionEdge,
@@ -58,6 +62,7 @@ export const numericAttribute = (
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 };
 
-export const displayCount = (value: number | null): string => (
-  value === null ? 'Нет данных' : String(value)
+export const displayCount = (value: number | null): string => displayCountForLocale(value, 'ru');
+export const displayCountForLocale = (value: number | null, locale: Locale): string => (
+  value === null ? (locale === 'en' ? 'No data' : 'Нет данных') : String(value)
 );
