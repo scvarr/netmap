@@ -148,6 +148,8 @@ export function MapPage({
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
   const selectedMapId = useRef<string | null>(mapId);
   const insertionSequence = useRef(0);
+  const latestActiveMap = useRef<SavedMap | null>(null);
+  const latestPhysicalDocument = useRef<TopologyProjectionDocument | null>(null);
   const viewportCenter = useRef<(() => XYPosition) | null>(null);
   const consumedAddIntent = useRef<string | null>(null);
 
@@ -160,6 +162,8 @@ export function MapPage({
     sceneDocument?.sceneKey === presentationSceneKey
       ? sceneDocument.document
       : null;
+  latestActiveMap.current = activeMap;
+  latestPhysicalDocument.current = viewMode === "physical" ? document : null;
   const ids =
     activeMap?.placements.map((item) => item.physical_object_ref.entity_id) ??
     [];
@@ -488,10 +492,10 @@ export function MapPage({
     if (candidates.length !== 1)
       throw new Error("Не удалось определить размеры объекта для размещения.");
 
-    const occupied: FlowRectangle[] = (activeMap?.placements ?? []).flatMap(
+    const occupied: FlowRectangle[] = (latestActiveMap.current?.placements ?? []).flatMap(
       (placement) => {
         const node = nodeForPhysicalObject(
-          document?.nodes ?? [],
+          latestPhysicalDocument.current?.nodes ?? [],
           placement.physical_object_ref.entity_id,
         );
         const position = placement.positions["L1/PHYSICAL_OBJECT"];
