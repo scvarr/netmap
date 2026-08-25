@@ -286,10 +286,26 @@ class ObjectBlueprintCatalog:
             if left.count != right.count:
                 raise ValidationError("Authoring pair groups must have equal counts")
             for index in range(left.count):
-                expected_links.add(tuple(sorted((
+                link = tuple(sorted((
                     f"{left.key_prefix}:{index + 1}",
                     f"{right.key_prefix}:{index + 1}",
-                ))))
+                )))
+                if link in expected_links:
+                    raise ValidationError("Authoring recipe generates duplicate internal links")
+                expected_links.add(link)
+        individual_links: set[tuple[str, str]] = set()
+        for link in recipe.individual_links:
+            if link.from_slot_key == link.to_slot_key:
+                raise ValidationError("Authoring individual link cannot join a slot to itself")
+            if link.from_slot_key not in expected_slots or link.to_slot_key not in expected_slots:
+                raise ValidationError("Authoring individual link refers to an unknown slot")
+            unordered_link = tuple(sorted((link.from_slot_key, link.to_slot_key)))
+            if unordered_link in individual_links:
+                raise ValidationError("Authoring recipe has duplicate individual internal links")
+            if unordered_link in expected_links:
+                raise ValidationError("Authoring individual link duplicates a pair-generated link")
+            individual_links.add(unordered_link)
+            expected_links.add(unordered_link)
         actual_links = {tuple(sorted((link.from_slot_key, link.to_slot_key))) for link in query.internal_links}
         if actual_links != expected_links:
             raise ValidationError("Authoring recipe does not match explicit blueprint internal links")

@@ -286,6 +286,7 @@ def version_snapshot(left: str, right: str) -> dict:
             {"group_id": "right", "key_prefix": right, "display_prefix": right, "kind": "CONNECTION_POINT", "side": "RIGHT", "count": 1, "starting_number": 1, "placement_offset": 0, "placement_span": 1},
         ],
         "pair_recipes": [{"group_a_id": "left", "group_b_id": "right"}],
+        "individual_links": [],
     }
     return {
         "default_physical_object_class": "cable",
@@ -331,6 +332,7 @@ def test_blueprint_group_placement_round_trips_and_rejects_invalid_ranges():
             {"group_id": "lower", "key_prefix": "L", "display_prefix": "L", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1, "placement_offset": .6, "placement_span": .2},
         ],
         "pair_recipes": [],
+        "individual_links": [],
     }
     blueprint_id, version_id = create_blueprint([
         {**slot("U:1"), "display_name": "U01", "anchor": {"side": "LEFT", "offset": .1}},
@@ -353,6 +355,7 @@ def test_recipe_snapshot_uses_stable_group_key_ordinals_independent_of_presentat
             {"group_id": "right", "key_prefix": "stable-right", "display_prefix": "Р", "kind": "CONNECTION_POINT", "side": "TOP", "count": 2, "starting_number": 7, "placement_offset": 0, "placement_span": 1},
         ],
         "pair_recipes": [{"group_a_id": "left", "group_b_id": "right"}],
+        "individual_links": [],
     }
     slots = [
         {**slot("stable-left:1", "NETWORK_PORT"), "display_name": "П20", "anchor": {"side": "BOTTOM", "offset": .25}},
@@ -366,6 +369,40 @@ def test_recipe_snapshot_uses_stable_group_key_ordinals_independent_of_presentat
         "authoring_recipe": recipe,
     })
     assert response.status_code == 201
+
+
+def test_recipe_snapshot_unions_and_validates_individual_internal_links():
+    recipe = {
+        "endpoint_groups": [
+            {"group_id": "left", "key_prefix": "left", "display_prefix": "A", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 2, "starting_number": 1, "placement_offset": 0, "placement_span": 1},
+            {"group_id": "right", "key_prefix": "right", "display_prefix": "B", "kind": "CONNECTION_POINT", "side": "RIGHT", "count": 1, "starting_number": 4, "placement_offset": 0, "placement_span": 1},
+        ],
+        "pair_recipes": [],
+        "individual_links": [{"from_slot_key": "left:2", "to_slot_key": "right:1"}, {"from_slot_key": "left:1", "to_slot_key": "left:2"}],
+    }
+    slots = [
+        {**slot("left:1"), "display_name": "A01", "anchor": {"side": "LEFT", "offset": 0}},
+        {**slot("left:2"), "display_name": "A02", "anchor": {"side": "LEFT", "offset": 1}},
+        {**slot("right:1"), "display_name": "B04", "anchor": {"side": "RIGHT", "offset": .5}},
+    ]
+    created = client.post("/v1/library/object-blueprints", json={"name": "Individual links", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": slots, "internal_links": recipe["individual_links"], "authoring_recipe": recipe})
+    assert created.status_code == 201
+    instance = instantiate(created.json()["blueprint_ref"]["entity_id"], created.json()["version_ref"]["entity_id"], "Individual")
+    points = {item["slot_key"]: item["connection_point_ref"]["entity_id"] for item in instance["slots"]}
+    assert trace(points["left:1"], points["left:2"]) == "REACHABLE"
+    assert trace(points["left:2"], points["right:1"]) == "REACHABLE"
+
+    for individual_links in [
+        [{"from_slot_key": "left:1", "to_slot_key": "left:1"}],
+        [{"from_slot_key": "left:1", "to_slot_key": "missing:1"}],
+        [{"from_slot_key": "left:1", "to_slot_key": "right:1"}, {"from_slot_key": "right:1", "to_slot_key": "left:1"}],
+    ]:
+        invalid = {**recipe, "individual_links": individual_links}
+        assert client.post("/v1/library/object-blueprints", json={"name": "Invalid individual link", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": slots, "internal_links": individual_links, "authoring_recipe": invalid}).status_code == 422
+
+    paired = version_snapshot("C", "D")
+    paired["authoring_recipe"]["individual_links"] = [{"from_slot_key": "C:1", "to_slot_key": "D:1"}]
+    assert client.post("/v1/library/object-blueprints", json={"name": "Duplicate pair", **paired}).status_code == 422
 
 
 def test_blueprint_version_creation_is_atomic_and_delete_is_safe():

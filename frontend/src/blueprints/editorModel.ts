@@ -21,6 +21,7 @@ export interface BlueprintEditorState {
   fillColor: string;
   groups: EndpointGroup[];
   pairs: GroupPair[];
+  individualLinks: BlueprintInternalLink[];
 }
 
 export interface GeneratedBlueprint { slots: BlueprintSlot[]; internalLinks: BlueprintInternalLink[]; errors: string[]; }
@@ -44,6 +45,7 @@ export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocum
     name: version.name, defaultClass: version.default_physical_object_class ?? '', width: version.body.width, height: version.body.height, fillColor: version.body.fill_color ?? '#28565a',
     groups: recipe.endpoint_groups.map((group) => ({ id: group.group_id, keyPrefix: group.key_prefix, displayPrefix: group.display_prefix, kind: group.kind, side: group.side, count: group.count, startingNumber: group.starting_number, placementOffset: group.placement_offset, placementSpan: group.placement_span })),
     pairs: recipe.pair_recipes.map((pair) => ({ leftGroupId: pair.group_a_id, rightGroupId: pair.group_b_id })),
+    individualLinks: recipe.individual_links,
   };
 };
 
@@ -77,15 +79,27 @@ export const generateBlueprint = (state: BlueprintEditorState): GeneratedBluepri
 
   const groupsById = new Map(state.groups.map((group) => [group.id, group]));
   const links: BlueprintInternalLink[] = [];
-  const pairs = new Set<string>();
+  const linkSources = new Map<string, 'pair' | 'individual'>();
+  const linkKey = (from: string, to: string) => [from, to].sort().join('\u0000');
   for (const pair of state.pairs) {
     const left = groupsById.get(pair.leftGroupId); const right = groupsById.get(pair.rightGroupId);
     if (!left || !right) { errors.push('Правило внутренних пар ссылается на отсутствующую группу.'); continue; }
     if (left.count !== right.count) { errors.push('Внутренние пары возможны только при одинаковом количестве портов в группах.'); continue; }
     generatedGroupKeys(left).forEach((from_slot_key, index) => {
-      const to_slot_key = generatedGroupKeys(right)[index]; const key = [from_slot_key, to_slot_key].sort().join('\u0000');
-      if (pairs.has(key)) errors.push('Сгенерирована повторяющаяся внутренняя связь.'); else { pairs.add(key); links.push({ from_slot_key, to_slot_key }); }
+      const to_slot_key = generatedGroupKeys(right)[index]; const key = linkKey(from_slot_key, to_slot_key);
+      if (linkSources.has(key)) errors.push('Сгенерирована повторяющаяся внутренняя связь.'); else { linkSources.set(key, 'pair'); links.push({ from_slot_key, to_slot_key }); }
     });
+  }
+  const generatedSlotKeys = new Set(slotKeys);
+  for (const link of state.individualLinks) {
+    const { from_slot_key, to_slot_key } = link;
+    if (from_slot_key === to_slot_key) { errors.push('Индивидуальная внутренняя связь не может соединять порт с самим собой.'); continue; }
+    if (!generatedSlotKeys.has(from_slot_key) || !generatedSlotKeys.has(to_slot_key)) { errors.push('Индивидуальная внутренняя связь ссылается на отсутствующий порт.'); continue; }
+    const key = linkKey(from_slot_key, to_slot_key);
+    const source = linkSources.get(key);
+    if (source === 'individual') errors.push('Повторяется индивидуальная внутренняя связь.');
+    else if (source === 'pair') errors.push('Индивидуальная связь повторяет правило пар по номеру.');
+    else { linkSources.set(key, 'individual'); links.push(link); }
   }
   return { slots, internalLinks: links, errors };
 };
@@ -96,6 +110,7 @@ export const createBlueprintRequest = (state: BlueprintEditorState): { request?:
   const authoring_recipe: BlueprintAuthoringRecipe = {
     endpoint_groups: state.groups.map((group) => ({ group_id: group.id, key_prefix: normalized(group.keyPrefix), display_prefix: normalized(group.displayPrefix), kind: group.kind, side: group.side, count: group.count, starting_number: group.startingNumber, placement_offset: group.placementOffset, placement_span: group.placementSpan })),
     pair_recipes: state.pairs.map((pair) => ({ group_a_id: pair.leftGroupId, group_b_id: pair.rightGroupId })),
+    individual_links: state.individualLinks,
   };
   return { errors: [], request: { name: normalized(state.name), ...(normalized(state.defaultClass) ? { default_physical_object_class: normalized(state.defaultClass) } : {}), body: { kind: 'RECTANGLE', width: state.width, height: state.height, ...(state.fillColor ? { fill_color: state.fillColor } : {}) }, slots: generated.slots, internal_links: generated.internalLinks, authoring_recipe } };
 };

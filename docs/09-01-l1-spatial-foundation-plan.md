@@ -164,10 +164,6 @@ complete. L1S.5 is not included in this slice.
 - The Blueprint editor exposes compact range start/span controls and validates
   that a positive range stays within `0..1`.
 
-- Скрыть или генерировать stable keys в primary UX там, где это безопасно.
-- Inspect/edit individual arbitrary internal mappings.
-- Pair-by-index остаётся bulk generator, но не единственной моделью.
-
 #### L1S.5b — Stable slot identity and key UX cleanup
 
 **IMPLEMENTED**
@@ -180,6 +176,19 @@ complete. L1S.5 is not included in this slice.
   labels in group summaries.
 - New groups use one browser-generated UUID for both persisted group id and
   opaque stable key; hydration retains both values.
+
+#### L1S.5c — Arbitrary individual Blueprint internal mappings
+
+**IMPLEMENTED**
+
+- Authoring recipe stores `individual_links` as explicit stable generated slot
+  key pairs, separate from bulk `pair_recipes`.
+- The explicit Blueprint snapshot is the validated union of pair-by-index and
+  individual links; self-links, missing slots and unordered duplicates are
+  rejected, including a manual link duplicating a bulk rule.
+- The editor shows Russian human-facing port labels, preserves mappings across
+  presentation edits, blocks save if a reduced group removes a referenced
+  ordinal, and removes affected mappings only when its entire group is deleted.
 
 ### L1S.6 — Controlled Blueprint instance upgrade
 

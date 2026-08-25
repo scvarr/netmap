@@ -41,6 +41,7 @@ export interface BlueprintAuthoringEndpointGroup {
 export interface BlueprintAuthoringRecipe {
   endpoint_groups: BlueprintAuthoringEndpointGroup[];
   pair_recipes: { group_a_id: string; group_b_id: string }[];
+  individual_links: BlueprintInternalLink[];
 }
 
 export interface CreateObjectBlueprintRequest {

@@ -540,11 +540,19 @@ class BlueprintAuthoringPairRecipe(BaseModel):
     group_b_id: str = Field(min_length=1, max_length=255)
 
 
+class BlueprintAuthoringIndividualLink(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    from_slot_key: str = Field(min_length=1, max_length=255)
+    to_slot_key: str = Field(min_length=1, max_length=255)
+
+
 class BlueprintAuthoringRecipe(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     endpoint_groups: list[BlueprintAuthoringEndpointGroup]
     pair_recipes: list[BlueprintAuthoringPairRecipe] = Field(default_factory=list)
+    individual_links: list[BlueprintAuthoringIndividualLink] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_groups(self) -> "BlueprintAuthoringRecipe":

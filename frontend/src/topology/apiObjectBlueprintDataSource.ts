@@ -70,6 +70,7 @@ const parseRecipe = (value: unknown, path: string): BlueprintAuthoringRecipe | n
       return { group_id: requireString(group.group_id, `${path}.endpoint_groups[${index}].group_id`), key_prefix: requireString(group.key_prefix, `${path}.endpoint_groups[${index}].key_prefix`), display_prefix: requireString(group.display_prefix, `${path}.endpoint_groups[${index}].display_prefix`), kind: group.kind as BlueprintSlotKind, side: group.side as BlueprintAnchorSide, count: group.count as number, starting_number: group.starting_number as number, placement_offset: placement_offset as number, placement_span: placement_span as number };
     }),
     pair_recipes: (recipe.pair_recipes as unknown[]).map((value, index) => { const pair = requireObject(value, `${path}.pair_recipes[${index}]`); return { group_a_id: requireString(pair.group_a_id, `${path}.pair_recipes[${index}].group_a_id`), group_b_id: requireString(pair.group_b_id, `${path}.pair_recipes[${index}].group_b_id`) }; }),
+    individual_links: recipe.individual_links == null ? [] : (Array.isArray(recipe.individual_links) ? recipe.individual_links : malformed(`${path}.individual_links has invalid shape.`)).map((value, index) => parseLink(value, `${path}.individual_links[${index}]`)),
   };
 };
 
