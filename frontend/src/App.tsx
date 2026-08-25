@@ -25,6 +25,7 @@ import type { PhysicalObjectDeleteDataSource } from './topology/physicalObjectDe
 import type { SavedMapDataSource } from './topology/savedMapTypes';
 import type { CatalogInventoryDataSource } from './topology/catalogInventoryTypes';
 import type { PhysicalObjectDisplayNameWriteDataSource } from './topology/physicalObjectDisplayNameWriteTypes';
+import type { BlueprintUpgradeDataSource } from './topology/blueprintUpgradeTypes';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
@@ -45,6 +46,7 @@ export interface AppProps {
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource: CatalogInventoryDataSource;
   physicalObjectDisplayNameWriteDataSource?: PhysicalObjectDisplayNameWriteDataSource;
+  blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
 }
 
 export function App(props: AppProps) {
@@ -97,6 +99,7 @@ export function App(props: AppProps) {
               l2ForwardingContextWriteDataSource={props.l2ForwardingContextWriteDataSource}
               catalogInventoryDataSource={props.catalogInventoryDataSource}
               savedMapDataSource={props.savedMapDataSource}
+              blueprintUpgradeDataSource={props.blueprintUpgradeDataSource}
             />
           )}
         />

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.blueprint_catalog import ObjectBlueprintCatalog
+from app.blueprint_upgrade_analysis import BlueprintUpgradeAnalyzer
 from app.catalog_inventory_resolver import CatalogInventoryResolver
 from app.database import get_session
 from app.device_catalog import DeviceCatalog
@@ -89,6 +90,7 @@ from app.schemas import (
     ObjectBlueprintInstantiationDocument,
     ObjectBlueprintListDocument,
     ObjectBlueprintVersionDocument,
+    BlueprintUpgradeAnalysisDocument,
     PhysicalConnectionCreationDocument,
     PhysicalEndpointConnectionCreationDocument,
     PhysicalEndpointMaterialization,
@@ -358,6 +360,28 @@ def get_physical_object_details(
     return ConfiguredPhysicalObjectDetailsResolver(CanonicalRepository(session)).resolve(
         physical_object_id
     )
+
+
+@app.get(
+    "/v1/topology/physical-objects/{physical_object_id}/blueprint-upgrade-analysis",
+    response_model=BlueprintUpgradeAnalysisDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}},
+)
+def analyze_physical_object_blueprint_upgrade(
+    physical_object_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> BlueprintUpgradeAnalysisDocument:
+    CanonicalRepository(session).require_physical_objects([physical_object_id])
+    analysis = BlueprintUpgradeAnalyzer(session).analyze(physical_object_id)
+    return {
+        "status": analysis.status,
+        **({"blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": analysis.blueprint_id}} if analysis.blueprint_id else {}),
+        **({"current_version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": analysis.current_version_id}, "current_version_number": analysis.current_version_number} if analysis.current_version_id else {}),
+        **({"target_version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": analysis.target_version_id}, "target_version_number": analysis.target_version_number} if analysis.target_version_id else {}),
+        "compatible_changes": list(analysis.compatible_changes),
+        "blockers": list(analysis.blockers),
+    }
 
 
 @app.delete(

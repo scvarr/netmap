@@ -219,6 +219,29 @@ The next bounded product step is `L1S.6 — Controlled Blueprint instance upgrad
 
 ### L1S.6 — Controlled Blueprint instance upgrade
 
+#### L1S.6a — Blueprint instance upgrade visibility and dry-run compatibility analysis
+
+**IMPLEMENTED**
+
+- Read-only `GET /v1/topology/physical-objects/{id}/blueprint-upgrade-analysis`
+  compares a materialized instance with the latest immutable version of its own
+  `ObjectBlueprint`; manual objects are `NOT_APPLICABLE` and current instances
+  are `UP_TO_DATE`.
+- `OUTDATED` analysis identifies matching slots solely by stable `slot_key` plus
+  unchanged kind. Added slots/internal links and body/anchor/presentation changes
+  are compatible; removed slots, kind changes, removed internal links and any
+  inconsistent instance mapping are explicit blockers. Recipe data is provenance,
+  never runtime-topology evidence. The dry-run performs no writes.
+- Object Detail shows only Blueprint-instance visibility, then performs analysis
+  only on the user’s explicit action. Results are localized at the typed RU/EN UI
+  boundary; API codes remain locale-neutral. There is deliberately no Apply action.
+
+#### L1S.6b — Explicit transactional apply
+
+**NEXT** — preserve `PhysicalObject` and compatible generated-slot identities,
+materialize only approved additive changes atomically, and never delete/recreate
+canonical topology.
+
 - Показывать instances на старой version и выполнять dry-run compatibility analysis.
 - Показывать compatible changes и blockers.
 - Сохранять identity `PhysicalObject` и, где возможно, совпадающих generated slots.

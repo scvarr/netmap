@@ -76,6 +76,15 @@ describe('PhysicalObjectDetailsSection ports', () => {
     expect(screen.getByRole('button', { name: '+ Добавить точку' })).toBeInTheDocument();
   });
 
+  it('shows an outdated blueprint only after explicit dry-run, with localized changes and blockers', async () => {
+    const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
+    const analyzeBlueprintUpgrade = vi.fn().mockResolvedValue({ schema_version: '1.0', status: 'OUTDATED', current_version_number: 1, target_version_number: 2, compatible_changes: [{ code: 'SLOT_ADDED', slot_key: 'C' }], blockers: [{ code: 'SLOT_REMOVED', slot_key: 'B' }] });
+    renderDetails(blueprint, { blueprintUpgradeDataSource: { analyzeBlueprintUpgrade } });
+    expect(await screen.findByText(/версия 1/)).toBeInTheDocument(); expect(screen.queryByText(/Доступна версия 2/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Проверить совместимость' }));
+    expect(await screen.findByText(/Доступна версия 2/)).toBeInTheDocument(); expect(screen.getByText('Добавлен порт C')).toBeInTheDocument(); expect(screen.getByText('Удалён порт B')).toBeInTheDocument(); expect(analyzeBlueprintUpgrade).toHaveBeenCalledWith('object');
+  });
+
   it('keeps technical identities collapsed until requested', async () => {
     renderDetails(document());
     const technical = await screen.findByText('Технические данные');

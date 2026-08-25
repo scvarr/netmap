@@ -22,6 +22,7 @@ import type {
 } from '../topology/physicalObjectDetailsTypes';
 import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
 import { useI18n } from '../i18n';
+import type { BlueprintUpgradeDataSource } from '../topology/blueprintUpgradeTypes';
 
 interface InfrastructureObjectDetailPageProps {
   dataSource: TopologyDataSource;
@@ -35,6 +36,7 @@ interface InfrastructureObjectDetailPageProps {
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
   catalogInventoryDataSource: CatalogInventoryDataSource;
   savedMapDataSource?: SavedMapDataSource;
+  blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
 }
 
 const mapLink = (mapId: string, objectId: string) =>
@@ -54,6 +56,7 @@ export function InfrastructureObjectDetailPage({
   l2ForwardingContextWriteDataSource,
   catalogInventoryDataSource,
   savedMapDataSource,
+  blueprintUpgradeDataSource,
 }: InfrastructureObjectDetailPageProps) {
   const { collator, locale, t } = useI18n();
   const { physicalObjectId = '' } = useParams();
@@ -225,6 +228,7 @@ export function InfrastructureObjectDetailPage({
           onConnected={refreshProjection}
           onClassUpdated={refreshProjection}
           onConnectionPointCreated={refreshProjection}
+          blueprintUpgradeDataSource={blueprintUpgradeDataSource}
         />
       </section>
       {details && details.owned_interface_count > 0 && (

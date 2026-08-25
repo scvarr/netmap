@@ -737,6 +737,30 @@ class ObjectBlueprintVersionDocument(BaseModel):
     authoring_recipe: BlueprintAuthoringRecipe | None = None
 
 
+class BlueprintUpgradeChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: str
+    slot_key: str | None = None
+    slot_keys: list[str] | None = None
+    kind: str | None = None
+    current_kind: str | None = None
+    target_kind: str | None = None
+    details: str | None = None
+
+
+class BlueprintUpgradeAnalysisDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["1.0"] = "1.0"
+    status: Literal["NOT_APPLICABLE", "UP_TO_DATE", "OUTDATED", "MODEL_INCONSISTENT"]
+    blueprint_ref: BlueprintLibraryRef | None = None
+    current_version_ref: BlueprintLibraryRef | None = None
+    current_version_number: int | None = Field(default=None, ge=1)
+    target_version_ref: BlueprintLibraryRef | None = None
+    target_version_number: int | None = Field(default=None, ge=1)
+    compatible_changes: list[BlueprintUpgradeChange]
+    blockers: list[BlueprintUpgradeChange]
+
+
 class CreatePhysicalLinkRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

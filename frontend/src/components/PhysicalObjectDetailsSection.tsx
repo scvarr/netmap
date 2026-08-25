@@ -13,6 +13,8 @@ import { physicalClassPresentation } from '../topology/presentation';
 import { ConnectPhysicalEndpoint } from './ConnectPhysicalEndpoint';
 import type { ConnectionPointWriteDataSource } from '../topology/connectionPointWriteTypes';
 import { CreateConnectionPoint } from './CreateConnectionPoint';
+import type { BlueprintUpgradeAnalysisDocument, BlueprintUpgradeDataSource } from '../topology/blueprintUpgradeTypes';
+import { useI18n } from '../i18n';
 
 interface PhysicalObjectDetailsSectionProps {
   node: TopologyProjectionNode;
@@ -26,6 +28,7 @@ interface PhysicalObjectDetailsSectionProps {
   onClassUpdated?: () => void;
   onConnectionPointCreated?: () => void;
   onDocumentChange?: (document: PhysicalObjectDetailsDocument) => void;
+  blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
 }
 
 type DetailsState =
@@ -239,6 +242,27 @@ const pairedChannels = (points: ConnectionPointDetails[]): Array<[ConnectionPoin
   return seen.size === points.length ? pairs : null;
 };
 
+const changeText = (change: { code: string; slot_key?: string; slot_keys?: string[] }, t: ReturnType<typeof useI18n>['t']) => {
+  const slot = change.slot_key ?? change.slot_keys?.join(' ↔ ') ?? '';
+  const key = `upgrade.${change.code}` as Parameters<typeof t>[0];
+  return t(key, { slot });
+};
+
+const BlueprintUpgrade = ({ physicalObjectId, dataSource }: { physicalObjectId: string; dataSource?: BlueprintUpgradeDataSource }) => {
+  const { t } = useI18n(); const [analysis, setAnalysis] = useState<BlueprintUpgradeAnalysisDocument | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null);
+  if (!dataSource) return null;
+  const run = async () => { setLoading(true); setError(null); try { setAnalysis(await dataSource.analyzeBlueprintUpgrade(physicalObjectId)); } catch (reason) { setError(reason instanceof Error ? reason.message : t('upgrade.failed')); } finally { setLoading(false); } };
+  return <section className="blueprint-upgrade" aria-label={t('upgrade.title')}>
+    {analysis?.status === 'OUTDATED' && <p>{t('upgrade.outdated', { current: analysis.current_version_number ?? '?', target: analysis.target_version_number ?? '?' })}</p>}
+    {analysis?.status === 'UP_TO_DATE' && <p>{t('upgrade.upToDate')}</p>}
+    {analysis?.status === 'MODEL_INCONSISTENT' && <p role="alert">{t('upgrade.inconsistent')}</p>}
+    <button type="button" onClick={() => void run()} disabled={loading}>{loading ? t('upgrade.analyzing') : t('upgrade.dryRun')}</button>
+    {error && <p role="alert">{t('upgrade.failed')}: {error}</p>}
+    {analysis && analysis.compatible_changes.length > 0 && <><h4>{t('upgrade.compatible')}</h4><ul>{analysis.compatible_changes.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
+    {analysis && analysis.blockers.length > 0 && <><h4>{t('upgrade.blockers')}</h4><ul>{analysis.blockers.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
+  </section>;
+};
+
 export function PhysicalObjectDetailsSection({
   node,
   dataSource,
@@ -251,6 +275,7 @@ export function PhysicalObjectDetailsSection({
   onClassUpdated = () => undefined,
   onConnectionPointCreated = () => undefined,
   onDocumentChange = () => undefined,
+  blueprintUpgradeDataSource,
 }: PhysicalObjectDetailsSectionProps) {
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
@@ -325,7 +350,7 @@ export function PhysicalObjectDetailsSection({
             />
           )}
           {state.document.blueprint_provenance && (
-            <p className="blueprint-provenance">Объект создан из шаблона · версия {state.document.blueprint_provenance.version_number}. Структурные изменения выполняются через версию шаблона. <Link to={`/library/object-blueprints/${state.document.blueprint_provenance.blueprint_ref.entity_id}/versions/${state.document.blueprint_provenance.version_ref.entity_id}/edit`}>Открыть шаблон</Link></p>
+            <><p className="blueprint-provenance">Объект создан из шаблона · версия {state.document.blueprint_provenance.version_number}. Структурные изменения выполняются через версию шаблона. <Link to={`/library/object-blueprints/${state.document.blueprint_provenance.blueprint_ref.entity_id}/versions/${state.document.blueprint_provenance.version_ref.entity_id}/edit`}>Открыть шаблон</Link></p>{physicalObjectId && <BlueprintUpgrade physicalObjectId={physicalObjectId} dataSource={blueprintUpgradeDataSource} />}</>
           )}
           <h3 id="connection-points-heading">Порты <span>{state.document.connection_points.length}</span></h3>
           {!state.document.blueprint_provenance && connectionPointWriteDataSource && physicalObjectId && (
