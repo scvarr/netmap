@@ -832,6 +832,13 @@ coordinates mean frontend ELK initialization, not a copy of Physical position.
 остаётся selectable и inspectable, но React Flow отключает его drag; успешная
 lock write обновляет local SavedMap state без reload projection или scene.
 
+Final SavedMap drag проверяется локально в flow coordinates по footprint
+размещённых normal nodes: blueprint использует размеры body, generic node —
+существующие layout dimensions. Overlap при drop не начинает position write,
+немедленно возвращает node к последней подтверждённой позиции и показывает
+короткое сообщение; viewport и selection не меняются. Touching boundaries
+допустимы. Collision-safe insertion и nearest-free placement ещё не реализованы.
+
 `TopologyCanvas` remains presentation-only: it receives a scene key,
 position overrides and callbacks, not SavedMap API knowledge. Viewport control
 belongs to scene initialization and explicit user layout/navigation actions,

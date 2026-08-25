@@ -36,6 +36,7 @@ import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
 import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
 import { physicalObjectIdForNode } from "../topology/projection";
 import type { XYPosition } from "@xyflow/react";
+import { overlapsAnyNode } from "../topology/nodeFootprint";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -53,6 +54,7 @@ interface TopologyCanvasProps {
     physicalObjectId: string,
     position: XYPosition,
   ) => void;
+  onNodeCollisionRejected?: () => void;
   disableAutoLayout?: boolean;
   onViewportCenterReady?: (getter: (() => XYPosition) | null) => void;
   onPhysicalPaneContextMenu?: (anchor: XYPosition, screen: XYPosition) => void;
@@ -82,6 +84,7 @@ export function TopologyCanvas({
   lockedNodeIds,
   authoritativePositionRevision,
   onPhysicalNodeDragStop,
+  onNodeCollisionRejected,
   disableAutoLayout,
   onViewportCenterReady,
   onPhysicalPaneContextMenu,
@@ -98,6 +101,7 @@ export function TopologyCanvas({
   );
   const currentDocument = useRef(document);
   const appliedSceneKey = useRef<string | null>(null);
+  const confirmedNodePositions = useRef(new Map<string, XYPosition>());
   const canvasRef = useRef<HTMLDivElement>(null);
   const { fitView, screenToFlowPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
@@ -116,13 +120,17 @@ export function TopologyCanvas({
         if (!current || currentDocument.current !== document) return;
         const storedPositions =
           positionOverrides ?? layoutStore?.load(viewKey) ?? {};
-        setProjection({
+        const next = {
           ...nextProjection,
           nodes: applyTopologyPositionOverrides(
             nextProjection.nodes,
             storedPositions,
           ),
-        });
+        };
+        confirmedNodePositions.current = new Map(
+          next.nodes.map((node) => [node.id, node.position]),
+        );
+        setProjection(next);
       },
       (reason: unknown) => {
         if (!current) return;
@@ -150,17 +158,17 @@ export function TopologyCanvas({
     appliedAuthoritativePositionRevision.current =
       authoritativePositionRevision;
     if (!positionOverrides) return;
-    setProjection((current) =>
-      current
-        ? {
-            ...current,
-            nodes: applyTopologyPositionOverrides(
-              current.nodes,
-              positionOverrides,
-            ),
-          }
-        : current,
-    );
+    setProjection((current) => {
+      if (!current) return current;
+      const nodes = applyTopologyPositionOverrides(
+        current.nodes,
+        positionOverrides,
+      );
+      confirmedNodePositions.current = new Map(
+        nodes.map((node) => [node.id, node.position]),
+      );
+      return { ...current, nodes };
+    });
   }, [authoritativePositionRevision]);
 
   useEffect(() => {
@@ -269,7 +277,34 @@ export function TopologyCanvas({
         : current,
     );
   };
+  const onNodeDragStart: OnNodeDrag<DeviceFlowNode> = (_, node) => {
+    confirmedNodePositions.current.set(node.id, node.position);
+  };
   const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
+    const confirmedPosition = confirmedNodePositions.current.get(draggedNode.id);
+    const placedNodes = draggableNodeIds
+      ? projection.nodes.filter((node) => draggableNodeIds.has(node.id))
+      : [];
+    if (
+      confirmedPosition &&
+      draggableNodeIds?.has(draggedNode.id) &&
+      overlapsAnyNode(draggedNode, placedNodes)
+    ) {
+      setProjection((current) =>
+        current
+          ? {
+              ...current,
+              nodes: current.nodes.map((node) =>
+                node.id === draggedNode.id
+                  ? { ...node, position: confirmedPosition }
+                  : node,
+              ),
+            }
+          : current,
+      );
+      onNodeCollisionRejected?.();
+      return;
+    }
     const physicalObjectId = physicalObjectIdForNode(
       draggedNode.data.projection,
     );
@@ -305,6 +340,7 @@ export function TopologyCanvas({
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
+        onNodeDragStart={onNodeDragStart}
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}

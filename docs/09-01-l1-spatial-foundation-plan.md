@@ -32,7 +32,17 @@ visible, но его нельзя перетащить; смена lock не п�
 
 #### L1S.2b — collision-safe placement
 
-- Collision-free final drag и insertion.
+**IMPLEMENTED для final drag**
+
+Final drag проверяет presentation footprint размещённых nodes в flow
+coordinates. Overlap локально отклоняется без write, а node возвращается к
+последней подтверждённой позиции.
+
+#### L1S.2c — collision-safe insertion
+
+**OPEN**
+
+- Collision-safe insertion.
 - Nearest-free placement около занятого insertion anchor.
 
 ### L1S.3 — Internal continuity

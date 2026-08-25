@@ -23,11 +23,12 @@ vi.mock('@xyflow/react', () => ({
   MiniMap: () => null,
   Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
-  ReactFlow: ({ nodes, edges, onNodeClick, onNodesChange, onNodeDragStop, children }: {
+  ReactFlow: ({ nodes, edges, onNodeClick, onNodesChange, onNodeDragStart, onNodeDragStop, children }: {
     nodes: FlowProjection['nodes'];
     edges: FlowProjection['edges'];
     onNodeClick: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     onNodesChange: (changes: unknown[]) => void;
+    onNodeDragStart: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     onNodeDragStop: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     children: React.ReactNode;
   }) => (
@@ -40,7 +41,9 @@ vi.mock('@xyflow/react', () => ({
           <span data-testid={`draggable-${node.id}`}>{String(node.draggable !== false)}</span>
           <button onClick={() => {
             if (node.draggable === false) return;
-            const dragged = { ...node, position: { x: 42, y: 84 } };
+            onNodeDragStart({}, node);
+            const position = node.id === 'collision-source' ? { x: 50, y: 0 } : node.id === 'touch-source' ? { x: 100, y: 0 } : { x: 42, y: 84 };
+            const dragged = { ...node, position };
             onNodesChange([{ id: node.id, type: 'position', position: dragged.position }]);
             onNodeDragStop({}, dragged);
           }}>drag {node.id}</button>
@@ -297,8 +300,49 @@ describe('TopologyCanvas async layout boundary', () => {
     );
     expect(screen.getByTestId('draggable-physical-A')).toHaveTextContent('true');
     fireEvent.click(screen.getByRole('button', { name: 'drag physical-A' }));
+    expect(onPhysicalNodeDragStop).toHaveBeenCalledTimes(1);
     expect(onPhysicalNodeDragStop).toHaveBeenCalledWith('object-a', { x: 42, y: 84 });
     expect(layoutEngine).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an overlapping final drop locally and restores the confirmed position', async () => {
+    fitViewMock.mockClear();
+    const source = { ...documentFor('physical-A').nodes[0], id: 'collision-source', source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'source-object' }] };
+    const blocker = { ...source, id: 'collision-blocker', source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'blocker-object' }] };
+    const document = { ...documentFor('physical-A'), nodes: [source, blocker] };
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async () => ({ nodes: [
+      { id: source.id, type: 'device' as const, position: { x: 0, y: 0 }, data: { projection: source } },
+      { id: blocker.id, type: 'device' as const, position: { x: 50, y: 0 }, data: { projection: blocker } },
+    ], edges: [] }));
+    const onPhysicalNodeDragStop = vi.fn();
+    const onNodeCollisionRejected = vi.fn();
+    const onSelectionChange = vi.fn();
+    render(<TopologyCanvas document={document} selection={{ type: 'node', item: source }} onSelectionChange={onSelectionChange} sceneKey="map-a/physical" layoutEngine={layoutEngine} draggableNodeIds={new Set([source.id, blocker.id])} onPhysicalNodeDragStop={onPhysicalNodeDragStop} onNodeCollisionRejected={onNodeCollisionRejected} />);
+
+    await screen.findByRole('button', { name: 'drag collision-source' });
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'drag collision-source' }));
+    await waitFor(() => expect(screen.getByTestId('position-collision-source')).toHaveTextContent('0,0'));
+    expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
+    expect(onNodeCollisionRejected).toHaveBeenCalledTimes(1);
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(fitViewMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('accepts a free or boundary-touching final drop exactly once', async () => {
+    const source = { ...documentFor('physical-A').nodes[0], id: 'touch-source', source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'source-object' }] };
+    const blocker = { ...source, id: 'touch-blocker', source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'blocker-object' }] };
+    const document = { ...documentFor('physical-A'), nodes: [source, blocker] };
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async () => ({ nodes: [
+      { id: source.id, type: 'device' as const, position: { x: 0, y: 0 }, data: { projection: source } },
+      { id: blocker.id, type: 'device' as const, position: { x: 312, y: 0 }, data: { projection: blocker } },
+    ], edges: [] }));
+    const onPhysicalNodeDragStop = vi.fn();
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} draggableNodeIds={new Set([source.id, blocker.id])} onPhysicalNodeDragStop={onPhysicalNodeDragStop} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'drag touch-source' }));
+    expect(onPhysicalNodeDragStop).toHaveBeenCalledTimes(1);
+    expect(onPhysicalNodeDragStop).toHaveBeenCalledWith('source-object', { x: 100, y: 0 });
   });
 
   it('fits each new scene once and applies an explicit authoritative rollback without ELK', async () => {

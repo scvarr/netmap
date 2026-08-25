@@ -567,6 +567,7 @@ export function MapPage({
 
   const move = async (id: string, position: XYPosition) => {
     if (!savedMapDataSource || !mapId) return;
+    setError(null);
     const targetMapId = mapId;
     const positionKey = savedMapViewKey(viewMode);
     try {
@@ -949,6 +950,9 @@ export function MapPage({
                   lockedNodeIds={!legacy ? lockedNodeIds : undefined}
                   authoritativePositionRevision={authoritativePositionRevision}
                   onPhysicalNodeDragStop={!legacy ? move : undefined}
+                  onNodeCollisionRejected={() =>
+                    setError("Объекты нельзя размещать друг на друге.")
+                  }
                   disableAutoLayout={!legacy}
                   traceOverlay={physicalTraceOverlayFor(
                     traceArtifact,
