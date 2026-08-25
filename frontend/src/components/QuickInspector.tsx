@@ -43,7 +43,6 @@ interface QuickInspectorProps {
   cableRoutePresentation?: { present: boolean; waypointCount: number; editing: boolean; selectedWaypointIndex: number | null; savePending: boolean; error: string | null; resetPending: boolean; resetRefreshFailed: boolean };
   onEditCableRoute?: () => void;
   onCancelCableRouteEdit?: () => void;
-  onAddCableRouteWaypoint?: () => void;
   onDeleteCableRouteWaypoint?: () => void;
   onSaveCableRoute?: () => void;
   onResetCableRoute?: () => void;
@@ -403,8 +402,7 @@ export function QuickInspector(props: QuickInspectorProps) {
               {props.cableRoutePresentation.present && <button disabled={props.cableRoutePresentation.resetPending} onClick={props.onResetCableRoute}>Сбросить трассу</button>}
               {props.cableRoutePresentation.resetRefreshFailed && <><p role="alert">Трасса сброшена, но карту не удалось обновить.</p><button onClick={props.onRetryCableRouteReset}>Повторить обновление</button></>}
             </> : <>
-              <p>Редактирование черновика: точки сохраняются только по кнопке.</p>
-              <button onClick={props.onAddCableRouteWaypoint}>Добавить точку</button>
+              <p>Перетащите точку или нажмите на участок трассы, чтобы вставить новую.</p>
               <button disabled={props.cableRoutePresentation.selectedWaypointIndex === null} onClick={props.onDeleteCableRouteWaypoint}>Удалить выбранную точку</button>
               <button disabled={props.cableRoutePresentation.savePending} onClick={props.onSaveCableRoute}>Сохранить трассу</button>
               <button disabled={props.cableRoutePresentation.savePending} onClick={props.onCancelCableRouteEdit}>Отменить</button>

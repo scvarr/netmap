@@ -42,6 +42,7 @@ export interface LogicalEdgeData extends Record<string, unknown> {
     selectedWaypointIndex: number | null;
     onWaypointSelect: (index: number) => void;
     onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void;
+    onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void;
   };
   continuation?: L1OffMapContinuation;
 }

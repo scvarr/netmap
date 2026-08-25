@@ -94,7 +94,6 @@ interface CableRouteEditState {
   originalWaypoints: MapCableRouteWaypoint[];
   draftWaypoints: MapCableRouteWaypoint[];
   selectedWaypointIndex: number | null;
-  addingWaypoint: boolean;
   status: "editing" | "saving";
   error: string | null;
 }
@@ -847,7 +846,7 @@ export function MapPage({
     if (!activeMap || !selectedCableId || !drawableSelectedCable || viewMode !== "physical") return;
     const existing = (activeMap.cable_routes ?? []).find((route) => route.cable_ref.entity_id === selectedCableId);
     const copied = existing?.waypoints.map((point) => ({ ...point })) ?? [];
-    setCableRouteEdit({ mapId: activeMap.map_ref.entity_id, cablePhysicalObjectId: selectedCableId, originalRoutePresent: Boolean(existing), originalWaypoints: copied, draftWaypoints: copied, selectedWaypointIndex: null, addingWaypoint: false, status: "editing", error: null });
+    setCableRouteEdit({ mapId: activeMap.map_ref.entity_id, cablePhysicalObjectId: selectedCableId, originalRoutePresent: Boolean(existing), originalWaypoints: copied, draftWaypoints: copied, selectedWaypointIndex: null, status: "editing", error: null });
   };
   const saveCableRoute = async () => {
     if (!savedMapDataSource || !cableRouteEdit || cableRouteEdit.status === "saving") return;
@@ -1121,9 +1120,7 @@ export function MapPage({
                   cableRoutes={
                     viewMode === "physical" ? activeMap?.cable_routes : undefined
                   }
-                  cableRouteDraft={cableRouteEdit ? { cablePhysicalObjectId: cableRouteEdit.cablePhysicalObjectId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}
-                  addCableRouteWaypointArmed={cableRouteEdit?.addingWaypoint}
-                  onAddCableRouteWaypoint={(waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints, waypoint], selectedWaypointIndex: current.draftWaypoints.length, addingWaypoint: false } : current)}
+                  cableRouteDraft={cableRouteEdit ? { cablePhysicalObjectId: cableRouteEdit.cablePhysicalObjectId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
                   onViewportCenterReady={
                     viewMode === "physical" ? receiveViewportCenter : undefined
                   }
@@ -1154,7 +1151,6 @@ export function MapPage({
         cableRoutePresentation={(!legacy && viewMode === "physical" && selectedCableId && drawableSelectedCable) ? { present: Boolean(selectedCableRoute), waypointCount: selectedCableRoute?.waypoints.length ?? 0, editing: Boolean(cableRouteEdit), selectedWaypointIndex: cableRouteEdit?.selectedWaypointIndex ?? null, savePending: cableRouteEdit?.status === "saving", error: cableRouteEdit?.error ?? null, resetPending: cableRouteReset?.status === "pending", resetRefreshFailed: cableRouteReset?.status === "refresh-failed" } : undefined}
         onEditCableRoute={beginCableRouteEdit}
         onCancelCableRouteEdit={() => setCableRouteEdit(null)}
-        onAddCableRouteWaypoint={() => setCableRouteEdit((current) => current ? { ...current, addingWaypoint: true } : current)}
         onDeleteCableRouteWaypoint={() => setCableRouteEdit((current) => current && current.selectedWaypointIndex !== null ? { ...current, draftWaypoints: current.draftWaypoints.filter((_, index) => index !== current.selectedWaypointIndex), selectedWaypointIndex: null } : current)}
         onSaveCableRoute={() => void saveCableRoute()}
         onResetCableRoute={() => void resetCableRoute()}

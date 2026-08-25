@@ -103,8 +103,9 @@ coordinates. Overlap локально отклоняется без write, а no
 
 **IMPLEMENTED**
 
-- Edit existing route with ordered add/move/delete waypoint draft state, including
-  an explicit zero-waypoint route.
+- Edit existing route directly on its segments: visible draggable waypoint
+  handles and exact segment insertion preserve ordered draft state, including an
+  explicit zero-waypoint route; arbitrary pane clicks do not place waypoints.
 - Save performs one full-list PUT; drag performs no writes. Reset deletes only
   the custom record and has a refresh-only retry lifecycle.
 - Draft state is local to the exact map/cable and is invalidated on map, view or

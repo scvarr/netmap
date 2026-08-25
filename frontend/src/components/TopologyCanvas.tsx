@@ -68,9 +68,7 @@ interface TopologyCanvasProps {
     anchor: XYPosition,
   ) => void;
   cableRoutes?: readonly MapCableRoute[];
-  cableRouteDraft?: { cablePhysicalObjectId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; };
-  addCableRouteWaypointArmed?: boolean;
-  onAddCableRouteWaypoint?: (waypoint: MapCableRouteWaypoint) => void;
+  cableRouteDraft?: { cablePhysicalObjectId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -100,8 +98,6 @@ export function TopologyCanvas({
   onContinuationClickAnchor,
   cableRoutes,
   cableRouteDraft,
-  addCableRouteWaypointArmed,
-  onAddCableRouteWaypoint,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -367,11 +363,7 @@ export function TopologyCanvas({
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
-        onPaneClick={(event) => {
-          if (addCableRouteWaypointArmed && onAddCableRouteWaypoint) {
-            onAddCableRouteWaypoint(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
-            return;
-          }
+        onPaneClick={() => {
           onSelectionChange(null);
           onPaneClick?.();
         }}

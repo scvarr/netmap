@@ -121,9 +121,20 @@ export function FloatingTopologyEdge({
   const path = waypoints
     ? routedCablePath(endpoints.source, endpoints.target, waypoints)
     : straightPath;
+  const segmentPoints = [endpoints.source, ...(waypoints ?? []), endpoints.target];
   return (
     <>
       <BaseEdge id={id} path={path} style={style} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={interactionWidth} />
+      {draft && segmentPoints.slice(0, -1).map((point, index) => {
+        const next = segmentPoints[index + 1];
+        return <line
+          key={`${id}:segment:${index}`}
+          className="cable-route-segment-hit"
+          x1={point.x} y1={point.y} x2={next.x} y2={next.y}
+          stroke="transparent" strokeWidth={22} pointerEvents="stroke"
+          onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); draft.onWaypointInsert(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }}
+        />;
+      })}
       {draft?.waypoints.map((waypoint, index) => (
         <circle
           key={`${id}:waypoint:${index}`}
@@ -131,9 +142,10 @@ export function FloatingTopologyEdge({
           cx={waypoint.x}
           cy={waypoint.y}
           r={6}
-          onPointerDown={(event) => { event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }}
-          onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); draft.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }}
-          onPointerUp={(event) => { event.stopPropagation(); event.currentTarget.releasePointerCapture(event.pointerId); }}
+          style={{ pointerEvents: 'all' }}
+          onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }}
+          onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); draft.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }}
+          onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
         />
       ))}
     </>
