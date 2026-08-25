@@ -86,7 +86,7 @@ coordinates. Overlap локально отклоняется без write, а no
 
 ### L1S.4b — Existing cable route rendering/editing
 
-**OPEN**
+**IMPLEMENTED**
 
 #### L1S.4b.1 — Authoritative SavedMap route rendering
 
@@ -116,6 +116,22 @@ coordinates. Overlap локально отклоняется без write, а no
 ### L1S.4c — Visual port-to-port wiring
 
 **OPEN**
+
+#### L1S.4c.1 — canonical direct wiring baseline
+
+**IMPLEMENTED**
+
+- Direct exact-port source/destination selection through the existing canonical
+  `PhysicalEndpointConnection` write boundary.
+- Authoritative free cardinality=1 port semantics, confirmation before write,
+  and exactly-once creation with refresh-only retry.
+
+#### L1S.4c.2 — route-aware wiring
+
+**OPEN**
+
+- Waypoints during wiring; route persistence after canonical creation; route
+  retry without duplicate cable; proven passive internal continuity highlight.
 
 - Выбрать source port, проложить zero or more waypoints и выбрать destination port.
 - Подсвечивать proven internal passive continuity.

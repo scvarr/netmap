@@ -4,6 +4,7 @@ import type { PhysicalEndpointConnectionWriteDataSource, PhysicalEndpointRequest
 import type { ConnectionPointDetails, PhysicalObjectDetailsDataSource, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import { displayNodeLabel, numericAttribute } from '../topology/presentation';
 import type { TopologyProjectionNode } from '../topology/types';
+import { isAvailablePhysicalPort } from '../topology/physicalPortAvailability';
 
 interface ConnectPhysicalEndpointProps { sourcePoint: ConnectionPointDetails; topologyNodes: TopologyProjectionNode[]; physicalDetailsDataSource: PhysicalObjectDetailsDataSource; deviceDetailsDataSource: DeviceDetailsDataSource; writeDataSource: PhysicalEndpointConnectionWriteDataSource; onConnected: () => void; }
 type Mode = 'PORT' | 'INTERFACE';
@@ -12,8 +13,8 @@ const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'bas
 const objectId = (node: TopologyProjectionNode): string | null => { const refs = node.source_refs.filter((ref) => ref.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'PhysicalObject'); return refs.length === 1 ? refs[0].entity_id : null; };
 const sort = <T,>(items: T[], label: (item: T) => string) => items.map((item, index) => ({ item, index })).sort((a, b) => collator.compare(label(a.item), label(b.item)) || a.index - b.index).map(({ item }) => item);
 const label = (point: ConnectionPointDetails) => /^ConnectionPoint\s+/i.test(point.label) ? 'Точка' : point.label;
-const freePort = (point: ConnectionPointDetails, sourceId: string) => point.cardinality === 1 && (point.external_connection_count ?? 0) === 0 && point.connection_point_ref.entity_id !== sourceId;
-const projectedFreePort = (node: TopologyProjectionNode, sourceId: string) => (node.attributes.connection_points ?? []).some((point) => point.cardinality === 1 && point.external_connection_count === 0 && point.connection_point_id !== sourceId);
+const freePort = (point: ConnectionPointDetails, sourceId: string) => isAvailablePhysicalPort(point) && point.connection_point_ref.entity_id !== sourceId;
+const projectedFreePort = (node: TopologyProjectionNode, sourceId: string) => (node.attributes.connection_points ?? []).some((point) => isAvailablePhysicalPort(point) && point.connection_point_id !== sourceId);
 
 export function ConnectPhysicalEndpoint({ sourcePoint, topologyNodes, physicalDetailsDataSource, deviceDetailsDataSource, writeDataSource, onConnected }: ConnectPhysicalEndpointProps) {
   const [open, setOpen] = useState(false); const [mode, setMode] = useState<Mode>('PORT'); const [targetObjectId, setTargetObjectId] = useState(''); const [targetEntityId, setTargetEntityId] = useState(''); const [query, setQuery] = useState(''); const [cableName, setCableName] = useState(''); const [targetState, setTargetState] = useState<TargetState>({ kind: 'idle' }); const [retry, setRetry] = useState(0); const [submitting, setSubmitting] = useState(false); const [error, setError] = useState<string | null>(null);

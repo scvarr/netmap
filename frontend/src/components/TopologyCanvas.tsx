@@ -69,6 +69,8 @@ interface TopologyCanvasProps {
   ) => void;
   cableRoutes?: readonly MapCableRoute[];
   cableRouteDraft?: { cablePhysicalObjectId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
+  physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
+  onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -98,6 +100,8 @@ export function TopologyCanvas({
   onContinuationClickAnchor,
   cableRoutes,
   cableRouteDraft,
+  physicalPortStates,
+  onPhysicalPortClick,
 }: TopologyCanvasProps) {
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
@@ -229,6 +233,8 @@ export function TopologyCanvas({
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
       traceHighlightedConnectionMemberIds:
         traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
+      physicalPortStates,
+      onPhysicalPortClick,
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));

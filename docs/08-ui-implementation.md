@@ -11,6 +11,11 @@ materialized subset на `main` после MAPS.2b; текст о будущих
 
 **IMPLEMENTED subset**
 
+SavedMap Physical/L1 also supports direct visual canonical wiring: select two
+authoritatively free cardinality=1 ConnectionPoints, confirm, then materialize
+the cable through the existing physical-endpoint connection boundary. A failed
+post-write projection refresh retries only the read, never the canonical write.
+
 Canonical/resolver core существенно опережает UI. Backend materializes и
 тестирует canonical L1/L2/L3, trace, routing, security, NAT, evidence и
 projection contracts, но frontend пока не является универсальным editor или

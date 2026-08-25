@@ -49,6 +49,8 @@ import type {
   TopologyProjectionDocument,
   TopologySelection,
 } from "../topology/types";
+import type { PhysicalEndpointConnectionWriteDataSource } from "../topology/physicalEndpointConnectionWriteTypes";
+import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
 
 export { mapCandidateChoices } from "../components/MapInsertionPicker";
 
@@ -60,6 +62,7 @@ interface MapPageProps {
   catalogInventoryDataSource?: CatalogInventoryDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
+  physicalEndpointConnectionWriteDataSource?: PhysicalEndpointConnectionWriteDataSource;
   traceDataSource?: PhysicalObjectL1TraceDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
 }
@@ -98,6 +101,8 @@ interface CableRouteEditState {
   error: string | null;
 }
 interface CableRouteResetOperation { mapId: string; cablePhysicalObjectId: string; status: "pending" | "refresh-failed"; message?: string; }
+interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
+type WiringState = { status: "idle" } | { status: "selecting-source"; mapId: string } | { status: "selecting-target"; mapId: string; source: WiringEndpoint } | { status: "confirming" | "creating"; mapId: string; source: WiringEndpoint; target: WiringEndpoint; cableName: string; error: string | null } | { status: "created-refresh-failed"; mapId: string; source: WiringEndpoint; target: WiringEndpoint; cableName: string };
 
 const view = (value: string | null): TopologyViewMode =>
   value === "physical" ? "physical" : "logical";
@@ -123,6 +128,7 @@ export function MapPage({
   catalogInventoryDataSource,
   physicalObjectDeleteDataSource,
   physicalObjectDetailsDataSource,
+  physicalEndpointConnectionWriteDataSource,
   traceDataSource,
 }: MapPageProps) {
   const [params, setParams] = useSearchParams();
@@ -158,6 +164,7 @@ export function MapPage({
   const [mapOperation, setMapOperation] = useState<MapOperation | null>(null);
   const [cableRouteEdit, setCableRouteEdit] = useState<CableRouteEditState | null>(null);
   const [cableRouteReset, setCableRouteReset] = useState<CableRouteResetOperation | null>(null);
+  const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
@@ -213,6 +220,7 @@ export function MapPage({
       setMapOperation(null);
       setCableRouteEdit(null);
       setCableRouteReset(null);
+      setWiring({ status: "idle" });
       setParams((current) => {
         const next = new URLSearchParams(current);
         next.set("map", id);
@@ -502,12 +510,57 @@ export function MapPage({
 
   const setViewMode = (nextView: TopologyViewMode) => {
     if (nextView !== "physical") setPendingPhysicalToolbarInsertion(null);
+    if (nextView !== "physical") setWiring({ status: "idle" });
     setParams((current) => {
       const next = new URLSearchParams(current);
       next.set("view", nextView);
       return next;
     });
   };
+
+  const endpointFor = (candidate: { physicalObjectId: string; connectionPointId: string; label: string }, sourceId?: string): WiringEndpoint | null => {
+    const node = (latestPhysicalDocument.current?.nodes ?? []).find((item) => physicalObjectIdForNode(item) === candidate.physicalObjectId);
+    if (!node || node.kind !== "PHYSICAL_OBJECT" || node.attributes.class === "cable") return null;
+    const point = (node.attributes.connection_points ?? []).find((item) => item.connection_point_id === candidate.connectionPointId);
+    if (!point || !isAvailablePhysicalPort(point) || point.connection_point_id === sourceId) return null;
+    return { physicalObjectId: candidate.physicalObjectId, connectionPointId: point.connection_point_id, objectLabel: node.label, portLabel: point.display_name || candidate.label };
+  };
+  const physicalPortStates = useMemo(() => {
+    if (wiring.status === "idle") return undefined;
+    const states: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'> = {};
+    for (const node of document?.nodes ?? []) {
+      if (node.kind !== "PHYSICAL_OBJECT" || node.attributes.class === "cable") continue;
+      for (const point of node.attributes.connection_points ?? []) states[point.connection_point_id] = isAvailablePhysicalPort(point) ? "eligible" : "unavailable";
+      for (const slot of node.attributes.blueprint_presentation?.slots ?? []) if (!states[slot.connection_point_id]) states[slot.connection_point_id] = "unavailable";
+    }
+    const source = wiring.status === "selecting-target" || wiring.status === "confirming" || wiring.status === "creating" || wiring.status === "created-refresh-failed" ? wiring.source : null;
+    const target = wiring.status === "confirming" || wiring.status === "creating" || wiring.status === "created-refresh-failed" ? wiring.target : null;
+    if (source) states[source.connectionPointId] = "source";
+    if (target) states[target.connectionPointId] = "destination";
+    return states;
+  }, [document, wiring]);
+  const onPhysicalPortClick = (candidate: { physicalObjectId: string; connectionPointId: string; label: string }) => {
+    if (wiring.status === "selecting-source") { const source = endpointFor(candidate); if (source) setWiring({ status: "selecting-target", mapId: wiring.mapId, source }); }
+    else if (wiring.status === "selecting-target") { const target = endpointFor(candidate, wiring.source.connectionPointId); if (target) setWiring({ status: "confirming", mapId: wiring.mapId, source: wiring.source, target, cableName: "", error: null }); }
+  };
+  const refreshWiringProjection = async (operation: Exclude<WiringState, { status: "idle" | "selecting-source" | "selecting-target" }>): Promise<boolean> => {
+    const currentMap = latestActiveMap.current;
+    if (!currentMap || currentMap.map_ref.entity_id !== operation.mapId) return false;
+    const next = await dataSource.loadProjection(projectionRequestFor("physical", currentMap.placements.map((item) => item.physical_object_ref.entity_id), true));
+    if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return false;
+    setSceneDocument({ sceneKey: `${operation.mapId}/physical`, document: next }); return true;
+  };
+  const createWiring = async () => {
+    if (!physicalEndpointConnectionWriteDataSource || wiring.status !== "confirming") return;
+    const operation = wiring;
+    if (!endpointFor({ physicalObjectId: operation.source.physicalObjectId, connectionPointId: operation.source.connectionPointId, label: operation.source.portLabel }) || !endpointFor({ physicalObjectId: operation.target.physicalObjectId, connectionPointId: operation.target.connectionPointId, label: operation.target.portLabel }, operation.source.connectionPointId)) { setWiring({ ...operation, error: "Выбранный порт больше не свободен. Выберите порты заново." }); return; }
+    setWiring({ ...operation, status: "creating", error: null });
+    try { await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection({ source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: 1 }, target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: 1 }, ...(operation.cableName.trim() ? { cable_display_name: operation.cableName.trim() } : {}) }); }
+    catch (reason) { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, error: errorMessage(reason, "Не удалось создать кабель") }); return; }
+    try { if (await refreshWiringProjection(operation)) setWiring({ status: "idle" }); }
+    catch { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "created-refresh-failed" }); }
+  };
+  const retryWiringRefresh = async () => { if (wiring.status !== "created-refresh-failed") return; const operation = wiring; try { if (await refreshWiringProjection(operation)) setWiring({ status: "idle" }); } catch { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring(operation); } };
 
   const resolveInsertionPosition = async (
     id: string,
@@ -973,6 +1026,7 @@ export function MapPage({
             >
               + Добавить на карту
             </button>
+            <button type="button" onClick={() => activeMap && setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id })} disabled={!activeMap || viewMode !== "physical" || !document || !physicalEndpointConnectionWriteDataSource}>Соединить порты</button>
           </>
         )}
         <button
@@ -1031,6 +1085,13 @@ export function MapPage({
           requestedObjectId={insertion.requestedObjectId}
         />
       )}
+      {wiring.status !== "idle" && wiring.mapId === mapId && <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Соединить порты"><div className="map-dialog__surface">
+        {wiring.status === "selecting-source" && <p role="status">Выберите исходный свободный порт</p>}
+        {wiring.status === "selecting-target" && <><p role="status">Выберите конечный свободный порт</p><p>Источник: {wiring.source.objectLabel} / {wiring.source.portLabel}</p></>}
+        {(wiring.status === "confirming" || wiring.status === "creating") && <><p>Источник: {wiring.source.objectLabel} / {wiring.source.portLabel}</p><p>Назначение: {wiring.target.objectLabel} / {wiring.target.portLabel}</p><label>Название кабеля<input aria-label="Название кабеля" disabled={wiring.status === "creating"} value={wiring.cableName} onChange={(event) => setWiring((current) => current.status === "confirming" ? { ...current, cableName: event.target.value } : current)} /></label>{wiring.error && <p role="alert">{wiring.error}</p>}<button type="button" disabled={wiring.status === "creating"} onClick={() => setWiring({ status: "selecting-target", mapId: wiring.mapId, source: wiring.source })}>Назад</button><button type="button" disabled={wiring.status === "creating"} onClick={() => setWiring({ status: "idle" })}>Отмена</button><button type="button" disabled={wiring.status === "creating"} onClick={() => void createWiring()}>{wiring.status === "creating" ? "Создаём…" : wiring.error ? "Повторить" : "Создать кабель"}</button></>}
+        {wiring.status === "created-refresh-failed" && <><p role="alert">Кабель создан, но карту не удалось обновить.</p><button type="button" onClick={() => void retryWiringRefresh()}>Повторить обновление</button></>}
+        {(wiring.status === "selecting-source" || wiring.status === "selecting-target") && <button type="button" onClick={() => setWiring({ status: "idle" })}>Отмена</button>}
+      </div></section>}
       {contextAnchor && viewMode === "physical" && (
         <div
           className="map-context-menu"
@@ -1121,6 +1182,8 @@ export function MapPage({
                     viewMode === "physical" ? activeMap?.cable_routes : undefined
                   }
                   cableRouteDraft={cableRouteEdit ? { cablePhysicalObjectId: cableRouteEdit.cablePhysicalObjectId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
+                  physicalPortStates={physicalPortStates}
+                  onPhysicalPortClick={wiring.status === "selecting-source" || wiring.status === "selecting-target" ? onPhysicalPortClick : undefined}
                   onViewportCenterReady={
                     viewMode === "physical" ? receiveViewportCenter : undefined
                   }

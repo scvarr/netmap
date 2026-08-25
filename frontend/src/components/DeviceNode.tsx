@@ -23,11 +23,16 @@ export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
       .filter((segment) => segment.state === 'trace-highlighted')
       .flatMap((segment) => [segment.fromConnectionPointId, segment.toConnectionPointId]),
   );
+  const objectId = projection.source_refs.find((ref) => ref.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'PhysicalObject')?.entity_id;
+  const portProps = (connectionPointId: string, label: string) => {
+    const state = data.physicalPortStates?.[connectionPointId];
+    return state ? { role: 'button' as const, tabIndex: state === 'unavailable' ? -1 : 0, 'aria-label': `Порт ${label}`, 'aria-disabled': state === 'unavailable' || undefined, onClick: (event: React.MouseEvent) => { event.stopPropagation(); if (state !== 'unavailable' && objectId) data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); }, onKeyDown: (event: React.KeyboardEvent) => { if ((event.key === 'Enter' || event.key === ' ') && state !== 'unavailable' && objectId) { event.preventDefault(); data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); } } } : {};
+  };
   if (physical && blueprint) return <div className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: blueprint.body.width, height: blueprint.body.height, background: blueprint.body.fill_color ?? '#18383a' }}>
     <Handle type="target" position={Position.Top} className="device-node__handle" />
     <InternalL1Continuity width={blueprint.body.width} height={blueprint.body.height} segments={internalSegments} />
     <strong className="blueprint-map-node__label">{displayNodeLabel(projection)}</strong>
-    {blueprint.slots.map((slot) => { const style = slot.anchor.side === 'LEFT' ? { left: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(-50%, -50%)' } : slot.anchor.side === 'RIGHT' ? { right: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(50%, -50%)' } : slot.anchor.side === 'TOP' ? { left: `${slot.anchor.offset * 100}%`, top: 0, transform: 'translate(-50%, -50%)' } : { left: `${slot.anchor.offset * 100}%`, bottom: 0, transform: 'translate(-50%, 50%)' }; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} />; })}
+    {blueprint.slots.map((slot) => { const style = slot.anchor.side === 'LEFT' ? { left: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(-50%, -50%)' } : slot.anchor.side === 'RIGHT' ? { right: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(50%, -50%)' } : slot.anchor.side === 'TOP' ? { left: `${slot.anchor.offset * 100}%`, top: 0, transform: 'translate(-50%, -50%)' } : { left: `${slot.anchor.offset * 100}%`, bottom: 0, transform: 'translate(-50%, 50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
     <Handle type="source" position={Position.Top} className="device-node__handle" />
   </div>;
   const genericPoints = physical ? genericConnectionPoints(projection) : [];
@@ -46,7 +51,8 @@ export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
       <span className="device-node__status"><i /> {projection.status ?? 'UNKNOWN'}</span>
       {genericPoints.map((point, index) => {
         const offset = genericEndpointOffset(index, genericPoints.length);
-        return <span key={point.connection_point_id} className="generic-map-node__endpoint" style={{ top: `${offset * 100}%` }} title={`${point.display_name} · внешних подключений: ${point.external_connection_count}`} data-connection-point-id={point.connection_point_id}>
+        const state = data.physicalPortStates?.[point.connection_point_id];
+        return <span key={point.connection_point_id} className={`generic-map-node__endpoint${state ? ` generic-map-node__endpoint--wiring-${state}` : ''}`} style={{ top: `${offset * 100}%` }} title={`${point.display_name} · внешних подключений: ${point.external_connection_count}`} data-connection-point-id={point.connection_point_id} {...portProps(point.connection_point_id, point.display_name)}>
           <Handle id={point.connection_point_id} type="source" position={Position.Right} className="generic-map-node__handle" />
           {genericPoints.length <= 8 && <small>{point.display_name}</small>}
         </span>;

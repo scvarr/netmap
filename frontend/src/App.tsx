@@ -60,6 +60,7 @@ export function App(props: AppProps) {
             topologyLayoutStore={props.topologyLayoutStore}
             physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource}
             physicalObjectDetailsDataSource={props.physicalObjectDetailsDataSource}
+            physicalEndpointConnectionWriteDataSource={props.physicalEndpointConnectionWriteDataSource}
             savedMapDataSource={props.savedMapDataSource}
             catalogInventoryDataSource={props.catalogInventoryDataSource}
           />}

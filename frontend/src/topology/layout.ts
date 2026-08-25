@@ -27,6 +27,8 @@ export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
   traceHighlighted?: boolean;
   traceHighlightedConnectionMemberIds?: ReadonlySet<string>;
+  physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
+  onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
 }
 
 export interface LogicalEdgeData extends Record<string, unknown> {

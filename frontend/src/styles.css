@@ -443,3 +443,9 @@ a { color: inherit; }
   .blueprint-editor-layout { grid-template-columns: 1fr; }.blueprint-editor-preview { position: static; }
   .quick-inspector { top: auto; bottom: 14px; max-height: 48%; }
 }
+
+.blueprint-map-node__port--wiring-eligible, .generic-map-node__endpoint--wiring-eligible { cursor: pointer; border-color: #7be6ff; box-shadow: 0 0 0 2px #147d94; }
+.blueprint-map-node__port--wiring-eligible:hover, .generic-map-node__endpoint--wiring-eligible:hover { box-shadow: 0 0 0 4px #7be6ff; }
+.blueprint-map-node__port--wiring-source, .generic-map-node__endpoint--wiring-source { border-color: #fff; background: #d65cff; box-shadow: 0 0 0 4px #d65cff; }
+.blueprint-map-node__port--wiring-destination, .generic-map-node__endpoint--wiring-destination { border-color: #fff; background: #54e3b4; box-shadow: 0 0 0 4px #54e3b4; }
+.blueprint-map-node__port--wiring-unavailable, .generic-map-node__endpoint--wiring-unavailable { opacity: .35; cursor: not-allowed; }
