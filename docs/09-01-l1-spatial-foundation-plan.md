@@ -188,9 +188,10 @@ complete. L1S.5 is not included in this slice.
 - The explicit Blueprint snapshot is the validated union of pair-by-index and
   individual links; self-links, missing slots and unordered duplicates are
   rejected, including a manual link duplicating a bulk rule.
-- The editor shows Russian human-facing port labels, preserves mappings across
-  presentation edits, blocks save if a reduced group removes a referenced
-  ordinal, and removes affected mappings only when its entire group is deleted.
+- The editor shows locale-appropriate human-facing port labels, preserves
+  mappings across presentation edits, blocks save if a reduced group removes a
+  referenced ordinal, and removes affected mappings only when its entire group
+  is deleted.
 
 #### L1S.5d — Blueprint authoring polish and completion
 
@@ -203,8 +204,18 @@ complete. L1S.5 is not included in this slice.
 - Pair-by-index локально требует две разные группы, а удаление последней группы
   возвращает все authoring collections к пустому состоянию.
 
-Следующий bounded repository/product шаг до L1S.6 — foundation для RU/EN
-локализации. Он не входит в L1S.5 и не меняет Blueprint authoring contract.
+### RU/EN frontend localization foundation
+
+**IMPLEMENTED**
+
+- Russian (`ru`) is the default locale and English (`en`) is supported.
+- Locale switches at runtime without a reload, persists in `localStorage`, and
+  updates `<html lang>`.
+- A typed, source-level localization boundary owns human-facing UI strings.
+- Active Map, Catalog/Object, and Blueprint surfaces use that boundary.
+- Canonical values, API payloads, and user/backend data remain locale-neutral.
+
+The next bounded product step is `L1S.6 — Controlled Blueprint instance upgrade`.
 
 ### L1S.6 — Controlled Blueprint instance upgrade
 
