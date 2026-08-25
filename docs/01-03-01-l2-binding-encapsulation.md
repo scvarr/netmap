@@ -500,6 +500,22 @@ Egress:
 
 Трассировщик просто применяет rules соответствующих boundaries.
 
+### Transport diagnostics поверх существующей semantics
+
+Для transport networks этот же `EncapsulationStack` должен быть источником
+объяснимого trace/presentation: пользователь видит не только «VLAN 120 проходит
+через устройство», а переходы `untagged -> C-VLAN 120 -> push S-VLAN 3000 ->
+preserve -> pop S-VLAN -> C-VLAN 120 -> untagged` там, где они доказаны.
+Это не создаёт вторую QinQ-модель и не меняет canonical rules `ingress match` /
+`egress emit`.
+
+Vendor terms (`QinQ`, `dot1q-tunnel`, `service-port`, VLAN stacking,
+translation/rewrite и другие) не являются canonical semantics. Future adapters
+нормализуют известные vendor facts в существующие rules и сохраняют исходное
+provenance. Если переход не доказан или ingress state несовместим с downstream
+expectation, trace обязан показать `UNKNOWN`/conflict, а не изобрести missing
+transformation или preferred path.
+
 ## Почему не хранить transform program
 
 Можно было бы описывать интерфейс операциями:

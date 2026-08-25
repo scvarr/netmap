@@ -146,6 +146,29 @@ eth0     -> CP-1:1
 eth0.100 -> CP-1:1
 ```
 
+## Capability, configured и operational link state
+
+`ConnectionPoint` отвечает на вопрос «куда физически можно подключиться?», а
+`NetworkInterface` — «какой сетевой интерфейс реализован через эту физическую
+точку?». Поэтому `ConnectionPoint.speed = 10G` не становится универсальным
+contract. При нужде cached/derived speed может быть presentation state, но не
+меняет identity или семантику точки.
+
+Будущая effective link capability может зависеть от всей доказанной цепочки:
+
+```text
+NetworkInterface -> transceiver/component -> ConnectionPoint -> cable
+    -> passive component -> cable -> remote ConnectionPoint
+    -> remote NetworkInterface
+```
+
+Следует различать capability компонентов/интерфейсов, configured link state
+(auto-negotiation, forced rate, duplex/mode) и operational observation
+(negotiated speed/duplex, current PHY mode, operational link state, source,
+`observed_at`, freshness). Последнее относится к observation/operational plane,
+а не к immutable property кабеля или порта. Exact schemas, capability resolver и
+standards rules остаются OPEN.
+
 ## Вложенные и составные интерфейсы
 
 Для зависимости одного интерфейса от другого вводится одна базовая направленная связь:

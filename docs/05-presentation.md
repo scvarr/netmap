@@ -1357,6 +1357,47 @@ Saved Map может содержать presentation object со ссылкой 
 масштабирования детальных L1 «точечных» карт: карта этажа ведёт на подробную карту
 помещения, стойки или узла.
 
+## Future media, capacity и transport views
+
+**FUTURE direction; exact UI и visual tokens остаются OPEN**
+
+Одна и та же base topology projection позднее может получать отдельные modes/
+overlays:
+
+- Physical topology;
+- media / cable type;
+- link capability;
+- configured link rate;
+- operational/negotiated link rate;
+- bottleneck;
+- compatibility / expected-versus-observed mismatch;
+- позднее utilization и error/quality overlays.
+
+Эти views показывают source/evidence, `observed_at`, freshness и UNKNOWN, когда
+это существенно для вывода. Nominal capability, configured/negotiated rate и
+actual traffic throughput не должны визуально или текстом выдаваться за один
+показатель. В частности, label bottleneck означает известное link-rate/capability
+ограничение, а не обещание измеренной throughput.
+
+Цвет сам по себе недостаточен: operational health уже может использовать
+red/yellow/green semantics. Media и capacity должны быть читаемы через labels,
+badges, line style/width, legend или другие visual channels; конкретные цвета и
+styles не являются architecture contract.
+
+Для complex transport path UI может показать expand-able hop trace, например:
+
+```text
+Hop | Physical transport | Encapsulation before/after | Transformation | Capacity | Evidence/state
+```
+
+Он объединяет L1 path с существующей L2 `EncapsulationStack` semantics:
+пользователь видит `untagged`, C-VLAN, push/pop S-VLAN, preserved stack,
+translation/rewrite и unknown transformation там, где это доказано. Wireless
+transport показывается как собственный technology segment с configured и
+operational radio observations, а не как нарисованный cable. Incomplete chain
+должна оставаться видимой как `UNKNOWN`/conflict, включая несовместимые
+downstream encapsulation expectations; UI не угадывает missing transition.
+
 ## Будущая L2 semantic aggregation
 
 **FIXED product/presentation principle; grouping heuristics — OPEN до L2 UI work**

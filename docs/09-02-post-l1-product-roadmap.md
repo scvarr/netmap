@@ -126,6 +126,101 @@ physical-path context.
 detailed Saved Maps, L2 — прежде всего semantic aggregation/collapse. Exact L2
 grouping heuristics остаются OPEN до реального L2 UI milestone.
 
+## Physical Media, Link Capability и Transport Diagnostics
+
+**FUTURE product direction; не меняет стратегический порядок и не создаёт
+implementation milestone**
+
+Когда появится соответствующий L1/L2/L3 UX use case, NetMap может развивать
+диагностику physical media, wired/wireless transport и capacity. Точная позиция
+этой capability остаётся product-driven после уже зафиксированных направлений
+roadmap.
+
+### Четыре разных класса facts
+
+Нельзя смешивать в одном «speed кабеля» четыре разные области:
+
+1. Relatively stable configured/inventory facts установленного component/medium:
+   cable copper/fiber/DAC/other, category/profile, construction, length,
+   connector/media context; media/capability characteristics passive components,
+   patch panels, couplers и transceivers.
+2. Capability: что component или `NetworkInterface` поддерживает — link rates,
+   PHY modes, transceiver capabilities, media/frequency/channel combinations,
+   passive rating.
+3. Configured link state: auto-negotiation, forced/configured rate, duplex и
+   mode.
+4. Operational/observed link state: negotiated rate/duplex, current PHY mode,
+   link state, source, `observed_at` и freshness.
+
+Capability не доказывает configured или negotiated state, а operational
+observation не является immutable property кабеля/порта. Structured capability
+profiles должны быть reusable definitions/references для cable authoring,
+Blueprint/library content, validation, capability analysis и presentation. Они
+не являются закрытым enum: конкретный profile schema, storage и API остаются
+OPEN. Blueprint/library identity и identity конкретного `PhysicalObject` также
+остаются разными; visual cable authoring позже может предлагать reusable profile
+и optional length вместо raw metadata.
+
+### Wired capability и capacity path
+
+Effective capability нельзя свести к `ConnectionPoint.speed`: физическая точка
+описывает место подключения, а `NetworkInterface` — сетевую реализацию через
+него. Будущий resolver может учитывать `NetworkInterface`, transceiver,
+`ConnectionPoint`, cable, passive path components, remote endpoint, medium/profile,
+length, PHY, lanes, configured mode и remote capability. Не фиксируются ни
+универсальное правило вроде `Cat6 = 10 Gbps`, ни standards engine.
+
+Поверх доказанного path NetMap может показывать известную capacity-цепочку и
+bottleneck, например `10G -> 10G -> 10G -> 1G -> WAN`. Это означает «на этом
+участке известно link-rate/capability ограничение 1 Gbps», а не «реальная
+throughput равна 1 Gbps»: throughput дополнительно зависит от utilization,
+congestion, shaping/policing, forwarding/firewall performance, характеристик
+пакетов, provider limits и других факторов.
+
+Полезный diagnostic case — mismatch: обе стороны и physical path способны на
+10G, а observation сообщает 1G. UI может сопоставить `capable/expected: 10G` с
+`observed: 1G` и показать область проверки (cable/termination, transceiver,
+forced mode, remote endpoint, PHY/errors), но не утверждает причину без evidence.
+
+### Wireless transport
+
+Приоритетная wireless ветка — устойчивые transport links: WiMAX, point-to-point
+и point-to-multipoint radio, microwave/radio bridge и другой backhaul. User
+Wi-Fi associations могут появиться позднее, но не являются главным driver.
+
+Wireless transport не должен изображаться фиктивным wired `Cable`/`Connection`.
+Он требует отдельной structured technology semantics поверх shared
+`PhysicalObject` / `NetworkInterface` foundation; final entity `WirelessLink` и
+DB schema сейчас не фиксируются. Его configured facts могут включать band/
+frequency, channel, channel width, remote endpoint/sector, configured mode/
+capacity и другие stable parameters. Operational observations отдельно несут
+RSSI/signal strength, SNR/CINR, modulation, negotiated/operational PHY rate,
+availability, errors/quality, source, `observed_at` и freshness. Universal radio
+metric schema не предполагается.
+
+Wireless segment участвует в том же capacity analysis, что и wired. Например
+`1G -> Radio Ethernet 100M -> WiMAX operational 40M -> Base Station 1G -> 10G`
+может честно указать текущий bottleneck 40M как изменяемое observation, а не
+вечное свойство physical topology.
+
+### Transport trace и QinQ visibility
+
+Для сложной transport сети future product surface может объединить в одном trace
+physical medium/path, L2 encapsulation state, доказанные transformations,
+capacity и unknown sections. Conceptual hop table:
+
+```text
+Hop | Physical transport | Encapsulation before/after | Transformation | Capacity | Evidence/state
+```
+
+QinQ уже выражается существующими `EncapsulationStack`, `dot1q`, `dot1ad`,
+stacked labels, ingress match, egress emit, translation и derived push/pop
+semantics. Новая canonical QinQ/transport trace engine semantics не нужна.
+Adapters позднее нормализуют vendor configuration в этот contract, не выводя
+семантику из vendor-specific names. Known -> `UNKNOWN TRANSFORMATION` -> known
+остаётся честным результатом; несовместимые stack expectations дают
+`UNKNOWN`/conflict, а не выдуманный path.
+
 ## Observations, collectors и operational presentation
 
 **FIXED direction; не текущий implementation plan**
@@ -157,6 +252,13 @@ Observation -> Resolved observation -> Canonical fact
 подтвердить canonical L1-связь `SW1/Gi48` — `SW2/Gi47`; если же canonical L1
 утверждает другое, UI показывает drift/conflict, а не молча переписывает
 topology.
+
+Для этого направления adapters могут нормализовать wired interface speed,
+configured/negotiated rate, duplex, errors и transceiver data; wireless signal,
+modulation, operational capacity и availability; transport/L2 QinQ/service
+configuration, VLAN rewrite, LLDP/adjacency и operational state. Эти facts
+сохраняют source и temporal evidence и не переписывают canonical model без
+явного reconciliation decision.
 
 ### Временное измерение
 
