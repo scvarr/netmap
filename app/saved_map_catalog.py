@@ -4,10 +4,11 @@ import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.device_catalog import DeviceCatalog
-from app.errors import ModelError, ValidationError
+from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.models import MapCableRoute, MapPlacement, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
@@ -29,7 +30,7 @@ class SavedMapCatalog:
             raise ModelError("SavedMap name already exists", {"reason": "SAVED_MAP_NAME_CONFLICT", "name": name})
         saved_map = SavedMap(name=name)
         self.session.add(saved_map)
-        self.session.flush()
+        self._flush()
         return saved_map
 
     def list(self) -> tuple[SavedMap, ...]:
@@ -41,7 +42,7 @@ class SavedMapCatalog:
 
     def delete(self, map_id: uuid.UUID) -> None:
         self.session.delete(self._require_map(map_id))
-        self.session.flush()
+        self._flush()
 
     def add_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, x: float, y: float) -> MapPlacement:
         self._require_map(map_id)
@@ -56,7 +57,7 @@ class SavedMapCatalog:
         placement = MapPlacement(map_id=map_id, physical_object_id=physical_object_id)
         placement.view_positions.append(MapViewPosition(view_key=MapViewKey.PHYSICAL, x=x, y=y))
         self.session.add(placement)
-        self.session.flush()
+        self._flush()
         return placement
 
     def move_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, x: float, y: float) -> MapPlacement:
@@ -77,7 +78,7 @@ class SavedMapCatalog:
             placement.view_positions.append(MapViewPosition(view_key=view_key, x=x, y=y))
         else:
             position.x, position.y = x, y
-        self.session.flush()
+        self._flush()
         return placement
 
     def set_view_lock(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, locked: bool) -> MapPlacement:
@@ -95,7 +96,7 @@ class SavedMapCatalog:
                 "map_id": str(map_id), "physical_object_id": str(physical_object_id), "view_key": str(view_key),
             })
         position.locked = locked
-        self.session.flush()
+        self._flush()
         return placement
 
     def remove_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID) -> None:
@@ -108,7 +109,7 @@ class SavedMapCatalog:
                 "map_id": str(map_id), "physical_object_id": str(physical_object_id),
             })
         self.session.delete(placement)
-        self.session.flush()
+        self._flush()
 
     def set_cable_route(
         self,
@@ -135,7 +136,7 @@ class SavedMapCatalog:
             )
             self.session.add(route)
         route.waypoints = [{"x": point["x"], "y": point["y"]} for point in waypoints]
-        self.session.flush()
+        self._flush()
         return route
 
     def delete_cable_route(self, map_id: uuid.UUID, cable_physical_object_id: uuid.UUID) -> None:
@@ -185,3 +186,13 @@ class SavedMapCatalog:
             raise ValidationError("PhysicalObject is not a cable", {
                 "reason": "MAP_CABLE_ROUTE_OBJECT_NOT_CABLE", "physical_object_id": str(physical_object_id),
             })
+
+    def _flush(self) -> None:
+        try:
+            self.session.flush()
+        except IntegrityError as error:
+            self.session.rollback()
+            conflict = classify_integrity_error(error)
+            if conflict is not None:
+                raise conflict from error
+            raise

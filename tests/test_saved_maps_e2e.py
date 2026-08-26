@@ -1,15 +1,86 @@
 import uuid
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
+from app.errors import classify_integrity_error
 from app.main import app
 from app.models import Connection, MapPlacement, MapViewPosition, PhysicalObject, SavedMap
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from app.saved_map_catalog import SavedMapCatalog
 
 
 client = TestClient(app)
+
+
+def test_expected_saved_map_name_race_returns_contract_conflict(monkeypatch):
+    """Both requests pass the pre-check before either INSERT is flushed."""
+    original_flush = Session.flush
+    flush_barrier = Barrier(2)
+
+    def synchronized_flush(session: Session, *args, **kwargs):
+        if any(isinstance(item, SavedMap) for item in session.new):
+            flush_barrier.wait(timeout=5)
+        return original_flush(session, *args, **kwargs)
+
+    monkeypatch.setattr(Session, "flush", synchronized_flush)
+
+    def create() -> tuple[int, dict]:
+        with TestClient(app, raise_server_exceptions=False) as concurrent_client:
+            response = concurrent_client.post("/v1/maps", json={"name": "Concurrent map"})
+            return response.status_code, response.json()
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _: create(), range(2)))
+
+    statuses = sorted(status for status, _ in results)
+    conflict = next(body for status, body in results if status == 409)
+    assert statuses == [201, 409]
+    assert conflict["error"] == {
+        "code": "UNIQUENESS_CONFLICT",
+        "message": "Concurrent write conflicts with an existing resource",
+        "details": {
+            "reason": "SAVED_MAP_NAME_CONFLICT",
+            "constraint": "uq_saved_maps_name",
+        },
+    }
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(SavedMap).where(SavedMap.name == "Concurrent map")) == 1
+
+
+def test_only_allowlisted_unique_constraints_are_classified():
+    for constraint, reason in {
+        "uq_saved_maps_name": "SAVED_MAP_NAME_CONFLICT",
+        "uq_map_placements_map_object": "MAP_PLACEMENT_CONFLICT",
+        "uq_map_cable_routes_map_cable_view": "MAP_CABLE_ROUTE_CONFLICT",
+    }.items():
+        error = IntegrityError("statement", {}, SimpleNamespace(diag=SimpleNamespace(constraint_name=constraint)))
+        conflict = classify_integrity_error(error)
+        assert conflict is not None
+        assert conflict.code == "UNIQUENESS_CONFLICT"
+        assert conflict.details == {"reason": reason, "constraint": constraint}
+
+
+def test_unknown_integrity_error_is_not_classified_as_uniqueness_conflict(monkeypatch):
+    error = IntegrityError(
+        "statement", {}, SimpleNamespace(diag=SimpleNamespace(constraint_name="fk_map_placements_map_id_saved_maps"))
+    )
+    assert classify_integrity_error(error) is None
+
+    def unknown_flush(_self):
+        raise error
+
+    monkeypatch.setattr(SavedMapCatalog, "_flush", unknown_flush)
+    with TestClient(app, raise_server_exceptions=False) as non_raising_client:
+        response = non_raising_client.post("/v1/maps", json={"name": "Unknown failure"})
+    assert response.status_code == 500
+    assert "UNIQUENESS_CONFLICT" not in response.text
 
 
 def create_object(name: str) -> dict:
