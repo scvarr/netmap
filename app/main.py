@@ -91,6 +91,7 @@ from app.schemas import (
     ObjectBlueprintListDocument,
     ObjectBlueprintVersionDocument,
     BlueprintUpgradeAnalysisDocument,
+    ApplyBlueprintUpgradeRequest,
     PhysicalConnectionCreationDocument,
     PhysicalEndpointConnectionCreationDocument,
     PhysicalEndpointMaterialization,
@@ -382,6 +383,31 @@ def analyze_physical_object_blueprint_upgrade(
         "compatible_changes": list(analysis.compatible_changes),
         "blockers": list(analysis.blockers),
     }
+
+
+@app.post(
+    "/v1/topology/physical-objects/{physical_object_id}/blueprint-upgrade",
+    response_model=ObjectBlueprintInstantiationDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def apply_physical_object_blueprint_upgrade(
+    physical_object_id: uuid.UUID,
+    query: ApplyBlueprintUpgradeRequest,
+    session: Session = Depends(get_session),
+) -> ObjectBlueprintInstantiationDocument:
+    with session.begin():
+        created = ObjectBlueprintCatalog(session).apply_upgrade(physical_object_id, query.target_version_id)
+        return {
+            "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
+            "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},
+            "physical_object_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": created.physical_object_id},
+            "slots": [{
+                "slot_key": slot.slot_key,
+                "connection_point_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "ConnectionPoint", "entity_id": slot.connection_point_id},
+                **({"network_interface_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "NetworkInterface", "entity_id": slot.network_interface_id}} if slot.network_interface_id else {}),
+            } for slot in created.slots],
+        }
 
 
 @app.delete(

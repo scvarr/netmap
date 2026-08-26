@@ -92,6 +92,19 @@ describe('PhysicalObjectDetailsSection ports', () => {
     expect(await screen.findByText('Объект использует актуальную версию шаблона.')).toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Проверить совместимость' })).not.toBeInTheDocument();
   });
 
+  it('applies only the reviewed target and retries only the refresh after a successful write', async () => {
+    const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
+    const load = vi.fn().mockResolvedValueOnce(blueprint).mockRejectedValueOnce(new Error('refresh')).mockResolvedValueOnce(blueprint);
+    const applyBlueprintUpgrade = vi.fn().mockResolvedValue({});
+    renderDetails(blueprint, { dataSource: { loadPhysicalObjectDetails: load }, blueprintUpgradeDataSource: { analyzeBlueprintUpgrade: vi.fn().mockResolvedValue({ schema_version: '1.0', status: 'OUTDATED', target_version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v2' }, target_version_number: 2, compatible_changes: [], blockers: [] }), applyBlueprintUpgrade }, objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: { ...blueprint.blueprint_provenance.version_ref, entity_id: 'v2' }, version_number: 2, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 2 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() } });
+    await userEvent.click(await screen.findByRole('button', { name: 'Проверить совместимость' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Обновить до версии 2' }));
+    expect(applyBlueprintUpgrade).toHaveBeenCalledWith('object', 'v2');
+    expect(await screen.findByText(/обновление применено/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Повторить обновление данных' }));
+    expect(applyBlueprintUpgrade).toHaveBeenCalledTimes(1);
+  });
+
   it('renders the new upgrade UI in English', async () => {
     window.localStorage.setItem('netmap.locale', 'en');
     const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };

@@ -243,9 +243,20 @@ The next bounded product step is `L1S.6 — Controlled Blueprint instance upgrad
 
 #### L1S.6b — Explicit transactional apply
 
-**NEXT** — preserve `PhysicalObject` and compatible generated-slot identities,
-materialize only approved additive changes atomically, and never delete/recreate
-canonical topology.
+**IMPLEMENTED**
+
+- `POST /v1/topology/physical-objects/{id}/blueprint-upgrade` requires the exact
+  reviewed target-version UUID, locks the instance, reruns compatibility analysis
+  and rejects stale, blocked or wrong-target requests with a conflict.
+- The one transaction preserves the `PhysicalObject`, same-key/same-kind
+  `ConnectionPoint` and `NETWORK_PORT` `NetworkInterface` identities, remaps
+  provenance to target slot rows, and seeds metadata only for newly materialized
+  entities.
+- Additive connection-point/network-port structures and missing exact internal
+  canonical links are materialized atomically; satisfied links are not duplicated
+  and conflicting evidence aborts the whole upgrade.
+- Object Detail exposes Apply only following a blocker-free dry-run. A failed
+  post-write refresh is retryable as a read only and never resends the write.
 
 - Показывать instances на старой version и выполнять dry-run compatibility analysis.
 - Показывать compatible changes и blockers.

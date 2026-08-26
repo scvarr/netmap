@@ -250,11 +250,18 @@ const changeText = (change: { code: string; slot_key?: string; slot_keys?: strin
   return t(key, { slot });
 };
 
-const BlueprintUpgrade = ({ physicalObjectId, provenance, dataSource, objectBlueprintDataSource }: { physicalObjectId: string; provenance: NonNullable<PhysicalObjectDetailsDocument['blueprint_provenance']>; dataSource?: BlueprintUpgradeDataSource; objectBlueprintDataSource?: ObjectBlueprintDataSource }) => {
-  const { t } = useI18n(); const [analysis, setAnalysis] = useState<BlueprintUpgradeAnalysisDocument | null>(null); const [availability, setAvailability] = useState<'loading' | 'outdated' | 'up-to-date' | 'unavailable'>('loading'); const [targetVersion, setTargetVersion] = useState<number | null>(null); const [loading, setLoading] = useState(false); const [error, setError] = useState<string | null>(null);
+const BlueprintUpgrade = ({ physicalObjectId, provenance, dataSource, objectBlueprintDataSource, refresh }: { physicalObjectId: string; provenance: NonNullable<PhysicalObjectDetailsDocument['blueprint_provenance']>; dataSource?: BlueprintUpgradeDataSource; objectBlueprintDataSource?: ObjectBlueprintDataSource; refresh: () => Promise<void> }) => {
+  const { t } = useI18n(); const [analysis, setAnalysis] = useState<BlueprintUpgradeAnalysisDocument | null>(null); const [availability, setAvailability] = useState<'loading' | 'outdated' | 'up-to-date' | 'unavailable'>('loading'); const [targetVersion, setTargetVersion] = useState<number | null>(null); const [loading, setLoading] = useState(false); const [applying, setApplying] = useState(false); const [error, setError] = useState<string | null>(null); const [refreshFailed, setRefreshFailed] = useState(false); const [succeeded, setSucceeded] = useState(false);
   useEffect(() => { let current = true; if (!objectBlueprintDataSource) { setAvailability('unavailable'); return undefined; } void objectBlueprintDataSource.loadObjectBlueprints().then((document) => { const item = document.blueprints.find((entry) => entry.blueprint_ref.entity_id === provenance.blueprint_ref.entity_id); if (!current) return; if (!item) setAvailability('unavailable'); else { setTargetVersion(item.version_number); setAvailability(item.version_ref.entity_id === provenance.version_ref.entity_id ? 'up-to-date' : 'outdated'); } }, () => current && setAvailability('unavailable')); return () => { current = false; }; }, [objectBlueprintDataSource, provenance.blueprint_ref.entity_id, provenance.version_ref.entity_id]);
   if (!dataSource || availability === 'unavailable' || availability === 'loading') return null;
   const run = async () => { setLoading(true); setError(null); try { setAnalysis(await dataSource.analyzeBlueprintUpgrade(physicalObjectId)); } catch (reason) { setError(reason instanceof Error ? reason.message : t('upgrade.failed')); } finally { setLoading(false); } };
+  const apply = async () => {
+    if (!analysis?.target_version_ref?.entity_id || applying) return;
+    setApplying(true); setError(null); setRefreshFailed(false);
+    try { await dataSource.applyBlueprintUpgrade?.(physicalObjectId, analysis.target_version_ref.entity_id); setSucceeded(true); try { await refresh(); } catch { setRefreshFailed(true); } }
+    catch (reason) { setError(reason instanceof Error && /status 409/.test(reason.message) ? t('upgrade.conflict') : t('upgrade.applyFailed')); setAnalysis(null); }
+    finally { setApplying(false); }
+  };
   return <section className="blueprint-upgrade" aria-label={t('upgrade.title')}>
     {availability === 'outdated' && <p>{t('upgrade.outdated', { current: provenance.version_number, target: targetVersion ?? '?' })}</p>}
     {availability === 'up-to-date' && <p>{t('upgrade.upToDate')}</p>}
@@ -263,6 +270,9 @@ const BlueprintUpgrade = ({ physicalObjectId, provenance, dataSource, objectBlue
     {error && <p role="alert">{t('upgrade.failed')}: {error}</p>}
     {analysis && analysis.compatible_changes.length > 0 && <><h4>{t('upgrade.compatible')}</h4><ul>{analysis.compatible_changes.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
     {analysis && analysis.blockers.length > 0 && <><h4>{t('upgrade.blockers')}</h4><ul>{analysis.blockers.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
+    {analysis?.status === 'OUTDATED' && analysis.blockers.length === 0 && analysis.target_version_ref && dataSource.applyBlueprintUpgrade && !succeeded && <button type="button" onClick={() => void apply()} disabled={applying}>{applying ? t('upgrade.applying') : t('upgrade.apply', { target: analysis.target_version_number ?? '?' })}</button>}
+    {succeeded && <p>{t('upgrade.success')}</p>}
+    {refreshFailed && <p role="alert">{t('upgrade.refreshFailed')} <button type="button" onClick={() => void refresh().then(() => setRefreshFailed(false), () => setRefreshFailed(true))}>{t('upgrade.retryRefresh')}</button></p>}
   </section>;
 };
 
@@ -354,7 +364,7 @@ export function PhysicalObjectDetailsSection({
             />
           )}
           {state.document.blueprint_provenance && (
-            <><p className="blueprint-provenance">Объект создан из шаблона · версия {state.document.blueprint_provenance.version_number}. Структурные изменения выполняются через версию шаблона. <Link to={`/library/object-blueprints/${state.document.blueprint_provenance.blueprint_ref.entity_id}/versions/${state.document.blueprint_provenance.version_ref.entity_id}/edit`}>Открыть шаблон</Link></p>{physicalObjectId && <BlueprintUpgrade physicalObjectId={physicalObjectId} provenance={state.document.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} />}</>
+            <><p className="blueprint-provenance">Объект создан из шаблона · версия {state.document.blueprint_provenance.version_number}. Структурные изменения выполняются через версию шаблона. <Link to={`/library/object-blueprints/${state.document.blueprint_provenance.blueprint_ref.entity_id}/versions/${state.document.blueprint_provenance.version_ref.entity_id}/edit`}>Открыть шаблон</Link></p>{physicalObjectId && <BlueprintUpgrade physicalObjectId={physicalObjectId} provenance={state.document.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={async () => { const document = await dataSource.loadPhysicalObjectDetails(physicalObjectId); setState({ kind: 'loaded', document }); onDocumentChange(document); }} />}</>
           )}
           <h3 id="connection-points-heading">Порты <span>{state.document.connection_points.length}</span></h3>
           {!state.document.blueprint_provenance && connectionPointWriteDataSource && physicalObjectId && (

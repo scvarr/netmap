@@ -78,3 +78,44 @@ def test_added_internal_link_uses_canonical_runtime_evidence():
         session.add(ConnectionMember(connection_id=connection.id, index=1, point_a_member=1, point_b_member=1))
     document = analysis(object_id)
     assert {item["code"] for item in document["blockers"]} >= {"INTERNAL_LINK_RUNTIME_CONFLICT"}
+
+
+def test_apply_upgrade_preserves_existing_identity_and_materializes_additions():
+    blueprint_id, v1 = create_blueprint([slot("A"), slot("N", "NETWORK_PORT")])
+    instance = instantiate(blueprint_id, v1, "old")
+    object_id = instance["physical_object_ref"]["entity_id"]
+    before = {item["slot_key"]: item for item in instance["slots"]}
+    v2 = next_version(blueprint_id, [slot("A"), slot("N", "NETWORK_PORT"), slot("C"), slot("P", "NETWORK_PORT")], [{"from_slot_key": "A", "to_slot_key": "C"}])
+    reviewed = analysis(object_id)
+    assert reviewed["target_version_ref"]["entity_id"] == v2 and not reviewed["blockers"]
+    response = client.post(f"/v1/topology/physical-objects/{object_id}/blueprint-upgrade", json={"target_version_id": v2})
+    assert response.status_code == 200, response.text
+    after = {item["slot_key"]: item for item in response.json()["slots"]}
+    assert response.json()["physical_object_ref"]["entity_id"] == object_id
+    assert after["A"]["connection_point_ref"]["entity_id"] == before["A"]["connection_point_ref"]["entity_id"]
+    assert after["N"]["network_interface_ref"]["entity_id"] == before["N"]["network_interface_ref"]["entity_id"]
+    assert {"C", "P"} <= set(after)
+    with SessionLocal() as session:
+        upgraded = session.scalar(select(BlueprintInstance).where(BlueprintInstance.physical_object_id == object_id))
+        assert str(upgraded.blueprint_version_id) == v2
+        mappings = tuple(session.scalars(select(BlueprintInstanceSlot).where(BlueprintInstanceSlot.blueprint_instance_id == upgraded.id)))
+        assert len(mappings) == 4
+        assert session.scalar(select(func.count()).select_from(Connection).where(
+            Connection.point_a_id.in_([uuid.UUID(after["A"]["connection_point_ref"]["entity_id"]), uuid.UUID(after["C"]["connection_point_ref"]["entity_id"])]),
+            Connection.point_b_id.in_([uuid.UUID(after["A"]["connection_point_ref"]["entity_id"]), uuid.UUID(after["C"]["connection_point_ref"]["entity_id"])]),
+        )) == 1
+
+
+def test_apply_requires_the_exact_reviewed_target_and_rolls_back_blockers():
+    blueprint_id, v1 = create_blueprint([slot("A")])
+    instance = instantiate(blueprint_id, v1, "old")
+    object_id = instance["physical_object_ref"]["entity_id"]
+    v2 = next_version(blueprint_id, [slot("A"), slot("B")])
+    v3 = next_version(blueprint_id, [slot("A"), slot("B"), slot("C")])
+    response = client.post(f"/v1/topology/physical-objects/{object_id}/blueprint-upgrade", json={"target_version_id": v2})
+    assert response.status_code == 409
+    with SessionLocal() as session:
+        upgraded = session.scalar(select(BlueprintInstance).where(BlueprintInstance.physical_object_id == object_id))
+        assert str(upgraded.blueprint_version_id) == v1
+        assert session.scalar(select(func.count()).select_from(BlueprintInstanceSlot).where(BlueprintInstanceSlot.blueprint_instance_id == upgraded.id)) == 1
+    assert client.post(f"/v1/topology/physical-objects/{object_id}/blueprint-upgrade", json={"target_version_id": v3}).status_code == 200

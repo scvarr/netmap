@@ -6,7 +6,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
-from app.errors import ValidationError
+from app.errors import ModelError, ValidationError
 from app.models import (
     BlueprintEndpointSlot,
     BlueprintInstance,
@@ -372,6 +372,87 @@ class ObjectBlueprintCatalog:
             physical_object_id=physical_object.id,
             slots=tuple(materialized[slot.id] for slot in slots),
             internal_connection_ids=tuple(internal_connection_ids),
+        )
+
+    def apply_upgrade(
+        self, physical_object_id: uuid.UUID, target_version_id: uuid.UUID,
+    ) -> MaterializedBlueprintInstance:
+        """Atomically materialize only a reviewed, additive Blueprint upgrade."""
+        from app.blueprint_upgrade_analysis import BlueprintUpgradeAnalyzer
+
+        instance = self.session.scalar(select(BlueprintInstance).where(
+            BlueprintInstance.physical_object_id == physical_object_id
+        ).with_for_update())
+        if instance is None:
+            raise ModelError("Blueprint upgrade requires a Blueprint instance", {"reason": "NOT_APPLICABLE"})
+        current = self.session.get(ObjectBlueprintVersion, instance.blueprint_version_id)
+        target = self.session.get(ObjectBlueprintVersion, target_version_id)
+        latest = self.session.scalar(select(ObjectBlueprintVersion).where(
+            ObjectBlueprintVersion.blueprint_id == (current.blueprint_id if current else None)
+        ).order_by(ObjectBlueprintVersion.version_number.desc()).limit(1))
+        if current is None or target is None or target.blueprint_id != current.blueprint_id or latest is None or latest.id != target.id:
+            raise ModelError("Blueprint upgrade review is stale", {"reason": "STALE_OR_WRONG_TARGET"})
+        analysis = BlueprintUpgradeAnalyzer(self.session).analyze(physical_object_id)
+        if analysis.status != "OUTDATED" or analysis.target_version_id != target_version_id or analysis.blockers:
+            raise ModelError("Blueprint upgrade review is stale or blocked", {
+                "reason": "UPGRADE_CONFLICT", "status": analysis.status,
+                "blockers": list(analysis.blockers),
+            })
+
+        current_slots = {slot.slot_key: slot for slot in self.session.scalars(select(BlueprintEndpointSlot).where(
+            BlueprintEndpointSlot.blueprint_version_id == current.id
+        ))}
+        target_slots = {slot.slot_key: slot for slot in self.session.scalars(select(BlueprintEndpointSlot).where(
+            BlueprintEndpointSlot.blueprint_version_id == target.id
+        ))}
+        mappings = {row.blueprint_slot_id: row for row in self.session.scalars(select(BlueprintInstanceSlot).where(
+            BlueprintInstanceSlot.blueprint_instance_id == instance.id
+        ).with_for_update())}
+        materialized: dict[str, MaterializedSlot] = {}
+        for key, old_slot in current_slots.items():
+            row = mappings[old_slot.id]
+            row.blueprint_slot_id = target_slots[key].id
+            materialized[key] = MaterializedSlot(key, row.connection_point_id, row.network_interface_id)
+
+        repository = CanonicalRepository(self.session)
+        for key in sorted(set(target_slots) - set(current_slots)):
+            slot = target_slots[key]
+            point = repository.add_connection_point(physical_object_id, cardinality=1)
+            self._metadata(connection_point_id=point.id, key=DISPLAY_ALIAS_KEY, value=slot.display_name)
+            interface_id: uuid.UUID | None = None
+            if slot.kind == "NETWORK_PORT":
+                interface = repository.add_network_interface()
+                repository.add_network_interface_physical_owner(interface.id, physical_object_id)
+                self._metadata(network_interface_id=interface.id, key=DISPLAY_ALIAS_KEY, value=slot.display_name)
+                repository.add_interface_physical_binding(interface.id, point.id, point_member=1)
+                interface_id = interface.id
+            self.session.add(BlueprintInstanceSlot(
+                blueprint_instance_id=instance.id, blueprint_slot_id=slot.id,
+                connection_point_id=point.id, network_interface_id=interface_id,
+            ))
+            materialized[key] = MaterializedSlot(key, point.id, interface_id)
+        self.session.flush()
+
+        target_links = tuple(self.session.scalars(select(BlueprintInternalLink).where(
+            BlueprintInternalLink.blueprint_version_id == target.id
+        )))
+        target_by_id = {slot.id: key for key, slot in target_slots.items()}
+        created_connections: list[uuid.UUID] = []
+        for link in target_links:
+            left, right = materialized[target_by_id[link.slot_a_id]], materialized[target_by_id[link.slot_b_id]]
+            state = BlueprintUpgradeAnalyzer(self.session)._canonical_link_state(left.connection_point_id, right.connection_point_id)
+            if state == "MISSING":
+                connection, _ = repository.add_connection(left.connection_point_id, right.connection_point_id, 1, [
+                    ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1),
+                ])
+                created_connections.append(connection.id)
+            elif state != "SATISFIED":
+                raise ModelError("Canonical internal link is conflicting", {"reason": "INTERNAL_LINK_RUNTIME_CONFLICT"})
+        instance.blueprint_version_id = target.id
+        self.session.flush()
+        return MaterializedBlueprintInstance(
+            blueprint_id=current.blueprint_id, version_id=target.id, physical_object_id=physical_object_id,
+            slots=tuple(materialized[key] for key in sorted(materialized)), internal_connection_ids=tuple(created_connections),
         )
 
     def _metadata(

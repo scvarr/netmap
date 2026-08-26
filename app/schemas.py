@@ -761,6 +761,11 @@ class BlueprintUpgradeAnalysisDocument(BaseModel):
     blockers: list[BlueprintUpgradeChange]
 
 
+class ApplyBlueprintUpgradeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target_version_id: uuid.UUID
+
+
 class CreatePhysicalLinkRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

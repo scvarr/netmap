@@ -8,4 +8,7 @@ export interface BlueprintUpgradeAnalysisDocument {
   target_version_ref?: LibraryRef; target_version_number?: number;
   compatible_changes: BlueprintUpgradeChange[]; blockers: BlueprintUpgradeChange[];
 }
-export interface BlueprintUpgradeDataSource { analyzeBlueprintUpgrade(physicalObjectId: string): Promise<BlueprintUpgradeAnalysisDocument>; }
+export interface BlueprintUpgradeDataSource {
+  analyzeBlueprintUpgrade(physicalObjectId: string): Promise<BlueprintUpgradeAnalysisDocument>;
+  applyBlueprintUpgrade?(physicalObjectId: string, targetVersionId: string): Promise<unknown>;
+}
