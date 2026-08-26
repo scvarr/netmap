@@ -212,7 +212,12 @@ complete. L1S.5 is not included in this slice.
 - Locale switches at runtime without a reload, persists in `localStorage`, and
   updates `<html lang>`.
 - A typed, source-level localization boundary owns human-facing UI strings.
-- Active Map, Catalog/Object, and Blueprint surfaces use that boundary.
+- The typed boundary covers Map toolbar/dialog strings and the Blueprint /
+  Port Block editor surfaces. Coverage is incomplete on older Catalog/Object
+  detail components and parts of Quick Inspector, which still contain
+  source-level RU literals; closing this gap is tracked as LOC-001 in
+  [[10-02-stabilization-backlog|10.2 Stabilization backlog]]. The blanket
+  surface-coverage claim returns only after LOC-001.
 - Canonical values, API payloads, and user/backend data remain locale-neutral.
 
 The next bounded product step is `L1S.6 — Controlled Blueprint instance upgrade`.

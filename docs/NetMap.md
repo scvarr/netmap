@@ -32,6 +32,10 @@
 - [[09-01-l1-spatial-foundation-plan|09.1 План завершения L1 spatial foundation]]
 - [[09-02-post-l1-product-roadmap|09.2 Post-L1 product roadmap]]
 - [[09-03-port-block-blueprint-architecture|09.3 Port Block Blueprint composition and multi-face physical presentation]]
+- [[10-stabilization-overview|10. Stabilization — аудиты и backlog]]
+  - [[10-01-audit-findings|10.1 Реестр находок аудитов]]
+  - [[10-02-stabilization-backlog|10.2 Stabilization backlog]]
+  - [[10-03-performance-baseline|10.3 Performance baseline и бюджеты]]
 
 ## Базовые принципы
 
