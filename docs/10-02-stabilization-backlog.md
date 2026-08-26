@@ -192,7 +192,7 @@ benchmark. Профили и бюджеты — [[10-03-performance-baseline|10.
   PORT_HEAVY/LARGE); pytest-марки считают query-count/latency/JSON-size;
   Playwright-каркас меряет time-to-map/layout/DOM/interactions; baseline
   записан в [[10-03-performance-baseline|10.3]].
-- Статус: TODO
+- Статус: DONE — 2026-08-26, tooling f92b1f2df72c8e2e576820098b6cc75d457be847, baseline 6327b74f3070b613e550aa49ec236aae4918f0e6
 
 ### PERF-002 — Bounded reads деталей/инвентаря (PERF.2)
 - Категория: performance · Severity: HIGH · До L2: ДА
