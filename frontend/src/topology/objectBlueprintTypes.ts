@@ -27,13 +27,14 @@ export interface BlueprintInternalLink {
 }
 
 export interface PortBlockVersionLibraryRef { ref_type: 'LIBRARY_RECORD'; entity_type: 'PortBlockVersion'; entity_id: string; }
-export interface BlueprintComposition { instances: Array<{ instance_key: string; port_block_version_ref: PortBlockVersionLibraryRef }>; }
+export interface PortBlockLibraryRef { ref_type: 'LIBRARY_RECORD'; entity_type: 'PortBlock'; entity_id: string; }
+export interface BlueprintComposition { instances: Array<{ instance_key: string; port_block_ref: PortBlockLibraryRef; port_block_version_ref: PortBlockVersionLibraryRef }>; }
 
 export interface CreateObjectBlueprintRequest {
   name: string;
   default_physical_object_class?: string;
   body: BlueprintBody;
-  composition: BlueprintComposition;
+  composition: { instances: Array<{ instance_key: string; port_block_version_ref: PortBlockVersionLibraryRef }> };
   internal_links: BlueprintInternalLink[];
 }
 

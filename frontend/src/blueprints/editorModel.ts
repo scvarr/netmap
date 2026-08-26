@@ -1,7 +1,7 @@
 import type { BlueprintInternalLink, CreateObjectBlueprintRequest, ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
-import type { PortBlockVersionDocument } from '../topology/portBlockTypes';
+import type { PortBlockDataSource, PortBlockVersionDocument } from '../topology/portBlockTypes';
 
-export interface BlueprintBlockInstance { instanceKey: string; portBlockVersionRef: string; portBlockName?: string; versionNumber?: number; ports: PortBlockVersionDocument['ports']; resolvedSlotKeys?: Record<string, string>; }
+export interface BlueprintBlockInstance { instanceKey: string; portBlockRef: string; portBlockVersionRef: string; portBlockName: string; versionNumber: number; ports: PortBlockVersionDocument['ports']; resolvedSlotKeys: Record<string, string>; }
 export interface BlueprintEditorState { name: string; defaultClass: string; width: number; height: number; fillColor: string; instances: BlueprintBlockInstance[]; individualLinks: BlueprintInternalLink[]; }
 export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateInstanceKey' | 'missingPortBlock' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
 const message: Record<BlueprintValidationError, string> = { nameRequired:'Укажите название шаблона.', dimensionsPositive:'Ширина и высота должны быть больше нуля.', colorFormat:'Цвет должен быть в формате #RRGGBB.', duplicateInstanceKey:'Повторяется ключ экземпляра Port Block.', missingPortBlock:'Выберите точную версию Port Block.', individualSelfLink:'Внутренняя связь не может соединять порт с самим собой.', individualMissingPort:'Внутренняя связь ссылается на отсутствующий порт.', duplicateIndividualLink:'Повторяется внутренняя связь.' };
@@ -16,7 +16,16 @@ export const composedSlotKey = async (instanceKey: string, localId: string) => {
 };
 export const resolveSlotKeys = async (item: BlueprintBlockInstance) => Object.fromEntries(await Promise.all(item.ports.map(async (port) => [port.local_id, await composedSlotKey(item.instanceKey, port.local_id)])));
 export const slotsForInstance = (item: BlueprintBlockInstance) => item.ports.flatMap((port) => item.resolvedSlotKeys?.[port.local_id] ? [{ key:item.resolvedSlotKeys[port.local_id], label: `${item.portBlockName ?? item.portBlockVersionRef} · ${port.display_label}`, kind: port.kind }] : []);
-export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocument): BlueprintEditorState | null => version.composition ? { name:version.name, defaultClass:version.default_physical_object_class ?? '', width:version.body.width, height:version.body.height, fillColor:version.body.fill_color ?? '#28565a', instances:version.composition.instances.map((item) => ({ instanceKey:item.instance_key, portBlockVersionRef:item.port_block_version_ref.entity_id, ports:[] })), individualLinks:version.internal_links } : null;
+export const hydrateBlueprintEditorState = async (version: ObjectBlueprintVersionDocument, source: PortBlockDataSource): Promise<BlueprintEditorState | null> => {
+  if (!version.composition) return null;
+  const instances = await Promise.all(version.composition.instances.map(async (item) => {
+    const exact = await source.loadPortBlockVersion(item.port_block_ref.entity_id, item.port_block_version_ref.entity_id);
+    if (exact.port_block_ref.entity_id !== item.port_block_ref.entity_id || exact.version_ref.entity_id !== item.port_block_version_ref.entity_id) throw new Error('Exact Port Block version response does not match Blueprint provenance.');
+    const instance = { instanceKey:item.instance_key, portBlockRef:item.port_block_ref.entity_id, portBlockVersionRef:item.port_block_version_ref.entity_id, portBlockName:exact.name, versionNumber:exact.version_number, ports:exact.ports, resolvedSlotKeys:{} };
+    return { ...instance, resolvedSlotKeys:await resolveSlotKeys(instance) };
+  }));
+  return { name:version.name, defaultClass:version.default_physical_object_class ?? '', width:version.body.width, height:version.body.height, fillColor:version.body.fill_color ?? '#28565a', instances, individualLinks:version.internal_links };
+};
 export const generateBlueprint = (state: BlueprintEditorState) => {
   const errors: BlueprintValidationError[] = [];
   if (!normalized(state.name)) errors.push('nameRequired');
