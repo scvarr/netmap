@@ -6,6 +6,7 @@ import type { PhysicalObjectDetailsDocument } from '../topology/physicalObjectDe
 import type { TopologyProjectionNode } from '../topology/types';
 import { PhysicalObjectDetailsSection } from './PhysicalObjectDetailsSection';
 import { I18nProvider } from '../i18n';
+import { BlueprintUpgradeApiError } from '../topology/blueprintUpgradeTypes';
 
 const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
 const node = (id = 'object') => ({ id, kind: 'PHYSICAL_OBJECT', label: id, attributes: {}, source_refs: [ref('PhysicalObject', id)] }) as TopologyProjectionNode;
@@ -103,6 +104,25 @@ describe('PhysicalObjectDetailsSection ports', () => {
     expect(await screen.findByText(/обновление применено/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Повторить обновление данных' }));
     expect(applyBlueprintUpgrade).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows an alert when blueprint analysis rejects a malformed response', async () => {
+    const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
+    renderDetails(blueprint, { blueprintUpgradeDataSource: { analyzeBlueprintUpgrade: vi.fn().mockRejectedValue(new Error('Malformed Blueprint upgrade analysis response: status is unsupported.')) }, objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: { ...blueprint.blueprint_provenance.version_ref, entity_id: 'v2' }, version_number: 2, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 2 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() } });
+    await userEvent.click(await screen.findByRole('button', { name: 'Проверить совместимость' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Malformed Blueprint upgrade analysis response: status is unsupported.');
+  });
+
+  it.each([
+    ['treats a structured backend conflict as an upgrade conflict', new BlueprintUpgradeApiError('stale', 409, 'MODEL_ERROR', { reason: 'UPGRADE_CONFLICT' }), /Состояние изменилось/i],
+    ['does not infer a conflict from an unstructured message', new Error('request failed with status 409'), /Не удалось применить обновление/i],
+    ['does not classify other structured API failures as conflicts', new BlueprintUpgradeApiError('validation', 422, 'VALIDATION_ERROR'), /Не удалось применить обновление/i],
+  ])('%s', async (_label, failure, expected) => {
+    const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
+    renderDetails(blueprint, { blueprintUpgradeDataSource: { analyzeBlueprintUpgrade: vi.fn().mockResolvedValue({ schema_version: '1.0', status: 'OUTDATED', target_version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v2' }, target_version_number: 2, compatible_changes: [], blockers: [] }), applyBlueprintUpgrade: vi.fn().mockRejectedValue(failure) }, objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: { ...blueprint.blueprint_provenance.version_ref, entity_id: 'v2' }, version_number: 2, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 2 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() } });
+    await userEvent.click(await screen.findByRole('button', { name: 'Проверить совместимость' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Обновить до версии 2' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(expected);
   });
 
   it('renders the new upgrade UI in English', async () => {

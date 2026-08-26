@@ -13,7 +13,7 @@ import { physicalClassPresentation } from '../topology/presentation';
 import { ConnectPhysicalEndpoint } from './ConnectPhysicalEndpoint';
 import type { ConnectionPointWriteDataSource } from '../topology/connectionPointWriteTypes';
 import { CreateConnectionPoint } from './CreateConnectionPoint';
-import type { BlueprintUpgradeAnalysisDocument, BlueprintUpgradeDataSource } from '../topology/blueprintUpgradeTypes';
+import { BlueprintUpgradeApiError, type BlueprintUpgradeAnalysisDocument, type BlueprintUpgradeDataSource } from '../topology/blueprintUpgradeTypes';
 import { useI18n } from '../i18n';
 import type { ObjectBlueprintDataSource } from '../topology/objectBlueprintTypes';
 
@@ -259,7 +259,7 @@ const BlueprintUpgrade = ({ physicalObjectId, provenance, dataSource, objectBlue
     if (!analysis?.target_version_ref?.entity_id || applying) return;
     setApplying(true); setError(null); setRefreshFailed(false);
     try { await dataSource.applyBlueprintUpgrade?.(physicalObjectId, analysis.target_version_ref.entity_id); setSucceeded(true); try { await refresh(); } catch { setRefreshFailed(true); } }
-    catch (reason) { setError(reason instanceof Error && /status 409/.test(reason.message) ? t('upgrade.conflict') : t('upgrade.applyFailed')); setAnalysis(null); }
+    catch (reason) { setError(reason instanceof BlueprintUpgradeApiError && reason.status === 409 && reason.code === 'MODEL_ERROR' ? t('upgrade.conflict') : t('upgrade.applyFailed')); setAnalysis(null); }
     finally { setApplying(false); }
   };
   return <section className="blueprint-upgrade" aria-label={t('upgrade.title')}>
