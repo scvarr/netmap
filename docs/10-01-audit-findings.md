@@ -1,7 +1,8 @@
 # 10.1 Реестр находок аудитов
 
-Компактный реестр. Полные сценарии — в истории аудитов; здесь достаточно
-деталей для работы по пункту backlog. Канонические действия — в
+Самодостаточный компактный реестр: каждая запись содержит место, суть, риск и
+действие в объёме, достаточном для постановки задачи без обращения к внешним
+или прошлым отчётам. Канонические действия и статусы — в
 [[10-02-stabilization-backlog|10.2]].
 
 Формат: **ID** · severity · место · суть → риск → действие (→ backlog).
@@ -19,9 +20,10 @@
   читает версию без блокировки: гонка даёт IntegrityError/500 вместо чистой
   ошибки. → Lock версии в instantiate и/или API-001 закрывает симптом.
 - **CORR-001** · LOW · `app/topology_projection_resolver.py:686-742` —
-  рекурсивный `_walk_passive_l1`: пассивная цепочка ~1000+ хопов →
-  RecursionError/500 вместо bounded результата. → Итеративный обход или лимит
-  с явным gap-кодом.
+  рекурсивный `_walk_passive_l1`: глубокая легальная пассивная цепочка может
+  упасть RecursionError/500 вместо корректного результата. → Iterative
+  traversal без изменения семантики; ограничение глубины с gap-кодом — только
+  как отдельное architecture/product решение.
 - **CORR-002** · LOW · `app/models.py:376-392` — уникальность unordered-пары
   internal links обеспечена только на уровне приложения; БД пропускает
   (v,A,B)+(v,B,A). → CHECK `slot_a_id < slot_b_id` или functional unique index.
@@ -82,36 +84,36 @@
 
 Канонические пункты PERF-001…PERF-011 (см. 10.2); краткая сводка находок:
 
-- **PERF-002** (бывш. F-H1) · HIGH · детали одного объекта грузят глобальные
+- **PERF-002** · HIGH · детали одного объекта грузят глобальные
   точки/members (`physical_object_details_resolver.py:20-23`); выбор кабеля в
   инспекторе тянет полный inventory (`QuickInspector.tsx:122-131`);
   `_occupancy` O(N·M) (`catalog_inventory_resolver.py:76-88`). Стоимость
   выбора растёт с размером всей БД.
-- **PERF-003** (F-H2) · HIGH · object-level L1-trace: S×T полных BFS + полный
+- **PERF-003** · HIGH · object-level L1-trace: S×T полных BFS + полный
   обход циклов на каждый source (`physical_object_l1_resolver.py:41-62,87-119`),
   query-per-hop binding-lookup'ов.
-- **PERF-004** (F-H3) · HIGH · нет мемоизации: overlay/cablePresentation
+- **PERF-004** · HIGH · нет мемоизации: overlay/cablePresentation
   считаются inline каждый рендер (`MapPage.tsx:1310-1314,212-214`), массивы
   nodes/edges пересоздаются (`TopologyCanvas.tsx:232-288`), нода/ребро без
   React.memo → полная перестройка сцены на каждую интеракцию.
-- **PERF-005** (F-M5) · MEDIUM · логическая проекция всей БД грузится eagerly
+- **PERF-005** · MEDIUM · логическая проекция всей БД грузится eagerly
   даже в physical view (`MapPage.tsx:372-394`).
-- **PERF-006** (F-H4) · HIGH@PORT_HEAVY · нет виртуализации/LOD
+- **PERF-006** · HIGH@PORT_HEAVY · нет виртуализации/LOD
   (`TopologyCanvas.tsx:372-408`, `DeviceNode.tsx:36,53-60`, MiniMap): 20k+
   портов ≈ 100k+ DOM-элементов.
-- **PERF-007** (F-M7) · MEDIUM · ELK выполняется полностью и в SavedMap-режиме,
+- **PERF-007** · MEDIUM · ELK выполняется полностью и в SavedMap-режиме,
   результат перекрывается авторитарными позициями (`layout.ts:132-168`,
   `TopologyCanvas.tsx:132-167`).
-- **PERF-008** (F-M6 + часть code-review M6) · MEDIUM · scoped проекция читает
+- **PERF-008** · MEDIUM · scoped проекция читает
   все точки/связи БД (`topology_projection_resolver.py:170-171`,
   `repository.py:1301-1306`), гигантские IN-списки aliases (`:193-195`), ORM-
   churn в member-join (`repository.py:1308-1366`).
-- **PERF-009** (F-M8) · MEDIUM · двойная стоимость сериализации/парсинга
+- **PERF-009** · MEDIUM · двойная стоимость сериализации/парсинга
   больших документов (Pydantic strict + 15–30 МБ JSON + полный frontend-
   валидатор `apiTopologyDataSource.ts:66-89`).
-- **PERF-010** (F-L9) · LOW · `WiringRoute` подписан на весь nodes-store с
+- **PERF-010** · LOW · `WiringRoute` подписан на весь nodes-store с
   O(N)-поисками в рендере (`FloatingTopologyEdge.tsx:105-107`).
-- **PERF-011** (остаток code-review M6) · LOW · N+1 в списках библиотек
+- **PERF-011** · LOW · N+1 в списках библиотек
   (`blueprint_catalog.py:146-179`, `port_block_catalog.py:65-93`).
 - Микро (без отдельных пунктов backlog): линейный slot-find на конец ребра
   (`FloatingTopologyEdge.tsx:82`), sort точек generic-нод в edge-render,

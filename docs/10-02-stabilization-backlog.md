@@ -67,11 +67,14 @@ ELK-layout в saved-map пути, объём полей в projection DTO. Эт�
 
 ## Correctness
 
-### CORR-001 — Ограничить глубину пассивного L1-обхода
+### CORR-001 — Итеративный пассивный L1-обход
 - Категория: correctness · Severity: LOW · До L2: нет
 - Behavior-preserving: да · Benchmark: нет · Зависимости: нет
-- Acceptance: fixture-цепочка глубже лимита возвращает bounded результат с
-  явным gap-кодом, не RecursionError/500.
+- Acceptance: глубокая легальная пассивная цепочка не вызывает
+  RecursionError/500 и даёт корректный результат проекции. Предпочтительное
+  решение — iterative traversal без изменения семантики. Вводить ограничение
+  глубины с gap-кодом молча запрещено: это отдельное architecture/product
+  решение (в случае необходимости — новый пункт backlog).
 - Статус: TODO
 
 ### CORR-002 — DB-уникальность unordered-пары internal links
@@ -87,9 +90,13 @@ ELK-layout в saved-map пути, объём полей в projection DTO. Эт�
 - Категория: API contract · Severity: MEDIUM · До L2: ДА
 - Behavior-preserving: да (маппинг ошибок) · Benchmark: нет
 - Зависимости: снижает остроту CONC-002
-- Acceptance: гонки имени карты/placement/route возвращают 409 с
-  `{error:{code,…}}`; regression-тест на name-conflict race; фронтенд показывает
-  код ошибки, а не «HTTP 500».
+- Acceptance: только ожидаемые constraint/uniqueness races (известные
+  ограничения: имя карты, placement pair, cable-route triple) маппятся в 409
+  контрактного вида `{error:{code,…}}`. Handler обязан классифицировать
+  ошибку/constraint (по имени нарушения); НЕИЗВЕСТНЫЙ IntegrityError не
+  маскируется как UNIQUENESS_CONFLICT и остаётся server-side ошибкой с логом.
+  Regression-тесты: name-conflict race → 409; неклассифицируемое нарушение →
+  не 409/UNIQUENESS_CONFLICT. Фронтенд показывает код ошибки, а не «HTTP 500».
 - Статус: TODO
 
 ### API-002 — NOT_FOUND семантика для отсутствующих ресурсов
@@ -134,9 +141,12 @@ ELK-layout в saved-map пути, объём полей в projection DTO. Эт�
 - Зависимости: claim в docs/09-01 уже скорректирован этим проходом
 - Scope: QuickInspector, PhysicalObjectDetailsSection, Inspector, Create*/
   Connect* формы, MapPage literals, русские тексты в dataSources.
-- Acceptance: EN-локаль рендерит Map/Catalog/Object без кириллицы вне
-  легитимных технических терминов; vitest паритетности ru/en ключей; после
-  завершения вернуть полный IMPLEMENTED-claim в docs/09-01.
+- Acceptance: отсутствие нелокализованных source-level/static RU UI-строк вне
+  i18n-границы в перечисленных компонентах (проверка по исходникам/тестом,
+  НЕ по отсутствию кириллицы в DOM — пользовательские и backend данные могут
+  быть русскими); EN-локаль рендерит эти поверхности словарными строками;
+  vitest паритетности ru/en ключей; после завершения вернуть полный
+  IMPLEMENTED-claim в docs/09-01.
 - Статус: TODO
 
 ## Maintainability
@@ -192,14 +202,17 @@ benchmark. Профили и бюджеты — [[10-03-performance-baseline|10.
   однопроходная; e2e каталога/инспектора зелёные.
 - Статус: TODO
 
-### PERF-003 — Батчинг object-level L1 trace (PERF.3)
+### PERF-003 — Устранение повторных обходов в object-level L1 trace (PERF.3)
 - Категория: performance · Severity: HIGH · До L2: ДА
-- Behavior-preserving: да при golden-тестах артефактов · Benchmark: нет
-  (golden обязателен)
+- Behavior-preserving: да при semantic/golden equivalence артефактов
+  · Benchmark: нет (golden обязателен)
 - Зависимости: нет
-- Acceptance: multi-target BFS + единый обход циклов; golden-файлы ветвей/
-  evidence идентичны текущим; query-count трассы O(уровней+батчей), не O(hops);
-  any-port trace на MEDIUM укладывается в budget 10.3.
+- Acceptance: устранены S×T повторных полных обходов и query-per-hop чтения
+  при сохранении semantic/golden equivalence trace artifact: verdict, source
+  identity, branches, evidence, ambiguity/conflict-семантика, cycles, ordering.
+  Конкретный алгоритм (multi-target BFS, общий predecessors-обход или иной)
+  сознательно НЕ зафиксирован — выбирается и обосновывается в implementation
+  milestone. Any-port trace на MEDIUM укладывается в budget [[10-03]].
 - Статус: TODO
 
 ### PERF-004 — Мемоизация сцены (PERF.1)
@@ -247,8 +260,8 @@ benchmark. Профили и бюджеты — [[10-03-performance-baseline|10.
 - Категория: performance · Severity: MEDIUM · До L2: НЕТ (по данным)
 - Behavior-preserving: да (read-time валидации и gaps сохраняются)
   · Benchmark: ОБЯЗАТЕЛЕН (query-count/latency на PORT_HEAVY)
-- Зависимости: PERF-001; поглощает per-hop часть бывшего code-review M6 для
-  логического слоя
+- Зависимости: PERF-001; включает устранение per-hop/per-interface чтений
+  логического слоя проекции
 - Acceptance: число строк/параметров проекции масштабируется scope'ом карты, а
   не размером БД; IN(все id) устранены; результаты e2e проекций идентичны.
 - Статус: TODO
@@ -282,5 +295,8 @@ benchmark. Профили и бюджеты — [[10-03-performance-baseline|10.
 CONC-001 · API-001 · FE-001 · LOC-001 · PERF-001 · PERF-002 · PERF-003 ·
 PERF-004 · PERF-005.
 
-Рекомендуемый порядок: PERF-001 → PERF-004 → CONC-001 → API-001 → FE-001 →
-PERF-002 → PERF-003 → PERF-005 → LOC-001 (LOC параллелится с любым пунктом).
+Рекомендуемый порядок — correctness/contracts перед performance tooling:
+CONC-001 → API-001 → FE-001 → PERF-001 → PERF-004 → PERF-002 → PERF-003 →
+PERF-005 … LOC-001 параллелится с любым пунктом. PERF-001 — первый именно
+внутри performance-направления; measure-first пункты (PERF-006…009) начинаются
+только после его завершения и фиксации baseline ([[10-03]]).

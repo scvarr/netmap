@@ -220,7 +220,8 @@ complete. L1S.5 is not included in this slice.
   surface-coverage claim returns only after LOC-001.
 - Canonical values, API payloads, and user/backend data remain locale-neutral.
 
-The next bounded product step is `L1S.6 — Controlled Blueprint instance upgrade`.
+The next bounded product step is `L1S.6c.3 — Object Blueprint composition and
+legacy EndpointGroup removal` (L1S.6a/L1S.6b are implemented; see below).
 
 ### L1S.6 — Controlled Blueprint instance upgrade
 
@@ -282,7 +283,8 @@ The architecture is fixed in
 and multi-face physical presentation]]. It is implemented as the following
 deliberately bounded milestones:
 
-1. **L1S.6c.1 — Port Block library foundation**: library-owned Port Blocks,
+1. **L1S.6c.1 — Port Block library foundation — IMPLEMENTED**: library-owned
+   Port Blocks,
    immutable exact versions, explicit local-port layout snapshots, migrations,
    machine-readable library API and backend tests. It does not reference Object
    Blueprints or alter canonical topology.
