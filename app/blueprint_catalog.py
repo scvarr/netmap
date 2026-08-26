@@ -12,6 +12,7 @@ from app.models import (
     BlueprintInstance,
     BlueprintInstanceSlot,
     BlueprintInternalLink,
+    ConnectionPoint,
     EntityMetadata,
     ObjectBlueprint,
     ObjectBlueprintVersion,
@@ -447,8 +448,27 @@ class ObjectBlueprintCatalog:
                 BlueprintInternalLink.blueprint_version_id == target.id
             ))
         }
+        new_links = tuple(sorted(target_links - current_links))
+        participating_point_ids = tuple(sorted({
+            point_id
+            for left_key, right_key in new_links
+            for point_id in (
+                materialized[left_key].connection_point_id,
+                materialized[right_key].connection_point_id,
+            )
+        }, key=str))
+        if participating_point_ids:
+            locked_point_ids = set(self.session.scalars(
+                select(ConnectionPoint.id)
+                .where(ConnectionPoint.id.in_(participating_point_ids))
+                .order_by(ConnectionPoint.id)
+                .with_for_update()
+            ))
+            if locked_point_ids != set(participating_point_ids):
+                raise ModelError("Blueprint upgrade connection point is missing")
+
         created_connections: list[uuid.UUID] = []
-        for left_key, right_key in sorted(target_links - current_links):
+        for left_key, right_key in new_links:
             left, right = materialized[left_key], materialized[right_key]
             state = BlueprintUpgradeAnalyzer(self.session)._canonical_link_state(left.connection_point_id, right.connection_point_id)
             if state == "MISSING":

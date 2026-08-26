@@ -1,10 +1,14 @@
 import uuid
+from threading import Event, Thread
 
 import pytest
 
 from sqlalchemy import delete, func, select
 
 from app.database import SessionLocal
+from app.blueprint_catalog import ObjectBlueprintCatalog
+from app.blueprint_upgrade_analysis import BlueprintUpgradeAnalyzer
+from app.errors import ModelError
 from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, Connection, ConnectionMember, ConnectionPoint, EntityMetadata, InterfacePhysicalBinding, NetworkInterface, NetworkInterfacePhysicalOwner
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from tests.test_object_blueprints_e2e import client, create_blueprint, instantiate, slot
@@ -197,6 +201,67 @@ def test_new_internal_link_states_create_skip_or_rollback():
     assert apply(conflict_id, v2).status_code == 409
     with SessionLocal() as session:
         assert str(session.scalar(select(BlueprintInstance).where(BlueprintInstance.physical_object_id == conflict_id)).blueprint_version_id) == v1
+
+
+def test_apply_upgrade_serializes_new_internal_link_with_canonical_wiring(monkeypatch):
+    blueprint_id, v1 = create_blueprint([slot("A"), slot("B")])
+    instance = instantiate(blueprint_id, v1, "panel")
+    object_id, points = instance["physical_object_ref"]["entity_id"], point_ids(instance)
+    v2 = next_version(blueprint_id, [slot("A"), slot("B")], [{"from_slot_key": "A", "to_slot_key": "B"}])
+
+    upgrade_at_state_check = Event()
+    wiring_attempted = Event()
+    original_state = BlueprintUpgradeAnalyzer._canonical_link_state
+    state_checks = 0
+    wiring_error: list[Exception] = []
+
+    def pause_upgrade_state_check(self, point_a_id, point_b_id):
+        nonlocal state_checks
+        state_checks += 1
+        if state_checks == 2:
+            upgrade_at_state_check.set()
+            assert wiring_attempted.wait(timeout=5)
+        return original_state(self, point_a_id, point_b_id)
+
+    def canonical_wiring():
+        try:
+            assert upgrade_at_state_check.wait(timeout=5)
+            with SessionLocal.begin() as session:
+                point_ids_in_order = tuple(sorted(points.values(), key=str))
+                wiring_attempted.set()
+                session.scalars(
+                    select(ConnectionPoint)
+                    .where(ConnectionPoint.id.in_(point_ids_in_order))
+                    .order_by(ConnectionPoint.id)
+                    .with_for_update()
+                ).all()
+                state = original_state(BlueprintUpgradeAnalyzer(session), points["A"], points["B"])
+                if state != "MISSING":
+                    raise ModelError("Canonical internal link is conflicting", {"reason": "INTERNAL_LINK_RUNTIME_CONFLICT"})
+                CanonicalRepository(session).add_connection(
+                    points["A"], points["B"], 1,
+                    [ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+                )
+        except Exception as error:
+            wiring_error.append(error)
+
+    monkeypatch.setattr(BlueprintUpgradeAnalyzer, "_canonical_link_state", pause_upgrade_state_check)
+    wiring = Thread(target=canonical_wiring)
+    wiring.start()
+    with SessionLocal.begin() as session:
+        ObjectBlueprintCatalog(session).apply_upgrade(uuid.UUID(object_id), uuid.UUID(v2))
+    wiring.join(timeout=5)
+    assert not wiring.is_alive()
+    assert len(wiring_error) == 1
+    assert isinstance(wiring_error[0], ModelError)
+
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(Connection).where(
+            Connection.point_a_id.in_(points.values()), Connection.point_b_id.in_(points.values())
+        )) == 1
+        assert str(session.scalar(select(BlueprintInstance).where(
+            BlueprintInstance.physical_object_id == object_id
+        )).blueprint_version_id) == v2
 
 
 @pytest.mark.parametrize("initial,target,links", [
