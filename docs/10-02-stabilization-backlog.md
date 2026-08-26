@@ -118,7 +118,8 @@ ELK-layout в saved-map пути, объём полей в projection DTO. Эт�
 - Acceptance: (а) строгий парсер analysis-документа — malformed ответ даёт
   bounded Error и alert, не крэш рендера; (б) конфликт определяется по
   {status, code}, не по подстроке сообщения; vitest на оба случая.
-- Статус: TODO
+- Статус: DONE — 2026-08-26, 6cd56dbe0de46419424afa504107eb96caf974ee
+  corrective: 231b8dca44c3b041a321d7c92829b45a7fa4d115
 
 ### FE-002 — Guard двойного создания карты
 - Категория: frontend contract · Severity: LOW · До L2: нет
