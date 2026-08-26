@@ -63,8 +63,7 @@ ELK-layout в saved-map пути, объём полей в projection DTO. Эт�
 - Behavior-preserving: да · Benchmark: нет
 - Зависимости: частично закрывается API-001 (симптом)
 - Acceptance: параллельные delete/instantiate дают чистую 409/422, не 500.
-- Статус: DONE — 2026-08-26, 1796a2386be13e79765cd6cce91096b3d1921973
-  corrective: 1bc10068b88b06a72e15fb4e5e1de1a29e33636e
+- Статус: TODO
 
 ## Correctness
 
@@ -98,7 +97,8 @@ ELK-layout в saved-map пути, объём полей в projection DTO. Эт�
   маскируется как UNIQUENESS_CONFLICT и остаётся server-side ошибкой с логом.
   Regression-тесты: name-conflict race → 409; неклассифицируемое нарушение →
   не 409/UNIQUENESS_CONFLICT. Фронтенд показывает код ошибки, а не «HTTP 500».
-- Статус: TODO
+- Статус: DONE — 2026-08-26, 1796a2386be13e79765cd6cce91096b3d1921973
+  corrective: 1bc10068b88b06a72e15fb4e5e1de1a29e33636e
 
 ### API-002 — NOT_FOUND семантика для отсутствующих ресурсов
 - Категория: API contract · Severity: LOW · До L2: нет
