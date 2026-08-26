@@ -43,23 +43,21 @@ describe('RU/EN localization integration', () => {
     expect(screen.getAllByRole('link', { name: 'Карта' })).toHaveLength(2);
   });
 
-  it('localizes the Blueprint editor while submitting canonical Blueprint values', async () => {
+  it('localizes the composition editor while submitting canonical Blueprint values', async () => {
     const createObjectBlueprint = vi.fn().mockResolvedValue({});
-    renderLocalized(<MemoryRouter><NewObjectBlueprintPage dataSource={{ loadObjectBlueprints: vi.fn(), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint }} /></MemoryRouter>);
+    const portBlockDataSource = { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_blocks: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' }, name: 'Patch', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'v-1' }, version_number: 1, port_count: 1, version_count: 1 }] }), loadPortBlockVersions: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, versions: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'v-1' }, version_number: 1, port_count: 1 }] }), loadPortBlockVersion: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' }, name: 'Patch', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'v-1' }, version_number: 1, ports: [{ local_id: 'p1', display_label: 'P1', kind: 'NETWORK_PORT' as const, row: 1 as const, column: 1, layout_order: 1 }] }), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
+    renderLocalized(<MemoryRouter><NewObjectBlueprintPage dataSource={{ loadObjectBlueprints: vi.fn(), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint }} portBlockDataSource={portBlockDataSource} /></MemoryRouter>);
 
     await userEvent.click(screen.getByRole('button', { name: 'English' }));
     expect(screen.getByRole('heading', { name: 'Create object blueprint' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Blueprint name'), 'Карта');
-    await userEvent.click(screen.getByRole('button', { name: 'Add port group' }));
-    const kind = screen.getByLabelText('Port kind 1');
-    const side = screen.getByLabelText('Diagram side 1');
-    expect([...kind.querySelectorAll('option')].map((option) => option.value)).toEqual(['CONNECTION_POINT', 'NETWORK_PORT']);
-    expect([...side.querySelectorAll('option')].map((option) => option.value)).toEqual(['LEFT', 'RIGHT', 'TOP', 'BOTTOM']);
-    await userEvent.selectOptions(kind, 'NETWORK_PORT');
-    await userEvent.selectOptions(side, 'RIGHT');
-    await userEvent.type(screen.getByLabelText('Display-name prefix 1'), 'P');
+    expect(screen.getByRole('heading', { name: 'Port Blocks' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Logical Port Block')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('Logical Port Block'), 'pb-1');
+    await userEvent.selectOptions(await screen.findByLabelText('Exact version'), 'v-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Add Port Block' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save blueprint' }));
 
-    expect(createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({ name: 'Карта', slots: [expect.objectContaining({ kind: 'NETWORK_PORT', anchor: expect.objectContaining({ side: 'RIGHT' }) })], authoring_recipe: expect.objectContaining({ endpoint_groups: [expect.objectContaining({ kind: 'NETWORK_PORT', side: 'RIGHT' })] }) }));
+    expect(createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({ name: 'Карта', composition: { instances: [expect.objectContaining({ port_block_version_ref: expect.objectContaining({ entity_type: 'PortBlockVersion', entity_id: 'v-1' }) })] } }));
   });
 });

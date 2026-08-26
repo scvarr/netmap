@@ -140,6 +140,7 @@ const renderApp = (route: string, overrides: Partial<AppProps> = {}) => {
       loadPhysicalObjectDetails: vi.fn((id) => Promise.resolve(id === swId ? swDetails : ppDetails)),
     },
     catalogInventoryDataSource: { loadCatalogInventory: vi.fn().mockResolvedValue(catalogDocument) },
+    portBlockDataSource: { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0', port_blocks: [] }), loadPortBlockVersions: vi.fn().mockResolvedValue({ schema_version: '1.0', versions: [] }), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() },
     ...overrides,
   };
   render(
@@ -384,19 +385,20 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
       ], internal_links: [{ from_slot_key: 'A01', to_slot_key: 'B01' }] }),
       createObjectBlueprint: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprint_ref: blueprint.blueprints[0].blueprint_ref, version_ref: blueprint.blueprints[0].version_ref }),
     };
-    renderApp('/library/object-blueprints', { objectBlueprintDataSource });
+    const portBlockDataSource = { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_blocks: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' }, name: 'Cable ports', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'pb-v1' }, version_number: 1, port_count: 2, version_count: 1 }] }), loadPortBlockVersions: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, versions: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'pb-v1' }, version_number: 1, port_count: 2 }] }), loadPortBlockVersion: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' }, name: 'Cable ports', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'pb-v1' }, version_number: 1, ports: [{ local_id: 'p1', display_label: 'A1', kind: 'CONNECTION_POINT' as const, row: 1 as const, column: 1, layout_order: 1 }, { local_id: 'p2', display_label: 'A2', kind: 'CONNECTION_POINT' as const, row: 1 as const, column: 2, layout_order: 2 }] }), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
+    renderApp('/library/object-blueprints', { objectBlueprintDataSource, portBlockDataSource });
     expect(await screen.findByRole('heading', { name: 'Generic cable' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Шаблоны объектов' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Создать объект' })).toHaveAttribute('href', '/infrastructure/objects/new?blueprint=bp-1&version=v-1');
     await userEvent.click(screen.getByRole('link', { name: 'Создать шаблон' }));
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Cable from editor');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить группу портов' }));
-    await userEvent.type(screen.getByLabelText('Префикс отображаемого имени 1'), 'A');
+    await userEvent.selectOptions(screen.getByLabelText('Логический Port Block'), 'pb-1');
+    await userEvent.selectOptions(await screen.findByLabelText('Точная версия'), 'pb-v1');
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить Port Block' }));
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
     await waitFor(() => expect(objectBlueprintDataSource.createObjectBlueprint).toHaveBeenCalled());
     expect(objectBlueprintDataSource.createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({
-      name: 'Cable from editor', slots: expect.arrayContaining([expect.objectContaining({ key: expect.stringMatching(/^group-.*:1$/), display_name: 'A01' })]), internal_links: [],
-      authoring_recipe: { endpoint_groups: [expect.objectContaining({ display_prefix: 'A' })], pair_recipes: [], individual_links: [] },
+      name: 'Cable from editor', composition: { instances: [expect.objectContaining({ port_block_version_ref: expect.objectContaining({ entity_id: 'pb-v1' }) })] }, internal_links: [],
     }));
     expect(await screen.findByTestId('location')).toHaveTextContent('/library/object-blueprints');
     expect(objectBlueprintDataSource.loadObjectBlueprints).toHaveBeenCalledTimes(2);

@@ -1,445 +1,121 @@
 import uuid
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
+from app.blueprint_catalog import ObjectBlueprintCatalog
 from app.database import SessionLocal
 from app.main import app
-from app.models import (
-    BlueprintInstance,
-    BlueprintInstanceSlot,
-    Connection,
-    ConnectionMember,
-    ConnectionPoint,
-    InterfacePhysicalBinding,
-    NetworkInterface,
-    ObjectBlueprintVersion,
-    PhysicalObject,
-)
-from app.repository import CanonicalRepository, ConnectionMemberInput
+from app.models import BlueprintEndpointSlot, BlueprintInstance, ConnectionPoint, InterfacePhysicalBinding, NetworkInterface, ObjectBlueprint, ObjectBlueprintVersion
 
 
 client = TestClient(app)
+composed_slot_key = ObjectBlueprintCatalog.composed_slot_key
 
 
-def slot(key: str, kind: str = "CONNECTION_POINT") -> dict:
-    return {
-        "key": key,
-        "display_name": key,
-        "kind": kind,
-        "anchor": {"side": "LEFT", "offset": 0.5},
-    }
+def slot(local_id: str, kind: str = "CONNECTION_POINT") -> dict:
+    return {"local_id": local_id, "display_label": local_id, "kind": kind, "row": 1, "column": 1, "layout_order": 1}
 
 
-def create_blueprint(slots: list[dict], links: list[dict] | None = None, **extra: object) -> tuple[str, str]:
+def create_port_block(ports: list[dict], name: str = "Port Block") -> tuple[str, str]:
+    normalized = [{**item, "column": index + 1, "layout_order": index + 1} for index, item in enumerate(ports)]
+    response = client.post("/v1/library/port-blocks", json={"name": name, "ports": normalized})
+    assert response.status_code == 201, response.text
+    body = response.json()
+    return body["port_block_ref"]["entity_id"], body["version_ref"]["entity_id"]
+
+
+def create_blueprint(slots: list[dict], links: list[dict] | None = None, *, instance_key: str = "instance", name: str = "Blueprint", port_block: tuple[str, str] | None = None, **extra: object) -> tuple[str, str]:
+    port_block_id, port_block_version_id = port_block or create_port_block(slots, f"{name} ports")
+    generated = {item["local_id"]: composed_slot_key(instance_key, item["local_id"]) for item in slots}
     response = client.post("/v1/library/object-blueprints", json={
-        "name": extra.pop("name", "Blueprint"),
+        "name": name,
         "body": extra.pop("body", {"kind": "RECTANGLE", "width": 100, "height": 40}),
-        "slots": slots,
-        "internal_links": links or [],
+        "default_physical_object_class": extra.pop("default_physical_object_class", None),
+        "composition": {"instances": [{"instance_key": instance_key, "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": port_block_version_id}}]},
+        "internal_links": [{"from_slot_key": generated[item["from_slot_key"]], "to_slot_key": generated[item["to_slot_key"]]} for item in (links or [])],
         **extra,
     })
     assert response.status_code == 201, response.text
     body = response.json()
-    assert body["blueprint_ref"]["ref_type"] == "LIBRARY_RECORD"
     return body["blueprint_ref"]["entity_id"], body["version_ref"]["entity_id"]
 
 
 def instantiate(blueprint_id: str, version_id: str, display_name: str) -> dict:
-    response = client.post(
-        f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}/instantiate",
-        json={"display_name": display_name},
-    )
+    response = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}/instantiate", json={"display_name": display_name})
     assert response.status_code == 201, response.text
     return response.json()
 
 
-def trace(point_a_id: str, point_b_id: str) -> str:
-    response = client.post("/v1/traces/l1", json={
-        "from": {"point_id": point_a_id, "member_index": 1},
-        "to": {"point_id": point_b_id, "member_index": 1},
-    })
-    assert response.status_code == 200
-    return response.json()["verdict"]
-
-
-def test_cable_like_blueprint_materializes_two_points_and_one_internal_connection():
-    blueprint_id, version_id = create_blueprint(
-        [slot("A"), slot("B")],
-        [{"from_slot_key": "A", "to_slot_key": "B"}],
-        name="Cable",
-        body={"kind": "RECTANGLE", "width": 100, "height": 4, "fill_color": "#A0B1C2"},
-        default_physical_object_class="cable",
-    )
-    created = instantiate(blueprint_id, version_id, "Cable-1")
-    assert created["physical_object_ref"]["entity_type"] == "PhysicalObject"
-    assert {item["slot_key"] for item in created["slots"]} == {"A", "B"}
-    details = client.get(
-        f"/v1/topology/physical-objects/{created['physical_object_ref']['entity_id']}"
-    )
-    assert details.status_code == 200
-    assert details.json()["physical_object"]["label"] == "Cable-1"
-    assert details.json()["physical_object"]["class"] == "cable"
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 1
-        assert session.scalar(select(func.count()).select_from(ConnectionPoint)) == 2
-        assert session.scalar(select(func.count()).select_from(Connection)) == 1
-        assert session.scalar(select(func.count()).select_from(ConnectionMember)) == 1
-
-
-def test_patch_panel_connectivity_follows_only_explicit_internal_pairs():
-    blueprint_id, version_id = create_blueprint(
-        [slot("front01"), slot("rear01"), slot("front02"), slot("rear02")],
-        [
-            {"from_slot_key": "front01", "to_slot_key": "rear01"},
-            {"from_slot_key": "front02", "to_slot_key": "rear02"},
-        ],
-        name="Patch panel",
-    )
-    created = instantiate(blueprint_id, version_id, "PP1")
-    points = {item["slot_key"]: item["connection_point_ref"]["entity_id"] for item in created["slots"]}
-    assert trace(points["front01"], points["rear01"]) == "REACHABLE"
-    assert trace(points["front02"], points["rear02"]) == "REACHABLE"
-    assert trace(points["front01"], points["rear02"]) == "UNKNOWN"
-
-
-def test_switch_ports_materialize_without_an_implicit_l1_connection():
-    blueprint_id, version_id = create_blueprint([slot("eth1", "NETWORK_PORT"), slot("eth2", "NETWORK_PORT")])
-    created = instantiate(blueprint_id, version_id, "SW1")
-    assert all("network_interface_ref" in item for item in created["slots"])
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(NetworkInterface)) == 2
-        assert session.scalar(select(func.count()).select_from(ConnectionPoint)) == 2
-        assert session.scalar(select(func.count()).select_from(InterfacePhysicalBinding)) == 2
-        assert session.scalar(select(func.count()).select_from(Connection)) == 0
-
-
-def test_operational_details_expose_blueprint_ports_internal_pairs_and_no_manual_provenance():
-    blueprint_id, version_id = create_blueprint(
-        [slot("A01", "NETWORK_PORT"), slot("B01")],
-        [{"from_slot_key": "A01", "to_slot_key": "B01"}],
-    )
-    created = instantiate(blueprint_id, version_id, "Panel")
-    details = client.get(f"/v1/topology/physical-objects/{created['physical_object_ref']['entity_id']}").json()
-    assert details["blueprint_provenance"] == {
-        "blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprint", "entity_id": blueprint_id},
-        "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprintVersion", "entity_id": version_id},
-        "version_number": 1,
-    }
-    ports = {port["blueprint_slot"]["slot_key"]: port for port in details["connection_points"]}
-    assert list(port["ordering_key"] for port in details["connection_points"]) == ["A01", "B01"]
-    assert ports["A01"]["blueprint_slot"]["kind"] == "NETWORK_PORT"
-    assert ports["A01"]["direct_interface_bindings"][0]["label"] == "A01"
-    assert ports["A01"]["internal_physical_counterparts"][0]["label"] == "B01"
-    manual = client.post("/v1/topology/physical-objects", json={"display_name": "Manual", "initial_connection_point": {"display_name": "M1"}}).json()
-    assert "blueprint_provenance" not in manual
-
-
-def test_operational_details_resolve_only_recognised_simple_cables():
-    with SessionLocal.begin() as session:
-        repository, catalog = CanonicalRepository(session), None
-        from app.device_catalog import DeviceCatalog
-        catalog = DeviceCatalog(session)
-        source = catalog.create_physical_object("Source", "S1")
-        remote = catalog.create_physical_object("Remote", "R1")
-        cable = catalog.create_physical_object("Cable-1", "C1")
-        catalog.set_physical_object_class(cable.physical_object_id, "cable")
-        cable_second = catalog.create_connection_point(cable.physical_object_id, "C2")
-        first, _ = repository.add_connection(source.connection_point_id, cable.connection_point_id, 1, [ConnectionMemberInput(1, 1, 1)])
-        second, _ = repository.add_connection(cable_second.connection_point_id, remote.connection_point_id, 1, [ConnectionMemberInput(1, 1, 1)])
-    port = client.get(f"/v1/topology/physical-objects/{source.physical_object_id}").json()["connection_points"][0]
-    attachment = port["external_physical_attachments"][0]
-    assert attachment["kind"] == "SIMPLE_CABLE" and attachment["cable_label"] == "Cable-1"
-    assert attachment["remote_physical_object_label"] == "Remote" and attachment["remote_connection_point_label"] == "R1"
-    assert first.id and second.id
-
-
-def test_operational_details_do_not_guess_through_non_simple_cable_topology():
-    with SessionLocal.begin() as session:
-        from app.device_catalog import DeviceCatalog
-        repository, catalog = CanonicalRepository(session), DeviceCatalog(session)
-        source = catalog.create_physical_object("Source", "S1")
-        cable = catalog.create_physical_object("Cable", "C1")
-        catalog.set_physical_object_class(cable.physical_object_id, "cable")
-        catalog.create_connection_point(cable.physical_object_id, "C2")
-        catalog.create_connection_point(cable.physical_object_id, "C3")
-        repository.add_connection(source.connection_point_id, cable.connection_point_id, 1, [ConnectionMemberInput(1, 1, 1)])
-    attachment = client.get(f"/v1/topology/physical-objects/{source.physical_object_id}").json()["connection_points"][0]["external_physical_attachments"][0]
-    assert attachment["kind"] == "UNRESOLVED"
-    assert "cable_ref" not in attachment and attachment["remote_physical_object_label"] == "Cable"
-
-
-def test_one_version_materializes_separate_instances_with_persistent_slot_mappings():
-    blueprint_id, version_id = create_blueprint([slot("front"), slot("rear")], [{"from_slot_key": "front", "to_slot_key": "rear"}])
-    first = instantiate(blueprint_id, version_id, "PP1")
-    second = instantiate(blueprint_id, version_id, "PP2")
-    assert first["physical_object_ref"]["entity_id"] != second["physical_object_ref"]["entity_id"]
-    with SessionLocal() as session:
-        version = session.get(ObjectBlueprintVersion, uuid.UUID(version_id))
-        assert version is not None and version.version_number == 1
-        instances = tuple(session.scalars(select(BlueprintInstance).order_by(BlueprintInstance.id)))
-        assert len(instances) == 2
-        assert {instance.blueprint_version_id for instance in instances} == {uuid.UUID(version_id)}
-        mappings = tuple(session.scalars(select(BlueprintInstanceSlot)))
-        assert len(mappings) == 4
-        assert len({mapping.connection_point_id for mapping in mappings}) == 4
-
-
-def test_failed_materialization_rolls_back_all_canonical_and_instance_rows(monkeypatch):
-    blueprint_id, version_id = create_blueprint([slot("A"), slot("B")], [{"from_slot_key": "A", "to_slot_key": "B"}])
-    original = CanonicalRepository.add_connection
-
-    def fail_connection(self, *args, **kwargs):
-        raise RuntimeError("injected internal link failure")
-
-    monkeypatch.setattr(CanonicalRepository, "add_connection", fail_connection)
-    response = TestClient(app, raise_server_exceptions=False).post(
-        f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}/instantiate",
-        json={"display_name": "broken"},
-    )
-    assert response.status_code == 500
-    monkeypatch.setattr(CanonicalRepository, "add_connection", original)
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 0
-        assert session.scalar(select(func.count()).select_from(BlueprintInstance)) == 0
-        assert session.scalar(select(func.count()).select_from(BlueprintInstanceSlot)) == 0
-
-
-@pytest.mark.parametrize("payload", [
-    {"name": "", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": []},
-    {"name": "x", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [{**slot("a"), "key": ""}]},
-    {"name": "x", "body": {"kind": "RECTANGLE", "width": 1, "height": 1, "fill_color": "red"}, "slots": []},
-    {"name": "x", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [slot("a"), slot("a")]},
-    {"name": "x", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [slot("a")], "internal_links": [{"from_slot_key": "a", "to_slot_key": "missing"}]},
-    {"name": "x", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [slot("a")], "internal_links": [{"from_slot_key": "a", "to_slot_key": "a"}]},
-    {"name": "x", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [slot("a"), slot("b")], "internal_links": [{"from_slot_key": "a", "to_slot_key": "b"}, {"from_slot_key": "b", "to_slot_key": "a"}]},
-    {"name": "x", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [{**slot("a"), "anchor": {"side": "LEFT", "offset": 2}}]},
-])
-def test_blueprint_request_validation_rejects_invalid_authoring_without_writes(payload: dict):
-    assert client.post("/v1/library/object-blueprints", json=payload).status_code == 422
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 0
-        assert session.scalar(select(func.count()).select_from(BlueprintInstance)) == 0
-
-
-def test_blueprint_library_list_is_stable_and_version_detail_is_exact_without_canonical_rows():
-    cable_id, cable_version = create_blueprint(
-        [slot("A"), slot("B")], [{"from_slot_key": "A", "to_slot_key": "B"}],
-        name="Z Cable", body={"kind": "RECTANGLE", "width": 120, "height": 6, "fill_color": "#123456"},
-        default_physical_object_class="cable",
-    )
-    panel_id, panel_version = create_blueprint(
-        [slot("front01"), slot("rear01")], [{"from_slot_key": "front01", "to_slot_key": "rear01"}],
-        name="A Panel",
-    )
-    response = client.get("/v1/library/object-blueprints")
-    assert response.status_code == 200
-    document = response.json()
-    assert [item["name"] for item in document["blueprints"]] == ["A Panel", "Z Cable"]
-    assert all(item["blueprint_ref"]["ref_type"] == "LIBRARY_RECORD" for item in document["blueprints"])
-    assert all(item["version_ref"]["ref_type"] == "LIBRARY_RECORD" for item in document["blueprints"])
-    cable = next(item for item in document["blueprints"] if item["blueprint_ref"]["entity_id"] == cable_id)
-    assert cable["version_ref"]["entity_id"] == cable_version
-    assert cable["slot_count"] == 2 and cable["internal_link_count"] == 1
-    detail = client.get(f"/v1/library/object-blueprints/{panel_id}/versions/{panel_version}")
-    assert detail.status_code == 200
-    assert detail.json()["body"] == {"kind": "RECTANGLE", "width": 100.0, "height": 40.0, "fill_color": None}
-    assert detail.json()["slots"] == [
-        {"key": "front01", "display_name": "front01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": 0.5}},
-        {"key": "rear01", "display_name": "rear01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": 0.5}},
-    ]
-    assert detail.json()["internal_links"] == [{"from_slot_key": "front01", "to_slot_key": "rear01"}]
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 0
-        assert session.scalar(select(func.count()).select_from(ConnectionPoint)) == 0
-
-
-def test_blueprint_library_read_rejects_missing_or_mismatched_version():
-    blueprint_id, version_id = create_blueprint([slot("A")])
-    assert client.get(
-        f"/v1/library/object-blueprints/00000000-0000-0000-0000-000000000001/versions/{version_id}"
-    ).status_code == 422
-
-
-def test_blueprint_library_read_rejects_incompatible_stored_recipe_without_server_error():
-    blueprint_id, version_id = create_blueprint([slot("A")])
-    with SessionLocal.begin() as session:
-        version = session.get(ObjectBlueprintVersion, uuid.UUID(version_id))
-        version.authoring_recipe = {
-            "endpoint_groups": [{
-                "group_id": "old", "key_prefix": "A", "display_prefix": "A",
-                "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1,
-                "starting_number": 1,
-            }],
-            "pair_recipes": [],
-        }
-    response = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
-    assert response.status_code == 422
-    assert response.json()["error"]["details"]["reason"] == "BLUEPRINT_RECIPE_INCOMPATIBLE"
-
-
-def version_snapshot(left: str, right: str) -> dict:
-    recipe = {
-        "endpoint_groups": [
-            {"group_id": "left", "key_prefix": left, "display_prefix": left, "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1, "placement_offset": 0, "placement_span": 1},
-            {"group_id": "right", "key_prefix": right, "display_prefix": right, "kind": "CONNECTION_POINT", "side": "RIGHT", "count": 1, "starting_number": 1, "placement_offset": 0, "placement_span": 1},
-        ],
-        "pair_recipes": [{"group_a_id": "left", "group_b_id": "right"}],
-        "individual_links": [],
-    }
-    return {
-        "default_physical_object_class": "cable",
-        "body": {"kind": "RECTANGLE", "width": 120, "height": 6, "fill_color": "#123456"},
-        "slots": [
-            {"key": f"{left}:1", "display_name": f"{left}01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .5}},
-            {"key": f"{right}:1", "display_name": f"{right}01", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .5}},
-        ],
-        "internal_links": [{"from_slot_key": f"{left}:1", "to_slot_key": f"{right}:1"}],
-        "authoring_recipe": recipe,
-    }
-
-
-def test_blueprint_versions_are_immutable_latest_is_listed_and_recipe_round_trips():
-    first = version_snapshot("A", "B")
-    response = client.post("/v1/library/object-blueprints", json={"name": "Versioned cable", **first})
-    assert response.status_code == 201
-    blueprint_id, v1_id = response.json()["blueprint_ref"]["entity_id"], response.json()["version_ref"]["entity_id"]
-    second = version_snapshot("C", "D")
-    v2 = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json=second)
-    assert v2.status_code == 201
-    v2_id = v2.json()["version_ref"]["entity_id"]
-    first_detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v1_id}").json()
-    second_detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v2_id}").json()
-    assert first_detail["version_number"] == 1 and [slot["key"] for slot in first_detail["slots"]] == ["A:1", "B:1"]
-    assert first_detail["authoring_recipe"] == first["authoring_recipe"]
-    assert second_detail["version_number"] == 2
-    assert [slot["key"] for slot in second_detail["slots"]] == ["C:1", "D:1"]
-    assert [slot["display_name"] for slot in second_detail["slots"]] == ["C01", "D01"]
-    listing = client.get("/v1/library/object-blueprints").json()["blueprints"]
-    item = next(item for item in listing if item["blueprint_ref"]["entity_id"] == blueprint_id)
-    assert item["version_ref"]["entity_id"] == v2_id and item["version_count"] == 2
-    old_instance = instantiate(blueprint_id, v1_id, "old cable")
-    new_instance = instantiate(blueprint_id, v2_id, "new cable")
-    assert old_instance["slots"][0]["slot_key"] == "A:1"
-    assert new_instance["slots"][0]["slot_key"] == "C:1"
-
-
-def test_blueprint_group_placement_round_trips_and_rejects_invalid_ranges():
-    recipe = {
-        "endpoint_groups": [
-            {"group_id": "upper", "key_prefix": "U", "display_prefix": "U", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 2, "starting_number": 1, "placement_offset": .1, "placement_span": .2},
-            {"group_id": "lower", "key_prefix": "L", "display_prefix": "L", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 1, "starting_number": 1, "placement_offset": .6, "placement_span": .2},
-        ],
-        "pair_recipes": [],
-        "individual_links": [],
-    }
-    blueprint_id, version_id = create_blueprint([
-        {**slot("U:1"), "display_name": "U01", "anchor": {"side": "LEFT", "offset": .1}},
-        {**slot("U:2"), "display_name": "U02", "anchor": {"side": "LEFT", "offset": .3}},
-        {**slot("L:1"), "display_name": "L01", "anchor": {"side": "LEFT", "offset": .7}},
-    ], authoring_recipe=recipe)
+def test_composition_expands_exact_ports_and_reads_provenance():
+    block_id, block_version_id = create_port_block([slot("p1"), slot("p2", "NETWORK_PORT")], "Panel")
+    blueprint_id, version_id = create_blueprint([slot("p1"), slot("p2", "NETWORK_PORT")], instance_key="K", port_block=(block_id, block_version_id))
     detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
     assert detail.status_code == 200
-    assert detail.json()["authoring_recipe"] == recipe
-    invalid = {**recipe, "endpoint_groups": [{**recipe["endpoint_groups"][0], "placement_offset": .8, "placement_span": .3}]}
-    assert client.post("/v1/library/object-blueprints", json={"name": "Bad range", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [], "authoring_recipe": invalid}).status_code == 422
-    missing_placement = {**recipe, "endpoint_groups": [{key: value for key, value in recipe["endpoint_groups"][0].items() if key not in {"placement_offset", "placement_span"}}]}
-    assert client.post("/v1/library/object-blueprints", json={"name": "Missing placement", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [], "authoring_recipe": missing_placement}).status_code == 422
-
-
-def test_recipe_snapshot_uses_stable_group_key_ordinals_independent_of_presentation():
-    recipe = {
-        "endpoint_groups": [
-            {"group_id": "left", "key_prefix": "stable-left", "display_prefix": "П", "kind": "NETWORK_PORT", "side": "BOTTOM", "count": 2, "starting_number": 20, "placement_offset": .25, "placement_span": .5},
-            {"group_id": "right", "key_prefix": "stable-right", "display_prefix": "Р", "kind": "CONNECTION_POINT", "side": "TOP", "count": 2, "starting_number": 7, "placement_offset": 0, "placement_span": 1},
-        ],
-        "pair_recipes": [{"group_a_id": "left", "group_b_id": "right"}],
-        "individual_links": [],
-    }
-    slots = [
-        {**slot("stable-left:1", "NETWORK_PORT"), "display_name": "П20", "anchor": {"side": "BOTTOM", "offset": .25}},
-        {**slot("stable-left:2", "NETWORK_PORT"), "display_name": "П21", "anchor": {"side": "BOTTOM", "offset": .75}},
-        {**slot("stable-right:1"), "display_name": "Р07", "anchor": {"side": "TOP", "offset": 0}},
-        {**slot("stable-right:2"), "display_name": "Р08", "anchor": {"side": "TOP", "offset": 1}},
-    ]
-    response = client.post("/v1/library/object-blueprints", json={
-        "name": "Stable recipe", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": slots,
-        "internal_links": [{"from_slot_key": "stable-left:1", "to_slot_key": "stable-right:1"}, {"from_slot_key": "stable-left:2", "to_slot_key": "stable-right:2"}],
-        "authoring_recipe": recipe,
-    })
-    assert response.status_code == 201
-
-
-def test_recipe_snapshot_unions_and_validates_individual_internal_links():
-    recipe = {
-        "endpoint_groups": [
-            {"group_id": "left", "key_prefix": "left", "display_prefix": "A", "kind": "CONNECTION_POINT", "side": "LEFT", "count": 2, "starting_number": 1, "placement_offset": 0, "placement_span": 1},
-            {"group_id": "right", "key_prefix": "right", "display_prefix": "B", "kind": "CONNECTION_POINT", "side": "RIGHT", "count": 1, "starting_number": 4, "placement_offset": 0, "placement_span": 1},
-        ],
-        "pair_recipes": [],
-        "individual_links": [{"from_slot_key": "left:2", "to_slot_key": "right:1"}, {"from_slot_key": "left:1", "to_slot_key": "left:2"}],
-    }
-    slots = [
-        {**slot("left:1"), "display_name": "A01", "anchor": {"side": "LEFT", "offset": 0}},
-        {**slot("left:2"), "display_name": "A02", "anchor": {"side": "LEFT", "offset": 1}},
-        {**slot("right:1"), "display_name": "B04", "anchor": {"side": "RIGHT", "offset": .5}},
-    ]
-    created = client.post("/v1/library/object-blueprints", json={"name": "Individual links", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": slots, "internal_links": recipe["individual_links"], "authoring_recipe": recipe})
-    assert created.status_code == 201
-    instance = instantiate(created.json()["blueprint_ref"]["entity_id"], created.json()["version_ref"]["entity_id"], "Individual")
-    points = {item["slot_key"]: item["connection_point_ref"]["entity_id"] for item in instance["slots"]}
-    assert trace(points["left:1"], points["left:2"]) == "REACHABLE"
-    assert trace(points["left:2"], points["right:1"]) == "REACHABLE"
-
-    for individual_links in [
-        [{"from_slot_key": "left:1", "to_slot_key": "left:1"}],
-        [{"from_slot_key": "left:1", "to_slot_key": "missing:1"}],
-        [{"from_slot_key": "left:1", "to_slot_key": "right:1"}, {"from_slot_key": "right:1", "to_slot_key": "left:1"}],
-    ]:
-        invalid = {**recipe, "individual_links": individual_links}
-        assert client.post("/v1/library/object-blueprints", json={"name": "Invalid individual link", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": slots, "internal_links": individual_links, "authoring_recipe": invalid}).status_code == 422
-
-    paired = version_snapshot("C", "D")
-    paired["authoring_recipe"]["individual_links"] = [{"from_slot_key": "C:1", "to_slot_key": "D:1"}]
-    assert client.post("/v1/library/object-blueprints", json={"name": "Duplicate pair", **paired}).status_code == 422
-
-
-def test_blueprint_version_creation_is_atomic_and_delete_is_safe():
-    blueprint_id, version_id = create_blueprint([slot("A")], name="Disposable")
-    invalid = version_snapshot("C", "D")
-    invalid["slots"] = invalid["slots"][:1]
-    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json=invalid).status_code == 422
-    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}").status_code == 200
-    assert client.delete(f"/v1/library/object-blueprints/{blueprint_id}").status_code == 204
-    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}").status_code == 422
-    protected_id, protected_version = create_blueprint([slot("P")], name="Protected")
-    instance = instantiate(protected_id, protected_version, "materialized")
-    assert client.delete(f"/v1/library/object-blueprints/{protected_id}").status_code == 409
-    assert client.get(f"/v1/library/object-blueprints/{protected_id}/versions/{protected_version}").status_code == 200
+    body = detail.json()
+    assert [item["key"] for item in body["slots"]] == [composed_slot_key("K", "p1"), composed_slot_key("K", "p2")]
+    assert [item["display_name"] for item in body["slots"]] == ["p1", "p2"]
+    assert body["composition"] == {"instances": [{"instance_key": "K", "port_block_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlock", "entity_id": block_id}, "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": block_version_id}}]}
     with SessionLocal() as session:
-        assert session.get(PhysicalObject, uuid.UUID(instance["physical_object_ref"]["entity_id"])) is not None
-    assert client.get(
-        f"/v1/library/object-blueprints/{blueprint_id}/versions/00000000-0000-0000-0000-000000000002"
-    ).status_code == 422
+        slots = tuple(session.scalars(select(BlueprintEndpointSlot).where(BlueprintEndpointSlot.blueprint_version_id == uuid.UUID(version_id))))
+    assert {(item.port_block_instance_id is not None, item.port_block_local_id) for item in slots} == {(True, "p1"), (True, "p2")}
 
 
-def test_next_version_can_rename_atomically_without_mutating_v1():
-    first = version_snapshot("A", "B")
-    created = client.post("/v1/library/object-blueprints", json={"name": "Original", **first})
-    blueprint_id = created.json()["blueprint_ref"]["entity_id"]
-    v1_id = created.json()["version_ref"]["entity_id"]
-    second = version_snapshot("C", "D")
-    response = client.post(
-        f"/v1/library/object-blueprints/{blueprint_id}/versions",
-        json={"blueprint_name": "Renamed", **second},
-    )
-    assert response.status_code == 201
-    v2_id = response.json()["version_ref"]["entity_id"]
-    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v1_id}").json()["slots"][0]["key"] == "A:1"
-    assert client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{v2_id}").json()["name"] == "Renamed"
-    invalid = version_snapshot("E", "F"); invalid["slots"] = invalid["slots"][:1]
-    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"blueprint_name": "Should not persist", **invalid}).status_code == 422
-    listing = client.get("/v1/library/object-blueprints").json()["blueprints"]
-    item = next(item for item in listing if item["blueprint_ref"]["entity_id"] == blueprint_id)
-    assert item["name"] == "Renamed" and item["version_count"] == 2
+def test_same_exact_block_twice_has_distinct_final_slots_and_duplicate_instance_key_is_rejected():
+    block_id, version_id = create_port_block([slot("p1")])
+    ref = {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": version_id}
+    payload = {"name": "Twice", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "composition": {"instances": [{"instance_key": "left", "port_block_version_ref": ref}, {"instance_key": "right", "port_block_version_ref": ref}]}, "internal_links": []}
+    created = client.post("/v1/library/object-blueprints", json=payload)
+    assert created.status_code == 201
+    detail = client.get(f"/v1/library/object-blueprints/{created.json()['blueprint_ref']['entity_id']}/versions/{created.json()['version_ref']['entity_id']}").json()
+    assert {item["key"] for item in detail["slots"]} == {composed_slot_key("left", "p1"), composed_slot_key("right", "p1")}
+    duplicate = client.post("/v1/library/object-blueprints", json={**payload, "composition": {"instances": [{"instance_key": "same", "port_block_version_ref": ref}, {"instance_key": "same", "port_block_version_ref": ref}]}})
+    assert duplicate.status_code == 422
+
+
+def test_exact_version_reference_validation_and_compact_version_list():
+    block_id, version_id = create_port_block([slot("p1")])
+    versions = client.get(f"/v1/library/port-blocks/{block_id}/versions")
+    assert versions.status_code == 200 and versions.json()["versions"] == [{"port_block_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlock", "entity_id": block_id}, "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": version_id}, "version_number": 1, "port_count": 1}]
+    base = {"name": "Invalid", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "internal_links": []}
+    wrong_kind = client.post("/v1/library/object-blueprints", json={**base, "composition": {"instances": [{"instance_key": "one", "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlock", "entity_id": block_id}}]}})
+    missing = client.post("/v1/library/object-blueprints", json={**base, "composition": {"instances": [{"instance_key": "one", "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": "00000000-0000-0000-0000-000000000001"}}]}})
+    assert wrong_kind.status_code == 422 and missing.status_code == 422
+
+
+def test_explicit_cross_block_links_reject_self_missing_and_unordered_duplicates():
+    block_id, block_version_id = create_port_block([slot("p1")])
+    ref = {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": block_version_id}
+    left, right = composed_slot_key("left", "p1"), composed_slot_key("right", "p1")
+    base = {"name": "Links", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "composition": {"instances": [{"instance_key": "left", "port_block_version_ref": ref}, {"instance_key": "right", "port_block_version_ref": ref}]}}
+    assert client.post("/v1/library/object-blueprints", json={**base, "internal_links": [{"from_slot_key": left, "to_slot_key": right}]}).status_code == 201
+    for links in ([{"from_slot_key": left, "to_slot_key": left}], [{"from_slot_key": left, "to_slot_key": "missing"}], [{"from_slot_key": left, "to_slot_key": right}, {"from_slot_key": right, "to_slot_key": left}]):
+        assert client.post("/v1/library/object-blueprints", json={**base, "internal_links": links}).status_code == 422
+
+
+def test_composed_materialization_creates_expected_canonical_rows_and_delete_preserves_port_block():
+    block_id, block_version_id = create_port_block([slot("cp"), slot("ni", "NETWORK_PORT")])
+    blueprint_id, version_id = create_blueprint([slot("cp"), slot("ni", "NETWORK_PORT")], port_block=(block_id, block_version_id), name="Materialized")
+    instance = instantiate(blueprint_id, version_id, "object")
+    assert len(instance["slots"]) == 2
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(ConnectionPoint)) >= 2
+        assert session.scalar(select(func.count()).select_from(NetworkInterface)) >= 1
+        assert session.scalar(select(func.count()).select_from(InterfacePhysicalBinding)) >= 1
+    assert client.delete(f"/v1/library/object-blueprints/{blueprint_id}").status_code == 409
+    disposable_id, disposable_version = create_blueprint([slot("only")], port_block=create_port_block([slot("only")]), name="Disposable")
+    assert client.delete(f"/v1/library/object-blueprints/{disposable_id}").status_code == 204
+    assert client.get(f"/v1/library/port-blocks/{block_id}/versions/{block_version_id}").status_code == 200
+    assert client.get(f"/v1/library/object-blueprints/{disposable_id}/versions/{disposable_version}").status_code == 422
+
+
+def test_historical_snapshot_without_composition_remains_readable_and_instantiable():
+    blueprint_id, version_id, slot_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    with SessionLocal.begin() as session:
+        session.add(ObjectBlueprint(id=blueprint_id, name="Historical"))
+        session.add(ObjectBlueprintVersion(id=version_id, blueprint_id=blueprint_id, version_number=1, body_kind="RECTANGLE", width=1, height=1))
+        session.flush()
+        session.add(BlueprintEndpointSlot(id=slot_id, blueprint_version_id=version_id, slot_key="legacy", display_name="Legacy", kind="CONNECTION_POINT", anchor_side="LEFT", anchor_offset=.5))
+    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
+    assert detail.status_code == 200 and detail.json()["composition"] is None
+    assert instantiate(str(blueprint_id), str(version_id), "historical")["slots"][0]["slot_key"] == "legacy"

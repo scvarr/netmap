@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.database import SessionLocal
 from app.main import app
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from tests.test_object_blueprints_e2e import create_blueprint, instantiate, slot
 
 
 client = TestClient(app)
@@ -331,18 +332,15 @@ def test_scoped_projection_includes_only_a_simple_cable_between_two_selected_end
 
 
 def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
-    slots = [
-        {"key": "front01", "display_name": "Front01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .25}},
-        {"key": "rear01", "display_name": "Rear01", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .75}},
-    ]
-    created = client.post("/v1/library/object-blueprints", json={"name": "Panel", "body": {"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"}, "slots": slots, "internal_links": [{"from_slot_key": "front01", "to_slot_key": "rear01"}]}).json()
-    instance = client.post(f"/v1/library/object-blueprints/{created['blueprint_ref']['entity_id']}/versions/{created['version_ref']['entity_id']}/instantiate", json={"display_name": "PP1"}).json()
-    assert client.post(f"/v1/library/object-blueprints/{created['blueprint_ref']['entity_id']}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "slots": slots, "internal_links": [{"from_slot_key": "front01", "to_slot_key": "rear01"}]}).status_code == 201
+    blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01")], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Panel", body={"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"})
+    instance = instantiate(blueprint_id, version_id, "PP1")
+    exact_ref = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}").json()["composition"]["instances"][0]["port_block_version_ref"]
+    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "composition": {"instances": [{"instance_key": "instance", "port_block_version_ref": exact_ref}]}, "internal_links": []}).status_code == 201
     node = node_by_object(client.post("/v1/topology/projection", json=projection_query()).json(), instance["physical_object_ref"]["entity_id"])
     presentation = node["attributes"]["blueprint_presentation"]
-    assert presentation["version_ref"]["entity_id"] == created["version_ref"]["entity_id"]
+    assert presentation["version_ref"]["entity_id"] == version_id
     assert presentation["body"] == {"kind": "RECTANGLE", "width": 480.0, "height": 70.0, "fill_color": "#123456"}
-    assert [(slot["slot_key"], slot["anchor"]["side"], slot["anchor"]["offset"]) for slot in presentation["slots"]] == [("front01", "LEFT", .25), ("rear01", "RIGHT", .75)]
+    assert [(slot["anchor"]["side"], slot["anchor"]["offset"]) for slot in presentation["slots"]] == [("RIGHT", .25), ("RIGHT", .75)]
     assert {slot["connection_point_id"] for slot in presentation["slots"]} == {slot["connection_point_ref"]["entity_id"] for slot in instance["slots"]}
     assert all(ref["ref_type"] == "CANONICAL_FACT" for ref in node["source_refs"])
     internal = node["attributes"]["internal_l1_links"]
@@ -356,12 +354,8 @@ def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
 
 
 def test_switch_blueprint_exposes_network_port_mapping_without_self_edge():
-    slots = [
-        {"key": "eth01", "display_name": "eth01", "kind": "NETWORK_PORT", "anchor": {"side": "BOTTOM", "offset": .25}},
-        {"key": "eth02", "display_name": "eth02", "kind": "NETWORK_PORT", "anchor": {"side": "BOTTOM", "offset": .75}},
-    ]
-    created = client.post("/v1/library/object-blueprints", json={"name": "Switch", "body": {"kind": "RECTANGLE", "width": 400, "height": 100}, "slots": slots, "internal_links": []}).json()
-    instance = client.post(f"/v1/library/object-blueprints/{created['blueprint_ref']['entity_id']}/versions/{created['version_ref']['entity_id']}/instantiate", json={"display_name": "SW1"}).json()
+    blueprint_id, version_id = create_blueprint([slot("eth01", "NETWORK_PORT"), slot("eth02", "NETWORK_PORT")], name="Switch", body={"kind": "RECTANGLE", "width": 400, "height": 100})
+    instance = instantiate(blueprint_id, version_id, "SW1")
     document = client.post("/v1/topology/projection", json=projection_query()).json()
     node = node_by_object(document, instance["physical_object_ref"]["entity_id"])
     mapped = node["attributes"]["blueprint_presentation"]["slots"]

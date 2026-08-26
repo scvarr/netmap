@@ -10,6 +10,7 @@ from app.models import (
     ConnectionMember,
     ConnectionPoint,
     BlueprintEndpointSlot,
+    BlueprintPortBlockInstance,
     BlueprintInstance,
     BlueprintInstanceSlot,
     BlueprintInternalLink,
@@ -98,6 +99,7 @@ def clean_database():
         session.execute(delete(BlueprintInstance))
         session.execute(delete(BlueprintInternalLink))
         session.execute(delete(BlueprintEndpointSlot))
+        session.execute(delete(BlueprintPortBlockInstance))
         session.execute(delete(ObjectBlueprintVersion))
         session.execute(delete(ObjectBlueprint))
         session.execute(delete(PortBlockPort))

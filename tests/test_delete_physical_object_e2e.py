@@ -12,6 +12,7 @@ from app.models import (
     PhysicalObject, RoutingContext,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from tests.test_object_blueprints_e2e import create_blueprint, instantiate, slot
 
 
 client = TestClient(app)
@@ -45,14 +46,8 @@ def test_deletes_standalone_manual_object_and_owned_point():
 
 
 def test_deletes_blueprint_instance_slots_provenance_and_internal_connections():
-    blueprint = client.post('/v1/library/object-blueprints', json={
-        'name': 'Patch', 'body': {'kind': 'RECTANGLE', 'width': 100, 'height': 40},
-        'slots': [
-            {'key': 'front', 'display_name': 'front', 'kind': 'CONNECTION_POINT', 'anchor': {'side': 'LEFT', 'offset': .5}},
-            {'key': 'rear', 'display_name': 'rear', 'kind': 'CONNECTION_POINT', 'anchor': {'side': 'RIGHT', 'offset': .5}},
-        ], 'internal_links': [{'from_slot_key': 'front', 'to_slot_key': 'rear'}],
-    }).json()
-    instance = client.post(f"/v1/library/object-blueprints/{blueprint['blueprint_ref']['entity_id']}/versions/{blueprint['version_ref']['entity_id']}/instantiate", json={'display_name': 'PP1'}).json()
+    blueprint_id, version_id = create_blueprint([slot('front'), slot('rear')], [{'from_slot_key': 'front', 'to_slot_key': 'rear'}], name='Patch')
+    instance = instantiate(blueprint_id, version_id, 'PP1')
     response = client.delete(f"/v1/topology/physical-objects/{instance['physical_object_ref']['entity_id']}")
     assert response.status_code == 204
     with SessionLocal() as session:
@@ -188,19 +183,12 @@ def test_deletes_simple_legacy_cable_but_preserves_neighbors():
 
 
 def test_deletes_simple_blueprint_backed_cable_and_its_provenance():
-    blueprint = client.post('/v1/library/object-blueprints', json={
-        'name': 'Cable', 'default_physical_object_class': 'cable',
-        'body': {'kind': 'RECTANGLE', 'width': 100, 'height': 4},
-        'slots': [
-            {'key': 'a', 'display_name': 'a', 'kind': 'CONNECTION_POINT', 'anchor': {'side': 'LEFT', 'offset': .5}},
-            {'key': 'b', 'display_name': 'b', 'kind': 'CONNECTION_POINT', 'anchor': {'side': 'RIGHT', 'offset': .5}},
-        ], 'internal_links': [{'from_slot_key': 'a', 'to_slot_key': 'b'}],
-    }).json()
+    blueprint_id, version_id = create_blueprint([slot('a'), slot('b')], [{'from_slot_key': 'a', 'to_slot_key': 'b'}], name='Cable', default_physical_object_class='cable', body={'kind': 'RECTANGLE', 'width': 100, 'height': 4})
     source, target = manual_object('source'), manual_object('target')
     response = client.post('/v1/topology/physical-connections', json={
         'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_points'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
         'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': target['connection_points'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
-        'cable_blueprint': {'blueprint_id': blueprint['blueprint_ref']['entity_id'], 'version_id': blueprint['version_ref']['entity_id']},
+        'cable_blueprint': {'blueprint_id': blueprint_id, 'version_id': version_id},
         'cable_display_name': 'bp-cable',
     })
     assert response.status_code == 201

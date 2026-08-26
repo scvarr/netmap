@@ -17,6 +17,7 @@ from app.models import (
 )
 from app.repository import CanonicalRepository
 from app.repository import ConnectionMemberInput
+from tests.test_object_blueprints_e2e import create_blueprint, instantiate, slot
 
 
 client = TestClient(app)
@@ -93,36 +94,25 @@ def physical_projection() -> dict:
 def test_blueprint_patch_panel_internal_pair_allows_one_external_attachment_per_side():
     pc_id, pc_interface_id = create_device("PC1", "eth0")
     switch_id, switch_interface_id = create_device("SW1", "eth1")
-    blueprint = client.post("/v1/library/object-blueprints", json={
-        "name": "Patch panel",
-        "body": {"kind": "RECTANGLE", "width": 300, "height": 80},
-        "slots": [
-            {"key": "front01", "display_name": "Front01", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .5}},
-            {"key": "rear01", "display_name": "Rear01", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .5}},
-        ],
-        "internal_links": [{"from_slot_key": "front01", "to_slot_key": "rear01"}],
-    }).json()
-    panel = client.post(
-        f"/v1/library/object-blueprints/{blueprint['blueprint_ref']['entity_id']}/versions/{blueprint['version_ref']['entity_id']}/instantiate",
-        json={"display_name": "PP1"},
-    ).json()
+    blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01")], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Patch panel", body={"kind": "RECTANGLE", "width": 300, "height": 80})
+    panel = instantiate(blueprint_id, version_id, "PP1")
     panel_id = panel["physical_object_ref"]["entity_id"]
-    panel_points = {item["slot_key"]: item["connection_point_ref"]["entity_id"] for item in panel["slots"]}
+    front_point, rear_point = [item["connection_point_ref"]["entity_id"] for item in panel["slots"]]
 
     responses = (
         connect(
             interface_endpoint(pc_interface_id),
-            point_endpoint(panel_points["front01"]),
+            point_endpoint(front_point),
             "cable-1",
         ),
         connect(
-            point_endpoint(panel_points["rear01"]),
+            point_endpoint(rear_point),
             interface_endpoint(switch_interface_id),
             "cable-2",
         ),
         connect(
-            point_endpoint(panel_points["front01"]),
-            point_endpoint(panel_points["rear01"]),
+            point_endpoint(front_point),
+            point_endpoint(rear_point),
             "cable-3",
         ),
     )
@@ -149,8 +139,8 @@ def test_blueprint_patch_panel_internal_pair_allows_one_external_attachment_per_
     assert details_by_label["Rear01"]["external_connection_count"] == 1
 
     trace = client.post("/v1/traces/l1", json={
-        "from": {"point_id": panel_points["front01"], "member_index": 1},
-        "to": {"point_id": panel_points["rear01"], "member_index": 1},
+        "from": {"point_id": front_point, "member_index": 1},
+        "to": {"point_id": rear_point, "member_index": 1},
     })
     assert trace.status_code == 200 and trace.json()["verdict"] == "REACHABLE"
 
@@ -217,16 +207,16 @@ def test_manual_two_sided_outlet_keeps_internal_topology_separate_from_external_
 
 
 def test_endpoint_connection_materializes_exact_simple_cable_blueprint():
-    blueprint = client.post("/v1/library/object-blueprints", json={"name": "Thin cable", "body": {"kind": "RECTANGLE", "width": 120, "height": 6, "fill_color": "#123456"}, "slots": [{"key": "A", "display_name": "A", "kind": "CONNECTION_POINT", "anchor": {"side": "LEFT", "offset": .5}}, {"key": "B", "display_name": "B", "kind": "CONNECTION_POINT", "anchor": {"side": "RIGHT", "offset": .5}}], "internal_links": [{"from_slot_key": "A", "to_slot_key": "B"}]}).json()
+    blueprint_id, version_id = create_blueprint([slot("A"), slot("B")], [{"from_slot_key": "A", "to_slot_key": "B"}], name="Thin cable", body={"kind": "RECTANGLE", "width": 120, "height": 6, "fill_color": "#123456"})
     source_id, source_point = create_physical_object("Source", "S")
     target_id, target_point = create_physical_object("Target", "T")
-    response = client.post("/v1/topology/physical-connections", json={"source": point_endpoint(source_point), "target": point_endpoint(target_point), "cable_display_name": "cable-01", "cable_blueprint": {"blueprint_id": blueprint["blueprint_ref"]["entity_id"], "version_id": blueprint["version_ref"]["entity_id"]}})
+    response = client.post("/v1/topology/physical-connections", json={"source": point_endpoint(source_point), "target": point_endpoint(target_point), "cable_display_name": "cable-01", "cable_blueprint": {"blueprint_id": blueprint_id, "version_id": version_id}})
     assert response.status_code == 201, response.text
     created = response.json()
     assert len(created["connection_refs"]) == 3
     projection = physical_projection()
     cable = next(node for node in projection["nodes"] if any(ref["entity_id"] == created["cable_ref"]["entity_id"] for ref in node["source_refs"]))
-    assert cable["attributes"]["blueprint_presentation"]["version_ref"]["entity_id"] == blueprint["version_ref"]["entity_id"]
+    assert cable["attributes"]["blueprint_presentation"]["version_ref"]["entity_id"] == version_id
     trace = client.post("/v1/traces/l1", json={"from": {"point_id": source_point, "member_index": 1}, "to": {"point_id": target_point, "member_index": 1}})
     assert trace.status_code == 200 and trace.json()["verdict"] == "REACHABLE"
 
