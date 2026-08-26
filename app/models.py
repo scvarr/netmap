@@ -351,6 +351,19 @@ class ObjectBlueprintVersion(Base):
     authoring_recipe: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
 
+class BlueprintPortBlockInstance(Base):
+    """Exact Port Block version provenance for one composed Blueprint instance."""
+    __tablename__ = "blueprint_port_block_instances"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(instance_key)) > 0", name="instance_key_not_blank"),
+        UniqueConstraint("blueprint_version_id", "instance_key", name="uq_blueprint_block_instance_key"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False)
+    port_block_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("port_block_versions.id", ondelete="RESTRICT"), nullable=False)
+    instance_key: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
 class BlueprintEndpointSlot(Base):
     __tablename__ = "blueprint_endpoint_slots"
     __table_args__ = (
@@ -360,6 +373,7 @@ class BlueprintEndpointSlot(Base):
         CheckConstraint("anchor_side IN ('LEFT', 'RIGHT', 'TOP', 'BOTTOM')", name="anchor_side_supported"),
         CheckConstraint("anchor_offset >= 0 AND anchor_offset <= 1", name="anchor_offset_range"),
         UniqueConstraint("blueprint_version_id", "slot_key", name="uq_blueprint_endpoint_slots_key"),
+        UniqueConstraint("port_block_instance_id", "port_block_local_id", name="uq_blueprint_slot_block_local_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -371,6 +385,8 @@ class BlueprintEndpointSlot(Base):
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     anchor_side: Mapped[str] = mapped_column(String(16), nullable=False)
     anchor_offset: Mapped[float] = mapped_column(Float, nullable=False)
+    port_block_instance_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("blueprint_port_block_instances.id", ondelete="RESTRICT"), nullable=True)
+    port_block_local_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class BlueprintInternalLink(Base):

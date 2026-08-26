@@ -520,69 +520,21 @@ class BlueprintInternalLinkRequest(BaseModel):
     to_slot_key: str = Field(min_length=1, max_length=255)
 
 
-class BlueprintAuthoringEndpointGroup(BaseModel):
+class BlueprintCompositionInstanceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    group_id: str = Field(min_length=1, max_length=255)
-    key_prefix: str = Field(min_length=1, max_length=255)
-    display_prefix: str = Field(min_length=1, max_length=255)
-    kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
-    side: Literal["LEFT", "RIGHT", "TOP", "BOTTOM"]
-    count: int = Field(ge=1)
-    starting_number: int = Field(ge=0)
-    placement_offset: FiniteFloat = Field(ge=0, le=1)
-    placement_span: FiniteFloat = Field(gt=0, le=1)
-
-    @model_validator(mode="after")
-    def validate_placement_range(self) -> "BlueprintAuthoringEndpointGroup":
-        if self.placement_offset + self.placement_span > 1:
-            raise PydanticCustomError(
-                "blueprint_invalid_group_placement",
-                "Blueprint endpoint-group placement must remain within the normalized side range",
-            )
-        return self
+    instance_key: str = Field(min_length=1, max_length=255)
+    port_block_version_ref: PortBlockLibraryRef
 
 
-class BlueprintAuthoringPairRecipe(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    group_a_id: str = Field(min_length=1, max_length=255)
-    group_b_id: str = Field(min_length=1, max_length=255)
-
-
-class BlueprintAuthoringIndividualLink(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    from_slot_key: str = Field(min_length=1, max_length=255)
-    to_slot_key: str = Field(min_length=1, max_length=255)
-
-
-class BlueprintAuthoringRecipe(BaseModel):
+class BlueprintCompositionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
-    endpoint_groups: list[BlueprintAuthoringEndpointGroup]
-    pair_recipes: list[BlueprintAuthoringPairRecipe] = Field(default_factory=list)
-    individual_links: list[BlueprintAuthoringIndividualLink] = Field(default_factory=list)
+    instances: list[BlueprintCompositionInstanceRequest] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_groups(self) -> "BlueprintAuthoringRecipe":
-        group_ids = [group.group_id for group in self.endpoint_groups]
-        if len(group_ids) != len(set(group_ids)):
-            raise PydanticCustomError("blueprint_duplicate_group_id", "Blueprint authoring group ids must be unique")
-        stable_keys = [group.key_prefix for group in self.endpoint_groups]
-        if len(stable_keys) != len(set(stable_keys)):
-            raise PydanticCustomError("blueprint_duplicate_group_key", "Blueprint authoring group stable keys must be unique")
-        known = set(group_ids)
-        pairs: set[tuple[str, str]] = set()
-        for pair in self.pair_recipes:
-            if pair.group_a_id not in known or pair.group_b_id not in known:
-                raise PydanticCustomError("blueprint_unknown_pair_group", "Blueprint pair refers to an unknown group")
-            if pair.group_a_id == pair.group_b_id:
-                raise PydanticCustomError("blueprint_self_pair", "Blueprint pair cannot refer to the same group")
-            key = tuple(sorted((pair.group_a_id, pair.group_b_id)))
-            if key in pairs:
-                raise PydanticCustomError("blueprint_duplicate_pair", "Blueprint authoring pairs must be unique")
-            pairs.add(key)
+    def validate_instance_keys(self) -> "BlueprintCompositionRequest":
+        keys = [item.instance_key for item in self.instances]
+        if len(keys) != len(set(keys)):
+            raise PydanticCustomError("blueprint_duplicate_block_instance_key", "Blueprint Port Block instance keys must be unique")
         return self
 
 
@@ -592,38 +544,9 @@ class CreateObjectBlueprintRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
     body: BlueprintBody
-    slots: list[BlueprintEndpointSlotRequest]
+    composition: BlueprintCompositionRequest
     internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
-    authoring_recipe: BlueprintAuthoringRecipe | None = None
 
-    @model_validator(mode="after")
-    def validate_slots_and_links(self) -> "CreateObjectBlueprintRequest":
-        keys = [slot.key for slot in self.slots]
-        if len(keys) != len(set(keys)):
-            raise PydanticCustomError(
-                "blueprint_duplicate_slot_key", "Blueprint slot keys must be unique"
-            )
-        known = set(keys)
-        pairs: set[tuple[str, str]] = set()
-        for link in self.internal_links:
-            if link.from_slot_key not in known or link.to_slot_key not in known:
-                raise PydanticCustomError(
-                    "blueprint_unknown_internal_link_slot",
-                    "Blueprint internal link refers to an unknown slot key",
-                )
-            if link.from_slot_key == link.to_slot_key:
-                raise PydanticCustomError(
-                    "blueprint_self_internal_link",
-                    "Blueprint internal link cannot refer to the same slot",
-                )
-            pair = tuple(sorted((link.from_slot_key, link.to_slot_key)))
-            if pair in pairs:
-                raise PydanticCustomError(
-                    "blueprint_duplicate_internal_link",
-                    "Blueprint internal links must be unique as unordered pairs",
-                )
-            pairs.add(pair)
-        return self
 
 
 class CreateObjectBlueprintVersionRequest(BaseModel):
@@ -632,26 +555,9 @@ class CreateObjectBlueprintVersionRequest(BaseModel):
     default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
     blueprint_name: str | None = Field(default=None, min_length=1, max_length=255)
     body: BlueprintBody
-    slots: list[BlueprintEndpointSlotRequest]
+    composition: BlueprintCompositionRequest
     internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
-    authoring_recipe: BlueprintAuthoringRecipe | None = None
 
-    @model_validator(mode="after")
-    def validate_slots_and_links(self) -> "CreateObjectBlueprintVersionRequest":
-        keys = [slot.key for slot in self.slots]
-        if len(keys) != len(set(keys)):
-            raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
-        known = set(keys); pairs: set[tuple[str, str]] = set()
-        for link in self.internal_links:
-            if link.from_slot_key not in known or link.to_slot_key not in known:
-                raise PydanticCustomError("blueprint_unknown_internal_link_slot", "Blueprint internal link refers to an unknown slot key")
-            if link.from_slot_key == link.to_slot_key:
-                raise PydanticCustomError("blueprint_self_internal_link", "Blueprint internal link cannot refer to the same slot")
-            pair = tuple(sorted((link.from_slot_key, link.to_slot_key)))
-            if pair in pairs:
-                raise PydanticCustomError("blueprint_duplicate_internal_link", "Blueprint internal links must be unique as unordered pairs")
-            pairs.add(pair)
-        return self
 
 
 class InstantiateObjectBlueprintRequest(BaseModel):
@@ -819,6 +725,17 @@ class ObjectBlueprintInternalLinkDocument(BaseModel):
     to_slot_key: str = Field(min_length=1)
 
 
+class BlueprintCompositionInstanceDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    instance_key: str = Field(min_length=1)
+    port_block_version_ref: PortBlockLibraryRef
+
+
+class BlueprintCompositionDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    instances: list[BlueprintCompositionInstanceDocument]
+
+
 class ObjectBlueprintVersionDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -831,7 +748,7 @@ class ObjectBlueprintVersionDocument(BaseModel):
     body: ObjectBlueprintBodyDocument
     slots: list[ObjectBlueprintSlotDocument]
     internal_links: list[ObjectBlueprintInternalLinkDocument]
-    authoring_recipe: BlueprintAuthoringRecipe | None = None
+    composition: BlueprintCompositionDocument | None = None
 
 
 class BlueprintUpgradeChange(BaseModel):

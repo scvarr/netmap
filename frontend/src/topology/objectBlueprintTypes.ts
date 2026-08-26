@@ -26,31 +26,15 @@ export interface BlueprintInternalLink {
   to_slot_key: string;
 }
 
-export interface BlueprintAuthoringEndpointGroup {
-  group_id: string;
-  key_prefix: string;
-  display_prefix: string;
-  kind: BlueprintSlotKind;
-  side: BlueprintAnchorSide;
-  count: number;
-  starting_number: number;
-  placement_offset: number;
-  placement_span: number;
-}
-
-export interface BlueprintAuthoringRecipe {
-  endpoint_groups: BlueprintAuthoringEndpointGroup[];
-  pair_recipes: { group_a_id: string; group_b_id: string }[];
-  individual_links: BlueprintInternalLink[];
-}
+export interface PortBlockVersionLibraryRef { ref_type: 'LIBRARY_RECORD'; entity_type: 'PortBlockVersion'; entity_id: string; }
+export interface BlueprintComposition { instances: Array<{ instance_key: string; port_block_version_ref: PortBlockVersionLibraryRef }>; }
 
 export interface CreateObjectBlueprintRequest {
   name: string;
   default_physical_object_class?: string;
   body: BlueprintBody;
-  slots: BlueprintSlot[];
+  composition: BlueprintComposition;
   internal_links: BlueprintInternalLink[];
-  authoring_recipe?: BlueprintAuthoringRecipe;
 }
 
 export interface CreateObjectBlueprintVersionRequest extends Omit<CreateObjectBlueprintRequest, 'name'> {
@@ -84,7 +68,7 @@ export interface ObjectBlueprintVersionDocument {
   body: BlueprintBody;
   slots: BlueprintSlot[];
   internal_links: BlueprintInternalLink[];
-  authoring_recipe?: BlueprintAuthoringRecipe | null;
+  composition?: BlueprintComposition | null;
 }
 
 export interface ObjectBlueprintCreationDocument {

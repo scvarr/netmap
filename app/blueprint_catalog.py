@@ -1,7 +1,6 @@
 import uuid
 from dataclasses import dataclass
 
-from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -12,13 +11,15 @@ from app.models import (
     BlueprintInstance,
     BlueprintInstanceSlot,
     BlueprintInternalLink,
+    BlueprintPortBlockInstance,
     ConnectionPoint,
     EntityMetadata,
     ObjectBlueprint,
     ObjectBlueprintVersion,
+    PortBlockPort,
+    PortBlockVersion,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from app.schemas import BlueprintAuthoringRecipe
 
 
 @dataclass(frozen=True)
@@ -72,7 +73,7 @@ class BlueprintVersionDetail:
     fill_color: str | None
     slots: tuple[BlueprintEndpointSlot, ...]
     internal_links: tuple[tuple[str, str], ...]
-    authoring_recipe: dict | None
+    composition: tuple[BlueprintPortBlockInstance, ...] | None
 
 
 class ObjectBlueprintCatalog:
@@ -105,7 +106,6 @@ class ObjectBlueprintCatalog:
         return CreatedBlueprint(blueprint_id, version.id)
 
     def _create_version(self, blueprint_id: uuid.UUID, version_number: int, query: object) -> ObjectBlueprintVersion:
-        self._validate_recipe_snapshot(query)
         version = ObjectBlueprintVersion(
             blueprint_id=blueprint_id,
             version_number=version_number,
@@ -114,24 +114,56 @@ class ObjectBlueprintCatalog:
             width=query.body.width,
             height=query.body.height,
             fill_color=query.body.fill_color,
-            authoring_recipe=(query.authoring_recipe.model_dump(mode="json") if query.authoring_recipe else None),
+            authoring_recipe=None,
         )
         self.session.add(version)
         self.session.flush()
         slots_by_key: dict[str, BlueprintEndpointSlot] = {}
-        for slot_query in query.slots:
+        instances: list[BlueprintPortBlockInstance] = []
+        for item in query.composition.instances:
+            port_block_version_id = item.port_block_version_ref.entity_id
+            exact_version = self.session.get(PortBlockVersion, port_block_version_id)
+            if exact_version is None:
+                raise ValidationError("PortBlockVersion was not found", {"port_block_version_id": str(port_block_version_id)})
+            instance = BlueprintPortBlockInstance(
+                blueprint_version_id=version.id,
+                port_block_version_id=exact_version.id,
+                instance_key=item.instance_key,
+            )
+            self.session.add(instance)
+            instances.append(instance)
+        self.session.flush()
+        # Presentation-only fallback: deterministic right-edge distribution by request instance order
+        # and immutable PortBlock layout_order. It never participates in slot identity.
+        expanded: list[tuple[BlueprintPortBlockInstance, PortBlockPort]] = []
+        for instance in instances:
+            expanded.extend((instance, port) for port in self.session.scalars(
+                select(PortBlockPort).where(PortBlockPort.port_block_version_id == instance.port_block_version_id).order_by(PortBlockPort.layout_order)
+            ))
+        for index, (instance, port) in enumerate(expanded):
             slot = BlueprintEndpointSlot(
                 blueprint_version_id=version.id,
-                slot_key=slot_query.key,
-                display_name=slot_query.display_name,
-                kind=slot_query.kind,
-                anchor_side=slot_query.anchor.side,
-                anchor_offset=slot_query.anchor.offset,
+                slot_key=self.composed_slot_key(instance.instance_key, port.local_id),
+                display_name=port.display_label,
+                kind=port.kind,
+                anchor_side="RIGHT",
+                anchor_offset=(index + .5) / len(expanded) if expanded else .5,
+                port_block_instance_id=instance.id,
+                port_block_local_id=port.local_id,
             )
             self.session.add(slot)
-            self.session.flush()
             slots_by_key[slot.slot_key] = slot
+        self.session.flush()
+        link_pairs: set[tuple[str, str]] = set()
         for link_query in query.internal_links:
+            if link_query.from_slot_key not in slots_by_key or link_query.to_slot_key not in slots_by_key:
+                raise ValidationError("Blueprint internal link refers to an unknown slot key")
+            if link_query.from_slot_key == link_query.to_slot_key:
+                raise ValidationError("Blueprint internal link cannot refer to the same slot")
+            pair = tuple(sorted((link_query.from_slot_key, link_query.to_slot_key)))
+            if pair in link_pairs:
+                raise ValidationError("Blueprint internal links must be unique as unordered pairs")
+            link_pairs.add(pair)
             slot_a, slot_b = sorted(
                 (slots_by_key[link_query.from_slot_key], slots_by_key[link_query.to_slot_key]),
                 key=lambda slot: slot.slot_key,
@@ -143,6 +175,11 @@ class ObjectBlueprintCatalog:
             ))
         self.session.flush()
         return version
+
+    @staticmethod
+    def composed_slot_key(instance_key: str, local_id: str) -> str:
+        """Canonical composed key: only opaque stable instance key plus immutable local id."""
+        return f"{instance_key}:{local_id}"
 
     def list_blueprints(self) -> tuple[BlueprintListItem, ...]:
         blueprints = tuple(self.session.scalars(select(ObjectBlueprint).order_by(ObjectBlueprint.name, ObjectBlueprint.id)))
@@ -205,15 +242,9 @@ class ObjectBlueprintCatalog:
                 .order_by(BlueprintInternalLink.id)
             )
         )
-        authoring_recipe = version.authoring_recipe
-        if authoring_recipe is not None:
-            try:
-                BlueprintAuthoringRecipe.model_validate(authoring_recipe)
-            except PydanticValidationError as exc:
-                raise ValidationError(
-                    "Сохранённый рецепт шаблона несовместим с текущим редактором",
-                    {"reason": "BLUEPRINT_RECIPE_INCOMPATIBLE", "errors": exc.errors()},
-                ) from exc
+        composition = tuple(self.session.scalars(select(BlueprintPortBlockInstance).where(
+            BlueprintPortBlockInstance.blueprint_version_id == version.id
+        ).order_by(BlueprintPortBlockInstance.instance_key)))
         return BlueprintVersionDetail(
             blueprint_id=blueprint.id,
             name=blueprint.name,
@@ -226,7 +257,7 @@ class ObjectBlueprintCatalog:
             fill_color=version.fill_color,
             slots=slots,
             internal_links=links,
-            authoring_recipe=authoring_recipe,
+            composition=composition or None,
         )
 
     def delete_blueprint(self, blueprint_id: uuid.UUID) -> None:
@@ -255,61 +286,6 @@ class ObjectBlueprintCatalog:
         self.session.execute(delete(ObjectBlueprintVersion).where(ObjectBlueprintVersion.id.in_(version_ids)))
         self.session.delete(blueprint)
 
-    @staticmethod
-    def _validate_recipe_snapshot(query: object) -> None:
-        recipe = query.authoring_recipe
-        if recipe is None:
-            return
-        expected_slots: dict[str, tuple[str, str, str, float]] = {}
-        sides = ("LEFT", "RIGHT", "TOP", "BOTTOM")
-        for side in sides:
-            groups = [group for group in recipe.endpoint_groups if group.side == side]
-            for group in groups:
-                display_width = max(2, len(str(group.starting_number + group.count - 1)))
-                for index in range(group.count):
-                    display_suffix = str(group.starting_number + index).zfill(display_width)
-                    offset = group.placement_offset + group.placement_span * (
-                        .5 if group.count == 1 else index / (group.count - 1)
-                    )
-                    expected_slots[f"{group.key_prefix}:{index + 1}"] = (
-                        f"{group.display_prefix}{display_suffix}", group.kind, side, offset,
-                    )
-        actual_slots = {slot.key: (slot.display_name, slot.kind, slot.anchor.side, slot.anchor.offset) for slot in query.slots}
-        if set(expected_slots) != set(actual_slots) or any(
-            actual[:3] != expected[:3] or abs(actual[3] - expected[3]) > 1e-9
-            for key, expected in expected_slots.items() for actual in [actual_slots[key]]
-        ):
-            raise ValidationError("Authoring recipe does not match explicit blueprint slots")
-        groups_by_id = {group.group_id: group for group in recipe.endpoint_groups}
-        expected_links: set[tuple[str, str]] = set()
-        for pair in recipe.pair_recipes:
-            left, right = groups_by_id[pair.group_a_id], groups_by_id[pair.group_b_id]
-            if left.count != right.count:
-                raise ValidationError("Authoring pair groups must have equal counts")
-            for index in range(left.count):
-                link = tuple(sorted((
-                    f"{left.key_prefix}:{index + 1}",
-                    f"{right.key_prefix}:{index + 1}",
-                )))
-                if link in expected_links:
-                    raise ValidationError("Authoring recipe generates duplicate internal links")
-                expected_links.add(link)
-        individual_links: set[tuple[str, str]] = set()
-        for link in recipe.individual_links:
-            if link.from_slot_key == link.to_slot_key:
-                raise ValidationError("Authoring individual link cannot join a slot to itself")
-            if link.from_slot_key not in expected_slots or link.to_slot_key not in expected_slots:
-                raise ValidationError("Authoring individual link refers to an unknown slot")
-            unordered_link = tuple(sorted((link.from_slot_key, link.to_slot_key)))
-            if unordered_link in individual_links:
-                raise ValidationError("Authoring recipe has duplicate individual internal links")
-            if unordered_link in expected_links:
-                raise ValidationError("Authoring individual link duplicates a pair-generated link")
-            individual_links.add(unordered_link)
-            expected_links.add(unordered_link)
-        actual_links = {tuple(sorted((link.from_slot_key, link.to_slot_key))) for link in query.internal_links}
-        if actual_links != expected_links:
-            raise ValidationError("Authoring recipe does not match explicit blueprint internal links")
 
     def instantiate(
         self, blueprint_id: uuid.UUID, version_id: uuid.UUID, display_name: str,

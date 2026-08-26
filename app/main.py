@@ -680,7 +680,10 @@ def get_object_blueprint_version(
             {"from_slot_key": left, "to_slot_key": right}
             for left, right in version.internal_links
         ],
-        "authoring_recipe": version.authoring_recipe,
+        "composition": None if version.composition is None else {"instances": [
+            {"instance_key": item.instance_key, "port_block_version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.port_block_version_id}}
+            for item in version.composition
+        ]},
     }
 
 

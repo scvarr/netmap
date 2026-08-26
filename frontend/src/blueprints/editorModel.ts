@@ -1,121 +1,24 @@
-import type { BlueprintAnchorSide, BlueprintAuthoringRecipe, BlueprintInternalLink, BlueprintSlot, BlueprintSlotKind, CreateObjectBlueprintRequest, ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
+import type { BlueprintInternalLink, CreateObjectBlueprintRequest, ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
+import type { PortBlockVersionDocument } from '../topology/portBlockTypes';
 
-export interface EndpointGroup {
-  id: string;
-  keyPrefix: string;
-  displayPrefix: string;
-  kind: BlueprintSlotKind;
-  side: BlueprintAnchorSide;
-  count: number;
-  startingNumber: number;
-  placementOffset: number;
-  placementSpan: number;
-}
-
-export interface GroupPair { leftGroupId: string; rightGroupId: string; }
-export interface BlueprintEditorState {
-  name: string;
-  defaultClass: string;
-  width: number;
-  height: number;
-  fillColor: string;
-  groups: EndpointGroup[];
-  pairs: GroupPair[];
-  individualLinks: BlueprintInternalLink[];
-}
-
-export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'stableGroupId' | 'uniqueStableGroupIds' | 'groupDisplayPrefix' | 'groupPortCount' | 'groupStartingNumber' | 'groupRange' | 'duplicateSlotKeys' | 'pairMissingGroup' | 'pairSameGroup' | 'pairCountMismatch' | 'duplicateInternalLink' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink' | 'individualDuplicatesPair';
-export interface GeneratedBlueprint { slots: BlueprintSlot[]; internalLinks: BlueprintInternalLink[]; errors: string[]; validationErrors: BlueprintValidationError[]; }
-const validationErrorText: Record<BlueprintValidationError, string> = {
-  nameRequired: 'Укажите название шаблона.', dimensionsPositive: 'Ширина и высота должны быть больше нуля.', colorFormat: 'Цвет должен быть в формате #RRGGBB.', stableGroupId: 'Не удалось создать стабильный идентификатор группы.', uniqueStableGroupIds: 'Не удалось создать уникальные стабильные идентификаторы групп.', groupDisplayPrefix: 'Укажите префикс отображаемого имени каждой группы.', groupPortCount: 'Количество портов в группе должно быть не меньше 1.', groupStartingNumber: 'Начальный номер должен быть целым числом от 0.', groupRange: 'Диапазон группы должен находиться в пределах 0–1 и иметь положительную длину.', duplicateSlotKeys: 'Получились повторяющиеся идентификаторы портов. Измените группы.', pairMissingGroup: 'Правило внутренних пар ссылается на отсутствующую группу.', pairSameGroup: 'Правило внутренних пар должно соединять две разные группы.', pairCountMismatch: 'Внутренние пары возможны только при одинаковом количестве портов в группах.', duplicateInternalLink: 'Сгенерирована повторяющаяся внутренняя связь.', individualSelfLink: 'Индивидуальная внутренняя связь не может соединять порт с самим собой.', individualMissingPort: 'Индивидуальная внутренняя связь ссылается на отсутствующий порт.', duplicateIndividualLink: 'Повторяется индивидуальная внутренняя связь.', individualDuplicatesPair: 'Индивидуальная связь повторяет правило пар по номеру.',
-};
-
-const pad = (value: number, width: number) => String(value).padStart(width, '0');
+export interface BlueprintBlockInstance { instanceKey: string; portBlockVersionRef: string; portBlockName?: string; versionNumber?: number; ports: PortBlockVersionDocument['ports']; }
+export interface BlueprintEditorState { name: string; defaultClass: string; width: number; height: number; fillColor: string; instances: BlueprintBlockInstance[]; individualLinks: BlueprintInternalLink[]; }
+export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateInstanceKey' | 'missingPortBlock' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
+const message: Record<BlueprintValidationError, string> = { nameRequired:'Укажите название шаблона.', dimensionsPositive:'Ширина и высота должны быть больше нуля.', colorFormat:'Цвет должен быть в формате #RRGGBB.', duplicateInstanceKey:'Повторяется ключ экземпляра Port Block.', missingPortBlock:'Выберите точную версию Port Block.', individualSelfLink:'Внутренняя связь не может соединять порт с самим собой.', individualMissingPort:'Внутренняя связь ссылается на отсутствующий порт.', duplicateIndividualLink:'Повторяется внутренняя связь.' };
 const normalized = (value: string) => value.trim();
-
-export const generatedGroupKeys = (group: EndpointGroup): string[] => {
-  return Array.from({ length: Math.max(0, group.count) }, (_, index) => `${normalized(group.keyPrefix)}:${index + 1}`);
-};
-
-export const generatedGroupDisplayNames = (group: EndpointGroup): string[] => {
-  const width = Math.max(2, String(group.startingNumber + Math.max(group.count - 1, 0)).length);
-  return Array.from({ length: Math.max(0, group.count) }, (_, index) => `${normalized(group.displayPrefix)}${pad(group.startingNumber + index, width)}`);
-};
-
-export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocument): BlueprintEditorState | null => {
-  const recipe = version.authoring_recipe;
-  if (!recipe) return null;
-  return {
-    name: version.name, defaultClass: version.default_physical_object_class ?? '', width: version.body.width, height: version.body.height, fillColor: version.body.fill_color ?? '#28565a',
-    groups: recipe.endpoint_groups.map((group) => ({ id: group.group_id, keyPrefix: group.key_prefix, displayPrefix: group.display_prefix, kind: group.kind, side: group.side, count: group.count, startingNumber: group.starting_number, placementOffset: group.placement_offset, placementSpan: group.placement_span })),
-    pairs: recipe.pair_recipes.map((pair) => ({ leftGroupId: pair.group_a_id, rightGroupId: pair.group_b_id })),
-    individualLinks: recipe.individual_links,
-  };
-};
-
-export const generateBlueprint = (state: BlueprintEditorState): GeneratedBlueprint => {
+export const composedSlotKey = (instanceKey: string, localId: string) => `${instanceKey}:${localId}`;
+export const slotsForInstance = (item: BlueprintBlockInstance) => item.ports.map((port) => ({ key: composedSlotKey(item.instanceKey, port.local_id), label: `${item.portBlockName ?? item.portBlockVersionRef} · ${port.display_label}`, kind: port.kind }));
+export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocument): BlueprintEditorState | null => version.composition ? { name:version.name, defaultClass:version.default_physical_object_class ?? '', width:version.body.width, height:version.body.height, fillColor:version.body.fill_color ?? '#28565a', instances:version.composition.instances.map((item) => ({ instanceKey:item.instance_key, portBlockVersionRef:item.port_block_version_ref.entity_id, ports:[] })), individualLinks:version.internal_links } : null;
+export const generateBlueprint = (state: BlueprintEditorState) => {
   const errors: BlueprintValidationError[] = [];
   if (!normalized(state.name)) errors.push('nameRequired');
   if (!Number.isFinite(state.width) || state.width <= 0 || !Number.isFinite(state.height) || state.height <= 0) errors.push('dimensionsPositive');
   if (state.fillColor && !/^#[0-9A-Fa-f]{6}$/.test(state.fillColor)) errors.push('colorFormat');
-  const stableKeys = new Set<string>();
-  state.groups.forEach((group) => {
-    const stableKey = normalized(group.keyPrefix);
-    if (!stableKey) errors.push('stableGroupId');
-    else if (stableKeys.has(stableKey)) errors.push('uniqueStableGroupIds');
-    stableKeys.add(stableKey);
-    if (!normalized(group.displayPrefix)) errors.push('groupDisplayPrefix');
-    if (!Number.isInteger(group.count) || group.count < 1) errors.push('groupPortCount');
-    if (!Number.isInteger(group.startingNumber) || group.startingNumber < 0) errors.push('groupStartingNumber');
-    if (!Number.isFinite(group.placementOffset) || group.placementOffset < 0 || group.placementOffset > 1 || !Number.isFinite(group.placementSpan) || group.placementSpan <= 0 || group.placementSpan > 1 || group.placementOffset + group.placementSpan > 1) errors.push('groupRange');
-  });
-
-  const slots: BlueprintSlot[] = [];
-  const groupsBySide = new Map<BlueprintAnchorSide, EndpointGroup[]>();
-  for (const group of state.groups) groupsBySide.set(group.side, [...(groupsBySide.get(group.side) ?? []), group]);
-  for (const [side, groups] of groupsBySide) {
-    groups.forEach((group) => generatedGroupKeys(group).forEach((key, index) => {
-      slots.push({ key, display_name: generatedGroupDisplayNames(group)[index], kind: group.kind, anchor: { side, offset: group.placementOffset + group.placementSpan * (group.count === 1 ? .5 : index / (group.count - 1)) } });
-    }));
-  }
-  const slotKeys = slots.map((slot) => slot.key);
-  if (new Set(slotKeys).size !== slotKeys.length) errors.push('duplicateSlotKeys');
-
-  const groupsById = new Map(state.groups.map((group) => [group.id, group]));
-  const links: BlueprintInternalLink[] = [];
-  const linkSources = new Map<string, 'pair' | 'individual'>();
-  const linkKey = (from: string, to: string) => [from, to].sort().join('\u0000');
-  for (const pair of state.pairs) {
-    const left = groupsById.get(pair.leftGroupId); const right = groupsById.get(pair.rightGroupId);
-    if (!left || !right) { errors.push('pairMissingGroup'); continue; }
-    if (left.id === right.id) { errors.push('pairSameGroup'); continue; }
-    if (left.count !== right.count) { errors.push('pairCountMismatch'); continue; }
-    generatedGroupKeys(left).forEach((from_slot_key, index) => {
-      const to_slot_key = generatedGroupKeys(right)[index]; const key = linkKey(from_slot_key, to_slot_key);
-      if (linkSources.has(key)) errors.push('duplicateInternalLink'); else { linkSources.set(key, 'pair'); links.push({ from_slot_key, to_slot_key }); }
-    });
-  }
-  const generatedSlotKeys = new Set(slotKeys);
-  for (const link of state.individualLinks) {
-    const { from_slot_key, to_slot_key } = link;
-    if (from_slot_key === to_slot_key) { errors.push('individualSelfLink'); continue; }
-    if (!generatedSlotKeys.has(from_slot_key) || !generatedSlotKeys.has(to_slot_key)) { errors.push('individualMissingPort'); continue; }
-    const key = linkKey(from_slot_key, to_slot_key);
-    const source = linkSources.get(key);
-    if (source === 'individual') errors.push('duplicateIndividualLink');
-    else if (source === 'pair') errors.push('individualDuplicatesPair');
-    else { linkSources.set(key, 'individual'); links.push(link); }
-  }
-  return { slots, internalLinks: links, errors: errors.map((error) => validationErrorText[error]), validationErrors: errors };
+  const keys = state.instances.map((item) => normalized(item.instanceKey)); if (keys.length !== new Set(keys).size) errors.push('duplicateInstanceKey');
+  if (state.instances.some((item) => !item.portBlockVersionRef || !item.ports.length)) errors.push('missingPortBlock');
+  const source = state.instances.flatMap(slotsForInstance); const slots = source.map((slot,index) => ({ key:slot.key, display_name:slot.label.split(' · ').at(-1)!, kind:slot.kind, anchor:{side:'RIGHT' as const, offset:(index+.5)/Math.max(source.length,1)} }));
+  const known = new Set(slots.map((slot) => slot.key)); const pairs = new Set<string>();
+  for (const link of state.individualLinks) { if (link.from_slot_key === link.to_slot_key) errors.push('individualSelfLink'); else if (!known.has(link.from_slot_key) || !known.has(link.to_slot_key)) errors.push('individualMissingPort'); else { const key=[link.from_slot_key,link.to_slot_key].sort().join('\u0000'); if (pairs.has(key)) errors.push('duplicateIndividualLink'); pairs.add(key); } }
+  return { slots, internalLinks:state.individualLinks, errors:errors.map((item) => message[item]), validationErrors:errors };
 };
-
-export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateObjectBlueprintRequest; errors: string[] } => {
-  const generated = generateBlueprint(state);
-  if (generated.errors.length) return { errors: generated.errors };
-  const authoring_recipe: BlueprintAuthoringRecipe = {
-    endpoint_groups: state.groups.map((group) => ({ group_id: group.id, key_prefix: normalized(group.keyPrefix), display_prefix: normalized(group.displayPrefix), kind: group.kind, side: group.side, count: group.count, starting_number: group.startingNumber, placement_offset: group.placementOffset, placement_span: group.placementSpan })),
-    pair_recipes: state.pairs.map((pair) => ({ group_a_id: pair.leftGroupId, group_b_id: pair.rightGroupId })),
-    individual_links: state.individualLinks,
-  };
-  return { errors: [], request: { name: normalized(state.name), ...(normalized(state.defaultClass) ? { default_physical_object_class: normalized(state.defaultClass) } : {}), body: { kind: 'RECTANGLE', width: state.width, height: state.height, ...(state.fillColor ? { fill_color: state.fillColor } : {}) }, slots: generated.slots, internal_links: generated.internalLinks, authoring_recipe } };
-};
+export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateObjectBlueprintRequest; errors: string[] } => { const generated=generateBlueprint(state); if (generated.errors.length) return {errors:generated.errors}; return { errors:[], request:{ name:normalized(state.name), ...(normalized(state.defaultClass)?{default_physical_object_class:normalized(state.defaultClass)}:{}), body:{kind:'RECTANGLE',width:state.width,height:state.height,...(state.fillColor?{fill_color:state.fillColor}:{})}, composition:{instances:state.instances.map((item)=>({instance_key:normalized(item.instanceKey),port_block_version_ref:{ref_type:'LIBRARY_RECORD',entity_type:'PortBlockVersion',entity_id:item.portBlockVersionRef}}))}, internal_links:state.individualLinks } }; };
