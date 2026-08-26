@@ -76,8 +76,8 @@ export function App(props: AppProps) {
           element={<InfrastructureObjectsPage catalogInventoryDataSource={props.catalogInventoryDataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} physicalObjectDisplayNameWriteDataSource={props.physicalObjectDisplayNameWriteDataSource} />}
         />
         <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
-        <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
-        <Route path="library/object-blueprints/:blueprintId/versions/:versionId/edit" element={props.objectBlueprintDataSource ? <EditObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
+        <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource && props.portBlockDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} portBlockDataSource={props.portBlockDataSource} /> : <Navigate replace to="/map" />} />
+        <Route path="library/object-blueprints/:blueprintId/versions/:versionId/edit" element={props.objectBlueprintDataSource && props.portBlockDataSource ? <EditObjectBlueprintPage dataSource={props.objectBlueprintDataSource} portBlockDataSource={props.portBlockDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/port-blocks" element={props.portBlockDataSource ? <PortBlockLibraryPage dataSource={props.portBlockDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/port-blocks/new" element={props.portBlockDataSource ? <PortBlockEditorPage dataSource={props.portBlockDataSource} mode="new" /> : <Navigate replace to="/map" />} />
         <Route path="library/port-blocks/:portBlockId/versions/:versionId/edit" element={props.portBlockDataSource ? <PortBlockEditorPage dataSource={props.portBlockDataSource} mode="version" /> : <Navigate replace to="/map" />} />
