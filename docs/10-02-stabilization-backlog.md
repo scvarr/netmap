@@ -63,7 +63,8 @@ ELK-layout в saved-map пути, объём полей в projection DTO. Эт�
 - Behavior-preserving: да · Benchmark: нет
 - Зависимости: частично закрывается API-001 (симптом)
 - Acceptance: параллельные delete/instantiate дают чистую 409/422, не 500.
-- Статус: TODO
+- Статус: DONE — 2026-08-26, 1796a2386be13e79765cd6cce91096b3d1921973
+  corrective: 1bc10068b88b06a72e15fb4e5e1de1a29e33636e
 
 ## Correctness
 
