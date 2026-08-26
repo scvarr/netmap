@@ -7,7 +7,7 @@ from app.database import SessionLocal
 from app.main import app
 from app.models import (
     BlueprintInstance, BlueprintInstanceSlot, Connection, ConnectionMember,
-    ConnectionPoint, InterfacePhysicalBinding, L2Binding, L2EgressRule,
+    ConnectionPoint, L2Binding, L2EgressRule,
     L2ForwardingContext, L2IngressRule, L3Binding, NetworkInterface,
     PhysicalObject, RoutingContext,
 )
@@ -137,11 +137,13 @@ def test_external_blocker_rolls_back_owned_l2_cleanup():
         ingress = L2IngressRule(binding_id=binding.id, exact_stack=[])
         egress = L2EgressRule(binding_id=binding.id, emit_stack=[])
         session.add_all((ingress, egress))
-        device_point_id = session.scalar(select(InterfacePhysicalBinding.point_id).where(
-            InterfacePhysicalBinding.interface_id == interface_id
-        ))
-        CanonicalRepository(session).add_connection(
-            device_point_id, external_point_id, 1,
+        repository = CanonicalRepository(session)
+        device_point = repository.add_connection_point(object_id_, cardinality=1)
+        repository.add_interface_physical_binding(
+            interface_id, device_point.id, point_member=1
+        )
+        repository.add_connection(
+            device_point.id, external_point_id, 1,
             [ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
         )
         session.flush()
