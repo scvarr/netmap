@@ -56,7 +56,7 @@ ELK-layout в saved-map пути, объём полей в projection DTO. Эт�
   параллельный wiring тех же точек» — ровно одна транзакция успешна, вторая
   получает явный конфликт; в БД ≤1 Connection на пару; все существующие e2e
   зелёные.
-- Статус: TODO
+- Статус: DONE — 2026-08-26, ef5018080bc5ff38bc630f83fd2919dc9f27694e
 
 ### CONC-002 — Гонка delete_blueprint ↔ instantiate
 - Категория: concurrency · Severity: LOW · До L2: нет
