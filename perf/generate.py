@@ -69,45 +69,55 @@ def generate(profile_name: str, seed: int) -> dict[str, object]:
         plan = port_plan(profile)
         patch_count = min(5, plan.count(24), profile.connections // 24)
         patch_version, patch_slots = create_blueprint(session, seed, 24, patch=True)
-        objects: list[PhysicalObject] = []; connections: list[Connection] = []
+        objects: list[PhysicalObject] = []; connections: list[Connection] = []; connection_members: list[ConnectionMember] = []
         points_by_object: dict[uuid.UUID, list[ConnectionPoint]] = {}
+        object_metadata: list[EntityMetadata] = []; instances: list[BlueprintInstance] = []
+        points: list[ConnectionPoint] = []; interfaces: list[NetworkInterface] = []
+        owners: list[NetworkInterfacePhysicalOwner] = []; bindings: list[InterfacePhysicalBinding] = []
+        point_and_interface_metadata: list[EntityMetadata] = []; instance_slots: list[BlueprintInstanceSlot] = []
         for index, port_count in enumerate(plan):
             obj = PhysicalObject(id=stable_id(seed, "object", index)); objects.append(obj)
-            session.add(obj)
-            session.flush()
             version, slots = (patch_version, patch_slots) if index < patch_count else blueprints[port_count]
-            session.add_all([
+            object_metadata.extend([
                 EntityMetadata(id=stable_id(seed, "metadata", index, "alias"), physical_object_id=obj.id, key="alias.display", value=f"PERF-{index:04d}"),
                 EntityMetadata(id=stable_id(seed, "metadata", index, "class"), physical_object_id=obj.id, key="class", value=version.default_physical_object_class or "switch"),
             ])
             instance = BlueprintInstance(id=stable_id(seed, "instance", index), blueprint_version_id=version.id, physical_object_id=obj.id)
-            session.add(instance)
-            session.flush()
+            instances.append(instance)
             local_cps = []
             for port_index, slot in enumerate(slots):
                 cp = ConnectionPoint(id=stable_id(seed, "cp", index, port_index), physical_object_id=obj.id, cardinality=1)
                 local_cps.append(cp)
-                session.add(cp)
-            session.flush()
+                points.append(cp)
             points_by_object[obj.id] = local_cps
             for port_index, (slot, cp) in enumerate(zip(slots, local_cps)):
-                session.add(EntityMetadata(id=stable_id(seed, "metadata", index, "cp", port_index), connection_point_id=cp.id, key="alias.display", value=slot.display_name))
+                point_and_interface_metadata.append(EntityMetadata(id=stable_id(seed, "metadata", index, "cp", port_index), connection_point_id=cp.id, key="alias.display", value=slot.display_name))
                 interface_id = None
                 if slot.kind == "NETWORK_PORT":
                     interface = NetworkInterface(id=stable_id(seed, "ni", index, port_index))
                     interface_id = interface.id
-                    session.add(interface)
-                    session.flush()
-                    session.add_all([
+                    interfaces.append(interface)
+                    owners.append(
                         NetworkInterfacePhysicalOwner(id=stable_id(seed, "ni-owner", index, port_index), interface_id=interface.id, physical_object_id=obj.id),
+                    )
+                    bindings.append(
                         InterfacePhysicalBinding(id=stable_id(seed, "ni-binding", index, port_index), interface_id=interface.id, point_id=cp.id, point_member=1),
+                    )
+                    point_and_interface_metadata.append(
                         EntityMetadata(id=stable_id(seed, "metadata", index, "ni", port_index), network_interface_id=interface.id, key="alias.display", value=slot.display_name),
-                    ])
-                session.add(BlueprintInstanceSlot(id=stable_id(seed, "instance-slot", index, port_index), blueprint_instance_id=instance.id, blueprint_slot_id=slot.id, connection_point_id=cp.id, network_interface_id=interface_id))
+                    )
+                instance_slots.append(BlueprintInstanceSlot(id=stable_id(seed, "instance-slot", index, port_index), blueprint_instance_id=instance.id, blueprint_slot_id=slot.id, connection_point_id=cp.id, network_interface_id=interface_id))
             if index < patch_count:
                 for pair in range(0, len(local_cps), 2):
                     conn = Connection(id=stable_id(seed, "connection", "internal", index, pair), point_a_id=local_cps[pair].id, point_b_id=local_cps[pair+1].id, cardinality=1)
-                    connections.append(conn); session.add_all([conn, ConnectionMember(id=stable_id(seed, "member", "internal", index, pair), connection_id=conn.id, index=1, point_a_member=1, point_b_member=1)])
+                    connections.append(conn); connection_members.append(ConnectionMember(id=stable_id(seed, "member", "internal", index, pair), connection_id=conn.id, index=1, point_a_member=1, point_b_member=1))
+        # Explicit IDs permit phase-level flushes only; this preserves FK ordering
+        # without per-object/per-interface round trips on LARGE.
+        session.add_all(objects); session.flush()
+        session.add_all(object_metadata + instances); session.flush()
+        session.add_all(points); session.flush()
+        session.add_all(interfaces); session.flush()
+        session.add_all(owners + bindings + point_and_interface_metadata + instance_slots); session.flush()
         # Ring first, then deterministic stars/additional links. Every external link
         # crosses PhysicalObjects; point selection is stable and supports trace anchors.
         external = profile.connections - len(connections)
@@ -127,7 +137,9 @@ def generate(profile_name: str, seed: int) -> dict[str, object]:
             left = free_external_members[source.id].pop(0)
             right = free_external_members[target.id].pop(0)
             conn = Connection(id=stable_id(seed, "connection", "external", index), point_a_id=left.id, point_b_id=right.id, cardinality=1)
-            connections.append(conn); session.add_all([conn, ConnectionMember(id=stable_id(seed, "member", "external", index), connection_id=conn.id, index=1, point_a_member=1, point_b_member=1)])
+            connections.append(conn); connection_members.append(ConnectionMember(id=stable_id(seed, "member", "external", index), connection_id=conn.id, index=1, point_a_member=1, point_b_member=1))
+        session.add_all(connections); session.flush()
+        session.add_all(connection_members); session.flush()
         maps = []
         for map_index in range(profile.maps):
             saved = SavedMap(id=stable_id(seed, "map", map_index), name=f"PERF {profile_name} {map_index + 1}"); maps.append(saved); session.add(saved)
