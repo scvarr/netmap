@@ -5,6 +5,8 @@ __pycache__/
 *.py[cod]
 .env
 perf/results/
+frontend/test-results/
+frontend/playwright-report/
 .gitnexus/
 .claude/skills/gitnexus/
 AGENTS.md

@@ -12,10 +12,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from sqlalchemy import select
-
 from app.database import SessionLocal, engine
-from app.models import ConnectionPoint, PhysicalObject, SavedMap
 from app.schemas import TopologyProjectionRequest
 from app.repository import CanonicalRepository
 from app.schemas import EvaluationView
@@ -32,10 +29,10 @@ def perf_context(request: pytest.FixtureRequest):
     from perf.generate import generate
     counts = generate(profile, seed)
     with SessionLocal() as session:
-        objects = list(session.scalars(select(PhysicalObject).order_by(PhysicalObject.id).limit(2)))
-        point = session.scalar(select(ConnectionPoint).where(ConnectionPoint.physical_object_id == objects[0].id))
-        map_id = session.scalar(select(SavedMap.id).order_by(SavedMap.id))
-    return {"mode": mode, "profile": profile, "seed": seed, "counts": counts, "object_ids": [str(item.id) for item in objects], "point_id": str(point.id), "map_id": str(map_id)}
+        from app.models import SavedMap
+        map_id = session.query(SavedMap.id).order_by(SavedMap.id).first()[0]
+    anchors = counts["anchors"]
+    return {"mode": mode, "profile": profile, "seed": seed, "counts": counts, "object_ids": anchors["projection_object_ids"], "point_id": anchors["specific_source_connection_point_id"], "map_id": str(map_id), "trace_source": anchors["trace_source_physical_object_id"], "trace_target": anchors["trace_target_physical_object_id"]}
 
 
 def _runs(mode: str) -> int: return 7 if mode == "quick" else 40
@@ -54,8 +51,8 @@ def test_backend_baseline(perf_context, request):
         "saved_map": ("GET", f"/v1/maps/{perf_context['map_id']}", None),
         "catalog_inventory": ("GET", "/v1/catalog/inventory", None),
         "physical_object": ("GET", f"/v1/topology/physical-objects/{perf_context['object_ids'][0]}", None),
-        "trace_specific_port": ("POST", "/v1/traces/physical-objects/l1", {"from_physical_object_id": perf_context["object_ids"][0], "to_physical_object_id": perf_context["object_ids"][1], "from_connection_point_id": perf_context["point_id"]}),
-        "trace_any_port": ("POST", "/v1/traces/physical-objects/l1", {"from_physical_object_id": perf_context["object_ids"][0], "to_physical_object_id": perf_context["object_ids"][1]}),
+        "trace_specific_port": ("POST", "/v1/traces/physical-objects/l1", {"from_physical_object_id": perf_context["trace_source"], "to_physical_object_id": perf_context["trace_target"], "from_connection_point_id": perf_context["point_id"]}),
+        "trace_any_port": ("POST", "/v1/traces/physical-objects/l1", {"from_physical_object_id": perf_context["trace_source"], "to_physical_object_id": perf_context["trace_target"]}),
     }
     results = []
     with httpx.Client(base_url=base_url, timeout=120) as client:
