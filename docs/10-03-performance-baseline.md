@@ -97,40 +97,95 @@ p95-значения контролируются в full-benchmark режиме
 - Nightly: MEDIUM latency-smoke с щедрым порогом (×3 локальной медианы).
 - PORT_HEAVY/LARGE: вручную или ночью; в per-PR CI не включать.
 
-## PERF-001 baseline (initial local record)
+## FINAL PERF-001 baseline
 
-Measured fact, not a budget verdict. Commit `a98353273c99d9c1e994e03905bf3adb62b231a9`,
-seed `20260826`, quick mode (one warmup + 7 measured runs; median only) in
-Docker Compose: Python 3.13.7, PostgreSQL 17.6. Dataset SMALL: 100 objects,
-800 CP, 150 connections, 2 maps, 100 map memberships.
+### Measured fact
 
-| Backend metric | SMALL: ms / SQL / bytes | MEDIUM: ms / SQL / bytes |
+Product/base main SHA: `a98353273c99d9c1e994e03905bf3adb62b231a9`.
+Final benchmark tooling SHA: `f92b1f2df72c8e2e576820098b6cc75d457be847`.
+The recorded environment was Docker Compose on this local host: Python 3.13.7
+and PostgreSQL 17.6. Seed: `20260826`.
+
+Backend quick protocol was **one unmeasured warmup plus seven measured runs per
+case, reporting median only**. Each logical case creates its own deterministic
+`netmap_perf` dataset; generator time is outside endpoint latency. The L1 shard
+contains both the HTTP projection and the direct resolver-only measurement.
+No quick result below is p50 or p95.
+
+| Profile | Objects | CP | NI | Connections | Maps | Memberships | Generation duration |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| SMALL | 100 | 800 | 680 | 150 | 2 | 100 | 0.285 s |
+| MEDIUM | 500 | 4,000 | 3,880 | 700 | 3 | 500 | 1.333 s |
+| PORT_HEAVY | 500 | 20,000 | 19,880 | 1,500 | 2 | 500 | 6.245 s |
+| LARGE/STRESS | 1,000 | 40,000 | 39,880 | 3,000 | 4 | 1,000 | 13.916 s |
+
+All four profiles completed generation and structural validation. This includes
+exact profile counts, runtime-shaped NETWORK_PORT rows (NI + owner + physical
+binding), cross-object external links, at most one external attachment per CP
+member, and non-patch NETWORK_PORT trace anchors with a real cross-object path.
+
+HTTP SQL counts are request-local measurements: `perf-backend` enables the
+ContextVar counter only under `NETMAP_PERF_INSTRUMENTATION=1`, and only requests
+with `X-NetMap-Perf-Measure: 1` receive `X-NetMap-Perf-SQL-Queries`.
+
+| Backend metric | SMALL: HTTP median ms / SQL / bytes | MEDIUM: HTTP median ms / SQL / bytes |
 |---|---:|---:|
-| L1 scoped + interstitial projection | 236.8 / 810 / 25,239 | 1125.0 / 4,010 / 5,589 |
-| L2 unscoped projection | 1.8 / 1 / 107 | 2.0 / 1 / 107 |
-| saved map | 4.8 / 4 / 13,100 | 8.3 / 4 / 43,369 |
-| inventory | 237.0 / 809 / 35,414 | 1295.7 / 4,009 / 177,274 |
-| physical object detail | 228.1 / 811 / 3,286 | 1116.6 / 4,011 / 3,286 |
-| L1 trace specific / any port | 4.9 / 6 / 7,639; 5.1 / 6 / 7,605 | 4.8 / 6 / 562; 4.2 / 6 / 528 |
-| L1 resolver only | 222.4 / 810 / 26,692 | 1126.2 / 4,010 / 5,947 |
+| L1 scoped + interstitial projection | 584.3 / 2,172 / 37,698 | 3,147.5 / 11,772 / 38,437 |
+| L1 resolver only | 588.1 ms / 2,172 / 39,876 | 3,193.7 ms / 11,772 / 40,651 |
+| L1 non-resolver overhead | -3.9 ms | -46.2 ms |
+| L2 unscoped projection | 1,682.4 / 3,852 / 366,780 | 10,108.9 / 22,627 / 2,206,905 |
+| saved map | 5.1 / 4 / 13,100 | 8.4 / 4 / 43,369 |
+| catalog inventory | 236.8 / 809 / 37,139 | 1,303.3 / 4,009 / 185,799 |
+| physical object detail | 571.4 / 2,174 / 34,405 | 3,108.1 / 11,774 / 36,363 |
+| L1 trace, specific port | 13.7 / 15 / 2,891 | 22.5 / 23 / 3,255 |
+| L1 trace, any port | 13.7 / 15 / 2,857 | 108.1 / 108 / 5,439 |
 
-HTTP SQL counts are a measured fact: `perf-backend` enables a request-local
-ContextVar counter only under `NETMAP_PERF_INSTRUMENTATION=1`, only with header
-`X-NetMap-Perf-Measure: 1`, and returns it as `X-NetMap-Perf-SQL-Queries`.
-The resolver and HTTP timings are intentionally separate; the SMALL overhead
-was 14.5 ms and MEDIUM was -1.1 ms, so neither is labelled serialization time.
+`non-resolver overhead` is HTTP median minus resolver median from independent
+distributions. The negative values are measurement noise, not negative real
+time and not serialization time.
 
-Observed finding, not an optimization decision: the measured 809–4,011 SQL
-statements for inventory/details and 810–4,010 for scoped projection are the
-baseline inputs to PERF-002/008; no query optimization is included here.
+PORT_HEAVY and LARGE completed generator validation but did not receive endpoint
+latency runs in this local pass; they remain manual/stress benchmark profiles.
 
-PORT_HEAVY and LARGE remain manual/not measured in this local pass. Chromium is
-configured against the real perf compose stack, but the local Playwright browser
-binary was unavailable (the attempted Chromium download did not complete);
-frontend metrics are therefore **not measured**, not substituted with jsdom
-data. The instrumentation marks layout duration separately from
-document-received to interactive-map.
+Chromium was available against `http://127.0.0.1:5174`; these are real-browser
+single-smoke measurements, not jsdom substitutes:
 
-Run: `docker compose -f compose.perf.yaml up -d --build`; then
-`docker compose -f compose.perf.yaml run --rm -e PERF_COMMIT_SHA=$(git rev-parse HEAD) perf-runner pytest -m perf perf/test_backend.py --perf-mode quick --perf-profile medium`.
-Full mode performs 40 measured runs and reports p50/p95; quick mode never does.
+| Frontend metric | SMALL | MEDIUM |
+|---|---:|---:|
+| layout duration | 96.1 ms | 133.5 ms |
+| document to interactive map | 116.9 ms | 173.8 ms |
+| DOM elements | 1,040 | 3,478 |
+| selection to next animation frame | 61.5 ms | 66.2 ms |
+| pan sequence | 360.0 ms | 376.3 ms |
+| zoom sequence | 49.2 ms | 42.9 ms |
+| drag-stop to next animation frame | 12.6 ms | 13.7 ms |
+
+### Interpretation
+
+The current generator makes the L2 unscoped endpoint materially non-empty, so
+its results are a control for the present runtime shape; they are not a promise
+that future configured-L2 scaling is represented exhaustively. The largest
+observed backend costs in this baseline are unscoped L2 projection and the
+high SQL counts for projection/object-detail/inventory. MEDIUM any-port tracing
+also has a higher query count than specific-port tracing. These are findings for
+later PERF work only: **no production query, API, React, DOM, LOD, ELK, or lazy
+loading optimization was made by PERF-001**.
+
+### Budget hypothesis
+
+The budgets above remain hypotheses, not an acceptance contract or a regression
+verdict from one local machine. A full run (40 measured samples in this tooling)
+is required before reporting p50/p95.
+
+### Reproduction
+
+Start the isolated stack with
+`docker compose -f compose.perf.yaml up -d --build`. Run one shard, for example:
+
+`docker compose -f compose.perf.yaml exec -T -e PERF_COMMIT_SHA=$(git rev-parse HEAD) perf-backend pytest -m perf perf/test_backend.py --perf-mode quick --perf-profile medium --perf-seed 20260826 --perf-case projection_l1 --perf-results /tmp/perf-results/medium-projection-l1.json`
+
+Run the seven logical cases separately (`projection_l1`, `projection_l2`,
+`saved_map`, `catalog_inventory`, `physical_object`, `trace_specific_port`,
+`trace_any_port`) and merge them with `python -m perf.results <shards...>
+--output <profile-result.json>`. The merge rejects inconsistent profile/seed/
+mode/count metadata and duplicate metric names.
