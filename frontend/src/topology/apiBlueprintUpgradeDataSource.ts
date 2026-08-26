@@ -23,6 +23,9 @@ const requireString = (value: unknown, path: string): string => (
     ? value
     : malformed(`${path} must be a non-empty string.`)
 );
+const requireOptionalString = (value: unknown, path: string): string => (
+  typeof value === 'string' ? value : malformed(`${path} must be a string.`)
+);
 const requireArray = (value: unknown, path: string): unknown[] => (
   Array.isArray(value) ? value : malformed(`${path} must be an array.`)
 );
@@ -54,7 +57,7 @@ const parseChange = (value: unknown, path: string): BlueprintUpgradeChange => {
   const change = requireObject(value, path);
   const parsed: BlueprintUpgradeChange = { code: requireString(change.code, `${path}.code`) };
   for (const field of ['slot_key', 'kind', 'current_kind', 'target_kind', 'details'] as const) {
-    if (change[field] !== undefined) parsed[field] = requireString(change[field], `${path}.${field}`);
+    if (change[field] !== undefined) parsed[field] = requireOptionalString(change[field], `${path}.${field}`);
   }
   const slotKeys = change.slot_keys;
   if (slotKeys !== undefined) {

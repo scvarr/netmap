@@ -36,6 +36,19 @@ describe('ApiBlueprintUpgradeDataSource', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/topology/physical-objects/object%2Fid/blueprint-upgrade-analysis');
   });
 
+  it('accepts empty optional change strings allowed by the backend schema', () => {
+    const parsed = parseBlueprintUpgradeAnalysisDocument({
+      ...document,
+      compatible_changes: [{
+        code: 'SLOT_ADDED', slot_key: '', kind: '', current_kind: '', target_kind: '', details: '',
+      }],
+    });
+
+    expect(parsed.compatible_changes[0]).toEqual({
+      code: 'SLOT_ADDED', slot_key: '', kind: '', current_kind: '', target_kind: '', details: '',
+    });
+  });
+
   it.each([
     ['an unsupported status', { ...document, status: 'UNKNOWN' }],
     ['missing compatible_changes', (() => { const { compatible_changes: _changes, ...value } = document; return value; })()],
