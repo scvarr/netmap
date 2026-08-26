@@ -252,9 +252,11 @@ The next bounded product step is `L1S.6 — Controlled Blueprint instance upgrad
   `ConnectionPoint` and `NETWORK_PORT` `NetworkInterface` identities, remaps
   provenance to target slot rows, and seeds metadata only for newly materialized
   entities.
-- Additive connection-point/network-port structures and missing exact internal
-  canonical links are materialized atomically; satisfied links are not duplicated
-  and conflicting evidence aborts the whole upgrade.
+- Additive connection-point/network-port structures and only exact internal links
+  newly introduced by the target snapshot are materialized atomically; satisfied
+  new links are not duplicated and conflicting evidence aborts the whole upgrade.
+  Unchanged Blueprint links remain provenance and are not reconciled against
+  runtime topology.
 - Object Detail exposes Apply only following a blocker-free dry-run. A failed
   post-write refresh is retryable as a read only and never resends the write.
 

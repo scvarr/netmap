@@ -433,13 +433,23 @@ class ObjectBlueprintCatalog:
             materialized[key] = MaterializedSlot(key, point.id, interface_id)
         self.session.flush()
 
-        target_links = tuple(self.session.scalars(select(BlueprintInternalLink).where(
-            BlueprintInternalLink.blueprint_version_id == target.id
-        )))
         target_by_id = {slot.id: key for key, slot in target_slots.items()}
+        current_by_id = {slot.id: key for key, slot in current_slots.items()}
+        current_links = {
+            tuple(sorted((current_by_id[link.slot_a_id], current_by_id[link.slot_b_id])))
+            for link in self.session.scalars(select(BlueprintInternalLink).where(
+                BlueprintInternalLink.blueprint_version_id == current.id
+            ))
+        }
+        target_links = {
+            tuple(sorted((target_by_id[link.slot_a_id], target_by_id[link.slot_b_id])))
+            for link in self.session.scalars(select(BlueprintInternalLink).where(
+                BlueprintInternalLink.blueprint_version_id == target.id
+            ))
+        }
         created_connections: list[uuid.UUID] = []
-        for link in target_links:
-            left, right = materialized[target_by_id[link.slot_a_id]], materialized[target_by_id[link.slot_b_id]]
+        for left_key, right_key in sorted(target_links - current_links):
+            left, right = materialized[left_key], materialized[right_key]
             state = BlueprintUpgradeAnalyzer(self.session)._canonical_link_state(left.connection_point_id, right.connection_point_id)
             if state == "MISSING":
                 connection, _ = repository.add_connection(left.connection_point_id, right.connection_point_id, 1, [
