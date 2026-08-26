@@ -13,7 +13,6 @@ from app.errors import classify_integrity_error
 from app.main import app
 from app.models import Connection, MapPlacement, MapViewPosition, PhysicalObject, SavedMap
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from app.saved_map_catalog import SavedMapCatalog
 
 
 client = TestClient(app)
@@ -73,10 +72,10 @@ def test_unknown_integrity_error_is_not_classified_as_uniqueness_conflict(monkey
     )
     assert classify_integrity_error(error) is None
 
-    def unknown_flush(_self):
+    def unknown_flush(_session: Session, *args, **kwargs):
         raise error
 
-    monkeypatch.setattr(SavedMapCatalog, "_flush", unknown_flush)
+    monkeypatch.setattr(Session, "flush", unknown_flush)
     with TestClient(app, raise_server_exceptions=False) as non_raising_client:
         response = non_raising_client.post("/v1/maps", json={"name": "Unknown failure"})
     assert response.status_code == 500

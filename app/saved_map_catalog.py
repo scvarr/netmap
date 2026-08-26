@@ -191,7 +191,6 @@ class SavedMapCatalog:
         try:
             self.session.flush()
         except IntegrityError as error:
-            self.session.rollback()
             conflict = classify_integrity_error(error)
             if conflict is not None:
                 raise conflict from error
