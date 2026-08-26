@@ -245,8 +245,8 @@ Aggregate edge не должен визуально или семантичес�
 
 ## Future Port Block and multi-face compatibility boundary
 
-**FIXED architecture; L1S.6c.1 library foundation is implemented and the
-remaining composition/presentation work is future.** The detailed decision record is
+**FIXED architecture; L1S.6c.1 library foundation and L1S.6c.2 authoring/
+numbering are implemented; remaining composition/presentation work is future.** The detailed decision record is
 [[09-03-port-block-blueprint-architecture|09.3 Port Block Blueprint composition
 and multi-face physical presentation]]. A reusable Port Block is
 authoring/presentation provenance for network connection points, not a canonical
@@ -255,10 +255,13 @@ immutable exact Port Block versions onto `FRONT`/`REAR` faces, but materializing
 it must still create only the existing canonical `ConnectionPoint`, optional
 `NetworkInterface`, binding, and Blueprint-instance provenance facts.
 
-The current foundation is library-only: it does not create Object Blueprint
-references, faces, projection geometry, UI, or topology facts. Its stable local
-port identities are explicitly authored values rather than labels, visible
-numbers, coordinates, or UI-array order. Subsequent L1S.6c milestones may
+The current library surface provides a Russian-default Port Block list and
+authoring UI. One or two rows, sequential/odd-even/even-odd numbering, a
+starting number, prefix, visual direction, kind and exceptional display labels
+generate the exact snapshot that the existing library API persists. Opaque local
+IDs are generated separately and survive presentation-only edits; they are not
+primary user input. It does not create Object Blueprint references, faces,
+projection geometry, or topology facts. Subsequent L1S.6c milestones may
 destructively replace legacy `EndpointGroup`/`placement_offset`/`placement_span`
 authoring without compatibility readers or data migration, because existing
 development authoring data has no pre-production compatibility guarantee. This

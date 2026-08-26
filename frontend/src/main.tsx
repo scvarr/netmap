@@ -21,6 +21,7 @@ import { ApiSavedMapDataSource } from './topology/apiSavedMapDataSource';
 import { ApiCatalogInventoryDataSource } from './topology/apiCatalogInventoryDataSource';
 import { ApiPhysicalObjectDisplayNameWriteDataSource } from './topology/apiPhysicalObjectDisplayNameWriteDataSource';
 import { ApiBlueprintUpgradeDataSource } from './topology/apiBlueprintUpgradeDataSource';
+import { ApiPortBlockDataSource } from './topology/apiPortBlockDataSource';
 import './styles.css';
 import { I18nProvider } from './i18n';
 
@@ -46,6 +47,7 @@ createRoot(document.getElementById('root')!).render(
         catalogInventoryDataSource={new ApiCatalogInventoryDataSource()}
         physicalObjectDisplayNameWriteDataSource={new ApiPhysicalObjectDisplayNameWriteDataSource()}
         blueprintUpgradeDataSource={new ApiBlueprintUpgradeDataSource()}
+        portBlockDataSource={new ApiPortBlockDataSource()}
         topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
       /></I18nProvider>
     </BrowserRouter>

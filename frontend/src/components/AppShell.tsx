@@ -42,6 +42,10 @@ export function AppShell() {
               <span className="shell-nav__icon" aria-hidden="true">▤</span>
               <span className="shell-nav__label">{t('nav.blueprints')}</span>
             </NavLink>
+            <NavLink className={navClassName} to="/library/port-blocks">
+              <span className="shell-nav__icon" aria-hidden="true">▥</span>
+              <span className="shell-nav__label">{t('nav.portBlocks')}</span>
+            </NavLink>
           </div>
         </nav>
         <div className="sidebar__health"><HealthIndicator /></div>

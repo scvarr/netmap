@@ -26,6 +26,9 @@ import type { SavedMapDataSource } from './topology/savedMapTypes';
 import type { CatalogInventoryDataSource } from './topology/catalogInventoryTypes';
 import type { PhysicalObjectDisplayNameWriteDataSource } from './topology/physicalObjectDisplayNameWriteTypes';
 import type { BlueprintUpgradeDataSource } from './topology/blueprintUpgradeTypes';
+import type { PortBlockDataSource } from './topology/portBlockTypes';
+import { PortBlockLibraryPage } from './pages/PortBlockLibraryPage';
+import { PortBlockEditorPage } from './pages/PortBlockEditorPage';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
@@ -47,6 +50,7 @@ export interface AppProps {
   catalogInventoryDataSource: CatalogInventoryDataSource;
   physicalObjectDisplayNameWriteDataSource?: PhysicalObjectDisplayNameWriteDataSource;
   blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
+  portBlockDataSource?: PortBlockDataSource;
 }
 
 export function App(props: AppProps) {
@@ -74,6 +78,9 @@ export function App(props: AppProps) {
         <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/:blueprintId/versions/:versionId/edit" element={props.objectBlueprintDataSource ? <EditObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
+        <Route path="library/port-blocks" element={props.portBlockDataSource ? <PortBlockLibraryPage dataSource={props.portBlockDataSource} /> : <Navigate replace to="/map" />} />
+        <Route path="library/port-blocks/new" element={props.portBlockDataSource ? <PortBlockEditorPage dataSource={props.portBlockDataSource} mode="new" /> : <Navigate replace to="/map" />} />
+        <Route path="library/port-blocks/:portBlockId/versions/:versionId/edit" element={props.portBlockDataSource ? <PortBlockEditorPage dataSource={props.portBlockDataSource} mode="version" /> : <Navigate replace to="/map" />} />
         <Route
           path="infrastructure/objects/new"
           element={(

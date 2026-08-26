@@ -281,7 +281,11 @@ deliberately bounded milestones:
    immutable exact versions, explicit local-port layout snapshots, migrations,
    machine-readable library API and backend tests. It does not reference Object
    Blueprints or alter canonical topology.
-2. **L1S.6c.2 — Port Block authoring and numbering**.
+2. **L1S.6c.2 — Port Block authoring and numbering — IMPLEMENTED**: Russian-default
+   library UI generates the existing exact immutable snapshot for one/two rows,
+   the bounded numbering schemes, prefix, direction, kind and label overrides.
+   Opaque local IDs are client-generated separately from presentation and are
+   preserved while authoring a version; successful writes refresh library data.
 3. **L1S.6c.3 — Object Blueprint composition and legacy EndpointGroup removal**.
 4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation**.
 5. **L1S.6c.5 — visual Blueprint composition editor**.

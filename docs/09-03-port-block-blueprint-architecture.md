@@ -2,8 +2,9 @@
 
 ## Status, authority and scope
 
-**FIXED architectural decisions. L1S.6c.1 library foundation is IMPLEMENTED;
-all composition and presentation work remains FUTURE.**
+**FIXED architectural decisions. L1S.6c.1 library foundation and L1S.6c.2
+authoring/numbering are IMPLEMENTED; all composition and presentation work
+remains FUTURE.**
 
 This note records the agreed next evolution of Object Blueprints for dense
 network equipment. It is an architecture/product boundary only: it does not
@@ -34,7 +35,9 @@ describes an arrangement of network connection points, for example:
 Port Block versions are immutable once created. Changing a Port Block creates a
 distinct version and must never silently alter an existing immutable Object
 Blueprint version that later references it. L1S.6c.1 persists the library-owned
-record, immutable version number, and an exact ordered/layout port snapshot;
+record, immutable version number, and an exact ordered/layout port snapshot.
+L1S.6c.2 adds a client authoring convenience which deterministically produces
+that same explicit snapshot; it is not persisted as a second source of truth.
 Object Blueprint references remain future work.
 
 A Port Block is authoring/presentation provenance, not canonical topology. It
@@ -190,7 +193,7 @@ not part of Port Block implementation.
 L1S.6c is intentionally subdivided as follows:
 
 1. **L1S.6c.1 — Port Block library foundation**.
-2. **L1S.6c.2 — Port Block authoring and numbering**.
+2. **L1S.6c.2 — Port Block authoring and numbering — IMPLEMENTED**.
 3. **L1S.6c.3 — Object Blueprint composition and legacy EndpointGroup removal**.
 4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation**.
 5. **L1S.6c.5 — visual Blueprint composition editor**.
