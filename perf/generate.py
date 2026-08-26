@@ -111,17 +111,21 @@ def generate(profile_name: str, seed: int) -> dict[str, object]:
         # Ring first, then deterministic stars/additional links. Every external link
         # crosses PhysicalObjects; point selection is stable and supports trace anchors.
         external = profile.connections - len(connections)
-        port_bearing = [obj for obj in objects if points_by_object[obj.id]]
+        port_bearing = [obj for obj in objects[patch_count:] if points_by_object[obj.id]] + [obj for obj in objects[:patch_count] if points_by_object[obj.id]]
         if len(port_bearing) < 2 or external < 2:
             raise RuntimeError("profile lacks budget for a meaningful cross-object ring")
         ring = min(external, len(port_bearing))
+        free_external_members = {obj.id: list(points_by_object[obj.id]) for obj in port_bearing}
         for index in range(external):
             source_index = index % len(port_bearing)
             target_index = (source_index + 1) % len(port_bearing) if index < ring else (index * 7 + 1) % len(port_bearing)
             if target_index == source_index:
                 target_index = (target_index + 1) % len(port_bearing)
-            left = points_by_object[port_bearing[source_index].id][(index // len(port_bearing)) % len(points_by_object[port_bearing[source_index].id])]
-            right = points_by_object[port_bearing[target_index].id][(index * 3 // len(port_bearing)) % len(points_by_object[port_bearing[target_index].id])]
+            source = port_bearing[source_index]; target = port_bearing[target_index]
+            if not free_external_members[source.id] or not free_external_members[target.id]:
+                raise RuntimeError("profile exhausted a connection point member for external topology")
+            left = free_external_members[source.id].pop(0)
+            right = free_external_members[target.id].pop(0)
             conn = Connection(id=stable_id(seed, "connection", "external", index), point_a_id=left.id, point_b_id=right.id, cardinality=1)
             connections.append(conn); session.add_all([conn, ConnectionMember(id=stable_id(seed, "member", "external", index), connection_id=conn.id, index=1, point_a_member=1, point_b_member=1)])
         maps = []

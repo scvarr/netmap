@@ -1,12 +1,11 @@
 import { expect, type Locator, type Page, test } from '@playwright/test';
 
-async function nextAnimationFrame(page: Page, mark: string): Promise<number> {
+async function measureToNextAnimationFrame(page: Page, startMark: string, metric: string): Promise<number> {
   return page.evaluate(async (name) => {
-    performance.mark(`netmap:${name}`);
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    performance.mark(`netmap:${name}:frame`);
-    return performance.measure(`netmap:${name}`, `netmap:${name}`, `netmap:${name}:frame`).duration;
-  }, mark);
+    performance.mark(`netmap:${name.metric}:frame`);
+    return performance.measure(`netmap:${name.metric}`, `netmap:${name.startMark}`, `netmap:${name.metric}:frame`).duration;
+  }, { startMark, metric });
 }
 
 /** Callable scenario seam: executes a real trace through the visible command bar. */
@@ -43,23 +42,27 @@ test('records real map, DOM, selection, pan, zoom, and drag interactions', async
   await page.evaluate(() => performance.mark('netmap:selection-event'));
   await node.click();
   await expect(node).toHaveClass(/selected/);
-  const selectionToNextAnimationFrameMs = await nextAnimationFrame(page, 'selection-event');
+  const selectionToNextAnimationFrameMs = await measureToNextAnimationFrame(page, 'selection-event', 'selection-to-next-animation-frame');
 
   const pane = page.locator('.react-flow__pane');
   const paneBox = await pane.boundingBox();
   if (!paneBox) throw new Error('React Flow pane is not measurable');
+  await page.evaluate(() => performance.mark('netmap:pan-start'));
   await page.mouse.move(paneBox.x + 120, paneBox.y + 120);
   await page.mouse.down(); await page.mouse.move(paneBox.x + 220, paneBox.y + 170, { steps: 20 }); await page.mouse.up();
-  const panSequenceMs = await nextAnimationFrame(page, 'pan-sequence');
+  const panSequenceMs = await measureToNextAnimationFrame(page, 'pan-start', 'pan-sequence-to-next-animation-frame');
 
+  await page.evaluate(() => performance.mark('netmap:zoom-start'));
   await page.locator('.react-flow__controls-zoomin').click();
-  const zoomSequenceMs = await nextAnimationFrame(page, 'zoom-sequence');
+  const zoomSequenceMs = await measureToNextAnimationFrame(page, 'zoom-start', 'zoom-to-next-animation-frame');
 
   const nodeBox = await node.boundingBox();
   if (!nodeBox) throw new Error('React Flow node is not measurable');
   await page.mouse.move(nodeBox.x + 20, nodeBox.y + 20);
-  await page.mouse.down(); await page.mouse.move(nodeBox.x + 45, nodeBox.y + 45, { steps: 8 }); await page.mouse.up();
-  const dragStopToNextAnimationFrameMs = await nextAnimationFrame(page, 'drag-stop');
+  await page.mouse.down(); await page.mouse.move(nodeBox.x + 45, nodeBox.y + 45, { steps: 8 });
+  await page.evaluate(() => performance.mark('netmap:drag-stop'));
+  await page.mouse.up();
+  const dragStopToNextAnimationFrameMs = await measureToNextAnimationFrame(page, 'drag-stop', 'drag-stop-to-next-animation-frame');
   const measures = await page.evaluate(() => Object.fromEntries(['layout-duration', 'time-to-map'].map((name) => [name, performance.getEntriesByName(`netmap:${name}`).at(-1)?.duration])));
   console.log(JSON.stringify({ ...measures, dom_elements: domElements, selection_to_next_animation_frame_ms: selectionToNextAnimationFrameMs, pan_sequence_ms: panSequenceMs, zoom_sequence_ms: zoomSequenceMs, drag_stop_to_next_animation_frame_ms: dragStopToNextAnimationFrameMs }));
 });
