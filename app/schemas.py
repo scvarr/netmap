@@ -52,6 +52,13 @@ class PortBlockLibraryRef(BaseModel):
     entity_id: uuid.UUID
 
 
+class PortBlockVersionLibraryRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ref_type: Literal["LIBRARY_RECORD"] = "LIBRARY_RECORD"
+    entity_type: Literal["PortBlockVersion"] = "PortBlockVersion"
+    entity_id: uuid.UUID
+
+
 class SavedMapRef(BaseModel):
     """Presentation identity; deliberately not a ProjectionSourceRef."""
 
@@ -523,13 +530,7 @@ class BlueprintInternalLinkRequest(BaseModel):
 class BlueprintCompositionInstanceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     instance_key: str = Field(min_length=1, max_length=255)
-    port_block_version_ref: PortBlockLibraryRef
-
-    @model_validator(mode="after")
-    def validate_exact_version_ref(self) -> "BlueprintCompositionInstanceRequest":
-        if self.port_block_version_ref.entity_type != "PortBlockVersion":
-            raise PydanticCustomError("blueprint_port_block_version_ref_required", "Blueprint composition requires a PortBlockVersion reference")
-        return self
+    port_block_version_ref: PortBlockVersionLibraryRef
 
 
 class BlueprintCompositionRequest(BaseModel):
@@ -643,6 +644,18 @@ class PortBlockListDocument(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
     port_blocks: list[PortBlockListItemDocument]
 
+class PortBlockVersionSummaryDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    port_block_ref: PortBlockLibraryRef
+    version_ref: PortBlockVersionLibraryRef
+    version_number: int = Field(ge=1)
+    port_count: int = Field(ge=1)
+
+class PortBlockVersionListDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    schema_version: Literal["1.0"] = "1.0"
+    versions: list[PortBlockVersionSummaryDocument]
+
 
 class PortBlockPortDocument(PortBlockPortRequest):
     pass
@@ -734,13 +747,8 @@ class ObjectBlueprintInternalLinkDocument(BaseModel):
 class BlueprintCompositionInstanceDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
     instance_key: str = Field(min_length=1)
-    port_block_version_ref: PortBlockLibraryRef
-
-    @model_validator(mode="after")
-    def validate_exact_version_ref(self) -> "BlueprintCompositionInstanceDocument":
-        if self.port_block_version_ref.entity_type != "PortBlockVersion":
-            raise PydanticCustomError("blueprint_port_block_version_ref_required", "Blueprint composition requires a PortBlockVersion reference")
-        return self
+    port_block_ref: PortBlockLibraryRef
+    port_block_version_ref: PortBlockVersionLibraryRef
 
 
 class BlueprintCompositionDocument(BaseModel):

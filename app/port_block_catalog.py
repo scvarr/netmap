@@ -32,6 +32,10 @@ class PortBlockVersionDetail:
     version_number: int
     ports: tuple[PortBlockPort, ...]
 
+@dataclass(frozen=True)
+class PortBlockVersionSummary:
+    port_block_id: uuid.UUID; version_id: uuid.UUID; version_number: int; port_count: int
+
 
 class PortBlockCatalog:
     """Library-only immutable Port Block snapshots; no topology materialization."""
@@ -108,6 +112,10 @@ class PortBlockCatalog:
             .order_by(PortBlockPort.layout_order)
         ))
         return PortBlockVersionDetail(port_block.id, port_block.name, version.id, version.version_number, ports)
+
+    def list_versions(self, port_block_id: uuid.UUID) -> tuple[PortBlockVersionSummary, ...]:
+        if self.session.get(PortBlock, port_block_id) is None: raise ValidationError("PortBlock was not found", {"port_block_id": str(port_block_id)})
+        return tuple(PortBlockVersionSummary(port_block_id, version.id, version.version_number, self.session.scalar(select(func.count()).select_from(PortBlockPort).where(PortBlockPort.port_block_version_id == version.id)) or 0) for version in self.session.scalars(select(PortBlockVersion).where(PortBlockVersion.port_block_id == port_block_id).order_by(PortBlockVersion.version_number)))
 
     def _create_version(self, port_block_id: uuid.UUID, version_number: int, query: object) -> PortBlockVersion:
         version = PortBlockVersion(port_block_id=port_block_id, version_number=version_number)

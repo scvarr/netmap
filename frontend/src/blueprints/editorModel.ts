@@ -1,18 +1,21 @@
 import type { BlueprintInternalLink, CreateObjectBlueprintRequest, ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 import type { PortBlockVersionDocument } from '../topology/portBlockTypes';
 
-export interface BlueprintBlockInstance { instanceKey: string; portBlockVersionRef: string; portBlockName?: string; versionNumber?: number; ports: PortBlockVersionDocument['ports']; }
+export interface BlueprintBlockInstance { instanceKey: string; portBlockVersionRef: string; portBlockName?: string; versionNumber?: number; ports: PortBlockVersionDocument['ports']; resolvedSlotKeys?: Record<string, string>; }
 export interface BlueprintEditorState { name: string; defaultClass: string; width: number; height: number; fillColor: string; instances: BlueprintBlockInstance[]; individualLinks: BlueprintInternalLink[]; }
 export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateInstanceKey' | 'missingPortBlock' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
 const message: Record<BlueprintValidationError, string> = { nameRequired:'Укажите название шаблона.', dimensionsPositive:'Ширина и высота должны быть больше нуля.', colorFormat:'Цвет должен быть в формате #RRGGBB.', duplicateInstanceKey:'Повторяется ключ экземпляра Port Block.', missingPortBlock:'Выберите точную версию Port Block.', individualSelfLink:'Внутренняя связь не может соединять порт с самим собой.', individualMissingPort:'Внутренняя связь ссылается на отсутствующий порт.', duplicateIndividualLink:'Повторяется внутренняя связь.' };
 const normalized = (value: string) => value.trim();
-/** Must match ObjectBlueprintCatalog.composed_slot_key: FNV-1a-128(UTF-8(instance) + NUL + UTF-8(local)). */
-export const composedSlotKey = (instanceKey: string, localId: string) => {
-  let value = 0x6c62272e07bb014262b821756295c58dn;
-  for (const byte of new TextEncoder().encode(`${instanceKey}\0${localId}`)) value = (value ^ BigInt(byte)) * 0x0000000001000000000000000000013bn & ((1n << 128n) - 1n);
-  return `pb_${value.toString(16).padStart(32, '0')}`;
+/** Must match ObjectBlueprintCatalog.composed_slot_key. */
+export const composedSlotKey = async (instanceKey: string, localId: string) => {
+  const instance = new TextEncoder().encode(instanceKey); const local = new TextEncoder().encode(localId);
+  const bytes = new Uint8Array(8 + instance.length + local.length); const view = new DataView(bytes.buffer);
+  view.setUint32(0, instance.length, false); bytes.set(instance, 4); view.setUint32(4 + instance.length, local.length, false); bytes.set(local, 8 + instance.length);
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return `pb_${Array.from(digest, (part) => part.toString(16).padStart(2, '0')).join('')}`;
 };
-export const slotsForInstance = (item: BlueprintBlockInstance) => item.ports.map((port) => ({ key: composedSlotKey(item.instanceKey, port.local_id), label: `${item.portBlockName ?? item.portBlockVersionRef} · ${port.display_label}`, kind: port.kind }));
+export const resolveSlotKeys = async (item: BlueprintBlockInstance) => Object.fromEntries(await Promise.all(item.ports.map(async (port) => [port.local_id, await composedSlotKey(item.instanceKey, port.local_id)])));
+export const slotsForInstance = (item: BlueprintBlockInstance) => item.ports.flatMap((port) => item.resolvedSlotKeys?.[port.local_id] ? [{ key:item.resolvedSlotKeys[port.local_id], label: `${item.portBlockName ?? item.portBlockVersionRef} · ${port.display_label}`, kind: port.kind }] : []);
 export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocument): BlueprintEditorState | null => version.composition ? { name:version.name, defaultClass:version.default_physical_object_class ?? '', width:version.body.width, height:version.body.height, fillColor:version.body.fill_color ?? '#28565a', instances:version.composition.instances.map((item) => ({ instanceKey:item.instance_key, portBlockVersionRef:item.port_block_version_ref.entity_id, ports:[] })), individualLinks:version.internal_links } : null;
 export const generateBlueprint = (state: BlueprintEditorState) => {
   const errors: BlueprintValidationError[] = [];

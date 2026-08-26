@@ -1,4 +1,5 @@
 import uuid
+import hashlib
 from dataclasses import dataclass
 
 from sqlalchemy import delete, func, select
@@ -181,16 +182,15 @@ class ObjectBlueprintCatalog:
 
     @staticmethod
     def composed_slot_key(instance_key: str, local_id: str) -> str:
-        """Bounded identity key: FNV-1a-128 of UTF-8 instance/local bytes.
+        """Bounded identity key: SHA-256 of length-prefixed UTF-8 pair bytes.
 
         Labels, exact version, layout and fallback anchors deliberately do not participate.
         The caller detects the cryptographically-unlikely digest collision before persistence.
         """
-        value = 0x6C62272E07BB014262B821756295C58D
-        for byte in instance_key.encode("utf-8") + b"\0" + local_id.encode("utf-8"):
-            value ^= byte
-            value = (value * 0x0000000001000000000000000000013B) & ((1 << 128) - 1)
-        return f"pb_{value:032x}"
+        instance = instance_key.encode("utf-8")
+        local = local_id.encode("utf-8")
+        canonical = len(instance).to_bytes(4, "big") + instance + len(local).to_bytes(4, "big") + local
+        return "pb_" + hashlib.sha256(canonical).hexdigest()
 
     def list_blueprints(self) -> tuple[BlueprintListItem, ...]:
         blueprints = tuple(self.session.scalars(select(ObjectBlueprint).order_by(ObjectBlueprint.name, ObjectBlueprint.id)))

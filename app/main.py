@@ -22,7 +22,7 @@ from app.interface_resolver import InterfacePhysicalResolver
 from app.l2_resolver import L2ReachabilityResolver
 from app.l2_catalog import L2Catalog, L2ForwardingContextBindingInput
 from app.l3_resolver import SelectedTableRouteDecisionResolver
-from app.models import MapViewKey
+from app.models import MapViewKey, PortBlockVersion
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.nat_resolver import ConfiguredNATPolicyResolver
@@ -97,6 +97,7 @@ from app.schemas import (
     PortBlockCreationDocument,
     PortBlockListDocument,
     PortBlockVersionDocument,
+    PortBlockVersionListDocument,
     BlueprintUpgradeAnalysisDocument,
     ApplyBlueprintUpgradeRequest,
     PhysicalConnectionCreationDocument,
@@ -532,6 +533,10 @@ def list_port_blocks(session: Session = Depends(get_session)) -> PortBlockListDo
         ]
     }
 
+@app.get("/v1/library/port-blocks/{port_block_id}/versions", response_model=PortBlockVersionListDocument)
+def list_port_block_versions(port_block_id: uuid.UUID, session: Session = Depends(get_session)) -> PortBlockVersionListDocument:
+    return {"versions": [{"port_block_ref": {"entity_type": "PortBlock", "entity_id": item.port_block_id}, "version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.version_id}, "version_number": item.version_number, "port_count": item.port_count} for item in PortBlockCatalog(session).list_versions(port_block_id)]}
+
 
 @app.post(
     "/v1/library/port-blocks/{port_block_id}/versions",
@@ -681,7 +686,9 @@ def get_object_blueprint_version(
             for left, right in version.internal_links
         ],
         "composition": None if version.composition is None else {"instances": [
-            {"instance_key": item.instance_key, "port_block_version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.port_block_version_id}}
+            {"instance_key": item.instance_key,
+             "port_block_ref": {"entity_type": "PortBlock", "entity_id": session.get(PortBlockVersion, item.port_block_version_id).port_block_id},
+             "port_block_version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.port_block_version_id}}
             for item in version.composition
         ]},
     }
