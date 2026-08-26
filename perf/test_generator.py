@@ -32,7 +32,7 @@ def test_small_materialization_matches_network_port_runtime_shape():
         source, target = result["anchors"]["trace_source_physical_object_id"], result["anchors"]["trace_target_physical_object_id"]
         assert session.query(Connection).join(ConnectionPoint, Connection.point_a_id == ConnectionPoint.id).filter(ConnectionPoint.physical_object_id == source).count() > 0
         assert source != target
-        objects_by_point = dict(session.execute(select(ConnectionPoint.id, ConnectionPoint.physical_object_id)))
+        objects_by_point = dict(session.execute(select(ConnectionPoint.id, ConnectionPoint.physical_object_id)).all())
         external_incidents: dict[object, int] = {}
         for connection in session.scalars(select(Connection)):
             if objects_by_point[connection.point_a_id] == objects_by_point[connection.point_b_id]:

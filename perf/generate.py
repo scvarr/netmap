@@ -116,14 +116,14 @@ def generate(profile_name: str, seed: int) -> dict[str, object]:
             raise RuntimeError("profile lacks budget for a meaningful cross-object ring")
         ring = min(external, len(port_bearing))
         free_external_members = {obj.id: list(points_by_object[obj.id]) for obj in port_bearing}
+        cursor = 0
         for index in range(external):
-            source_index = index % len(port_bearing)
-            target_index = (source_index + 1) % len(port_bearing) if index < ring else (index * 7 + 1) % len(port_bearing)
-            if target_index == source_index:
-                target_index = (target_index + 1) % len(port_bearing)
-            source = port_bearing[source_index]; target = port_bearing[target_index]
-            if not free_external_members[source.id] or not free_external_members[target.id]:
+            available = [obj for obj in port_bearing if free_external_members[obj.id]]
+            if len(available) < 2:
                 raise RuntimeError("profile exhausted a connection point member for external topology")
+            source = available[cursor % len(available)]
+            target = available[(cursor + 1) % len(available)]
+            cursor += 1
             left = free_external_members[source.id].pop(0)
             right = free_external_members[target.id].pop(0)
             conn = Connection(id=stable_id(seed, "connection", "external", index), point_a_id=left.id, point_b_id=right.id, cardinality=1)
