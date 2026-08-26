@@ -525,6 +525,12 @@ class BlueprintCompositionInstanceRequest(BaseModel):
     instance_key: str = Field(min_length=1, max_length=255)
     port_block_version_ref: PortBlockLibraryRef
 
+    @model_validator(mode="after")
+    def validate_exact_version_ref(self) -> "BlueprintCompositionInstanceRequest":
+        if self.port_block_version_ref.entity_type != "PortBlockVersion":
+            raise PydanticCustomError("blueprint_port_block_version_ref_required", "Blueprint composition requires a PortBlockVersion reference")
+        return self
+
 
 class BlueprintCompositionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -729,6 +735,12 @@ class BlueprintCompositionInstanceDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
     instance_key: str = Field(min_length=1)
     port_block_version_ref: PortBlockLibraryRef
+
+    @model_validator(mode="after")
+    def validate_exact_version_ref(self) -> "BlueprintCompositionInstanceDocument":
+        if self.port_block_version_ref.entity_type != "PortBlockVersion":
+            raise PydanticCustomError("blueprint_port_block_version_ref_required", "Blueprint composition requires a PortBlockVersion reference")
+        return self
 
 
 class BlueprintCompositionDocument(BaseModel):

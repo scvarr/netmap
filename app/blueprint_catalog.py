@@ -141,9 +141,12 @@ class ObjectBlueprintCatalog:
                 select(PortBlockPort).where(PortBlockPort.port_block_version_id == instance.port_block_version_id).order_by(PortBlockPort.layout_order)
             ))
         for index, (instance, port) in enumerate(expanded):
+            slot_key = self.composed_slot_key(instance.instance_key, port.local_id)
+            if slot_key in slots_by_key:
+                raise ValidationError("Composed Blueprint slot identity collision")
             slot = BlueprintEndpointSlot(
                 blueprint_version_id=version.id,
-                slot_key=self.composed_slot_key(instance.instance_key, port.local_id),
+                slot_key=slot_key,
                 display_name=port.display_label,
                 kind=port.kind,
                 anchor_side="RIGHT",
@@ -178,8 +181,16 @@ class ObjectBlueprintCatalog:
 
     @staticmethod
     def composed_slot_key(instance_key: str, local_id: str) -> str:
-        """Canonical composed key: only opaque stable instance key plus immutable local id."""
-        return f"{instance_key}:{local_id}"
+        """Bounded identity key: FNV-1a-128 of UTF-8 instance/local bytes.
+
+        Labels, exact version, layout and fallback anchors deliberately do not participate.
+        The caller detects the cryptographically-unlikely digest collision before persistence.
+        """
+        value = 0x6C62272E07BB014262B821756295C58D
+        for byte in instance_key.encode("utf-8") + b"\0" + local_id.encode("utf-8"):
+            value ^= byte
+            value = (value * 0x0000000001000000000000000000013B) & ((1 << 128) - 1)
+        return f"pb_{value:032x}"
 
     def list_blueprints(self) -> tuple[BlueprintListItem, ...]:
         blueprints = tuple(self.session.scalars(select(ObjectBlueprint).order_by(ObjectBlueprint.name, ObjectBlueprint.id)))
@@ -283,6 +294,9 @@ class ObjectBlueprintCatalog:
                 BlueprintInternalLink.blueprint_version_id.in_(version_ids)
             ))
             self.session.execute(delete(BlueprintEndpointSlot).where(BlueprintEndpointSlot.id.in_(slot_ids)))
+        self.session.execute(delete(BlueprintPortBlockInstance).where(
+            BlueprintPortBlockInstance.blueprint_version_id.in_(version_ids)
+        ))
         self.session.execute(delete(ObjectBlueprintVersion).where(ObjectBlueprintVersion.id.in_(version_ids)))
         self.session.delete(blueprint)
 

@@ -6,7 +6,12 @@ export interface BlueprintEditorState { name: string; defaultClass: string; widt
 export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateInstanceKey' | 'missingPortBlock' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
 const message: Record<BlueprintValidationError, string> = { nameRequired:'Укажите название шаблона.', dimensionsPositive:'Ширина и высота должны быть больше нуля.', colorFormat:'Цвет должен быть в формате #RRGGBB.', duplicateInstanceKey:'Повторяется ключ экземпляра Port Block.', missingPortBlock:'Выберите точную версию Port Block.', individualSelfLink:'Внутренняя связь не может соединять порт с самим собой.', individualMissingPort:'Внутренняя связь ссылается на отсутствующий порт.', duplicateIndividualLink:'Повторяется внутренняя связь.' };
 const normalized = (value: string) => value.trim();
-export const composedSlotKey = (instanceKey: string, localId: string) => `${instanceKey}:${localId}`;
+/** Must match ObjectBlueprintCatalog.composed_slot_key: FNV-1a-128(UTF-8(instance) + NUL + UTF-8(local)). */
+export const composedSlotKey = (instanceKey: string, localId: string) => {
+  let value = 0x6c62272e07bb014262b821756295c58dn;
+  for (const byte of new TextEncoder().encode(`${instanceKey}\0${localId}`)) value = (value ^ BigInt(byte)) * 0x0000000001000000000000000000013bn & ((1n << 128n) - 1n);
+  return `pb_${value.toString(16).padStart(32, '0')}`;
+};
 export const slotsForInstance = (item: BlueprintBlockInstance) => item.ports.map((port) => ({ key: composedSlotKey(item.instanceKey, port.local_id), label: `${item.portBlockName ?? item.portBlockVersionRef} · ${port.display_label}`, kind: port.kind }));
 export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocument): BlueprintEditorState | null => version.composition ? { name:version.name, defaultClass:version.default_physical_object_class ?? '', width:version.body.width, height:version.body.height, fillColor:version.body.fill_color ?? '#28565a', instances:version.composition.instances.map((item) => ({ instanceKey:item.instance_key, portBlockVersionRef:item.port_block_version_ref.entity_id, ports:[] })), individualLinks:version.internal_links } : null;
 export const generateBlueprint = (state: BlueprintEditorState) => {
