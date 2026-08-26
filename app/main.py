@@ -13,7 +13,8 @@ from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.blueprint_catalog import ObjectBlueprintCatalog
 from app.blueprint_upgrade_analysis import BlueprintUpgradeAnalyzer
 from app.catalog_inventory_resolver import CatalogInventoryResolver
-from app.database import get_session
+from app.database import engine, get_session
+from app.perf_instrumentation import instrument_request, install_listener
 from app.device_catalog import DeviceCatalog
 from app.device_details_resolver import ConfiguredDeviceDetailsResolver
 from app.errors import NetMapError, ValidationError
@@ -132,6 +133,8 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message
 logger = logging.getLogger("netmap")
 
 app = FastAPI(title="NetMap", version="0.1.0")
+install_listener(engine)
+app.middleware("http")(instrument_request)
 
 
 @app.get(

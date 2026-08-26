@@ -35,6 +35,7 @@ import { FloatingTopologyEdge, WiringRoute } from "./FloatingTopologyEdge";
 import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
 import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
 import { physicalObjectIdForNode } from "../topology/projection";
+import { perfMark, perfMeasure } from "../perfMarks";
 import type { XYPosition } from "@xyflow/react";
 import { overlapsAnyNode } from "../topology/nodeFootprint";
 import type { MapCableRoute } from "../topology/savedMapTypes";
@@ -135,6 +136,7 @@ export function TopologyCanvas({
     appliedSceneKey.current = presentationSceneKey;
     if (sceneChanged) setProjection(null);
     setLayoutError(null);
+    perfMark("layout-start");
     void layoutEngine(document).then(
       (nextProjection) => {
         if (!current || currentDocument.current !== document) return;
@@ -151,6 +153,8 @@ export function TopologyCanvas({
           next.nodes.map((node) => [node.id, node.position]),
         );
         setProjection(next);
+        perfMark("layout-end");
+        perfMeasure("layout-duration", "layout-start", "layout-end");
       },
       (reason: unknown) => {
         if (!current) return;
@@ -199,6 +203,10 @@ export function TopologyCanvas({
     fitAfterLayout.current = false;
     fittedSceneKey.current = presentationSceneKey;
     void fitView({ duration: 300, maxZoom: 1.1, padding: 0.2 });
+    requestAnimationFrame(() => {
+      perfMark("map-interactive");
+      perfMeasure("time-to-map", "document-received", "map-interactive");
+    });
   }, [fitView, presentationSceneKey, projection]);
 
   useEffect(() => {

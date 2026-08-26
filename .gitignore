@@ -4,6 +4,7 @@ __pycache__/
 .pytest_cache/
 *.py[cod]
 .env
+perf/results/
 .gitnexus/
 .claude/skills/gitnexus/
 AGENTS.md

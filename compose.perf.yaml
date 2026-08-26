@@ -1,0 +1,41 @@
+name: netmap-perf
+services:
+  perf-db:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_DB: netmap_perf
+      POSTGRES_USER: netmap
+      POSTGRES_PASSWORD: netmap
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  perf-backend:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://netmap:netmap@perf-db:5432/netmap_perf
+      NETMAP_PERF_DATABASE: "1"
+      NETMAP_PERF_INSTRUMENTATION: "1"
+    depends_on:
+      perf-db:
+        condition: service_healthy
+    networks:
+      default:
+        aliases: [backend]
+  perf-frontend:
+    build: ./frontend
+    depends_on:
+      perf-backend:
+        condition: service_started
+    ports: ["5174:80"]
+  perf-runner:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://netmap:netmap@perf-db:5432/netmap_perf
+      NETMAP_PERF_DATABASE: "1"
+      PERF_BASE_URL: http://perf-backend:8000
+    command: ["pytest", "-m", "perf", "perf/test_backend.py"]
+    depends_on:
+      perf-backend:
+        condition: service_started

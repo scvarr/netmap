@@ -8,6 +8,7 @@ import {
 import { QuickInspector } from "../components/QuickInspector";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
+import { perfMark } from "../perfMarks";
 import { ViewState } from "../components/ViewState";
 import { physicalTraceOverlayFor } from "../topology/interfacePhysicalTraceOverlay";
 import {
@@ -349,9 +350,11 @@ export function MapPage({
         ),
       )
       .then(
-        (next) =>
-          active &&
-          setSceneDocument({ sceneKey: presentationSceneKey, document: next }),
+        (next) => {
+          if (!active) return;
+          perfMark("document-received");
+          setSceneDocument({ sceneKey: presentationSceneKey, document: next });
+        },
         (reason) =>
           active &&
           setError(errorMessage(reason, t("view.error.title"))),

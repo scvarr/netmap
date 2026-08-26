@@ -8,6 +8,7 @@
     "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
     "test": "vitest run",
     "test:watch": "vitest"
+    ,"perf:playwright": "playwright test -c playwright.perf.config.ts"
   },
   "dependencies": {
     "@xyflow/react": "12.11.3",
@@ -27,5 +28,6 @@
     "typescript": "5.9.3",
     "vite": "8.2.1",
     "vitest": "4.1.10"
+    ,"@playwright/test": "1.58.2"
   }
 }

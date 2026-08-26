@@ -96,3 +96,41 @@ p95-значения контролируются в full-benchmark режиме
   SMALL DOM-count sanity.
 - Nightly: MEDIUM latency-smoke с щедрым порогом (×3 локальной медианы).
 - PORT_HEAVY/LARGE: вручную или ночью; в per-PR CI не включать.
+
+## PERF-001 baseline (initial local record)
+
+Measured fact, not a budget verdict. Commit `a98353273c99d9c1e994e03905bf3adb62b231a9`,
+seed `20260826`, quick mode (one warmup + 7 measured runs; median only) in
+Docker Compose: Python 3.13.7, PostgreSQL 17.6. Dataset SMALL: 100 objects,
+800 CP, 150 connections, 2 maps, 100 map memberships.
+
+| Backend metric | SMALL: ms / SQL / bytes | MEDIUM: ms / SQL / bytes |
+|---|---:|---:|
+| L1 scoped + interstitial projection | 236.8 / 810 / 25,239 | 1125.0 / 4,010 / 5,589 |
+| L2 unscoped projection | 1.8 / 1 / 107 | 2.0 / 1 / 107 |
+| saved map | 4.8 / 4 / 13,100 | 8.3 / 4 / 43,369 |
+| inventory | 237.0 / 809 / 35,414 | 1295.7 / 4,009 / 177,274 |
+| physical object detail | 228.1 / 811 / 3,286 | 1116.6 / 4,011 / 3,286 |
+| L1 trace specific / any port | 4.9 / 6 / 7,639; 5.1 / 6 / 7,605 | 4.8 / 6 / 562; 4.2 / 6 / 528 |
+| L1 resolver only | 222.4 / 810 / 26,692 | 1126.2 / 4,010 / 5,947 |
+
+HTTP SQL counts are a measured fact: `perf-backend` enables a request-local
+ContextVar counter only under `NETMAP_PERF_INSTRUMENTATION=1`, only with header
+`X-NetMap-Perf-Measure: 1`, and returns it as `X-NetMap-Perf-SQL-Queries`.
+The resolver and HTTP timings are intentionally separate; the SMALL overhead
+was 14.5 ms and MEDIUM was -1.1 ms, so neither is labelled serialization time.
+
+Observed finding, not an optimization decision: the measured 809–4,011 SQL
+statements for inventory/details and 810–4,010 for scoped projection are the
+baseline inputs to PERF-002/008; no query optimization is included here.
+
+PORT_HEAVY and LARGE remain manual/not measured in this local pass. Chromium is
+configured against the real perf compose stack, but the local Playwright browser
+binary was unavailable (the attempted Chromium download did not complete);
+frontend metrics are therefore **not measured**, not substituted with jsdom
+data. The instrumentation marks layout duration separately from
+document-received to interactive-map.
+
+Run: `docker compose -f compose.perf.yaml up -d --build`; then
+`docker compose -f compose.perf.yaml run --rm -e PERF_COMMIT_SHA=$(git rev-parse HEAD) perf-runner pytest -m perf perf/test_backend.py --perf-mode quick --perf-profile medium`.
+Full mode performs 40 measured runs and reports p50/p95; quick mode never does.

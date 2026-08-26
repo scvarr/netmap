@@ -13,6 +13,7 @@ COPY alembic.ini .
 COPY alembic ./alembic
 COPY app ./app
 COPY tests ./tests
+COPY perf ./perf
 COPY pytest.ini .
 
 EXPOSE 8000
