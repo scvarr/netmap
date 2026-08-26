@@ -31,6 +31,7 @@
 - [[09-ui-ux-review|09. Рабочий L1 UI/UX review]]
 - [[09-01-l1-spatial-foundation-plan|09.1 План завершения L1 spatial foundation]]
 - [[09-02-post-l1-product-roadmap|09.2 Post-L1 product roadmap]]
+- [[09-03-port-block-blueprint-architecture|09.3 Port Block Blueprint composition and multi-face physical presentation]]
 
 ## Базовые принципы
 

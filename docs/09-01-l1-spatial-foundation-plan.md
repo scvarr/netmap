@@ -268,6 +268,28 @@ The next bounded product step is `L1S.6 — Controlled Blueprint instance upgrad
 - Делать explicit apply только после устранения blockers; upgrade не является
   delete/recreate `PhysicalObject`.
 
+### L1S.6c — Port Block Blueprint composition and multi-face physical presentation
+
+**ARCHITECTURE AGREED / IMPLEMENTATION FUTURE**
+
+The architecture is fixed in
+[[09-03-port-block-blueprint-architecture|09.3 Port Block Blueprint composition
+and multi-face physical presentation]]. Future bounded implementation milestone(s)
+may introduce reusable immutable Port Block versions, their composition into one
+Object Blueprint version, and `FRONT`/`REAR` presentation faces. This work is
+not complete and may need subdivision. It must preserve L1S.6 canonical identity,
+provenance, upgrade, and runtime-topology invariants; it does not add a
+`MapViewKey` or a new Saved Map membership model.
+
+### Later separate bounded milestone — dense cable-editing visibility
+
+**FUTURE / NOT PART OF L1S.6c**
+
+While routing a selected cable, it should remain visible; objects that obstruct
+the editing context may become translucent. This is deliberately separate from
+Port Block Blueprint composition so dense-device authoring does not absorb cable
+editing visibility work.
+
 ### L1S.7 — Regions / areas
 
 - Presentation-only spatial regions без topology semantics.

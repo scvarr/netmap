@@ -232,6 +232,25 @@ Aggregate edge не должен визуально или семантичес�
 
 По запросу пользователя meaningful aggregate должен раскрываться до supporting canonical/evidence refs.
 
+## Future Port Block and multi-face compatibility boundary
+
+**FIXED architecture; FUTURE implementation.** The detailed decision record is
+[[09-03-port-block-blueprint-architecture|09.3 Port Block Blueprint composition
+and multi-face physical presentation]]. A reusable Port Block is
+authoring/presentation provenance for network connection points, not a canonical
+entity or a `PhysicalObject`. A future Object Blueprint version may compose
+immutable exact Port Block versions onto `FRONT`/`REAR` faces, but materializing
+it must still create only the existing canonical `ConnectionPoint`, optional
+`NetworkInterface`, binding, and Blueprint-instance provenance facts.
+
+`FRONT` and `REAR` are geometry within the one L1 object presentation. They do
+not create a new Saved Map membership, network view, `MapViewKey`, or canonical
+object. The existing `L1/PHYSICAL_OBJECT` and `L2/DEVICE` Saved Map views remain
+the only relevant map/network-view dimension. Stable final slot identity is
+separate from labels, row/order, and geometry; existing L1S.6 immutable
+snapshot and runtime-topology rules continue to apply. This paragraph does not
+change a current presentation DTO or the current single-anchor renderer.
+
 ## Layer и detail независимы
 
 **FIXED**

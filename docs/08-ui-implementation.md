@@ -736,6 +736,14 @@ Geometry и side anchor никогда не создают connectivity. `Bluepr
 готовый для будущего map-node use. После save Library перечитывается авторитетно;
 optimistic invented blueprint отсутствует.
 
+The current editor and DTOs intentionally remain this single-body,
+`side`/`offset`/`span` contract. Future Port Block composition, `FRONT`/`REAR`
+faces, visual face placement, and separate rendered-port/cable-attachment
+geometry are architecture-only decisions in
+[[09-03-port-block-blueprint-architecture|09.3]]. They are not implemented by
+this UI contract and do not add a map view, Saved Map membership, or a current
+API field.
+
 ## BLUEPRINT.3a — viewport and version lifecycle foundation
 
 `BlueprintPreview` остаётся reusable renderer. Editor помещает его в bounded
