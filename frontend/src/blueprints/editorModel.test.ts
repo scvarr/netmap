@@ -29,4 +29,12 @@ describe('Object Blueprint composition editor model', () => {
     const source = { loadPortBlocks: vi.fn(), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
     expect(await hydrateBlueprintEditorState({ schema_version: '1.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v' }, version_number: 1, name: 'Historical', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slots: [], internal_links: [], composition: null }, source)).toBeNull();
   });
+
+  it('hydrates and saves an authored empty composition as an editable state', async () => {
+    const source = { loadPortBlocks: vi.fn(), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
+    const empty = { schema_version: '1.0' as const, blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v' }, version_number: 2, name: 'Empty composition', body: { kind: 'RECTANGLE' as const, width: 100, height: 40 }, slots: [], internal_links: [], composition: { instances: [] } };
+    const state = await hydrateBlueprintEditorState(empty, source);
+    expect(state).toMatchObject({ name: 'Empty composition', instances: [], individualLinks: [] });
+    expect(createBlueprintRequest(state!).request).toMatchObject({ composition: { instances: [] }, internal_links: [] });
+  });
 });

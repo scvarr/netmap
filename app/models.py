@@ -349,6 +349,9 @@ class ObjectBlueprintVersion(Base):
     height: Mapped[float] = mapped_column(Float, nullable=False)
     fill_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     authoring_recipe: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # NULL identifies pre-composition immutable snapshots. New authoring always
+    # writes PORT_BLOCKS_V1, even when its composition contains no instances.
+    composition_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class BlueprintPortBlockInstance(Base):

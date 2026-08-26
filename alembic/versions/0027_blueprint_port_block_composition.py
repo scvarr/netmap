@@ -14,6 +14,9 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
+    # Existing immutable Blueprint snapshots predate composition provenance and
+    # therefore retain NULL. New composition-authored versions write PORT_BLOCKS_V1.
+    op.add_column("object_blueprint_versions", sa.Column("composition_kind", sa.String(length=32), nullable=True))
     op.create_table(
         "blueprint_port_block_instances",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
@@ -37,3 +40,4 @@ def downgrade() -> None:
     op.drop_column("blueprint_endpoint_slots", "port_block_local_id")
     op.drop_column("blueprint_endpoint_slots", "port_block_instance_id")
     op.drop_table("blueprint_port_block_instances")
+    op.drop_column("object_blueprint_versions", "composition_kind")

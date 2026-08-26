@@ -29,6 +29,8 @@ def test_0027_preserves_historical_blueprint_snapshot_when_upgrading_from_0026()
         slots = session.execute(text("SELECT slot_key, port_block_instance_id, port_block_local_id FROM blueprint_endpoint_slots WHERE blueprint_version_id = :version_id ORDER BY slot_key"), {"version_id": version_id}).all()
         link = session.execute(text("SELECT slot_a_id, slot_b_id FROM blueprint_internal_links WHERE id = :id"), {"id": link_id}).one()
         composition_count = session.execute(text("SELECT count(*) FROM blueprint_port_block_instances WHERE blueprint_version_id = :version_id"), {"version_id": version_id}).scalar_one()
+        composition_kind = session.execute(text("SELECT composition_kind FROM object_blueprint_versions WHERE id = :version_id"), {"version_id": version_id}).scalar_one()
     assert slots == [("legacy-a", None, None), ("legacy-b", None, None)]
     assert set(link) == {first_slot_id, second_slot_id}
     assert composition_count == 0
+    assert composition_kind is None

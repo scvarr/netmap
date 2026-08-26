@@ -61,6 +61,36 @@ def test_composition_expands_exact_ports_and_reads_provenance():
     assert {(item.port_block_instance_id is not None, item.port_block_local_id) for item in slots} == {(True, "p1"), (True, "p2")}
 
 
+def test_empty_composition_is_authored_and_not_read_as_historical_snapshot():
+    payload = {
+        "name": "Empty composition",
+        "body": {"kind": "RECTANGLE", "width": 100, "height": 40},
+        "composition": {"instances": []},
+        "internal_links": [],
+    }
+    created = client.post("/v1/library/object-blueprints", json=payload)
+    assert created.status_code == 201, created.text
+    blueprint_id = created.json()["blueprint_ref"]["entity_id"]
+    version_id = created.json()["version_ref"]["entity_id"]
+    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
+    assert detail.status_code == 200
+    assert detail.json()["composition"] == {"instances": []}
+
+
+def test_next_version_can_replace_composition_with_empty_composition():
+    blueprint_id, _ = create_blueprint([slot("p1")])
+    response = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={
+        "body": {"kind": "RECTANGLE", "width": 100, "height": 40},
+        "composition": {"instances": []},
+        "internal_links": [],
+    })
+    assert response.status_code == 201, response.text
+    version_id = response.json()["version_ref"]["entity_id"]
+    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
+    assert detail.status_code == 200
+    assert detail.json()["composition"] == {"instances": []}
+
+
 def test_same_exact_block_twice_has_distinct_final_slots_and_duplicate_instance_key_is_rejected():
     block_id, version_id = create_port_block([slot("p1")])
     ref = {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": version_id}

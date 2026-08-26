@@ -116,6 +116,7 @@ class ObjectBlueprintCatalog:
             height=query.body.height,
             fill_color=query.body.fill_color,
             authoring_recipe=None,
+            composition_kind="PORT_BLOCKS_V1",
         )
         self.session.add(version)
         self.session.flush()
@@ -268,7 +269,7 @@ class ObjectBlueprintCatalog:
             fill_color=version.fill_color,
             slots=slots,
             internal_links=links,
-            composition=composition or None,
+            composition=composition if version.composition_kind == "PORT_BLOCKS_V1" else None,
         )
 
     def delete_blueprint(self, blueprint_id: uuid.UUID) -> None:
