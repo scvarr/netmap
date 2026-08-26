@@ -66,10 +66,10 @@ main:p2
 uplink:p1
 ```
 
-The exact serialized slot-key format is deliberately open. The invariant is
-not: a port identity must never be derived from visible port number, display
-label, row position, screen coordinate, or array/UI order. Renumbering a label
-alone must not change canonical port identity.
+The exact serialized slot-key format is deliberately open. The invariant is: a
+port identity must never be derived from visible port number, display label, row
+position, screen coordinate, or array/UI order. Renumbering a label alone must
+not change canonical port identity.
 
 Port numbering is a type-safe/common authoring convenience, not identity. The
 initial scope supports one or two rows and at least these automatic schemes:
