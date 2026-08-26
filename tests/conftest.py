@@ -27,6 +27,9 @@ from app.models import (
     PacketProcessingPlanAttachmentSet,
     ObjectBlueprint,
     ObjectBlueprintVersion,
+    PortBlock,
+    PortBlockPort,
+    PortBlockVersion,
     MapCableRoute,
     MapPlacement,
     MapViewPosition,
@@ -97,6 +100,9 @@ def clean_database():
         session.execute(delete(BlueprintEndpointSlot))
         session.execute(delete(ObjectBlueprintVersion))
         session.execute(delete(ObjectBlueprint))
+        session.execute(delete(PortBlockPort))
+        session.execute(delete(PortBlockVersion))
+        session.execute(delete(PortBlock))
         session.execute(delete(PacketProcessingPlanAttachment))
         session.execute(delete(PacketProcessingPlanAttachmentSet))
         session.execute(delete(ProcessingEntryPoint))

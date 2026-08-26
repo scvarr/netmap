@@ -38,6 +38,7 @@ from app.physical_connections import (
 from app.physical_object_details_resolver import ConfiguredPhysicalObjectDetailsResolver
 from app.physical_object_l1_resolver import PhysicalObjectL1Resolver
 from app.physical_object_deletion import PhysicalObjectDeletionCatalog
+from app.port_block_catalog import PortBlockCatalog
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.saved_map_catalog import SavedMapCatalog
@@ -56,6 +57,8 @@ from app.schemas import (
     CreatePhysicalEndpointConnectionRequest,
     CreatePhysicalLinkRequest,
     CreatePhysicalObjectRequest,
+    CreatePortBlockRequest,
+    CreatePortBlockVersionRequest,
     CreateSavedMapRequest,
     CreateL2ForwardingContextRequest,
     CatalogInventoryDocument,
@@ -90,6 +93,9 @@ from app.schemas import (
     ObjectBlueprintInstantiationDocument,
     ObjectBlueprintListDocument,
     ObjectBlueprintVersionDocument,
+    PortBlockCreationDocument,
+    PortBlockListDocument,
+    PortBlockVersionDocument,
     BlueprintUpgradeAnalysisDocument,
     ApplyBlueprintUpgradeRequest,
     PhysicalConnectionCreationDocument,
@@ -483,6 +489,94 @@ def create_physical_object(
         return ConfiguredPhysicalObjectDetailsResolver(
             CanonicalRepository(session)
         ).resolve(created.physical_object_id)
+
+
+@app.post(
+    "/v1/library/port-blocks",
+    response_model=PortBlockCreationDocument,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}},
+)
+def create_port_block(
+    query: CreatePortBlockRequest,
+    session: Session = Depends(get_session),
+) -> PortBlockCreationDocument:
+    with session.begin():
+        created = PortBlockCatalog(session).create_initial_version(query)
+        return {
+            "port_block_ref": {"entity_type": "PortBlock", "entity_id": created.port_block_id},
+            "version_ref": {"entity_type": "PortBlockVersion", "entity_id": created.version_id},
+        }
+
+
+@app.get(
+    "/v1/library/port-blocks",
+    response_model=PortBlockListDocument,
+)
+def list_port_blocks(session: Session = Depends(get_session)) -> PortBlockListDocument:
+    port_blocks = PortBlockCatalog(session).list_port_blocks()
+    return {
+        "port_blocks": [
+            {
+                "port_block_ref": {"entity_type": "PortBlock", "entity_id": item.port_block_id},
+                "name": item.name,
+                "version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.version_id},
+                "version_number": item.version_number,
+                "port_count": item.port_count,
+                "version_count": item.version_count,
+            }
+            for item in port_blocks
+        ]
+    }
+
+
+@app.post(
+    "/v1/library/port-blocks/{port_block_id}/versions",
+    response_model=PortBlockCreationDocument,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}},
+)
+def create_port_block_version(
+    port_block_id: uuid.UUID,
+    query: CreatePortBlockVersionRequest,
+    session: Session = Depends(get_session),
+) -> PortBlockCreationDocument:
+    with session.begin():
+        created = PortBlockCatalog(session).create_next_version(port_block_id, query)
+        return {
+            "port_block_ref": {"entity_type": "PortBlock", "entity_id": created.port_block_id},
+            "version_ref": {"entity_type": "PortBlockVersion", "entity_id": created.version_id},
+        }
+
+
+@app.get(
+    "/v1/library/port-blocks/{port_block_id}/versions/{version_id}",
+    response_model=PortBlockVersionDocument,
+    responses={422: {"model": ErrorResponse}},
+)
+def get_port_block_version(
+    port_block_id: uuid.UUID,
+    version_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> PortBlockVersionDocument:
+    version = PortBlockCatalog(session).get_version_detail(port_block_id, version_id)
+    return {
+        "port_block_ref": {"entity_type": "PortBlock", "entity_id": version.port_block_id},
+        "name": version.name,
+        "version_ref": {"entity_type": "PortBlockVersion", "entity_id": version.version_id},
+        "version_number": version.version_number,
+        "ports": [
+            {
+                "local_id": port.local_id,
+                "display_label": port.display_label,
+                "kind": port.kind,
+                "row": port.row,
+                "column": port.layout_column,
+                "layout_order": port.layout_order,
+            }
+            for port in version.ports
+        ],
+    }
 
 
 @app.post(

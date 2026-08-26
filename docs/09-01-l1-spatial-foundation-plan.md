@@ -270,16 +270,34 @@ The next bounded product step is `L1S.6 — Controlled Blueprint instance upgrad
 
 ### L1S.6c — Port Block Blueprint composition and multi-face physical presentation
 
-**ARCHITECTURE AGREED / IMPLEMENTATION FUTURE**
+**ARCHITECTURE AGREED / SUBDIVIDED IMPLEMENTATION**
 
 The architecture is fixed in
 [[09-03-port-block-blueprint-architecture|09.3 Port Block Blueprint composition
-and multi-face physical presentation]]. Future bounded implementation milestone(s)
-may introduce reusable immutable Port Block versions, their composition into one
-Object Blueprint version, and `FRONT`/`REAR` presentation faces. This work is
-not complete and may need subdivision. It must preserve L1S.6 canonical identity,
+and multi-face physical presentation]]. It is implemented as the following
+deliberately bounded milestones:
+
+1. **L1S.6c.1 — Port Block library foundation**: library-owned Port Blocks,
+   immutable exact versions, explicit local-port layout snapshots, migrations,
+   machine-readable library API and backend tests. It does not reference Object
+   Blueprints or alter canonical topology.
+2. **L1S.6c.2 — Port Block authoring and numbering**.
+3. **L1S.6c.3 — Object Blueprint composition and legacy EndpointGroup removal**.
+4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation**.
+5. **L1S.6c.5 — visual Blueprint composition editor**.
+6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
+
+This work is not otherwise complete. Every slice must preserve L1S.6 canonical identity,
 provenance, upgrade, and runtime-topology invariants; it does not add a
 `MapViewKey` or a new Saved Map membership model.
+
+This is a pre-production project. There is no compatibility requirement for
+existing legacy `EndpointGroup` authoring data. When L1S.6c.3 replaces that
+contract, `EndpointGroup`, `placement_offset`, and `placement_span` authoring
+may be removed destructively. Do not add compatibility parsers, dual recipe
+formats, or migration machinery solely to preserve development Blueprint data.
+This exception does not relax canonical topology, immutable Blueprint snapshot,
+Saved Map, provenance, or L1S.6 upgrade invariants.
 
 ### Later separate bounded milestone — dense cable-editing visibility
 

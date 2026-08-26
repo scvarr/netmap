@@ -245,7 +245,8 @@ Aggregate edge не должен визуально или семантичес�
 
 ## Future Port Block and multi-face compatibility boundary
 
-**FIXED architecture; FUTURE implementation.** The detailed decision record is
+**FIXED architecture; L1S.6c.1 library foundation is implemented and the
+remaining composition/presentation work is future.** The detailed decision record is
 [[09-03-port-block-blueprint-architecture|09.3 Port Block Blueprint composition
 and multi-face physical presentation]]. A reusable Port Block is
 authoring/presentation provenance for network connection points, not a canonical
@@ -253,6 +254,16 @@ entity or a `PhysicalObject`. A future Object Blueprint version may compose
 immutable exact Port Block versions onto `FRONT`/`REAR` faces, but materializing
 it must still create only the existing canonical `ConnectionPoint`, optional
 `NetworkInterface`, binding, and Blueprint-instance provenance facts.
+
+The current foundation is library-only: it does not create Object Blueprint
+references, faces, projection geometry, UI, or topology facts. Its stable local
+port identities are explicitly authored values rather than labels, visible
+numbers, coordinates, or UI-array order. Subsequent L1S.6c milestones may
+destructively replace legacy `EndpointGroup`/`placement_offset`/`placement_span`
+authoring without compatibility readers or data migration, because existing
+development authoring data has no pre-production compatibility guarantee. This
+does not relax canonical topology, immutable Blueprint snapshot, Saved Map,
+provenance, or L1S.6 upgrade invariants.
 
 `FRONT` and `REAR` are geometry within the one L1 object presentation. They do
 not create a new Saved Map membership, network view, `MapViewKey`, or canonical

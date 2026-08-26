@@ -2,7 +2,8 @@
 
 ## Status, authority and scope
 
-**FIXED architectural decisions. Implementation is FUTURE.**
+**FIXED architectural decisions. L1S.6c.1 library foundation is IMPLEMENTED;
+all composition and presentation work remains FUTURE.**
 
 This note records the agreed next evolution of Object Blueprints for dense
 network equipment. It is an architecture/product boundary only: it does not
@@ -30,11 +31,11 @@ describes an arrangement of network connection points, for example:
 - management ports;
 - patch-panel rows.
 
-Port Block versions are immutable once an Object Blueprint version references
-them. Changing a Port Block later creates a distinct version and must never
-silently alter an existing immutable Object Blueprint version. The exact
-library ownership, persistence shape, and serialized references are future
-implementation decisions.
+Port Block versions are immutable once created. Changing a Port Block creates a
+distinct version and must never silently alter an existing immutable Object
+Blueprint version that later references it. L1S.6c.1 persists the library-owned
+record, immutable version number, and an exact ordered/layout port snapshot;
+Object Blueprint references remain future work.
 
 A Port Block is authoring/presentation provenance, not canonical topology. It
 is not a `PhysicalObject`, a canonical network entity, or a topology source of
@@ -168,8 +169,11 @@ not part of Port Block implementation.
 
 ## Deliberately out of scope
 
-- implementation, persistence/schema, migrations, API endpoints, projection
-  DTO changes, UI components, and tests;
+- Object Blueprint references, block-instance keys and final composed-slot
+  serialization;
+- `FRONT`/`REAR`, Object Blueprint editor changes, automatic numbering recipes,
+  Port Block UI, projection changes, cable geometry, composite devices, and
+  dense-cable editing visibility;
 - arbitrary front-panel hardware inventory or rack visualization;
 - arbitrary dense grids, more than initial one/two-row numbering scope, or a
   numbering expression language;
@@ -183,8 +187,23 @@ not part of Port Block implementation.
 
 ## Implementation hand-off
 
-Future implementation may need subdivision, but must start from this note and
-the existing L1S.6 contracts. It must preserve the current authoritative
-runtime facts, immutable snapshot behavior, exact slot-to-canonical mappings,
-and the Saved Map separation between membership, network view, and presentation
-geometry.
+L1S.6c is intentionally subdivided as follows:
+
+1. **L1S.6c.1 — Port Block library foundation**.
+2. **L1S.6c.2 — Port Block authoring and numbering**.
+3. **L1S.6c.3 — Object Blueprint composition and legacy EndpointGroup removal**.
+4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation**.
+5. **L1S.6c.5 — visual Blueprint composition editor**.
+6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
+
+L1S.6c.3 may destructively remove the legacy `EndpointGroup`,
+`placement_offset`, and `placement_span` authoring contract: NetMap is
+pre-production and does not require compatibility with existing development
+Blueprint authoring data. Do not introduce compatibility parsers, dual recipe
+formats, or migration machinery just to preserve those records. This does not
+change any canonical topology, immutable Blueprint snapshot, Saved Map,
+provenance, or L1S.6 upgrade rule.
+
+Every future slice must preserve the current authoritative runtime facts,
+immutable snapshot behavior, exact slot-to-canonical mappings, and the Saved
+Map separation between membership, network view, and presentation geometry.

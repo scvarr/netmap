@@ -42,6 +42,16 @@ class BlueprintLibraryRef(BaseModel):
     entity_id: uuid.UUID
 
 
+class PortBlockLibraryRef(BaseModel):
+    """Library identity for a Port Block record or immutable version."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ref_type: Literal["LIBRARY_RECORD"] = "LIBRARY_RECORD"
+    entity_type: Literal["PortBlock", "PortBlockVersion"]
+    entity_id: uuid.UUID
+
+
 class SavedMapRef(BaseModel):
     """Presentation identity; deliberately not a ProjectionSourceRef."""
 
@@ -648,6 +658,93 @@ class InstantiateObjectBlueprintRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     display_name: str = Field(min_length=1, max_length=255)
+
+
+class PortBlockPortRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    local_id: str = Field(min_length=1, max_length=255)
+    display_label: str = Field(min_length=1, max_length=255)
+    kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
+    row: int = Field(ge=1, le=2)
+    column: int = Field(ge=1)
+    layout_order: int = Field(ge=1)
+
+
+class _PortBlockVersionSnapshotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    ports: list[PortBlockPortRequest] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_port_snapshot(self) -> "_PortBlockVersionSnapshotRequest":
+        local_ids = [port.local_id for port in self.ports]
+        positions = [(port.row, port.column) for port in self.ports]
+        orders = [port.layout_order for port in self.ports]
+        if len(local_ids) != len(set(local_ids)):
+            raise PydanticCustomError("port_block_duplicate_local_id", "Port Block local ids must be unique")
+        if len(positions) != len(set(positions)):
+            raise PydanticCustomError("port_block_duplicate_position", "Port Block port positions must be unique")
+        if len(orders) != len(set(orders)):
+            raise PydanticCustomError("port_block_duplicate_layout_order", "Port Block layout order values must be unique")
+        if sorted(orders) != list(range(1, len(orders) + 1)):
+            raise PydanticCustomError(
+                "port_block_non_contiguous_layout_order",
+                "Port Block layout order must be contiguous starting at 1",
+            )
+        rows = {port.row for port in self.ports}
+        if rows not in ({1}, {1, 2}):
+            raise PydanticCustomError("port_block_invalid_rows", "Port Block rows must be one row or rows 1 and 2")
+        return self
+
+
+class CreatePortBlockRequest(_PortBlockVersionSnapshotRequest):
+    name: str = Field(min_length=1, max_length=255)
+
+
+class CreatePortBlockVersionRequest(_PortBlockVersionSnapshotRequest):
+    port_block_name: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class PortBlockCreationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    port_block_ref: PortBlockLibraryRef
+    version_ref: PortBlockLibraryRef
+
+
+class PortBlockListItemDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    port_block_ref: PortBlockLibraryRef
+    name: str = Field(min_length=1)
+    version_ref: PortBlockLibraryRef
+    version_number: int = Field(ge=1)
+    port_count: int = Field(ge=1)
+    version_count: int = Field(ge=1)
+
+
+class PortBlockListDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    port_blocks: list[PortBlockListItemDocument]
+
+
+class PortBlockPortDocument(PortBlockPortRequest):
+    pass
+
+
+class PortBlockVersionDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    port_block_ref: PortBlockLibraryRef
+    name: str = Field(min_length=1)
+    version_ref: PortBlockLibraryRef
+    version_number: int = Field(ge=1)
+    ports: list[PortBlockPortDocument] = Field(min_length=1)
 
 
 class ObjectBlueprintCreationDocument(BaseModel):

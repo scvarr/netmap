@@ -273,6 +273,60 @@ class ObjectBlueprint(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
+class PortBlock(Base):
+    """Library-owned authoring record; never a canonical topology fact."""
+
+    __tablename__ = "port_blocks"
+    __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class PortBlockVersion(Base):
+    """Immutable ordered/layout snapshot of one PortBlock's network ports."""
+
+    __tablename__ = "port_block_versions"
+    __table_args__ = (
+        CheckConstraint("version_number >= 1", name="version_number_positive"),
+        UniqueConstraint("port_block_id", "version_number", name="uq_port_block_versions_number"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    port_block_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("port_blocks.id", ondelete="RESTRICT"), nullable=False
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class PortBlockPort(Base):
+    """One exact port in an immutable PortBlockVersion snapshot."""
+
+    __tablename__ = "port_block_ports"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(local_id)) > 0", name="local_id_not_blank"),
+        CheckConstraint("char_length(btrim(display_label)) > 0", name="display_label_not_blank"),
+        CheckConstraint("kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="kind_supported"),
+        CheckConstraint("row >= 1 AND row <= 2", name="row_supported"),
+        CheckConstraint("layout_column >= 1", name="column_positive"),
+        CheckConstraint("layout_order >= 1", name="layout_order_positive"),
+        UniqueConstraint("port_block_version_id", "local_id", name="uq_port_block_ports_local_id"),
+        UniqueConstraint("port_block_version_id", "row", "layout_column", name="uq_port_block_ports_position"),
+        UniqueConstraint("port_block_version_id", "layout_order", name="uq_port_block_ports_layout_order"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    port_block_version_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("port_block_versions.id", ondelete="RESTRICT"), nullable=False
+    )
+    local_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_label: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    row: Mapped[int] = mapped_column(Integer, nullable=False)
+    layout_column: Mapped[int] = mapped_column(Integer, nullable=False)
+    layout_order: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class ObjectBlueprintVersion(Base):
     __tablename__ = "object_blueprint_versions"
     __table_args__ = (
