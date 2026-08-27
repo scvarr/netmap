@@ -131,33 +131,36 @@ class ObjectBlueprintCatalog:
                 blueprint_version_id=version.id,
                 port_block_version_id=exact_version.id,
                 instance_key=item.instance_key,
+                face=item.face,
             )
             self.session.add(instance)
             instances.append(instance)
         self.session.flush()
         # Presentation-only fallback: deterministic right-edge distribution by request instance order
-        # and immutable PortBlock layout_order. It never participates in slot identity.
-        expanded: list[tuple[BlueprintPortBlockInstance, PortBlockPort]] = []
+        # and immutable PortBlock layout_order, independently for each physical face.
+        # It never participates in slot identity.
+        expanded_by_face: dict[str, list[tuple[BlueprintPortBlockInstance, PortBlockPort]]] = {"FRONT": [], "REAR": []}
         for instance in instances:
-            expanded.extend((instance, port) for port in self.session.scalars(
+            expanded_by_face[instance.face].extend((instance, port) for port in self.session.scalars(
                 select(PortBlockPort).where(PortBlockPort.port_block_version_id == instance.port_block_version_id).order_by(PortBlockPort.layout_order)
             ))
-        for index, (instance, port) in enumerate(expanded):
-            slot_key = self.composed_slot_key(instance.instance_key, port.local_id)
-            if slot_key in slots_by_key:
-                raise ValidationError("Composed Blueprint slot identity collision")
-            slot = BlueprintEndpointSlot(
-                blueprint_version_id=version.id,
-                slot_key=slot_key,
-                display_name=port.display_label,
-                kind=port.kind,
-                anchor_side="RIGHT",
-                anchor_offset=(index + .5) / len(expanded) if expanded else .5,
-                port_block_instance_id=instance.id,
-                port_block_local_id=port.local_id,
-            )
-            self.session.add(slot)
-            slots_by_key[slot.slot_key] = slot
+        for expanded in expanded_by_face.values():
+            for index, (instance, port) in enumerate(expanded):
+                slot_key = self.composed_slot_key(instance.instance_key, port.local_id)
+                if slot_key in slots_by_key:
+                    raise ValidationError("Composed Blueprint slot identity collision")
+                slot = BlueprintEndpointSlot(
+                    blueprint_version_id=version.id,
+                    slot_key=slot_key,
+                    display_name=port.display_label,
+                    kind=port.kind,
+                    anchor_side="RIGHT",
+                    anchor_offset=(index + .5) / len(expanded) if expanded else .5,
+                    port_block_instance_id=instance.id,
+                    port_block_local_id=port.local_id,
+                )
+                self.session.add(slot)
+                slots_by_key[slot.slot_key] = slot
         self.session.flush()
         link_pairs: set[tuple[str, str]] = set()
         for link_query in query.internal_links:

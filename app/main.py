@@ -664,6 +664,7 @@ def get_object_blueprint_version(
     session: Session = Depends(get_session),
 ) -> ObjectBlueprintVersionDocument:
     version = ObjectBlueprintCatalog(session).get_version_detail(blueprint_id, version_id)
+    faces_by_instance = {item.id: item.face or "FRONT" for item in (version.composition or ())}
     return {
         "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": version.blueprint_id},
         "name": version.name,
@@ -678,6 +679,7 @@ def get_object_blueprint_version(
             {
                 "key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind,
                 "anchor": {"side": slot.anchor_side, "offset": slot.anchor_offset},
+                "face": faces_by_instance.get(slot.port_block_instance_id, "FRONT"),
             }
             for slot in version.slots
         ],
@@ -688,7 +690,8 @@ def get_object_blueprint_version(
         "composition": None if version.composition is None else {"instances": [
             {"instance_key": item.instance_key,
              "port_block_ref": {"entity_type": "PortBlock", "entity_id": session.get(PortBlockVersion, item.port_block_version_id).port_block_id},
-             "port_block_version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.port_block_version_id}}
+             "port_block_version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.port_block_version_id},
+             "face": item.face or "FRONT"}
             for item in version.composition
         ]},
     }

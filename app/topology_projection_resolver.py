@@ -9,7 +9,7 @@ from app.device_catalog import (
     PhysicalObjectClassRecord,
 )
 from app.errors import ModelError, ValidationError
-from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, ObjectBlueprint, ObjectBlueprintVersion
+from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintPortBlockInstance, ObjectBlueprint, ObjectBlueprintVersion
 from app.repository import (
     CanonicalRepository,
     ConnectionPointRecord,
@@ -636,13 +636,14 @@ class ConfiguredTopologyProjectionResolver:
             return {}
         slots_by_instance: dict[uuid.UUID, list[dict]] = {instance_id: [] for instance_id in by_instance}
         mappings = self.repository.session.execute(
-            select(BlueprintInstanceSlot, BlueprintEndpointSlot)
+            select(BlueprintInstanceSlot, BlueprintEndpointSlot, BlueprintPortBlockInstance.face)
             .join(BlueprintEndpointSlot, BlueprintEndpointSlot.id == BlueprintInstanceSlot.blueprint_slot_id)
+            .outerjoin(BlueprintPortBlockInstance, BlueprintPortBlockInstance.id == BlueprintEndpointSlot.port_block_instance_id)
             .where(BlueprintInstanceSlot.blueprint_instance_id.in_(by_instance))
             .order_by(BlueprintInstanceSlot.blueprint_instance_id, BlueprintEndpointSlot.slot_key)
         ).all()
-        for mapping, slot in mappings:
-            slots_by_instance[mapping.blueprint_instance_id].append({"slot_key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "anchor": {"side": slot.anchor_side, "offset": slot.anchor_offset}, "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None})
+        for mapping, slot, face in mappings:
+            slots_by_instance[mapping.blueprint_instance_id].append({"slot_key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "anchor": {"side": slot.anchor_side, "offset": slot.anchor_offset}, "face": face or "FRONT", "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None})
         return {instance.physical_object_id: {"blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprint", "entity_id": str(blueprint.id)}, "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprintVersion", "entity_id": str(version.id)}, "body": {"kind": version.body_kind, "width": version.width, "height": version.height, "fill_color": version.fill_color}, "slots": slots_by_instance[instance.id]} for instance, version, blueprint in by_instance.values()}
     def _physical_candidates(
         self, owner: NetworkInterfacePhysicalOwnerRecord

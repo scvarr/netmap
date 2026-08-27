@@ -4,6 +4,7 @@ import type {
   BlueprintInternalLink,
   BlueprintSlot,
   BlueprintSlotKind,
+  BlueprintFace,
   CreateObjectBlueprintRequest,
   CreateObjectBlueprintVersionRequest,
   LibraryRef,
@@ -46,7 +47,8 @@ const parseSlot = (value: unknown, path: string): BlueprintSlot => {
   if (slot.kind !== 'CONNECTION_POINT' && slot.kind !== 'NETWORK_PORT') malformed(`${path}.kind is unsupported.`);
   if (!['LEFT', 'RIGHT', 'TOP', 'BOTTOM'].includes(String(anchor.side))) malformed(`${path}.anchor.side is unsupported.`);
   if (typeof anchor.offset !== 'number' || anchor.offset < 0 || anchor.offset > 1) malformed(`${path}.anchor.offset must be 0..1.`);
-  return { key: requireString(slot.key, `${path}.key`), display_name: requireString(slot.display_name, `${path}.display_name`), kind: slot.kind as BlueprintSlotKind, anchor: { side: anchor.side as BlueprintAnchorSide, offset: anchor.offset as number } };
+  if (slot.face !== 'FRONT' && slot.face !== 'REAR') malformed(`${path}.face is unsupported.`);
+  return { key: requireString(slot.key, `${path}.key`), display_name: requireString(slot.display_name, `${path}.display_name`), kind: slot.kind as BlueprintSlotKind, anchor: { side: anchor.side as BlueprintAnchorSide, offset: anchor.offset as number }, face: slot.face as BlueprintFace };
 };
 
 const parseLink = (value: unknown, path: string): BlueprintInternalLink => {
@@ -57,7 +59,7 @@ const parseLink = (value: unknown, path: string): BlueprintInternalLink => {
 const parseComposition = (value: unknown, path: string) => {
   if (value == null) return value as null | undefined;
   const composition = requireObject(value, path); if (!Array.isArray(composition.instances)) malformed(`${path}.instances must be an array.`);
-  return { instances: (composition.instances as unknown[]).map((value, index) => { const item=requireObject(value, `${path}.instances[${index}]`); const block=requireObject(item.port_block_ref, `${path}.instances[${index}].port_block_ref`); const ref=requireObject(item.port_block_version_ref, `${path}.instances[${index}].port_block_version_ref`); if(block.ref_type !== 'LIBRARY_RECORD' || block.entity_type !== 'PortBlock' || ref.ref_type !== 'LIBRARY_RECORD' || ref.entity_type !== 'PortBlockVersion') malformed(`${path}.instances[${index}] has invalid Port Block refs.`); return { instance_key:requireString(item.instance_key, `${path}.instances[${index}].instance_key`), port_block_ref:{ref_type:'LIBRARY_RECORD' as const,entity_type:'PortBlock' as const,entity_id:requireString(block.entity_id, `${path}.instances[${index}].port_block_ref.entity_id`)}, port_block_version_ref:{ref_type:'LIBRARY_RECORD' as const,entity_type:'PortBlockVersion' as const,entity_id:requireString(ref.entity_id, `${path}.instances[${index}].port_block_version_ref.entity_id`)} }; }) };
+  return { instances: (composition.instances as unknown[]).map((value, index) => { const item=requireObject(value, `${path}.instances[${index}]`); const block=requireObject(item.port_block_ref, `${path}.instances[${index}].port_block_ref`); const ref=requireObject(item.port_block_version_ref, `${path}.instances[${index}].port_block_version_ref`); if(block.ref_type !== 'LIBRARY_RECORD' || block.entity_type !== 'PortBlock' || ref.ref_type !== 'LIBRARY_RECORD' || ref.entity_type !== 'PortBlockVersion') malformed(`${path}.instances[${index}] has invalid Port Block refs.`); if (item.face !== 'FRONT' && item.face !== 'REAR') malformed(`${path}.instances[${index}].face is unsupported.`); return { instance_key:requireString(item.instance_key, `${path}.instances[${index}].instance_key`), port_block_ref:{ref_type:'LIBRARY_RECORD' as const,entity_type:'PortBlock' as const,entity_id:requireString(block.entity_id, `${path}.instances[${index}].port_block_ref.entity_id`)}, port_block_version_ref:{ref_type:'LIBRARY_RECORD' as const,entity_type:'PortBlockVersion' as const,entity_id:requireString(ref.entity_id, `${path}.instances[${index}].port_block_version_ref.entity_id`)}, face: item.face as BlueprintFace }; }) };
 };
 
 export const parseObjectBlueprintListDocument = (value: unknown): ObjectBlueprintListDocument => {

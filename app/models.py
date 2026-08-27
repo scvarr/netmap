@@ -365,6 +365,8 @@ class BlueprintPortBlockInstance(Base):
     blueprint_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False)
     port_block_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("port_block_versions.id", ondelete="RESTRICT"), nullable=False)
     instance_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    # NULL is immutable pre-face provenance. New composition authoring must set a face.
+    face: Mapped[str | None] = mapped_column(String(8), nullable=True)
 
 
 class BlueprintEndpointSlot(Base):

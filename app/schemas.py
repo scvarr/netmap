@@ -531,6 +531,7 @@ class BlueprintCompositionInstanceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     instance_key: str = Field(min_length=1, max_length=255)
     port_block_version_ref: PortBlockVersionLibraryRef
+    face: Literal["FRONT", "REAR"]
 
 
 class BlueprintCompositionRequest(BaseModel):
@@ -735,6 +736,7 @@ class ObjectBlueprintSlotDocument(BaseModel):
     display_name: str = Field(min_length=1)
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
     anchor: BlueprintAnchor
+    face: Literal["FRONT", "REAR"]
 
 
 class ObjectBlueprintInternalLinkDocument(BaseModel):
@@ -749,6 +751,7 @@ class BlueprintCompositionInstanceDocument(BaseModel):
     instance_key: str = Field(min_length=1)
     port_block_ref: PortBlockLibraryRef
     port_block_version_ref: PortBlockVersionLibraryRef
+    face: Literal["FRONT", "REAR"]
 
 
 class BlueprintCompositionDocument(BaseModel):
