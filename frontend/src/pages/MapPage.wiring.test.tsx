@@ -11,6 +11,21 @@ const creation = { cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Physic
 const renderPage = (write = vi.fn().mockResolvedValue(creation), loadProjection = vi.fn().mockResolvedValue(doc), setCableRoute = vi.fn().mockResolvedValue(map)) => { const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn(), setCableRoute }; render(<MemoryRouter initialEntries={['/map?map=map-1&view=physical']}><MapPage dataSource={{ loadProjection }} savedMapDataSource={maps} physicalEndpointConnectionWriteDataSource={{ createPhysicalEndpointConnection: write }} /></MemoryRouter>); return { write, loadProjection, maps, setCableRoute }; };
 
 describe('MapPage visual wiring', () => {
+  it('keeps primary map controls usable while the transient trace dock opens and closes without saved-map writes', async () => {
+    const { maps } = renderPage();
+    await screen.findByTestId('canvas');
+    const initialMapReads = maps.loadMap.mock.calls.length;
+    const initialMapLists = maps.listMaps.mock.calls.length;
+    await fireEvent.click(screen.getByRole('button', { name: 'Трассировка' }));
+    expect(screen.getByLabelText('L1 трассировка PhysicalObject')).toHaveClass('trace-command--docked');
+    fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' }));
+    expect(screen.getByText('Выберите исходный свободный порт')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Свернуть' }));
+    expect(maps.loadMap).toHaveBeenCalledTimes(initialMapReads);
+    expect(maps.listMaps).toHaveBeenCalledTimes(initialMapLists);
+    expect(maps.setCableRoute).not.toHaveBeenCalled();
+  });
+
   it('uses a non-modal selecting panel, keeps canvas clickable, then writes exact ports once', async () => {
     const { write, loadProjection } = renderPage();
     await screen.findByTestId('canvas');

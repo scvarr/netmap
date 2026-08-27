@@ -27,9 +27,11 @@ describe('RU/EN localization integration', () => {
     expect(screen.getByRole('option', { name: 'Карта' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'English' }));
     expect(screen.getByLabelText('Maps')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Trace' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'Карта' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Русский' }));
     expect(screen.getByLabelText('Карты')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Трассировка' })).toBeInTheDocument();
   });
 
   it('switches the Catalog/Object surface to English without translating backend names', async () => {
