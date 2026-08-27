@@ -121,7 +121,7 @@ describe('TopologyCanvas async layout boundary', () => {
   ])('renders an SVG path for %s', async (_, collapsedCable, genericTarget) => {
     const blueprint = (id: string, point: string) => ({
       id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [], attributes: {
-        blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint', entity_id: `${id}-bp` }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion', entity_id: `${id}-v` }, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, slots: [{ slot_key: 'port', display_name: 'port', kind: 'CONNECTION_POINT' as const, anchor: { side: 'RIGHT' as const, offset: .5 }, connection_point_id: point }] },
+        blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint', entity_id: `${id}-bp` }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion', entity_id: `${id}-v` }, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, slots: [{ slot_key: 'port', display_name: 'port', kind: 'CONNECTION_POINT' as const, rendered_position: { x: .5, y: .5 }, external_attachment: { x: 1, y: .5, side: 'RIGHT' as const }, connection_point_id: point }] },
       },
     });
     const left = blueprint('left', 'left-cp');

@@ -58,7 +58,7 @@ describe('PhysicalObjectDetailsSection ports', () => {
   });
 
   it('uses ordinary ports for paired network ports or bound interfaces and hides mixed-cardinality summary', async () => {
-    const a = point('A01', 'a', { blueprint_slot: { slot_key: 'A01', kind: 'NETWORK_PORT', anchor_side: 'LEFT', anchor_offset: 0 }, direct_interface_bindings: [{ interface_ref: ref('NetworkInterface', 'ni'), label: 'A01', evidence_refs: [] }] }); const b = point('B01', 'b');
+    const a = point('A01', 'a', { blueprint_slot: { slot_key: 'A01', kind: 'NETWORK_PORT' }, direct_interface_bindings: [{ interface_ref: ref('NetworkInterface', 'ni'), label: 'A01', evidence_refs: [] }] }); const b = point('B01', 'b');
     a.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'b'), label: 'B01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
     b.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'a'), label: 'A01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
     renderDetails(document([{ ...a, cardinality: 2 }, b]));

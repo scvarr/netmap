@@ -381,8 +381,8 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     const objectBlueprintDataSource = {
       loadObjectBlueprints: vi.fn().mockResolvedValue(blueprint),
       loadObjectBlueprintVersion: vi.fn().mockResolvedValue({ ...blueprint.blueprints[0], slots: [
-        { key: 'A01', display_name: 'A01', kind: 'CONNECTION_POINT' as const, anchor: { side: 'LEFT' as const, offset: .5 } },
-        { key: 'B01', display_name: 'B01', kind: 'CONNECTION_POINT' as const, anchor: { side: 'RIGHT' as const, offset: .5 } },
+        { key: 'A01', display_name: 'A01', kind: 'CONNECTION_POINT' as const, rendered_position: { x: .25, y: .5 } },
+        { key: 'B01', display_name: 'B01', kind: 'CONNECTION_POINT' as const, rendered_position: { x: .75, y: .5 } },
       ], internal_links: [{ from_slot_key: 'A01', to_slot_key: 'B01' }] }),
       createObjectBlueprint: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprint_ref: blueprint.blueprints[0].blueprint_ref, version_ref: blueprint.blueprints[0].version_ref }),
     };
