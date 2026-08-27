@@ -16,6 +16,7 @@ import {
 } from '../topology/layout';
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
+import { BLUEPRINT_FACE_GAP, BLUEPRINT_FACE_LABEL_HEIGHT, BLUEPRINT_NODE_HEADER_HEIGHT, blueprintDisplayDimensions, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
 
 export interface NodeRectangle {
   x: number;
@@ -80,7 +81,20 @@ export const getConnectionPointEndpoint = (
   if (!connectionPointId) return null;
   const presentation = projection.attributes.blueprint_presentation;
   const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId);
-  if (slot) { const side = slot.anchor.side; return { x: box.x + (side === 'LEFT' ? 0 : side === 'RIGHT' ? box.width : box.width * slot.anchor.offset), y: box.y + (side === 'TOP' ? 0 : side === 'BOTTOM' ? box.height : box.height * slot.anchor.offset), side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom }; }
+  if (slot && presentation) {
+    const side = slot.anchor.side;
+    const faces = visibleBlueprintFaces(presentation);
+    const faceIndex = faces.indexOf(slot.face ?? 'FRONT');
+    const face = blueprintDisplayDimensions(presentation.body, box.width);
+    const panelTop = BLUEPRINT_NODE_HEADER_HEIGHT
+      + faceIndex * (BLUEPRINT_FACE_LABEL_HEIGHT + face.height + BLUEPRINT_FACE_GAP)
+      + BLUEPRINT_FACE_LABEL_HEIGHT;
+    return {
+      x: box.x + (side === 'LEFT' ? 0 : side === 'RIGHT' ? box.width : box.width * slot.anchor.offset),
+      y: box.y + panelTop + (side === 'TOP' ? 0 : side === 'BOTTOM' ? face.height : face.height * slot.anchor.offset),
+      side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
+    };
+  }
   const points = genericConnectionPoints(projection); const index = points.findIndex((point) => point.connection_point_id === connectionPointId); return index < 0 ? null : { x: box.x + box.width, y: box.y + box.height * genericEndpointOffset(index, points.length), side: Position.Right };
 };
 

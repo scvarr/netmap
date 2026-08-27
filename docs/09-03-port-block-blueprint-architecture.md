@@ -2,7 +2,7 @@
 
 ## Status, authority and scope
 
-**FIXED architectural decisions. L1S.6c.1–L1S.6c.5a are IMPLEMENTED;
+**FIXED architectural decisions. L1S.6c.1–L1S.6c.5b are IMPLEMENTED;
 L1S.6c.6 remains FUTURE.**
 
 This note records the agreed next evolution of Object Blueprints for dense
@@ -217,7 +217,15 @@ L1S.6c is intentionally subdivided as follows:
 4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation — IMPLEMENTED**. Face is persisted on exact Port Block instances; historical NULL reads as FRONT, and runtime filtering is presentation-only.
 5. **L1S.6c.5 — visual Blueprint composition editor — IMPLEMENTED**.
 6. **L1S.6c.5a — intrinsic Blueprint geometry and per-map L1 display size — IMPLEMENTED**.
-7. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry — FUTURE**.
+7. **L1S.6c.5b — simultaneous runtime faces — IMPLEMENTED**. The L1 map is one
+   object presentation with zero, one or two visible face panels derived from
+   actual slot presentation; it is not a runtime FRONT/REAR selector. One
+   `display_width` controls every visible panel and the complete footprint.
+   The Blueprint editor may retain its FRONT/REAR tabs because they are an
+   authoring convenience only. Same-face internal continuity is rendered inside
+   its panel; cross-face continuity remains canonical but its geometry is
+   suppressed rather than misleadingly drawn through both panels.
+8. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry — FUTURE**.
 
 L1S.6c.3 destructively removed the active legacy `EndpointGroup`,
 `placement_offset`, and `placement_span` authoring contract. NetMap is

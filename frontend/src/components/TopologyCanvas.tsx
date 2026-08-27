@@ -43,7 +43,7 @@ import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation"
 import { physicalObjectIdForNode as cablePhysicalObjectIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
-import { blueprintDisplayDimensions } from "../topology/blueprintDisplaySize";
+import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -156,7 +156,7 @@ export function TopologyCanvas({
             const blueprint = node.data.projection.attributes.blueprint_presentation;
             const displayWidth = displayWidthOverrides?.[node.id];
             return blueprint && displayWidth !== undefined
-              ? { ...node, ...blueprintDisplayDimensions(blueprint.body, displayWidth) }
+              ? { ...node, ...blueprintNodeDisplayDimensions(blueprint, displayWidth) }
               : node;
           }),
         };
@@ -189,7 +189,7 @@ export function TopologyCanvas({
         const blueprint = node.data.projection.attributes.blueprint_presentation;
         const displayWidth = displayWidthOverrides[node.id];
         return blueprint && displayWidth !== undefined
-          ? { ...node, ...blueprintDisplayDimensions(blueprint.body, displayWidth) }
+          ? { ...node, ...blueprintNodeDisplayDimensions(blueprint, displayWidth) }
           : node;
       }),
     } : current);

@@ -18,12 +18,12 @@ const node = (id: string, position: { x: number; y: number }, attributes: Record
 
 describe('node footprint presentation geometry', () => {
   it('uses display dimensions, not intrinsic body magnitude, for Blueprint-backed objects', () => {
-    const wide = node('wide', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 480, height: 60 } } });
-    const compact = node('compact', { x: 45, y: 0 }, { blueprint_presentation: { body: { width: 8, height: 1 } } });
-    expect(nodeFootprint(wide)).toMatchObject({ width: 240, height: 30 });
-    expect(nodeFootprint(compact)).toMatchObject({ width: 240, height: 30 });
-    expect(projectionNodeFootprint(wide.data.projection, { x: 5, y: 6 }, 320)).toMatchObject({ x: 5, y: 6, width: 320, height: 40 });
-    expect(footprintDimensionsForProjectionNode(compact.data.projection, 480)).toEqual({ width: 480, height: 60 });
+    const wide = node('wide', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 480, height: 60 }, slots: [{ face: 'FRONT' }] } });
+    const compact = node('compact', { x: 45, y: 0 }, { blueprint_presentation: { body: { width: 8, height: 1 }, slots: [{ face: 'FRONT' }] } });
+    expect(nodeFootprint(wide)).toMatchObject({ width: 240, height: 70 });
+    expect(nodeFootprint(compact)).toMatchObject({ width: 240, height: 70 });
+    expect(projectionNodeFootprint(wide.data.projection, { x: 5, y: 6 }, 320)).toMatchObject({ x: 5, y: 6, width: 320, height: 80 });
+    expect(footprintDimensionsForProjectionNode(compact.data.projection, 480)).toEqual({ width: 480, height: 100 });
   });
 
   it('uses the existing generic layout footprint and permits touching boundaries', () => {
@@ -31,6 +31,14 @@ describe('node footprint presentation geometry', () => {
     const right = node('right', { x: LAYOUT_NODE_WIDTH, y: 0 });
     expect(nodeFootprint(left)).toMatchObject({ width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT });
     expect(rectanglesOverlap(nodeFootprint(left), nodeFootprint(right))).toBe(false);
+  });
+
+  it('uses the full simultaneous two-face footprint for collision and insertion geometry', () => {
+    const twoFace = node('two-face', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 8, height: 1 }, slots: [{ face: 'FRONT' }, { face: 'REAR' }] } });
+    const footprint = nodeFootprint(twoFace);
+    expect(footprint).toMatchObject({ width: 240, height: 130 });
+    expect(rectanglesOverlap(footprint, { x: 0, y: 120, width: 240, height: 20 })).toBe(true);
+    expect(nearestFreePosition({ x: 0, y: 0 }, footprint, [{ x: 0, y: 0, width: 240, height: 130 }])).not.toEqual({ x: 0, y: 0 });
   });
 });
 

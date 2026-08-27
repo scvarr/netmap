@@ -221,7 +221,7 @@ complete. L1S.5 is not included in this slice.
 - Canonical values, API payloads, and user/backend data remain locale-neutral.
 
 The next bounded product step is `L1S.6c.6 — rendered-port vs external-cable-attachment geometry`
-(L1S.6a/L1S.6b/L1S.6c.3–L1S.6c.5a are implemented; see below).
+(L1S.6a/L1S.6b/L1S.6c.3–L1S.6c.5b are implemented; see below).
 
 ### L1S.6 — Controlled Blueprint instance upgrade
 
@@ -303,7 +303,7 @@ deliberately bounded milestones:
    contract was removed destructively. L1S.6 upgrades continue to compare exact
    slot/internal-link snapshots, preserving canonical identity for additive
    versions that retain an instance key and local IDs.
-4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation — IMPLEMENTED**: exact Port Block instances persist a face within the complete immutable Blueprint version; historical NULL provenance reads as FRONT. Runtime renders one PhysicalObject and transiently selects a face, while preserving all slots for topology/cable logic. L1S.6c.6 remains the separate external cable-attachment geometry boundary.
+4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation — IMPLEMENTED**: exact Port Block instances persist a face within the complete immutable Blueprint version; historical NULL provenance reads as FRONT. Runtime preserves all slots for topology/cable logic. L1S.6c.6 remains the separate external cable-attachment geometry boundary.
 5. **L1S.6c.5 — visual Blueprint composition editor — IMPLEMENTED**: every new
    exact Port Block instance stores an immutable face-local normalized `x`,
    `y`, `width`, `height` rectangle. It is presentation provenance only and
@@ -313,7 +313,8 @@ deliberately bounded milestones:
    independent FRONT/REAR surfaces, drag/resize, snapshot port grids and
    same-face internal-link visibility.
 6. **L1S.6c.5a — intrinsic Blueprint geometry and per-map L1 display size — IMPLEMENTED**: immutable Blueprint body `width`/`height` are dimensionless design geometry that define only the body aspect ratio; their absolute values are never map dimensions. Normalized Port Block composition remains intrinsic to that body with unchanged provenance and identity. Optional positive `MapViewPosition.display_width` owns one Saved Map physical-view body width; historical NULL rows use a deterministic presentation default. Runtime derives height from that aspect ratio and persists locked-aspect resize through the position write path. Slot anchors, topology, cable semantics and runtime Port Block rectangles are unchanged.
-7. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry — FUTURE**.
+7. **L1S.6c.5b — simultaneous FRONT/REAR physical presentation — IMPLEMENTED**: the Saved Map runtime renders the actual visible Blueprint faces simultaneously as panels inside one React Flow node. There remains exactly one canonical `PhysicalObject`, `MapPlacement`, `MapViewPosition` and `display_width`; both panels move and resize together. Visible faces derive from actual slot presentation (historical missing face is FRONT); Blueprint-editor tabs remain authoring convenience only. Shared runtime footprint/layout/collision geometry includes panel labels and a deterministic presentation-only inter-face gap. Same-face internal continuity remains drawn within its panel; cross-face continuity stays canonical and highlightable but has no misleading one-panel line. Port Block container rectangles remain editor-only.
+8. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry — FUTURE**.
 
 This work is not otherwise complete. Every slice must preserve L1S.6 canonical identity,
 provenance, upgrade, and runtime-topology invariants; it does not add a

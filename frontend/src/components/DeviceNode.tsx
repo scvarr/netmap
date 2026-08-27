@@ -1,5 +1,4 @@
 import { Handle, NodeResizer, Position, type NodeProps } from '@xyflow/react';
-import { useState } from 'react';
 import type { Node } from '@xyflow/react';
 import type { DeviceNodeData } from '../topology/layout';
 import { displayNodeLabel, physicalClassPresentation } from '../topology/presentation';
@@ -7,41 +6,47 @@ import { genericConnectionPoints, genericEndpointOffset } from '../topology/gene
 import { internalL1Segments } from '../topology/internalL1Presentation';
 import { InternalL1Continuity } from './InternalL1Continuity';
 import { useI18n } from '../i18n';
+import { blueprintDisplayDimensions, blueprintNodeDisplayDimensions, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
 export function DeviceNode({ data, selected, width, height }: NodeProps<DeviceFlowNode>) {
-  const [face, setFace] = useState<'FRONT' | 'REAR'>('FRONT');
   const { t } = useI18n();
   const { projection } = data;
   const physical = projection.kind === 'PHYSICAL_OBJECT';
   const classPresentation = physicalClassPresentation(projection.attributes.class);
   const blueprint = projection.attributes.blueprint_presentation;
-  const internalSegments = internalL1Segments(
-    projection,
-    selected,
-    data.traceHighlightedConnectionMemberIds,
-    data.wiringHighlightedConnectionMemberIds, face,
-  );
-  const traceHighlightedConnectionPointIds = new Set(
-    internalSegments
-      .filter((segment) => segment.state === 'trace-highlighted')
-      .flatMap((segment) => [segment.fromConnectionPointId, segment.toConnectionPointId]),
-  );
   const objectId = projection.source_refs.find((ref) => ref.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'PhysicalObject')?.entity_id;
   const portProps = (connectionPointId: string, label: string) => {
     const state = data.physicalPortStates?.[connectionPointId];
     return state ? { role: 'button' as const, tabIndex: state === 'unavailable' ? -1 : 0, 'aria-label': `Порт ${label}`, 'aria-disabled': state === 'unavailable' || undefined, onClick: (event: React.MouseEvent) => { event.stopPropagation(); if (state !== 'unavailable' && objectId) data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); }, onKeyDown: (event: React.KeyboardEvent) => { if ((event.key === 'Enter' || event.key === ' ') && state !== 'unavailable' && objectId) { event.preventDefault(); data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); } } } : {};
   };
   if (physical && blueprint) {
-    const displayWidth = width ?? blueprint.body.width;
-    const displayHeight = height ?? blueprint.body.height;
-    return <div className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: displayWidth, height: displayHeight, background: blueprint.body.fill_color ?? '#18383a' }}>
+    const displayWidth = width ?? blueprintNodeDisplayDimensions(blueprint, undefined).width;
+    const displayHeight = height ?? blueprintNodeDisplayDimensions(blueprint, displayWidth).height;
+    const faceDimensions = blueprintDisplayDimensions(blueprint.body, displayWidth);
+    const faces = visibleBlueprintFaces(blueprint);
+    const traceHighlightedConnectionPointIds = new Set(
+      (projection.attributes.internal_l1_links ?? [])
+        .filter((link) => data.traceHighlightedConnectionMemberIds?.has(link.connection_member_id))
+        .flatMap((link) => [link.from_connection_point_id, link.to_connection_point_id]),
+    );
+    return <div className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: displayWidth, height: displayHeight }}>
     <NodeResizer isVisible={Boolean(selected && data.blueprintResizeEnabled)} minWidth={96} maxWidth={960} minHeight={1} maxHeight={960} keepAspectRatio onResizeEnd={(_, dimensions) => { if (objectId) data.onBlueprintDisplayResize?.(objectId, dimensions.width); }} />
     <Handle type="target" position={Position.Top} className="device-node__handle" />
-    <InternalL1Continuity width={displayWidth} height={displayHeight} segments={internalSegments} />
-    <strong className="blueprint-map-node__label">{displayNodeLabel(projection)}</strong><div className="blueprint-map-node__faces"><button type="button" aria-pressed={face === 'FRONT'} onClick={() => setFace('FRONT')}>{t('blueprint.face.front')}</button><button type="button" aria-pressed={face === 'REAR'} onClick={() => setFace('REAR')}>{t('blueprint.face.rear')}</button></div>
-    {blueprint.slots.filter((slot) => (slot.face ?? 'FRONT') === face).map((slot) => { const style = slot.anchor.side === 'LEFT' ? { left: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(-50%, -50%)' } : slot.anchor.side === 'RIGHT' ? { right: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(50%, -50%)' } : slot.anchor.side === 'TOP' ? { left: `${slot.anchor.offset * 100}%`, top: 0, transform: 'translate(-50%, -50%)' } : { left: `${slot.anchor.offset * 100}%`, bottom: 0, transform: 'translate(-50%, 50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
+    <strong className="blueprint-map-node__label">{displayNodeLabel(projection)}</strong>
+    <div className="blueprint-map-node__panels">
+      {faces.map((face) => {
+        const internalSegments = internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, face, displayWidth);
+        return <section key={face} className="blueprint-map-node__face" data-testid={`blueprint-face-${face}`}>
+          <span className="blueprint-map-node__face-label">{t(face === 'FRONT' ? 'blueprint.face.front' : 'blueprint.face.rear')}</span>
+          <div className="blueprint-map-node__face-surface" style={{ height: faceDimensions.height, background: blueprint.body.fill_color ?? '#18383a' }}>
+            <InternalL1Continuity width={displayWidth} height={faceDimensions.height} segments={internalSegments} />
+            {blueprint.slots.filter((slot) => (slot.face ?? 'FRONT') === face).map((slot) => { const style = slot.anchor.side === 'LEFT' ? { left: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(-50%, -50%)' } : slot.anchor.side === 'RIGHT' ? { right: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(50%, -50%)' } : slot.anchor.side === 'TOP' ? { left: `${slot.anchor.offset * 100}%`, top: 0, transform: 'translate(-50%, -50%)' } : { left: `${slot.anchor.offset * 100}%`, bottom: 0, transform: 'translate(-50%, 50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
+          </div>
+        </section>;
+      })}
+    </div>
     <Handle type="source" position={Position.Top} className="device-node__handle" />
   </div>;
   }
