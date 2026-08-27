@@ -89,8 +89,8 @@ class MapViewPosition(Base):
             name="map_view_positions_view_key_valid",
         ),
         CheckConstraint(
-            "display_width IS NULL OR display_width > 0",
-            name="map_view_positions_display_width_positive",
+            "display_width IS NULL OR (view_key = 'L1/PHYSICAL_OBJECT' AND display_width > 0)",
+            name="map_view_positions_display_width_physical_positive",
         ),
     )
 

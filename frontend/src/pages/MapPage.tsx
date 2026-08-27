@@ -694,7 +694,7 @@ export function MapPage({
         );
         const position = placement.positions["L1/PHYSICAL_OBJECT"];
         return node && position && node.kind === "PHYSICAL_OBJECT" && node.attributes.class !== "cable"
-          ? [projectionNodeFootprint(node, position)]
+          ? [projectionNodeFootprint(node, position, position.display_width)]
           : [];
       },
     );

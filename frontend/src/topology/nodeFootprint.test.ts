@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LAYOUT_NODE_HEIGHT, LAYOUT_NODE_WIDTH, type DeviceFlowNode } from './layout';
 import {
+  footprintDimensionsForProjectionNode,
   nearestFreePosition,
   nodeFootprint,
   projectionNodeFootprint,
@@ -16,13 +17,13 @@ const node = (id: string, position: { x: number; y: number }, attributes: Record
 });
 
 describe('node footprint presentation geometry', () => {
-  it('uses blueprint body dimensions for mixed-size physical objects', () => {
-    const small = node('small', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 40, height: 20 } } });
-    const large = node('large', { x: 45, y: 0 }, { blueprint_presentation: { body: { width: 320, height: 180 } } });
-    expect(nodeFootprint(small)).toMatchObject({ width: 40, height: 20 });
-    expect(nodeFootprint(large)).toMatchObject({ width: 320, height: 180 });
-    expect(rectanglesOverlap(nodeFootprint(small), nodeFootprint(large))).toBe(false);
-    expect(projectionNodeFootprint(small.data.projection, { x: 5, y: 6 })).toMatchObject({ x: 5, y: 6, width: 40, height: 20 });
+  it('uses display dimensions, not intrinsic body magnitude, for Blueprint-backed objects', () => {
+    const wide = node('wide', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 480, height: 60 } } });
+    const compact = node('compact', { x: 45, y: 0 }, { blueprint_presentation: { body: { width: 8, height: 1 } } });
+    expect(nodeFootprint(wide)).toMatchObject({ width: 240, height: 30 });
+    expect(nodeFootprint(compact)).toMatchObject({ width: 240, height: 30 });
+    expect(projectionNodeFootprint(wide.data.projection, { x: 5, y: 6 }, 320)).toMatchObject({ x: 5, y: 6, width: 320, height: 40 });
+    expect(footprintDimensionsForProjectionNode(compact.data.projection, 480)).toEqual({ width: 480, height: 60 });
   });
 
   it('uses the existing generic layout footprint and permits touching boundaries', () => {

@@ -10,6 +10,7 @@ import type {
 import { physicalCablePresentation } from './physicalCablePresentation';
 import type { MapCableRoute } from './savedMapTypes';
 import type { MapCableRouteWaypoint } from './savedMapTypes';
+import { blueprintDisplayDimensions } from './blueprintDisplaySize';
 
 export const LAYOUT_NODE_WIDTH = 212;
 export const LAYOUT_NODE_HEIGHT = 144;
@@ -157,8 +158,9 @@ export const toFlowProjection: TopologyLayoutEngine = async (document) => {
     },
     children: orderedNodes.map((node) => ({
       id: node.id,
-      width: node.attributes.blueprint_presentation?.body.width ?? LAYOUT_NODE_WIDTH,
-      height: node.attributes.blueprint_presentation?.body.height ?? LAYOUT_NODE_HEIGHT,
+      ...(node.attributes.blueprint_presentation
+        ? blueprintDisplayDimensions(node.attributes.blueprint_presentation.body, undefined)
+        : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT }),
     })),
     edges: layoutEdges,
   };
@@ -173,8 +175,9 @@ export const toFlowProjection: TopologyLayoutEngine = async (document) => {
     nodes: orderedNodes.map((projection) => ({
       id: projection.id,
       type: 'device',
-      width: projection.attributes.blueprint_presentation?.body.width,
-      height: projection.attributes.blueprint_presentation?.body.height,
+      ...(projection.attributes.blueprint_presentation
+        ? blueprintDisplayDimensions(projection.attributes.blueprint_presentation.body, undefined)
+        : { width: undefined, height: undefined }),
       position: positions.get(projection.id) ?? { x: 0, y: 0 },
       data: { projection },
     })),
