@@ -28,4 +28,10 @@ describe('BlueprintCompositionCanvas', () => {
     const group = container.querySelector('[data-instance-key="stable"]')!; fireEvent.pointerDown(group, { clientX: 200, clientY: 250, pointerId: 1 }); fireEvent.pointerMove(svg, { clientX: 650, clientY: 250, pointerId: 1 });
     const placement = onPlacement.mock.calls.at(-1)?.[1]; expect(placement.x + placement.width <= .5 || placement.x >= .7).toBe(true);
   });
+
+  it('lets a historically overlapping block escape by dragging', () => {
+    const onPlacement = vi.fn(); const current = instance('stable', 'FRONT', { x: .2, y: .2, width: .3, height: .3 }); const peer = instance('peer', 'FRONT', { x: .25, y: .25, width: .3, height: .3 }); const { container } = render(<BlueprintCompositionCanvas body={body} face="FRONT" instances={[current, peer]} links={[]} selectedKey="stable" onSelect={vi.fn()} onPlacement={onPlacement} />); const svg = container.querySelector('svg')!; Object.defineProperty(svg, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 1000 }) });
+    const group = container.querySelector('[data-instance-key="stable"]')!; fireEvent.pointerDown(group, { clientX: 250, clientY: 250, pointerId: 1 }); fireEvent.pointerMove(svg, { clientX: 250, clientY: 250, pointerId: 1 });
+    const placement = onPlacement.mock.calls.at(-1)?.[1]; expect(placement.x + placement.width <= .25 || placement.x >= .55 || placement.y + placement.height <= .25 || placement.y >= .55).toBe(true);
+  });
 });

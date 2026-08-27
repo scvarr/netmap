@@ -25,4 +25,13 @@ describe('ObjectBlueprintEditor composition version changes', () => {
     expect(saved.instances[0].resolvedSlotKeys.p3).toBe(await composedSlotKey(key, 'p3'));
     expect(saved.individualLinks).toEqual([]);
   });
+
+  it('refuses to add an instance to a full face and reports localized space error', async () => {
+    const source = { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_blocks: [{ port_block_ref: ref('PortBlock', 'pb-1'), name: 'Panel', version_ref: ref('PortBlockVersion', 'v1'), version_number: 1, port_count: 1, version_count: 1 }] }), loadPortBlockVersions: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, versions: [{ port_block_ref: ref('PortBlock', 'pb-1'), version_ref: ref('PortBlockVersion', 'v1'), version_number: 1, port_count: 1 }] }), loadPortBlockVersion: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_block_ref: ref('PortBlock', 'pb-1'), version_ref: ref('PortBlockVersion', 'v1'), name: 'Panel', version_number: 1, ports: [p1] }), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
+    render(<ObjectBlueprintEditor portBlockDataSource={source} title="Editor" description="Description" saveLabel="Save" onSave={vi.fn()} initialState={{ name: 'Blueprint', defaultClass: '', width: 120, height: 60, fillColor: '#28565a', instances: [{ instanceKey: 'full', portBlockRef: 'pb-1', portBlockVersionRef: 'v1', face: 'FRONT', placement: { x: 0, y: 0, width: 1, height: 1 }, portBlockName: 'Panel', versionNumber: 1, ports: [p1], resolvedSlotKeys: {} }], individualLinks: [] }} />);
+    await userEvent.selectOptions(await screen.findByLabelText('Логический Port Block'), 'pb-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить Port Block' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('На выбранной панели нет места');
+    expect(document.querySelectorAll('.blueprint-composition-canvas__block')).toHaveLength(1);
+  });
 });

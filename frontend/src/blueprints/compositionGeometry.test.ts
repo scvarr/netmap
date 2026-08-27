@@ -18,9 +18,23 @@ describe('Blueprint composition geometry', () => {
 
   it('sizes a new block from its port grid and finds an unoccupied place', () => {
     const placement = initialPlacementForPorts([{ row: 1, column: 1 }, { row: 2, column: 3 }], [{ x: 0, y: 0, width: .5, height: .5 }]);
+    if (!placement) throw new Error('expected a free placement');
     expect(placement.width).toBeCloseTo(.4);
     expect(placement.height).toBeCloseTo(.34);
     expect(placement.x + placement.width <= .5 || placement.y + placement.height <= .5).toBe(true);
+  });
+
+  it('places a second block in free space after reducing an oversized recommendation', () => {
+    const occupied = [{ x: 0, y: 0, width: 1, height: .8 }];
+    const placement = initialPlacementForPorts([{ row: 1, column: 1 }], occupied);
+    if (!placement) throw new Error('expected a reduced free placement');
+    expect(placement.height).toBeLessThan(.22);
+    expect(placement.y).toBeGreaterThanOrEqual(.8);
+    expect(placement.y + placement.height).toBeLessThanOrEqual(1);
+  });
+
+  it('refuses a full canvas instead of returning an overlapping origin placement', () => {
+    expect(initialPlacementForPorts([{ row: 1, column: 1 }], [{ x: 0, y: 0, width: 1, height: 1 }])).toBeUndefined();
   });
 
   it('snaps to panel and neighbouring block edges without allowing overlap', () => {
@@ -36,5 +50,10 @@ describe('Blueprint composition geometry', () => {
     const east = resizePlacement({ x: .2, y: .2, width: .3, height: .3 }, 'e', .1, 0); expect(east.x).toBeCloseTo(.2); expect(east.width).toBeCloseTo(.4);
     const previous = { x: .1, y: .1, width: .2, height: .2 };
     expect(resolvePlacement({ ...previous, width: .6 }, previous, [{ x: .5, y: .1, width: .2, height: .2 }], 'resize').placement).toEqual(previous);
+  });
+
+  it('finds an exit for a historical overlapping placement', () => {
+    const result = resolvePlacement({ x: .2, y: .2, width: .3, height: .3 }, { x: .2, y: .2, width: .3, height: .3 }, [{ x: .25, y: .25, width: .3, height: .3 }], 'drag');
+    expect(result.placement.x + result.placement.width <= .25 || result.placement.x >= .55 || result.placement.y + result.placement.height <= .25 || result.placement.y >= .55).toBe(true);
   });
 });

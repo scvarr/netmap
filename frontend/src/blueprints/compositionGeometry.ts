@@ -7,6 +7,7 @@ export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 export interface AlignmentGuide { axis: 'x' | 'y'; position: number; }
 
 const MIN_SIZE = .08;
+const INITIAL_MIN_SIZE = .12;
 const SNAP_DISTANCE = .018;
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 const bounded = (placement: BlueprintPortBlockPlacement): BlueprintPortBlockPlacement => {
@@ -16,19 +17,29 @@ const bounded = (placement: BlueprintPortBlockPlacement): BlueprintPortBlockPlac
 };
 const overlaps = (first: BlueprintPortBlockPlacement, second: BlueprintPortBlockPlacement) => first.x < second.x + second.width && first.x + first.width > second.x && first.y < second.y + second.height && first.y + first.height > second.y;
 const equalPlacement = (first: BlueprintPortBlockPlacement, second: BlueprintPortBlockPlacement) => first.x === second.x && first.y === second.y && first.width === second.width && first.height === second.height;
+const axisPositions = (size: number) => [...new Set([...Array(Math.floor((1 - size) / .02) + 1)].map((_, index) => Number((index * .02).toFixed(3))).concat(Number((1 - size).toFixed(3))))];
+const freePlacement = (width: number, height: number, occupied: BlueprintPortBlockPlacement[], preferred?: BlueprintPortBlockPlacement) => {
+  const available: BlueprintPortBlockPlacement[] = [];
+  for (const y of axisPositions(height)) for (const x of axisPositions(width)) {
+    const placement = { x, y, width, height };
+    if (!occupied.some((item) => overlaps(placement, item))) available.push(placement);
+  }
+  if (!available.length) return undefined;
+  if (preferred) available.sort((a, b) => Math.hypot(a.x - preferred.x, a.y - preferred.y) - Math.hypot(b.x - preferred.x, b.y - preferred.y));
+  return available[0];
+};
 
 /** A compact initial block that follows the version's declared port grid. */
-export const initialPlacementForPorts = (ports: Array<{ row: number; column: number }>, occupied: BlueprintPortBlockPlacement[]) => {
+export const initialPlacementForPorts = (ports: Array<{ row: number; column: number }>, occupied: BlueprintPortBlockPlacement[]): BlueprintPortBlockPlacement | undefined => {
   const columns = Math.max(...ports.map((port) => port.column), 1);
   const rows = Math.max(...ports.map((port) => port.row), 1);
   const width = clamp(.10 + columns * .10, .18, .48);
   const height = clamp(.10 + rows * .12, .18, .62);
-  const step = .02;
-  for (let y = 0; y <= 1 - height + .0001; y += step) for (let x = 0; x <= 1 - width + .0001; x += step) {
-    const placement = { x: Number(x.toFixed(3)), y: Number(y.toFixed(3)), width, height };
-    if (!occupied.some((item) => overlaps(placement, item))) return placement;
+  for (const scale of [1, .85, .7, .55, .4]) {
+    const placement = freePlacement(Math.max(INITIAL_MIN_SIZE, width * scale), Math.max(INITIAL_MIN_SIZE, height * scale), occupied);
+    if (placement) return placement;
   }
-  return { x: 0, y: 0, width, height };
+  return undefined;
 };
 
 export const resizePlacement = (start: BlueprintPortBlockPlacement, handle: ResizeHandle, dx: number, dy: number): BlueprintPortBlockPlacement => {
@@ -59,7 +70,8 @@ const snapped = (placement: BlueprintPortBlockPlacement, occupied: BlueprintPort
 export const resolvePlacement = (requested: BlueprintPortBlockPlacement, previous: BlueprintPortBlockPlacement, occupied: BlueprintPortBlockPlacement[], mode: 'drag' | 'resize') => {
   const result = snapped(bounded(requested), occupied);
   if (!occupied.some((item) => overlaps(result.placement, item))) return result;
-  if (mode === 'resize') return { placement: previous, guides: [] as AlignmentGuide[] };
+  const previousOverlaps = occupied.some((item) => overlaps(previous, item));
+  if (mode === 'resize' && !previousOverlaps) return { placement: previous, guides: [] as AlignmentGuide[] };
   const candidates: BlueprintPortBlockPlacement[] = [];
   for (const item of occupied) {
     candidates.push(bounded({ ...result.placement, x: item.x - result.placement.width }));
@@ -68,6 +80,8 @@ export const resolvePlacement = (requested: BlueprintPortBlockPlacement, previou
     candidates.push(bounded({ ...result.placement, y: item.y + item.height }));
   }
   const available = candidates.filter((candidate) => !occupied.some((item) => overlaps(candidate, item)));
+  const escaped = freePlacement(result.placement.width, result.placement.height, occupied, result.placement);
+  if (escaped) available.push(escaped);
   if (!available.length) return { placement: previous, guides: [] as AlignmentGuide[] };
   available.sort((a, b) => Math.hypot(a.x - requested.x, a.y - requested.y) - Math.hypot(b.x - requested.x, b.y - requested.y));
   const placement = available[0];
