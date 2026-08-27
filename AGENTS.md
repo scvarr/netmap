@@ -39,3 +39,8 @@ Permanent NetMap rules:
   acceptance boundary.
 - Runtime is Docker-only, migrations run before startup, and dependencies are
   pinned. UI defaults to Russian, with English through typed i18n.
+- Published/applied Alembic revisions are immutable. Once a revision may have
+  been applied to any persistent database, never modify it to change the schema
+  contract: use a new forward migration for every evolution or correction, as
+  existing databases will not replay an already-recorded revision. This protects
+  migration-history integrity, not obsolete application contracts.
