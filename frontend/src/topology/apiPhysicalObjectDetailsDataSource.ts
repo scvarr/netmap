@@ -96,7 +96,6 @@ export const parsePhysicalObjectDetailsDocument = (
     if (item.blueprint_slot !== undefined) {
       requireObject(item.blueprint_slot, `${path}.blueprint_slot`); requireString(item.blueprint_slot.slot_key, `${path}.blueprint_slot.slot_key`);
       if (!['CONNECTION_POINT', 'NETWORK_PORT'].includes(String(item.blueprint_slot.kind))) malformed(`${path}.blueprint_slot.kind is invalid.`);
-      if (!['LEFT', 'RIGHT', 'TOP', 'BOTTOM'].includes(String(item.blueprint_slot.anchor_side)) || typeof item.blueprint_slot.anchor_offset !== 'number' || item.blueprint_slot.anchor_offset < 0 || item.blueprint_slot.anchor_offset > 1) malformed(`${path}.blueprint_slot anchor is invalid.`);
     }
     const validateItems = (items: unknown, name: string, validate: (entry: Record<string, unknown>, entryPath: string) => void): void => { if (items !== undefined) { if (!Array.isArray(items)) malformed(`${path}.${name} must be an array.`); (items as unknown[]).forEach((entry, entryIndex) => { const entryPath = `${path}.${name}[${entryIndex}]`; requireObject(entry, entryPath); validate(entry, entryPath); }); } };
     validateItems(item.direct_interface_bindings, 'direct_interface_bindings', (entry, entryPath) => { validateRef(entry.interface_ref, `${entryPath}.interface_ref`); validateLabel(entry, entryPath); validateRefs(entry.evidence_refs, `${entryPath}.evidence_refs`); });

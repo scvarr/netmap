@@ -85,7 +85,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
         if row is None: return None, {}
         instance, version, blueprint = row
         mappings = self.repository.session.execute(select(BlueprintInstanceSlot, BlueprintEndpointSlot).join(BlueprintEndpointSlot, BlueprintEndpointSlot.id == BlueprintInstanceSlot.blueprint_slot_id).where(BlueprintInstanceSlot.blueprint_instance_id == instance.id)).all()
-        slots = {mapping.connection_point_id: BlueprintSlotMetadata(slot_key=slot.slot_key, kind=slot.kind, anchor_side=slot.anchor_side, anchor_offset=slot.anchor_offset) for mapping, slot in mappings}
+        slots = {mapping.connection_point_id: BlueprintSlotMetadata(slot_key=slot.slot_key, kind=slot.kind) for mapping, slot in mappings}
         return BlueprintInstanceProvenance(blueprint_ref=BlueprintLibraryRef(entity_type="ObjectBlueprint", entity_id=blueprint.id), version_ref=BlueprintLibraryRef(entity_type="ObjectBlueprintVersion", entity_id=version.id), version_number=version.version_number), slots
 
     @staticmethod

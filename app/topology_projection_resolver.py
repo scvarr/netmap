@@ -9,7 +9,8 @@ from app.device_catalog import (
     PhysicalObjectClassRecord,
 )
 from app.errors import ModelError, ValidationError
-from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintPortBlockInstance, ObjectBlueprint, ObjectBlueprintVersion
+from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintPortBlockInstance, ObjectBlueprint, ObjectBlueprintVersion, PortBlockPort
+from app.blueprint_presentation_geometry import PortGeometryInput, derive_port_geometry, fallback_placement
 from app.repository import (
     CanonicalRepository,
     ConnectionPointRecord,
@@ -636,14 +637,30 @@ class ConfiguredTopologyProjectionResolver:
             return {}
         slots_by_instance: dict[uuid.UUID, list[dict]] = {instance_id: [] for instance_id in by_instance}
         mappings = self.repository.session.execute(
-            select(BlueprintInstanceSlot, BlueprintEndpointSlot, BlueprintPortBlockInstance.face)
+            select(BlueprintInstanceSlot, BlueprintEndpointSlot, BlueprintPortBlockInstance)
             .join(BlueprintEndpointSlot, BlueprintEndpointSlot.id == BlueprintInstanceSlot.blueprint_slot_id)
             .outerjoin(BlueprintPortBlockInstance, BlueprintPortBlockInstance.id == BlueprintEndpointSlot.port_block_instance_id)
             .where(BlueprintInstanceSlot.blueprint_instance_id.in_(by_instance))
             .order_by(BlueprintInstanceSlot.blueprint_instance_id, BlueprintEndpointSlot.slot_key)
         ).all()
-        for mapping, slot, face in mappings:
-            slots_by_instance[mapping.blueprint_instance_id].append({"slot_key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "anchor": {"side": slot.anchor_side, "offset": slot.anchor_offset}, "face": face or "FRONT", "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None})
+        for instance, version, blueprint in by_instance.values():
+            instance_rows = [(mapping, slot, block) for mapping, slot, block in mappings if mapping.blueprint_instance_id == instance.id]
+            blocks = {block.id: block for _, _, block in instance_rows if block is not None}
+            ports = {(port.port_block_version_id, port.local_id): port for port in self.repository.session.scalars(select(PortBlockPort).where(PortBlockPort.port_block_version_id.in_([block.port_block_version_id for block in blocks.values()]))) } if blocks else {}
+            fallback_indices: dict[uuid.UUID, int] = {}
+            by_face: dict[str, list[BlueprintPortBlockInstance]] = {"FRONT": [], "REAR": []}
+            for block in sorted(blocks.values(), key=lambda value: value.instance_key): by_face[block.face or "FRONT"].append(block)
+            for face_blocks in by_face.values():
+                for index, block in enumerate(face_blocks): fallback_indices[block.id] = index
+            inputs = []
+            for _, slot, block in instance_rows:
+                port = ports.get((block.port_block_version_id, slot.port_block_local_id)) if block is not None else None
+                placement = None if block is None else ((block.placement_x, block.placement_y, block.placement_width, block.placement_height) if None not in (block.placement_x, block.placement_y, block.placement_width, block.placement_height) else fallback_placement(fallback_indices[block.id]))
+                inputs.append(PortGeometryInput(slot.slot_key, block.id if block else None, slot.port_block_local_id or slot.slot_key, port.row if port else None, port.layout_column if port else None, port.layout_order if port else 0, (block.face if block and block.face else "FRONT"), placement))
+            geometry = derive_port_geometry(inputs, (version.width, version.height))
+            for mapping, slot, block in instance_rows:
+                item = {"slot_key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "face": block.face if block and block.face else "FRONT", "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None, **geometry[slot.slot_key]}
+                slots_by_instance[instance.id].append(item)
         return {instance.physical_object_id: {"blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprint", "entity_id": str(blueprint.id)}, "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprintVersion", "entity_id": str(version.id)}, "body": {"kind": version.body_kind, "width": version.width, "height": version.height, "fill_color": version.fill_color}, "slots": slots_by_instance[instance.id]} for instance, version, blueprint in by_instance.values()}
     def _physical_candidates(
         self, owner: NetworkInterfacePhysicalOwnerRecord

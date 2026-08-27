@@ -1,5 +1,4 @@
 import type {
-  BlueprintAnchorSide,
   BlueprintBody,
   BlueprintInternalLink,
   BlueprintSlot,
@@ -43,12 +42,11 @@ const parseBody = (value: unknown, path: string): BlueprintBody => {
 };
 
 const parseSlot = (value: unknown, path: string): BlueprintSlot => {
-  const slot = requireObject(value, path); const anchor = requireObject(slot.anchor, `${path}.anchor`);
+  const slot = requireObject(value, path); const rendered = requireObject(slot.rendered_position, `${path}.rendered_position`);
   if (slot.kind !== 'CONNECTION_POINT' && slot.kind !== 'NETWORK_PORT') malformed(`${path}.kind is unsupported.`);
-  if (!['LEFT', 'RIGHT', 'TOP', 'BOTTOM'].includes(String(anchor.side))) malformed(`${path}.anchor.side is unsupported.`);
-  if (typeof anchor.offset !== 'number' || anchor.offset < 0 || anchor.offset > 1) malformed(`${path}.anchor.offset must be 0..1.`);
+  if (typeof rendered.x !== 'number' || typeof rendered.y !== 'number' || rendered.x < 0 || rendered.x > 1 || rendered.y < 0 || rendered.y > 1) malformed(`${path}.rendered_position is invalid.`);
   if (slot.face !== 'FRONT' && slot.face !== 'REAR') malformed(`${path}.face is unsupported.`);
-  return { key: requireString(slot.key, `${path}.key`), display_name: requireString(slot.display_name, `${path}.display_name`), kind: slot.kind as BlueprintSlotKind, anchor: { side: anchor.side as BlueprintAnchorSide, offset: anchor.offset as number }, face: slot.face as BlueprintFace };
+  return { key: requireString(slot.key, `${path}.key`), display_name: requireString(slot.display_name, `${path}.display_name`), kind: slot.kind as BlueprintSlotKind, face: slot.face as BlueprintFace, rendered_position: { x: rendered.x as number, y: rendered.y as number } };
 };
 
 const parseLink = (value: unknown, path: string): BlueprintInternalLink => {

@@ -43,7 +43,7 @@ export const generateBlueprint = (state: BlueprintEditorState) => {
   if (state.fillColor && !/^#[0-9A-Fa-f]{6}$/.test(state.fillColor)) errors.push('colorFormat');
   const keys = state.instances.map((item) => normalized(item.instanceKey)); if (keys.length !== new Set(keys).size) errors.push('duplicateInstanceKey');
   if (state.instances.some((item) => !item.portBlockVersionRef || !item.ports.length)) errors.push('missingPortBlock');
-  const source = state.instances.flatMap(slotsForInstance); const slots = source.map((slot,index) => ({ key:slot.key, display_name:slot.label.split(' · ').at(-1)!, kind:slot.kind, anchor:{side:'RIGHT' as const, offset:(index+.5)/Math.max(source.length,1)} }));
+  const source = state.instances.flatMap(slotsForInstance); const slots = source.map((slot) => ({ key:slot.key, display_name:slot.label.split(' · ').at(-1)!, kind:slot.kind }));
   const known = new Set(slots.map((slot) => slot.key)); const pairs = new Set<string>();
   for (const link of state.individualLinks) { if (link.from_slot_key === link.to_slot_key) errors.push('individualSelfLink'); else if (!known.has(link.from_slot_key) || !known.has(link.to_slot_key)) errors.push('individualMissingPort'); else { const key=[link.from_slot_key,link.to_slot_key].sort().join('\u0000'); if (pairs.has(key)) errors.push('duplicateIndividualLink'); pairs.add(key); } }
   return { slots, internalLinks:state.individualLinks, errors, validationErrors:errors };

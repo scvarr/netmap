@@ -17,7 +17,7 @@ export interface ConnectionPointDetails {
   external_connection_count?: number;
   direct_interface_binding_count: number;
   ordering_key?: string;
-  blueprint_slot?: { slot_key: string; kind: BlueprintSlotKind; anchor_side: BlueprintAnchorSide; anchor_offset: number };
+  blueprint_slot?: { slot_key: string; kind: BlueprintSlotKind };
   direct_interface_bindings?: Array<{ interface_ref: ProjectionSourceRef; label: string; label_source?: 'TECHNICAL_FALLBACK'; evidence_refs: ProjectionSourceRef[] }>;
   internal_physical_counterparts?: Array<{ connection_point_ref: ProjectionSourceRef; label: string; label_source?: 'TECHNICAL_FALLBACK'; connection_ref: ProjectionSourceRef; evidence_refs: ProjectionSourceRef[] }>;
   external_physical_attachments?: Array<{ kind: 'DIRECT_CONNECTION' | 'SIMPLE_CABLE' | 'UNRESOLVED'; connection_ref: ProjectionSourceRef; evidence_refs: ProjectionSourceRef[]; remote_physical_object_ref?: ProjectionSourceRef; remote_physical_object_label?: string; remote_connection_point_ref?: ProjectionSourceRef; remote_connection_point_label?: string; cable_ref?: ProjectionSourceRef; cable_label?: string }>;

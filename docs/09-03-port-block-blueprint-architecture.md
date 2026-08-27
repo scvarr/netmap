@@ -2,8 +2,7 @@
 
 ## Status, authority and scope
 
-**FIXED architectural decisions. L1S.6c.1–L1S.6c.5b are IMPLEMENTED;
-L1S.6c.6 remains FUTURE.**
+**FIXED architectural decisions. L1S.6c.1–L1S.6c.6 are IMPLEMENTED.**
 
 This note records the agreed next evolution of Object Blueprints for dense
 network equipment. It is an architecture/product boundary only: it does not
@@ -173,7 +172,12 @@ visually passing through the other row merely because the exact port is drawn
 there. Canonical connectivity still attaches to the exact same
 `ConnectionPoint`; neither value changes topology. This boundary is explicit
 because the current single `anchor` presentation model cannot represent it
-cleanly. No new geometry contract is implemented by this note.
+cleanly. L1S.6c.6 derives rendered ports from immutable PortBlock layout plus
+face-local placement and separately derives external cable attachment on the
+complete object's outer boundary with deterministic per-block fan-out. The
+shared FRONT/REAR divider is visual only, never an external boundary. Neither
+geometry affects canonical identity/topology, upgrades, Saved Map membership,
+or routes; the obsolete `BlueprintEndpointSlot.anchor` contract is removed.
 
 ## Deliberately separate future concern: composite network devices
 
@@ -228,7 +232,7 @@ L1S.6c is intentionally subdivided as follows:
    authoring convenience only. Same-face internal continuity is rendered inside
    its panel; cross-face continuity remains canonical but its geometry is
    suppressed rather than misleadingly drawn through both panels.
-8. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry — FUTURE**.
+8. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry — IMPLEMENTED**.
 
 L1S.6c.3 destructively removed the active legacy `EndpointGroup`,
 `placement_offset`, and `placement_span` authoring contract. NetMap is

@@ -1,5 +1,4 @@
 export type BlueprintSlotKind = 'CONNECTION_POINT' | 'NETWORK_PORT';
-export type BlueprintAnchorSide = 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM';
 export type BlueprintFace = 'FRONT' | 'REAR';
 export interface BlueprintPortBlockPlacement { x: number; y: number; width: number; height: number; }
 
@@ -20,8 +19,8 @@ export interface BlueprintSlot {
   key: string;
   display_name: string;
   kind: BlueprintSlotKind;
-  anchor: { side: BlueprintAnchorSide; offset: number };
   face?: BlueprintFace;
+  rendered_position: { x: number; y: number };
 }
 
 export interface BlueprintInternalLink {

@@ -53,7 +53,7 @@ class BlueprintUpgradeAnalyzer:
                 else: compatible.append({"code": "SLOT_PRESERVED", "slot_key": key})
             for key in sorted(set(target_slots) - set(current_slots)):
                 compatible.append({"code": "SLOT_ADDED", "slot_key": key, "kind": target_slots[key].kind})
-            if (current.body_kind, current.width, current.height, current.fill_color) != (target.body_kind, target.width, target.height, target.fill_color) or any((current_slots[key].display_name, current_slots[key].anchor_side, current_slots[key].anchor_offset) != (target_slots[key].display_name, target_slots[key].anchor_side, target_slots[key].anchor_offset) for key in set(current_slots) & set(target_slots)):
+            if (current.body_kind, current.width, current.height, current.fill_color) != (target.body_kind, target.width, target.height, target.fill_color) or any(current_slots[key].display_name != target_slots[key].display_name for key in set(current_slots) & set(target_slots)):
                 compatible.append({"code": "PRESENTATION_CHANGED"})
             for link in sorted(target_links - current_links):
                 mapped_a, mapped_b = mapped_points.get(link[0]), mapped_points.get(link[1])

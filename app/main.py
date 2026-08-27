@@ -682,8 +682,8 @@ def get_object_blueprint_version(
         "slots": [
             {
                 "key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind,
-                "anchor": {"side": slot.anchor_side, "offset": slot.anchor_offset},
                 "face": faces_by_instance.get(slot.port_block_instance_id, "FRONT"),
+                "rendered_position": ObjectBlueprintCatalog(session).slot_presentation_geometry(version).get(slot.slot_key, {"rendered_position": {"x": .95, "y": .5}})["rendered_position"],
             }
             for slot in version.slots
         ],

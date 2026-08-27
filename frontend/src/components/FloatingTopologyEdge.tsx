@@ -82,14 +82,14 @@ export const getConnectionPointEndpoint = (
   const presentation = projection.attributes.blueprint_presentation;
   const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId);
   if (slot && presentation) {
-    const side = slot.anchor.side;
+    const side = slot.external_attachment.side;
     const faces = visibleBlueprintFaces(presentation);
     const faceIndex = faces.indexOf(slot.face ?? 'FRONT');
     const face = blueprintDisplayDimensions(presentation.body, box.width);
     const panelTop = faceIndex * face.height;
     return {
-      x: box.x + (side === 'LEFT' ? 0 : side === 'RIGHT' ? box.width : box.width * slot.anchor.offset),
-      y: box.y + panelTop + (side === 'TOP' ? 0 : side === 'BOTTOM' ? face.height : face.height * slot.anchor.offset),
+      x: box.x + box.width * slot.external_attachment.x,
+      y: box.y + panelTop + face.height * slot.external_attachment.y,
       side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
     };
   }

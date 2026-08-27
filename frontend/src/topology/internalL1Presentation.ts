@@ -15,19 +15,14 @@ export interface InternalL1Segment {
   state: InternalL1PresentationState;
 }
 
-const anchorPoint = (
+const renderedPoint = (
   blueprint: BlueprintPresentation,
-  anchor: BlueprintPresentation['slots'][number]['anchor'],
+  position: BlueprintPresentation['slots'][number]['rendered_position'],
   displayWidth?: number,
 ): { x: number; y: number } => {
   const width = displayWidth ?? blueprint.body.width;
   const height = width * blueprint.body.height / blueprint.body.width;
-  switch (anchor.side) {
-    case 'LEFT': return { x: 0, y: height * anchor.offset };
-    case 'RIGHT': return { x: width, y: height * anchor.offset };
-    case 'TOP': return { x: width * anchor.offset, y: 0 };
-    case 'BOTTOM': return { x: width * anchor.offset, y: height };
-  }
+  return { x: width * position.x, y: height * position.y };
 };
 
 const compareLinks = (left: PhysicalInternalL1Link, right: PhysicalInternalL1Link): number => (
@@ -59,8 +54,8 @@ export const internalL1Segments = (
         connectionMemberId: link.connection_member_id,
         fromConnectionPointId: link.from_connection_point_id,
         toConnectionPointId: link.to_connection_point_id,
-        from: anchorPoint(blueprint, fromSlot.anchor, displayWidth),
-        to: anchorPoint(blueprint, toSlot.anchor, displayWidth),
+        from: renderedPoint(blueprint, fromSlot.rendered_position, displayWidth),
+        to: renderedPoint(blueprint, toSlot.rendered_position, displayWidth),
         state: highlightedConnectionMemberIds.has(link.connection_member_id)
           ? 'trace-highlighted'
           : wiringHighlightedConnectionMemberIds.has(link.connection_member_id)

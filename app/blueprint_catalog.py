@@ -21,6 +21,7 @@ from app.models import (
     PortBlockVersion,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from app.blueprint_presentation_geometry import PortGeometryInput, derive_port_geometry, fallback_placement
 
 
 @dataclass(frozen=True)
@@ -140,16 +141,13 @@ class ObjectBlueprintCatalog:
             self.session.add(instance)
             instances.append(instance)
         self.session.flush()
-        # Presentation-only fallback: deterministic right-edge distribution by request instance order
-        # and immutable PortBlock layout_order, independently for each physical face.
-        # It never participates in slot identity.
         expanded_by_face: dict[str, list[tuple[BlueprintPortBlockInstance, PortBlockPort]]] = {"FRONT": [], "REAR": []}
         for instance in instances:
             expanded_by_face[instance.face].extend((instance, port) for port in self.session.scalars(
                 select(PortBlockPort).where(PortBlockPort.port_block_version_id == instance.port_block_version_id).order_by(PortBlockPort.layout_order)
             ))
         for expanded in expanded_by_face.values():
-            for index, (instance, port) in enumerate(expanded):
+            for instance, port in expanded:
                 slot_key = self.composed_slot_key(instance.instance_key, port.local_id)
                 if slot_key in slots_by_key:
                     raise ValidationError("Composed Blueprint slot identity collision")
@@ -158,8 +156,6 @@ class ObjectBlueprintCatalog:
                     slot_key=slot_key,
                     display_name=port.display_label,
                     kind=port.kind,
-                    anchor_side="RIGHT",
-                    anchor_offset=(index + .5) / len(expanded) if expanded else .5,
                     port_block_instance_id=instance.id,
                     port_block_local_id=port.local_id,
                 )
@@ -192,7 +188,7 @@ class ObjectBlueprintCatalog:
     def composed_slot_key(instance_key: str, local_id: str) -> str:
         """Bounded identity key: SHA-256 of length-prefixed UTF-8 pair bytes.
 
-        Labels, exact version, layout and fallback anchors deliberately do not participate.
+        Labels, exact version and layout deliberately do not participate.
         The caller detects the cryptographically-unlikely digest collision before persistence.
         """
         instance = instance_key.encode("utf-8")
@@ -278,6 +274,22 @@ class ObjectBlueprintCatalog:
             internal_links=links,
             composition=composition if version.composition_kind == "PORT_BLOCKS_V1" else None,
         )
+
+    def slot_presentation_geometry(self, detail: BlueprintVersionDetail) -> dict[str, dict[str, object]]:
+        """Derived immutable-snapshot geometry; never stored on endpoint slots."""
+        blocks = {block.id: block for block in detail.composition or ()}
+        ports = {(port.port_block_version_id, port.local_id): port for port in self.session.scalars(select(PortBlockPort).where(PortBlockPort.port_block_version_id.in_([block.port_block_version_id for block in blocks.values()]))) } if blocks else {}
+        face_blocks: dict[str, list[BlueprintPortBlockInstance]] = {"FRONT": [], "REAR": []}
+        for block in sorted(blocks.values(), key=lambda value: value.instance_key):
+            face_blocks[block.face or "FRONT"].append(block)
+        fallback_indices = {block.id: index for values in face_blocks.values() for index, block in enumerate(values)}
+        inputs = []
+        for slot in detail.slots:
+            block = blocks.get(slot.port_block_instance_id)
+            port = ports.get((block.port_block_version_id, slot.port_block_local_id)) if block else None
+            placement = None if block is None else ((block.placement_x, block.placement_y, block.placement_width, block.placement_height) if None not in (block.placement_x, block.placement_y, block.placement_width, block.placement_height) else fallback_placement(fallback_indices[block.id]))
+            inputs.append(PortGeometryInput(slot.slot_key, block.id if block else None, slot.port_block_local_id or slot.slot_key, port.row if port else None, port.layout_column if port else None, port.layout_order if port else 0, block.face if block and block.face else "FRONT", placement))
+        return derive_port_geometry(inputs, (detail.width, detail.height))
 
     def delete_blueprint(self, blueprint_id: uuid.UUID) -> None:
         blueprint = self.session.scalar(

@@ -377,8 +377,6 @@ class BlueprintSlotMetadata(BaseModel):
 
     slot_key: str = Field(min_length=1)
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
-    anchor_side: Literal["LEFT", "RIGHT", "TOP", "BOTTOM"]
-    anchor_offset: float = Field(ge=0, le=1)
 
 
 class DirectInterfaceBindingDetails(BaseModel):
@@ -753,8 +751,8 @@ class ObjectBlueprintSlotDocument(BaseModel):
     key: str = Field(min_length=1)
     display_name: str = Field(min_length=1)
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
-    anchor: BlueprintAnchor
     face: Literal["FRONT", "REAR"]
+    rendered_position: dict[str, float]
 
 
 class ObjectBlueprintInternalLinkDocument(BaseModel):

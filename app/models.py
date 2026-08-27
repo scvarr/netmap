@@ -388,8 +388,6 @@ class BlueprintEndpointSlot(Base):
         CheckConstraint("char_length(btrim(slot_key)) > 0", name="slot_key_not_blank"),
         CheckConstraint("char_length(btrim(display_name)) > 0", name="display_name_not_blank"),
         CheckConstraint("kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="kind_supported"),
-        CheckConstraint("anchor_side IN ('LEFT', 'RIGHT', 'TOP', 'BOTTOM')", name="anchor_side_supported"),
-        CheckConstraint("anchor_offset >= 0 AND anchor_offset <= 1", name="anchor_offset_range"),
         UniqueConstraint("blueprint_version_id", "slot_key", name="uq_blueprint_endpoint_slots_key"),
         UniqueConstraint("port_block_instance_id", "port_block_local_id", name="uq_blueprint_slot_block_local_id"),
     )
@@ -401,8 +399,6 @@ class BlueprintEndpointSlot(Base):
     slot_key: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
-    anchor_side: Mapped[str] = mapped_column(String(16), nullable=False)
-    anchor_offset: Mapped[float] = mapped_column(Float, nullable=False)
     port_block_instance_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("blueprint_port_block_instances.id", ondelete="RESTRICT"), nullable=True)
     port_block_local_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
