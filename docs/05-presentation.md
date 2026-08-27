@@ -246,8 +246,8 @@ Aggregate edge не должен визуально или семантичес�
 ## Future Port Block and multi-face compatibility boundary
 
 **FIXED architecture; L1S.6c.1 library foundation, L1S.6c.2 authoring/
-numbering, and L1S.6c.3 Object Blueprint composition are implemented; only
-L1S.6c.4–L1S.6c.6 physical presentation work remains future.** The detailed decision record is
+numbering, L1S.6c.3 Object Blueprint composition, and L1S.6c.4 FRONT/REAR
+physical presentation are implemented; only L1S.6c.5–L1S.6c.6 remain future.** The detailed decision record is
 [[09-03-port-block-blueprint-architecture|09.3 Port Block Blueprint composition
 and multi-face physical presentation]]. A reusable Port Block is
 authoring/presentation provenance for network connection points, not a canonical

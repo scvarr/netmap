@@ -303,7 +303,7 @@ deliberately bounded milestones:
    contract was removed destructively. L1S.6 upgrades continue to compare exact
    slot/internal-link snapshots, preserving canonical identity for additive
    versions that retain an instance key and local IDs.
-4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation**.
+4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation — IMPLEMENTED**: exact Port Block instances persist a face within the complete immutable Blueprint version; historical NULL provenance reads as FRONT. Runtime renders one PhysicalObject and transiently selects a face, while preserving all slots for topology/cable logic. L1S.6c.6 remains the separate external cable-attachment geometry boundary.
 5. **L1S.6c.5 — visual Blueprint composition editor**.
 6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
 

@@ -4,7 +4,7 @@
 
 **FIXED architectural decisions. L1S.6c.1 library foundation, L1S.6c.2
 authoring/numbering, and L1S.6c.3 Object Blueprint composition are IMPLEMENTED;
-physical presentation work in L1S.6c.4–L1S.6c.6 remains FUTURE.**
+L1S.6c.4 FRONT/REAR presentation is IMPLEMENTED; L1S.6c.5–L1S.6c.6 remain FUTURE.**
 
 This note records the agreed next evolution of Object Blueprints for dense
 network equipment. It is an architecture/product boundary only: it does not
@@ -197,7 +197,7 @@ L1S.6c is intentionally subdivided as follows:
    produce server-expanded slots and explicit internal-link endpoints. Historical
    snapshot-only versions remain readable/instantiable; additive L1S.6 upgrades
    retain canonical identity through unchanged slot snapshots.
-4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation**.
+4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation — IMPLEMENTED**. Face is persisted on exact Port Block instances; historical NULL reads as FRONT, and runtime filtering is presentation-only.
 5. **L1S.6c.5 — visual Blueprint composition editor**.
 6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
 

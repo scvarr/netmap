@@ -14,7 +14,7 @@ def test_additive_composed_upgrade_preserves_canonical_identity_for_shared_insta
     created_block_version = client.post(f"/v1/library/port-blocks/{block_id}/versions", json={"ports": v2_ports})
     assert created_block_version.status_code == 201, created_block_version.text
     v2_block_version = created_block_version.json()["version_ref"]["entity_id"]
-    v2 = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 100, "height": 40}, "composition": {"instances": [{"instance_key": "K", "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": v2_block_version}}]}, "internal_links": []})
+    v2 = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 100, "height": 40}, "composition": {"instances": [{"instance_key": "K", "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": v2_block_version}, "face": "FRONT"}]}, "internal_links": []})
     assert v2.status_code == 201, v2.text
     v2_id = v2.json()["version_ref"]["entity_id"]
     instance = instantiate(blueprint_id, v1, "upgradable object")

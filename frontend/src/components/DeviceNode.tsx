@@ -6,11 +6,13 @@ import { displayNodeLabel, physicalClassPresentation } from '../topology/present
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import { internalL1Segments } from '../topology/internalL1Presentation';
 import { InternalL1Continuity } from './InternalL1Continuity';
+import { useI18n } from '../i18n';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
 export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
   const [face, setFace] = useState<'FRONT' | 'REAR'>('FRONT');
+  const { t } = useI18n();
   const { projection } = data;
   const physical = projection.kind === 'PHYSICAL_OBJECT';
   const classPresentation = physicalClassPresentation(projection.attributes.class);
@@ -34,7 +36,7 @@ export function DeviceNode({ data, selected }: NodeProps<DeviceFlowNode>) {
   if (physical && blueprint) return <div className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: blueprint.body.width, height: blueprint.body.height, background: blueprint.body.fill_color ?? '#18383a' }}>
     <Handle type="target" position={Position.Top} className="device-node__handle" />
     <InternalL1Continuity width={blueprint.body.width} height={blueprint.body.height} segments={internalSegments} />
-    <strong className="blueprint-map-node__label">{displayNodeLabel(projection)}</strong><div className="blueprint-map-node__faces"><button type="button" aria-pressed={face === 'FRONT'} onClick={() => setFace('FRONT')}>Передняя</button><button type="button" aria-pressed={face === 'REAR'} onClick={() => setFace('REAR')}>Задняя</button></div>
+    <strong className="blueprint-map-node__label">{displayNodeLabel(projection)}</strong><div className="blueprint-map-node__faces"><button type="button" aria-pressed={face === 'FRONT'} onClick={() => setFace('FRONT')}>{t('blueprint.face.front')}</button><button type="button" aria-pressed={face === 'REAR'} onClick={() => setFace('REAR')}>{t('blueprint.face.rear')}</button></div>
     {blueprint.slots.filter((slot) => (slot.face ?? 'FRONT') === face).map((slot) => { const style = slot.anchor.side === 'LEFT' ? { left: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(-50%, -50%)' } : slot.anchor.side === 'RIGHT' ? { right: 0, top: `${slot.anchor.offset * 100}%`, transform: 'translate(50%, -50%)' } : slot.anchor.side === 'TOP' ? { left: `${slot.anchor.offset * 100}%`, top: 0, transform: 'translate(-50%, -50%)' } : { left: `${slot.anchor.offset * 100}%`, bottom: 0, transform: 'translate(-50%, 50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
     <Handle type="source" position={Position.Top} className="device-node__handle" />
   </div>;
