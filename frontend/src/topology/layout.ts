@@ -31,6 +31,8 @@ export interface DeviceNodeData extends Record<string, unknown> {
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
+  onBlueprintDisplayResize?: (physicalObjectId: string, displayWidth: number) => void;
+  blueprintResizeEnabled?: boolean;
 }
 
 export interface LogicalEdgeData extends Record<string, unknown> {

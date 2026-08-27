@@ -87,6 +87,7 @@ class MoveMapPlacementRequest(BaseModel):
 
     x: FiniteFloat
     y: FiniteFloat
+    display_width: FiniteFloat | None = Field(default=None, gt=0)
 
 
 class SetMapViewLockRequest(BaseModel):
@@ -101,6 +102,7 @@ class MapViewPositionDocument(BaseModel):
     x: FiniteFloat
     y: FiniteFloat
     locked: bool = False
+    display_width: FiniteFloat | None = Field(default=None, gt=0)
 
 
 class MapPlacementDocument(BaseModel):

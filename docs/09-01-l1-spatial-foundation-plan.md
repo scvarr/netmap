@@ -221,7 +221,7 @@ complete. L1S.5 is not included in this slice.
 - Canonical values, API payloads, and user/backend data remain locale-neutral.
 
 The next bounded product step is `L1S.6c.6 — rendered-port vs external-cable-attachment geometry`
-(L1S.6a/L1S.6b/L1S.6c.3–L1S.6c.5 are implemented; see below).
+(L1S.6a/L1S.6b/L1S.6c.3–L1S.6c.5a are implemented; see below).
 
 ### L1S.6 — Controlled Blueprint instance upgrade
 
@@ -312,7 +312,8 @@ deliberately bounded milestones:
    fallback; saving a new version writes explicit placement. The SVG editor has
    independent FRONT/REAR surfaces, drag/resize, snapshot port grids and
    same-face internal-link visibility.
-6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
+6. **L1S.6c.5a — intrinsic Blueprint geometry and per-map L1 display size — IMPLEMENTED**: immutable Blueprint body `width`/`height` are dimensionless design geometry that define only the body aspect ratio; their absolute values are never map dimensions. Normalized Port Block composition remains intrinsic to that body with unchanged provenance and identity. Optional positive `MapViewPosition.display_width` owns one Saved Map physical-view body width; historical NULL rows use a deterministic presentation default. Runtime derives height from that aspect ratio and persists locked-aspect resize through the position write path. Slot anchors, topology, cable semantics and runtime Port Block rectangles are unchanged.
+7. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry — FUTURE**.
 
 This work is not otherwise complete. Every slice must preserve L1S.6 canonical identity,
 provenance, upgrade, and runtime-topology invariants; it does not add a

@@ -88,6 +88,10 @@ class MapViewPosition(Base):
             "view_key IN ('L1/PHYSICAL_OBJECT', 'L2/DEVICE')",
             name="map_view_positions_view_key_valid",
         ),
+        CheckConstraint(
+            "display_width IS NULL OR display_width > 0",
+            name="map_view_positions_display_width_positive",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -98,6 +102,9 @@ class MapViewPosition(Base):
     x: Mapped[float] = mapped_column(Float, nullable=False)
     y: Mapped[float] = mapped_column(Float, nullable=False)
     locked: Mapped[bool] = mapped_column(nullable=False, server_default="false")
+    # Per-map/view presentation size. NULL deliberately preserves historical
+    # positions; readers apply the deterministic L1 display default.
+    display_width: Mapped[float | None] = mapped_column(Float, nullable=True)
     placement: Mapped[MapPlacement] = relationship(back_populates="view_positions")
 
 

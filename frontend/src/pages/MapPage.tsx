@@ -44,6 +44,7 @@ import type {
   SavedMapViewKey,
   MapCableRouteWaypoint,
 } from "../topology/savedMapTypes";
+import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { physicalCablePresentation } from "../topology/physicalCablePresentation";
 import type {
   TopologyDataSource,
@@ -882,6 +883,28 @@ export function MapPage({
     }
   };
 
+  const resizeBlueprint = async (id: string, displayWidth: number) => {
+    if (!savedMapDataSource || !mapId || viewMode !== "physical") return;
+    const targetMapId = mapId;
+    const positionKey = savedMapViewKey(viewMode);
+    const current = activeMap?.placements.find((placement) => placement.physical_object_ref.entity_id === id)?.positions[positionKey];
+    if (!current) return;
+    const width = clampBlueprintDisplayWidth(displayWidth);
+    try {
+      await savedMapDataSource.movePosition(targetMapId, id, viewMode, current.x, current.y, width);
+      if (selectedMapId.current === targetMapId) setMap((existing) => existing?.map_ref.entity_id === targetMapId ? {
+        ...existing,
+        placements: existing.placements.map((placement) => placement.physical_object_ref.entity_id === id ? {
+          ...placement, positions: { ...placement.positions, [positionKey]: { ...placement.positions[positionKey]!, display_width: width } },
+        } : placement),
+      } : existing);
+    } catch (reason) {
+      if (selectedMapId.current !== targetMapId) return;
+      setError(errorMessage(reason, t("view.error.title")));
+      try { await reloadMap(targetMapId); } catch { /* preserve persistence error */ }
+    }
+  };
+
   const setPlacementLock = async (id: string, locked: boolean) => {
     if (!savedMapDataSource || !mapId) return;
     const targetMapId = mapId;
@@ -1057,6 +1080,13 @@ export function MapPage({
         .filter((item): item is [string, XYPosition] => item !== null),
     );
   }, [activeMap, document, viewMode]);
+  const displayWidthOverrides = useMemo(() => Object.fromEntries(
+    (activeMap?.placements ?? []).flatMap((item) => {
+      const node = nodeForPhysicalObject(document?.nodes ?? [], item.physical_object_ref.entity_id);
+      const position = item.positions['L1/PHYSICAL_OBJECT'];
+      return node?.attributes.blueprint_presentation && position ? [[node.id, position.display_width ?? DEFAULT_BLUEPRINT_DISPLAY_WIDTH]] : [];
+    }),
+  ), [activeMap, document]);
   const draggableNodeIds = useMemo(
     () =>
       new Set(
@@ -1302,10 +1332,12 @@ export function MapPage({
                   }}
                   sceneKey={presentationSceneKey}
                   positionOverrides={!legacy ? positions : undefined}
+                  displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}
                   lockedNodeIds={!legacy ? lockedNodeIds : undefined}
                   authoritativePositionRevision={authoritativePositionRevision}
                   onPhysicalNodeDragStop={!legacy ? move : undefined}
+                  onBlueprintDisplayResize={!legacy && viewMode === "physical" ? resizeBlueprint : undefined}
                   onNodeCollisionRejected={() =>
                     setError(t("map.collision"))
                   }

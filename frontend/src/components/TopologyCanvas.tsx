@@ -43,6 +43,7 @@ import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation"
 import { physicalObjectIdForNode as cablePhysicalObjectIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
+import { blueprintDisplayDimensions } from "../topology/blueprintDisplaySize";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -53,6 +54,7 @@ interface TopologyCanvasProps {
   traceOverlay?: PhysicalTraceOverlay;
   sceneKey?: string;
   positionOverrides?: Record<string, XYPosition>;
+  displayWidthOverrides?: Record<string, number>;
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
@@ -60,6 +62,7 @@ interface TopologyCanvasProps {
     physicalObjectId: string,
     position: XYPosition,
   ) => void;
+  onBlueprintDisplayResize?: (physicalObjectId: string, displayWidth: number) => void;
   onNodeCollisionRejected?: () => void;
   disableAutoLayout?: boolean;
   onViewportCenterReady?: (getter: (() => XYPosition) | null) => void;
@@ -93,10 +96,12 @@ export function TopologyCanvas({
   traceOverlay,
   sceneKey,
   positionOverrides,
+  displayWidthOverrides,
   draggableNodeIds,
   lockedNodeIds,
   authoritativePositionRevision,
   onPhysicalNodeDragStop,
+  onBlueprintDisplayResize,
   onNodeCollisionRejected,
   disableAutoLayout,
   onViewportCenterReady,
@@ -147,7 +152,13 @@ export function TopologyCanvas({
           nodes: applyTopologyPositionOverrides(
             nextProjection.nodes,
             storedPositions,
-          ),
+          ).map((node) => {
+            const blueprint = node.data.projection.attributes.blueprint_presentation;
+            const displayWidth = displayWidthOverrides?.[node.id];
+            return blueprint && displayWidth !== undefined
+              ? { ...node, ...blueprintDisplayDimensions(blueprint.body, displayWidth) }
+              : node;
+          }),
         };
         confirmedNodePositions.current = new Map(
           next.nodes.map((node) => [node.id, node.position]),
@@ -169,6 +180,20 @@ export function TopologyCanvas({
       current = false;
     };
   }, [document, layoutEngine, layoutRevision, layoutStore, t, viewKey]);
+
+  useEffect(() => {
+    if (!displayWidthOverrides) return;
+    setProjection((current) => current ? {
+      ...current,
+      nodes: current.nodes.map((node) => {
+        const blueprint = node.data.projection.attributes.blueprint_presentation;
+        const displayWidth = displayWidthOverrides[node.id];
+        return blueprint && displayWidth !== undefined
+          ? { ...node, ...blueprintDisplayDimensions(blueprint.body, displayWidth) }
+          : node;
+      }),
+    } : current);
+  }, [displayWidthOverrides]);
 
   // A position acknowledgement is already reflected by React Flow's drag state.
   // Only an explicit authoritative revision (for example, a failed persistence rollback)
@@ -253,6 +278,8 @@ export function TopologyCanvas({
       wiringContinuationConnectionPointIds,
       physicalPortStates,
       onPhysicalPortClick,
+      onBlueprintDisplayResize,
+      blueprintResizeEnabled: Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));

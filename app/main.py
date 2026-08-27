@@ -163,7 +163,12 @@ def _saved_map_document(detail) -> dict[str, object]:
                     "entity_id": placement.physical_object_id,
                 },
                 "positions": {
-                    str(position.view_key): {"x": position.x, "y": position.y, "locked": position.locked}
+                    str(position.view_key): {
+                        "x": position.x,
+                        "y": position.y,
+                        "locked": position.locked,
+                        **({"display_width": position.display_width} if position.display_width is not None else {}),
+                    }
                     for position in placement.view_positions
                 },
             }
@@ -221,7 +226,7 @@ def list_saved_maps(session: Session = Depends(get_session)) -> SavedMapListDocu
     ]}
 
 
-@app.post("/v1/maps", response_model=SavedMapDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
+@app.post("/v1/maps", response_model=SavedMapDocument, response_model_exclude_none=True, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
 def create_saved_map(query: CreateSavedMapRequest, session: Session = Depends(get_session)) -> SavedMapDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)
@@ -229,7 +234,7 @@ def create_saved_map(query: CreateSavedMapRequest, session: Session = Depends(ge
         return _saved_map_document(catalog.detail(saved_map.id))
 
 
-@app.get("/v1/maps/{map_id}", response_model=SavedMapDocument, responses={422: {"model": ErrorResponse}})
+@app.get("/v1/maps/{map_id}", response_model=SavedMapDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
 def get_saved_map(map_id: uuid.UUID, session: Session = Depends(get_session)) -> SavedMapDocument:
     return _saved_map_document(SavedMapCatalog(session).detail(map_id))
 
@@ -245,12 +250,12 @@ def _map_placements_document(detail) -> dict[str, object]:
     return {"map_ref": document["map_ref"], "placements": document["placements"]}
 
 
-@app.get("/v1/maps/{map_id}/placements", response_model=MapPlacementsDocument, responses={422: {"model": ErrorResponse}})
+@app.get("/v1/maps/{map_id}/placements", response_model=MapPlacementsDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
 def list_map_placements(map_id: uuid.UUID, session: Session = Depends(get_session)) -> MapPlacementsDocument:
     return _map_placements_document(SavedMapCatalog(session).placements(map_id))
 
 
-@app.post("/v1/maps/{map_id}/placements", response_model=MapPlacementsDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
+@app.post("/v1/maps/{map_id}/placements", response_model=MapPlacementsDocument, response_model_exclude_none=True, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
 def add_map_placement(map_id: uuid.UUID, query: CreateMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)
@@ -258,16 +263,16 @@ def add_map_placement(map_id: uuid.UUID, query: CreateMapPlacementRequest, sessi
         return _map_placements_document(catalog.placements(map_id))
 
 
-@app.put("/v1/maps/{map_id}/placements/{physical_object_id}", response_model=MapPlacementsDocument, responses={422: {"model": ErrorResponse}})
+@app.put("/v1/maps/{map_id}/placements/{physical_object_id}", response_model=MapPlacementsDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
 def move_map_placement(map_id: uuid.UUID, physical_object_id: uuid.UUID, query: MoveMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
     """Compatibility alias for the physical (`L1/PHYSICAL_OBJECT`) position."""
     with session.begin():
         catalog = SavedMapCatalog(session)
-        catalog.move_placement(map_id, physical_object_id, query.x, query.y)
+        catalog.move_placement(map_id, physical_object_id, query.x, query.y, query.display_width)
         return _map_placements_document(catalog.placements(map_id))
 
 
-@app.put("/v1/maps/{map_id}/placements/{physical_object_id}/positions/{view_key}", response_model=MapPlacementsDocument, responses={422: {"model": ErrorResponse}})
+@app.put("/v1/maps/{map_id}/placements/{physical_object_id}/positions/{view_key}", response_model=MapPlacementsDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
 def set_map_view_position(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: MoveMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)
@@ -275,13 +280,12 @@ def set_map_view_position(map_id: uuid.UUID, physical_object_id: uuid.UUID, view
             map_id,
             physical_object_id,
             MapViewKey.PHYSICAL if view_key == "physical" else MapViewKey.LOGICAL,
-            query.x,
-            query.y,
+            query.x, query.y, query.display_width,
         )
         return _map_placements_document(catalog.placements(map_id))
 
 
-@app.put("/v1/maps/{map_id}/placements/{physical_object_id}/locks/{view_key}", response_model=MapPlacementsDocument, responses={422: {"model": ErrorResponse}})
+@app.put("/v1/maps/{map_id}/placements/{physical_object_id}/locks/{view_key}", response_model=MapPlacementsDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
 def set_map_view_lock(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: SetMapViewLockRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)

@@ -60,11 +60,13 @@ class SavedMapCatalog:
         self._flush()
         return placement
 
-    def move_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, x: float, y: float) -> MapPlacement:
+    def move_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, x: float, y: float, display_width: float | None = None) -> MapPlacement:
         """Compatibility operation: update the physical presentation position only."""
-        return self.set_view_position(map_id, physical_object_id, MapViewKey.PHYSICAL, x, y)
+        return self.set_view_position(map_id, physical_object_id, MapViewKey.PHYSICAL, x, y, display_width)
 
-    def set_view_position(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, x: float, y: float) -> MapPlacement:
+    def set_view_position(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, x: float, y: float, display_width: float | None = None) -> MapPlacement:
+        if display_width is not None and view_key != MapViewKey.PHYSICAL:
+            raise ValidationError("display_width is supported only by the physical map view", {"view_key": str(view_key)})
         self._require_map(map_id)
         placement = self.session.scalar(select(MapPlacement).where(
             MapPlacement.map_id == map_id, MapPlacement.physical_object_id == physical_object_id
@@ -75,9 +77,11 @@ class SavedMapCatalog:
             })
         position = next((item for item in placement.view_positions if item.view_key == view_key), None)
         if position is None:
-            placement.view_positions.append(MapViewPosition(view_key=view_key, x=x, y=y))
+            placement.view_positions.append(MapViewPosition(view_key=view_key, x=x, y=y, display_width=display_width))
         else:
             position.x, position.y = x, y
+            if display_width is not None:
+                position.display_width = display_width
         self._flush()
         return placement
 

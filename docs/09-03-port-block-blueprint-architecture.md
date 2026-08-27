@@ -2,7 +2,7 @@
 
 ## Status, authority and scope
 
-**FIXED architectural decisions. L1S.6c.1–L1S.6c.5 are IMPLEMENTED;
+**FIXED architectural decisions. L1S.6c.1–L1S.6c.5a are IMPLEMENTED;
 L1S.6c.6 remains FUTURE.**
 
 This note records the agreed next evolution of Object Blueprints for dense
@@ -118,6 +118,20 @@ Front and rear are parts of that one version, not separately versioned device
 templates. This prevents invalid independent state such as “front v3 + rear
 v2”.
 
+### Intrinsic body geometry and Saved Map display size
+
+Blueprint body `width` and `height` are dimensionless intrinsic/design
+coordinates: they define body shape and aspect ratio only, not physical units or
+map-node size. `8×1` and `480×60` are therefore equivalent aspect ratios.
+Face-local normalized Port Block composition remains intrinsic to this body and
+keeps its existing provenance and identity boundary. A positive optional
+`MapViewPosition.display_width` is the per-Saved-Map L1 presentation width;
+runtime height is `display_width × body.height / body.width`. Historical NULL
+positions use a deterministic default independent of absolute body dimensions.
+This preserves `BlueprintEndpointSlot.anchor`, canonical connection-point
+identity and cable behavior; rendered-port and external attachment geometry are
+still exclusively future L1S.6c.6 work.
+
 ### Internal links and runtime topology
 
 Existing Blueprint internal-link semantics remain valid. For example, a front
@@ -202,7 +216,8 @@ L1S.6c is intentionally subdivided as follows:
    retain canonical identity through unchanged slot snapshots.
 4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation — IMPLEMENTED**. Face is persisted on exact Port Block instances; historical NULL reads as FRONT, and runtime filtering is presentation-only.
 5. **L1S.6c.5 — visual Blueprint composition editor — IMPLEMENTED**.
-6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
+6. **L1S.6c.5a — intrinsic Blueprint geometry and per-map L1 display size — IMPLEMENTED**.
+7. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry — FUTURE**.
 
 L1S.6c.3 destructively removed the active legacy `EndpointGroup`,
 `placement_offset`, and `placement_span` authoring contract. NetMap is

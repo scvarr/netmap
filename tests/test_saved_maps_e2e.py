@@ -178,6 +178,23 @@ def test_placements_are_per_map_and_keep_physical_and_logical_positions_independ
     assert client.put(f"/v1/maps/{uuid.uuid4()}/placements/{physical_id}/positions/logical", json={"x": 1, "y": 2}).status_code == 422
 
 
+def test_physical_display_width_is_optional_validated_and_independent_per_saved_map():
+    physical = create_object("Sized")
+    first, second = create_map("Width A"), create_map("Width B")
+    physical_id = object_id(physical)
+    for saved in (first, second):
+        assert client.post(f"/v1/maps/{map_id(saved)}/placements", json={"physical_object_id": physical_id, "x": 1, "y": 2}).status_code == 201
+    # Historical NULL remains readable without inventing stored presentation state.
+    assert "display_width" not in placements(map_id(first))[0]["positions"]["L1/PHYSICAL_OBJECT"]
+    assert client.put(f"/v1/maps/{map_id(first)}/placements/{physical_id}/positions/physical", json={"x": 3, "y": 4, "display_width": 320}).status_code == 200
+    assert client.put(f"/v1/maps/{map_id(second)}/placements/{physical_id}/positions/physical", json={"x": 5, "y": 6, "display_width": 480}).status_code == 200
+    assert placements(map_id(first))[0]["positions"]["L1/PHYSICAL_OBJECT"]["display_width"] == 320.0
+    assert placements(map_id(second))[0]["positions"]["L1/PHYSICAL_OBJECT"]["display_width"] == 480.0
+    for value in (0, -1, "NaN", "Infinity"):
+        assert client.put(f"/v1/maps/{map_id(first)}/placements/{physical_id}/positions/physical", json={"x": 3, "y": 4, "display_width": value}).status_code == 422
+    assert client.put(f"/v1/maps/{map_id(first)}/placements/{physical_id}/positions/logical", json={"x": 3, "y": 4, "display_width": 320}).status_code == 422
+
+
 def test_per_view_placement_locks_preserve_coordinates_and_validate_scope():
     physical = create_object("SW1")
     saved_map = create_map("Locks")
