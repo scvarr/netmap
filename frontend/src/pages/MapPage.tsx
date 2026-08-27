@@ -889,7 +889,10 @@ export function MapPage({
     const positionKey = savedMapViewKey(viewMode);
     const current = activeMap?.placements.find((placement) => placement.physical_object_ref.entity_id === id)?.positions[positionKey];
     if (!current) return;
-    const width = clampBlueprintDisplayWidth(displayWidth);
+    const blueprint = (latestPhysicalDocument.current?.nodes ?? [])
+      .find((node) => physicalObjectIdForNode(node) === id)
+      ?.attributes.blueprint_presentation;
+    const width = clampBlueprintDisplayWidth(displayWidth, blueprint?.body);
     try {
       await savedMapDataSource.movePosition(targetMapId, id, viewMode, current.x, current.y, width);
       if (selectedMapId.current === targetMapId) setMap((existing) => existing?.map_ref.entity_id === targetMapId ? {

@@ -30,8 +30,14 @@ describe('DeviceNode internal L1 overlay', () => {
     render(<DeviceNode {...({ data: { projection, traceHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 320 } as any)} />);
     const front = screen.getByTestId('blueprint-face-FRONT');
     const rear = screen.getByTestId('blueprint-face-REAR');
+    const body = screen.getByTestId('blueprint-map-node');
     expect(screen.queryByRole('button', { name: 'Передняя' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Задняя' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Передняя')).not.toBeInTheDocument();
+    expect(screen.queryByText('Задняя')).not.toBeInTheDocument();
+    expect(body).toHaveStyle({ height: '320px' });
+    expect(within(body).getByTitle('PP1')).toHaveClass('blueprint-map-node__label');
+    expect(front.nextElementSibling).toBe(rear);
     expect(within(front).getByTitle('Front 01 · CONNECTION_POINT')).toBeInTheDocument();
     expect(within(front).queryByTitle('Rear 01 · CONNECTION_POINT')).not.toBeInTheDocument();
     expect(within(rear).getByTitle('Rear 01 · CONNECTION_POINT')).toBeInTheDocument();
@@ -49,6 +55,7 @@ describe('DeviceNode internal L1 overlay', () => {
     const { rerender } = render(<DeviceNode {...({ data: { projection: frontOnly }, selected: false } as any)} />);
     expect(screen.getByTestId('blueprint-face-FRONT')).toBeInTheDocument();
     expect(screen.queryByTestId('blueprint-face-REAR')).not.toBeInTheDocument();
+    expect(screen.getByTestId('blueprint-map-node')).toHaveStyle({ height: '120px' });
     const rearOnly = { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots: [projection.attributes.blueprint_presentation.slots[1]] } } };
     rerender(<DeviceNode {...({ data: { projection: rearOnly }, selected: false } as any)} />);
     expect(screen.queryByTestId('blueprint-face-FRONT')).not.toBeInTheDocument();

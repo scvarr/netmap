@@ -127,11 +127,11 @@ describe('ELK topology layout', () => {
 
   it('uses default display dimensions for Blueprints while generic nodes keep the fallback', async () => {
     const document = documentFor(['panel', 'cable', 'manual'], [], 'L1', 'PHYSICAL_OBJECT');
-    document.nodes[0].attributes.blueprint_presentation = { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v' }, body: { kind: 'RECTANGLE', width: 480, height: 70 }, slots: [] };
+    document.nodes[0].attributes.blueprint_presentation = { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v' }, body: { kind: 'RECTANGLE', width: 480, height: 70 }, slots: [{ slot_key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', connection_point_id: 'front', anchor: { side: 'TOP', offset: .5 } }] };
     document.nodes[1].attributes.blueprint_presentation = { ...document.nodes[0].attributes.blueprint_presentation, body: { kind: 'RECTANGLE', width: 120, height: 6 } };
     const flow = await toFlowProjection(document);
-    expect(flow.nodes.find((node) => node.id === 'panel')).toMatchObject({ width: 240, height: 22 });
-    expect(flow.nodes.find((node) => node.id === 'cable')).toMatchObject({ width: 240, height: 22 });
+    expect(flow.nodes.find((node) => node.id === 'panel')).toMatchObject({ width: 240, height: 35 });
+    expect(flow.nodes.find((node) => node.id === 'cable')).toMatchObject({ width: 240, height: 12 });
     expect(flow.nodes.find((node) => node.id === 'manual')).toMatchObject({ width: undefined, height: undefined });
   });
 

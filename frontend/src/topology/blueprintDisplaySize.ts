@@ -3,13 +3,12 @@ import type { BlueprintPresentation } from './types';
 // Presentation-only fallback for legacy MapViewPosition rows. It is deliberately
 // independent of Blueprint body's absolute intrinsic/design coordinates.
 export const DEFAULT_BLUEPRINT_DISPLAY_WIDTH = 240;
-export const MIN_BLUEPRINT_DISPLAY_WIDTH = 96;
 export const MAX_BLUEPRINT_DISPLAY_WIDTH = 960;
-// Runtime-only composition constants. They deliberately do not belong to the
-// immutable Blueprint body or Port Block authoring geometry.
-export const BLUEPRINT_NODE_HEADER_HEIGHT = 22;
-export const BLUEPRINT_FACE_LABEL_HEIGHT = 18;
-export const BLUEPRINT_FACE_GAP = 12;
+export const MIN_BLUEPRINT_USABLE_FACE_HEIGHT = 18;
+export const MIN_BLUEPRINT_DISPLAY_WIDTH = 64;
+export const MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH = 240;
+export const MIN_BLUEPRINT_LABEL_FONT_SIZE = 8;
+export const MAX_BLUEPRINT_LABEL_FONT_SIZE = 32;
 
 export type BlueprintFace = 'FRONT' | 'REAR';
 
@@ -36,13 +35,30 @@ export const blueprintNodeDisplayDimensions = (
   const faces = visibleBlueprintFaces(presentation);
   return {
     width: face.width,
-    height: BLUEPRINT_NODE_HEADER_HEIGHT
-      + faces.length * (BLUEPRINT_FACE_LABEL_HEIGHT + face.height)
-      + Math.max(0, faces.length - 1) * BLUEPRINT_FACE_GAP,
+    height: faces.length * face.height,
   };
 };
 
-export const clampBlueprintDisplayWidth = (width: number) => Math.min(
-  MAX_BLUEPRINT_DISPLAY_WIDTH,
-  Math.max(MIN_BLUEPRINT_DISPLAY_WIDTH, width),
+export const minimumBlueprintDisplayWidth = (body: BlueprintPresentation['body']) => Math.min(
+  MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH,
+  Math.max(MIN_BLUEPRINT_DISPLAY_WIDTH, MIN_BLUEPRINT_USABLE_FACE_HEIGHT * body.width / body.height),
 );
+
+export const clampBlueprintDisplayWidth = (
+  width: number,
+  body?: BlueprintPresentation['body'],
+) => Math.min(
+  MAX_BLUEPRINT_DISPLAY_WIDTH,
+  Math.max(body ? minimumBlueprintDisplayWidth(body) : MIN_BLUEPRINT_DISPLAY_WIDTH, width),
+);
+
+export const blueprintObjectLabelFontSize = (
+  body: BlueprintPresentation['body'],
+  displayWidth: number | undefined,
+) => {
+  const face = blueprintDisplayDimensions(body, displayWidth);
+  return Math.min(
+    MAX_BLUEPRINT_LABEL_FONT_SIZE,
+    Math.max(MIN_BLUEPRINT_LABEL_FONT_SIZE, Math.min(face.width * 0.075, face.height * 0.6)),
+  );
+};

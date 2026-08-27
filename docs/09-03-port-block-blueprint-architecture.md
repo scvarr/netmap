@@ -218,9 +218,12 @@ L1S.6c is intentionally subdivided as follows:
 5. **L1S.6c.5 — visual Blueprint composition editor — IMPLEMENTED**.
 6. **L1S.6c.5a — intrinsic Blueprint geometry and per-map L1 display size — IMPLEMENTED**.
 7. **L1S.6c.5b — simultaneous runtime faces — IMPLEMENTED**. The L1 map is one
-   object presentation with zero, one or two visible face panels derived from
-   actual slot presentation; it is not a runtime FRONT/REAR selector. One
-   `display_width` controls every visible panel and the complete footprint.
+   object presentation with zero, one or two visible face surfaces derived from
+   actual slot presentation; it is not a runtime FRONT/REAR selector and has
+   no runtime face captions. One face is one body rectangle; FRONT plus REAR
+   are directly joined body rectangles (FRONT above REAR) under one centered,
+   scalable object label. One `display_width` controls every face and the
+   complete footprint with no header, label, or inter-face gap geometry.
    The Blueprint editor may retain its FRONT/REAR tabs because they are an
    authoring convenience only. Same-face internal continuity is rendered inside
    its panel; cross-face continuity remains canonical but its geometry is
