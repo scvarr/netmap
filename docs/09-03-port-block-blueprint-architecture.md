@@ -2,9 +2,9 @@
 
 ## Status, authority and scope
 
-**FIXED architectural decisions. L1S.6c.1 library foundation and L1S.6c.2
-authoring/numbering are IMPLEMENTED; all composition and presentation work
-remains FUTURE.**
+**FIXED architectural decisions. L1S.6c.1 library foundation, L1S.6c.2
+authoring/numbering, and L1S.6c.3 Object Blueprint composition are IMPLEMENTED;
+physical presentation work in L1S.6c.4–L1S.6c.6 remains FUTURE.**
 
 This note records the agreed next evolution of Object Blueprints for dense
 network equipment. It is an architecture/product boundary only: it does not
@@ -38,7 +38,8 @@ Blueprint version that later references it. L1S.6c.1 persists the library-owned
 record, immutable version number, and an exact ordered/layout port snapshot.
 L1S.6c.2 adds a client authoring convenience which deterministically produces
 that same explicit snapshot; it is not persisted as a second source of truth.
-Object Blueprint references remain future work.
+L1S.6c.3 composes exact immutable Port Block versions into Object Blueprint
+versions; the server expands their slots and persists provenance.
 
 A Port Block is authoring/presentation provenance, not canonical topology. It
 is not a `PhysicalObject`, a canonical network entity, or a topology source of
@@ -61,19 +62,18 @@ Each Port Block conceptually owns stable local port identities, such as `p1`
 through `p48`. Each placement of that exact Port Block version within an Object
 Blueprint has a stable instance key, such as `main`, `uplink`, or `rear`.
 
-Consequently, a final Object Blueprint slot identity may be compositionally
-derived from stable authoring identities:
+Consequently, a final Object Blueprint slot identity is compositionally derived
+from stable authoring identities:
 
 ```text
-main:p1
-main:p2
-uplink:p1
+SHA-256(uint32be(byte_length(UTF-8(instance_key))) + UTF-8(instance_key) +
+        uint32be(byte_length(UTF-8(local_id))) + UTF-8(local_id))
 ```
 
-The exact serialized slot-key format is deliberately open. The invariant is: a
-port identity must never be derived from visible port number, display label, row
-position, screen coordinate, or array/UI order. Renumbering a label alone must
-not change canonical port identity.
+The persisted key is `pb_` plus that lowercase SHA-256 digest. The invariant is:
+a port identity must never be derived from visible port number, display label,
+row position, screen coordinate, or array/UI order. Renumbering a label alone
+must not change canonical port identity.
 
 Port numbering is a type-safe/common authoring convenience, not identity. The
 initial scope supports one or two rows and at least these automatic schemes:
@@ -172,11 +172,9 @@ not part of Port Block implementation.
 
 ## Deliberately out of scope
 
-- Object Blueprint references, block-instance keys and final composed-slot
-  serialization;
-- `FRONT`/`REAR`, Object Blueprint editor changes, automatic numbering recipes,
-  Port Block UI, projection changes, cable geometry, composite devices, and
-  dense-cable editing visibility;
+- `FRONT`/`REAR`, visual Object Blueprint composition, rendered-port/cable
+  attachment geometry, projection changes, cable geometry, composite devices,
+  and dense-cable editing visibility;
 - arbitrary front-panel hardware inventory or rack visualization;
 - arbitrary dense grids, more than initial one/two-row numbering scope, or a
   numbering expression language;
@@ -194,18 +192,21 @@ L1S.6c is intentionally subdivided as follows:
 
 1. **L1S.6c.1 — Port Block library foundation**.
 2. **L1S.6c.2 — Port Block authoring and numbering — IMPLEMENTED**.
-3. **L1S.6c.3 — Object Blueprint composition and legacy EndpointGroup removal**.
+3. **L1S.6c.3 — Object Blueprint composition and legacy EndpointGroup removal — IMPLEMENTED**.
+   Exact immutable Port Block versions, stable block-instance keys and local IDs
+   produce server-expanded slots and explicit internal-link endpoints. Historical
+   snapshot-only versions remain readable/instantiable; additive L1S.6 upgrades
+   retain canonical identity through unchanged slot snapshots.
 4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation**.
 5. **L1S.6c.5 — visual Blueprint composition editor**.
 6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
 
-L1S.6c.3 may destructively remove the legacy `EndpointGroup`,
-`placement_offset`, and `placement_span` authoring contract: NetMap is
-pre-production and does not require compatibility with existing development
-Blueprint authoring data. Do not introduce compatibility parsers, dual recipe
-formats, or migration machinery just to preserve those records. This does not
-change any canonical topology, immutable Blueprint snapshot, Saved Map,
-provenance, or L1S.6 upgrade rule.
+L1S.6c.3 destructively removed the active legacy `EndpointGroup`,
+`placement_offset`, and `placement_span` authoring contract. NetMap is
+pre-production, so no compatibility parser, dual recipe format, or migration
+machinery exists solely to preserve development Blueprint authoring records.
+This does not change any canonical topology, immutable Blueprint snapshot,
+Saved Map, provenance, or L1S.6 upgrade rule.
 
 Every future slice must preserve the current authoritative runtime facts,
 immutable snapshot behavior, exact slot-to-canonical mappings, and the Saved

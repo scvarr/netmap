@@ -245,14 +245,15 @@ Aggregate edge не должен визуально или семантичес�
 
 ## Future Port Block and multi-face compatibility boundary
 
-**FIXED architecture; L1S.6c.1 library foundation and L1S.6c.2 authoring/
-numbering are implemented; remaining composition/presentation work is future.** The detailed decision record is
+**FIXED architecture; L1S.6c.1 library foundation, L1S.6c.2 authoring/
+numbering, and L1S.6c.3 Object Blueprint composition are implemented; only
+L1S.6c.4–L1S.6c.6 physical presentation work remains future.** The detailed decision record is
 [[09-03-port-block-blueprint-architecture|09.3 Port Block Blueprint composition
 and multi-face physical presentation]]. A reusable Port Block is
 authoring/presentation provenance for network connection points, not a canonical
-entity or a `PhysicalObject`. A future Object Blueprint version may compose
-immutable exact Port Block versions onto `FRONT`/`REAR` faces, but materializing
-it must still create only the existing canonical `ConnectionPoint`, optional
+entity or a `PhysicalObject`. An Object Blueprint version composes immutable
+exact Port Block versions; materializing it still creates only the existing
+canonical `ConnectionPoint`, optional
 `NetworkInterface`, binding, and Blueprint-instance provenance facts.
 
 The current library surface provides a Russian-default Port Block list and
@@ -260,13 +261,13 @@ authoring UI. One or two rows, sequential/odd-even/even-odd numbering, a
 starting number, prefix, visual direction, kind and exceptional display labels
 generate the exact snapshot that the existing library API persists. Opaque local
 IDs are generated separately and survive presentation-only edits; they are not
-primary user input. It does not create Object Blueprint references, faces,
-projection geometry, or topology facts. Subsequent L1S.6c milestones may
-destructively replace legacy `EndpointGroup`/`placement_offset`/`placement_span`
-authoring without compatibility readers or data migration, because existing
-development authoring data has no pre-production compatibility guarantee. This
-does not relax canonical topology, immutable Blueprint snapshot, Saved Map,
-provenance, or L1S.6 upgrade invariants.
+primary user input. Object Blueprint composition records exact version references
+and server-expands slots, but neither the library nor composition creates faces,
+projection geometry, or new topology facts. L1S.6c.3 removed legacy
+`EndpointGroup`/`placement_offset`/`placement_span` authoring without compatibility
+readers or data migration, because existing development authoring data has no
+pre-production compatibility guarantee. This does not relax canonical topology,
+immutable Blueprint snapshot, Saved Map, provenance, or L1S.6 upgrade invariants.
 
 `FRONT` and `REAR` are geometry within the one L1 object presentation. They do
 not create a new Saved Map membership, network view, `MapViewKey`, or canonical

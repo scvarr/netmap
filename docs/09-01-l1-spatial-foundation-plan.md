@@ -220,8 +220,8 @@ complete. L1S.5 is not included in this slice.
   surface-coverage claim returns only after LOC-001.
 - Canonical values, API payloads, and user/backend data remain locale-neutral.
 
-The next bounded product step is `L1S.6c.3 — Object Blueprint composition and
-legacy EndpointGroup removal` (L1S.6a/L1S.6b are implemented; see below).
+The next bounded product step is `L1S.6c.4 — FRONT/REAR physical presentation`
+(L1S.6a/L1S.6b/L1S.6c.3 are implemented; see below).
 
 ### L1S.6 — Controlled Blueprint instance upgrade
 
@@ -293,7 +293,16 @@ deliberately bounded milestones:
    the bounded numbering schemes, prefix, direction, kind and label overrides.
    Opaque local IDs are client-generated separately from presentation and are
    preserved while authoring a version; successful writes refresh library data.
-3. **L1S.6c.3 — Object Blueprint composition and legacy EndpointGroup removal**.
+3. **L1S.6c.3 — Object Blueprint composition and legacy EndpointGroup removal — IMPLEMENTED**.
+   Object Blueprint versions compose exact immutable `PortBlockVersion` records;
+   each block instance has an opaque stable `instance_key`, and each final slot
+   identity derives only from that key plus the stable Port Block `local_id`.
+   The server expands exact ports and validates explicit internal links, while
+   immutable historical snapshot-only versions remain readable and instantiable.
+   The active EndpointGroup/`placement_offset`/`placement_span` authoring
+   contract was removed destructively. L1S.6 upgrades continue to compare exact
+   slot/internal-link snapshots, preserving canonical identity for additive
+   versions that retain an instance key and local IDs.
 4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation**.
 5. **L1S.6c.5 — visual Blueprint composition editor**.
 6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
@@ -302,13 +311,12 @@ This work is not otherwise complete. Every slice must preserve L1S.6 canonical i
 provenance, upgrade, and runtime-topology invariants; it does not add a
 `MapViewKey` or a new Saved Map membership model.
 
-This is a pre-production project. There is no compatibility requirement for
-existing legacy `EndpointGroup` authoring data. When L1S.6c.3 replaces that
-contract, `EndpointGroup`, `placement_offset`, and `placement_span` authoring
-may be removed destructively. Do not add compatibility parsers, dual recipe
-formats, or migration machinery solely to preserve development Blueprint data.
-This exception does not relax canonical topology, immutable Blueprint snapshot,
-Saved Map, provenance, or L1S.6 upgrade invariants.
+This is a pre-production project. L1S.6c.3 has destructively removed the active
+legacy `EndpointGroup`, `placement_offset`, and `placement_span` authoring
+contract. No compatibility parser, dual recipe format, or migration machinery
+exists solely to preserve development Blueprint authoring data. This exception
+does not relax canonical topology, immutable Blueprint snapshot, Saved Map,
+provenance, or L1S.6 upgrade invariants.
 
 ### Later separate bounded milestone — dense cable-editing visibility
 
