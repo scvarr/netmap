@@ -220,8 +220,8 @@ complete. L1S.5 is not included in this slice.
   surface-coverage claim returns only after LOC-001.
 - Canonical values, API payloads, and user/backend data remain locale-neutral.
 
-The next bounded product step is `L1S.6c.4 — FRONT/REAR physical presentation`
-(L1S.6a/L1S.6b/L1S.6c.3 are implemented; see below).
+The next bounded product step is `L1S.6c.6 — rendered-port vs external-cable-attachment geometry`
+(L1S.6a/L1S.6b/L1S.6c.3–L1S.6c.5 are implemented; see below).
 
 ### L1S.6 — Controlled Blueprint instance upgrade
 
@@ -304,7 +304,14 @@ deliberately bounded milestones:
    slot/internal-link snapshots, preserving canonical identity for additive
    versions that retain an instance key and local IDs.
 4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation — IMPLEMENTED**: exact Port Block instances persist a face within the complete immutable Blueprint version; historical NULL provenance reads as FRONT. Runtime renders one PhysicalObject and transiently selects a face, while preserving all slots for topology/cable logic. L1S.6c.6 remains the separate external cable-attachment geometry boundary.
-5. **L1S.6c.5 — visual Blueprint composition editor**.
+5. **L1S.6c.5 — visual Blueprint composition editor — IMPLEMENTED**: every new
+   exact Port Block instance stores an immutable face-local normalized `x`,
+   `y`, `width`, `height` rectangle. It is presentation provenance only and
+   independent from instance/slot identity, canonical topology and upgrades.
+   Historical NULL placement remains readable with deterministic editor-only
+   fallback; saving a new version writes explicit placement. The SVG editor has
+   independent FRONT/REAR surfaces, drag/resize, snapshot port grids and
+   same-face internal-link visibility.
 6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
 
 This work is not otherwise complete. Every slice must preserve L1S.6 canonical identity,

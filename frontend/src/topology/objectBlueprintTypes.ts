@@ -1,6 +1,7 @@
 export type BlueprintSlotKind = 'CONNECTION_POINT' | 'NETWORK_PORT';
 export type BlueprintAnchorSide = 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM';
 export type BlueprintFace = 'FRONT' | 'REAR';
+export interface BlueprintPortBlockPlacement { x: number; y: number; width: number; height: number; }
 
 export interface LibraryRef {
   ref_type: 'LIBRARY_RECORD';
@@ -30,13 +31,13 @@ export interface BlueprintInternalLink {
 
 export interface PortBlockVersionLibraryRef { ref_type: 'LIBRARY_RECORD'; entity_type: 'PortBlockVersion'; entity_id: string; }
 export interface PortBlockLibraryRef { ref_type: 'LIBRARY_RECORD'; entity_type: 'PortBlock'; entity_id: string; }
-export interface BlueprintComposition { instances: Array<{ instance_key: string; port_block_ref: PortBlockLibraryRef; port_block_version_ref: PortBlockVersionLibraryRef; face?: BlueprintFace }>; }
+export interface BlueprintComposition { instances: Array<{ instance_key: string; port_block_ref: PortBlockLibraryRef; port_block_version_ref: PortBlockVersionLibraryRef; face?: BlueprintFace; placement?: BlueprintPortBlockPlacement | null }>; }
 
 export interface CreateObjectBlueprintRequest {
   name: string;
   default_physical_object_class?: string;
   body: BlueprintBody;
-  composition: { instances: Array<{ instance_key: string; port_block_version_ref: PortBlockVersionLibraryRef; face: BlueprintFace }> };
+  composition: { instances: Array<{ instance_key: string; port_block_version_ref: PortBlockVersionLibraryRef; face: BlueprintFace; placement: BlueprintPortBlockPlacement }> };
   internal_links: BlueprintInternalLink[];
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { composedSlotKey, createBlueprintRequest, hydrateBlueprintEditorState } from './editorModel';
+import { clampPlacement, composedSlotKey, createBlueprintRequest, fallbackPlacement, hydrateBlueprintEditorState } from './editorModel';
 
 const blockRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' };
 const versionRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'v-1' };
@@ -36,5 +36,14 @@ describe('Object Blueprint composition editor model', () => {
     const state = await hydrateBlueprintEditorState(empty, source);
     expect(state).toMatchObject({ name: 'Empty composition', instances: [], individualLinks: [] });
     expect(createBlueprintRequest(state!).request).toMatchObject({ composition: { instances: [] }, internal_links: [] });
+  });
+
+  it('gives a pre-c.5 composition row a deterministic temporary rectangle and persists it on save', async () => {
+    const source = { loadPortBlocks: vi.fn(), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn().mockResolvedValue({ schema_version: '1.0', port_block_ref: blockRef, version_ref: versionRef, name: 'Panel', version_number: 1, ports: [port('p1')] }), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
+    const version = { schema_version: '1.0' as const, blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v' }, version_number: 1, name: 'Historical composition', body: { kind: 'RECTANGLE' as const, width: 100, height: 40 }, slots: [], internal_links: [], composition: { instances: [{ instance_key: 'old', port_block_ref: blockRef, port_block_version_ref: versionRef, face: 'FRONT' as const, placement: null }] } };
+    const state = await hydrateBlueprintEditorState(version, source);
+    expect(state?.instances[0].placement).toEqual(fallbackPlacement(0));
+    expect(createBlueprintRequest(state!).request?.composition.instances[0].placement).toEqual(fallbackPlacement(0));
+    expect(clampPlacement({ x: .9, y: .9, width: .4, height: .4 })).toEqual({ x: .6, y: .6, width: .4, height: .4 });
   });
 });

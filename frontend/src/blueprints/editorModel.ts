@@ -1,10 +1,19 @@
-import type { BlueprintFace, BlueprintInternalLink, CreateObjectBlueprintRequest, ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
+import type { BlueprintFace, BlueprintInternalLink, BlueprintPortBlockPlacement, CreateObjectBlueprintRequest, ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 import type { PortBlockDataSource, PortBlockVersionDocument } from '../topology/portBlockTypes';
 
-export interface BlueprintBlockInstance { instanceKey: string; portBlockRef: string; portBlockVersionRef: string; face?: BlueprintFace; portBlockName: string; versionNumber: number; ports: PortBlockVersionDocument['ports']; resolvedSlotKeys: Record<string, string>; }
+export interface BlueprintBlockInstance { instanceKey: string; portBlockRef: string; portBlockVersionRef: string; face?: BlueprintFace; placement?: BlueprintPortBlockPlacement; portBlockName: string; versionNumber: number; ports: PortBlockVersionDocument['ports']; resolvedSlotKeys: Record<string, string>; }
 export interface BlueprintEditorState { name: string; defaultClass: string; width: number; height: number; fillColor: string; instances: BlueprintBlockInstance[]; individualLinks: BlueprintInternalLink[]; }
 export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateInstanceKey' | 'missingPortBlock' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
 const normalized = (value: string) => value.trim();
+export const clampPlacement = (placement: BlueprintPortBlockPlacement): BlueprintPortBlockPlacement => {
+  const width = Math.min(1, Math.max(.04, placement.width)); const height = Math.min(1, Math.max(.04, placement.height));
+  return { width, height, x: Math.min(Math.max(0, placement.x), 1 - width), y: Math.min(Math.max(0, placement.y), 1 - height) };
+};
+/** Deterministic editor-only fallback for immutable rows written before c.5. */
+export const fallbackPlacement = (index: number): BlueprintPortBlockPlacement => {
+  const width = .36; const height = .22; const columns = 2;
+  return clampPlacement({ x: .08 + (index % columns) * .48, y: .12 + Math.floor(index / columns) * .28, width, height });
+};
 /** Must match ObjectBlueprintCatalog.composed_slot_key. */
 export const composedSlotKey = async (instanceKey: string, localId: string) => {
   const instance = new TextEncoder().encode(instanceKey); const local = new TextEncoder().encode(localId);
@@ -15,12 +24,13 @@ export const composedSlotKey = async (instanceKey: string, localId: string) => {
 };
 export const resolveSlotKeys = async (item: BlueprintBlockInstance) => Object.fromEntries(await Promise.all(item.ports.map(async (port) => [port.local_id, await composedSlotKey(item.instanceKey, port.local_id)])));
 export const slotsForInstance = (item: BlueprintBlockInstance) => item.ports.flatMap((port) => item.resolvedSlotKeys?.[port.local_id] ? [{ key:item.resolvedSlotKeys[port.local_id], label: `${item.portBlockName ?? item.portBlockVersionRef} · ${port.display_label}`, kind: port.kind }] : []);
+export const cleanupLinks = (links: BlueprintInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
 export const hydrateBlueprintEditorState = async (version: ObjectBlueprintVersionDocument, source: PortBlockDataSource): Promise<BlueprintEditorState | null> => {
   if (!version.composition) return null;
-  const instances = await Promise.all(version.composition.instances.map(async (item) => {
+  const instances = await Promise.all(version.composition.instances.map(async (item, index) => {
     const exact = await source.loadPortBlockVersion(item.port_block_ref.entity_id, item.port_block_version_ref.entity_id);
     if (exact.port_block_ref.entity_id !== item.port_block_ref.entity_id || exact.version_ref.entity_id !== item.port_block_version_ref.entity_id) throw new Error('Exact Port Block version response does not match Blueprint provenance.');
-    const instance = { instanceKey:item.instance_key, portBlockRef:item.port_block_ref.entity_id, portBlockVersionRef:item.port_block_version_ref.entity_id, face:item.face ?? 'FRONT' as BlueprintFace, portBlockName:exact.name, versionNumber:exact.version_number, ports:exact.ports, resolvedSlotKeys:{} };
+    const instance = { instanceKey:item.instance_key, portBlockRef:item.port_block_ref.entity_id, portBlockVersionRef:item.port_block_version_ref.entity_id, face:item.face ?? 'FRONT' as BlueprintFace, placement: item.placement ? clampPlacement(item.placement) : fallbackPlacement(index), portBlockName:exact.name, versionNumber:exact.version_number, ports:exact.ports, resolvedSlotKeys:{} };
     return { ...instance, resolvedSlotKeys:await resolveSlotKeys(instance) };
   }));
   return { name:version.name, defaultClass:version.default_physical_object_class ?? '', width:version.body.width, height:version.body.height, fillColor:version.body.fill_color ?? '#28565a', instances, individualLinks:version.internal_links };
@@ -37,4 +47,4 @@ export const generateBlueprint = (state: BlueprintEditorState) => {
   for (const link of state.individualLinks) { if (link.from_slot_key === link.to_slot_key) errors.push('individualSelfLink'); else if (!known.has(link.from_slot_key) || !known.has(link.to_slot_key)) errors.push('individualMissingPort'); else { const key=[link.from_slot_key,link.to_slot_key].sort().join('\u0000'); if (pairs.has(key)) errors.push('duplicateIndividualLink'); pairs.add(key); } }
   return { slots, internalLinks:state.individualLinks, errors, validationErrors:errors };
 };
-export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateObjectBlueprintRequest; errors: BlueprintValidationError[] } => { const generated=generateBlueprint(state); if (generated.errors.length) return {errors:generated.errors}; return { errors:[], request:{ name:normalized(state.name), ...(normalized(state.defaultClass)?{default_physical_object_class:normalized(state.defaultClass)}:{}), body:{kind:'RECTANGLE',width:state.width,height:state.height,...(state.fillColor?{fill_color:state.fillColor}:{})}, composition:{instances:state.instances.map((item)=>({instance_key:normalized(item.instanceKey),port_block_version_ref:{ref_type:'LIBRARY_RECORD',entity_type:'PortBlockVersion',entity_id:item.portBlockVersionRef},face:item.face ?? 'FRONT'}))}, internal_links:state.individualLinks } }; };
+export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateObjectBlueprintRequest; errors: BlueprintValidationError[] } => { const generated=generateBlueprint(state); if (generated.errors.length) return {errors:generated.errors}; return { errors:[], request:{ name:normalized(state.name), ...(normalized(state.defaultClass)?{default_physical_object_class:normalized(state.defaultClass)}:{}), body:{kind:'RECTANGLE',width:state.width,height:state.height,...(state.fillColor?{fill_color:state.fillColor}:{})}, composition:{instances:state.instances.map((item, index)=>({instance_key:normalized(item.instanceKey),port_block_version_ref:{ref_type:'LIBRARY_RECORD',entity_type:'PortBlockVersion',entity_id:item.portBlockVersionRef},face:item.face ?? 'FRONT', placement:clampPlacement(item.placement ?? fallbackPlacement(index))}))}, internal_links:state.individualLinks } }; };

@@ -335,7 +335,7 @@ def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
     blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01")], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Panel", body={"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"})
     instance = instantiate(blueprint_id, version_id, "PP1")
     exact_ref = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}").json()["composition"]["instances"][0]["port_block_version_ref"]
-    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "composition": {"instances": [{"instance_key": "instance", "port_block_version_ref": exact_ref, "face": "FRONT"}]}, "internal_links": []}).status_code == 201
+    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "composition": {"instances": [{"instance_key": "instance", "port_block_version_ref": exact_ref, "face": "FRONT", "placement": {"x": .1, "y": .1, "width": .3, "height": .2}}]}, "internal_links": []}).status_code == 201
     node = node_by_object(client.post("/v1/topology/projection", json=projection_query()).json(), instance["physical_object_ref"]["entity_id"])
     presentation = node["attributes"]["blueprint_presentation"]
     assert presentation["version_ref"]["entity_id"] == version_id

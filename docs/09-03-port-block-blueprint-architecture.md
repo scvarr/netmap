@@ -2,9 +2,8 @@
 
 ## Status, authority and scope
 
-**FIXED architectural decisions. L1S.6c.1 library foundation, L1S.6c.2
-authoring/numbering, and L1S.6c.3 Object Blueprint composition are IMPLEMENTED;
-L1S.6c.4 FRONT/REAR presentation is IMPLEMENTED; L1S.6c.5–L1S.6c.6 remain FUTURE.**
+**FIXED architectural decisions. L1S.6c.1–L1S.6c.5 are IMPLEMENTED;
+L1S.6c.6 remains FUTURE.**
 
 This note records the agreed next evolution of Object Blueprints for dense
 network equipment. It is an architecture/product boundary only: it does not
@@ -136,11 +135,15 @@ destructive or inconsistent changes remain blockers.
 
 ### Visual authoring
 
-The Object Blueprint editor should evolve from numeric `side` plus
-`offset`/`span` placement to a visual composition surface. An author places
-Port Block instances on a device face by visual placement/dragging rather than
-calculating normalized ranges manually. This is a future editor direction, not
-an implementation request for the current editor.
+L1S.6c.5 persists an immutable, face-local normalized rectangle (`x`, `y`,
+`width`, `height`) on each exact Port Block instance and provides visual
+composition by drag/resize on independent FRONT/REAR surfaces. The rectangle
+is strictly presentation/provenance: it never contributes to `instance_key`,
+composed `slot_key`, ConnectionPoint identity, canonical topology, or upgrade
+matching. Historical immutable rows may have NULL placement; readers use a
+deterministic temporary editor layout and a newly saved Blueprint version writes
+explicit placement. It does not repurpose `BlueprintEndpointSlot.anchor`, whose
+deterministic right-edge fallback remains runtime cable/topology presentation.
 
 ### Drawn-port geometry and cable attachment geometry
 
@@ -198,7 +201,7 @@ L1S.6c is intentionally subdivided as follows:
    snapshot-only versions remain readable/instantiable; additive L1S.6 upgrades
    retain canonical identity through unchanged slot snapshots.
 4. **L1S.6c.4 — `FRONT`/`REAR` physical presentation — IMPLEMENTED**. Face is persisted on exact Port Block instances; historical NULL reads as FRONT, and runtime filtering is presentation-only.
-5. **L1S.6c.5 — visual Blueprint composition editor**.
+5. **L1S.6c.5 — visual Blueprint composition editor — IMPLEMENTED**.
 6. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry**.
 
 L1S.6c.3 destructively removed the active legacy `EndpointGroup`,

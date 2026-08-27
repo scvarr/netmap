@@ -132,6 +132,10 @@ class ObjectBlueprintCatalog:
                 port_block_version_id=exact_version.id,
                 instance_key=item.instance_key,
                 face=item.face,
+                placement_x=item.placement.x,
+                placement_y=item.placement.y,
+                placement_width=item.placement.width,
+                placement_height=item.placement.height,
             )
             self.session.add(instance)
             instances.append(instance)

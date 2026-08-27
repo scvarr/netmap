@@ -691,7 +691,11 @@ def get_object_blueprint_version(
             {"instance_key": item.instance_key,
              "port_block_ref": {"entity_type": "PortBlock", "entity_id": session.get(PortBlockVersion, item.port_block_version_id).port_block_id},
              "port_block_version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.port_block_version_id},
-             "face": item.face or "FRONT"}
+             "face": item.face or "FRONT",
+             "placement": (
+                 {"x": item.placement_x, "y": item.placement_y, "width": item.placement_width, "height": item.placement_height}
+                 if None not in (item.placement_x, item.placement_y, item.placement_width, item.placement_height) else None
+             )}
             for item in version.composition
         ]},
     }

@@ -11,6 +11,7 @@ from app.models import BlueprintEndpointSlot, BlueprintInstance, ConnectionPoint
 
 client = TestClient(app)
 composed_slot_key = ObjectBlueprintCatalog.composed_slot_key
+placement = {"x": .1, "y": .1, "width": .3, "height": .2}
 
 
 def slot(local_id: str, kind: str = "CONNECTION_POINT") -> dict:
@@ -28,11 +29,12 @@ def create_port_block(ports: list[dict], name: str = "Port Block") -> tuple[str,
 def create_blueprint(slots: list[dict], links: list[dict] | None = None, *, instance_key: str = "instance", face: str = "FRONT", name: str = "Blueprint", port_block: tuple[str, str] | None = None, **extra: object) -> tuple[str, str]:
     port_block_id, port_block_version_id = port_block or create_port_block(slots, f"{name} ports")
     generated = {item["local_id"]: composed_slot_key(instance_key, item["local_id"]) for item in slots}
+    instance_placement = extra.pop("placement", placement)
     response = client.post("/v1/library/object-blueprints", json={
         "name": name,
         "body": extra.pop("body", {"kind": "RECTANGLE", "width": 100, "height": 40}),
         "default_physical_object_class": extra.pop("default_physical_object_class", None),
-        "composition": {"instances": [{"instance_key": instance_key, "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": port_block_version_id}, "face": face}]},
+        "composition": {"instances": [{"instance_key": instance_key, "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": port_block_version_id}, "face": face, "placement": instance_placement}]},
         "internal_links": [{"from_slot_key": generated[item["from_slot_key"]], "to_slot_key": generated[item["to_slot_key"]]} for item in (links or [])],
         **extra,
     })
@@ -55,7 +57,7 @@ def test_composition_expands_exact_ports_and_reads_provenance():
     body = detail.json()
     assert [item["key"] for item in body["slots"]] == [composed_slot_key("K", "p1"), composed_slot_key("K", "p2")]
     assert [item["display_name"] for item in body["slots"]] == ["p1", "p2"]
-    assert body["composition"] == {"instances": [{"instance_key": "K", "port_block_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlock", "entity_id": block_id}, "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": block_version_id}, "face": "FRONT"}]}
+    assert body["composition"] == {"instances": [{"instance_key": "K", "port_block_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlock", "entity_id": block_id}, "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": block_version_id}, "face": "FRONT", "placement": placement}]}
     with SessionLocal() as session:
         slots = tuple(session.scalars(select(BlueprintEndpointSlot).where(BlueprintEndpointSlot.blueprint_version_id == uuid.UUID(version_id))))
     assert {(item.port_block_instance_id is not None, item.port_block_local_id) for item in slots} == {(True, "p1"), (True, "p2")}
@@ -94,12 +96,12 @@ def test_next_version_can_replace_composition_with_empty_composition():
 def test_same_exact_block_twice_has_distinct_final_slots_and_duplicate_instance_key_is_rejected():
     block_id, version_id = create_port_block([slot("p1")])
     ref = {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": version_id}
-    payload = {"name": "Twice", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "composition": {"instances": [{"instance_key": "left", "port_block_version_ref": ref, "face": "FRONT"}, {"instance_key": "right", "port_block_version_ref": ref, "face": "REAR"}]}, "internal_links": []}
+    payload = {"name": "Twice", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "composition": {"instances": [{"instance_key": "left", "port_block_version_ref": ref, "face": "FRONT", "placement": placement}, {"instance_key": "right", "port_block_version_ref": ref, "face": "REAR", "placement": placement}]}, "internal_links": []}
     created = client.post("/v1/library/object-blueprints", json=payload)
     assert created.status_code == 201
     detail = client.get(f"/v1/library/object-blueprints/{created.json()['blueprint_ref']['entity_id']}/versions/{created.json()['version_ref']['entity_id']}").json()
     assert {item["key"] for item in detail["slots"]} == {composed_slot_key("left", "p1"), composed_slot_key("right", "p1")}
-    duplicate = client.post("/v1/library/object-blueprints", json={**payload, "composition": {"instances": [{"instance_key": "same", "port_block_version_ref": ref, "face": "FRONT"}, {"instance_key": "same", "port_block_version_ref": ref, "face": "FRONT"}]}})
+    duplicate = client.post("/v1/library/object-blueprints", json={**payload, "composition": {"instances": [{"instance_key": "same", "port_block_version_ref": ref, "face": "FRONT", "placement": placement}, {"instance_key": "same", "port_block_version_ref": ref, "face": "FRONT", "placement": placement}]}})
     assert duplicate.status_code == 422
 
 
@@ -117,7 +119,7 @@ def test_explicit_cross_block_links_reject_self_missing_and_unordered_duplicates
     block_id, block_version_id = create_port_block([slot("p1")])
     ref = {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": block_version_id}
     left, right = composed_slot_key("left", "p1"), composed_slot_key("right", "p1")
-    base = {"name": "Links", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "composition": {"instances": [{"instance_key": "left", "port_block_version_ref": ref, "face": "FRONT"}, {"instance_key": "right", "port_block_version_ref": ref, "face": "REAR"}]}}
+    base = {"name": "Links", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "composition": {"instances": [{"instance_key": "left", "port_block_version_ref": ref, "face": "FRONT", "placement": placement}, {"instance_key": "right", "port_block_version_ref": ref, "face": "REAR", "placement": placement}]}}
     assert client.post("/v1/library/object-blueprints", json={**base, "internal_links": [{"from_slot_key": left, "to_slot_key": right}]}).status_code == 201
     for links in ([{"from_slot_key": left, "to_slot_key": left}], [{"from_slot_key": left, "to_slot_key": "missing"}], [{"from_slot_key": left, "to_slot_key": right}, {"from_slot_key": right, "to_slot_key": left}]):
         assert client.post("/v1/library/object-blueprints", json={**base, "internal_links": links}).status_code == 422
@@ -149,3 +151,21 @@ def test_historical_snapshot_without_composition_remains_readable_and_instantiab
     detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
     assert detail.status_code == 200 and detail.json()["composition"] is None
     assert instantiate(str(blueprint_id), str(version_id), "historical")["slots"][0]["slot_key"] == "legacy"
+
+
+def test_placement_round_trips_and_cannot_change_composed_slot_identity():
+    block_id, block_version_id = create_port_block([slot("p1")])
+    blueprint_id, version_id = create_blueprint([slot("p1")], instance_key="stable", port_block=(block_id, block_version_id), placement={"x": .4, "y": .5, "width": .3, "height": .2})
+    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}").json()
+    assert detail["composition"]["instances"][0]["placement"] == {"x": .4, "y": .5, "width": .3, "height": .2}
+    assert detail["slots"][0]["key"] == composed_slot_key("stable", "p1")
+    created = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 100, "height": 40}, "composition": {"instances": [{"instance_key": "stable", "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": block_version_id}, "face": "FRONT", "placement": {"x": .05, "y": .05, "width": .8, "height": .7}}]}, "internal_links": []})
+    assert created.status_code == 201
+    next_detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{created.json()['version_ref']['entity_id']}").json()
+    assert next_detail["slots"][0]["key"] == detail["slots"][0]["key"]
+
+
+def test_out_of_bounds_placement_is_rejected():
+    _, block_version_id = create_port_block([slot("p1")])
+    payload = {"name": "Invalid placement", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "composition": {"instances": [{"instance_key": "one", "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": block_version_id}, "face": "FRONT", "placement": {"x": .8, "y": 0, "width": .3, "height": .2}}]}, "internal_links": []}
+    assert client.post("/v1/library/object-blueprints", json=payload).status_code == 422

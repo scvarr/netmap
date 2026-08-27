@@ -367,6 +367,12 @@ class BlueprintPortBlockInstance(Base):
     instance_key: Mapped[str] = mapped_column(String(255), nullable=False)
     # NULL is immutable pre-face provenance. New composition authoring must set a face.
     face: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # NULL is immutable pre-L1S.6c.5 provenance. This is face-local presentation
+    # geometry only: it must never affect slot identity or runtime attachment anchors.
+    placement_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    placement_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    placement_width: Mapped[float | None] = mapped_column(Float, nullable=True)
+    placement_height: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class BlueprintEndpointSlot(Base):

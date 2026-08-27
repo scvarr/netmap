@@ -532,6 +532,22 @@ class BlueprintCompositionInstanceRequest(BaseModel):
     instance_key: str = Field(min_length=1, max_length=255)
     port_block_version_ref: PortBlockVersionLibraryRef
     face: Literal["FRONT", "REAR"]
+    placement: "BlueprintPortBlockPlacement"
+
+
+class BlueprintPortBlockPlacement(BaseModel):
+    """Face-local normalized composition rectangle, unrelated to topology anchors."""
+    model_config = ConfigDict(extra="forbid")
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    width: float = Field(gt=0, le=1)
+    height: float = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "BlueprintPortBlockPlacement":
+        if self.x + self.width > 1 or self.y + self.height > 1:
+            raise PydanticCustomError("blueprint_port_block_placement_out_of_bounds", "Blueprint Port Block placement must fit within the body")
+        return self
 
 
 class BlueprintCompositionRequest(BaseModel):
@@ -752,6 +768,7 @@ class BlueprintCompositionInstanceDocument(BaseModel):
     port_block_ref: PortBlockLibraryRef
     port_block_version_ref: PortBlockVersionLibraryRef
     face: Literal["FRONT", "REAR"]
+    placement: BlueprintPortBlockPlacement | None = None
 
 
 class BlueprintCompositionDocument(BaseModel):

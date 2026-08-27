@@ -17,7 +17,7 @@ def _assert_composition_contract() -> None:
     assert "composition_kind" in {column["name"] for column in inspector.get_columns("object_blueprint_versions")}
     assert inspector.has_table("blueprint_port_block_instances")
     assert {column["name"] for column in inspector.get_columns("blueprint_port_block_instances")} >= {
-        "id", "blueprint_version_id", "port_block_version_id", "instance_key", "face",
+        "id", "blueprint_version_id", "port_block_version_id", "instance_key", "face", "placement_x", "placement_y", "placement_width", "placement_height",
     }
     assert tuple(inspector.get_pk_constraint("blueprint_port_block_instances")["constrained_columns"]) == ("id",)
     foreign_keys = inspector.get_foreign_keys("blueprint_port_block_instances")
@@ -67,6 +67,7 @@ def test_0029_repairs_a_drifted_0028_composition_schema_and_preserves_authoring(
             "instance_key": "panel",
             "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": port_block_version_id},
             "face": "FRONT",
+            "placement": {"x": .1, "y": .1, "width": .3, "height": .2},
         }]},
         "internal_links": [],
     })
