@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -53,11 +53,11 @@ describe('RU/EN localization integration', () => {
     await userEvent.click(screen.getByRole('button', { name: 'English' }));
     expect(screen.getByRole('heading', { name: 'Create object blueprint' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Blueprint name'), 'Карта');
-    expect(screen.getByRole('heading', { name: 'Port Blocks' })).toBeInTheDocument();
     expect(screen.getByLabelText('Logical Port Block')).toBeInTheDocument();
     await userEvent.selectOptions(screen.getByLabelText('Logical Port Block'), 'pb-1');
     await userEvent.selectOptions(await screen.findByLabelText('Exact version'), 'v-1');
     await userEvent.click(screen.getByRole('button', { name: 'Add Port Block' }));
+    await waitFor(() => expect(document.querySelectorAll('.blueprint-composition-canvas__block')).toHaveLength(1));
     await userEvent.click(screen.getByRole('button', { name: 'Save blueprint' }));
 
     expect(createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({ name: 'Карта', composition: { instances: [expect.objectContaining({ port_block_version_ref: expect.objectContaining({ entity_type: 'PortBlockVersion', entity_id: 'v-1' }) })] } }));

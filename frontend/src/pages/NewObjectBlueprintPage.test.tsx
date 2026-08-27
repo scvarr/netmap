@@ -24,9 +24,9 @@ describe('NewObjectBlueprintPage composition', () => {
     await waitFor(() => expect(portBlocks.loadPortBlockVersions).toHaveBeenCalledWith('pb-1'));
     await userEvent.selectOptions(screen.getByLabelText('Точная версия'), 'v-1');
     await userEvent.click(add);
-    await screen.findAllByText('Patch panel');
+    await waitFor(() => expect(document.querySelectorAll('.blueprint-composition-canvas__block')).toHaveLength(1));
     await userEvent.click(add);
-    await waitFor(() => expect(document.querySelectorAll('.blueprint-composer__instance')).toHaveLength(2));
+    await waitFor(() => expect(document.querySelectorAll('.blueprint-composition-canvas__block')).toHaveLength(2));
     expect(portBlocks.loadPortBlockVersion).toHaveBeenCalledWith('pb-1', 'v-1');
   });
 
@@ -35,13 +35,13 @@ describe('NewObjectBlueprintPage composition', () => {
     render(<MemoryRouter><NewObjectBlueprintPage dataSource={dataSource} portBlockDataSource={portBlocks} /></MemoryRouter>);
     await userEvent.type(screen.getByLabelText('Название шаблона'), ' Panel ');
     await userEvent.type(screen.getByLabelText('Тип объекта'), ' patch_panel ');
-    await userEvent.clear(screen.getByLabelText('Ширина')); await userEvent.type(screen.getByLabelText('Ширина'), '240');
-    await userEvent.clear(screen.getByLabelText('Высота')); await userEvent.type(screen.getByLabelText('Высота'), '40');
+    await userEvent.clear(screen.getByLabelText('Пропорция ширины корпуса')); await userEvent.type(screen.getByLabelText('Пропорция ширины корпуса'), '240');
+    await userEvent.clear(screen.getByLabelText('Пропорция высоты корпуса')); await userEvent.type(screen.getByLabelText('Пропорция высоты корпуса'), '40');
     await screen.findByRole('option', { name: 'Patch panel' });
     await userEvent.selectOptions(screen.getByLabelText('Логический Port Block'), 'pb-1');
     await userEvent.selectOptions(await screen.findByLabelText('Точная версия'), 'v-2');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить Port Block' }));
-    await screen.findAllByText('Patch panel');
+    await waitFor(() => expect(document.querySelectorAll('.blueprint-composition-canvas__block')).toHaveLength(1));
     await userEvent.click(screen.getByRole('button', { name: 'Добавить связь' }));
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
     await waitFor(() => expect(dataSource.createObjectBlueprint).toHaveBeenCalledOnce());
