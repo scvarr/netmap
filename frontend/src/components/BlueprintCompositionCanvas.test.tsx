@@ -18,7 +18,14 @@ describe('BlueprintCompositionCanvas', () => {
     const onPlacement = vi.fn(); const current = instance('stable', 'FRONT', { x: .7, y: .7, width: .2, height: .2 }); const { container } = render(<BlueprintCompositionCanvas body={body} face="FRONT" instances={[current]} links={[]} selectedKey="stable" onSelect={vi.fn()} onPlacement={onPlacement} />); const svg = container.querySelector('svg')!; Object.defineProperty(svg, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 1000 }) });
     const group = container.querySelector('[data-instance-key="stable"]')!; fireEvent.pointerDown(group, { clientX: 900, clientY: 500, pointerId: 1 }); fireEvent.pointerMove(svg, { clientX: 1400, clientY: 511.5, pointerId: 1 });
     expect(onPlacement.mock.calls.at(-1)?.[0]).toBe('stable'); expect(onPlacement.mock.calls.at(-1)?.[1].x).toBe(.8); expect(onPlacement.mock.calls.at(-1)?.[1].y).toBeCloseTo(.8);
-    const handle = container.querySelector('[data-resize-handle="stable"]')!; fireEvent.pointerDown(handle, { clientX: 900, clientY: 500, pointerId: 2 }); fireEvent.pointerMove(svg, { clientX: 1000, clientY: 511.5, pointerId: 2 });
+    const handle = container.querySelector('[data-resize-handle="stable-se"]')!; fireEvent.pointerDown(handle, { clientX: 900, clientY: 500, pointerId: 2 }); fireEvent.pointerMove(svg, { clientX: 1000, clientY: 511.5, pointerId: 2 });
     expect(onPlacement.mock.calls.at(-1)?.[0]).toBe('stable'); expect(onPlacement.mock.calls.at(-1)?.[1].width).toBeCloseTo(.3); expect(onPlacement.mock.calls.at(-1)?.[1].height).toBeCloseTo(.3);
+  });
+
+  it('exposes forgiving handles on every side and corner and blocks overlap', () => {
+    const onPlacement = vi.fn(); const current = instance('stable', 'FRONT', { x: .1, y: .2, width: .2, height: .2 }); const peer = instance('peer', 'FRONT', { x: .5, y: .2, width: .2, height: .2 }); const { container } = render(<BlueprintCompositionCanvas body={body} face="FRONT" instances={[current, peer]} links={[]} selectedKey="stable" onSelect={vi.fn()} onPlacement={onPlacement} />); const svg = container.querySelector('svg')!; Object.defineProperty(svg, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 1000 }) });
+    expect(container.querySelectorAll('[data-resize-handle^="stable-"]')).toHaveLength(8);
+    const group = container.querySelector('[data-instance-key="stable"]')!; fireEvent.pointerDown(group, { clientX: 200, clientY: 250, pointerId: 1 }); fireEvent.pointerMove(svg, { clientX: 650, clientY: 250, pointerId: 1 });
+    const placement = onPlacement.mock.calls.at(-1)?.[1]; expect(placement.x + placement.width <= .5 || placement.x >= .7).toBe(true);
   });
 });
