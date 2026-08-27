@@ -1,9 +1,11 @@
 import uuid
 
+import pytest
 from alembic import command
 from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy import inspect, text
+from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.main import app
@@ -26,6 +28,7 @@ def _assert_composition_contract() -> None:
     assert any(constraint["column_names"] == ["blueprint_version_id", "instance_key"] for constraint in inspector.get_unique_constraints("blueprint_port_block_instances"))
     assert any("instance_key" in str(constraint["sqltext"]) for constraint in inspector.get_check_constraints("blueprint_port_block_instances"))
     assert any("face" in str(constraint["sqltext"]) and "FRONT" in str(constraint["sqltext"]) and "REAR" in str(constraint["sqltext"]) for constraint in inspector.get_check_constraints("blueprint_port_block_instances"))
+    assert any("num_nonnulls" in str(constraint["sqltext"]) for constraint in inspector.get_check_constraints("blueprint_port_block_instances"))
     endpoint_columns = {column["name"] for column in inspector.get_columns("blueprint_endpoint_slots")}
     assert {"port_block_instance_id", "port_block_local_id"} <= endpoint_columns
     endpoint_foreign_keys = inspector.get_foreign_keys("blueprint_endpoint_slots")
@@ -92,3 +95,19 @@ def test_0029_is_a_no_op_for_a_clean_0028_schema():
     command.downgrade(config, "0028_blueprint_port_block_instance_face")
     command.upgrade(config, "head")
     _assert_composition_contract()
+
+
+def test_0031_rejects_partial_null_placement_but_allows_historical_all_null():
+    port_block = client.post("/v1/library/port-blocks", json={"name": "Completeness", "ports": [{"local_id": "p1", "display_label": "P1", "kind": "CONNECTION_POINT", "row": 1, "column": 1, "layout_order": 1}]}).json()
+    port_block_version_id = port_block["version_ref"]["entity_id"]
+    blueprint = client.post("/v1/library/object-blueprints", json={"name": "Completeness", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "composition": {"instances": []}, "internal_links": []}).json()
+    blueprint_version_id = blueprint["version_ref"]["entity_id"]
+    with SessionLocal.begin() as session:
+        session.execute(text("""INSERT INTO blueprint_port_block_instances
+            (id, blueprint_version_id, port_block_version_id, instance_key, face, placement_x, placement_y, placement_width, placement_height)
+            VALUES (:id, :blueprint_version_id, :port_block_version_id, 'historical-null', 'FRONT', NULL, NULL, NULL, NULL)"""), {"id": uuid.uuid4(), "blueprint_version_id": blueprint_version_id, "port_block_version_id": port_block_version_id})
+    with pytest.raises(IntegrityError):
+        with SessionLocal.begin() as session:
+            session.execute(text("""INSERT INTO blueprint_port_block_instances
+                (id, blueprint_version_id, port_block_version_id, instance_key, face, placement_x, placement_y, placement_width, placement_height)
+                VALUES (:id, :blueprint_version_id, :port_block_version_id, 'partial-null', 'FRONT', .1, NULL, .2, .2)"""), {"id": uuid.uuid4(), "blueprint_version_id": blueprint_version_id, "port_block_version_id": port_block_version_id})

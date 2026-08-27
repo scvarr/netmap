@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { clampPlacement, composedSlotKey, createBlueprintRequest, fallbackPlacement, hydrateBlueprintEditorState } from './editorModel';
+import { clampPlacement, composedSlotKey, createBlueprintRequest, faceLocalIndex, fallbackPlacement, hydrateBlueprintEditorState } from './editorModel';
 
 const blockRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' };
 const versionRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'v-1' };
@@ -45,5 +45,10 @@ describe('Object Blueprint composition editor model', () => {
     expect(state?.instances[0].placement).toEqual(fallbackPlacement(0));
     expect(createBlueprintRequest(state!).request?.composition.instances[0].placement).toEqual(fallbackPlacement(0));
     expect(clampPlacement({ x: .9, y: .9, width: .4, height: .4 })).toEqual({ x: .6, y: .6, width: .4, height: .4 });
+  });
+
+  it('assigns historical fallback indexes independently on FRONT and REAR', () => {
+    const instances = [{ face: 'FRONT' as const }, { face: 'REAR' as const }, { face: 'FRONT' as const }, { face: 'REAR' as const }];
+    expect(instances.map((_, index) => faceLocalIndex(instances, index))).toEqual([0, 0, 1, 1]);
   });
 });
