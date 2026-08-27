@@ -208,6 +208,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     } as const) };
     const { dataSource } = renderApp('/map?view=physical', { traceDataSource });
     expect(await screen.findByLabelText('Физическая схема сети')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Трассировка' }));
     await userEvent.selectOptions(await screen.findByLabelText('Откуда'), swId);
     await userEvent.selectOptions(screen.getByLabelText('Куда'), swId);
     await userEvent.click(screen.getByRole('button', { name: 'Трассировать' }));
