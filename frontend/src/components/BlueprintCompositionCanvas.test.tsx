@@ -10,7 +10,7 @@ describe('BlueprintCompositionCanvas', () => {
   it('uses corrected port geometry for same-face links and keeps faces independent', () => {
     const front = instance('front', 'FRONT'); const rear = instance('rear', 'REAR'); const { container, rerender } = render(<BlueprintCompositionCanvas body={body} face="FRONT" instances={[front, rear]} links={[{ from_slot_key: 'front-1', to_slot_key: 'front-2' }]} onSelect={vi.fn()} onPlacement={vi.fn()} />);
     expect(container.querySelector('[data-instance-key="front"]')).not.toBeNull(); expect(container.querySelector('[data-instance-key="rear"]')).toBeNull();
-    const line = container.querySelector('line')!; const circles = container.querySelectorAll('circle'); expect(line.getAttribute('x1')).toBe(circles[0].getAttribute('cx')); expect(line.getAttribute('y1')).toBe(circles[0].getAttribute('cy'));
+    const line = container.querySelector('line')!; const circles = container.querySelectorAll('circle'); expect(line.getAttribute('x1')).toBe(circles[0].getAttribute('cx')); expect(line.getAttribute('y1')).toBe(circles[0].getAttribute('cy')); expect(container.querySelectorAll('text')).toHaveLength(0); expect(container.querySelectorAll('title')).toHaveLength(2);
     rerender(<BlueprintCompositionCanvas body={body} face="REAR" instances={[front, rear]} links={[]} onSelect={vi.fn()} onPlacement={vi.fn()} />); expect(container.querySelector('[data-instance-key="front"]')).toBeNull(); expect(container.querySelector('[data-instance-key="rear"]')).not.toBeNull();
   });
 

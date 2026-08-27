@@ -6,6 +6,7 @@
   text-rendering: optimizeLegibility;
 }
 
+.blueprint-composer__selected .port-block-structure-preview { grid-column: 1 / -1; margin: 0; }.port-block-structure-preview figcaption { margin-bottom: 6px; color: #9fb9b4; font-size: 10px; }.port-block-structure-preview__canvas { height: 190px; padding: 8px; border: 1px solid #35575b; border-radius: 7px; background: #071315; }.port-block-structure-preview__canvas svg { display: block; width: 100%; height: 100%; }.port-block-structure-preview__surface { fill: #10292b; stroke: #5eaaa0; stroke-width: 2; }.port-block-structure-preview__port circle { fill: #55e5b5; stroke: #071012; stroke-width: 3; }.port-block-structure-preview__port text { fill: #e7f4f1; font-size: 18px; text-anchor: middle; dominant-baseline: middle; }
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; min-width: 320px; height: 100%; margin: 0; }
 button { font: inherit; }
