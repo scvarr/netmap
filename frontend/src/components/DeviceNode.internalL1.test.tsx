@@ -17,8 +17,8 @@ const projection = {
       version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' },
       body: { kind: 'RECTANGLE' as const, width: 200, height: 100 },
       slots: [
-        { slot_key: 'front01', display_name: 'Front 01', kind: 'CONNECTION_POINT' as const, anchor: { side: 'LEFT' as const, offset: .25 }, connection_point_id: 'front-01' },
-        { slot_key: 'rear01', display_name: 'Rear 01', kind: 'CONNECTION_POINT' as const, anchor: { side: 'RIGHT' as const, offset: .75 }, face: 'REAR' as const, connection_point_id: 'rear-01' },
+        { slot_key: 'front01', display_name: 'Front 01', kind: 'CONNECTION_POINT' as const, rendered_position: { x: 0, y: .25 }, external_attachment: { x: 0, y: .25, side: 'LEFT' as const }, connection_point_id: 'front-01' },
+        { slot_key: 'rear01', display_name: 'Rear 01', kind: 'CONNECTION_POINT' as const, rendered_position: { x: 1, y: .75 }, external_attachment: { x: 1, y: .75, side: 'RIGHT' as const }, face: 'REAR' as const, connection_point_id: 'rear-01' },
       ],
     },
     internal_l1_links: [{ from_connection_point_id: 'front-01', from_member_index: 1, to_connection_point_id: 'rear-01', to_member_index: 1, connection_id: 'connection-1', connection_member_id: 'member-1', source_refs: [] }],

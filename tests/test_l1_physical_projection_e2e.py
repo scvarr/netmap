@@ -340,7 +340,9 @@ def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
     presentation = node["attributes"]["blueprint_presentation"]
     assert presentation["version_ref"]["entity_id"] == version_id
     assert presentation["body"] == {"kind": "RECTANGLE", "width": 480.0, "height": 70.0, "fill_color": "#123456"}
-    assert [(slot["anchor"]["side"], slot["anchor"]["offset"]) for slot in presentation["slots"]] == [("RIGHT", .25), ("RIGHT", .75)]
+    assert all("anchor" not in slot for slot in presentation["slots"])
+    assert all(0 <= slot["rendered_position"][axis] <= 1 for slot in presentation["slots"] for axis in ("x", "y"))
+    assert all(slot["external_attachment"]["side"] in {"LEFT", "RIGHT", "TOP", "BOTTOM"} for slot in presentation["slots"])
     assert {slot["connection_point_id"] for slot in presentation["slots"]} == {slot["connection_point_ref"]["entity_id"] for slot in instance["slots"]}
     assert all(ref["ref_type"] == "CANONICAL_FACT" for ref in node["source_refs"])
     internal = node["attributes"]["internal_l1_links"]

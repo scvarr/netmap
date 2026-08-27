@@ -19,8 +19,8 @@ describe('BlueprintPreview', () => {
 
   it('renders one or two directly joined face surfaces without face controls', () => {
     const { rerender } = render(<BlueprintPreview body={{ kind: 'RECTANGLE', width: 8, height: 1 }} slots={[
-      { key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', anchor: { side: 'LEFT', offset: .5 } },
-      { key: 'rear', display_name: 'Rear', kind: 'CONNECTION_POINT', face: 'REAR', anchor: { side: 'RIGHT', offset: .5 } },
+      { key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', rendered_position: { x: .25, y: .5 } },
+      { key: 'rear', display_name: 'Rear', kind: 'CONNECTION_POINT', face: 'REAR', rendered_position: { x: .75, y: .5 } },
     ]} />);
     const thumbnail = screen.getByTestId('blueprint-thumbnail');
     expect(screen.getAllByTestId(/blueprint-thumbnail-face-/)).toHaveLength(2);
@@ -29,24 +29,22 @@ describe('BlueprintPreview', () => {
     expect(thumbnail).toHaveAttribute('data-preview-height', '30');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     rerender(<BlueprintPreview body={{ kind: 'RECTANGLE', width: 8, height: 1 }} slots={[
-      { key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', anchor: { side: 'LEFT', offset: .5 } },
+      { key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', rendered_position: { x: .25, y: .5 } },
     ]} />);
     expect(screen.getAllByTestId(/blueprint-thumbnail-face-/)).toHaveLength(1);
     expect(screen.getByTestId('blueprint-thumbnail')).toHaveStyle({ width: '120px', height: '120px' });
   });
 
-  it('keeps ports at their requested borders', () => {
+  it('renders derived positions inside the intrinsic body', () => {
     render(<BlueprintPreview body={{ kind: 'RECTANGLE', width: 100, height: 4, fill_color: '#123456' }} slots={[
-      { key: 'left', display_name: 'A', kind: 'CONNECTION_POINT', anchor: { side: 'LEFT', offset: .5 } },
-      { key: 'right', display_name: 'B', kind: 'NETWORK_PORT', anchor: { side: 'RIGHT', offset: .5 } },
-      { key: 'top', display_name: 'T', kind: 'CONNECTION_POINT', anchor: { side: 'TOP', offset: .5 } },
-      { key: 'bottom', display_name: 'D', kind: 'CONNECTION_POINT', anchor: { side: 'BOTTOM', offset: .5 } },
+      { key: 'left', display_name: 'A', kind: 'CONNECTION_POINT', rendered_position: { x: .2, y: .5 } },
+      { key: 'right', display_name: 'B', kind: 'NETWORK_PORT', rendered_position: { x: .8, y: .5 } },
+      { key: 'top', display_name: 'T', kind: 'CONNECTION_POINT', rendered_position: { x: .5, y: .2 } },
+      { key: 'bottom', display_name: 'D', kind: 'CONNECTION_POINT', rendered_position: { x: .5, y: .8 } },
     ]} />);
     const preview = screen.getByRole('img'); expect(preview).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet'); expect(preview).toHaveAttribute('data-ratio', '25');
     expect(preview.querySelector('rect')).toHaveAttribute('width', '100'); expect(preview.querySelector('rect')).toHaveAttribute('height', '4');
-    expect(preview.querySelector('[data-slot-key="left"]')).toHaveAttribute('data-anchor-side', 'LEFT');
-    expect(preview.querySelector('[data-slot-key="right"]')).toHaveAttribute('data-anchor-side', 'RIGHT');
-    expect(preview.querySelector('[data-slot-key="top"]')).toHaveAttribute('data-anchor-side', 'TOP');
-    expect(preview.querySelector('[data-slot-key="bottom"]')).toHaveAttribute('data-anchor-side', 'BOTTOM');
+    expect(preview.querySelector('[data-slot-key="left"] circle')).toHaveAttribute('cx', '20');
+    expect(preview.querySelector('[data-slot-key="right"] circle')).toHaveAttribute('cx', '80');
   });
 });

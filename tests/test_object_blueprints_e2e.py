@@ -147,7 +147,7 @@ def test_historical_snapshot_without_composition_remains_readable_and_instantiab
         session.add(ObjectBlueprint(id=blueprint_id, name="Historical"))
         session.add(ObjectBlueprintVersion(id=version_id, blueprint_id=blueprint_id, version_number=1, body_kind="RECTANGLE", width=1, height=1))
         session.flush()
-        session.add(BlueprintEndpointSlot(id=slot_id, blueprint_version_id=version_id, slot_key="legacy", display_name="Legacy", kind="CONNECTION_POINT", anchor_side="LEFT", anchor_offset=.5))
+        session.add(BlueprintEndpointSlot(id=slot_id, blueprint_version_id=version_id, slot_key="legacy", display_name="Legacy", kind="CONNECTION_POINT"))
     detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
     assert detail.status_code == 200 and detail.json()["composition"] is None
     assert instantiate(str(blueprint_id), str(version_id), "historical")["slots"][0]["slot_key"] == "legacy"

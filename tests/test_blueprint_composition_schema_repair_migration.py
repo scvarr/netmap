@@ -83,8 +83,8 @@ def test_0029_repairs_a_drifted_0028_composition_schema_and_preserves_authoring(
             (id, blueprint_id, version_number, body_kind, width, height)
             VALUES (:id, :blueprint_id, 1, 'RECTANGLE', 1, 1)"""), {"id": version_id, "blueprint_id": blueprint_id})
         session.execute(text("""INSERT INTO blueprint_endpoint_slots
-            (id, blueprint_version_id, slot_key, display_name, kind, anchor_side, anchor_offset)
-            VALUES (:id, :version_id, 'legacy', 'Legacy', 'CONNECTION_POINT', 'LEFT', .5)"""), {"id": slot_id, "version_id": version_id})
+            (id, blueprint_version_id, slot_key, display_name, kind)
+            VALUES (:id, :version_id, 'legacy', 'Legacy', 'CONNECTION_POINT')"""), {"id": slot_id, "version_id": version_id})
     historical = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
     assert historical.status_code == 200, historical.text
     assert historical.json()["composition"] is None

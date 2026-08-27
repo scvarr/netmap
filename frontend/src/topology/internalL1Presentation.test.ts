@@ -13,9 +13,9 @@ const panel = (links: TopologyProjectionNode['attributes']['internal_l1_links'] 
       version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' },
       body: { kind: 'RECTANGLE', width: 200, height: 100 },
       slots: [
-        { slot_key: 'front01', display_name: 'Front 01', kind: 'CONNECTION_POINT', anchor: { side: 'LEFT', offset: .25 }, connection_point_id: 'front-01' },
-        { slot_key: 'rear01', display_name: 'Rear 01', kind: 'CONNECTION_POINT', anchor: { side: 'RIGHT', offset: .75 }, connection_point_id: 'rear-01' },
-        { slot_key: 'rear02', display_name: 'Rear 02', kind: 'CONNECTION_POINT', anchor: { side: 'BOTTOM', offset: .5 }, connection_point_id: 'rear-02' },
+        { slot_key: 'front01', display_name: 'Front 01', kind: 'CONNECTION_POINT', rendered_position: { x: 0, y: .25 }, external_attachment: { x: 0, y: .25, side: 'LEFT' }, connection_point_id: 'front-01' },
+        { slot_key: 'rear01', display_name: 'Rear 01', kind: 'CONNECTION_POINT', rendered_position: { x: 1, y: .75 }, external_attachment: { x: 1, y: .75, side: 'RIGHT' }, connection_point_id: 'rear-01' },
+        { slot_key: 'rear02', display_name: 'Rear 02', kind: 'CONNECTION_POINT', rendered_position: { x: .5, y: 1 }, external_attachment: { x: .5, y: 1, side: 'BOTTOM' }, connection_point_id: 'rear-02' },
       ],
     },
     internal_l1_links: links,

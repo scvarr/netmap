@@ -34,7 +34,7 @@ describe('floating topology edge geometry', () => {
 
   it('keeps a Blueprint slot anchor exact when a cable path is routed', () => {
     const projection: TopologyProjectionNode = { id: 'blueprint', kind: 'PHYSICAL_OBJECT', label: 'Patch panel', source_refs: [], attributes: {
-      blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, slots: [{ slot_key: 'rear01', display_name: 'rear01', kind: 'CONNECTION_POINT', connection_point_id: 'rear-01', anchor: { side: 'TOP', offset: .25 } }] },
+      blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, slots: [{ slot_key: 'rear01', display_name: 'rear01', kind: 'CONNECTION_POINT', connection_point_id: 'rear-01', rendered_position: { x: .25, y: .5 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }] },
     } };
     const endpoint = getConnectionPointEndpoint(projection, node(10, 20), 'rear-01');
     expect(endpoint).toMatchObject({ x: 60, y: 20, side: Position.Top });
@@ -44,7 +44,7 @@ describe('floating topology edge geometry', () => {
 
   it('offsets a REAR slot endpoint to the REAR panel without changing its anchor semantics', () => {
     const projection: TopologyProjectionNode = { id: 'blueprint', kind: 'PHYSICAL_OBJECT', label: 'Patch panel', source_refs: [], attributes: {
-      blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, slots: [{ slot_key: 'front', display_name: 'front', kind: 'CONNECTION_POINT', connection_point_id: 'front', anchor: { side: 'TOP', offset: .25 } }, { slot_key: 'rear', display_name: 'rear', kind: 'CONNECTION_POINT', connection_point_id: 'rear', face: 'REAR', anchor: { side: 'TOP', offset: .25 } }] },
+      blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, slots: [{ slot_key: 'front', display_name: 'front', kind: 'CONNECTION_POINT', connection_point_id: 'front', rendered_position: { x: .25, y: .5 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }, { slot_key: 'rear', display_name: 'rear', kind: 'CONNECTION_POINT', connection_point_id: 'rear', face: 'REAR', rendered_position: { x: .25, y: .5 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }] },
     } };
     expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, width: 200, height: 200 }, 'front')).toMatchObject({ x: 60, y: 20, side: Position.Top });
     expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, width: 200, height: 200 }, 'rear')).toMatchObject({ x: 60, y: 120, side: Position.Top });
