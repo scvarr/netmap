@@ -28,7 +28,7 @@ canonical topology: она читает public projection DTO и SavedMap presen
 state.
 
 The authoritative SavedMap read also contains `cable_routes`: each record is a
-canonical `PhysicalObject` cable ref, explicit `L1/PHYSICAL_OBJECT` view and an
+canonical Cable ref, explicit `L1/PHYSICAL_OBJECT` view and an
 ordered list of finite flow-coordinate `{x, y}` waypoints. `PUT
 /v1/maps/{map_id}/cable-routes/{cable_id}` replaces the complete list (including
 an explicit empty list); DELETE removes the record, so no-route remains distinct
@@ -169,15 +169,16 @@ CatalogInventoryDocument
     gaps[], warnings[]
 ```
 
-Equipment is every `PhysicalObject` without an explicit `class="cable"`.
+Equipment is every `PhysicalObject`; Cable is a separate optional domain entity
+and is not represented by a `class="cable"` PhysicalObject.
 Occupancy is emitted only when every owned `ConnectionPoint` has cardinality
 one; it counts points with external canonical `Connection` occupancy, excluding
 same-object internal links, and never counts `NetworkInterface`s. Map
 memberships are only explicit `MapPlacement` facts joined to `SavedMap`; they do
 not participate in topology resolution. Cables are only explicit
-`class="cable"` objects. Exact two endpoints are emitted solely when the
-existing `simple_cable_semantics` recognises the cable; otherwise the item is
-`UNRESOLVED` with no guessed endpoint. The endpoint order is stable but has no
+Cable records are emitted only when a canonical Cable and its one Connection
+exist. Exact two endpoints are the Connection's two ConnectionPoints; no
+endpoint is guessed. The endpoint order is stable but has no
 directional meaning. This read model is bulk-resolved from canonical and
 presentation query boundaries, not by L1 projection or per-object/map detail
 requests. `/infrastructure/objects` now uses this datasource exclusively: one
@@ -504,10 +505,9 @@ POST /v1/topology/physical-links
 
 Bounded operation принимает два разных существующих `NetworkInterface` с
 явными physical owners и без direct `InterfacePhysicalBinding`. Одна transaction
-создаёт для каждого интерфейса атомарную device `ConnectionPoint`, две конечные
-точки cable `PhysicalObject`, обе direct bindings и три `Connection`, каждый с
-единственным явным `ConnectionMember` `1↔1`. Optional имя кабеля хранится как
-существующий `alias.display` PhysicalObject metadata.
+создаёт необходимые device `ConnectionPoint`, direct bindings, один canonical
+`Connection` и optional Cable. Optional cable display metadata относится к
+Cable, а не к `PhysicalObject`.
 
 `PhysicalLink` не становится canonical entity. Operation не создаёт
 realization, L2/L3/IP или другие network facts. После success UI заново загружает
@@ -566,9 +566,9 @@ Each ConnectionPoint retains its canonical ref/counts and adds `ordering_key`
 (the stable blueprint `slot_key` for instances), factual `blueprint_slot`
 (kind and anchor metadata), named direct interface bindings with evidence refs,
 direct internal counterparts, and structured external attachments. Attachments
-are exact `DIRECT_CONNECTION`, recognised `SIMPLE_CABLE` with cable and far
-endpoint, or honest `UNRESOLVED`; ambiguous/non-simple passive topology never
-gets a guessed far peer. The simple-cable predicate is shared with
+are exact `DIRECT_CONNECTION`, recognised `CABLE_BACKED_CONNECTION` with its
+Cable and far endpoint, or honest `UNRESOLVED`; ambiguous topology never gets a
+guessed far peer. The same canonical Cable-backed relation is shared with
 ConfiguredTopologyProjectionResolver/off-map continuations.
 
 UI предоставляет operation на full-page Catalog create flow, после success
@@ -587,11 +587,11 @@ numeric-aware ordering only by the user-visible display label; `slot_key`, UUID
 and other opaque identity/provenance values do not order it. Per-port technical
 refs are not part of this primary table. Cardinality above one shows factual
 connection counts only. An occupied cardinality-1 port offers confirmed
-disconnect of its exact external canonical `Connection`; it preserves cable and
-other `PhysicalObject` lifecycle. A later explicit cable delete accepts that
-same simple cable with zero, one, or two remaining external Connections and
-deletes its aggregate atomically; an acknowledged disconnect is followed only
-by authoritative refresh/retry.
+disconnect of its exact external canonical relation. For a Cable-backed
+relation this atomically deletes the Cable and its Connection; a direct
+Connection deletes only the Connection. Neither operation deletes participating
+PhysicalObjects or ConnectionPoints. An acknowledged disconnect is followed
+only by authoritative refresh/retry.
 
 When every point forms one reciprocal direct internal counterpart, the UI
 instead renders each exact pair once as a channel. Non-reciprocal or ambiguous
@@ -635,8 +635,9 @@ PhysicalEndpoint =
 W.6 ограничен `cardinality=1` / member `1`. Для unbound
 `NetworkInterface` transaction создаёт owning device `ConnectionPoint` и
 `InterfacePhysicalBinding`; для `ConnectionPoint` используется ровно выбранная
-canonical точка. Затем та же transaction создаёт cable `PhysicalObject`, две
-его точки и три explicit `Connection` с member mapping `1↔1`.
+canonical точка. Затем та же transaction атомарно создаёт один canonical
+`Connection` и optional Cable; Cable не получает собственных точек или
+internal Connection.
 
 Наличие существующей `Connection` у passive `ConnectionPoint` не означает, что
 точка занята: через неё разрешено строить последовательную physical composition.
@@ -654,8 +655,8 @@ Bounded metadata materialization поддерживает optional непуст�
 только для `PhysicalObject`. Она возвращается в `PhysicalObjectDetailsDocument`
 и в `attributes.class` L1 projection без вывода из aliases, counts или
 connectivity. `PUT /v1/topology/physical-objects/{id}/class` идемпотентно меняет
-значение; create physical object принимает optional `class`, а новые cable
-objects из W.3/W.6 получают explicit `class=cable`. Отсутствующий class остаётся
+значение; create physical object принимает optional `class`. Cable не является
+PhysicalObject и не получает `class=cable`. Отсутствующий class остаётся
 валидным и существующие объекты автоматически не классифицируются.
 
 ## W.7 — добавление ConnectionPoint
@@ -879,20 +880,20 @@ passive continuity hint; they do not change the canonical source endpoint.
 
 ## MAP-CONNECT.1a — blueprint-backed cable composition
 
-`POST /v1/topology/physical-connections` optionally accepts an exact blueprint
-and version for a simple inline cable: exactly two CONNECTION_POINT slots and one
-link between them. Slot key order provides stable undirected source/target
-assignment; anchors and classes do not determine L1 semantics. The operation
-atomically materializes that version, its internal link, and two external links;
-legacy generic-cable requests remain unchanged.
+`POST /v1/topology/physical-connections` may use an exact Object Blueprint for
+the participating PhysicalObject endpoints. Blueprint materialization creates
+only that object's ConnectionPoints/internal Connections; the cable-backed
+operation itself atomically creates one canonical Connection and optional Cable.
+Cable has no Blueprint, endpoints or internal link, and no legacy generic-cable
+request is retained.
 
 ## MAPS.1 — persisted Saved Maps and scene lifecycle
 
 **IMPLEMENTED**
 
 Saved Maps are an explicit presentation scope over canonical
-`PhysicalObject` refs. `MapPlacement` is membership only and excludes cable
-objects; `MapViewPosition` is a separate row per placement/view key. The public
+`PhysicalObject` refs. `MapPlacement` is membership only and excludes Cable;
+`MapViewPosition` is a separate row per placement/view key. The public
 map detail response exposes each placement as:
 
 ```text
@@ -944,19 +945,18 @@ server.
 **IMPLEMENTED only for Saved Map Physical view**
 
 Saved Map Physical projection requests opt into
-`include_interstitial_cables`. The resolver admits a `class=cable` only when it
-is an unambiguous simple two-ended cable whose two external endpoint objects are
-already explicitly placed. Existing `physicalCablePresentation` then collapses
-the cable node into the familiar edge, retaining cable node identity and
-supporting edge IDs for existing selection and trace highlighting. No cable
-placement or cable position is created; the Logical view and canonical trace
-scope do not opt in.
+`include_interstitial_cables`. The resolver admits a Cable-backed Connection
+when its two endpoint objects are already explicitly placed. Existing
+presentation collapse renders the Cable-backed edge, retaining canonical Cable
+and Connection refs for selection and trace highlighting. No cable placement or
+cable position is created; the Logical view and canonical trace scope do not
+opt in.
 
 ## MAPS.2b — L1 off-map continuation
 
 **IMPLEMENTED only for Saved Map Physical view**
 
-For the same simple cable with exactly one placed endpoint, the opt-in L1
+For the same Cable-backed Connection with exactly one placed endpoint, the opt-in L1
 document returns `l1_off_map_continuations` with exact canonical refs for local
 object/ConnectionPoint, cable, and remote object/ConnectionPoint. The remote
 object is not a projection node and neither it nor the cable is added to map
@@ -967,8 +967,8 @@ remote object through the existing placement API, or open that canonical object
 in Catalog. Once added, the normal MAPS.2a collapse is used.
 
 Quick Inspector L1 object summaries use the authoritative
-`PhysicalObjectDetailsDocument`; cable endpoints are read only from proven
-`CatalogInventoryDocument` simple-cable resolution. Primary map removal affects
+`PhysicalObjectDetailsDocument`; Cable endpoints are read only from the
+authoritative Cable-backed Connection. Primary map removal affects
 only `MapPlacement`; canonical deletion remains an advanced destructive action.
 When a continuation is selected from its marker/edge, its placement uses the
 captured React Flow coordinate rather than a guessed topology coordinate.

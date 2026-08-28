@@ -13,7 +13,8 @@
 подход с архитектором.
 
 1. Canonical topology (`PhysicalObject`, `ConnectionPoint`, `Connection`,
-   `ConnectionMember`, `Cable`) — единственный source of truth о фактической
+   `ConnectionMember`) плюс optional Cable domain relation — единственный source
+   of truth о фактической
    сети (docs/architecture/presentation/05-presentation, docs/architecture/blueprints/09-03-port-block-blueprint-architecture).
 2. SavedMap: placement/positions/locks/cable-routes — presentation-only;
    resolvers и traces не читают presentation state (docs/architecture/presentation/05-presentation MAPS).

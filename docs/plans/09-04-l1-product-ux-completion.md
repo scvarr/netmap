@@ -128,9 +128,11 @@ UUIDs and other identity/provenance values do not decide presentation order.
 Rows are compact and omit per-port technical data. Connect and disconnect are
 accessible compact icon actions. An occupied cardinality-1 port has an explicit
 confirmed disconnect action which deletes exactly its external canonical
-`Connection`; it does not delete the cable or either PhysicalObject. After the
-delete acknowledgement, the UI only reloads authoritative details/projection;
-retry cannot repeat the destructive write.
+relation. For a Cable-backed relation it atomically deletes Cable + Connection;
+for a direct relation it deletes only Connection. It does not delete either
+participating PhysicalObject or ConnectionPoint. After acknowledgement, the UI
+only reloads authoritative details/projection; retry cannot repeat the
+destructive write.
 
 ## UX follow-up decisions после UX.2c
 

@@ -139,6 +139,11 @@ device-internal continuity can connect slots on different faces. On
 materialization those links remain ordinary canonical topology; runtime
 canonical topology remains authoritative thereafter.
 
+This rule applies only to the `PhysicalObject` and its owned
+`ConnectionPoint`s. `Cable` is not a Blueprint/Port Block target: it is an
+optional entity attached to one canonical `Connection`, with no Cable-owned
+points, internal Connection, or Blueprint provenance.
+
 Port Block composition changes neither the L1S.6 rule that blueprint provenance
 must not silently reconcile runtime topology nor the existing additive upgrade
 contract: same-key/same-kind slots preserve their canonical endpoint identity;

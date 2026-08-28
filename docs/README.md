@@ -15,6 +15,7 @@
 
 - [[architecture/01-domain-model|Предметная модель]]
 - [[architecture/l1/01-01-l1|L1]] — физические connections и NetworkInterface
+- [[architecture/l1/01-01-02-cable|Cable domain decision]] — Cable.0 target model
 - [[architecture/l2/01-03-l2|L2]] — model, encapsulation, operational state, MAC/FDB
 - [[architecture/l3/01-04-l3|L3]] — routing, security, NAT, policy routing
 - [[architecture/graph/02-graph|Graph / resolver / projection / cache]]
@@ -31,6 +32,7 @@
 
 - [[plans/09-01-l1-spatial-foundation-plan|L1 spatial foundation plan]]
 - [[plans/09-04-l1-product-ux-completion|L1 Product UX completion]]
+- [[plans/09-05-cable-domain-cutover-plan|Cable.1 canonical cutover plan]]
 - [[plans/stabilization/10-stabilization-overview|Stabilization overview]] и его [[plans/stabilization/10-02-stabilization-backlog|backlog]]
 
 ## Reviews and audits

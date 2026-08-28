@@ -144,7 +144,7 @@ state; the Map page turns explicit placement refs into a bounded projection
 scope.
 
 `MapCableRoute` is separate SavedMap-owned Physical/L1 presentation state,
-keyed by `(map, canonical cable PhysicalObject, view)`. It stores only ordered
+keyed by `(map, canonical Cable, view)`. It stores only ordered
 flow-coordinate `{x, y}` waypoints: endpoints are not persisted, no route row
 is distinct from an explicit empty waypoint list, and it does not require a
 `MapPlacement`. SavedMap/cable deletion cascades route removal; placement and
@@ -154,10 +154,10 @@ topology changes do not derive or mutate the route.
 
 **IMPLEMENTED**
 
-`MapPlacement` is created only for an explicitly added non-cable
-`PhysicalObject`. `class=cable` stays excluded from the Add Object picker and
-is never made a placement by cable presentation. The same canonical object may
-have independent placements on different maps.
+`MapPlacement` is created only for an explicitly added `PhysicalObject`.
+Cable is not a placement candidate because it is not a `PhysicalObject`; its
+presentation is derived from the Cable-backed Connection and route state.
+The same PhysicalObject may have independent placements on different maps.
 
 Physical and Logical are different presentation scenes for the same SavedMap:
 
@@ -183,16 +183,15 @@ viewport and no cross-view coordinate reuse.
 
 **IMPLEMENTED for Saved Map Physical view**
 
-When two explicitly placed objects are connected through one unambiguous simple
-two-ended canonical `class=cable`, the scoped L1 projection may include the
-cable solely to reuse existing collapse semantics. The canvas hides that cable
-node and renders the existing collapsed cable edge between the placed endpoints.
-The edge retains the cable node and supporting connection/member refs for
-selection and trace highlighting. The cable has no placement and no per-view
-position. Logical projection and trace scope are unchanged.
+When two explicitly placed objects have one canonical Cable-backed `Connection`,
+the scoped L1 projection may include the Cable solely as a presentation ref for
+collapse semantics. The canvas renders the collapsed Cable-backed edge between
+the placed endpoints. The Cable has no placement or per-view position; it is not
+a topology node or `PhysicalObject`. Logical projection and trace scope are
+unchanged.
 
 An opt-in scoped `L1 / PHYSICAL_OBJECT` projection may additionally expose a
-presentation-only off-map continuation for a simple two-ended canonical cable
+presentation-only off-map continuation for a Cable-backed canonical Connection
 whose local endpoint is in scope and remote endpoint is not. The continuation
 contains exact canonical refs for local/remote connection points, cable, and
 remote `PhysicalObject`, but neither the remote object nor the cable becomes
@@ -203,7 +202,7 @@ not L2/L3 inference, and does not affect traces.
 
 **IMPLEMENTED for Saved Map Physical view**
 
-If exactly one endpoint object of the same simple cable is placed, the scoped
+If exactly one endpoint object of the same Cable-backed Connection is placed, the scoped
 L1 response exposes a presentation-only continuation rather than adding either
 the cable or remote object. It carries exact refs for local PhysicalObject and
 ConnectionPoint, cable, remote PhysicalObject and remote ConnectionPoint.
@@ -1343,7 +1342,7 @@ viewport. Один initial fit допустим при входе в новую 
 
 **FIXED**
 
-Canonical cable/connectivity и нарисованная на Saved Map трасса кабеля — разные
+Canonical Cable/Connection connectivity и нарисованная на Saved Map трасса — разные
 сущности. Waypoints являются presentation-only: они не становятся
 `PhysicalObject`, `ConnectionPoint`, `Connection` или `ConnectionMember` и не
 создают topology semantics. Один canonical cable может иметь разную route geometry
@@ -1359,13 +1358,14 @@ waypoint никогда не меняет canonical topology.
 exact source ConnectionPoint
     -> zero or more canvas waypoints
     -> exact destination ConnectionPoint
-    -> canonical physical cable/connection
+    -> canonical Connection with optional Cable
     -> сохранение presentation route
 ```
 
-Canonical write и persistence presentation route — разные lifecycle steps. Если
-canonical cable создан успешно, а route persistence завершился ошибкой, Retry не
-создаёт второй cable.
+Cable-backed canonical write (атомарные Connection + Cable) и persistence
+presentation route — разные lifecycle steps. Если canonical write завершён, а
+route persistence завершился ошибкой, Retry не создаёт второй Cable или
+Connection.
 
 ### Внутренняя физическая continuity объекта
 

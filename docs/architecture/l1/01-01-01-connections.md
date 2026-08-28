@@ -173,40 +173,21 @@ A:48 <-> B:48
 
 Глобальное ограничение вида «member ConnectionPoint может участвовать только в одном Connection» **не вводится**. Одна точка пассивного проходного объекта должна иметь возможность участвовать во внешней и внутренней связи. Более строгие ограничения конкретных объектов могут появиться позднее как validation/capabilities, но не являются законом L1-ядра.
 
-## Кабель как PhysicalObject
+## Cable как optional domain entity
 
-Кабель остаётся обычным `PhysicalObject`. Его тип, среда, категория и прочие характеристики являются metadata.
+`Cable` не является `PhysicalObject` и не имеет собственных
+`ConnectionPoint` или internal `Connection`. Он связан ровно с одним
+`Connection`, а его endpoints — это две точки этого Connection. Полный
+contract зафиксирован в [[architecture/l1/01-01-02-cable|Cable domain
+architecture decision]].
 
-У простого кабеля есть две конечные ConnectionPoint и внутренняя Connection между ними.
+Многоволоконный или многоканальный Cable использует
+`Connection.cardinality` и явные `ConnectionMember` непосредственно между
+двумя canonical `ConnectionPoint`; отдельные Cable endpoints не создаются.
 
-### Одиночный кабель
-
-```text
-PhysicalObject CABLE-1
-├── CP-A cardinality = 1
-└── CP-B cardinality = 1
-
-internal Connection
-    CP-A:1 <-> CP-B:1
-```
-
-Подключение концов кабеля к другим физическим точкам задаётся отдельными Connection.
-
-### 48-волоконный кабель
-
-```text
-PhysicalObject CABLE-48
-├── CP-A cardinality = 48
-└── CP-B cardinality = 48
-
-internal Connection cardinality = 48
-    A:1  <-> B:1
-    A:2  <-> B:2
-    ...
-    A:48 <-> B:48
-```
-
-Отдельное волокно не становится `PhysicalObject` только потому, что оно индивидуально трассируется. В данном случае оно является `ConnectionMember` внутренней связи кабеля.
+Cable-backed create/delete атомарны. Direct `Connection` без Cable также
+допустим; orphan Cable и half-disconnected Cable не являются состояниями
+модели.
 
 Если какой-либо вложенный компонент действительно требуется учитывать как самостоятельную физическую сущность с собственным жизненным циклом, inventory, metadata или ConnectionPoint, он по-прежнему может быть отдельным `PhysicalObject`.
 
