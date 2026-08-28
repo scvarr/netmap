@@ -31,11 +31,12 @@ provenance constructs, а immutable Blueprint history не изменяется.
    компактные icon-actions с доступными labels/tooltips. Для подключённого
    порта доступен явный разрыв физического соединения с подтверждением.
 5. **Lifecycle библиотеки портовых модулей.** Пользователь может удалить
-   неиспользуемый портовый модуль. Если модуль или его versions используются
-   immutable Blueprint versions, destructive delete блокируется с понятным
-   объяснением; immutable history/provenance не разрушается. Archive,
-   soft-delete и новая persistence model не проектируются без отдельной
-   необходимости.
+   неиспользуемый Портовый модуль целиком вместе со всеми его versions, только
+   если ни одна version не используется ни одной immutable Object Blueprint
+   version. Если используется хотя бы одна version, destructive delete
+   запрещён, а UI явно сообщает о зависимости; immutable history/provenance не
+   разрушается. Archive, soft-delete, deprecated state и другой дополнительный
+   lifecycle не вводятся без отдельной будущей необходимости.
 6. **Context menus и Inspector.** Context menu — быстрые действия над
    объектом, портом, кабелем или пустым местом; Inspector — информация и
    подробный рабочий контекст; toolbar — глобальные режимы карты. В этот scope
