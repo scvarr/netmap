@@ -54,6 +54,16 @@ ChatGPT не должен заниматься микрокодингом вме
 последовательности внутренних вызовов и подробные патчи,
 если это не требуется для архитектурного решения.
 
+## External review workflow
+
+Codex никогда не изменяет и не push'ит `main`.
+
+Завершённая milestone или housekeeping-ветка должна быть committed и pushed
+для внешнего review через GitHub.
+
+Запрет на commit/push не следует автоматически добавлять в operational prompts
+для milestone-веток.
+
 ## Operational prompts
 
 Codex уже находится внутри проекта и видит репозиторий.

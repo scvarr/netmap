@@ -2,11 +2,12 @@
 
 Это навигационный индекс. Не нужно читать всю папку `docs/` перед каждой задачей: выберите минимальный набор документов по области работы.
 
-## Читать всегда
+## Точки входа
 
-- [[00-implementation-constraints|Ограничения реализации]] — обязательные project-wide правила.
-- [[NetMap|NetMap]] — сводное дерево документации.
-- [[chatgpt|CHATGPT]] — порядок работы ChatGPT с проектом.
+- Для навигации по документации используйте этот `docs/README.md`.
+- [[00-implementation-constraints|00. Ограничения реализации]] — обязательный project-wide implementation contract.
+- [[chatgpt|docs/chatgpt.md]] — только workflow ChatGPT; Codex не читает его как свою инструкцию.
+- [[NetMap|docs/NetMap.md]] — полное архитектурное дерево/reference. Читайте его при необходимости, а не перед каждой bounded-задачей.
 
 ## Architecture contracts
 
