@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mapCandidateChoices } from './MapPage';
 import type { CatalogInventoryEquipmentItem } from '../topology/catalogInventoryTypes';
 
-const equipment = (id: string, label: string, className?: string): CatalogInventoryEquipmentItem => ({ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }, label, ...(className ? { class: className } : {}), map_memberships: [] });
+const equipment = (id: string, label: string, className?: string): CatalogInventoryEquipmentItem => ({ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: id }, label, ...(className ? { class: className } : {}), map_memberships: [] });
 
 describe('Saved Map candidate picker', () => {
   it('uses catalog equipment and excludes already placed objects', () => {

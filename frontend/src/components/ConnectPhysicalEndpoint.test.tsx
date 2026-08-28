@@ -1,0 +1,62 @@
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+import type { ComponentProps } from 'react';
+import { ConnectPhysicalEndpoint } from './ConnectPhysicalEndpoint';
+
+const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
+const point = (id = 'source') => ({ connection_point_ref: ref('ConnectionPoint', id), label: id, cardinality: 1, incident_connection_count: 0, external_connection_count: 0, direct_interface_binding_count: 0, source_refs: [] });
+const node = (id: string, label: string, ports: Array<{ connection_point_id: string; display_name: string; cardinality: number; external_connection_count: number }>, interfaces = 0, className?: string) => ({ id, kind: 'PHYSICAL_OBJECT', label, source_refs: [ref('PhysicalObject', id)], attributes: { connection_points: ports, owned_interface_count: interfaces, ...(className ? { class: className } : {}) } });
+const document = (id: string, ports: ReturnType<typeof point>[]) => ({ schema_version: '1.0' as const, physical_object: { source_ref: ref('PhysicalObject', id), label: id }, connection_points: ports, owned_interface_count: 0, gaps: [], warnings: [] });
+const renderConnect = (props: Partial<ComponentProps<typeof ConnectPhysicalEndpoint>> = {}) => { const physicalDetailsDataSource = props.physicalDetailsDataSource ?? { loadPhysicalObjectDetails: vi.fn() }; const writeDataSource = props.writeDataSource ?? { createPhysicalEndpointConnection: vi.fn() }; render(<ConnectPhysicalEndpoint sourcePoint={point()} topologyNodes={props.topologyNodes ?? []} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={props.deviceDetailsDataSource ?? { loadDeviceDetails: vi.fn() }} writeDataSource={writeDataSource} onConnected={props.onConnected ?? vi.fn()} />); return { physicalDetailsDataSource, writeDataSource }; };
+
+describe('ConnectPhysicalEndpoint', () => {
+  it('uses the physical-port primary flow, filters impossible objects, preserves same object, searches, and orders ports', async () => {
+    const target = node('target', 'Panel 10', [{ connection_point_id: 'p10', display_name: 'A10', cardinality: 1, external_connection_count: 0 }, { connection_point_id: 'p2', display_name: 'A02', cardinality: 1, external_connection_count: 0 }, { connection_point_id: 'busy', display_name: 'Busy', cardinality: 1, external_connection_count: 1 }, { connection_point_id: 'wide', display_name: 'Wide', cardinality: 2, external_connection_count: 0 }, { connection_point_id: 'source', display_name: 'Source', cardinality: 1, external_connection_count: 0 }]);
+    const load = vi.fn().mockResolvedValue(document('target', [point('p10'), point('p2'), { ...point('busy'), external_connection_count: 1 }, { ...point('wide'), cardinality: 2 }, point('source')])); const { physicalDetailsDataSource } = renderConnect({ physicalDetailsDataSource: { loadPhysicalObjectDetails: load }, topologyNodes: [node('none', 'No ports', []), node('busy', 'Busy', [{ connection_point_id: 'b', display_name: 'B', cardinality: 1, external_connection_count: 1 }]), node('source-object', 'Same object', [{ connection_point_id: 'source', display_name: 'Source', cardinality: 1, external_connection_count: 0 }, { connection_point_id: 'other', display_name: 'Other', cardinality: 1, external_connection_count: 0 }]), target, node('cable', 'Cable', [{ connection_point_id: 'c', display_name: 'C', cardinality: 1, external_connection_count: 0 }], 0, 'cable')] });
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить порт' }));
+    expect(screen.queryByLabelText(/Тип конечной точки/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('option').map((item) => item.textContent)).toEqual(expect.arrayContaining(['Panel 10', 'Same object']));
+    expect(screen.queryByRole('option', { name: 'No ports' })).not.toBeInTheDocument(); expect(screen.queryByRole('option', { name: 'Busy' })).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText('Поиск целевого физического объекта'), 'panel'); expect(screen.queryByRole('option', { name: 'Same object' })).not.toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'target');
+    expect(await screen.findByRole('option', { name: 'p2' })).toBeInTheDocument();
+    expect(screen.getAllByLabelText('Свободный физический порт')[0].querySelectorAll('option')).toHaveLength(3);
+    expect(screen.queryByRole('option', { name: 'busy' })).not.toBeInTheDocument(); expect(screen.queryByRole('option', { name: 'source' })).not.toBeInTheDocument();
+  });
+
+  it('submits an exact primary CP request, resets after success, and exposes backend errors', async () => {
+    const load = vi.fn().mockResolvedValue(document('target', [point('port')])); const create = vi.fn().mockResolvedValue({}); const onConnected = vi.fn(); renderConnect({ topologyNodes: [node('target', 'Target', [{ connection_point_id: 'port', display_name: 'Port', cardinality: 1, external_connection_count: 0 }])], physicalDetailsDataSource: { loadPhysicalObjectDetails: load }, writeDataSource: { createPhysicalEndpointConnection: create }, onConnected });
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить порт' })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'target'); await userEvent.selectOptions(await screen.findByLabelText('Свободный физический порт'), 'port'); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
+    expect(create).toHaveBeenCalledWith({ source: { kind: 'CONNECTION_POINT', connection_point_id: 'source', member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: 'port', member_index: 1 } }); expect(onConnected).toHaveBeenCalledTimes(1); expect(screen.queryByText('Подключить порт кабелем')).not.toBeInTheDocument();
+  });
+
+  it('keeps the explicit advanced interface path and ignores stale target loads', async () => {
+    let firstResolve!: (value: any) => void; const first = new Promise<any>((resolve) => { firstResolve = resolve; }); const load = vi.fn((id: string) => id === 'one' ? first : Promise.resolve(document('two', [point('two-port')]))); const devices = { loadDeviceDetails: vi.fn().mockResolvedValue({ schema_version: '1.0', device: { source_ref: ref('PhysicalObject', 'i'), label: 'I' }, interfaces: [{ interface_ref: ref('NetworkInterface', 'ni'), label: 'Eth1', addresses: [], l2_binding_count: 0, l3_binding_count: 0, direct_physical_bindings: [], realization_down_count: 0, realization_up_count: 0, source_refs: [] }], gaps: [], warnings: [] }) }; const create = vi.fn().mockResolvedValue({});
+    renderConnect({ topologyNodes: [node('one', 'One', [{ connection_point_id: 'one-port', display_name: 'One', cardinality: 1, external_connection_count: 0 }]), node('two', 'Two', [{ connection_point_id: 'two-port', display_name: 'Two', cardinality: 1, external_connection_count: 0 }]), node('iface', 'Iface', [], 1)], physicalDetailsDataSource: { loadPhysicalObjectDetails: load }, deviceDetailsDataSource: devices, writeDataSource: { createPhysicalEndpointConnection: create } });
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить порт' })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'one'); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'two'); expect(await screen.findByRole('option', { name: 'two-port' })).toBeInTheDocument(); firstResolve(document('one', [point('one-port')])); await Promise.resolve(); expect(screen.queryByRole('option', { name: 'one-port' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Дополнительно/ })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'iface'); await userEvent.selectOptions(await screen.findByLabelText('Свободный интерфейс'), 'ni'); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!); expect(create).toHaveBeenLastCalledWith(expect.objectContaining({ target: { kind: 'NETWORK_INTERFACE', network_interface_id: 'ni' } }));
+  });
+
+  it('shows authoritative submit errors without announcing success', async () => {
+    const create = vi.fn().mockRejectedValue(new Error('порт уже занят')); const onConnected = vi.fn(); renderConnect({ topologyNodes: [node('target', 'Target', [{ connection_point_id: 'port', display_name: 'Port', cardinality: 1, external_connection_count: 0 }])], physicalDetailsDataSource: { loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document('target', [point('port')])) }, writeDataSource: { createPhysicalEndpointConnection: create }, onConnected });
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить порт' })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'target'); await userEvent.selectOptions(await screen.findByLabelText('Свободный физический порт'), 'port'); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
+    expect(await screen.findByRole('alert')).toHaveTextContent('порт уже занят'); expect(onConnected).not.toHaveBeenCalled();
+  });
+
+  it('clears hidden primary selection after search and does not apply primary search to advanced candidates', async () => {
+    const devices = { loadDeviceDetails: vi.fn().mockResolvedValue({ schema_version: '1.0', device: { source_ref: ref('PhysicalObject', 'i'), label: 'I' }, interfaces: [], gaps: [], warnings: [] }) };
+    renderConnect({ topologyNodes: [node('target', 'Target', [{ connection_point_id: 'port', display_name: 'Port', cardinality: 1, external_connection_count: 0 }]), node('interface', 'Interface target', [], 1)], physicalDetailsDataSource: { loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document('target', [point('port')])) }, deviceDetailsDataSource: devices });
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить порт' })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'target'); await userEvent.selectOptions(await screen.findByLabelText('Свободный физический порт'), 'port');
+    expect(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)).toBeEnabled(); await userEvent.type(screen.getByLabelText('Поиск целевого физического объекта'), 'missing');
+    expect(screen.getByLabelText('Целевой физический объект')).toHaveValue(''); expect(screen.getByLabelText('Свободный физический порт')).toHaveValue(''); expect(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: /Дополнительно/ })); expect(screen.getByRole('option', { name: 'Interface target' })).toBeInTheDocument();
+  });
+
+  it('disables a pending submit and does not issue a second write', async () => {
+    let resolve!: (value: any) => void; const create = vi.fn(() => new Promise<any>((next) => { resolve = next; }));
+    renderConnect({ topologyNodes: [node('target', 'Target', [{ connection_point_id: 'port', display_name: 'Port', cardinality: 1, external_connection_count: 0 }])], physicalDetailsDataSource: { loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document('target', [point('port')])) }, writeDataSource: { createPhysicalEndpointConnection: create } });
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить порт' })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'target'); await userEvent.selectOptions(await screen.findByLabelText('Свободный физический порт'), 'port'); const submit = screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!;
+    await userEvent.click(submit); expect(submit).toBeDisabled(); await userEvent.click(submit); expect(create).toHaveBeenCalledTimes(1); resolve({});
+  });
+});

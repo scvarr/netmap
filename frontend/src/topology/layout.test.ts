@@ -142,7 +142,7 @@ describe('ELK topology layout', () => {
       local_physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'local-object' },
       local_connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'local-port' },
       local_connection_point_display_name: 'Rear',
-      cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'cable' }, cable_display_name: 'cable-17',
+      cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable' }, cable_display_name: 'cable-17',
       remote_physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'remote-object' }, remote_display_name: 'PP1',
       remote_connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'remote-port' }, remote_connection_point_display_name: 'A07',
       source_refs: [],
