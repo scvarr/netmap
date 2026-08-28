@@ -235,6 +235,30 @@ def test_endpoint_connection_rejects_same_or_unknown_connection_point():
         assert session.scalar(select(func.count()).select_from(Connection)) == 0
 
 
+def test_disconnect_deletes_only_selected_external_connection_and_preserves_cable():
+    source_id, source_point = create_physical_object("Source", "S")
+    target_id, target_point = create_physical_object("Target", "T")
+    created = connect(point_endpoint(source_point), point_endpoint(target_point), "cable-01")
+    assert created.status_code == 201
+    body = created.json()
+    cable_id = body["cable_ref"]["entity_id"]
+    source_connection_id = body["connection_refs"][0]["entity_id"]
+
+    response = client.delete(f"/v1/topology/physical-connections/{source_connection_id}")
+    assert response.status_code == 204
+    with SessionLocal() as session:
+        assert session.get(PhysicalObject, uuid.UUID(cable_id)) is not None
+        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 3
+        assert session.scalar(select(func.count()).select_from(Connection)) == 2
+        assert session.scalar(select(func.count()).select_from(ConnectionMember)) == 2
+
+    details = client.get(f"/v1/topology/physical-objects/{source_id}")
+    assert details.status_code == 200
+    assert details.json()["connection_points"][0]["external_connection_count"] == 0
+    assert client.delete(f"/v1/topology/physical-connections/{body['connection_refs'][1]['entity_id']}").status_code == 422
+    assert client.get(f"/v1/topology/physical-objects/{target_id}").status_code == 200
+
+
 def test_endpoint_connection_rejects_rebinding_network_interface():
     _, interface_id = create_device("PC1", "eth0")
     _, first_point = create_physical_object("Outlet1", "Port")

@@ -582,10 +582,14 @@ bounded details API. Relevant `L1 / PHYSICAL_OBJECT` projection позднее
 Object Detail renders the existing `PhysicalObjectDetailsDocument` as a compact
 operational Ports table rather than a card per `ConnectionPoint`. Active rows
 show port, factual status, resolved external attachment(s), direct bound
-interface(s), connect action for an externally free cardinality-1 point, and
-collapsed technical refs. `ordering_key` is the primary natural ordering key;
-the human label is the deterministic legacy fallback. Cardinality above one
-shows factual connection counts only.
+interface(s), and compact labelled icon actions. The primary list uses natural
+numeric-aware ordering only by the user-visible display label; `slot_key`, UUID
+and other opaque identity/provenance values do not order it. Per-port technical
+refs are not part of this primary table. Cardinality above one shows factual
+connection counts only. An occupied cardinality-1 port offers confirmed
+disconnect of its exact external canonical `Connection`; it preserves cable and
+other `PhysicalObject` lifecycle, and an acknowledged delete is followed only
+by authoritative refresh/retry.
 
 When every point forms one reciprocal direct internal counterpart, the UI
 instead renders each exact pair once as a channel. Non-reciprocal or ambiguous

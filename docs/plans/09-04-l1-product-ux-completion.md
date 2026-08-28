@@ -120,6 +120,18 @@ case-insensitive, map-local substring search over placed PhysicalObject display
 names. A result selects the existing object selection; selection/search do not
 move the viewport.
 
+### UX.2d — Object port-list workflow completion
+
+**IMPLEMENTED.** The primary PhysicalObject Ports table uses natural
+numeric-aware ordering by the user-visible display label only; opaque slot keys,
+UUIDs and other identity/provenance values do not decide presentation order.
+Rows are compact and omit per-port technical data. Connect and disconnect are
+accessible compact icon actions. An occupied cardinality-1 port has an explicit
+confirmed disconnect action which deletes exactly its external canonical
+`Connection`; it does not delete the cable or either PhysicalObject. After the
+delete acknowledgement, the UI only reloads authoritative details/projection;
+retry cannot repeat the destructive write.
+
 ## UX follow-up decisions после UX.2c
 
 Следующие пункты зафиксированы как bounded future presentation work, а не как

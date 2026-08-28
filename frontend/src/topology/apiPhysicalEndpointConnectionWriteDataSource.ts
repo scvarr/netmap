@@ -112,4 +112,11 @@ implements PhysicalEndpointConnectionWriteDataSource {
     }
     return parsePhysicalEndpointConnectionCreationDocument(body);
   }
+
+  async deleteExternalPhysicalConnection(connectionId: string): Promise<void> {
+    const response = await fetch(`${this.endpoint}/${encodeURIComponent(connectionId)}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw await readBackendError(response);
+  }
 }

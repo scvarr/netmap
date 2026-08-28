@@ -70,7 +70,6 @@ const sortedConnectionPoints = (points: ConnectionPointDetails[]): ConnectionPoi
     .map((point, index) => ({ point, index }))
     .sort((left, right) => (
       Number(isTechnicalPointLabel(left.point)) - Number(isTechnicalPointLabel(right.point))
-      || pointLabelCollator.compare(left.point.ordering_key || displayPointLabel(left.point), right.point.ordering_key || displayPointLabel(right.point))
       || pointLabelCollator.compare(displayPointLabel(left.point), displayPointLabel(right.point))
       || left.index - right.index
     ))
@@ -204,11 +203,32 @@ const canConnect = (point: ConnectionPointDetails): boolean => (
 
 interface PortActionProps extends Omit<PortRowProps, 'point'> { point: ConnectionPointDetails; }
 
+const DisconnectPhysicalConnection = ({ point, writeDataSource, onDisconnected }: Pick<PortActionProps, 'point' | 'writeDataSource'> & { onDisconnected: () => void }) => {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const attachment = point.cardinality === 1 ? point.external_physical_attachments?.[0] : undefined;
+  if (!attachment || !writeDataSource?.deleteExternalPhysicalConnection) return null;
+  const disconnect = async () => {
+    if (pending || !window.confirm(`Разорвать физическое подключение порта «${displayPointLabel(point)}»?`)) return;
+    setPending(true);
+    setError(null);
+    try {
+      await writeDataSource.deleteExternalPhysicalConnection!(attachment.connection_ref.entity_id);
+      onDisconnected();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+    } finally {
+      setPending(false);
+    }
+  };
+  return <><button type="button" className="port-icon-action port-icon-action--danger" aria-label="Разорвать физическое подключение" title="Разорвать физическое подключение" disabled={pending} onClick={() => void disconnect()}>×</button>{error && <p className="port-action-error" role="alert">Не удалось разорвать подключение. {error}</p>}</>;
+};
+
 const PortActions = ({ point, topologyNodes, physicalDetailsDataSource, deviceDetailsDataSource, writeDataSource, onConnected }: PortActionProps) => <>
   {canConnect(point) && deviceDetailsDataSource && writeDataSource && (
     <ConnectPhysicalEndpoint sourcePoint={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} />
   )}
-  <details className="interface-technical-details"><summary>Технические данные</summary><SourceRefs refs={[point.connection_point_ref, ...point.source_refs]} /></details>
+  <DisconnectPhysicalConnection point={point} writeDataSource={writeDataSource} onDisconnected={onConnected} />
 </>;
 
 const PortRow = ({

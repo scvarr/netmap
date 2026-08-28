@@ -30,4 +30,5 @@ export interface PhysicalEndpointConnectionWriteDataSource {
   createPhysicalEndpointConnection(
     request: CreatePhysicalEndpointConnectionRequest,
   ): Promise<PhysicalEndpointConnectionCreationDocument>;
+  deleteExternalPhysicalConnection?(connectionId: string): Promise<void>;
 }

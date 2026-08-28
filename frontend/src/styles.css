@@ -217,12 +217,14 @@ button { font: inherit; }
 .ports-table-wrap { overflow-x: auto; border: 1px solid #294145; border-radius: 9px; background: #0d1c1f; }
 .ports-table-wrap h4 { margin: 0; padding: 10px 12px 0; color: #dcebe8; font-size: 12px; }
 .ports-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-.ports-table th, .ports-table td { padding: 9px 10px; border-bottom: 1px solid #20373a; text-align: left; vertical-align: top; color: #b9ceca; }
+.ports-table th, .ports-table td { padding: 6px 8px; border-bottom: 1px solid #20373a; text-align: left; vertical-align: middle; color: #b9ceca; }
 .ports-table thead th { color: #809596; font-size: 9px; letter-spacing: .05em; text-transform: uppercase; }
 .ports-table tbody th { color: #dcebe8; font-weight: 700; }
 .ports-table tbody tr:last-child > * { border-bottom: 0; }
 .ports-table .connect-interface { margin: 0; }
-.ports-table .interface-technical-details { display: inline-block; margin-left: 7px; }
+.port-icon-action { display: inline-grid; width: 26px; height: 26px; place-items: center; margin: 0 3px 0 0; padding: 0; border: 1px solid #35575b; border-radius: 6px; color: #d6e8e4; background: #102326; cursor: pointer; font: 700 16px/1 system-ui, sans-serif; }
+.port-icon-action:hover { border-color: #63af9f; background: #15372f; }.port-icon-action:disabled { cursor: not-allowed; opacity: .5; }.port-icon-action--danger { color: #f0b5ae; border-color: #70433f; background: #281a19; }.port-icon-action--danger:hover { border-color: #d77b70; background: #3a201e; }.ports-table .connect-interface { display: inline-block; vertical-align: middle; }
+.port-action-error { margin: 5px 0 0; color: #e0aaa5; font-size: 10px; }
 .physical-object-details__technical { margin-top: 14px; }
 .interface-card { padding: 13px; border: 1px solid #294145; border-radius: 10px; background: #0d1c1f; }
 .interface-card > h4 { margin: 0 0 12px; color: #dcebe8; font-size: 13px; }

@@ -80,4 +80,13 @@ describe('ApiPhysicalEndpointConnectionWriteDataSource', () => {
       }),
     ).rejects.toThrow(/already has a direct physical binding/);
   });
+
+  it('deletes one external physical connection without parsing a response body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(
+      new ApiPhysicalEndpointConnectionWriteDataSource().deleteExternalPhysicalConnection('connection-a'),
+    ).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/topology/physical-connections/connection-a', { method: 'DELETE' });
+  });
 });

@@ -272,6 +272,41 @@ class PhysicalConnectionCatalog:
             ),
         )
 
+    def delete_external_connection(self, connection_id: uuid.UUID) -> None:
+        """Delete exactly one canonical connection that crosses object ownership.
+
+        Disconnect is deliberately narrower than deleting either endpoint or an
+        intervening cable.  Auxiliary records (including bindings and cable
+        topology) remain canonical facts until their own lifecycle operation.
+        """
+        connection = self.session.scalar(
+            select(Connection).where(Connection.id == connection_id).with_for_update()
+        )
+        if connection is None:
+            raise ValidationError(
+                "Connection does not exist", {"connection_id": str(connection_id)}
+            )
+        points = tuple(
+            self.session.scalars(
+                select(ConnectionPoint)
+                .where(ConnectionPoint.id.in_((connection.point_a_id, connection.point_b_id)))
+                .order_by(ConnectionPoint.id)
+                .with_for_update()
+            )
+        )
+        if len(points) != 2:
+            raise ValidationError(
+                "Connection refers to a missing ConnectionPoint",
+                {"connection_id": str(connection_id)},
+            )
+        if points[0].physical_object_id == points[1].physical_object_id:
+            raise ValidationError(
+                "Only an external physical Connection can be disconnected",
+                {"connection_id": str(connection_id)},
+            )
+        self.session.delete(connection)
+        self.session.flush()
+
     @staticmethod
     def _endpoint_description(endpoint: PhysicalEndpoint) -> dict[str, str | int]:
         if isinstance(endpoint, NetworkInterfaceEndpoint):

@@ -976,6 +976,19 @@ def create_physical_endpoint_connection(
         )
 
 
+@app.delete(
+    "/v1/topology/physical-connections/{connection_id}",
+    status_code=204,
+    responses={422: {"model": ErrorResponse}},
+)
+def delete_external_physical_connection(
+    connection_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        PhysicalConnectionCatalog(session).delete_external_connection(connection_id)
+
+
 @app.post(
     "/v1/traces/packet-processing/plan-validation",
     response_model=PacketProcessingPlanValidationArtifact,

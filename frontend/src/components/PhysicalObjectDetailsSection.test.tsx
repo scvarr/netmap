@@ -16,17 +16,19 @@ const renderDetails = (value: PhysicalObjectDetailsDocument, props = {}) => rend
 const deferred = <T,>() => { let resolve!: (value: T) => void; return { promise: new Promise<T>((next) => { resolve = next; }), resolve }; };
 
 describe('PhysicalObjectDetailsSection ports', () => {
-  it('renders active ports in natural ordering with factual status, neighbour, cable, interface and connect action', async () => {
-    const cable = point('A10', 'a10', { direct_interface_bindings: [{ interface_ref: ref('NetworkInterface', 'ni'), label: 'Eth1', evidence_refs: [] }], external_physical_attachments: [{ kind: 'SIMPLE_CABLE', connection_ref: ref('Connection', 'c'), evidence_refs: [], cable_label: 'CAB-1', remote_physical_object_label: 'SW2', remote_connection_point_label: 'Eth2' }] });
-    const direct = point('A02', 'a02', { external_physical_attachments: [{ kind: 'DIRECT_CONNECTION', connection_ref: ref('Connection', 'd'), evidence_refs: [], remote_physical_object_label: 'PP1', remote_connection_point_label: 'B01' }] });
-    renderDetails(document([cable, direct, point('A01')]), { deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, writeDataSource: { createPhysicalEndpointConnection: vi.fn() } });
+  it('renders active ports in natural display-label ordering with factual status, neighbour, cable, interface and icon actions', async () => {
+    const cable = point('A10', 'a10', { ordering_key: '000', direct_interface_bindings: [{ interface_ref: ref('NetworkInterface', 'ni'), label: 'Eth1', evidence_refs: [] }], external_physical_attachments: [{ kind: 'SIMPLE_CABLE', connection_ref: ref('Connection', 'c'), evidence_refs: [], cable_label: 'CAB-1', remote_physical_object_label: 'SW2', remote_connection_point_label: 'Eth2' }] });
+    const direct = point('A02', 'a02', { ordering_key: 'zzz', external_physical_attachments: [{ kind: 'DIRECT_CONNECTION', connection_ref: ref('Connection', 'd'), evidence_refs: [], remote_physical_object_label: 'PP1', remote_connection_point_label: 'B01' }] });
+    renderDetails(document([cable, direct, point('A01')]), { deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, writeDataSource: { createPhysicalEndpointConnection: vi.fn(), deleteExternalPhysicalConnection: vi.fn() } });
     await screen.findByRole('rowheader', { name: 'A01' });
     expect(screen.getAllByRole('row').slice(1).map((row) => within(row).getByRole('rowheader').textContent)).toEqual(['A01', 'A02', 'A10']);
     expect(screen.getByText('Свободен')).toBeInTheDocument();
     expect(screen.getByText(/SW2 · Eth2 · CAB-1/)).toBeInTheDocument();
     expect(screen.getByText('PP1 · B01')).toBeInTheDocument();
     expect(screen.getByText('Eth1')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Подключить/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Подключить порт' })).toHaveAttribute('title', 'Подключить порт');
+    expect(screen.getAllByRole('button', { name: 'Разорвать физическое подключение' })).toHaveLength(2);
+    expect(screen.queryByText('Технические данные')).not.toBeInTheDocument();
   });
 
   it('states unresolved external attachment without presenting a remote endpoint', async () => {
@@ -46,15 +48,29 @@ describe('PhysicalObjectDetailsSection ports', () => {
     expect(await screen.findByRole('columnheader', { name: 'Порт' })).toBeInTheDocument();
   });
 
-  it('keeps free channel endpoints connectable and their per-port technical refs accessible', async () => {
+  it('keeps free channel endpoints connectable without per-port technical refs', async () => {
     const a = point('A01', 'a'); const b = point('B01', 'b');
     a.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'b'), label: 'B01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
     b.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'a'), label: 'A01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
     renderDetails(document([a, b]), { deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, writeDataSource: { createPhysicalEndpointConnection: vi.fn() } });
     await screen.findByRole('heading', { name: 'Каналы' });
-    expect(screen.getAllByRole('button', { name: 'Подключить' })).toHaveLength(2);
-    await userEvent.click(screen.getAllByText('Технические данные')[0]);
-    expect(screen.getAllByText('ConnectionPoint')).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Подключить порт' })).toHaveLength(2);
+    expect(screen.queryByText('Технические данные')).not.toBeInTheDocument();
+  });
+
+  it('confirms one disconnect write and retries only authoritative details refresh', async () => {
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true));
+    const occupied = document([point('A01', 'a', { external_connection_count: 1, incident_connection_count: 1, external_physical_attachments: [{ kind: 'SIMPLE_CABLE', connection_ref: ref('Connection', 'external'), evidence_refs: [], cable_label: 'CAB-1' }] })]);
+    const refreshed = document([point('A01', 'a')]);
+    const load = vi.fn().mockResolvedValueOnce(occupied).mockRejectedValueOnce(new Error('refresh failed')).mockResolvedValueOnce(refreshed);
+    const deleteExternalPhysicalConnection = vi.fn().mockResolvedValue(undefined);
+    renderDetails(occupied, { dataSource: { loadPhysicalObjectDetails: load }, writeDataSource: { createPhysicalEndpointConnection: vi.fn(), deleteExternalPhysicalConnection } });
+    await userEvent.click(await screen.findByRole('button', { name: 'Разорвать физическое подключение' }));
+    expect(deleteExternalPhysicalConnection).toHaveBeenCalledWith('external');
+    expect(await screen.findByText(/refresh failed/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+    expect(await screen.findByRole('rowheader', { name: 'A01' })).toBeInTheDocument();
+    expect(deleteExternalPhysicalConnection).toHaveBeenCalledTimes(1);
   });
 
   it('uses ordinary ports for paired network ports or bound interfaces and hides mixed-cardinality summary', async () => {
@@ -136,9 +152,9 @@ describe('PhysicalObjectDetailsSection ports', () => {
 
   it('keeps technical identities collapsed until requested', async () => {
     renderDetails(document());
-    const technical = await screen.findByText('Технические данные');
+    const technical = await screen.findByText('Технические данные объекта');
     await userEvent.click(technical);
-    expect(screen.getByText('ConnectionPoint')).toBeInTheDocument();
+    expect(screen.getByText('PhysicalObject')).toBeInTheDocument();
   });
 
   it('retries local load errors, rejects stale responses, and does not load ambiguous refs', async () => {
