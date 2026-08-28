@@ -119,3 +119,59 @@ continuity, or Saved Map persistence. Physical Saved Map also provides a
 case-insensitive, map-local substring search over placed PhysicalObject display
 names. A result selects the existing object selection; selection/search do not
 move the viewport.
+
+## UX follow-up decisions после UX.2c
+
+Следующие пункты зафиксированы как bounded future presentation work, а не как
+уже реализованные части L1. Они сохраняют canonical topology как источник
+истины; Saved Map placement/view остаётся map-local presentation state.
+
+### UX.3 — Presentation controls для объекта (future)
+
+- **Размер через Inspector.** Для выбранного Blueprint-backed объекта Inspector
+  в будущем принимает числовой размер на текущей Saved Map. Это существующий
+  `MapViewPosition.display_width`, не новый size contract: aspect ratio и
+  derived height сохраняются. Применяются те же min/max, collision и
+  persistence rules, что и при resize на canvas. Copy/apply size и
+  apply-to-same-Blueprint остаются частью этого же направления.
+- **Поворот.** Future bounded capability: placement/view можно повернуть только
+  на 0/90/180/270 градусов; основной UX-кандидат — context menu объекта.
+  Rotation принадлежит конкретному Saved Map placement/view и является
+  presentation-only: она не меняет Blueprint, identity `PhysicalObject` или
+  canonical topology. Поворачиваются body, rendered ports, internal
+  continuity, external cable attachment geometry и фактический collision
+  footprint. `display_width` сохраняет семантику intrinsic/unrotated body
+  width; при 90/270 меняется ориентация экранного footprint. Nameplate не
+  вращается, остаётся горизонтальным сверху относительно экрана и получает
+  ширину по экранной ширине повёрнутого объекта.
+
+### UX.4 — Multi-selection (future bounded interaction)
+
+Обычный click сохраняет текущий single-selection behavior. `Shift+click`
+добавляет или убирает `PhysicalObject` из текущего selection. Rectangle/lasso
+selection пока не входит в scope. Selection — UI/presentation state, не
+topology; это foundation для безопасных batch presentation actions, включая
+size, rotation и group movement. Точная модель Inspector для multi-selection
+остаётся OPEN.
+
+### UX.5 — «Кабельный жгут» / Cable Bundle (future idea)
+
+Map-local Cable Bundle — presentation-only visual grouping нескольких
+независимых canonical Cable, не физическая сущность и не topology object.
+Кабели сходятся визуальной «расчёской» в общий trunk и расходятся обратно;
+редактирование общего trunk не требует ручного редактирования route каждого
+кабеля, но выбор конкретного Cable всё равно выделяет именно его путь через
+bundle. Bundle не создаёт connectivity между кабелями; canonical cables,
+endpoints, identity и trace остаются независимыми. RU product term —
+«Кабельный жгут», EN — `Cable Bundle`. Cable tray/duct, размеры, физическая
+ёмкость и NetBox-like properties не моделируются. Exact persistence/API shape
+остаётся OPEN.
+
+### UX.6 — Global map presentation settings (future settings milestone)
+
+Будущая Settings surface может задавать общие чисто визуальные map
+preferences, например единую typography для object nameplates, font family,
+font size и другие подобные настройки. Это не свойства `PhysicalObject` или
+Blueprint; точная persistence/user/workspace model сейчас не проектируется.
+До отдельного settings milestone единый nameplate font остаётся hard-coded
+product default.
