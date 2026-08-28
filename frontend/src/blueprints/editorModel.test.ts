@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { clampPlacement, composedSlotKey, createBlueprintRequest, faceLocalIndex, fallbackPlacement, hydrateBlueprintEditorState } from './editorModel';
+import { addBulkInternalLinks, clampPlacement, composedSlotKey, createBlueprintRequest, faceLocalIndex, fallbackPlacement, generateBlueprint, hydrateBlueprintEditorState, removeInternalLinksBetweenInstances, type BlueprintBlockInstance } from './editorModel';
 
 const blockRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' };
 const versionRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'v-1' };
 const port = (local_id: string) => ({ local_id, display_label: `Port ${local_id}`, kind: 'CONNECTION_POINT' as const, row: 1 as const, column: 1, layout_order: 1 });
+const instance = (instanceKey: string, localIds: string[]): BlueprintBlockInstance => ({ instanceKey, portBlockRef: `${instanceKey}-block`, portBlockVersionRef: `${instanceKey}-version`, portBlockName: instanceKey, versionNumber: 1, ports: localIds.map((local_id, index) => ({ ...port(local_id), layout_order: index + 1 })), resolvedSlotKeys: Object.fromEntries(localIds.map((local_id) => [local_id, `${instanceKey}-${local_id}`])) });
 
 describe('Object Blueprint composition editor model', () => {
   it.each([
@@ -50,5 +51,43 @@ describe('Object Blueprint composition editor model', () => {
   it('assigns historical fallback indexes independently on FRONT and REAR', () => {
     const instances = [{ face: 'FRONT' as const }, { face: 'REAR' as const }, { face: 'FRONT' as const }, { face: 'REAR' as const }];
     expect(instances.map((_, index) => faceLocalIndex(instances, index))).toEqual([0, 0, 1, 1]);
+  });
+
+  it('creates sequential bulk links in the exact Port Block layout order', () => {
+    const left = instance('left', ['one', 'two', 'three']);
+    const right = instance('right', ['one', 'two']);
+    left.ports = [left.ports[2], left.ports[0], left.ports[1]];
+    expect(addBulkInternalLinks([], left, right, 'SEQUENTIAL')).toEqual([
+      { from_slot_key: 'left-one', to_slot_key: 'right-one' },
+      { from_slot_key: 'left-two', to_slot_key: 'right-two' },
+    ]);
+  });
+
+  it('creates reverse bulk links in the exact Port Block layout order', () => {
+    const left = instance('left', ['one', 'two', 'three']);
+    const right = instance('right', ['one', 'two', 'three']);
+    expect(addBulkInternalLinks([], left, right, 'REVERSE')).toEqual([
+      { from_slot_key: 'left-one', to_slot_key: 'right-three' },
+      { from_slot_key: 'left-two', to_slot_key: 'right-two' },
+      { from_slot_key: 'left-three', to_slot_key: 'right-one' },
+    ]);
+  });
+
+  it('skips exact existing unordered pairs when bulk linking runs again', () => {
+    const left = instance('left', ['one', 'two']); const right = instance('right', ['one', 'two']);
+    const once = addBulkInternalLinks([{ from_slot_key: 'right-one', to_slot_key: 'left-one' }], left, right, 'SEQUENTIAL');
+    expect(once).toEqual([{ from_slot_key: 'right-one', to_slot_key: 'left-one' }, { from_slot_key: 'left-two', to_slot_key: 'right-two' }]);
+    expect(addBulkInternalLinks(once, left, right, 'SEQUENTIAL')).toEqual(once);
+  });
+
+  it('keeps one-to-many explicit links valid', () => {
+    const left = instance('left', ['one']); const middle = instance('middle', ['one']); const right = instance('right', ['one']);
+    expect(generateBlueprint({ name: 'One to many', defaultClass: '', width: 1, height: 1, fillColor: '#123456', instances: [left, middle, right], individualLinks: [{ from_slot_key: 'left-one', to_slot_key: 'middle-one' }, { from_slot_key: 'left-one', to_slot_key: 'right-one' }] }).errors).toEqual([]);
+  });
+
+  it('removes only links between the selected two instances', () => {
+    const left = instance('left', ['one', 'two']); const middle = instance('middle', ['one', 'two']); const right = instance('right', ['one']);
+    const links = [{ from_slot_key: 'left-one', to_slot_key: 'middle-one' }, { from_slot_key: 'middle-two', to_slot_key: 'left-two' }, { from_slot_key: 'left-one', to_slot_key: 'right-one' }, { from_slot_key: 'middle-one', to_slot_key: 'right-one' }];
+    expect(removeInternalLinksBetweenInstances(links, left, middle)).toEqual([{ from_slot_key: 'left-one', to_slot_key: 'right-one' }, { from_slot_key: 'middle-one', to_slot_key: 'right-one' }]);
   });
 });

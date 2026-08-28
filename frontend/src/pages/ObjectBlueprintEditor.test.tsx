@@ -10,6 +10,17 @@ const p2 = { local_id: 'p2', display_label: 'P2', kind: 'CONNECTION_POINT' as co
 const p3 = { local_id: 'p3', display_label: 'P3', kind: 'NETWORK_PORT' as const, row: 1 as const, column: 3, layout_order: 3 };
 
 describe('ObjectBlueprintEditor composition version changes', () => {
+  it('groups existing links between the same two instances into a collapsed summary', () => {
+    const left = { instanceKey: 'left', portBlockRef: 'pb-1', portBlockVersionRef: 'v1', portBlockName: 'Panel', versionNumber: 1, ports: [p1, p2], resolvedSlotKeys: { p1: 'left-p1', p2: 'left-p2' } };
+    const right = { instanceKey: 'right', portBlockRef: 'pb-1', portBlockVersionRef: 'v1', portBlockName: 'Panel', versionNumber: 1, ports: [p1, p2], resolvedSlotKeys: { p1: 'right-p1', p2: 'right-p2' } };
+    const source = { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_blocks: [] }), loadPortBlockVersions: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, versions: [] }), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
+    render(<ObjectBlueprintEditor portBlockDataSource={source} title="Editor" description="Description" saveLabel="Save" onSave={vi.fn()} initialState={{ name: 'Blueprint', defaultClass: '', width: 120, height: 60, fillColor: '#28565a', instances: [left, right], individualLinks: [{ from_slot_key: 'left-p1', to_slot_key: 'right-p1' }, { from_slot_key: 'left-p2', to_slot_key: 'right-p2' }] }} />);
+    const group = document.querySelector('.blueprint-composer__link-group') as HTMLDetailsElement;
+    expect(group).not.toBeNull();
+    expect(group.open).toBe(false);
+    expect(group).toHaveTextContent('связей 2');
+  });
+
   it('keeps the instance identity and shared local-id slot while cleaning links to removed ports', async () => {
     const key = 'stable-instance'; const p1Key = await composedSlotKey(key, 'p1'); const p2Key = await composedSlotKey(key, 'p2');
     const source = { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_blocks: [] }), loadPortBlockVersions: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, versions: [{ port_block_ref: ref('PortBlock', 'pb-1'), version_ref: ref('PortBlockVersion', 'v1'), version_number: 1, port_count: 2 }, { port_block_ref: ref('PortBlock', 'pb-1'), version_ref: ref('PortBlockVersion', 'v2'), version_number: 2, port_count: 2 }] }), loadPortBlockVersion: vi.fn().mockImplementation(async (_blockId: string, versionId: string) => ({ schema_version: '1.0' as const, port_block_ref: ref('PortBlock', 'pb-1'), version_ref: ref('PortBlockVersion', versionId), name: 'Panel', version_number: versionId === 'v1' ? 1 : 2, ports: versionId === 'v1' ? [p1, p2] : [p1, p3] })), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
