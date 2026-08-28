@@ -49,6 +49,15 @@ provenance constructs, а immutable Blueprint history не изменяется.
    RU/EN localization активных поверхностей согласно
    [[plans/stabilization/10-02-stabilization-backlog|LOC-001]].
 
+### UX.1 — Cable routing reliability
+
+**IMPLEMENTED.** Route `PUT` acknowledgement and authoritative SavedMap read
+are separate lifecycle stages. A failed route write may retry only the route;
+after acknowledgement, a malformed/read/refresh failure retries only the
+authoritative read/refresh and never repeats canonical cable creation or route
+write. Primary cable-routing UI reports the stage in user-facing RU/EN text;
+raw transport/parser diagnostics remain non-primary technical detail.
+
 ## Порядок и exit
 
 Последовательность фиксирована:

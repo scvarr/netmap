@@ -41,11 +41,12 @@ interface QuickInspectorProps {
     message?: string;
   } | null;
   onRetryMapRefresh?: () => Promise<void>;
-  cableRoutePresentation?: { present: boolean; waypointCount: number; editing: boolean; selectedWaypointIndex: number | null; savePending: boolean; error: string | null; resetPending: boolean; resetRefreshFailed: boolean };
+  cableRoutePresentation?: { present: boolean; waypointCount: number; editing: boolean; selectedWaypointIndex: number | null; savePending: boolean; refreshFailed: boolean; error: string | null; resetPending: boolean; resetRefreshFailed: boolean };
   onEditCableRoute?: () => void;
   onCancelCableRouteEdit?: () => void;
   onDeleteCableRouteWaypoint?: () => void;
   onSaveCableRoute?: () => void;
+  onRetryCableRouteRefresh?: () => void;
   onResetCableRoute?: () => void;
   onRetryCableRouteReset?: () => void;
 }
@@ -406,7 +407,7 @@ export function QuickInspector(props: QuickInspectorProps) {
             </> : <>
               <p>{t("inspector.routeEditHelp")}</p>
               <button disabled={props.cableRoutePresentation.selectedWaypointIndex === null} onClick={props.onDeleteCableRouteWaypoint}>{t("inspector.deleteSelectedPoint")}</button>
-              <button disabled={props.cableRoutePresentation.savePending} onClick={props.onSaveCableRoute}>{t("inspector.saveRoute")}</button>
+              {props.cableRoutePresentation.refreshFailed ? <button onClick={props.onRetryCableRouteRefresh}>{t("map.retryRefresh")}</button> : <button disabled={props.cableRoutePresentation.savePending} onClick={props.onSaveCableRoute}>{t("inspector.saveRoute")}</button>}
               <button disabled={props.cableRoutePresentation.savePending} onClick={props.onCancelCableRouteEdit}>{t("action.cancel")}</button>
               {props.cableRoutePresentation.error && <p role="alert">{props.cableRoutePresentation.error}</p>}
             </>}

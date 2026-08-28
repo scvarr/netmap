@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MapPage } from './MapPage';
+import { ApiSavedMapDataSource } from '../topology/apiSavedMapDataSource';
 
 vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (p: any) => <div data-testid="canvas"><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'a', connectionPointId: 'a-cp', label: 'A01' })}>blueprint port</button><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'b', connectionPointId: 'b-cp', label: 'B01' })}>generic port</button><button onClick={() => p.onPaneClick?.({ x: 10, y: 20 })}>pane 1</button><button onClick={() => p.onPaneClick?.({ x: 30, y: 40 })}>pane 2</button><button onClick={() => p.wiringRoute?.onWaypointMove(0, { x: 99, y: 88 })}>drag waypoint</button><span data-states={JSON.stringify(p.physicalPortStates)} data-waypoints={JSON.stringify(p.wiringRoute?.waypoints)} /></div> }));
 const map = { map_ref: { entity_type: 'SavedMap', entity_id: 'map-1' }, name: 'M1', placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'a' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0 } } }, { physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'b' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 1, y: 1 } } }] } as any;
@@ -9,6 +10,8 @@ const node = (id: string, label: string, cp: string, count = 0) => ({ id, kind: 
 const doc = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [node('a', 'Source', 'a-cp'), node('b', 'Target', 'b-cp')], edges: [], gaps: [], warnings: [] } as any;
 const creation = { cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'cable-1' }, source: {}, target: {}, connection_refs: [] } as any;
 const renderPage = (write = vi.fn().mockResolvedValue(creation), loadProjection = vi.fn().mockResolvedValue(doc), setCableRoute = vi.fn().mockResolvedValue(map)) => { const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn(), setCableRoute }; render(<MemoryRouter initialEntries={['/map?map=map-1&view=physical']}><MapPage dataSource={{ loadProjection }} savedMapDataSource={maps} physicalEndpointConnectionWriteDataSource={{ createPhysicalEndpointConnection: write }} /></MemoryRouter>); return { write, loadProjection, maps, setCableRoute }; };
+const apiResponse = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
+afterEach(() => vi.unstubAllGlobals());
 
 describe('MapPage visual wiring', () => {
   it('keeps primary map controls usable while the transient trace dock opens and closes without saved-map writes', async () => {
@@ -67,5 +70,31 @@ describe('MapPage visual wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'pane 1' })); fireEvent.click(screen.getByRole('button', { name: 'drag waypoint' }));
     expect(write).not.toHaveBeenCalled(); expect(setCableRoute).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     expect(await screen.findByText('Кабель создан, но трассу не удалось сохранить.')).toBeInTheDocument(); expect(setCableRoute).toHaveBeenLastCalledWith('map-1', 'cable-1', [{ x: 99, y: 88 }]); fireEvent.click(screen.getByRole('button', { name: 'Повторить сохранение трассы' })); await waitFor(() => expect(setCableRoute).toHaveBeenCalledTimes(2)); expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses ApiSavedMapDataSource acknowledgement and retries only the authoritative read after a malformed post-write response', async () => {
+    const mapId = '00000000-0000-4000-8000-000000000001';
+    const cableId = '00000000-0000-4000-8000-000000000003';
+    const savedMap: any = { map_ref: { entity_type: 'SavedMap', entity_id: mapId }, name: 'M1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: '00000000-0000-4000-8000-000000000011' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0, locked: false } } }], cable_routes: [] };
+    let acknowledged = false; let postWriteReads = 0;
+    const refreshedMap = { ...savedMap, cable_routes: [{ cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: cableId }, view: 'L1/PHYSICAL_OBJECT', waypoints: [] }] };
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url === '/api/v1/maps') return Promise.resolve(apiResponse({ maps: [savedMap] }));
+      if ((init?.method ?? 'GET') === 'PUT') { acknowledged = true; return Promise.resolve(apiResponse({ acknowledged: true })); }
+      if (acknowledged && postWriteReads++ === 0) return Promise.resolve(apiResponse({ malformed: true }));
+      return Promise.resolve(apiResponse(acknowledged ? refreshedMap : savedMap));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const write = vi.fn().mockResolvedValue({ ...creation, cable_ref: { ...creation.cable_ref, entity_id: cableId } });
+    render(<MemoryRouter initialEntries={[`/map?map=${mapId}&view=physical`]}><MapPage dataSource={{ loadProjection: vi.fn().mockResolvedValue(doc) }} savedMapDataSource={new ApiSavedMapDataSource()} physicalEndpointConnectionWriteDataSource={{ createPhysicalEndpointConnection: write }} /></MemoryRouter>);
+    await screen.findByTestId('canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    expect(await screen.findByText('Кабель и трасса сохранены, но карту не удалось обновить.')).toBeInTheDocument();
+    expect(screen.queryByText(/Malformed SavedMap response/)).not.toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([url, init]) => String(url).includes('/cable-routes/') && (init as RequestInit).method === 'PUT')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
+    await waitFor(() => expect(postWriteReads).toBe(2));
+    expect(fetchMock.mock.calls.filter(([url, init]) => String(url).includes('/cable-routes/') && (init as RequestInit).method === 'PUT')).toHaveLength(1);
+    expect(write).toHaveBeenCalledTimes(1);
   });
 });
