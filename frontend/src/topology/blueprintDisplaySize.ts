@@ -4,9 +4,10 @@ import type { BlueprintPresentation } from './types';
 // independent of Blueprint body's absolute intrinsic/design coordinates.
 export const DEFAULT_BLUEPRINT_DISPLAY_WIDTH = 240;
 export const MAX_BLUEPRINT_DISPLAY_WIDTH = 960;
-export const MIN_BLUEPRINT_USABLE_FACE_HEIGHT = 18;
-export const MIN_BLUEPRINT_DISPLAY_WIDTH = 64;
+export const MIN_BLUEPRINT_USABLE_FACE_HEIGHT = 12;
+export const MIN_BLUEPRINT_DISPLAY_WIDTH = 32;
 export const MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH = 240;
+export const MIN_BLUEPRINT_PORT_CENTER_SEPARATION = 14;
 export const MIN_BLUEPRINT_LABEL_FONT_SIZE = 8;
 export const MAX_BLUEPRINT_LABEL_FONT_SIZE = 32;
 
@@ -39,17 +40,32 @@ export const blueprintNodeDisplayDimensions = (
   };
 };
 
-export const minimumBlueprintDisplayWidth = (body: BlueprintPresentation['body']) => Math.min(
-  MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH,
-  Math.max(MIN_BLUEPRINT_DISPLAY_WIDTH, MIN_BLUEPRINT_USABLE_FACE_HEIGHT * body.width / body.height),
-);
+export const minimumBlueprintDisplayWidth = (presentation: BlueprintPresentation) => {
+  const { body } = presentation;
+  const aspectRatio = body.width / body.height;
+  const portSeparationWidth = visibleBlueprintFaces(presentation).flatMap((face) => {
+    const ports = presentation.slots.filter((slot) => (slot.face ?? 'FRONT') === face);
+    return ports.flatMap((port, index) => ports.slice(index + 1).map((other) => {
+      const x = port.rendered_position.x - other.rendered_position.x;
+      const y = (port.rendered_position.y - other.rendered_position.y) / aspectRatio;
+      const normalizedDistance = Math.hypot(x, y);
+      return normalizedDistance === 0
+        ? MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH
+        : MIN_BLUEPRINT_PORT_CENTER_SEPARATION / normalizedDistance;
+    }));
+  });
+  return Math.min(
+    MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH,
+    Math.max(MIN_BLUEPRINT_DISPLAY_WIDTH, MIN_BLUEPRINT_USABLE_FACE_HEIGHT * aspectRatio, ...portSeparationWidth),
+  );
+};
 
 export const clampBlueprintDisplayWidth = (
   width: number,
-  body?: BlueprintPresentation['body'],
+  presentation?: BlueprintPresentation,
 ) => Math.min(
   MAX_BLUEPRINT_DISPLAY_WIDTH,
-  Math.max(body ? minimumBlueprintDisplayWidth(body) : MIN_BLUEPRINT_DISPLAY_WIDTH, width),
+  Math.max(presentation ? minimumBlueprintDisplayWidth(presentation) : MIN_BLUEPRINT_DISPLAY_WIDTH, width),
 );
 
 export const blueprintObjectLabelFontSize = (

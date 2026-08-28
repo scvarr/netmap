@@ -31,7 +31,7 @@ export function DeviceNode({ data, selected, width, height }: NodeProps<DeviceFl
         .flatMap((link) => [link.from_connection_point_id, link.to_connection_point_id]),
     );
     return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: displayWidth, height: displayHeight, '--blueprint-label-font-size': `${labelFontSize}px` } as React.CSSProperties}>
-    <NodeResizer isVisible={Boolean(selected && data.blueprintResizeEnabled)} minWidth={minimumBlueprintDisplayWidth(blueprint.body)} maxWidth={960} minHeight={1} maxHeight={960} keepAspectRatio onResizeEnd={(_, dimensions) => { if (objectId) data.onBlueprintDisplayResize?.(objectId, dimensions.width); }} />
+    <NodeResizer isVisible={Boolean(selected && data.blueprintResizeEnabled)} minWidth={minimumBlueprintDisplayWidth(blueprint)} maxWidth={960} minHeight={1} maxHeight={960} keepAspectRatio onResizeEnd={(_, dimensions) => { if (objectId) data.onBlueprintDisplayResize?.(objectId, dimensions.width); }} />
     <Handle type="target" position={Position.Top} className="device-node__handle" />
     <strong className="blueprint-map-node__label" title={displayNodeLabel(projection)}>{displayNodeLabel(projection)}</strong>
     <div className="blueprint-map-node__panels">

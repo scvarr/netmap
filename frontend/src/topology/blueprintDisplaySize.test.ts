@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, MAX_BLUEPRINT_LABEL_FONT_SIZE, MIN_BLUEPRINT_LABEL_FONT_SIZE, blueprintDisplayDimensions, blueprintNodeDisplayDimensions, blueprintObjectLabelFontSize, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth, visibleBlueprintFaces } from './blueprintDisplaySize';
 
+const presentation = (width: number, height: number, slots: Array<{ x: number; y: number }>) => ({
+  body: { kind: 'RECTANGLE' as const, width, height },
+  slots: slots.map(({ x, y }, index) => ({
+    slot_key: `slot-${index}`, display_name: `Slot ${index}`, kind: 'CONNECTION_POINT' as const,
+    rendered_position: { x, y }, external_attachment: { x, y, side: 'TOP' as const }, connection_point_id: `cp-${index}`,
+  })),
+}) as any;
+
 describe('Blueprint Saved Map display dimensions', () => {
   it('uses the deterministic width for historical positions and derives height from intrinsic aspect ratio', () => {
     expect(blueprintDisplayDimensions({ kind: 'RECTANGLE', width: 480, height: 60 }, undefined)).toEqual({ width: DEFAULT_BLUEPRINT_DISPLAY_WIDTH, height: 30 });
@@ -8,9 +16,21 @@ describe('Blueprint Saved Map display dimensions', () => {
   it('gives equivalent intrinsic ratios the same runtime dimensions at one display width', () => {
     expect(blueprintDisplayDimensions({ kind: 'RECTANGLE', width: 480, height: 60 }, 320)).toEqual(blueprintDisplayDimensions({ kind: 'RECTANGLE', width: 8, height: 1 }, 320));
   });
-  it('derives the resize minimum from a bounded usable face height', () => {
-    expect(minimumBlueprintDisplayWidth({ kind: 'RECTANGLE', width: 8, height: 1 })).toBe(144);
-    expect(clampBlueprintDisplayWidth(20, { kind: 'RECTANGLE', width: 8, height: 1 })).toBe(144);
+  it('allows a one-port square Blueprint to resize to a compact minimum', () => {
+    const pc = presentation(100, 100, [{ x: .5, y: .5 }]);
+    expect(minimumBlueprintDisplayWidth(pc)).toBe(32);
+    expect(clampBlueprintDisplayWidth(20, pc)).toBe(32);
+  });
+  it('keeps a dense multiport switch large enough for distinct ports', () => {
+    const switchBlueprint = presentation(240, 48, Array.from({ length: 16 }, (_, index) => ({ x: (index + .5) / 16, y: .5 })));
+    expect(minimumBlueprintDisplayWidth(switchBlueprint)).toBe(224);
+    expect(clampBlueprintDisplayWidth(20, switchBlueprint)).toBe(224);
+  });
+  it('preserves aspect ratio while retaining display_width as the sole size contract', () => {
+    const pc = presentation(100, 100, [{ x: .5, y: .5 }]);
+    const switchBlueprint = presentation(240, 48, Array.from({ length: 16 }, (_, index) => ({ x: (index + .5) / 16, y: .5 })));
+    expect(blueprintDisplayDimensions(switchBlueprint.body, clampBlueprintDisplayWidth(20, switchBlueprint))).toEqual({ width: 224, height: 44.8 });
+    expect(blueprintNodeDisplayDimensions(pc, 32)).toEqual({ width: 32, height: 32 });
     expect(clampBlueprintDisplayWidth(2000)).toBe(960);
   });
   it('derives visible faces from slots, treating historical missing face as FRONT', () => {
