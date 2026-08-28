@@ -40,6 +40,13 @@ Start here when exploring this area:
 | `clean` | Function | `frontend/src/portBlocks/editorModel.ts` | 9 |
 | `labelNumber` | Function | `frontend/src/portBlocks/editorModel.ts` | 14 |
 
+## Execution Flows
+
+| Flow | Type | Steps |
+|------|------|-------|
+| `Save → Clean` | intra_community | 4 |
+| `Save → RequiredPortCount` | intra_community | 4 |
+
 ## How to Explore
 
 1. `context({name: "save"})` — see callers and callees
