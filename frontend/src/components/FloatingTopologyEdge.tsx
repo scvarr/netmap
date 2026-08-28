@@ -273,7 +273,10 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates }: { nodeId: str
     {ports.map((port) => {
       const endpoint = getRenderedConnectionPoint(projection, rectangle(node), port.id);
       const state = physicalPortStates?.[port.id];
-      return endpoint && <circle key={port.id} className={`cable-route-port-marker${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`} cx={endpoint.x} cy={endpoint.y} r={port.network ? 4 : 3.5} />;
+      const className = `cable-route-port-marker${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
+      return endpoint && (port.network
+        ? <rect key={port.id} className={className} x={endpoint.x - 3.5} y={endpoint.y - 3.5} width={7} height={7} rx={1} pointerEvents="none" />
+        : <circle key={port.id} className={className} cx={endpoint.x} cy={endpoint.y} r={3.5} pointerEvents="none" />);
     })}
   </g>;
 }

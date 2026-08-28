@@ -111,9 +111,12 @@ describe('direct cable route edge interaction', () => {
       const { container } = render(<ForegroundCableRoutes edges={[edge] as any} physicalPortStates={{ 'source-port': 'source', 'target-port': 'destination' }} />);
       const markers = container.querySelectorAll('.cable-route-port-marker');
       expect(markers).toHaveLength(2);
-      expect(markers[0]).toHaveAttribute('cx', '25');
+      expect(markers[0]).toHaveAttribute('x', '21.5');
+      expect(markers[0].tagName).toBe('rect');
       expect(markers[0]).toHaveClass('cable-route-port-marker--network', 'cable-route-port-marker--wiring-source');
+      expect(markers[0]).toHaveAttribute('pointer-events', 'none');
       expect(markers[1]).toHaveAttribute('cx', '375');
+      expect(markers[1].tagName).toBe('circle');
       expect(markers[1]).toHaveClass('cable-route-port-marker--wiring-destination');
       expect(container.querySelector('.cable-route-port-marker[cx="100"]')).toBeNull();
       expect(container.querySelector('.cable-route-port-marker[cx="300"]')).toBeNull();
