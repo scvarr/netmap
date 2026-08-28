@@ -388,7 +388,11 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     };
     const portBlockDataSource = { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_blocks: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' }, name: 'Cable ports', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'pb-v1' }, version_number: 1, port_count: 2, version_count: 1 }] }), loadPortBlockVersions: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, versions: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'pb-v1' }, version_number: 1, port_count: 2 }] }), loadPortBlockVersion: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' }, name: 'Cable ports', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'pb-v1' }, version_number: 1, ports: [{ local_id: 'p1', display_label: 'A1', kind: 'CONNECTION_POINT' as const, row: 1 as const, column: 1, layout_order: 1 }, { local_id: 'p2', display_label: 'A2', kind: 'CONNECTION_POINT' as const, row: 1 as const, column: 2, layout_order: 2 }] }), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
     renderApp('/library/object-blueprints', { objectBlueprintDataSource, portBlockDataSource });
-    expect(await screen.findByRole('heading', { name: 'Generic cable' })).toBeInTheDocument();
+    expect(await screen.findByRole('rowheader', { name: 'Generic cable' })).toBeInTheDocument();
+    expect(screen.getByRole('table')).toHaveTextContent('Тип объекта');
+    expect(screen.getByRole('table')).toHaveTextContent('120 × 6');
+    expect(screen.getByRole('table')).toHaveTextContent('Точки подключения: 2');
+    expect(screen.queryByLabelText('Предпросмотр шаблона «Generic cable»')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Шаблоны объектов' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Создать объект' })).toHaveAttribute('href', '/infrastructure/objects/new?blueprint=bp-1&version=v-1');
     await userEvent.click(screen.getByRole('link', { name: 'Создать шаблон' }));
@@ -414,7 +418,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     expect(await screen.findByText('library unavailable')).toBeInTheDocument();
   });
 
-  it('keeps the blueprint library usable when one preview version cannot be read', async () => {
+  it('keeps the blueprint library usable when one version cannot be read', async () => {
     const source = {
       loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprints: [{
         blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'broken-bp' },
@@ -425,7 +429,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
       createObjectBlueprint: vi.fn(), deleteObjectBlueprint: vi.fn(),
     };
     renderApp('/library/object-blueprints', { objectBlueprintDataSource: source });
-    expect(await screen.findByRole('heading', { name: 'Несовместимый шаблон' })).toBeInTheDocument();
+    expect(await screen.findByRole('rowheader', { name: 'Несовместимый шаблон' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Удалить' })).toBeInTheDocument();
     expect(screen.queryByText(/Не удалось загрузить схему/)).not.toBeInTheDocument();
   });
