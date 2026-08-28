@@ -36,7 +36,7 @@ describe('DeviceNode internal L1 overlay', () => {
     expect(screen.queryByText('Передняя')).not.toBeInTheDocument();
     expect(screen.queryByText('Задняя')).not.toBeInTheDocument();
     expect(body).toHaveStyle({ height: '320px' });
-    expect(within(body).getByTitle('PP1')).toHaveClass('blueprint-map-node__label');
+    expect(within(body).getByTitle('PP1')).toHaveClass('blueprint-map-node__nameplate');
     expect(front.nextElementSibling).toBe(rear);
     expect(within(front).getByTitle('Front 01 · CONNECTION_POINT')).toBeInTheDocument();
     expect(within(front).queryByTitle('Rear 01 · CONNECTION_POINT')).not.toBeInTheDocument();

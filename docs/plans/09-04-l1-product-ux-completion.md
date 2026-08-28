@@ -106,3 +106,14 @@ and cross-face canonical links use one exact, scalable coordinate system.
 Continuity remains behind port markers and keeps normal, selected, trace, and
 wiring-highlighted presentation states without introducing routing or
 persistence.
+
+### UX.2c — Object identification & map search
+
+**IMPLEMENTED.** Blueprint-backed objects render their display name in a
+single-line, ellipsized nameplate above the intrinsic body; its full value is
+available through the native title tooltip. The nameplate is presentation-only:
+it does not change body dimensions, footprint, port/cable attachment, internal
+continuity, or Saved Map persistence. Physical Saved Map also provides a
+case-insensitive, map-local substring search over placed PhysicalObject display
+names. A result selects the existing object selection; selection/search do not
+move the viewport.

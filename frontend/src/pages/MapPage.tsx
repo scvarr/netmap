@@ -53,6 +53,7 @@ import type {
 } from "../topology/types";
 import type { PhysicalEndpointConnectionCreationDocument, PhysicalEndpointConnectionWriteDataSource } from "../topology/physicalEndpointConnectionWriteTypes";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
+import { displayNodeLabel } from "../topology/presentation";
 import { useI18n } from "../i18n";
 
 export { mapCandidateChoices } from "../components/MapInsertionPicker";
@@ -159,6 +160,7 @@ export function MapPage({
   const [selectedTraceBranchId, setSelectedTraceBranchId] = useState<string | null>(null);
   const [traceViewNotice, setTraceViewNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
+  const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -207,6 +209,15 @@ export function MapPage({
     [];
   const placementMembershipKey = ids.join(",");
   const hasLoadedMap = legacy || Boolean(activeMap);
+  const objectSearchResults = useMemo(() => {
+    const query = objectSearch.trim().toLocaleLowerCase();
+    if (viewMode !== "physical" || !query) return [];
+    return document?.nodes
+      .filter((node) => node.source_refs.some((ref) => ref.ref_type === "CANONICAL_FACT" && ref.entity_type === "PhysicalObject"))
+      .map((node) => ({ node, label: displayNodeLabel(node) }))
+      .filter((item) => item.label.toLocaleLowerCase().includes(query))
+      .sort((left, right) => natural(left.label, right.label)) ?? [];
+  }, [document, objectSearch, viewMode]);
 
   const selectedCableId = selection?.type === "node" && selection.item.attributes.class === "cable"
     ? physicalObjectIdForNode(selection.item)
@@ -229,6 +240,7 @@ export function MapPage({
       insertionSequence.current += 1;
       selectedMapId.current = id;
       setSelection(null);
+      setObjectSearch("");
       setSceneDocument(null);
       setInsertion(null);
       setContextAnchor(null);
@@ -253,6 +265,7 @@ export function MapPage({
     insertionSequence.current += 1;
     selectedMapId.current = null;
     setSelection(null);
+    setObjectSearch("");
     setMap(null);
     setSceneDocument(null);
     setInsertion(null);
@@ -1215,6 +1228,27 @@ export function MapPage({
           {t("map.physical")}
         </button>
       </div>
+
+      {!legacy && activeMap && viewMode === "physical" && (
+        <section className="map-object-search" aria-label={t("map.objectSearch")}>
+          <label>
+            {t("map.objectSearch")}
+            <input
+              type="search"
+              value={objectSearch}
+              onChange={(event) => setObjectSearch(event.target.value)}
+              placeholder={t("map.objectSearchPlaceholder")}
+            />
+          </label>
+          {objectSearch.trim() && (
+            <div className="map-object-search__results" role="listbox" aria-label={t("map.objectSearchResults")}>
+              {objectSearchResults.length === 0 ? <p>{t("map.objectSearchEmpty")}</p> : objectSearchResults.map(({ node, label }) => (
+                <button key={node.id} type="button" role="option" aria-selected={selection?.type === "node" && selection.item.id === node.id} title={label} onClick={() => setSelection({ type: "node", item: node })}>{label}</button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       {creating && (
         <section
