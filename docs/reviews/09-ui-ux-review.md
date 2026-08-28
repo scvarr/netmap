@@ -43,8 +43,10 @@ Product/presentation invariants — в [[architecture/presentation/05-presentati
 - Catalog разделяет equipment и cables, показывает доказанные cable endpoints,
   поиск/фильтрацию, переименование и явные Saved Map memberships.
 - Object Detail показывает map membership и позволяет добавить equipment на карту.
-- Ports представлены компактной рабочей таблицей с natural ordering, состоянием и
-  доказанным соседним endpoint; технические детали остаются вторичными.
+- Ports представлены рабочей таблицей с состоянием и доказанным соседним
+  endpoint; natural ordering, компактная primary presentation и окончательное
+  исключение технических данных из списка остаются scope активного
+  [[plans/09-04-l1-product-ux-completion|09.4 UX completion]].
 - Paired passive device показывается через channels, а не через две несвязанные
   карточки портов.
 - Ordinary per-instance structural editing Blueprint instance запрещено; обычное
@@ -59,8 +61,9 @@ Product/presentation invariants — в [[architecture/presentation/05-presentati
   interface не является альтернативным cable endpoint.
 - Рабочий Quick Inspector показывает доказанные cable endpoints и понятные
   действия.
-- Разрыв физической связи — отдельное destructive действие с явным смыслом; оно
-  не смешивается с удалением объекта с карты.
+- Разрыв физической связи определён как отдельное destructive действие и не
+  смешивается с удалением объекта с карты; полностью доступный в primary UX
+  disconnect workflow с подтверждением остаётся scope активного 09.4.
 
 ### Saved Map и L1 trace
 

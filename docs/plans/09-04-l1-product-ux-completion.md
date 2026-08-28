@@ -2,8 +2,8 @@
 
 ## Статус и граница
 
-**ACTIVE** — короткий product/UX execution pass после завершённой L1 spatial
-foundation и до L1S.7. Его цель — сделать существующий L1 workflow надёжным и
+**ACTIVE** — короткий product/UX execution pass после завершения текущих
+L1S.1–L1S.6 и до L1S.7. Его цель — сделать существующий L1 workflow надёжным и
 понятным перед добавлением spatial hierarchy. Это не implementation
 specification: он не фиксирует schema, API, DTO, persistence model или точный
 visual design.
