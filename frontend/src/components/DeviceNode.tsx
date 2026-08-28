@@ -5,7 +5,7 @@ import { displayNodeLabel, physicalClassPresentation } from '../topology/present
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import { internalL1Segments } from '../topology/internalL1Presentation';
 import { InternalL1Continuity } from './InternalL1Continuity';
-import { blueprintDisplayDimensions, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
+import { blueprintDisplayDimensions, blueprintNodeDisplayDimensions, blueprintObjectLabelFontSize, minimumBlueprintDisplayWidth, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
@@ -23,6 +23,7 @@ export function DeviceNode({ data, selected, width, height }: NodeProps<DeviceFl
     const displayWidth = width ?? blueprintNodeDisplayDimensions(blueprint, undefined).width;
     const displayHeight = height ?? blueprintNodeDisplayDimensions(blueprint, displayWidth).height;
     const faceDimensions = blueprintDisplayDimensions(blueprint.body, displayWidth);
+    const nameplateFontSize = blueprintObjectLabelFontSize(blueprint.body, displayWidth);
     const faces = visibleBlueprintFaces(blueprint);
     const traceHighlightedConnectionPointIds = new Set(
       (projection.attributes.internal_l1_links ?? [])
@@ -32,7 +33,7 @@ export function DeviceNode({ data, selected, width, height }: NodeProps<DeviceFl
     return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: displayWidth, height: displayHeight }}>
     <NodeResizer isVisible={Boolean(selected && data.blueprintResizeEnabled)} minWidth={minimumBlueprintDisplayWidth(blueprint)} maxWidth={960} minHeight={1} maxHeight={960} keepAspectRatio onResizeEnd={(_, dimensions) => { if (objectId) data.onBlueprintDisplayResize?.(objectId, dimensions.width); }} />
     <Handle type="target" position={Position.Top} className="device-node__handle" />
-    <strong className="blueprint-map-node__nameplate" title={displayNodeLabel(projection)}>{displayNodeLabel(projection)}</strong>
+    <strong className="blueprint-map-node__nameplate" style={{ '--blueprint-nameplate-font-size': `${nameplateFontSize}px` } as React.CSSProperties} title={displayNodeLabel(projection)}>{displayNodeLabel(projection)}</strong>
     <div className="blueprint-map-node__panels">
       {faces.map((face) => {
         return <section key={face} className="blueprint-map-node__face" data-testid={`blueprint-face-${face}`}>
