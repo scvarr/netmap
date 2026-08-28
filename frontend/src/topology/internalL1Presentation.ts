@@ -1,3 +1,4 @@
+import { visibleBlueprintFaces } from './blueprintDisplaySize';
 import type {
   BlueprintPresentation,
   PhysicalInternalL1Link,
@@ -17,12 +18,16 @@ export interface InternalL1Segment {
 
 const renderedPoint = (
   blueprint: BlueprintPresentation,
-  position: BlueprintPresentation['slots'][number]['rendered_position'],
+  slot: BlueprintPresentation['slots'][number],
   displayWidth?: number,
 ): { x: number; y: number } => {
   const width = displayWidth ?? blueprint.body.width;
   const height = width * blueprint.body.height / blueprint.body.width;
-  return { x: width * position.x, y: height * position.y };
+  const stackedFaces = visibleBlueprintFaces(blueprint).length === 2;
+  return {
+    x: width * slot.rendered_position.x,
+    y: height * slot.rendered_position.y + (stackedFaces && slot.face === 'REAR' ? height : 0),
+  };
 };
 
 const compareLinks = (left: PhysicalInternalL1Link, right: PhysicalInternalL1Link): number => (
@@ -35,7 +40,6 @@ export const internalL1Segments = (
   selected: boolean,
   highlightedConnectionMemberIds: ReadonlySet<string> = new Set(),
   wiringHighlightedConnectionMemberIds: ReadonlySet<string> = new Set(),
-  face?: 'FRONT' | 'REAR',
   displayWidth?: number,
 ): InternalL1Segment[] => {
   const blueprint = node.attributes.blueprint_presentation;
@@ -49,13 +53,13 @@ export const internalL1Segments = (
     .flatMap((link) => {
       const fromSlot = slotsByConnectionPoint.get(link.from_connection_point_id);
       const toSlot = slotsByConnectionPoint.get(link.to_connection_point_id);
-      if (!fromSlot || !toSlot || (face && ((fromSlot.face ?? 'FRONT') !== face || (toSlot.face ?? 'FRONT') !== face))) return [];
+      if (!fromSlot || !toSlot) return [];
       return [{
         connectionMemberId: link.connection_member_id,
         fromConnectionPointId: link.from_connection_point_id,
         toConnectionPointId: link.to_connection_point_id,
-        from: renderedPoint(blueprint, fromSlot.rendered_position, displayWidth),
-        to: renderedPoint(blueprint, toSlot.rendered_position, displayWidth),
+        from: renderedPoint(blueprint, fromSlot, displayWidth),
+        to: renderedPoint(blueprint, toSlot, displayWidth),
         state: highlightedConnectionMemberIds.has(link.connection_member_id)
           ? 'trace-highlighted'
           : wiringHighlightedConnectionMemberIds.has(link.connection_member_id)

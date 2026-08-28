@@ -229,9 +229,13 @@ L1S.6c is intentionally subdivided as follows:
    scalable object label. One `display_width` controls every face and the
    complete footprint with no header, label, or inter-face gap geometry.
    The Blueprint editor may retain its FRONT/REAR tabs because they are an
-   authoring convenience only. Same-face internal continuity is rendered inside
-   its panel; cross-face continuity remains canonical but its geometry is
-   suppressed rather than misleadingly drawn through both panels.
+   authoring convenience only. Internal continuity is rendered in one
+   object-level presentation coordinate system behind the ports: a FRONT slot
+   uses its `rendered_position`, and a REAR slot is offset by the rendered
+   FRONT-face height when both faces are stacked. Every canonical internal L1
+   link whose two endpoints are visible is a direct segment between those exact
+   positions, including cross-face links. This is presentation-only geometry:
+   it adds no routing, bends, or persistence.
 8. **L1S.6c.6 — rendered-port vs external-cable-attachment geometry — IMPLEMENTED**.
 
 L1S.6c.3 destructively removed the active legacy `EndpointGroup`,

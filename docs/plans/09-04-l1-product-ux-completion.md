@@ -96,3 +96,13 @@ layouts automatically receive their larger existing minimum. The selected
 width participates in collision preflight and is persisted atomically as the
 physical placement's explicit `display_width`; generic objects and historical
 placements without that field retain their existing behavior.
+
+### UX.2b — Cross-face internal continuity visibility
+
+**IMPLEMENTED.** Physical Saved Map now renders every visible Blueprint
+internal L1 link in an object-level continuity layer. With stacked FRONT and
+REAR faces, REAR endpoints are offset by the FRONT-face height, so same-face
+and cross-face canonical links use one exact, scalable coordinate system.
+Continuity remains behind port markers and keeps normal, selected, trace, and
+wiring-highlighted presentation states without introducing routing or
+persistence.

@@ -44,8 +44,13 @@ describe('DeviceNode internal L1 overlay', () => {
     expect(within(rear).queryByTitle('Front 01 · CONNECTION_POINT')).not.toBeInTheDocument();
     expect(front.querySelector('.blueprint-map-node__face-surface')).toHaveStyle({ height: '160px' });
     expect(rear.querySelector('.blueprint-map-node__face-surface')).toHaveStyle({ height: '160px' });
-    // Cross-face continuity remains canonical/highlighted but has no misleading single-panel line.
-    expect(screen.queryByTestId('internal-l1-line-member-1')).not.toBeInTheDocument();
+    const line = screen.getByTestId('internal-l1-line-member-1');
+    expect(line).toHaveAttribute('x1', '0');
+    expect(line).toHaveAttribute('y1', '40');
+    expect(line).toHaveAttribute('x2', '320');
+    expect(line).toHaveAttribute('y2', '280');
+    expect(line).toHaveClass('internal-l1-continuity__line--trace-highlighted');
+    expect(body.querySelector('.blueprint-map-node__panels')!.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByTitle('Front 01 · CONNECTION_POINT')).toHaveClass('blueprint-map-node__port--trace-highlighted');
     expect(screen.getByTitle('Rear 01 · CONNECTION_POINT')).toHaveClass('blueprint-map-node__port--trace-highlighted');
   });
@@ -67,5 +72,14 @@ describe('DeviceNode internal L1 overlay', () => {
     render(<DeviceNode {...({ data: { projection, blueprintResizeEnabled: true, onBlueprintDisplayResize }, selected: true, width: 320 } as any)} />);
     screen.getByRole('button', { name: 'resize' }).click();
     expect(onBlueprintDisplayResize).toHaveBeenCalledWith('object-1', 360);
+  });
+
+  it('keeps a wiring-highlighted cross-face line in the object layer while ports remain above it', () => {
+    render(<DeviceNode {...({ data: { projection, wiringHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 160 } as any)} />);
+    const line = screen.getByTestId('internal-l1-line-member-1');
+    expect(line).toHaveAttribute('y1', '20');
+    expect(line).toHaveAttribute('y2', '140');
+    expect(line).toHaveClass('internal-l1-continuity__line--wiring-highlighted');
+    expect(screen.getByTitle('Front 01 · CONNECTION_POINT')).toHaveClass('blueprint-map-node__port');
   });
 });

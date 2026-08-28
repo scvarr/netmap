@@ -36,15 +36,14 @@ export function DeviceNode({ data, selected, width, height }: NodeProps<DeviceFl
     <strong className="blueprint-map-node__label" title={displayNodeLabel(projection)}>{displayNodeLabel(projection)}</strong>
     <div className="blueprint-map-node__panels">
       {faces.map((face) => {
-        const internalSegments = internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, face, displayWidth);
         return <section key={face} className="blueprint-map-node__face" data-testid={`blueprint-face-${face}`}>
           <div className="blueprint-map-node__face-surface" style={{ height: faceDimensions.height, background: blueprint.body.fill_color ?? '#18383a' }}>
-            <InternalL1Continuity width={displayWidth} height={faceDimensions.height} segments={internalSegments} />
             {blueprint.slots.filter((slot) => (slot.face ?? 'FRONT') === face).map((slot) => { const style = { left: `${slot.rendered_position.x * 100}%`, top: `${slot.rendered_position.y * 100}%`, transform: 'translate(-50%, -50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
           </div>
         </section>;
       })}
     </div>
+    <InternalL1Continuity width={displayWidth} height={displayHeight} segments={internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, displayWidth)} />
     <Handle type="source" position={Position.Top} className="device-node__handle" />
   </div>;
   }
