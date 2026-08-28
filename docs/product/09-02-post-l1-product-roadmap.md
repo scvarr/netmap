@@ -143,10 +143,12 @@ roadmap.
 
 Нельзя смешивать в одном «speed кабеля» четыре разные области:
 
-1. Relatively stable configured/inventory facts установленного component/medium:
-   cable copper/fiber/DAC/other, category/profile, construction, length,
-   connector/media context; media/capability characteristics passive components,
-   patch panels, couplers и transceivers.
+1. Relatively stable configured facts reusable media/capability profiles и
+   установленного path component: medium/material, category/profile,
+   construction, nominal length, connector/media context и характеристики
+   passive components, patch panels, couplers и transceivers. Такие profiles и
+   component facts не превращают optional `Cable` над одним `Connection` в
+   `PhysicalObject` или physical inventory.
 2. Capability: что component или `NetworkInterface` поддерживает — link rates,
    PHY modes, transceiver capabilities, media/frequency/channel combinations,
    passive rating.
@@ -156,21 +158,22 @@ roadmap.
    link state, source, `observed_at` и freshness.
 
 Capability не доказывает configured или negotiated state, а operational
-observation не является immutable property кабеля/порта. Structured capability
-profiles должны быть reusable definitions/references для cable authoring,
-Blueprint/library content, validation, capability analysis и presentation. Они
-не являются закрытым enum: конкретный profile schema, storage и API остаются
-OPEN. Blueprint/library identity и identity конкретного `PhysicalObject` также
-остаются разными; visual cable authoring позже может предлагать reusable profile
-и optional length вместо raw metadata.
+observation не является immutable property Cable или порта. Structured
+capability profiles должны быть reusable definitions/references для выбора
+медиа-профиля при работе со связью, Blueprint/library content, validation,
+capability analysis и presentation. Они не являются закрытым enum: конкретный
+profile schema, storage и API остаются OPEN. Blueprint/library identity,
+identity конкретного `PhysicalObject` и identity Cable также остаются разными;
+будущий UI может ссылаться на reusable profile и показывать evidence, не вводя
+authoring или inventory lifecycle для Cable.
 
 ### Wired capability и capacity path
 
 Effective capability нельзя свести к `ConnectionPoint.speed`: физическая точка
 описывает место подключения, а `NetworkInterface` — сетевую реализацию через
 него. Будущий resolver может учитывать `NetworkInterface`, transceiver,
-`ConnectionPoint`, cable, passive path components, remote endpoint, medium/profile,
-length, PHY, lanes, configured mode и remote capability. Не фиксируются ни
+`ConnectionPoint`, Cable, passive path components, remote endpoint,
+medium/profile, PHY, lanes, configured mode и remote capability. Не фиксируются ни
 универсальное правило вроде `Cat6 = 10 Gbps`, ни standards engine.
 
 Поверх доказанного path NetMap может показывать известную capacity-цепочку и
