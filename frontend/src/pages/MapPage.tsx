@@ -172,8 +172,6 @@ export function MapPage({
   const [contextAnchor, setContextAnchor] = useState<ContextMenuState | null>(
     null,
   );
-  const [pendingPhysicalToolbarInsertion, setPendingPhysicalToolbarInsertion] =
-    useState<{ mapId: string } | null>(null);
   const [continuationAnchor, setContinuationAnchor] = useState<{
     continuationId: string;
     mapId: string;
@@ -246,7 +244,6 @@ export function MapPage({
       setSceneDocument(null);
       setInsertion(null);
       setContextAnchor(null);
-      setPendingPhysicalToolbarInsertion(null);
       setContinuationAnchor(null);
       setMapOperation(null);
       setCableRouteEdit(null);
@@ -272,7 +269,6 @@ export function MapPage({
     setSceneDocument(null);
     setInsertion(null);
     setContextAnchor(null);
-    setPendingPhysicalToolbarInsertion(null);
     setContinuationAnchor(null);
     setMapOperation(null);
     setCableRouteEdit(null);
@@ -544,31 +540,6 @@ export function MapPage({
   );
 
   useEffect(() => {
-    if (!pendingPhysicalToolbarInsertion) return;
-    if (pendingPhysicalToolbarInsertion.mapId !== mapId) {
-      setPendingPhysicalToolbarInsertion(null);
-      return;
-    }
-    if (
-      viewMode !== "physical" ||
-      !activeMap ||
-      !document ||
-      !viewportCenter.current
-    )
-      return;
-    setPendingPhysicalToolbarInsertion(null);
-    openInsertion(viewportCenter.current());
-  }, [
-    activeMap,
-    coordinateBridgeRevision,
-    document,
-    mapId,
-    openInsertion,
-    pendingPhysicalToolbarInsertion,
-    viewMode,
-  ]);
-
-  useEffect(() => {
     if (!mapId || !addIntent) return;
     const intentKey = `${mapId}/${addIntent}`;
     if (consumedAddIntent.current === intentKey) return;
@@ -591,20 +562,7 @@ export function MapPage({
     if (!ids.includes(addIntent)) openInsertion(viewportCenter.current(), addIntent);
   }, [activeMap, addIntent, coordinateBridgeRevision, document, ids, mapId, openInsertion, setParams, viewMode]);
 
-  const startToolbarInsertion = () => {
-    if (!mapId || !activeMap) return;
-    setPendingPhysicalToolbarInsertion({ mapId });
-    if (viewMode === "logical") {
-      setParams((current) => {
-        const next = new URLSearchParams(current);
-        next.set("view", "physical");
-        return next;
-      });
-    }
-  };
-
   const setViewMode = (nextView: TopologyViewMode) => {
-    if (nextView !== "physical") setPendingPhysicalToolbarInsertion(null);
     if (nextView !== "physical") setWiring({ status: "idle" });
     setParams((current) => {
       const next = new URLSearchParams(current);
@@ -1205,13 +1163,6 @@ export function MapPage({
             >
               {t("map.delete")}
             </button>
-            <button
-              type="button"
-              onClick={startToolbarInsertion}
-              disabled={!activeMap || !catalogInventoryDataSource}
-            >
-              + {t("map.add")}
-            </button>
             <button type="button" onClick={() => activeMap && setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id })} disabled={!activeMap || viewMode !== "physical" || !document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
           </>
         )}
@@ -1354,7 +1305,6 @@ export function MapPage({
       {!legacy && activeMap && ids.length === 0 && (
         <section>
           <h2>{t("map.empty.active", { name: activeMap.name })}</h2>
-          <button onClick={startToolbarInsertion}>{t("map.add")}</button>
         </section>
       )}
       {(legacy || activeMap) && (
