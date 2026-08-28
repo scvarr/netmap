@@ -145,6 +145,34 @@ GitNexus использовать для targeted discovery и impact analysis, 
 - сначала проанализировать уже сделанный diff/status;
 - дать короткий prompt на завершение текущего WIP.
 
+После review pushed milestone branch и решения ChatGPT `ACCEPTED`:
+
+1. сразу дать пользователю cmd.exe команды для merge этой ветки в `main` и
+   push `main`;
+2. использовать fast-forward merge через `git merge --ff-only`, если история
+   это позволяет;
+3. не завершать review только формулировкой «можно сливать»;
+4. после успешного push `main` предложить удалить локальную и remote
+   milestone-ветку;
+5. не начинать следующий milestone до merge предыдущего accepted milestone в
+   `main`.
+
+Типовой closure sequence в cmd.exe:
+
+```cmd
+git checkout main
+git pull --ff-only origin main
+git merge --ff-only <milestone-branch>
+git push origin main
+```
+
+После успешного push `main` можно предложить cleanup:
+
+```cmd
+git branch -d <milestone-branch>
+git push origin --delete <milestone-branch>
+```
+
 ## Уровень детализации
 
 Предпочитать:
