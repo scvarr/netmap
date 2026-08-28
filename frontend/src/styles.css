@@ -376,6 +376,7 @@ a { color: inherit; }
 .primary-action, .secondary-action { display: inline-flex; align-items: center; justify-content: center; padding: 11px 16px; border: 1px solid #3a7968; border-radius: 8px; color: #e3f7f0; background: #15372f; text-decoration: none; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .secondary-action { border-color: #35575b; background: #102326; }
 .primary-action:hover, .primary-action:focus-visible, .secondary-action:hover, .secondary-action:focus-visible { border-color: #55e5b5; outline: none; }
+.port-block-library__content { position: relative; min-height: 280px; margin-top: 24px; }
 .catalog-tabs { display: flex; gap: 8px; margin-top: 28px; }
 .catalog-tabs button { padding: 9px 13px; border: 1px solid #284247; border-radius: 8px; color: #94abaa; background: #0d1d20; cursor: pointer; font: 700 11px ui-monospace, "Cascadia Code", monospace; }
 .catalog-tabs button[aria-selected="true"] { border-color: #55e5b5; color: #e3f7f0; background: #15372f; }

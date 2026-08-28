@@ -14,7 +14,12 @@ describe('PortBlockLibraryPage', () => {
         </Routes>
       </MemoryRouter>,
     );
-    await userEvent.click(await screen.findByRole('button', { name: 'Создать портовый блок' }));
+    const createButton = await screen.findByRole('button', { name: 'Создать портовый блок' });
+    expect(createButton).toBeVisible();
+    expect(createButton).toBeEnabled();
+    expect(screen.getByRole('status').parentElement).toHaveClass('port-block-library__content');
+
+    await userEvent.click(createButton);
     expect(await screen.findByRole('heading', { name: 'New port block' })).toBeInTheDocument();
   });
 });
