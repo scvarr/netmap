@@ -85,11 +85,11 @@ docker compose down
 ## Documentation
 
 - [`docs/NetMap.md`](docs/NetMap.md) — documentation index.
-- [`docs/05-presentation.md`](docs/05-presentation.md) — presentation
+- [`docs/architecture/presentation/05-presentation.md`](docs/architecture/presentation/05-presentation.md) — presentation
   contracts, Saved Map scope and explicit open work.
-- [`docs/08-ui-implementation.md`](docs/08-ui-implementation.md) — implemented
+- [`docs/architecture/presentation/08-ui-implementation.md`](docs/architecture/presentation/08-ui-implementation.md) — implemented
   frontend/API subset and its boundaries.
-- [`docs/09-ui-ux-review.md`](docs/09-ui-ux-review.md) — working L1 product/UX
+- [`docs/reviews/09-ui-ux-review.md`](docs/reviews/09-ui-ux-review.md) — working L1 product/UX
   review; its findings are implementation-pending, not runtime contracts.
 
 The architecture notes intentionally contain designs that are not yet product

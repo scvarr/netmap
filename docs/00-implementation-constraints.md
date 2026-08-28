@@ -194,7 +194,7 @@ request/job
 
 Новые implementation decisions не должны необратимо предполагать, что canonical store всегда единственный глобальный namespace.
 
-Подробности: [[07-workspaces|07. Workspace и canonical isolation]].
+Подробности: [[architecture/workspaces/07-workspaces|07. Workspace и canonical isolation]].
 
 ## Reproducible build
 
