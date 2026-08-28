@@ -259,7 +259,7 @@ def list_map_placements(map_id: uuid.UUID, session: Session = Depends(get_sessio
 def add_map_placement(map_id: uuid.UUID, query: CreateMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)
-        catalog.add_placement(map_id, query.physical_object_id, query.x, query.y)
+        catalog.add_placement(map_id, query.physical_object_id, query.x, query.y, query.display_width)
         return _map_placements_document(catalog.placements(map_id))
 
 

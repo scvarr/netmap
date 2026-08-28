@@ -195,6 +195,22 @@ def test_physical_display_width_is_optional_validated_and_independent_per_saved_
     assert client.put(f"/v1/maps/{map_id(first)}/placements/{physical_id}/positions/logical", json={"x": 3, "y": 4, "display_width": 320}).status_code == 422
 
 
+def test_placement_creation_persists_an_explicit_physical_display_width():
+    physical = create_object("Initially sized")
+    saved_map = create_map("Initial width")
+    physical_id = object_id(physical)
+    response = client.post(f"/v1/maps/{map_id(saved_map)}/placements", json={
+        "physical_object_id": physical_id, "x": 12, "y": 34, "display_width": 96,
+    })
+    assert response.status_code == 201
+    assert response.json()["placements"][0]["positions"]["L1/PHYSICAL_OBJECT"] == {
+        "x": 12.0, "y": 34.0, "locked": False, "display_width": 96.0,
+    }
+    assert client.post(f"/v1/maps/{map_id(saved_map)}/placements", json={
+        "physical_object_id": str(uuid.uuid4()), "x": 1, "y": 2, "display_width": 0,
+    }).status_code == 422
+
+
 def test_per_view_placement_locks_preserve_coordinates_and_validate_scope():
     physical = create_object("SW1")
     saved_map = create_map("Locks")

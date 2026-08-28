@@ -14,7 +14,7 @@ export interface SavedMapDataSource {
   createMap(name: string): Promise<SavedMap>;
   deleteMap(mapId: string): Promise<void>;
   loadMap(mapId: string): Promise<SavedMap>;
-  addPlacement(mapId: string, physicalObjectId: string, x: number, y: number): Promise<void>;
+  addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number): Promise<void>;
   movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number): Promise<void>;
   setPositionLock(mapId: string, physicalObjectId: string, view: SavedMapView, locked: boolean): Promise<void>;
   removePlacement(mapId: string, physicalObjectId: string): Promise<void>;

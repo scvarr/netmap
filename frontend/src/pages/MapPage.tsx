@@ -675,7 +675,7 @@ export function MapPage({
   const resolveInsertionPosition = async (
     id: string,
     anchor: XYPosition,
-  ): Promise<XYPosition | null> => {
+  ): Promise<{ position: XYPosition; displayWidth?: number } | null> => {
     const candidateDocument = await dataSource.loadProjection(
       projectionRequestFor("physical", [id]),
     );
@@ -700,11 +700,19 @@ export function MapPage({
           : [];
       },
     );
-    return nearestFreePosition(
+    const blueprint = candidates[0].attributes.blueprint_presentation;
+    const displayWidth = blueprint
+      ? clampBlueprintDisplayWidth(96, blueprint)
+      : undefined;
+    const position = nearestFreePosition(
       anchor,
-      footprintDimensionsForProjectionNode(candidates[0]),
+      footprintDimensionsForProjectionNode(candidates[0], displayWidth),
       occupied,
     );
+    return position && {
+      position,
+      ...(displayWidth === undefined ? {} : { displayWidth }),
+    };
   };
 
   const submitInsertion = async (id: string, operation = insertion) => {
@@ -717,17 +725,17 @@ export function MapPage({
         ? { ...current, status: "resolving", error: null }
         : current,
     );
-    let position: XYPosition | null;
+    let placement: { position: XYPosition; displayWidth?: number } | null;
     let preflightComplete = false;
     try {
-      position = await resolveInsertionPosition(id, operation.anchor);
+      placement = await resolveInsertionPosition(id, operation.anchor);
       preflightComplete = true;
       if (
         request !== insertionSequence.current ||
         selectedMapId.current !== targetMapId
       )
         return;
-      if (!position) {
+      if (!placement) {
         setInsertion((current) =>
           current?.mapId === targetMapId
             ? {
@@ -747,8 +755,9 @@ export function MapPage({
       await savedMapDataSource.addPlacement(
         targetMapId,
         id,
-        position.x,
-        position.y,
+        placement.position.x,
+        placement.position.y,
+        ...(placement.displayWidth === undefined ? [] : [placement.displayWidth]),
       );
     } catch (reason) {
       if (
@@ -984,16 +993,17 @@ export function MapPage({
     setMapOperation({ kind: "add", id, mapId: targetMapId, status: "pending" });
     let preflightComplete = false;
     try {
-      const position = await resolveInsertionPosition(id, anchor);
+      const placement = await resolveInsertionPosition(id, anchor);
       preflightComplete = true;
       if (selectedMapId.current !== targetMapId) return;
-      if (!position)
+      if (!placement)
         throw new Error(t("view.empty.body"));
       await savedMapDataSource.addPlacement(
         targetMapId,
         id,
-        position.x,
-        position.y,
+        placement.position.x,
+        placement.position.y,
+        ...(placement.displayWidth === undefined ? [] : [placement.displayWidth]),
       );
     } catch (reason) {
       if (selectedMapId.current === targetMapId) setMapOperation(null);

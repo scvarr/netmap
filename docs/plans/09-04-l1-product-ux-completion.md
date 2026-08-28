@@ -87,3 +87,12 @@ is non-interactive, so normal object and ConnectionPoint interaction continues
 through it; only explicit route editing segments and waypoint handles receive
 pointer input. Port/ConnectionPoint markers are repainted above foreground cable
 paths, allowing route editing through an object body without hiding ports.
+
+### UX.2a — Initial Blueprint placement sizing
+
+**IMPLEMENTED.** New Blueprint-backed Saved Map placements choose the compact
+preferred width of 96 through the existing Blueprint clamp, so dense port
+layouts automatically receive their larger existing minimum. The selected
+width participates in collision preflight and is persisted atomically as the
+physical placement's explicit `display_width`; generic objects and historical
+placements without that field retain their existing behavior.

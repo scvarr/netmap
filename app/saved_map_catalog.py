@@ -44,7 +44,14 @@ class SavedMapCatalog:
         self.session.delete(self._require_map(map_id))
         self._flush()
 
-    def add_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, x: float, y: float) -> MapPlacement:
+    def add_placement(
+        self,
+        map_id: uuid.UUID,
+        physical_object_id: uuid.UUID,
+        x: float,
+        y: float,
+        display_width: float | None = None,
+    ) -> MapPlacement:
         self._require_map(map_id)
         if self.session.get(PhysicalObject, physical_object_id) is None:
             raise ValidationError("PhysicalObject does not exist", {"physical_object_id": str(physical_object_id)})
@@ -55,7 +62,9 @@ class SavedMapCatalog:
                 "reason": "MAP_PLACEMENT_CONFLICT", "map_id": str(map_id), "physical_object_id": str(physical_object_id),
             })
         placement = MapPlacement(map_id=map_id, physical_object_id=physical_object_id)
-        placement.view_positions.append(MapViewPosition(view_key=MapViewKey.PHYSICAL, x=x, y=y))
+        placement.view_positions.append(MapViewPosition(
+            view_key=MapViewKey.PHYSICAL, x=x, y=y, display_width=display_width
+        ))
         self.session.add(placement)
         self._flush()
         return placement

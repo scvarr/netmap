@@ -80,6 +80,7 @@ class CreateMapPlacementRequest(BaseModel):
     physical_object_id: uuid.UUID
     x: FiniteFloat
     y: FiniteFloat
+    display_width: FiniteFloat | None = Field(default=None, gt=0)
 
 
 class MoveMapPlacementRequest(BaseModel):
