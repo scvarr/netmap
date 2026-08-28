@@ -112,11 +112,11 @@ class PhysicalObjectDeletionCatalog:
         connections = tuple(self.session.scalars(select(Connection).where(or_(Connection.point_a_id.in_(point_ids), Connection.point_b_id.in_(point_ids))).with_for_update()))
         internal = [c for c in connections if c.point_a_id in point_ids and c.point_b_id in point_ids]
         external = [c for c in connections if (c.point_a_id in point_ids) != (c.point_b_id in point_ids)]
-        if len(connections) != 3 or len(internal) != 1 or len(external) != 2:
-            self._reject_cable(object_id, "cable must have one internal and two external Connections")
+        if len(internal) != 1 or len(external) > 2:
+            self._reject_cable(object_id, "cable must have one internal and at most two external Connections")
         incident = Counter(point for c in connections for point in (c.point_a_id, c.point_b_id) if point in point_ids)
-        if set(incident) != set(point_ids) or any(count != 2 for count in incident.values()):
-            self._reject_cable(object_id, "cable ConnectionPoints must each have one internal and one external Connection")
+        if set(incident) != set(point_ids) or any(count not in (1, 2) for count in incident.values()):
+            self._reject_cable(object_id, "cable ConnectionPoints must each have one internal and at most one external Connection")
         if any(c.cardinality != 1 or len(c.members) != 1 for c in connections):
             self._reject_cable(object_id, "cable Connections must be simple cardinality-one Connections")
         return tuple(c.id for c in connections)

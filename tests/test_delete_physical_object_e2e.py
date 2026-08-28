@@ -201,6 +201,39 @@ def test_deletes_simple_blueprint_backed_cable_and_its_provenance():
         assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 2
 
 
+def test_deletes_cable_after_disconnect_of_one_endpoint():
+    source, target = manual_object('source'), manual_object('target')
+    created = client.post('/v1/topology/physical-connections', json={
+        'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_points'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
+        'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': target['connection_points'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
+    })
+    assert created.status_code == 201
+    connection = created.json()
+    assert client.delete(f"/v1/topology/physical-connections/{connection['connection_refs'][0]['entity_id']}").status_code == 204
+    assert client.delete(f"/v1/topology/physical-objects/{connection['cable_ref']['entity_id']}").status_code == 204
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 2
+        assert session.scalar(select(func.count()).select_from(Connection)) == 0
+        assert session.scalar(select(func.count()).select_from(ConnectionMember)) == 0
+
+
+def test_deletes_cable_after_disconnect_of_both_endpoints():
+    source, target = manual_object('source'), manual_object('target')
+    created = client.post('/v1/topology/physical-connections', json={
+        'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_points'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
+        'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': target['connection_points'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
+    })
+    assert created.status_code == 201
+    connection = created.json()
+    for external_connection in (connection['connection_refs'][0], connection['connection_refs'][2]):
+        assert client.delete(f"/v1/topology/physical-connections/{external_connection['entity_id']}").status_code == 204
+    assert client.delete(f"/v1/topology/physical-objects/{connection['cable_ref']['entity_id']}").status_code == 204
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 2
+        assert session.scalar(select(func.count()).select_from(Connection)) == 0
+        assert session.scalar(select(func.count()).select_from(ConnectionMember)) == 0
+
+
 def test_rejects_branching_cable_without_writes():
     source, target = create_device('source'), create_device('target')
     link = client.post('/v1/topology/physical-links', json={

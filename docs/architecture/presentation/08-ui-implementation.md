@@ -588,7 +588,9 @@ and other opaque identity/provenance values do not order it. Per-port technical
 refs are not part of this primary table. Cardinality above one shows factual
 connection counts only. An occupied cardinality-1 port offers confirmed
 disconnect of its exact external canonical `Connection`; it preserves cable and
-other `PhysicalObject` lifecycle, and an acknowledged delete is followed only
+other `PhysicalObject` lifecycle. A later explicit cable delete accepts that
+same simple cable with zero, one, or two remaining external Connections and
+deletes its aggregate atomically; an acknowledged disconnect is followed only
 by authoritative refresh/retry.
 
 When every point forms one reciprocal direct internal counterpart, the UI
