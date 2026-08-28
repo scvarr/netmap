@@ -178,8 +178,8 @@ def _saved_map_document(detail) -> dict[str, object]:
             {
                 "cable_ref": {
                     "ref_type": "CANONICAL_FACT",
-                    "entity_type": "PhysicalObject",
-                    "entity_id": route.cable_physical_object_id,
+                    "entity_type": "Cable",
+                    "entity_id": route.cable_id,
                 },
                 "view": str(route.view_key),
                 "waypoints": route.waypoints,
@@ -304,10 +304,10 @@ def delete_map_placement(map_id: uuid.UUID, physical_object_id: uuid.UUID, sessi
         SavedMapCatalog(session).remove_placement(map_id, physical_object_id)
 
 
-@app.put("/v1/maps/{map_id}/cable-routes/{cable_physical_object_id}", response_model=SavedMapDocument, responses={422: {"model": ErrorResponse}})
+@app.put("/v1/maps/{map_id}/cable-routes/{cable_id}", response_model=SavedMapDocument, responses={422: {"model": ErrorResponse}})
 def set_map_cable_route(
     map_id: uuid.UUID,
-    cable_physical_object_id: uuid.UUID,
+    cable_id: uuid.UUID,
     query: SetMapCableRouteRequest,
     session: Session = Depends(get_session),
 ) -> SavedMapDocument:
@@ -315,20 +315,20 @@ def set_map_cable_route(
         catalog = SavedMapCatalog(session)
         catalog.set_cable_route(
             map_id,
-            cable_physical_object_id,
+            cable_id,
             [waypoint.model_dump() for waypoint in query.waypoints],
         )
         return _saved_map_document(catalog.detail(map_id))
 
 
-@app.delete("/v1/maps/{map_id}/cable-routes/{cable_physical_object_id}", status_code=204, responses={422: {"model": ErrorResponse}})
+@app.delete("/v1/maps/{map_id}/cable-routes/{cable_id}", status_code=204, responses={422: {"model": ErrorResponse}})
 def delete_map_cable_route(
     map_id: uuid.UUID,
-    cable_physical_object_id: uuid.UUID,
+    cable_id: uuid.UUID,
     session: Session = Depends(get_session),
 ) -> None:
     with session.begin():
-        SavedMapCatalog(session).delete_cable_route(map_id, cable_physical_object_id)
+        SavedMapCatalog(session).delete_cable_route(map_id, cable_id)
 
 
 @app.post(
@@ -886,7 +886,6 @@ def create_physical_link(
         created = PhysicalConnectionCatalog(session).create_atomic_link(
             query.source_interface_id,
             query.target_interface_id,
-            query.cable_display_name,
         )
 
         def ref(entity_type: str, entity_id: uuid.UUID) -> dict[str, object]:
@@ -899,17 +898,14 @@ def create_physical_link(
         return PhysicalConnectionCreationDocument(
             source_interface_ref=ref("NetworkInterface", created.source_interface_id),
             target_interface_ref=ref("NetworkInterface", created.target_interface_id),
-            cable_ref=ref("PhysicalObject", created.cable_id),
+            cable_ref=ref("Cable", created.cable_id),
             source_binding_ref=ref(
                 "InterfacePhysicalBinding", created.source_binding_id
             ),
             target_binding_ref=ref(
                 "InterfacePhysicalBinding", created.target_binding_id
             ),
-            connection_refs=[
-                ref("Connection", connection_id)
-                for connection_id in created.connection_ids
-            ],
+            connection_ref=ref("Connection", created.connection_id),
         )
 
 
@@ -962,18 +958,26 @@ def create_physical_endpoint_connection(
         created = PhysicalConnectionCatalog(session).create_endpoint_link(
             endpoint(query.source),
             endpoint(query.target),
-            query.cable_display_name,
-            (query.cable_blueprint.blueprint_id, query.cable_blueprint.version_id) if query.cable_blueprint else None,
         )
         return PhysicalEndpointConnectionCreationDocument(
             source=materialization(created.source),
             target=materialization(created.target),
-            cable_ref=ref("PhysicalObject", created.cable_id),
-            connection_refs=[
-                ref("Connection", connection_id)
-                for connection_id in created.connection_ids
-            ],
+            cable_ref=ref("Cable", created.cable_id),
+            connection_ref=ref("Connection", created.connection_id),
         )
+
+
+@app.delete(
+    "/v1/cables/{cable_id}",
+    status_code=204,
+    responses={422: {"model": ErrorResponse}},
+)
+def delete_cable(
+    cable_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        PhysicalConnectionCatalog(session).delete_cable(cable_id)
 
 
 @app.delete(

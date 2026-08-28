@@ -22,6 +22,7 @@ import { ApiCatalogInventoryDataSource } from './topology/apiCatalogInventoryDat
 import { ApiPhysicalObjectDisplayNameWriteDataSource } from './topology/apiPhysicalObjectDisplayNameWriteDataSource';
 import { ApiBlueprintUpgradeDataSource } from './topology/apiBlueprintUpgradeDataSource';
 import { ApiPortBlockDataSource } from './topology/apiPortBlockDataSource';
+import { ApiCableDeleteDataSource } from './topology/apiCableDeleteDataSource';
 import './styles.css';
 import { I18nProvider } from './i18n';
 
@@ -43,6 +44,7 @@ createRoot(document.getElementById('root')!).render(
         l2ForwardingContextWriteDataSource={new ApiL2ForwardingContextWriteDataSource()}
         objectBlueprintDataSource={new ApiObjectBlueprintDataSource()}
         physicalObjectDeleteDataSource={new ApiPhysicalObjectDeleteDataSource()}
+        cableDeleteDataSource={new ApiCableDeleteDataSource()}
         savedMapDataSource={new ApiSavedMapDataSource()}
         catalogInventoryDataSource={new ApiCatalogInventoryDataSource()}
         physicalObjectDisplayNameWriteDataSource={new ApiPhysicalObjectDisplayNameWriteDataSource()}

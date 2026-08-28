@@ -7,9 +7,8 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
-from app.device_catalog import DeviceCatalog
 from app.errors import ModelError, ValidationError, classify_integrity_error
-from app.models import MapCableRoute, MapPlacement, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import Cable, MapCableRoute, MapPlacement, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -127,16 +126,16 @@ class SavedMapCatalog:
     def set_cable_route(
         self,
         map_id: uuid.UUID,
-        cable_physical_object_id: uuid.UUID,
+        cable_id: uuid.UUID,
         waypoints: list[dict[str, float]],
     ) -> MapCableRoute:
         self._require_map(map_id)
-        self._require_cable(cable_physical_object_id)
+        self._require_cable(cable_id)
         route = self.session.scalar(
             select(MapCableRoute)
             .where(
                 MapCableRoute.map_id == map_id,
-                MapCableRoute.cable_physical_object_id == cable_physical_object_id,
+                MapCableRoute.cable_id == cable_id,
                 MapCableRoute.view_key == MapViewKey.PHYSICAL,
             )
             .with_for_update()
@@ -144,7 +143,7 @@ class SavedMapCatalog:
         if route is None:
             route = MapCableRoute(
                 map_id=map_id,
-                cable_physical_object_id=cable_physical_object_id,
+                cable_id=cable_id,
                 view_key=MapViewKey.PHYSICAL,
             )
             self.session.add(route)
@@ -152,20 +151,20 @@ class SavedMapCatalog:
         self._flush()
         return route
 
-    def delete_cable_route(self, map_id: uuid.UUID, cable_physical_object_id: uuid.UUID) -> None:
+    def delete_cable_route(self, map_id: uuid.UUID, cable_id: uuid.UUID) -> None:
         self._require_map(map_id)
         route = self.session.scalar(
             select(MapCableRoute)
             .where(
                 MapCableRoute.map_id == map_id,
-                MapCableRoute.cable_physical_object_id == cable_physical_object_id,
+                MapCableRoute.cable_id == cable_id,
                 MapCableRoute.view_key == MapViewKey.PHYSICAL,
             )
             .with_for_update()
         )
         if route is None:
             raise ValidationError("MapCableRoute does not exist", {
-                "map_id": str(map_id), "cable_physical_object_id": str(cable_physical_object_id),
+                "map_id": str(map_id), "cable_id": str(cable_id),
             })
         self.session.delete(route)
         self.session.flush()
@@ -188,17 +187,12 @@ class SavedMapCatalog:
         return tuple(self.session.scalars(
             select(MapCableRoute)
             .where(MapCableRoute.map_id == map_id)
-            .order_by(MapCableRoute.cable_physical_object_id, MapCableRoute.view_key)
+            .order_by(MapCableRoute.cable_id, MapCableRoute.view_key)
         ))
 
-    def _require_cable(self, physical_object_id: uuid.UUID) -> None:
-        if self.session.get(PhysicalObject, physical_object_id) is None:
-            raise ValidationError("PhysicalObject does not exist", {"physical_object_id": str(physical_object_id)})
-        object_class = DeviceCatalog(self.session).physical_object_classes([physical_object_id]).get(physical_object_id)
-        if object_class is None or object_class.value != "cable":
-            raise ValidationError("PhysicalObject is not a cable", {
-                "reason": "MAP_CABLE_ROUTE_OBJECT_NOT_CABLE", "physical_object_id": str(physical_object_id),
-            })
+    def _require_cable(self, cable_id: uuid.UUID) -> None:
+        if self.session.get(Cable, cable_id) is None:
+            raise ValidationError("Cable does not exist", {"cable_id": str(cable_id)})
 
     def _flush(self) -> None:
         try:

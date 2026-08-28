@@ -3,7 +3,6 @@ import type { ProjectionSourceRef } from './types';
 export interface CreatePhysicalLinkRequest {
   source_interface_id: string;
   target_interface_id: string;
-  cable_display_name?: string;
 }
 
 export interface PhysicalConnectionCreationDocument {
@@ -13,7 +12,7 @@ export interface PhysicalConnectionCreationDocument {
   cable_ref: ProjectionSourceRef;
   source_binding_ref: ProjectionSourceRef;
   target_binding_ref: ProjectionSourceRef;
-  connection_refs: ProjectionSourceRef[];
+  connection_ref: ProjectionSourceRef;
 }
 
 export interface PhysicalLinkWriteDataSource {

@@ -2,8 +2,8 @@
 
 ## Статус
 
-**PLANNED.** Cable.0 зафиксировал target architecture; этот документ задаёт
-границы следующего implementation milestone и не является его реализацией.
+**IMPLEMENTED — Cable.1.** Cable.0 зафиксировал target architecture; Cable.1
+выполнил bounded canonical-domain cutover, описанный ниже.
 
 ## Цель
 
@@ -101,7 +101,11 @@ surface is implementation work to complete, not a reason to retain a
 compatibility layer. An impact outside this surface remains a blocker requiring
 an explicit scope decision.
 
-Then perform one forward migration or a documented destructive reset, remove
-obsolete code/tests/fixtures rather than adding a compatibility layer, and
-verify `git diff`, `gitnexus detect_changes`, and an active docs/code search for
-old Cable contract phrases before acceptance.
+Implemented with forward revision `0035_canonical_cables`: it destructively
+removes development Cable-as-PhysicalObject aggregates and route rows, adds
+`cables(connection_id UNIQUE)` and recreates `MapCableRoute` against Cable.
+The API creates one Connection plus Cable atomically, deletes either Cable plus
+Connection atomically, and preserves direct Connections. Catalog, Object
+Details, L1 projection/continuations and Saved Maps expose canonical Cable
+refs. Regression coverage verifies the constraints, rollback, lifecycle, and
+all four structural readers; obsolete aggregate fixtures were removed.

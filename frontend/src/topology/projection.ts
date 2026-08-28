@@ -18,11 +18,11 @@ export const PHYSICAL_PROJECTION_REQUEST: TopologyProjectionRequest = {
 
 export type TopologyViewMode = 'logical' | 'physical';
 
-export const projectionRequestFor = (view: TopologyViewMode, physicalObjectIds?: string[], includeInterstitialCables = false): TopologyProjectionRequest => {
+export const projectionRequestFor = (view: TopologyViewMode, physicalObjectIds?: string[], includeCableContinuations = false): TopologyProjectionRequest => {
   const base = view === 'physical' ? PHYSICAL_PROJECTION_REQUEST : LOGICAL_PROJECTION_REQUEST;
   return physicalObjectIds === undefined ? base : {
     ...base,
-    ...(includeInterstitialCables ? { include_interstitial_cables: true } : {}),
+    ...(includeCableContinuations ? { include_cable_continuations: true } : {}),
     scope: { include_location_subtrees: [], include_entities: physicalObjectIds.map((entity_id) => ({ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id })) },
   };
 };
@@ -30,6 +30,13 @@ export const projectionRequestFor = (view: TopologyViewMode, physicalObjectIds?:
 export const physicalObjectIdForNode = (node: TopologyProjectionNode): string | null => {
   const refs = node.source_refs.filter((ref) => (
     ref.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'PhysicalObject'
+  ));
+  return refs.length === 1 ? refs[0].entity_id : null;
+};
+
+export const cableIdForNode = (node: TopologyProjectionNode): string | null => {
+  const refs = node.source_refs.filter((ref) => (
+    ref.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'Cable'
   ));
   return refs.length === 1 ? refs[0].entity_id : null;
 };

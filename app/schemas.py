@@ -202,11 +202,12 @@ class CatalogInventoryCableItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     cable_ref: ProjectionSourceRef
+    connection_ref: ProjectionSourceRef
     label: str = Field(min_length=1)
     label_source: Literal["TECHNICAL_FALLBACK"] | None = None
-    resolution: Literal["SIMPLE_CABLE", "UNRESOLVED"]
-    endpoint_a: CatalogInventoryCableEndpoint | None = None
-    endpoint_b: CatalogInventoryCableEndpoint | None = None
+    resolution: Literal["RESOLVED"] = "RESOLVED"
+    endpoint_a: CatalogInventoryCableEndpoint
+    endpoint_b: CatalogInventoryCableEndpoint
     gaps: list[str]
     warnings: list[str]
 
@@ -234,7 +235,7 @@ class TopologyProjectionRequest(BaseModel):
     layer: Literal["L1", "L2", "L3"]
     detail_level: Literal["DEVICE", "PHYSICAL_OBJECT"]
     scope: TopologyProjectionScope
-    include_interstitial_cables: bool = False
+    include_cable_continuations: bool = False
     grouping: dict[str, Any] | None = None
     filters: dict[str, Any] | None = None
 
@@ -402,7 +403,7 @@ class InternalPhysicalCounterpartDetails(BaseModel):
 class ExternalPhysicalAttachmentDetails(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    kind: Literal["DIRECT_CONNECTION", "SIMPLE_CABLE", "UNRESOLVED"]
+    kind: Literal["DIRECT_CONNECTION", "CABLE"]
     connection_ref: ProjectionSourceRef
     evidence_refs: list[ProjectionSourceRef]
     remote_physical_object_ref: ProjectionSourceRef | None = None
@@ -826,7 +827,6 @@ class CreatePhysicalLinkRequest(BaseModel):
 
     source_interface_id: uuid.UUID
     target_interface_id: uuid.UUID
-    cable_display_name: str | None = Field(default=None, min_length=1, max_length=255)
 
 
 class PhysicalConnectionCreationDocument(BaseModel):
@@ -838,7 +838,7 @@ class PhysicalConnectionCreationDocument(BaseModel):
     cable_ref: ProjectionSourceRef
     source_binding_ref: ProjectionSourceRef
     target_binding_ref: ProjectionSourceRef
-    connection_refs: list[ProjectionSourceRef] = Field(min_length=3, max_length=3)
+    connection_ref: ProjectionSourceRef
 
 
 class NetworkInterfacePhysicalEndpointRequest(BaseModel):
@@ -867,15 +867,6 @@ class CreatePhysicalEndpointConnectionRequest(BaseModel):
 
     source: PhysicalEndpointRequest
     target: PhysicalEndpointRequest
-    cable_display_name: str | None = Field(default=None, min_length=1, max_length=255)
-    cable_blueprint: "CableBlueprintRequest | None" = None
-
-
-class CableBlueprintRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    blueprint_id: uuid.UUID
-    version_id: uuid.UUID
 
 
 class PhysicalEndpointMaterialization(BaseModel):
@@ -895,7 +886,7 @@ class PhysicalEndpointConnectionCreationDocument(BaseModel):
     source: PhysicalEndpointMaterialization
     target: PhysicalEndpointMaterialization
     cable_ref: ProjectionSourceRef
-    connection_refs: list[ProjectionSourceRef] = Field(min_length=3, max_length=3)
+    connection_ref: ProjectionSourceRef
 
 
 class EvidenceRef(BaseModel):

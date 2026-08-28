@@ -1,4 +1,4 @@
-import { physicalObjectIdForNode } from './projection';
+import { cableIdForNode } from './projection';
 import type { MapCableRoute } from './savedMapTypes';
 import type { TopologyProjectionNode } from './types';
 
@@ -7,12 +7,12 @@ export const cableRouteForCollapsedCable = (
   cableNode: TopologyProjectionNode | undefined,
   routes: readonly MapCableRoute[] | undefined,
 ): MapCableRoute | undefined => {
-  const cablePhysicalObjectId = cableNode && physicalObjectIdForNode(cableNode);
-  if (!cablePhysicalObjectId) return undefined;
+  const cableId = cableNode && cableIdForNode(cableNode);
+  if (!cableId) return undefined;
   return routes?.find((route) => (
     route.view === 'L1/PHYSICAL_OBJECT'
     && route.cable_ref.ref_type === 'CANONICAL_FACT'
-    && route.cable_ref.entity_type === 'PhysicalObject'
-    && route.cable_ref.entity_id === cablePhysicalObjectId
+    && route.cable_ref.entity_type === 'Cable'
+    && route.cable_ref.entity_id === cableId
   ));
 };

@@ -9,11 +9,13 @@ import type {
 } from '../topology/catalogInventoryTypes';
 import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectDeleteTypes';
 import type { PhysicalObjectDisplayNameWriteDataSource } from '../topology/physicalObjectDisplayNameWriteTypes';
+import type { CableDeleteDataSource } from '../topology/cableDeleteTypes';
 import { useI18n } from '../i18n';
 
 interface Props {
   catalogInventoryDataSource: CatalogInventoryDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
+  cableDeleteDataSource?: CableDeleteDataSource;
   physicalObjectDisplayNameWriteDataSource?: PhysicalObjectDisplayNameWriteDataSource;
 }
 
@@ -58,6 +60,7 @@ function CatalogState({
 export function InfrastructureObjectsPage({
   catalogInventoryDataSource,
   physicalObjectDeleteDataSource,
+  cableDeleteDataSource,
   physicalObjectDisplayNameWriteDataSource,
 }: Props) {
   const { collator, locale, t } = useI18n();
@@ -108,7 +111,8 @@ export function InfrastructureObjectsPage({
 
   const remove = async (id: string, label: string, cable: boolean) => {
     if (
-      !physicalObjectDeleteDataSource ||
+      (!cable && !physicalObjectDeleteDataSource) ||
+      (cable && !cableDeleteDataSource) ||
       !window.confirm(cable ? t('catalog.deleteCableConfirm', { name: label }) : t('catalog.deleteObjectConfirm', { name: label }))
     ) {
       return;
@@ -117,7 +121,8 @@ export function InfrastructureObjectsPage({
     setDeleteError(null);
 
     try {
-      await physicalObjectDeleteDataSource.deletePhysicalObject(id);
+      if (cable) await cableDeleteDataSource!.deleteCable(id);
+      else await physicalObjectDeleteDataSource!.deletePhysicalObject(id);
       await reload();
     } catch (reason) {
       setDeleteError(reason instanceof Error ? reason.message : t('catalog.error.title'));
@@ -302,7 +307,7 @@ export function InfrastructureObjectsPage({
               value={cableState}
               onChange={(event) => setCableState(event.target.value)}
             >
-              <option value="all">{t('catalog.all')}</option><option value="SIMPLE_CABLE">{t('catalog.resolved')}</option><option value="UNRESOLVED">Неоднозначные</option>
+              <option value="all">{t('catalog.all')}</option><option value="RESOLVED">{t('catalog.resolved')}</option>
             </select>
           </label>
         )}
@@ -333,8 +338,7 @@ export function InfrastructureObjectsPage({
         {document && shown > 0 && tab === 'cables' && (
           <Cables
             rows={cables}
-            remove={physicalObjectDeleteDataSource ? remove : undefined}
-            onRename={physicalObjectDisplayNameWriteDataSource ? openRename : undefined}
+            remove={cableDeleteDataSource ? remove : undefined}
           />
         )}
       </section>
@@ -468,7 +472,7 @@ function Equipment({
 
             return (
               <tr key={id}>
-                <td><Link to={objectLink(id)}>{item.label}</Link></td>
+                <td>{item.label}</td>
                 <td>
                   <strong>{classLabel(item.class, locale, t)}</strong>
                   {item.class && known.has(item.class) && <code>{item.class}</code>}
@@ -511,11 +515,9 @@ function Equipment({
 function Cables({
   rows,
   remove,
-  onRename,
 }: {
   rows: CatalogInventoryDocument['cables'];
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
-  onRename?: (target: RenameTarget) => void;
 }) {
   const { t } = useI18n();
   const part = (value?: CatalogInventoryCableEndpoint) =>
@@ -546,13 +548,13 @@ function Cables({
               <tr key={id}>
                 <td><Link to={objectLink(id)}>{item.label}</Link></td>
                 <td className="catalog-endpoint">
-                  {item.resolution === 'SIMPLE_CABLE' ? part(item.endpoint_a) : '—'}
+                  {part(item.endpoint_a)}
                 </td>
                 <td className="catalog-endpoint">
-                  {item.resolution === 'SIMPLE_CABLE' ? part(item.endpoint_b) : '—'}
+                  {part(item.endpoint_b)}
                 </td>
-                <td>{item.resolution === 'SIMPLE_CABLE' ? t('catalog.resolved') : t('catalog.unresolved')}</td>
-                <Actions id={id} label={item.label} cable remove={remove} onRename={onRename} />
+                <td>{t('catalog.resolved')}</td>
+                <Actions id={id} label={item.label} cable remove={remove} />
               </tr>
             );
           })}
@@ -578,10 +580,10 @@ function Actions({
   const { t } = useI18n();
   return (
     <td className="catalog-table__actions">
-      <Link className="catalog-table__open" aria-label={`${t('inspector.open')} ${label}`} to={objectLink(id)}>
+      {!cable && <Link className="catalog-table__open" aria-label={`${t('inspector.open')} ${label}`} to={objectLink(id)}>
         →
-      </Link>
-      {onRename && (
+      </Link>}
+      {onRename && !cable && (
         <button
           type="button"
           className="catalog-table__rename"

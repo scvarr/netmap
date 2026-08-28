@@ -7,7 +7,6 @@ export type PhysicalEndpointRequest =
 export interface CreatePhysicalEndpointConnectionRequest {
   source: PhysicalEndpointRequest;
   target: PhysicalEndpointRequest;
-  cable_display_name?: string;
 }
 
 export interface PhysicalEndpointMaterialization {
@@ -23,7 +22,7 @@ export interface PhysicalEndpointConnectionCreationDocument {
   source: PhysicalEndpointMaterialization;
   target: PhysicalEndpointMaterialization;
   cable_ref: ProjectionSourceRef;
-  connection_refs: ProjectionSourceRef[];
+  connection_ref: ProjectionSourceRef;
 }
 
 export interface PhysicalEndpointConnectionWriteDataSource {

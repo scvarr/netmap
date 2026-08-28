@@ -19,6 +19,6 @@ export interface SavedMapDataSource {
   setPositionLock(mapId: string, physicalObjectId: string, view: SavedMapView, locked: boolean): Promise<void>;
   removePlacement(mapId: string, physicalObjectId: string): Promise<void>;
   /** A successful resolution only acknowledges the route write; read SavedMap separately for authoritative state. */
-  setCableRoute(mapId: string, cablePhysicalObjectId: string, waypoints: MapCableRouteWaypoint[]): Promise<void>;
-  deleteCableRoute(mapId: string, cablePhysicalObjectId: string): Promise<void>;
+  setCableRoute(mapId: string, cableId: string, waypoints: MapCableRouteWaypoint[]): Promise<void>;
+  deleteCableRoute(mapId: string, cableId: string): Promise<void>;
 }

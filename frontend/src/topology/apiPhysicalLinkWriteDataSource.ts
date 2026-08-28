@@ -21,13 +21,6 @@ const requireObject: (
   if (!isObject(value)) malformed(`${path} must be an object.`);
 };
 
-const requireArray: (
-  value: unknown,
-  path: string,
-) => asserts value is unknown[] = (value, path) => {
-  if (!Array.isArray(value)) malformed(`${path} must be an array.`);
-};
-
 const validateRef = (value: unknown, path: string, entityType: string): void => {
   requireObject(value, path);
   if (value.ref_type !== 'CANONICAL_FACT') {
@@ -46,17 +39,10 @@ export const parsePhysicalConnectionCreationDocument = (
   if (value.schema_version !== '1.0') malformed('schema_version must be "1.0".');
   validateRef(value.source_interface_ref, 'source_interface_ref', 'NetworkInterface');
   validateRef(value.target_interface_ref, 'target_interface_ref', 'NetworkInterface');
-  validateRef(value.cable_ref, 'cable_ref', 'PhysicalObject');
+  validateRef(value.cable_ref, 'cable_ref', 'Cable');
   validateRef(value.source_binding_ref, 'source_binding_ref', 'InterfacePhysicalBinding');
   validateRef(value.target_binding_ref, 'target_binding_ref', 'InterfacePhysicalBinding');
-  const connectionRefs = value.connection_refs;
-  requireArray(connectionRefs, 'connection_refs');
-  if (connectionRefs.length !== 3) {
-    malformed('connection_refs must contain exactly three refs.');
-  }
-  connectionRefs.forEach((ref, index) => (
-    validateRef(ref, `connection_refs[${index}]`, 'Connection')
-  ));
+  validateRef(value.connection_ref, 'connection_ref', 'Connection');
   return value as unknown as PhysicalConnectionCreationDocument;
 };
 

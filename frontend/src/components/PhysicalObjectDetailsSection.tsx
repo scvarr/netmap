@@ -180,9 +180,8 @@ const attachmentLabel = (point: ConnectionPointDetails): string => {
   const attachments = point.external_physical_attachments ?? [];
   if (!attachments.length) return '—';
   return attachments.map((attachment) => {
-    if (attachment.kind === 'UNRESOLVED') return 'Физическая связь не разрешена';
     const remote = [attachment.remote_physical_object_label, attachment.remote_connection_point_label].filter(Boolean).join(' · ');
-    return attachment.kind === 'SIMPLE_CABLE'
+    return attachment.kind === 'CABLE'
       ? `${remote || 'Удалённый endpoint'}${attachment.cable_label ? ` · ${attachment.cable_label}` : ''}`
       : remote || 'Физическое подключение';
   }).join('; ');

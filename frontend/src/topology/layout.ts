@@ -40,11 +40,11 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   projection: TopologyProjectionEdge;
   endpointPair?: PhysicalEndpointPair;
   cableNode?: TopologyProjectionNode;
-  supportingEdgeIds?: [string, string];
+  supportingEdgeIds?: string[];
   /** Authoritative SavedMap state, enriched after topology-derived layout. */
   cableRoute?: MapCableRoute;
   cableRouteDraft?: {
-    cablePhysicalObjectId: string;
+    cableId: string;
     waypoints: readonly MapCableRouteWaypoint[];
     selectedWaypointIndex: number | null;
     onWaypointSelect: (index: number) => void;

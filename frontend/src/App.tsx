@@ -27,6 +27,7 @@ import type { CatalogInventoryDataSource } from './topology/catalogInventoryType
 import type { PhysicalObjectDisplayNameWriteDataSource } from './topology/physicalObjectDisplayNameWriteTypes';
 import type { BlueprintUpgradeDataSource } from './topology/blueprintUpgradeTypes';
 import type { PortBlockDataSource } from './topology/portBlockTypes';
+import type { CableDeleteDataSource } from './topology/cableDeleteTypes';
 import { PortBlockLibraryPage } from './pages/PortBlockLibraryPage';
 import { PortBlockEditorPage } from './pages/PortBlockEditorPage';
 
@@ -46,6 +47,7 @@ export interface AppProps {
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
   objectBlueprintDataSource?: ObjectBlueprintDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
+  cableDeleteDataSource?: CableDeleteDataSource;
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource: CatalogInventoryDataSource;
   physicalObjectDisplayNameWriteDataSource?: PhysicalObjectDisplayNameWriteDataSource;
@@ -65,6 +67,7 @@ export function App(props: AppProps) {
             traceDataSource={props.traceDataSource}
             topologyLayoutStore={props.topologyLayoutStore}
             physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource}
+            cableDeleteDataSource={props.cableDeleteDataSource}
             physicalObjectDetailsDataSource={props.physicalObjectDetailsDataSource}
             physicalEndpointConnectionWriteDataSource={props.physicalEndpointConnectionWriteDataSource}
             savedMapDataSource={props.savedMapDataSource}
@@ -73,7 +76,7 @@ export function App(props: AppProps) {
         />
         <Route
           path="infrastructure/objects"
-          element={<InfrastructureObjectsPage catalogInventoryDataSource={props.catalogInventoryDataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} physicalObjectDisplayNameWriteDataSource={props.physicalObjectDisplayNameWriteDataSource} />}
+          element={<InfrastructureObjectsPage catalogInventoryDataSource={props.catalogInventoryDataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} cableDeleteDataSource={props.cableDeleteDataSource} physicalObjectDisplayNameWriteDataSource={props.physicalObjectDisplayNameWriteDataSource} />}
         />
         <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource && props.portBlockDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} portBlockDataSource={props.portBlockDataSource} /> : <Navigate replace to="/map" />} />

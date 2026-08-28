@@ -4,7 +4,7 @@ import {
   displayNodeLabel,
   physicalClassPresentation,
 } from "../topology/presentation";
-import { physicalObjectIdForNode } from "../topology/projection";
+import { cableIdForNode, physicalObjectIdForNode } from "../topology/projection";
 import { useI18n } from "../i18n";
 import type {
   CatalogInventoryDataSource,
@@ -30,6 +30,7 @@ interface QuickInspectorProps {
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
   onDeletePhysicalObject?: (id: string) => Promise<void>;
+  onDeleteCable?: (id: string) => Promise<void>;
   onRemoveFromMap?: (id: string) => Promise<void>;
   onAddContinuationToMap?: (id: string) => Promise<void>;
   placementLocked?: boolean;
@@ -107,8 +108,9 @@ export function QuickInspector(props: QuickInspectorProps) {
   const [lockPending, setLockPending] = useState(false);
   const node = selection?.type === "node" ? selection.item : null;
   const id = node && physicalObjectIdForNode(node);
+  const cableId = node && cableIdForNode(node);
   const isL1 = document?.layer === "L1";
-  const cable = Boolean(node && node.attributes.class === "cable");
+  const cable = Boolean(cableId);
   useEffect(() => {
     let active = true;
     setDetails(null);
@@ -116,7 +118,7 @@ export function QuickInspector(props: QuickInspectorProps) {
     setLoading(false);
     setInventory(null);
     setInventoryError(null);
-    if (!node || !id || !isL1)
+    if (!node || (!id && !cableId) || !isL1)
       return () => {
         active = false;
       };
@@ -140,7 +142,7 @@ export function QuickInspector(props: QuickInspectorProps) {
       };
     setLoading(true);
     void props.physicalObjectDetailsDataSource
-      .loadPhysicalObjectDetails(id)
+      .loadPhysicalObjectDetails(id!)
       .then(
         (x) => {
           if (active) {
@@ -164,6 +166,7 @@ export function QuickInspector(props: QuickInspectorProps) {
     };
   }, [
     id,
+    cableId,
     isL1,
     cable,
     props.physicalObjectDetailsDataSource,
@@ -230,11 +233,13 @@ export function QuickInspector(props: QuickInspectorProps) {
     }
   };
   const destroy = async () => {
+    const targetId = cableId ?? id;
+    const deleteTarget = cable ? props.onDeleteCable : props.onDeletePhysicalObject;
     if (
-      !id ||
-      !props.onDeletePhysicalObject ||
+      !targetId ||
+      !deleteTarget ||
       pending ||
-      activeOperationFor(id)
+      activeOperationFor(targetId)
     )
       return;
     const message = cable
@@ -244,7 +249,7 @@ export function QuickInspector(props: QuickInspectorProps) {
     setPending("delete");
     setDeleteError(null);
     try {
-      await props.onDeletePhysicalObject(id);
+      await deleteTarget(targetId);
     } catch (e) {
       setDeleteError(
         e instanceof Error ? e.message : t("map.delete"),
@@ -354,8 +359,8 @@ export function QuickInspector(props: QuickInspectorProps) {
       </>,
     );
   }
-  if (node && isL1 && cable && id) {
-    const item = inventory?.cables.find((x) => x.cable_ref.entity_id === id);
+  if (node && isL1 && cable && cableId) {
+    const item = inventory?.cables.find((x) => x.cable_ref.entity_id === cableId);
     return shell(
       <>
         <span className="eyebrow">{t("inspector.cable")}</span>
@@ -369,9 +374,7 @@ export function QuickInspector(props: QuickInspectorProps) {
             Повторить
           </button>
         )}
-        {item?.resolution === "SIMPLE_CABLE" &&
-          item.endpoint_a &&
-          item.endpoint_b && (
+        {item?.resolution === "RESOLVED" && (
             <p>
               <Link
                 to={url(item.endpoint_a.remote_physical_object_ref.entity_id)}
@@ -388,9 +391,6 @@ export function QuickInspector(props: QuickInspectorProps) {
               </Link>
             </p>
           )}
-        {item?.resolution === "UNRESOLVED" && (
-          <p>{t("inspector.cableUnresolved")}</p>
-        )}
         {item &&
           [...item.warnings, ...item.gaps].map((notice) => (
             <p key={notice}>{notice}</p>
@@ -413,40 +413,21 @@ export function QuickInspector(props: QuickInspectorProps) {
             </>}
           </section>
         )}
-        <Link to={url(id)}>{t("inspector.open")}</Link>
-        {placementLockAction}
-        {props.onRemoveFromMap && (
-          <button
-            disabled={pending !== null || Boolean(activeOperationFor(id))}
-            onClick={() => void remove()}
-          >
-            Убрать с карты
-          </button>
-        )}
         <details>
           <summary>{t("inspector.actions")}</summary>
-          {props.onDeletePhysicalObject && (
+          {props.onDeleteCable && (
             <button
-              disabled={Boolean(activeOperationFor(id))}
+              disabled={Boolean(activeOperationFor(cableId))}
               onClick={() => void destroy()}
             >
               Удалить кабель и разорвать физическое соединение
             </button>
           )}
         </details>
-        {removeError && <p role="alert">{removeError}</p>}
-        {operationFor("remove", id)?.status === "refresh-failed" && (
-          <>
-            <p role="alert">{operationFor("remove", id)?.message}</p>
-            <button onClick={() => void props.onRetryMapRefresh?.()}>
-              Повторить обновление
-            </button>
-          </>
-        )}
         {deleteError && <p role="alert">{deleteError}</p>}
-        {operationFor("delete", id)?.status === "refresh-failed" && (
+        {operationFor("delete", cableId)?.status === "refresh-failed" && (
           <>
-            <p role="alert">{operationFor("delete", id)?.message}</p>
+            <p role="alert">{operationFor("delete", cableId)?.message}</p>
             <button onClick={() => void props.onRetryMapRefresh?.()}>
               Повторить обновление
             </button>
@@ -497,9 +478,7 @@ export function QuickInspector(props: QuickInspectorProps) {
                     {p.external_physical_attachments!.map((a, i) => (
                       <p key={i}>
                         →{" "}
-                        {a.kind === "UNRESOLVED"
-                          ? t("inspector.unresolvedConnection")
-                          : `${a.remote_physical_object_label ?? t("inspector.remoteObject")} / ${a.remote_connection_point_label ?? t("inspector.port")}${a.kind === "SIMPLE_CABLE" ? t("inspector.viaCable", { cable: a.cable_label ?? "cable" }) : ""}`}
+                        {`${a.remote_physical_object_label ?? t("inspector.remoteObject")} / ${a.remote_connection_point_label ?? t("inspector.port")}${a.kind === "CABLE" ? t("inspector.viaCable", { cable: a.cable_label ?? "cable" }) : ""}`}
                       </p>
                     ))}
                   </div>

@@ -289,7 +289,7 @@ TopologyProjectionRequest
     scope:
         include_location_subtrees[]
         include_entities[]
-    include_interstitial_cables: bool = false
+    include_cable_continuations: bool = false
     grouping?
     filters?
 ```
@@ -945,7 +945,7 @@ server.
 **IMPLEMENTED only for Saved Map Physical view**
 
 Saved Map Physical projection requests opt into
-`include_interstitial_cables`. The resolver admits a Cable-backed Connection
+`include_cable_continuations`. The resolver admits a Cable-backed Connection
 when its two endpoint objects are already explicitly placed. Existing
 presentation collapse renders the Cable-backed edge, retaining canonical Cable
 and Connection refs for selection and trace highlighting. No cable placement or

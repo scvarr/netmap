@@ -20,9 +20,6 @@ class PhysicalObject(Base):
     map_placements: Mapped[list["MapPlacement"]] = relationship(
         back_populates="physical_object", passive_deletes=True
     )
-    map_cable_routes: Mapped[list["MapCableRoute"]] = relationship(
-        back_populates="cable_physical_object", passive_deletes=True
-    )
 
 
 class SavedMap(Base):
@@ -113,18 +110,18 @@ class MapCableRoute(Base):
 
     __tablename__ = "map_cable_routes"
     __table_args__ = (
-        UniqueConstraint("map_id", "cable_physical_object_id", "view_key", name="uq_map_cable_routes_map_cable_view"),
+        UniqueConstraint("map_id", "cable_id", "view_key", name="uq_map_cable_routes_map_cable_view"),
         CheckConstraint("view_key = 'L1/PHYSICAL_OBJECT'", name="map_cable_routes_view_key_physical_only"),
-        Index("ix_map_cable_routes_cable_physical_object_id", "cable_physical_object_id"),
+        Index("ix_map_cable_routes_cable_id", "cable_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
-    cable_physical_object_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("physical_objects.id", ondelete="CASCADE"), nullable=False)
+    cable_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cables.id", ondelete="CASCADE"), nullable=False)
     view_key: Mapped[MapViewKey] = mapped_column(String(32), nullable=False)
     waypoints: Mapped[list[dict[str, float]]] = mapped_column(JSONB, nullable=False, default=list)
     saved_map: Mapped[SavedMap] = relationship(back_populates="cable_routes")
-    cable_physical_object: Mapped[PhysicalObject] = relationship(back_populates="map_cable_routes")
+    cable: Mapped["Cable"] = relationship(back_populates="map_routes")
 
 
 class ConnectionPoint(Base):
@@ -161,6 +158,28 @@ class Connection(Base):
     cardinality: Mapped[int] = mapped_column(Integer, nullable=False)
     members: Mapped[list["ConnectionMember"]] = relationship(
         back_populates="connection", cascade="all, delete-orphan"
+    )
+    cable: Mapped["Cable | None"] = relationship(
+        back_populates="connection", uselist=False, cascade="all, delete-orphan", passive_deletes=True
+    )
+
+
+class Cable(Base):
+    """Optional identity for one point-to-point canonical Connection."""
+
+    __tablename__ = "cables"
+    __table_args__ = (
+        UniqueConstraint("connection_id", name="uq_cables_connection"),
+        Index("ix_cables_connection_id", "connection_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    connection_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("connections.id", ondelete="CASCADE"), nullable=False
+    )
+    connection: Mapped[Connection] = relationship(back_populates="cable")
+    map_routes: Mapped[list[MapCableRoute]] = relationship(
+        back_populates="cable", cascade="all, delete-orphan", passive_deletes=True
     )
 
 

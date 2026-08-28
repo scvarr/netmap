@@ -4,7 +4,6 @@ from collections import Counter
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.device_catalog import PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ModelError, ValidationError
 from app.models import (
     BlueprintInstance, BlueprintInstanceSlot, Connection, ConnectionMember,
@@ -12,7 +11,7 @@ from app.models import (
     L2EgressRule, L2ForwardingContext, L2IngressRule,
     L3Binding, NetworkInterface, NetworkInterfacePhysicalOwner,
     NetworkInterfaceRealization, PhysicalObject,
-    MapCableRoute, MapPlacement,
+    MapPlacement,
 )
 
 
@@ -34,16 +33,6 @@ class PhysicalObjectDeletionCatalog:
             NetworkInterfacePhysicalOwner.interface_id,
             NetworkInterfacePhysicalOwner.physical_object_id == physical_object_id,
         )
-        is_cable = self.session.scalar(select(EntityMetadata.id).where(
-            EntityMetadata.physical_object_id == physical_object_id,
-            EntityMetadata.key == PHYSICAL_OBJECT_CLASS_KEY,
-            EntityMetadata.value == "cable",
-        )) is not None
-        if is_cable:
-            connection_ids = self._simple_cable_connections(physical_object_id, point_ids)
-            self._delete_aggregate(object_, point_ids, interface_ids, connection_ids)
-            return
-
         blockers = self._ordinary_blockers(point_ids, interface_ids)
         if blockers:
             raise ModelError(
@@ -105,31 +94,8 @@ class PhysicalObjectDeletionCatalog:
             if not has_bindings:
                 self.session.delete(context)
 
-    def _simple_cable_connections(self, object_id: uuid.UUID, point_ids: tuple[uuid.UUID, ...]) -> tuple[uuid.UUID, ...]:
-        # Cable shape is canonical topology, never a projection/geometry inference.
-        if len(point_ids) != 2:
-            self._reject_cable(object_id, "cable must own exactly two ConnectionPoints")
-        connections = tuple(self.session.scalars(select(Connection).where(or_(Connection.point_a_id.in_(point_ids), Connection.point_b_id.in_(point_ids))).with_for_update()))
-        internal = [c for c in connections if c.point_a_id in point_ids and c.point_b_id in point_ids]
-        external = [c for c in connections if (c.point_a_id in point_ids) != (c.point_b_id in point_ids)]
-        if len(internal) != 1 or len(external) > 2:
-            self._reject_cable(object_id, "cable must have one internal and at most two external Connections")
-        incident = Counter(point for c in connections for point in (c.point_a_id, c.point_b_id) if point in point_ids)
-        if set(incident) != set(point_ids) or any(count not in (1, 2) for count in incident.values()):
-            self._reject_cable(object_id, "cable ConnectionPoints must each have one internal and at most one external Connection")
-        if any(c.cardinality != 1 or len(c.members) != 1 for c in connections):
-            self._reject_cable(object_id, "cable Connections must be simple cardinality-one Connections")
-        return tuple(c.id for c in connections)
-
-    def _reject_cable(self, object_id: uuid.UUID, message: str) -> None:
-        raise ModelError(message, {"reason": "PHYSICAL_OBJECT_IN_USE", "physical_object_id": str(object_id), "blockers": {"AMBIGUOUS_CABLE_STRUCTURE": 1}})
-
     def _delete_aggregate(self, object_: PhysicalObject, point_ids: tuple[uuid.UUID, ...], interface_ids: tuple[uuid.UUID, ...], connection_ids: tuple[uuid.UUID, ...]) -> None:
         instance_ids = self._ids(BlueprintInstance.id, BlueprintInstance.physical_object_id == object_.id)
-        # Presentation records have no topology meaning, but must not outlive their
-        # exact canonical object. They are deleted in this same transaction.
-        for route in self.session.scalars(select(MapCableRoute).where(MapCableRoute.cable_physical_object_id == object_.id)):
-            self.session.delete(route)
         for placement in self.session.scalars(select(MapPlacement).where(MapPlacement.physical_object_id == object_.id)):
             self.session.delete(placement)
         if connection_ids:

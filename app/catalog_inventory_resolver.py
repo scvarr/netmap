@@ -4,7 +4,7 @@ from collections import defaultdict
 from sqlalchemy import select
 
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
-from app.models import MapPlacement, SavedMap
+from app.models import Cable, MapPlacement, SavedMap
 from app.repository import CanonicalRepository, ConnectionPointRecord
 from app.schemas import (
     CatalogInventoryCableEndpoint,
@@ -16,7 +16,6 @@ from app.schemas import (
     ProjectionSourceRef,
     SavedMapRef,
 )
-from app.simple_cable_semantics import simple_cable_members
 
 
 class CatalogInventoryResolver:
@@ -35,15 +34,11 @@ class CatalogInventoryResolver:
         point_aliases = catalog.connection_point_display_aliases([point.point_id for point in points])
         points_by_object = self._points_by_object(points)
         memberships = self._map_memberships()
-        simple = simple_cable_members(catalog, set(object_ids), points, members)
 
-        equipment, cables = [], []
+        equipment = []
         for object_id in object_ids:
             alias = aliases.get(object_id)
             object_class = classes.get(object_id)
-            if object_class is not None and object_class.value == "cable":
-                cables.append(self._cable(object_id, alias, simple, points, point_aliases, aliases))
-                continue
             equipment.append(CatalogInventoryEquipmentItem(
                 physical_object_ref=self._ref("PhysicalObject", object_id),
                 label=self._label(alias, "PhysicalObject", object_id),
@@ -52,6 +47,12 @@ class CatalogInventoryResolver:
                 occupancy=self._occupancy(object_id, points_by_object, members),
                 map_memberships=memberships[object_id],
             ))
+        cables = [
+            self._cable(cable, points, point_aliases, aliases, members)
+            for cable in self.repository.session.scalars(
+                select(Cable).order_by(Cable.id)
+            )
+        ]
         return CatalogInventoryDocument(equipment=equipment, cables=cables, gaps=[], warnings=[])
 
     def _map_memberships(self) -> dict[uuid.UUID, list[CatalogInventoryMapMembership]]:
@@ -87,25 +88,40 @@ class CatalogInventoryResolver:
         connected = sum(point.point_id in externally_connected for point in points)
         return CatalogInventoryOccupancy(total_ports=total, connected_ports=connected, free_ports=total - connected)
 
-    def _cable(self, cable_id, alias, simple, points, point_aliases, object_aliases) -> CatalogInventoryCableItem:
-        common = dict(cable_ref=self._ref("PhysicalObject", cable_id), label=self._label(alias, "PhysicalObject", cable_id), label_source=None if alias else "TECHNICAL_FALLBACK")
-        cable_members = simple.get(cable_id)
-        if cable_members is None:
-            return CatalogInventoryCableItem(**common, resolution="UNRESOLVED", gaps=[], warnings=[])
+    def _cable(self, cable, points, point_aliases, object_aliases, members) -> CatalogInventoryCableItem:
+        cable_members = [
+            member for member in members if member.connection_id == cable.connection_id
+        ]
         point_by_id = {point.point_id: point for point in points}
         endpoints = []
-        for member in cable_members:
-            remote_point_id = member.point_b_id if member.object_a_id == cable_id else member.point_a_id
-            remote_object_id = point_by_id[remote_point_id].physical_object_id
+        connection = cable.connection
+        for point_id in (connection.point_a_id, connection.point_b_id):
+            object_id = point_by_id[point_id].physical_object_id
             endpoints.append(CatalogInventoryCableEndpoint(
-                remote_physical_object_ref=self._ref("PhysicalObject", remote_object_id),
-                remote_physical_object_label=self._label(object_aliases.get(remote_object_id), "PhysicalObject", remote_object_id),
-                remote_connection_point_ref=self._ref("ConnectionPoint", remote_point_id),
-                remote_connection_point_label=self._label(point_aliases.get(remote_point_id), "ConnectionPoint", remote_point_id),
-                evidence_refs=[self._ref("Connection", member.connection_id), self._ref("ConnectionMember", member.connection_member_id)],
+                remote_physical_object_ref=self._ref("PhysicalObject", object_id),
+                remote_physical_object_label=self._label(object_aliases.get(object_id), "PhysicalObject", object_id),
+                remote_connection_point_ref=self._ref("ConnectionPoint", point_id),
+                remote_connection_point_label=self._label(point_aliases.get(point_id), "ConnectionPoint", point_id),
+                evidence_refs=[
+                    self._ref("Cable", cable.id),
+                    self._ref("Connection", connection.id),
+                    *[
+                        self._ref("ConnectionMember", member.connection_member_id)
+                        for member in cable_members
+                    ],
+                ],
             ))
         endpoints.sort(key=lambda item: (str(item.remote_physical_object_ref.entity_id), str(item.remote_connection_point_ref.entity_id)))
-        return CatalogInventoryCableItem(**common, resolution="SIMPLE_CABLE", endpoint_a=endpoints[0], endpoint_b=endpoints[1], gaps=[], warnings=[])
+        return CatalogInventoryCableItem(
+            cable_ref=self._ref("Cable", cable.id),
+            connection_ref=self._ref("Connection", connection.id),
+            label=f"Cable {str(cable.id)[:8]}",
+            label_source="TECHNICAL_FALLBACK",
+            endpoint_a=endpoints[0],
+            endpoint_b=endpoints[1],
+            gaps=[],
+            warnings=[],
+        )
 
     @staticmethod
     def _label(alias: DisplayAliasRecord | None, entity_type: str, entity_id: uuid.UUID) -> str:

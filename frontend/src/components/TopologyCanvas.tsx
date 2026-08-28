@@ -41,7 +41,7 @@ import type { XYPosition } from "@xyflow/react";
 import { overlapsAnyNode } from "../topology/nodeFootprint";
 import type { MapCableRoute } from "../topology/savedMapTypes";
 import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation";
-import { physicalObjectIdForNode as cablePhysicalObjectIdForNode } from "../topology/projection";
+import { cableIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
@@ -74,7 +74,7 @@ interface TopologyCanvasProps {
     anchor: XYPosition,
   ) => void;
   cableRoutes?: readonly MapCableRoute[];
-  cableRouteDraft?: { cablePhysicalObjectId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
+  cableRouteDraft?: { cableId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
   wiringRoute?: { source: { physicalObjectId: string; connectionPointId: string }; target?: { physicalObjectId: string; connectionPointId: string }; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; };
@@ -290,7 +290,7 @@ export function TopologyCanvas({
       : undefined;
     const matchingDraft = edge.data?.cableNode
       && cableRouteDraft
-      && cablePhysicalObjectIdForNode(edge.data.cableNode) === cableRouteDraft.cablePhysicalObjectId
+      && cableIdForNode(edge.data.cableNode) === cableRouteDraft.cableId
       ? cableRouteDraft
       : undefined;
     const isSelected = edge.data?.continuation

@@ -35,7 +35,6 @@ export function ConnectPhysicalInterface({
   const [open, setOpen] = useState(false);
   const [targetDeviceId, setTargetDeviceId] = useState('');
   const [targetInterfaceId, setTargetInterfaceId] = useState('');
-  const [cableName, setCableName] = useState('');
   const [targetState, setTargetState] = useState<TargetState>({ kind: 'idle' });
   const [targetRetryKey, setTargetRetryKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -78,16 +77,13 @@ export function ConnectPhysicalInterface({
     setSubmitting(true);
     setError(null);
     try {
-      const trimmedCableName = cableName.trim();
       await writeDataSource.createPhysicalLink({
         source_interface_id: sourceInterface.interface_ref.entity_id,
         target_interface_id: targetInterfaceId,
-        ...(trimmedCableName ? { cable_display_name: trimmedCableName } : {}),
       });
       setOpen(false);
       setTargetDeviceId('');
       setTargetInterfaceId('');
-      setCableName('');
       onConnected();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
@@ -154,15 +150,6 @@ export function ConnectPhysicalInterface({
               </button>
             </div>
           )}
-          <label>
-            <span>Кабель</span>
-            <input
-              value={cableName}
-              onChange={(event) => setCableName(event.target.value)}
-              disabled={submitting}
-              placeholder="Необязательное название"
-            />
-          </label>
           {error && (
             <p className="connect-interface__error" role="alert">
               Не удалось подключить интерфейс. {error}
