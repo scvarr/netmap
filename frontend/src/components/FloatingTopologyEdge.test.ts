@@ -1,6 +1,6 @@
 import { Position } from '@xyflow/react';
 import { describe, expect, it } from 'vitest';
-import { getConnectionPointEndpoint, getFloatingEndpoints, routedCablePath, type NodeRectangle } from './FloatingTopologyEdge';
+import { cablePathWithLeadIns, getConnectionPointEndpoint, getFloatingEndpoints, getRenderedConnectionPoint, routedCablePath, type NodeRectangle } from './FloatingTopologyEdge';
 import type { TopologyProjectionNode } from '../topology/types';
 
 const node = (x: number, y: number): NodeRectangle => ({ x, y, width: 200, height: 100 });
@@ -37,9 +37,13 @@ describe('floating topology edge geometry', () => {
       blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, slots: [{ slot_key: 'rear01', display_name: 'rear01', kind: 'CONNECTION_POINT', connection_point_id: 'rear-01', rendered_position: { x: .25, y: .5 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }] },
     } };
     const endpoint = getConnectionPointEndpoint(projection, node(10, 20), 'rear-01');
+    const renderedPort = getRenderedConnectionPoint(projection, node(10, 20), 'rear-01');
     expect(endpoint).toMatchObject({ x: 60, y: 20, side: Position.Top });
+    expect(renderedPort).toMatchObject({ x: 60, y: 70, side: Position.Top });
     expect(routedCablePath(endpoint!, { x: 300, y: 200, side: Position.Left }, [{ x: 80, y: 30 }]))
       .toBe('M 60 20 L 80 30 L 300 200');
+    expect(cablePathWithLeadIns(renderedPort!, endpoint!, { x: 300, y: 200, side: Position.Left }, { x: 320, y: 220, side: Position.Left }, [{ x: 80, y: 30 }]))
+      .toBe('M 60 70 L 60 20 L 80 30 L 300 200 L 320 220');
   });
 
   it('offsets a REAR slot endpoint to the REAR panel without changing its anchor semantics', () => {
