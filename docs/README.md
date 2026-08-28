@@ -30,6 +30,7 @@
 ## Active plans
 
 - [[plans/09-01-l1-spatial-foundation-plan|L1 spatial foundation plan]]
+- [[plans/09-04-l1-product-ux-completion|L1 Product UX completion]]
 - [[plans/stabilization/10-stabilization-overview|Stabilization overview]] и его [[plans/stabilization/10-02-stabilization-backlog|backlog]]
 
 ## Reviews and audits

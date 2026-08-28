@@ -6,8 +6,9 @@
 развития продукта и границы будущих систем, но не является детальным
 implementation plan и не создаёт implementation milestones.
 
-Текущий план [[plans/09-01-l1-spatial-foundation-plan|09.1 L1 spatial foundation]]
-не пересматривается и продолжается независимо от этой заметки.
+Активный [[plans/09-04-l1-product-ux-completion|09.4 L1 Product UX completion]]
+pass выполняется перед L1S.7; затем продолжается оставшаяся spatial foundation
+последовательность.
 
 Связанные contracts:
 
@@ -21,20 +22,22 @@ implementation plan и не создаёт implementation milestones.
 
 **FIXED direction**
 
-1. Завершить текущую серию L1.S spatial foundation.
-2. Провести отдельный L1 Product UX / Usability Pass.
-3. Сформировать полноценную многопользовательскую основу NetMap:
+1. Завершить [[plans/09-04-l1-product-ux-completion|L1 Product UX completion]]
+   pass.
+2. Выполнить L1S.7 Regions, L1S.8 MapReference/hierarchical maps и финальный
+   L1 usability/acceptance.
+3. Закрыть обязательные до-L2 stabilization/performance пункты.
+4. Развивать semantic presentation L2, а затем L3.
+5. Сформировать полноценную многопользовательскую основу NetMap:
    authentication, ownership/isolation workspace, sharing/access control,
    comments/annotations, activity/audit.
-4. Развивать portability и reusable content: workspace export/import,
+6. Развивать portability и reusable content: workspace export/import,
    packages библиотек Blueprint, а при реальной потребности — map templates
    или cloning.
-5. После зрелого L1 UX и multi-user foundation активно развивать semantic
-   presentation L2 и L3.
-6. После появления реальных L2/L3 UI use cases развивать observations,
+7. После появления реальных L2/L3 UI use cases развивать observations,
    collectors/adapters, dynamic maps и monitoring/health overlays.
 
-Порядок шагов после multi-user foundation может корректироваться по реальной
+Порядок шагов после L2/L3 foundation может корректироваться по реальной
 product need. Это не повод расширять core «на всякий случай»: L2/L3 backend
 semantics уже существенно развиты. После зрелого L1 главным риском является
 UX/product/application layer, а не изобретение ещё одного network core.
@@ -42,7 +45,7 @@ Backend и API расширяются для конкретного UI/use case.
 
 ## L1 Product UX / Usability Pass
 
-**FIXED direction после L1.S**
+**FIXED direction перед L1S.7**
 
 Цель отдельного pass — сделать L1 NetMap самостоятельным удобным рабочим
 инструментом, а не демонстрацией корректной архитектуры. Это будущий usability

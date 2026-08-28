@@ -78,12 +78,12 @@ Product/presentation invariants — в [[architecture/presentation/05-presentati
 
 ### L1 spatial foundation
 
-Оставшиеся L1 работы имеют намеренно ограниченную последовательность L1S.1–L1S.9
-в [[plans/09-01-l1-spatial-foundation-plan|плане L1S]]: control canvas, стабильное
-размещение, внутренняя continuity, контракт/отрисовка маршрута кабеля/visual wiring,
-завершение Blueprint authoring, controlled instance upgrade, regions, MapReference
-и L1 acceptance. До конкретных milestones остаются открытыми окончательные
-storage/API/DTO shape, collision policy и точный visual design.
+L1S.1–L1S.6 завершены. Перед Regions выполняется активный
+[[plans/09-04-l1-product-ux-completion|09.4 L1 Product UX completion]] pass;
+после него остаются L1S.7 Regions, L1S.8 MapReference и L1 acceptance по
+[[plans/09-01-l1-spatial-foundation-plan|плану L1S]]. До конкретных milestones
+остаются открытыми окончательные storage/API/DTO shape, collision policy и
+точный visual design.
 
 ### Blueprint authoring и version lifecycle
 
@@ -100,7 +100,8 @@ changes/blockers и explicit apply. Upgrade сохраняет identity `Physica
 
 ### L2 — отдельный следующий UI-трек
 
-После L1S.9 L2 не следует понимать как L1 map с VLAN labels. Это отдельная
+После 09.4, L1S.7–L1S.9 и обязательной до-L2 stabilization L2 не следует
+понимать как L1 map с VLAN labels. Это отдельная
 semantic projection с объяснимой aggregation/collapse, supporting evidence refs
 и раскрытием к individual endpoints/interfaces/facts. L1 главным образом
 масштабируется через spatial hierarchy и detailed Saved Maps, L2 — через semantic
@@ -109,6 +110,7 @@ aggregation. Точные grouping heuristics намеренно отложен�
 
 ## Не является gate для L2
 
-После выполнения L1S.1–L1S.9 старт L2 не должен ждать `PointMember`/`member_index`
-UI refinement, полный optical/fiber-member UX, ducts/bundles, вычисление физической
-длины кабеля или другие speculative L1 extensions без конкретного use case.
+После 09.4, L1S.7–L1S.9 и обязательной до-L2 stabilization старт L2 не должен
+ждать `PointMember`/`member_index` UI refinement, полный optical/fiber-member
+UX, ducts/bundles, вычисление физической длины кабеля или другие speculative L1
+extensions без конкретного use case.

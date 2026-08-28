@@ -326,14 +326,13 @@ exists solely to preserve development Blueprint authoring data. This exception
 does not relax canonical topology, immutable Blueprint snapshot, Saved Map,
 provenance, or L1S.6 upgrade invariants.
 
-### Later separate bounded milestone — dense cable-editing visibility
+### L1 Product UX completion pass before L1S.7
 
-**FUTURE / NOT PART OF L1S.6c**
-
-While routing a selected cable, it should remain visible; objects that obstruct
-the editing context may become translucent. This is deliberately separate from
-Port Block Blueprint composition so dense-device authoring does not absorb cable
-editing visibility work.
+Before Regions, complete the active
+[[plans/09-04-l1-product-ux-completion|09.4 L1 Product UX completion]] pass.
+It owns the remaining reliability and usability work around cable routing,
+port/module workflows, Inspector/context menus, error presentation and LOC-001;
+it is deliberately separate from Port Block Blueprint composition.
 
 ### L1S.7 — Regions / areas
 
