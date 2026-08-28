@@ -111,7 +111,7 @@ persistence.
 
 **IMPLEMENTED.** Blueprint-backed objects render their display name in a
 single-line, width-matched rectangular header directly attached to the
-intrinsic body; the header scales its type with display width and ellipsizes
+intrinsic body; the header uses a shared compact UI typography and ellipsizes
 only when needed. Its full value is available through the native title tooltip.
 The nameplate is presentation-only:
 it does not change body dimensions, footprint, port/cable attachment, internal

@@ -32,7 +32,7 @@ describe('DeviceNode internal L1 overlay', () => {
     const nameplate = screen.getByTitle('PC1');
     expect(nameplate).toHaveTextContent('PC1');
     expect(nameplate).toHaveClass('blueprint-map-node__nameplate');
-    expect(nameplate.getAttribute('style')).toContain('--blueprint-nameplate-font-size: 8px');
+    expect(nameplate).not.toHaveAttribute('style');
   });
 
   it('keeps the full long name in title while the small nameplate ellipsizes via CSS', () => {
@@ -44,12 +44,12 @@ describe('DeviceNode internal L1 overlay', () => {
     expect(nameplate).toHaveClass('blueprint-map-node__nameplate');
   });
 
-  it('scales nameplate font with the Blueprint display width', () => {
+  it('keeps one shared nameplate typography across Blueprint display widths', () => {
     const { rerender } = render(<DeviceNode {...({ data: { projection }, selected: false, width: 160 } as any)} />);
     const nameplate = () => screen.getByTitle('PP1');
-    const smallFont = nameplate().getAttribute('style');
+    expect(nameplate()).not.toHaveAttribute('style');
     rerender(<DeviceNode {...({ data: { projection }, selected: false, width: 320 } as any)} />);
-    expect(nameplate().getAttribute('style')).not.toBe(smallFont);
+    expect(nameplate()).not.toHaveAttribute('style');
   });
 
   it('renders both physical faces simultaneously without runtime face tabs and keeps slots on their own surfaces', () => {
