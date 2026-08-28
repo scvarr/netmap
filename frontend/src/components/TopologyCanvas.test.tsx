@@ -55,7 +55,9 @@ vi.mock('@xyflow/react', () => ({
     </div>
   ),
   useInternalNode: () => undefined,
+  useNodes: () => [],
   useReactFlow: () => ({ fitView: fitViewMock }),
+  ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 const documentFor = (id: string): TopologyProjectionDocument => ({

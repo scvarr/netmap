@@ -1,6 +1,7 @@
 import {
   BaseEdge,
   Position,
+  ViewportPortal,
   getStraightPath,
   useReactFlow,
   useInternalNode,
@@ -167,7 +168,7 @@ export function FloatingTopologyEdge({
   return (
     <>
       <BaseEdge id={id} path={path} style={style} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={interactionWidth} />
-      {draft && segmentPoints.slice(0, -1).map((point, index) => {
+      {draft && !data?.renderRouteEditorInForeground && segmentPoints.slice(0, -1).map((point, index) => {
         const next = segmentPoints[index + 1];
         return <line
           key={`${id}:segment:${index}`}
@@ -177,7 +178,7 @@ export function FloatingTopologyEdge({
           onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); draft.onWaypointInsert(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }}
         />;
       })}
-      {draft?.waypoints.map((waypoint, index) => (
+      {draft && !data?.renderRouteEditorInForeground && draft.waypoints.map((waypoint, index) => (
         <circle
           key={`${id}:waypoint:${index}`}
           className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`}
@@ -192,4 +193,70 @@ export function FloatingTopologyEdge({
       ))}
     </>
   );
+}
+
+function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
+  const { screenToFlowPosition } = useReactFlow();
+  const sourceNode = useInternalNode<DeviceFlowNode>(edge.source);
+  const targetNode = useInternalNode<DeviceFlowNode>(edge.target);
+  const data = edge.data;
+  if (!sourceNode || !targetNode || !data?.cableNode) return null;
+
+  const pair = data.endpointPair;
+  const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
+  const endpoints = {
+    source: getConnectionPointEndpoint(sourceNode.data.projection, rectangle(sourceNode), pair?.from_connection_point_id) ?? floating.source,
+    target: getConnectionPointEndpoint(targetNode.data.projection, rectangle(targetNode), pair?.to_connection_point_id) ?? floating.target,
+  };
+  const draft = data.cableRouteDraft;
+  const waypoints = draft?.waypoints ?? data.cableRoute?.waypoints;
+  const [straightPath] = getStraightPath({ sourceX: endpoints.source.x, sourceY: endpoints.source.y, targetX: endpoints.target.x, targetY: endpoints.target.y });
+  const path = waypoints ? routedCablePath(endpoints.source, endpoints.target, waypoints) : straightPath;
+  const emphasis = draft ? 'editing' : edge.selected ? 'selected' : 'normal';
+  const style = draft ? { stroke: '#8d7aff', strokeWidth: 5, opacity: 1 } : edge.style;
+  const segmentPoints = [endpoints.source, ...(waypoints ?? []), endpoints.target];
+
+  return <g data-testid={`foreground-cable-${edge.id}`} data-emphasis={emphasis}>
+    <path className={`cable-route-foreground cable-route-foreground--${emphasis}`} d={path} fill="none" style={{ ...style, pointerEvents: 'none' }} />
+    {draft && segmentPoints.slice(0, -1).map((point, index) => {
+      const next = segmentPoints[index + 1];
+      return <line key={`${edge.id}:foreground-segment:${index}`} className="cable-route-segment-hit" x1={point.x} y1={point.y} x2={next.x} y2={next.y} stroke="transparent" strokeWidth={22} pointerEvents="stroke" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); draft.onWaypointInsert(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }} />;
+    })}
+    {draft?.waypoints.map((waypoint, index) => (
+      <circle key={`${edge.id}:foreground-waypoint:${index}`} className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={6} pointerEvents="all" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); draft.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }} onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} />
+    ))}
+  </g>;
+}
+
+function ForegroundPortMarkers() {
+  const nodes = useNodes<DeviceFlowNode>();
+  return <>{nodes.map((node) => <ForegroundNodePortMarkers key={node.id} nodeId={node.id} />)}</>;
+}
+
+function ForegroundNodePortMarkers({ nodeId }: { nodeId: string }) {
+  const node = useInternalNode<DeviceFlowNode>(nodeId);
+  if (!node || node.data.projection.kind !== 'PHYSICAL_OBJECT') return null;
+  const projection = node.data.projection;
+  const blueprint = projection.attributes.blueprint_presentation;
+  const ports = blueprint
+    ? blueprint.slots.map((slot) => ({ id: slot.connection_point_id, network: slot.kind === 'NETWORK_PORT' }))
+    : genericConnectionPoints(projection).map((point) => ({ id: point.connection_point_id, network: false }));
+  return <g className="cable-route-port-markers" pointerEvents="none">
+    {ports.map((port) => {
+      const endpoint = getConnectionPointEndpoint(projection, rectangle(node), port.id);
+      return endpoint && <circle key={port.id} className={`cable-route-port-marker${port.network ? ' cable-route-port-marker--network' : ''}`} cx={endpoint.x} cy={endpoint.y} r={port.network ? 4 : 3.5} />;
+    })}
+  </g>;
+}
+
+/** Foreground-only cable rendering; only route-editor controls accept input. */
+export function ForegroundCableRoutes({ edges }: { edges: readonly LogicalFlowEdge[] }) {
+  const cables = edges.filter((edge) => Boolean(edge.data?.cableNode));
+  if (!cables.length) return null;
+  return <ViewportPortal>
+    <svg className="cable-routes-foreground" aria-hidden="true">
+      {cables.map((edge) => <ForegroundCableRoute key={edge.id} edge={edge} />)}
+      <ForegroundPortMarkers />
+    </svg>
+  </ViewportPortal>;
 }

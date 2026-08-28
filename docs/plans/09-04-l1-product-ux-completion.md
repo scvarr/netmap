@@ -76,3 +76,14 @@ raw transport/parser diagnostics remain non-primary technical detail.
 object, ports, cabling и Saved Map до L1 trace. L2 начинается только после
 acceptance и выполнения обязательных до-L2 пунктов stabilization/performance,
 включая LOC-001.
+
+### UX.2 — Persistent cable visibility
+
+**IMPLEMENTED.** Physical Saved Map renders every collapsed canonical cable in a
+foreground, viewport-aligned presentation layer independently of selection or
+editing state. Normal cables remain thin; selection increases emphasis; route
+editing and new-wiring drafts have the strongest emphasis. The foreground path
+is non-interactive, so normal object and ConnectionPoint interaction continues
+through it; only explicit route editing segments and waypoint handles receive
+pointer input. Port/ConnectionPoint markers are repainted above foreground cable
+paths, allowing route editing through an object body without hiding ports.

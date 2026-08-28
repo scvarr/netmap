@@ -7,6 +7,7 @@ import {
   MiniMap,
   Panel,
   ReactFlow,
+  ViewportPortal,
   useReactFlow,
   type EdgeMouseHandler,
   type NodeMouseHandler,
@@ -31,7 +32,7 @@ import {
   type TopologyLayoutStore,
 } from "../topology/layoutStore";
 import { DeviceNode } from "./DeviceNode";
-import { FloatingTopologyEdge, WiringRoute } from "./FloatingTopologyEdge";
+import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute } from "./FloatingTopologyEdge";
 import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
 import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
 import { physicalObjectIdForNode } from "../topology/projection";
@@ -311,13 +312,13 @@ export function TopologyCanvas({
         : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
     return {
       ...edge,
-      data: edge.data ? { ...edge.data, ...(cableRoute ? { cableRoute } : {}), ...(matchingDraft ? { cableRouteDraft: matchingDraft } : {}) } : edge.data,
+      data: edge.data ? { ...edge.data, ...(cableRoute ? { cableRoute } : {}), ...(matchingDraft ? { cableRouteDraft: matchingDraft, renderRouteEditorInForeground: true } : {}) } : edge.data,
       selected: isSelected,
       animated: isSelected || isTraced,
       style: {
         stroke: isSelected ? "#54e3b4" : isTraced ? "#f0bd66" : "#52676b",
         strokeWidth: isSelected ? 3 : isTraced ? 4 : 2,
-        opacity: isTraced ? 1 : 0.72,
+        opacity: 1,
       },
     };
   });
@@ -467,7 +468,8 @@ export function TopologyCanvas({
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        {wiringRoute && <WiringRoute {...wiringRoute} />}
+        <ForegroundCableRoutes edges={edges} />
+        {wiringRoute && <ViewportPortal><svg className="cable-routes-foreground cable-routes-foreground--wiring" aria-hidden="true"><WiringRoute {...wiringRoute} /></svg></ViewportPortal>}
       </ReactFlow>
     </div>
   );

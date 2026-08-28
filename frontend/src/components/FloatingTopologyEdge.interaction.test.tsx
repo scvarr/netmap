@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { FloatingTopologyEdge } from './FloatingTopologyEdge';
+import { FloatingTopologyEdge, ForegroundCableRoutes } from './FloatingTopologyEdge';
 
 const source = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'source', kind: 'PHYSICAL_OBJECT', label: 'source', source_refs: [], attributes: {} } } };
 const target = { internals: { positionAbsolute: { x: 300, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'target', kind: 'PHYSICAL_OBJECT', label: 'target', source_refs: [], attributes: {} } } };
@@ -10,7 +10,9 @@ vi.mock('@xyflow/react', () => ({
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
   getStraightPath: () => ['straight'],
   useInternalNode: (id: string) => id === 'source' ? source : target,
+  useNodes: () => [{ id: 'source', data: source.data }, { id: 'target', data: target.data }],
   useReactFlow: () => ({ screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x: x + 1000, y: y + 2000 }) }),
+  ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 const editor = (waypoints: Array<{ x: number; y: number }>) => ({
@@ -54,5 +56,20 @@ describe('direct cable route edge interaction', () => {
     expect(draft.onWaypointMove).toHaveBeenCalledWith(0, { x: 1007, y: 2008 });
     expect(draft.onWaypointInsert).not.toHaveBeenCalled();
     expect(onCanvasPointerDown).not.toHaveBeenCalled();
+  });
+
+  it('keeps normal cables visual-only in the foreground and puts edit controls above object bodies', () => {
+    const normalDraft = edgeProps(editor([]));
+    const { cableRouteDraft: _unused, ...normalData } = normalDraft.data;
+    const normal = { ...normalDraft, data: { ...normalData, cableNode: { id: 'cable-node' } } };
+    const selected = { ...normal, id: 'selected-cable', selected: true };
+    const draft = editor([{ x: 100, y: 50 }]);
+    const editing = { ...edgeProps(draft), id: 'editing-cable', data: { ...edgeProps(draft).data, cableNode: { id: 'editing-node' } } };
+    const { container } = render(<ForegroundCableRoutes edges={[normal, selected, editing] as any} />);
+    expect(container.querySelector('[data-testid="foreground-cable-cable"]')).toHaveAttribute('data-emphasis', 'normal');
+    expect(container.querySelector('[data-testid="foreground-cable-selected-cable"]')).toHaveAttribute('data-emphasis', 'selected');
+    expect(container.querySelector('[data-testid="foreground-cable-editing-cable"]')).toHaveAttribute('data-emphasis', 'editing');
+    expect(container.querySelectorAll('.cable-route-segment-hit')).toHaveLength(2);
+    expect(container.querySelector('.cable-route-foreground--normal')).toHaveStyle({ pointerEvents: 'none' });
   });
 });

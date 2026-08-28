@@ -51,6 +51,8 @@ export interface LogicalEdgeData extends Record<string, unknown> {
     onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void;
     onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void;
   };
+  /** Route editing controls are rendered by the foreground cable overlay. */
+  renderRouteEditorInForeground?: boolean;
   continuation?: L1OffMapContinuation;
 }
 
