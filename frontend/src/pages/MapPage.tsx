@@ -1042,7 +1042,7 @@ export function MapPage({
     setCableRouteEdit({ ...operation, status: "saving", error: null });
     try { await savedMapDataSource.setCableRoute(operation.mapId, operation.cablePhysicalObjectId, operation.draftWaypoints); }
     catch {
-      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cablePhysicalObjectId === operation.cablePhysicalObjectId ? { ...current, status: "editing", error: t("map.routeFailed") } : current);
+      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cablePhysicalObjectId === operation.cablePhysicalObjectId ? { ...current, status: "editing", error: t("map.routeEditorFailed") } : current);
       return;
     }
     try {
