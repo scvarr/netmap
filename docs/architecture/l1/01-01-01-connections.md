@@ -16,7 +16,9 @@
 - MPO и другие многоканальные разъёмы;
 - breakout с разным количеством ConnectionPoint на сторонах.
 
-Понятия `fiber`, `pair`, `wire`, `MPO`, `splice` и конкретные типы кабелей не входят в ядро и при необходимости задаются metadata.
+Понятия `fiber`, `pair`, `wire`, `MPO`, `splice` и другие technology labels не
+входят в ядро. Описательные Cable metadata не являются physical inventory и
+будут рассмотрены отдельно; Cable.0 фиксирует только domain relation.
 
 ## Уровень детализации
 

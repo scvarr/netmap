@@ -149,7 +149,7 @@ same-scene insertion does not refit the viewport or change map/view identity.
 
 Текущий `InfrastructureObjectsPage` временно продолжает переиспользовать public
 `L1 / PHYSICAL_OBJECT` projection как object list. Для следующего Catalog
-Equipment/Cables UI уже materialized отдельный inventory read model
+Equipment/Cables UI уже materialized отдельный bounded catalog read model
 `GET /v1/catalog/inventory` (frontend transport: `/api/v1/catalog/inventory`):
 
 ```text
@@ -169,37 +169,37 @@ CatalogInventoryDocument
     gaps[], warnings[]
 ```
 
-Equipment is every `PhysicalObject`; Cable is a separate optional domain entity
-and is not represented by a `class="cable"` PhysicalObject.
+Equipment is every `PhysicalObject`; Cable is a separate descriptive relation
+catalog entry and is not represented by a `class="cable"` PhysicalObject.
 Occupancy is emitted only when every owned `ConnectionPoint` has cardinality
 one; it counts points with external canonical `Connection` occupancy, excluding
 same-object internal links, and never counts `NetworkInterface`s. Map
 memberships are only explicit `MapPlacement` facts joined to `SavedMap`; they do
-not participate in topology resolution. Cables are only explicit
-Cable records are emitted only when a canonical Cable and its one Connection
+not participate in topology resolution. Cable records are emitted only when a
+canonical Cable and its one Connection
 exist. Exact two endpoints are the Connection's two ConnectionPoints; no
 endpoint is guessed. The endpoint order is stable but has no
 directional meaning. This read model is bulk-resolved from canonical and
 presentation query boundaries, not by L1 projection or per-object/map detail
 requests. `/infrastructure/objects` now uses this datasource exclusively: one
-guarded inventory load per initial/retry/authoritative post-delete refresh, with
+guarded catalog load per initial/retry/authoritative post-delete refresh, with
 no topology-projection fallback. The Catalog has Equipment and Cables tabs.
 Equipment shows class, trustworthy `connected / total` port occupancy (or an
 unknown state), explicit SavedMap links, and bounded client-side
-name/class/map search and filters. Cables show only proven simple-cable
-endpoints or an explicit unresolved state; cable search and resolution filtering
-are client-side. Map links use the placed object and map identity directly:
+name/class/map search and filters. Cables show only proven Cable-backed
+Connection endpoints; cable search and resolution filtering are client-side.
+Map links use the placed object and map identity directly:
 `/map?map=<SavedMap UUID>&view=physical&focus=<PhysicalObject UUID>`.
 Deletion preserves the existing cable-specific confirmation and reloads the
-authoritative inventory only after a successful operation.
+authoritative catalog only after a successful operation.
 
 Catalog additionally provides a bounded PhysicalObject display rename on both
 tabs. `PUT /v1/topology/physical-objects/<PhysicalObject UUID>/display-name`
 updates or creates exactly one `EntityMetadata(key="alias.display")` value;
 it never changes the canonical PhysicalObject UUID, class metadata, points,
 connections, blueprint provenance, or map placements. A successful Catalog
-write is followed by an authoritative inventory reload rather than a local row
-mutation, so labels, natural ordering, search, and simple-cable endpoint labels
+write is followed by an authoritative catalog reload rather than a local row
+mutation, so labels, natural ordering, search, and Cable endpoint labels
 are refreshed together. If that reload fails, the last confirmed document is
 shown with an explicit retry/error state rather than presenting the rename as
 authoritatively refreshed.
@@ -871,9 +871,9 @@ waypoints determine route bends.
 
 Physical-map wiring keeps a local flow-coordinate waypoint draft after source
 port selection. Pane clicks append draft waypoints; port/panel clicks do not.
-Confirmation first creates the canonical cable, then persists the explicit
+Confirmation first creates the canonical Connection + optional Cable, then persists the explicit
 route (including `[]`) by the returned canonical cable ref. These are separate
-writes: route retry never repeats canonical creation, and a failed projection
+writes: route retry never repeats the atomic canonical create, and a failed projection
 refresh retries only the projection read. During endpoint choice, only exact
 same-object `internal_l1_links` adjacent to the source are highlighted as a
 passive continuity hint; they do not change the canonical source endpoint.

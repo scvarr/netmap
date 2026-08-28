@@ -177,8 +177,9 @@ Map-local Cable Bundle — presentation-only visual grouping нескольки�
 кабеля, но выбор конкретного Cable всё равно выделяет именно его путь через
 bundle. Bundle не создаёт connectivity между кабелями; canonical cables,
 endpoints, identity и trace остаются независимыми. RU product term —
-«Кабельный жгут», EN — `Cable Bundle`. Cable tray/duct, размеры, физическая
-ёмкость и NetBox-like properties не моделируются. Exact persistence/API shape
+«Кабельный жгут», EN — `Cable Bundle`. Материальная inventory-модель Cable,
+размеры, vendor/construction и подобные свойства не моделируются. Exact
+persistence/API shape
 остаётся OPEN.
 
 ### UX.6 — Global map presentation settings (future settings milestone)

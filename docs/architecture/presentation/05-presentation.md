@@ -1410,7 +1410,7 @@ Saved Map может содержать presentation object со ссылкой 
 overlays:
 
 - Physical topology;
-- media / cable type;
+- descriptive Cable relation labels/category/capacity;
 - link capability;
 - configured link rate;
 - operational/negotiated link rate;
@@ -1425,7 +1425,8 @@ actual traffic throughput не должны визуально или текст
 ограничение, а не обещание измеренной throughput.
 
 Цвет сам по себе недостаточен: operational health уже может использовать
-red/yellow/green semantics. Media и capacity должны быть читаемы через labels,
+red/yellow/green semantics. Descriptive Cable labels/category/capacity и
+capability должны быть читаемы через labels,
 badges, line style/width, legend или другие visual channels; конкретные цвета и
 styles не являются architecture contract.
 
