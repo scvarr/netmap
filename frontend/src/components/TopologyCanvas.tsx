@@ -468,7 +468,7 @@ export function TopologyCanvas({
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        <ForegroundCableRoutes edges={edges} />
+        <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} />
         {wiringRoute && <ViewportPortal><svg className="cable-routes-foreground cable-routes-foreground--wiring" aria-hidden="true"><WiringRoute {...wiringRoute} /></svg></ViewportPortal>}
       </ReactFlow>
     </div>

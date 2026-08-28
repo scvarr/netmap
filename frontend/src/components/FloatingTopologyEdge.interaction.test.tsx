@@ -2,8 +2,9 @@ import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FloatingTopologyEdge, ForegroundCableRoutes } from './FloatingTopologyEdge';
 
-const source = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'source', kind: 'PHYSICAL_OBJECT', label: 'source', source_refs: [], attributes: {} } } };
-const target = { internals: { positionAbsolute: { x: 300, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'target', kind: 'PHYSICAL_OBJECT', label: 'target', source_refs: [], attributes: {} } } };
+const markerPoints = ['eligible', 'source', 'destination', 'unavailable'].map((id) => ({ connection_point_id: id, display_name: id, cardinality: 1, external_connection_count: 0 }));
+const source = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'source', kind: 'PHYSICAL_OBJECT', label: 'source', source_refs: [], attributes: { connection_points: markerPoints } } } };
+const target = { internals: { positionAbsolute: { x: 300, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'target', kind: 'PHYSICAL_OBJECT', label: 'target', source_refs: [], attributes: { connection_points: markerPoints } } } };
 
 vi.mock('@xyflow/react', () => ({
   BaseEdge: () => <path data-testid="base-edge" />,
@@ -71,5 +72,14 @@ describe('direct cable route edge interaction', () => {
     expect(container.querySelector('[data-testid="foreground-cable-editing-cable"]')).toHaveAttribute('data-emphasis', 'editing');
     expect(container.querySelectorAll('.cable-route-segment-hit')).toHaveLength(2);
     expect(container.querySelector('.cable-route-foreground--normal')).toHaveStyle({ pointerEvents: 'none' });
+  });
+
+  it('preserves every wiring port state in the foreground repaint', () => {
+    const base = edgeProps(editor([]));
+    const edge = { ...base, data: { ...base.data, cableNode: { id: 'cable-node' } } };
+    const { container } = render(<ForegroundCableRoutes edges={[edge] as any} physicalPortStates={{ eligible: 'eligible', source: 'source', destination: 'destination', unavailable: 'unavailable' }} />);
+    for (const state of ['eligible', 'source', 'destination', 'unavailable']) {
+      expect(container.querySelector(`.cable-route-port-marker--wiring-${state}`)).toBeInTheDocument();
+    }
   });
 });

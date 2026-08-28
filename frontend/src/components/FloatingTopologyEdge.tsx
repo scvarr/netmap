@@ -228,12 +228,14 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
   </g>;
 }
 
-function ForegroundPortMarkers() {
+export type ForegroundPortState = 'eligible' | 'source' | 'destination' | 'unavailable';
+
+function ForegroundPortMarkers({ physicalPortStates }: { physicalPortStates?: Record<string, ForegroundPortState> }) {
   const nodes = useNodes<DeviceFlowNode>();
-  return <>{nodes.map((node) => <ForegroundNodePortMarkers key={node.id} nodeId={node.id} />)}</>;
+  return <>{nodes.map((node) => <ForegroundNodePortMarkers key={node.id} nodeId={node.id} physicalPortStates={physicalPortStates} />)}</>;
 }
 
-function ForegroundNodePortMarkers({ nodeId }: { nodeId: string }) {
+function ForegroundNodePortMarkers({ nodeId, physicalPortStates }: { nodeId: string; physicalPortStates?: Record<string, ForegroundPortState> }) {
   const node = useInternalNode<DeviceFlowNode>(nodeId);
   if (!node || node.data.projection.kind !== 'PHYSICAL_OBJECT') return null;
   const projection = node.data.projection;
@@ -244,19 +246,20 @@ function ForegroundNodePortMarkers({ nodeId }: { nodeId: string }) {
   return <g className="cable-route-port-markers" pointerEvents="none">
     {ports.map((port) => {
       const endpoint = getConnectionPointEndpoint(projection, rectangle(node), port.id);
-      return endpoint && <circle key={port.id} className={`cable-route-port-marker${port.network ? ' cable-route-port-marker--network' : ''}`} cx={endpoint.x} cy={endpoint.y} r={port.network ? 4 : 3.5} />;
+      const state = physicalPortStates?.[port.id];
+      return endpoint && <circle key={port.id} className={`cable-route-port-marker${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`} cx={endpoint.x} cy={endpoint.y} r={port.network ? 4 : 3.5} />;
     })}
   </g>;
 }
 
 /** Foreground-only cable rendering; only route-editor controls accept input. */
-export function ForegroundCableRoutes({ edges }: { edges: readonly LogicalFlowEdge[] }) {
+export function ForegroundCableRoutes({ edges, physicalPortStates }: { edges: readonly LogicalFlowEdge[]; physicalPortStates?: Record<string, ForegroundPortState> }) {
   const cables = edges.filter((edge) => Boolean(edge.data?.cableNode));
   if (!cables.length) return null;
   return <ViewportPortal>
     <svg className="cable-routes-foreground" aria-hidden="true">
       {cables.map((edge) => <ForegroundCableRoute key={edge.id} edge={edge} />)}
-      <ForegroundPortMarkers />
+      <ForegroundPortMarkers physicalPortStates={physicalPortStates} />
     </svg>
   </ViewportPortal>;
 }
