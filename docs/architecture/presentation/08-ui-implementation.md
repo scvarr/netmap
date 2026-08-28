@@ -855,10 +855,10 @@ and selected-branch trace evidence emphasizes only the exact
 `connection_member_id`. This presentation mechanism is intentionally reusable by
 future L1S.4c wiring highlight, without introducing wiring state here.
 
-`external_attachment` is an invisible external routing anchor, not a second
-user-visible port marker. The sole visible port marker remains at the slot's
-`rendered_position`; a deterministic non-interactive lead-in visually joins it
-to the external cable route.
+`external_attachment` is not a second user-visible port marker. The sole visible
+port marker remains at the slot's `rendered_position`. Saved Map cable routes
+also use these rendered port positions as their endpoints; only explicit user
+waypoints determine route bends.
 
 ## MAP-CONNECT.1b — route-aware visual wiring
 

@@ -97,7 +97,7 @@ export const getConnectionPointEndpoint = (
   const points = genericConnectionPoints(projection); const index = points.findIndex((point) => point.connection_point_id === connectionPointId); return index < 0 ? null : { x: box.x + box.width, y: box.y + box.height * genericEndpointOffset(index, points.length), side: Position.Right };
 };
 
-/** Visible Blueprint port position; external_attachment remains a routing-only anchor. */
+/** Visible Blueprint port position used by Saved Map cable presentation. */
 export const getRenderedConnectionPoint = (
   projection: DeviceFlowNode['data']['projection'],
   box: NodeRectangle,
@@ -127,18 +127,6 @@ export const routedCablePath = (
   .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
   .join(' ');
 
-export const cablePathWithLeadIns = (
-  sourcePort: FloatingEndpoint,
-  sourceAttachment: FloatingEndpoint,
-  targetAttachment: FloatingEndpoint | undefined,
-  targetPort: FloatingEndpoint | undefined,
-  waypoints: readonly MapCableRouteWaypoint[],
-): string => {
-  const points = [sourcePort, sourceAttachment, ...waypoints, ...(targetAttachment ? [targetAttachment] : []), ...(targetPort ? [targetPort] : [])]
-    .filter((point, index, all) => index === 0 || point.x !== all[index - 1].x || point.y !== all[index - 1].y);
-  return points.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ');
-};
-
 /** Presentation-only route used while the user is drawing a new cable. */
 export function WiringRoute(props: {
   source: { physicalObjectId: string; connectionPointId: string };
@@ -155,16 +143,16 @@ export function WiringRoute(props: {
   const sourceNode = useInternalNode<DeviceFlowNode>(sourceFlowId ?? '__none__');
   const targetNode = useInternalNode<DeviceFlowNode>(targetFlowId ?? '__none__');
   if (!sourceNode) return null;
-  const source = getConnectionPointEndpoint(sourceNode.data.projection, rectangle(sourceNode), props.source.connectionPointId);
-  const sourcePort = getRenderedConnectionPoint(sourceNode.data.projection, rectangle(sourceNode), props.source.connectionPointId) ?? source;
+  const source = getRenderedConnectionPoint(sourceNode.data.projection, rectangle(sourceNode), props.source.connectionPointId);
   const target = props.target && targetNode
-    ? getConnectionPointEndpoint(targetNode.data.projection, rectangle(targetNode), props.target.connectionPointId)
-    : undefined;
-  const targetPort = props.target && targetNode
-    ? getRenderedConnectionPoint(targetNode.data.projection, rectangle(targetNode), props.target.connectionPointId) ?? target ?? undefined
+    ? getRenderedConnectionPoint(targetNode.data.projection, rectangle(targetNode), props.target.connectionPointId)
     : undefined;
   if (!source) return null;
-  const path = sourcePort ? cablePathWithLeadIns(sourcePort, source, target ?? undefined, targetPort, props.waypoints) : '';
+  const path = target
+    ? routedCablePath(source, target, props.waypoints)
+    : props.waypoints.length
+      ? [source, ...props.waypoints].map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' ')
+      : '';
   return <>
     {path && <path className="wiring-route-preview" d={path} fill="none" stroke="#8d7aff" strokeWidth={3} pointerEvents="none" />}
     {props.waypoints.map((waypoint, index) => <circle key={`wiring-route:${index}`} className={`cable-route-waypoint wiring-route-waypoint${props.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={6} style={{ pointerEvents: 'all' }} onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); props.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); props.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }} onPointerUp={(event) => { if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} />)}
@@ -187,7 +175,9 @@ export function FloatingTopologyEdge({
   if (!sourceNode || !targetNode) return null;
 
   const pair = data?.endpointPair;
-  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => getConnectionPointEndpoint(node.data.projection, rectangle(node), connectionPointId);
+  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => data?.cableNode
+    ? getRenderedConnectionPoint(node.data.projection, rectangle(node), connectionPointId)
+    : getConnectionPointEndpoint(node.data.projection, rectangle(node), connectionPointId);
   const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
   const endpoints = { source: exact(sourceNode, pair?.from_connection_point_id) ?? floating.source, target: exact(targetNode, pair?.to_connection_point_id) ?? floating.target };
   const [straightPath] = getStraightPath({
@@ -242,16 +232,12 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
   const pair = data.endpointPair;
   const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
   const endpoints = {
-    source: getConnectionPointEndpoint(sourceNode.data.projection, rectangle(sourceNode), pair?.from_connection_point_id) ?? floating.source,
-    target: getConnectionPointEndpoint(targetNode.data.projection, rectangle(targetNode), pair?.to_connection_point_id) ?? floating.target,
-  };
-  const renderedEndpoints = {
-    source: getRenderedConnectionPoint(sourceNode.data.projection, rectangle(sourceNode), pair?.from_connection_point_id) ?? endpoints.source,
-    target: getRenderedConnectionPoint(targetNode.data.projection, rectangle(targetNode), pair?.to_connection_point_id) ?? endpoints.target,
+    source: getRenderedConnectionPoint(sourceNode.data.projection, rectangle(sourceNode), pair?.from_connection_point_id) ?? floating.source,
+    target: getRenderedConnectionPoint(targetNode.data.projection, rectangle(targetNode), pair?.to_connection_point_id) ?? floating.target,
   };
   const draft = data.cableRouteDraft;
   const waypoints = draft?.waypoints ?? data.cableRoute?.waypoints;
-  const path = cablePathWithLeadIns(renderedEndpoints.source, endpoints.source, endpoints.target, renderedEndpoints.target, waypoints ?? []);
+  const path = routedCablePath(endpoints.source, endpoints.target, waypoints ?? []);
   const emphasis = draft ? 'editing' : edge.selected ? 'selected' : 'normal';
   const style = draft ? { stroke: '#8d7aff', strokeWidth: 5, opacity: 1 } : edge.style;
   const segmentPoints = [endpoints.source, ...(waypoints ?? []), endpoints.target];

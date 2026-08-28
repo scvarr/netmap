@@ -1,6 +1,6 @@
 import { Position } from '@xyflow/react';
 import { describe, expect, it } from 'vitest';
-import { cablePathWithLeadIns, getConnectionPointEndpoint, getFloatingEndpoints, getRenderedConnectionPoint, routedCablePath, type NodeRectangle } from './FloatingTopologyEdge';
+import { getConnectionPointEndpoint, getFloatingEndpoints, getRenderedConnectionPoint, routedCablePath, type NodeRectangle } from './FloatingTopologyEdge';
 import type { TopologyProjectionNode } from '../topology/types';
 
 const node = (x: number, y: number): NodeRectangle => ({ x, y, width: 200, height: 100 });
@@ -42,8 +42,8 @@ describe('floating topology edge geometry', () => {
     expect(renderedPort).toMatchObject({ x: 60, y: 70, side: Position.Top });
     expect(routedCablePath(endpoint!, { x: 300, y: 200, side: Position.Left }, [{ x: 80, y: 30 }]))
       .toBe('M 60 20 L 80 30 L 300 200');
-    expect(cablePathWithLeadIns(renderedPort!, endpoint!, { x: 300, y: 200, side: Position.Left }, { x: 320, y: 220, side: Position.Left }, [{ x: 80, y: 30 }]))
-      .toBe('M 60 70 L 60 20 L 80 30 L 300 200 L 320 220');
+    expect(routedCablePath(renderedPort!, { x: 320, y: 220, side: Position.Left }, [{ x: 80, y: 30 }]))
+      .toBe('M 60 70 L 80 30 L 320 220');
   });
 
   it('offsets a REAR slot endpoint to the REAR panel without changing its anchor semantics', () => {

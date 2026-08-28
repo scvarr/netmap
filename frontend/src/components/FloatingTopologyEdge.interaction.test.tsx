@@ -102,7 +102,7 @@ describe('direct cable route edge interaction', () => {
     }
   });
 
-  it('uses a Blueprint rendered port marker and non-editable lead-ins to its external route anchors', () => {
+  it('uses Blueprint rendered ports directly for a zero-waypoint route without attachment geometry', () => {
     const blueprintSource = blueprintNode('source', 0, 'source-object', { connectionPointId: 'source-port', kind: 'NETWORK_PORT', renderedX: .25, attachmentX: 1, side: 'RIGHT' });
     const blueprintTarget = blueprintNode('target', 300, 'target-object', { connectionPointId: 'target-port', kind: 'CONNECTION_POINT', renderedX: .75, attachmentX: 0, side: 'LEFT' });
     withNodes({ source: blueprintSource, target: blueprintTarget }, () => {
@@ -117,19 +117,32 @@ describe('direct cable route edge interaction', () => {
       expect(markers[1]).toHaveClass('cable-route-port-marker--wiring-destination');
       expect(container.querySelector('.cable-route-port-marker[cx="100"]')).toBeNull();
       expect(container.querySelector('.cable-route-port-marker[cx="300"]')).toBeNull();
-      expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 25 50 L 100 50 L 300 50 L 375 50');
+      expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 25 50 L 375 50');
       expect(container.querySelectorAll('.cable-route-segment-hit')).toHaveLength(1);
       expect(container.querySelectorAll('.cable-route-waypoint')).toHaveLength(0);
     });
   });
 
-  it('draws the same non-editable Blueprint lead-ins for a new wiring draft', () => {
+  it('draws a new zero-waypoint Blueprint wiring draft directly port-to-port', () => {
     const blueprintSource = blueprintNode('source', 0, 'source-object', { connectionPointId: 'source-port', kind: 'NETWORK_PORT', renderedX: .25, attachmentX: 1, side: 'RIGHT' });
     const blueprintTarget = blueprintNode('target', 300, 'target-object', { connectionPointId: 'target-port', kind: 'CONNECTION_POINT', renderedX: .75, attachmentX: 0, side: 'LEFT' });
     withNodes({ source: blueprintSource, target: blueprintTarget }, () => {
       const { container } = render(<svg><WiringRoute source={{ physicalObjectId: 'source-object', connectionPointId: 'source-port' }} target={{ physicalObjectId: 'target-object', connectionPointId: 'target-port' }} waypoints={[]} selectedWaypointIndex={null} onWaypointSelect={vi.fn()} onWaypointMove={vi.fn()} /></svg>);
-      expect(container.querySelector('.wiring-route-preview')).toHaveAttribute('d', 'M 25 50 L 100 50 L 300 50 L 375 50');
+      expect(container.querySelector('.wiring-route-preview')).toHaveAttribute('d', 'M 25 50 L 375 50');
       expect(container.querySelectorAll('.cable-route-waypoint')).toHaveLength(0);
+    });
+  });
+
+  it('adds bends and edit hit segments only for explicit user waypoints', () => {
+    const blueprintSource = blueprintNode('source', 0, 'source-object', { connectionPointId: 'source-port', kind: 'NETWORK_PORT', renderedX: .25, attachmentX: 1, side: 'RIGHT' });
+    const blueprintTarget = blueprintNode('target', 300, 'target-object', { connectionPointId: 'target-port', kind: 'CONNECTION_POINT', renderedX: .75, attachmentX: 0, side: 'LEFT' });
+    withNodes({ source: blueprintSource, target: blueprintTarget }, () => {
+      const draft = editor([{ x: 200, y: 100 }]);
+      const edge = { id: 'blueprint-cable', source: 'source', target: 'target', data: { projection: { id: 'edge', from_node_id: 'source', to_node_id: 'target', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableNode: { id: 'cable-node' }, endpointPair: { from_connection_point_id: 'source-port', to_connection_point_id: 'target-port' }, cableRouteDraft: draft } };
+      const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
+      expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 25 50 L 200 100 L 375 50');
+      expect(container.querySelectorAll('.cable-route-segment-hit')).toHaveLength(2);
+      expect(container.querySelectorAll('.cable-route-waypoint')).toHaveLength(1);
     });
   });
 });
