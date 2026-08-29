@@ -186,6 +186,7 @@ export function MapPage({
     useState(0);
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
+  const [copiedBlueprintDisplayWidth, setCopiedBlueprintDisplayWidth] = useState<number>();
   const selectedMapId = useRef<string | null>(mapId);
   const deletedMapIds = useRef(new Set<string>());
   const mapListRequest = useRef(0);
@@ -867,29 +868,35 @@ export function MapPage({
     }
   };
 
-  const resizeBlueprint = async (id: string, displayWidth: number) => {
+  const persistBlueprintDisplayWidths = async (requests: Array<{ id: string; displayWidth: number }>) => {
     if (!savedMapDataSource || !mapId || viewMode !== "physical") return;
     const targetMapId = mapId;
     const positionKey = savedMapViewKey(viewMode);
-    const current = activeMap?.placements.find((placement) => placement.physical_object_ref.entity_id === id)?.positions[positionKey];
-    if (!current) return;
-    const blueprint = (latestPhysicalDocument.current?.nodes ?? [])
-      .find((node) => physicalObjectIdForNode(node) === id)
-      ?.attributes.blueprint_presentation;
-    const width = clampBlueprintDisplayWidth(displayWidth, blueprint);
+    const writes = requests.flatMap(({ id, displayWidth }) => {
+      const current = activeMap?.placements.find((placement) => placement.physical_object_ref.entity_id === id)?.positions[positionKey];
+      const blueprint = (latestPhysicalDocument.current?.nodes ?? []).find((node) => physicalObjectIdForNode(node) === id)?.attributes.blueprint_presentation;
+      return current && blueprint ? [{ id, current, width: clampBlueprintDisplayWidth(displayWidth, blueprint) }] : [];
+    });
+    if (!writes.length) return;
     try {
-      await savedMapDataSource.movePosition(targetMapId, id, viewMode, current.x, current.y, width);
+      for (const write of writes)
+        await savedMapDataSource.movePosition(targetMapId, write.id, viewMode, write.current.x, write.current.y, write.width);
       if (selectedMapId.current === targetMapId) setMap((existing) => existing?.map_ref.entity_id === targetMapId ? {
         ...existing,
-        placements: existing.placements.map((placement) => placement.physical_object_ref.entity_id === id ? {
-          ...placement, positions: { ...placement.positions, [positionKey]: { ...placement.positions[positionKey]!, display_width: width } },
-        } : placement),
+        placements: existing.placements.map((placement) => {
+          const write = writes.find((item) => item.id === placement.physical_object_ref.entity_id);
+          return write ? { ...placement, positions: { ...placement.positions, [positionKey]: { ...placement.positions[positionKey]!, display_width: write.width } } } : placement;
+        }),
       } : existing);
     } catch (reason) {
       if (selectedMapId.current !== targetMapId) return;
-      setError(errorMessage(reason, t("view.error.title")));
       try { await reloadMap(targetMapId); } catch { /* preserve persistence error */ }
+      throw reason;
     }
+  };
+
+  const resizeBlueprint = async (id: string, displayWidth: number) => {
+    await persistBlueprintDisplayWidths([{ id, displayWidth }]);
   };
 
   const setPlacementLock = async (id: string, locked: boolean) => {
@@ -1116,6 +1123,24 @@ export function MapPage({
     return activeMap?.placements.find((item) => item.physical_object_ref.entity_id === id)
       ?.positions[savedMapViewKey(viewMode)];
   }, [activeMap, selection, viewMode]);
+  const selectedBlueprint = useMemo(() => {
+    const id = physicalObjectIdForSelection(selection);
+    return id ? nodeForPhysicalObject(document?.nodes ?? [], id)?.attributes.blueprint_presentation : undefined;
+  }, [document, selection]);
+  const selectedBlueprintSize = !legacy && viewMode === "physical" && selectedPlacementPosition && selectedBlueprint
+    ? { displayWidth: selectedPlacementPosition.display_width ?? DEFAULT_BLUEPRINT_DISPLAY_WIDTH, copiedDisplayWidth: copiedBlueprintDisplayWidth }
+    : undefined;
+  const applySizeToSameBlueprint = async () => {
+    if (!selectedBlueprint || !activeMap || !document) return;
+    const blueprintId = selectedBlueprint.blueprint_ref.entity_id;
+    const selectedWidth = selectedPlacementPosition?.display_width ?? DEFAULT_BLUEPRINT_DISPLAY_WIDTH;
+    const ids = activeMap.placements.flatMap((placement) => {
+      const id = placement.physical_object_ref.entity_id;
+      const presentation = nodeForPhysicalObject(document.nodes, id)?.attributes.blueprint_presentation;
+      return presentation?.blueprint_ref.entity_id === blueprintId && placement.positions["L1/PHYSICAL_OBJECT"] ? [id] : [];
+    });
+    await persistBlueprintDisplayWidths(ids.map((id) => ({ id, displayWidth: selectedWidth })));
+  };
   const receiveViewportCenter = useCallback(
     (getter: (() => XYPosition) | null) => {
       viewportCenter.current = getter;
@@ -1350,7 +1375,9 @@ export function MapPage({
                   lockedNodeIds={!legacy ? lockedNodeIds : undefined}
                   authoritativePositionRevision={authoritativePositionRevision}
                   onPhysicalNodeDragStop={!legacy ? move : undefined}
-                  onBlueprintDisplayResize={!legacy && viewMode === "physical" ? resizeBlueprint : undefined}
+                  onBlueprintDisplayResize={!legacy && viewMode === "physical" ? (id, displayWidth) => {
+                    void resizeBlueprint(id, displayWidth).catch((reason) => setError(errorMessage(reason, t("view.error.title"))));
+                  } : undefined}
                   onNodeCollisionRejected={() =>
                     setError(t("map.collision"))
                   }
@@ -1420,6 +1447,11 @@ export function MapPage({
             : undefined
         }
         placementLocked={selectedPlacementPosition?.locked}
+        blueprintSize={selectedBlueprintSize}
+        onApplyBlueprintSize={selectedBlueprintSize && physicalObjectIdForSelection(selection) ? (displayWidth) => resizeBlueprint(physicalObjectIdForSelection(selection)!, displayWidth) : undefined}
+        onCopyBlueprintSize={selectedBlueprintSize ? () => setCopiedBlueprintDisplayWidth(selectedBlueprintSize.displayWidth) : undefined}
+        onApplyCopiedBlueprintSize={selectedBlueprintSize && copiedBlueprintDisplayWidth !== undefined && physicalObjectIdForSelection(selection) ? () => resizeBlueprint(physicalObjectIdForSelection(selection)!, copiedBlueprintDisplayWidth) : undefined}
+        onApplyBlueprintSizeToSameBlueprint={selectedBlueprintSize ? applySizeToSameBlueprint : undefined}
         onSetPlacementLock={
           !legacy && selectedPlacementPosition && physicalObjectIdForSelection(selection)
             ? (locked) => setPlacementLock(physicalObjectIdForSelection(selection)!, locked)

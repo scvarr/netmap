@@ -34,4 +34,25 @@ describe('QuickInspector physical delete', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Добавить на карту' }));
     expect(add).toHaveBeenCalledWith('remote');
   });
+
+  it('shows size actions only when MapPage supplies Blueprint presentation state', async () => {
+    const apply = vi.fn().mockResolvedValue(undefined);
+    const copy = vi.fn();
+    const applyCopied = vi.fn().mockResolvedValue(undefined);
+    const applySame = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(<BrowserRouter><QuickInspector document={document('L1')} selection={{ type: 'node', item: node() }} onClose={vi.fn()} onSelectNode={vi.fn()} /></BrowserRouter>);
+    expect(screen.queryByRole('heading', { name: 'Размер на карте' })).not.toBeInTheDocument();
+    rerender(<BrowserRouter><QuickInspector document={document('L1')} selection={{ type: 'node', item: node() }} onClose={vi.fn()} onSelectNode={vi.fn()} blueprintSize={{ displayWidth: 240, copiedDisplayWidth: 320 }} onApplyBlueprintSize={apply} onCopyBlueprintSize={copy} onApplyCopiedBlueprintSize={applyCopied} onApplyBlueprintSizeToSameBlueprint={applySame} /></BrowserRouter>);
+    expect(screen.getByRole('spinbutton', { name: 'Ширина' })).toHaveValue(240);
+    await userEvent.clear(screen.getByRole('spinbutton', { name: 'Ширина' }));
+    await userEvent.type(screen.getByRole('spinbutton', { name: 'Ширина' }), '100');
+    await userEvent.click(screen.getByRole('button', { name: 'Применить размер' }));
+    expect(apply).toHaveBeenCalledWith(100);
+    await userEvent.click(screen.getByRole('button', { name: 'Копировать размер' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Применить скопированный размер' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Применить к тому же шаблону' }));
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect(applyCopied).toHaveBeenCalledTimes(1);
+    expect(applySame).toHaveBeenCalledTimes(1);
+  });
 });

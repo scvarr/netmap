@@ -50,6 +50,11 @@ interface QuickInspectorProps {
   onRetryCableRouteRefresh?: () => void;
   onResetCableRoute?: () => void;
   onRetryCableRouteReset?: () => void;
+  blueprintSize?: { displayWidth: number; copiedDisplayWidth?: number };
+  onApplyBlueprintSize?: (displayWidth: number) => Promise<void>;
+  onCopyBlueprintSize?: () => void;
+  onApplyCopiedBlueprintSize?: () => Promise<void>;
+  onApplyBlueprintSizeToSameBlueprint?: () => Promise<void>;
 }
 const natural = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
@@ -106,6 +111,9 @@ export function QuickInspector(props: QuickInspectorProps) {
   );
   const [lockError, setLockError] = useState<string | null>(null);
   const [lockPending, setLockPending] = useState(false);
+  const [sizeDraft, setSizeDraft] = useState("");
+  const [sizeError, setSizeError] = useState<string | null>(null);
+  const [sizePending, setSizePending] = useState(false);
   const node = selection?.type === "node" ? selection.item : null;
   const id = node && physicalObjectIdForNode(node);
   const cableId = node && cableIdForNode(node);
@@ -173,6 +181,10 @@ export function QuickInspector(props: QuickInspectorProps) {
     props.catalogInventoryDataSource,
     readRevision,
   ]);
+  useEffect(() => {
+    setSizeDraft(props.blueprintSize ? String(props.blueprintSize.displayWidth) : "");
+    setSizeError(null);
+  }, [props.blueprintSize?.displayWidth]);
   if (!selection) return null;
   const shell = (children: React.ReactNode) => (
     <aside className="quick-inspector" aria-label={t("inspector.label")}>
@@ -279,6 +291,37 @@ export function QuickInspector(props: QuickInspectorProps) {
       </button>
       {lockError && <p role="alert">{lockError}</p>}
     </>
+  ) : null;
+  const blueprintSizeAction = props.blueprintSize ? (
+    <section className="quick-inspector__blueprint-size">
+      <h3>{t("inspector.size")}</h3>
+      <label>{t("inspector.width")}
+        <input type="number" min="0" step="1" value={sizeDraft} onChange={(event) => setSizeDraft(event.target.value)} />
+      </label>
+      <button disabled={sizePending || !Number.isFinite(Number(sizeDraft)) || Number(sizeDraft) <= 0} onClick={() => void (async () => {
+        if (!props.onApplyBlueprintSize) return;
+        setSizePending(true); setSizeError(null);
+        try { await props.onApplyBlueprintSize(Number(sizeDraft)); }
+        catch (reason) { setSizeError(reason instanceof Error ? reason.message : t("view.error.title")); }
+        finally { setSizePending(false); }
+      })()}>{t("inspector.applySize")}</button>
+      <button disabled={sizePending} onClick={props.onCopyBlueprintSize}>{t("inspector.copySize")}</button>
+      <button disabled={sizePending || props.blueprintSize.copiedDisplayWidth === undefined} onClick={() => void (async () => {
+        if (!props.onApplyCopiedBlueprintSize) return;
+        setSizePending(true); setSizeError(null);
+        try { await props.onApplyCopiedBlueprintSize(); }
+        catch (reason) { setSizeError(reason instanceof Error ? reason.message : t("view.error.title")); }
+        finally { setSizePending(false); }
+      })()}>{t("inspector.applyCopiedSize")}</button>
+      <button disabled={sizePending} onClick={() => void (async () => {
+        if (!props.onApplyBlueprintSizeToSameBlueprint) return;
+        setSizePending(true); setSizeError(null);
+        try { await props.onApplyBlueprintSizeToSameBlueprint(); }
+        catch (reason) { setSizeError(reason instanceof Error ? reason.message : t("view.error.title")); }
+        finally { setSizePending(false); }
+      })()}>{t("inspector.applySizeToSameBlueprint")}</button>
+      {sizeError && <p role="alert">{sizeError}</p>}
+    </section>
   ) : null;
   if (selection.type === "continuation") {
     const c = selection.item;
@@ -494,6 +537,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           </>
         )}
         <Link to={url(id)}>{t("inspector.open")}</Link>
+        {blueprintSizeAction}
         {placementLockAction}
         {props.onRemoveFromMap && (
           <button

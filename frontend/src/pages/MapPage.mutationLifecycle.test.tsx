@@ -49,4 +49,46 @@ describe('MapPage mutation lifecycles', () => {
   it('does not repeat a successful cable delete when its authoritative refresh fails', async () => { const destroy = vi.fn().mockResolvedValue(undefined); const cableMap = { ...map }; const maps: any = { listMaps: vi.fn().mockResolvedValue([cableMap]), loadMap: vi.fn().mockResolvedValueOnce(cableMap).mockResolvedValueOnce(cableMap).mockRejectedValueOnce(new Error('refresh failed')).mockResolvedValueOnce({ ...cableMap, placements: [] }), removePlacement: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), createMap: vi.fn() }; vi.spyOn(window, 'confirm').mockReturnValue(true); renderPage(maps, destroy, collapsedCableDocument); await screen.findByText('select'); fireEvent.click(screen.getByText('select')); fireEvent.click(screen.getByText('Дополнительные действия')); fireEvent.click(screen.getByRole('button', { name: 'Удалить кабель и разорвать физическое соединение' })); await screen.findByText('Объект удалён, но карту не удалось обновить.'); expect(destroy).toHaveBeenCalledTimes(1); expect(screen.getByRole('button', { name: 'Удалить кабель и разорвать физическое соединение' })).toBeDisabled(); fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' })); await screen.findByText('Карта «A» пока пуста'); expect(maps.loadMap).toHaveBeenCalledTimes(4); expect(destroy).toHaveBeenCalledTimes(1); });
   it('acknowledges a successful placement lock locally without reloading map or projection', async () => { const setPositionLock = vi.fn().mockResolvedValue(undefined); const loadProjection = vi.fn().mockResolvedValue(doc); const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), removePlacement: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), setPositionLock, createMap: vi.fn() }; render(<MemoryRouter initialEntries={[`/map?map=${A}&view=physical`]}><MapPage dataSource={{ loadProjection }} deviceDetailsDataSource={{ loadDeviceDetails: vi.fn() }} savedMapDataSource={maps} /></MemoryRouter>); await screen.findByText('select'); fireEvent.click(screen.getByText('select')); const mapLoads = maps.loadMap.mock.calls.length; const projectionLoads = loadProjection.mock.calls.length; fireEvent.click(await screen.findByRole('button', { name: 'Зафиксировать положение' })); await waitFor(() => expect(setPositionLock).toHaveBeenCalledWith(A, O, 'physical', true)); expect(maps.loadMap).toHaveBeenCalledTimes(mapLoads); expect(loadProjection).toHaveBeenCalledTimes(projectionLoads); expect(screen.getByRole('button', { name: 'Разблокировать положение' })).toBeInTheDocument(); });
   it('keeps the last confirmed placement lock state after a failed write', async () => { const setPositionLock = vi.fn().mockRejectedValue(new Error('lock failed')); const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), removePlacement: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), setPositionLock, createMap: vi.fn() }; renderPage(maps); await screen.findByText('select'); fireEvent.click(screen.getByText('select')); fireEvent.click(await screen.findByRole('button', { name: 'Зафиксировать положение' })); expect(await screen.findByRole('alert')).toHaveTextContent('lock failed'); expect(screen.getByRole('button', { name: 'Зафиксировать положение' })).toBeInTheDocument(); });
+  it('applies size to every placement with the same Blueprint identity, not only the same immutable version', async () => {
+    const presentation = (blueprintId: string, versionId: string) => ({ blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: blueprintId }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: versionId }, body: { kind: 'RECTANGLE', width: 100, height: 100 }, slots: [] } });
+    const sibling = { ...node, id: 'sibling', label: 'SW2', attributes: { ...node.attributes, ...presentation('bp-1', 'version-2') }, source_refs: [{ ...node.source_refs[0], entity_id: 'sibling' }] };
+    const different = { ...node, id: 'different', label: 'SW3', attributes: { ...node.attributes, ...presentation('bp-2', 'version-1') }, source_refs: [{ ...node.source_refs[0], entity_id: 'different' }] };
+    const blueprintNode = { ...node, attributes: { ...node.attributes, ...presentation('bp-1', 'version-1') } };
+    const blueprintDocument = { ...doc, nodes: [blueprintNode, sibling, different] };
+    const blueprintMap = { ...map, placements: [
+      { physical_object_ref: blueprintNode.source_refs[0], positions: { 'L1/PHYSICAL_OBJECT': { x: 1, y: 2, display_width: 180 } } },
+      { physical_object_ref: sibling.source_refs[0], positions: { 'L1/PHYSICAL_OBJECT': { x: 3, y: 4, display_width: 220 } } },
+      { physical_object_ref: different.source_refs[0], positions: { 'L1/PHYSICAL_OBJECT': { x: 5, y: 6, display_width: 260 } } },
+    ] };
+    const movePosition = vi.fn().mockResolvedValue(undefined);
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([blueprintMap]), loadMap: vi.fn().mockResolvedValue(blueprintMap), createMap: vi.fn(), movePosition, removePlacement: vi.fn(), addPlacement: vi.fn() };
+    renderPage(maps, vi.fn(), blueprintDocument);
+    await screen.findByText('select');
+    fireEvent.click(screen.getByText('select'));
+    expect(await screen.findByRole('spinbutton', { name: 'Ширина' })).toHaveValue(180);
+    fireEvent.click(screen.getByRole('button', { name: 'Применить к тому же шаблону' }));
+    await waitFor(() => expect(movePosition).toHaveBeenCalledTimes(2));
+    expect(movePosition).toHaveBeenNthCalledWith(1, A, O, 'physical', 1, 2, 180);
+    expect(movePosition).toHaveBeenNthCalledWith(2, A, 'sibling', 'physical', 3, 4, 180);
+  });
+
+  it('reloads authoritative Saved Map after a bulk size write fails without repeating acknowledged writes', async () => {
+    const presentation = (versionId: string) => ({ blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp-1' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: versionId }, body: { kind: 'RECTANGLE', width: 100, height: 100 }, slots: [] } });
+    const sibling = { ...node, id: 'sibling', label: 'SW2', attributes: { ...node.attributes, ...presentation('version-2') }, source_refs: [{ ...node.source_refs[0], entity_id: 'sibling' }] };
+    const blueprintNode = { ...node, attributes: { ...node.attributes, ...presentation('version-1') } };
+    const blueprintMap = { ...map, placements: [
+      { physical_object_ref: blueprintNode.source_refs[0], positions: { 'L1/PHYSICAL_OBJECT': { x: 1, y: 2, display_width: 180 } } },
+      { physical_object_ref: sibling.source_refs[0], positions: { 'L1/PHYSICAL_OBJECT': { x: 3, y: 4, display_width: 220 } } },
+    ] };
+    const movePosition = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('size failed'));
+    const loadMap = vi.fn().mockResolvedValue(blueprintMap);
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([blueprintMap]), loadMap, createMap: vi.fn(), movePosition, removePlacement: vi.fn(), addPlacement: vi.fn() };
+    renderPage(maps, vi.fn(), { ...doc, nodes: [blueprintNode, sibling] });
+    await screen.findByText('select');
+    fireEvent.click(screen.getByText('select'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Применить к тому же шаблону' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('size failed');
+    expect(movePosition).toHaveBeenCalledTimes(2);
+    expect(loadMap.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
 });

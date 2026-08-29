@@ -162,14 +162,22 @@ instances и их links сохраняются. Операция не удаля
 уже реализованные части L1. Они сохраняют canonical topology как источник
 истины; Saved Map placement/view остаётся map-local presentation state.
 
-### UX.3 — Presentation controls для объекта (future)
+### UX.3 — Presentation controls для объекта
 
-- **Размер через Inspector.** Для выбранного Blueprint-backed объекта Inspector
-  в будущем принимает числовой размер на текущей Saved Map. Это существующий
-  `MapViewPosition.display_width`, не новый size contract: aspect ratio и
-  derived height сохраняются. Применяются те же min/max, collision и
-  persistence rules, что и при resize на canvas. Copy/apply size и
-  apply-to-same-Blueprint остаются частью этого же направления.
+**IMPLEMENTED (size only).** Для выбранного Blueprint-backed `PhysicalObject`
+на physical Saved Map Inspector показывает effective width
+(`MapViewPosition.display_width`, либо historical fallback) и принимает
+числовое значение. Оно проходит ровно тот же clamp/min/max и `movePosition`
+persistence path, что canvas resize; width остаётся intrinsic body width, а
+aspect ratio и derived height не получают отдельного contract. Copy size и
+Apply copied size — transient Inspector actions. Apply to same Blueprint
+обновляет только placements текущей Saved Map, сравнивая identity
+`blueprint_presentation.blueprint_ref.entity_id` (не exact immutable version).
+Каждая placement write использует существующий contract; при bulk failure UI
+reloads authoritative Saved Map и не повторяет уже acknowledged writes.
+Generic `PhysicalObject` controls не получает. Все действия map-local
+presentation-only и не меняют Blueprint, ObjectBlueprintVersion или canonical
+topology.
 - **Поворот.** Future bounded capability: placement/view можно повернуть только
   на 0/90/180/270 градусов; основной UX-кандидат — context menu объекта.
   Rotation принадлежит конкретному Saved Map placement/view и является
