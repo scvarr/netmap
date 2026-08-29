@@ -212,3 +212,19 @@ implementation specification или расширением текущего scop
   восприниматься как единая визуальная композиция. Текущий технический resize
   affordance требует нормализации. При этом числовой
   `MapViewPosition.display_width` через Inspector остаётся запланированным.
+
+- **Object Blueprint catalog/list compaction.** Текущая таблица каталога
+  перегружена по ширине. «Состав портов» / port composition следует разложить
+  на отдельные компактные числовые колонки как минимум для количества точек
+  подключения и количества сетевых портов; в ячейках показываются только
+  количества, без длинных текстовых префиксов. «Действия» следует упростить до
+  компактных icon-actions с понятностью через tooltip и accessible labels.
+  Цель — уменьшить горизонтальную перегрузку и сделать строки компактнее.
+
+- **Port Module version selection in Blueprint authoring.** Immutable версии
+  `Port Module` / `Port Block` сохраняются и остаются частью исторической
+  provenance. Однако в обычном authoring flow устаревшие версии не должны
+  предлагаться пользователю как равноправные default options: стандартный
+  add-to-Blueprint flow должен ориентироваться на latest/current published
+  version. Это упрощение product UX, а не отмена immutable version history;
+  advanced legacy-version workflow пока не вводится.
