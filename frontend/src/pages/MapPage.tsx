@@ -122,8 +122,7 @@ const savedMapViewKey = (value: SavedMapView): SavedMapViewKey =>
   value === "physical" ? "L1/PHYSICAL_OBJECT" : "L2/DEVICE";
 const natural = (left: string, right: string) =>
   left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
-const errorMessage = (reason: unknown, fallback: string) =>
-  reason instanceof Error ? reason.message : fallback;
+const errorMessage = (_reason: unknown, fallback: string) => fallback;
 const emptyPhysicalDocument: TopologyProjectionDocument = {
   schema_version: "1.0",
   layer: "L1",
@@ -303,7 +302,7 @@ export function MapPage({
         setMaps(sorted);
         if (!mapId && sorted[0]) selectMap(sorted[0].map_ref.entity_id);
       },
-      (reason) => active && request === mapListRequest.current && setError(errorMessage(reason, t("view.error.title"))),
+      (reason) => active && request === mapListRequest.current && setError(errorMessage(reason, t("map.loadFailed"))),
     );
     return () => {
       active = false;
@@ -328,7 +327,7 @@ export function MapPage({
     void savedMapDataSource.loadMap(mapId).then(
       (detail) => active && selectedMapId.current === mapId && !deletedMapIds.current.has(mapId) && setMap(detail),
       (reason) =>
-        active && setError(errorMessage(reason, t("view.error.title"))),
+        active && setError(errorMessage(reason, t("map.loadFailed"))),
     );
     return () => {
       active = false;
@@ -365,7 +364,7 @@ export function MapPage({
         },
         (reason) =>
           active &&
-          setError(errorMessage(reason, t("view.error.title"))),
+          setError(errorMessage(reason, t("map.loadFailed"))),
       );
     return () => {
       active = false;
@@ -444,7 +443,7 @@ export function MapPage({
       setCreating(false);
       selectMap(created.map_ref.entity_id);
     } catch (reason) {
-      setError(errorMessage(reason, t("map.create")));
+      setError(errorMessage(reason, t("map.createFailed")));
     }
   };
 
@@ -473,7 +472,7 @@ export function MapPage({
     try {
       await savedMapDataSource.deleteMap(operation.mapId);
     } catch (reason) {
-      setMapDeletion({ ...operation, status: "confirming", error: errorMessage(reason, t("map.delete")) });
+      setMapDeletion({ ...operation, status: "confirming", error: errorMessage(reason, t("map.deleteFailed")) });
       return;
     }
     deletedMapIds.current.add(operation.mapId);
@@ -635,7 +634,7 @@ export function MapPage({
     setWiring({ ...operation, status: "creating", error: null });
     let canonicalResult: PhysicalEndpointConnectionCreationDocument;
     try { canonicalResult = await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection({ source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: 1 }, target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: 1 } }); }
-    catch (reason) { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, error: errorMessage(reason, t("map.createCable")) }); return; }
+    catch (reason) { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, error: errorMessage(reason, t("map.connectFailed")) }); return; }
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
     await saveWiringRoute({ ...operation, canonicalResult });
   };
@@ -741,7 +740,7 @@ export function MapPage({
               ...current,
               status: "ready",
               error: preflightComplete
-                ? errorMessage(reason, t("map.add"))
+                ? errorMessage(reason, t("map.addFailed"))
                 : t("map.geometryUnavailable"),
             }
           : current,
@@ -806,7 +805,7 @@ export function MapPage({
             ? {
                 ...current,
                 status: "saved-refresh-failed",
-                error: errorMessage(reason, t("view.error.title")),
+                error: errorMessage(reason, t("map.addRefreshFailed")),
               }
             : current,
         );
@@ -853,7 +852,7 @@ export function MapPage({
       }
     } catch (reason) {
       if (selectedMapId.current !== targetMapId) return;
-      setError(errorMessage(reason, t("view.error.title")));
+      setError(errorMessage(reason, t("map.moveFailed")));
       try {
         await reloadMap(targetMapId);
       } catch {
@@ -1052,7 +1051,7 @@ export function MapPage({
     const operation = { mapId: activeMap.map_ref.entity_id, cableId: requestedCableId, status: "pending" as const };
     setCableRouteReset(operation);
     try { await savedMapDataSource.deleteCableRoute(operation.mapId, operation.cableId); }
-    catch (reason) { if (selectedMapId.current === operation.mapId) setCableRouteReset(null); setError(errorMessage(reason, t("inspector.resetRoute"))); return; }
+    catch (reason) { if (selectedMapId.current === operation.mapId) setCableRouteReset(null); setError(errorMessage(reason, t("map.routeEditorFailed"))); return; }
     try {
       const refreshed = await reloadMap(operation.mapId);
       if (selectedMapId.current === operation.mapId && refreshed) setCableRouteReset(null);
@@ -1350,9 +1349,9 @@ export function MapPage({
         onEditRoute={(id) => beginCableRouteEdit(id)}
         onResetRoute={(id) => void resetCableRoute(id)}
         onConnectFromPort={connectFromPort}
-        onDisconnect={(connectionId, label) => void disconnectPort(connectionId, label).catch((reason) => setError(errorMessage(reason, t("view.error.title"))))}
-        onDeleteObject={(id, label) => { if (window.confirm(t("map.context.deleteObjectConfirm", { name: label }))) void deletePhysicalObject(id).catch((reason) => setError(errorMessage(reason, t("view.error.title")))); }}
-        onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("view.error.title")))); }}
+        onDisconnect={(connectionId, label) => void disconnectPort(connectionId, label).catch((reason) => setError(errorMessage(reason, t("map.disconnectFailed"))))}
+        onDeleteObject={(id, label) => { if (window.confirm(t("map.context.deleteObjectConfirm", { name: label }))) void deletePhysicalObject(id).catch((reason) => setError(errorMessage(reason, t("map.deleteObjectFailed")))); }}
+        onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("map.deleteCableFailed")))); }}
       />}
       {error && <p role="alert">{error}</p>}
       {document &&
@@ -1417,7 +1416,7 @@ export function MapPage({
                   authoritativePositionRevision={authoritativePositionRevision}
                   onPhysicalNodeDragStop={!legacy ? move : undefined}
                   onBlueprintDisplayResize={!legacy && viewMode === "physical" ? (id, displayWidth) => {
-                    void resizeBlueprint(id, displayWidth).catch((reason) => setError(errorMessage(reason, t("view.error.title"))));
+                    void resizeBlueprint(id, displayWidth).catch((reason) => setError(errorMessage(reason, t("map.sizeFailed"))));
                   } : undefined}
                   onNodeCollisionRejected={() =>
                     setError(t("map.collision"))

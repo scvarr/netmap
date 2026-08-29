@@ -58,6 +58,19 @@ authoritative read/refresh and never repeats canonical cable creation or route
 write. Primary cable-routing UI reports the stage in user-facing RU/EN text;
 raw transport/parser diagnostics remain non-primary technical detail.
 
+### UX.8 — User-facing L1 errors
+
+**IMPLEMENTED.** Active L1 UI boundaries present typed RU/EN operation-level
+messages for Saved Map load/create/delete, placement and position writes,
+cable route writes, physical connect/disconnect, authoritative refreshes, and
+the active object-detail and Blueprint map-size workflows. Data-source
+`Error.message` diagnostics, including HTTP and malformed/schema responses,
+remain unchanged technical diagnostics but are not primary user-facing text.
+Acknowledged writes remain distinct from a failed authoritative refresh: the UI
+states that the change was saved and retries only the refresh. Existing
+domain-specific conflict localization, including Blueprint upgrade conflicts,
+remains specific rather than falling back to a generic error.
+
 ## Порядок и exit
 
 Последовательность фиксирована:

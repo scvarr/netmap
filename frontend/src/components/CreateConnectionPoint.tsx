@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { ConnectionPointWriteDataSource } from '../topology/connectionPointWriteTypes';
 import type { PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
+import { useI18n } from '../i18n';
 
 interface CreateConnectionPointProps {
   physicalObjectId: string;
@@ -13,6 +14,7 @@ export function CreateConnectionPoint({
   dataSource,
   onCreated,
 }: CreateConnectionPointProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -32,8 +34,8 @@ export function CreateConnectionPoint({
       setName('');
       setOpen(false);
       onCreated(document);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+    } catch {
+      setError(t('physical.createPointFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -65,7 +67,7 @@ export function CreateConnectionPoint({
           </label>
           {error && (
             <p className="create-interface__error" role="alert">
-              Не удалось создать точку подключения. {error}
+              {error}
             </p>
           )}
           <div className="create-interface__actions">

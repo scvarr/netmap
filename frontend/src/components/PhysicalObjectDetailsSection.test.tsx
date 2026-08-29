@@ -62,7 +62,8 @@ describe('PhysicalObjectDetailsSection ports', () => {
     renderDetails(occupied, { dataSource: { loadPhysicalObjectDetails: load }, writeDataSource: { createPhysicalEndpointConnection: vi.fn(), deleteExternalPhysicalConnection } });
     await userEvent.click(await screen.findByRole('button', { name: 'Разорвать физическое подключение' }));
     expect(deleteExternalPhysicalConnection).toHaveBeenCalledWith('external');
-    expect(await screen.findByText(/refresh failed/)).toBeInTheDocument();
+    expect(await screen.findByText('Не удалось загрузить физический объект.')).toBeInTheDocument();
+    expect(screen.queryByText(/refresh failed/)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
     expect(await screen.findByRole('rowheader', { name: 'A01' })).toBeInTheDocument();
     expect(deleteExternalPhysicalConnection).toHaveBeenCalledTimes(1);
@@ -121,7 +122,8 @@ describe('PhysicalObjectDetailsSection ports', () => {
     const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
     renderDetails(blueprint, { blueprintUpgradeDataSource: { analyzeBlueprintUpgrade: vi.fn().mockRejectedValue(new Error('Malformed Blueprint upgrade analysis response: status is unsupported.')) }, objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: { ...blueprint.blueprint_provenance.version_ref, entity_id: 'v2' }, version_number: 2, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 2 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() } });
     await userEvent.click(await screen.findByRole('button', { name: 'Проверить совместимость' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Malformed Blueprint upgrade analysis response: status is unsupported.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось проверить совместимость');
+    expect(screen.queryByText(/Malformed Blueprint upgrade analysis response/)).not.toBeInTheDocument();
   });
 
   it.each([
@@ -155,7 +157,7 @@ describe('PhysicalObjectDetailsSection ports', () => {
   it('retries local load errors, rejects stale responses, and does not load ambiguous refs', async () => {
     const load = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(document());
     const { rerender } = render(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={{ loadPhysicalObjectDetails: load }} /></MemoryRouter>);
-    expect(await screen.findByText(/offline/)).toBeInTheDocument(); await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+    expect(await screen.findByText('Не удалось загрузить физический объект.')).toBeInTheDocument(); expect(screen.queryByText(/offline/)).not.toBeInTheDocument(); await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
     expect(await screen.findByRole('rowheader', { name: 'A01' })).toBeInTheDocument();
     const first = deferred<PhysicalObjectDetailsDocument>(); const second = deferred<PhysicalObjectDetailsDocument>();
     const delayed = vi.fn((id: string) => id === 'one' ? first.promise : second.promise);

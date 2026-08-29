@@ -103,6 +103,7 @@ const PhysicalObjectClassEditor = ({
   dataSource,
   onUpdated,
 }: PhysicalObjectClassEditorProps) => {
+  const { t } = useI18n();
   const initialPreset = currentClass && KNOWN_CLASSES.has(currentClass) ? currentClass : '__custom__';
   const [preset, setPreset] = useState(initialPreset);
   const [customValue, setCustomValue] = useState(
@@ -119,8 +120,8 @@ const PhysicalObjectClassEditor = ({
     setError(null);
     try {
       onUpdated(await dataSource.setPhysicalObjectClass(physicalObjectId, value));
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+    } catch {
+      setError(t('physical.classSaveFailed'));
     } finally {
       setPending(false);
     }
@@ -203,6 +204,7 @@ const canConnect = (point: ConnectionPointDetails): boolean => (
 interface PortActionProps extends Omit<PortRowProps, 'point'> { point: ConnectionPointDetails; }
 
 const DisconnectPhysicalConnection = ({ point, writeDataSource, onDisconnected }: Pick<PortActionProps, 'point' | 'writeDataSource'> & { onDisconnected: () => void }) => {
+  const { t } = useI18n();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const attachment = point.cardinality === 1 ? point.external_physical_attachments?.[0] : undefined;
@@ -214,13 +216,13 @@ const DisconnectPhysicalConnection = ({ point, writeDataSource, onDisconnected }
     try {
       await writeDataSource.deleteExternalPhysicalConnection!(attachment.connection_ref.entity_id);
       onDisconnected();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+    } catch {
+      setError(t('physical.disconnectFailed'));
     } finally {
       setPending(false);
     }
   };
-  return <><button type="button" className="port-icon-action port-icon-action--danger" aria-label="Разорвать физическое подключение" title="Разорвать физическое подключение" disabled={pending} onClick={() => void disconnect()}>×</button>{error && <p className="port-action-error" role="alert">Не удалось разорвать подключение. {error}</p>}</>;
+  return <><button type="button" className="port-icon-action port-icon-action--danger" aria-label="Разорвать физическое подключение" title="Разорвать физическое подключение" disabled={pending} onClick={() => void disconnect()}>×</button>{error && <p className="port-action-error" role="alert">{error}</p>}</>;
 };
 
 const PortActions = ({ point, topologyNodes, physicalDetailsDataSource, deviceDetailsDataSource, writeDataSource, onConnected }: PortActionProps) => <>
@@ -273,7 +275,7 @@ const BlueprintUpgrade = ({ physicalObjectId, provenance, dataSource, objectBlue
   const { t } = useI18n(); const [analysis, setAnalysis] = useState<BlueprintUpgradeAnalysisDocument | null>(null); const [availability, setAvailability] = useState<'loading' | 'outdated' | 'up-to-date' | 'unavailable'>('loading'); const [targetVersion, setTargetVersion] = useState<number | null>(null); const [loading, setLoading] = useState(false); const [applying, setApplying] = useState(false); const [error, setError] = useState<string | null>(null); const [refreshFailed, setRefreshFailed] = useState(false); const [succeeded, setSucceeded] = useState(false);
   useEffect(() => { let current = true; if (!objectBlueprintDataSource) { setAvailability('unavailable'); return undefined; } void objectBlueprintDataSource.loadObjectBlueprints().then((document) => { const item = document.blueprints.find((entry) => entry.blueprint_ref.entity_id === provenance.blueprint_ref.entity_id); if (!current) return; if (!item) setAvailability('unavailable'); else { setTargetVersion(item.version_number); setAvailability(item.version_ref.entity_id === provenance.version_ref.entity_id ? 'up-to-date' : 'outdated'); } }, () => current && setAvailability('unavailable')); return () => { current = false; }; }, [objectBlueprintDataSource, provenance.blueprint_ref.entity_id, provenance.version_ref.entity_id]);
   if (!dataSource || availability === 'unavailable' || availability === 'loading') return null;
-  const run = async () => { setLoading(true); setError(null); try { setAnalysis(await dataSource.analyzeBlueprintUpgrade(physicalObjectId)); } catch (reason) { setError(reason instanceof Error ? reason.message : t('upgrade.failed')); } finally { setLoading(false); } };
+  const run = async () => { setLoading(true); setError(null); try { setAnalysis(await dataSource.analyzeBlueprintUpgrade(physicalObjectId)); } catch { setError(t('upgrade.failed')); } finally { setLoading(false); } };
   const apply = async () => {
     if (!analysis?.target_version_ref?.entity_id || applying) return;
     setApplying(true); setError(null); setRefreshFailed(false);
@@ -286,7 +288,7 @@ const BlueprintUpgrade = ({ physicalObjectId, provenance, dataSource, objectBlue
     {availability === 'up-to-date' && <p>{t('upgrade.upToDate')}</p>}
     {analysis?.status === 'MODEL_INCONSISTENT' && <p role="alert">{t('upgrade.inconsistent')}</p>}
     {availability === 'outdated' && <button type="button" onClick={() => void run()} disabled={loading}>{loading ? t('upgrade.analyzing') : t('upgrade.dryRun')}</button>}
-    {error && <p role="alert">{t('upgrade.failed')}: {error}</p>}
+    {error && <p role="alert">{error}</p>}
     {analysis && analysis.compatible_changes.length > 0 && <><h4>{t('upgrade.compatible')}</h4><ul>{analysis.compatible_changes.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
     {analysis && analysis.blockers.length > 0 && <><h4>{t('upgrade.blockers')}</h4><ul>{analysis.blockers.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
     {analysis?.status === 'OUTDATED' && analysis.blockers.length === 0 && analysis.target_version_ref && dataSource.applyBlueprintUpgrade && !succeeded && <button type="button" onClick={() => void apply()} disabled={applying}>{applying ? t('upgrade.applying') : t('upgrade.apply', { target: analysis.target_version_number ?? '?' })}</button>}
@@ -310,6 +312,7 @@ export function PhysicalObjectDetailsSection({
   blueprintUpgradeDataSource,
   objectBlueprintDataSource,
 }: PhysicalObjectDetailsSectionProps) {
+  const { t } = useI18n();
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
   const [state, setState] = useState<DetailsState>(() => (
@@ -341,7 +344,7 @@ export function PhysicalObjectDetailsSection({
         if (current) {
           setState({
             kind: 'error',
-            message: reason instanceof Error ? reason.message : 'Неизвестная ошибка',
+            message: t('physical.loadFailed'),
           });
         }
       },
@@ -355,7 +358,7 @@ export function PhysicalObjectDetailsSection({
       {state.kind === 'unavailable' && <p className="device-details-state">{state.message}</p>}
       {state.kind === 'error' && (
         <div className="device-details-state device-details-state--error">
-          <p>Не удалось загрузить физический объект. {state.message}</p>
+          <p>{state.message}</p>
           <button onClick={() => setRetryKey((key) => key + 1)}>Повторить</button>
         </div>
       )}

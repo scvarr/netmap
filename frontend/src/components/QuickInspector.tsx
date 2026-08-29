@@ -126,9 +126,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           (x) => active && setInventory(x),
           (e) =>
             active &&
-            setInventoryError(
-              e instanceof Error ? e.message : t("catalog.error.title"),
-            ),
+            setInventoryError(t("inspector.inventoryLoadFailed")),
         );
       return () => {
         active = false;
@@ -150,11 +148,7 @@ export function QuickInspector(props: QuickInspectorProps) {
         },
         (e) => {
           if (active) {
-            setDetailError(
-              e instanceof Error
-                ? e.message
-                : t("view.error.title"),
-            );
+            setDetailError(t("inspector.objectDetailsLoadFailed"));
             setLoading(false);
           }
         },
@@ -229,7 +223,7 @@ export function QuickInspector(props: QuickInspectorProps) {
         if (!props.onApplyBlueprintSize) return;
         setSizePending(true); setSizeError(null);
         try { await props.onApplyBlueprintSize(Number(sizeDraft)); }
-        catch (reason) { setSizeError(reason instanceof Error ? reason.message : t("view.error.title")); }
+        catch { setSizeError(t("inspector.sizeFailed")); }
         finally { setSizePending(false); }
       })()}>{t("inspector.applySize")}</button>
       <button disabled={sizePending} onClick={props.onCopyBlueprintSize}>{t("inspector.copySize")}</button>
@@ -237,14 +231,14 @@ export function QuickInspector(props: QuickInspectorProps) {
         if (!props.onApplyCopiedBlueprintSize) return;
         setSizePending(true); setSizeError(null);
         try { await props.onApplyCopiedBlueprintSize(); }
-        catch (reason) { setSizeError(reason instanceof Error ? reason.message : t("view.error.title")); }
+        catch { setSizeError(t("inspector.sizeFailed")); }
         finally { setSizePending(false); }
       })()}>{t("inspector.applyCopiedSize")}</button>
       <button disabled={sizePending} onClick={() => void (async () => {
         if (!props.onApplyBlueprintSizeToSameBlueprint) return;
         setSizePending(true); setSizeError(null);
         try { await props.onApplyBlueprintSizeToSameBlueprint(); }
-        catch (reason) { setSizeError(reason instanceof Error ? reason.message : t("view.error.title")); }
+        catch { setSizeError(t("inspector.sizeFailed")); }
         finally { setSizePending(false); }
       })()}>{t("inspector.applySizeToSameBlueprint")}</button>
       {sizeError && <p role="alert">{sizeError}</p>}
@@ -260,11 +254,7 @@ export function QuickInspector(props: QuickInspectorProps) {
       try {
         await props.onAddContinuationToMap(remote);
       } catch (reason) {
-        setContinuationError(
-          reason instanceof Error
-            ? reason.message
-            : t("map.add"),
-        );
+        setContinuationError(t("map.addFailed"));
       }
     };
     return shell(

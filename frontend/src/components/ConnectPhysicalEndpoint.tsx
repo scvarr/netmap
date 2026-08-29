@@ -15,6 +15,7 @@ import type {
 import { displayNodeLabel, numericAttribute } from "../topology/presentation";
 import type { TopologyProjectionNode } from "../topology/types";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
+import { useI18n } from "../i18n";
 
 interface ConnectPhysicalEndpointProps {
   sourcePoint: ConnectionPointDetails;
@@ -69,6 +70,7 @@ export function ConnectPhysicalEndpoint({
   writeDataSource,
   onConnected,
 }: ConnectPhysicalEndpointProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("PORT");
   const [targetObjectId, setTargetObjectId] = useState("");
@@ -155,12 +157,11 @@ export function ConnectPhysicalEndpoint({
                 },
           );
       },
-      (reason: unknown) => {
+      () => {
         if (current)
           setTargetState({
             kind: "error",
-            message:
-              reason instanceof Error ? reason.message : "Неизвестная ошибка",
+            message: t('physical.connectTargetLoadFailed'),
           });
       },
     );
@@ -217,8 +218,8 @@ export function ConnectPhysicalEndpoint({
       });
       reset();
       onConnected();
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Неизвестная ошибка");
+    } catch {
+      setError(t('physical.connectFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -370,7 +371,7 @@ export function ConnectPhysicalEndpoint({
           )}
           {targetState.kind === "error" && (
             <div className="connect-interface__target-error">
-              <p>Не удалось загрузить endpoints. {targetState.message}</p>
+              <p>{targetState.message}</p>
               <button
                 type="button"
                 onClick={() => setRetry((value) => value + 1)}
@@ -381,7 +382,7 @@ export function ConnectPhysicalEndpoint({
           )}
           {error && (
             <p className="connect-interface__error" role="alert">
-              Не удалось создать соединение. {error}
+              {error}
             </p>
           )}
           <div className="connect-interface__actions">
