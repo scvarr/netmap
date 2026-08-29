@@ -120,6 +120,15 @@ GitNexus использовать для targeted discovery и impact analysis, 
 реализации предпочитать targeted tests; широкую acceptance suite запускать на
 финальной границе milestone, если проектный контракт не требует иного.
 
+Testing workflow contract: сохранять нужно behavioural contracts и invariants,
+а не историческую форму или количество test files. Один invariant не следует
+дублировать на нескольких test layers без отдельной ценности; настоящие E2E
+оставлять для небольшого числа сквозных гарантий, а локальные contracts
+проверять более дешёвыми слоями. Failure вне текущего contract сначала
+классифицировать как regression текущего milestone либо unrelated/obsolete test
+debt. Obsolete development-stage expectations не восстанавливать автоматически
+только ради прохождения старого test suite.
+
 Не пересказывать Codex:
 
 - AGENTS.md;

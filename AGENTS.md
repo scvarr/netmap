@@ -45,6 +45,21 @@ Permanent NetMap rules:
   existing databases will not replay an already-recorded revision. This protects
   migration-history integrity, not obsolete application contracts.
 
+Testing workflow contract:
+
+- During implementation, prefer targeted tests for the affected behavioural
+  contract. Run the full backend/frontend regression suites at the final
+  milestone boundary unless broad or uncertain impact requires them earlier.
+- Preserve behavioural contracts and invariants, not the historical shape or
+  number of test files. Do not duplicate one invariant across test layers
+  without separate value.
+- Use true E2E tests for a small number of end-to-end guarantees; verify local
+  contracts in cheaper layers.
+- First classify a failure outside the current contract as either a regression
+  of the current milestone or unrelated/obsolete test debt.
+- Do not automatically restore obsolete development-stage expectations merely
+  to make an old test suite pass.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
