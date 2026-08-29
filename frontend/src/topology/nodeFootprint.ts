@@ -41,6 +41,11 @@ export const nodeFootprint = (
   position: XYPosition = node.position,
 ): FlowRectangle => {
   const dimensions = footprintDimensionsForProjectionNode(node.data.projection);
+  const blueprint = node.data.projection.attributes.blueprint_presentation;
+  if (blueprint) {
+    const width = node.measured?.width ?? node.width ?? dimensions.width;
+    return { ...position, ...blueprintNodeDisplayDimensions(blueprint, width) };
+  }
   return {
     ...position,
     width: node.measured?.width ?? node.width ?? dimensions.width,

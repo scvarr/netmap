@@ -10,6 +10,8 @@ export const MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH = 240;
 export const MIN_BLUEPRINT_PORT_CENTER_SEPARATION = 14;
 export const MIN_BLUEPRINT_LABEL_FONT_SIZE = 8;
 export const MAX_BLUEPRINT_LABEL_FONT_SIZE = 32;
+export const BLUEPRINT_MAP_NAMEPLATE_FACE_HEIGHT_RATIO = 0.12;
+export const MIN_BLUEPRINT_MAP_NAMEPLATE_HEIGHT = 14;
 
 export type BlueprintFace = 'FRONT' | 'REAR';
 
@@ -39,6 +41,16 @@ export const blueprintNodeDisplayDimensions = (
     height: faces.length * face.height,
   };
 };
+
+// This is a card chrome dimension, deliberately derived from the rendered face
+// so the React Flow card preserves the Blueprint body's resize aspect ratio.
+export const blueprintMapNameplateHeight = (
+  presentation: BlueprintPresentation,
+  displayWidth: number | undefined,
+) => Math.max(
+  MIN_BLUEPRINT_MAP_NAMEPLATE_HEIGHT,
+  blueprintDisplayDimensions(presentation.body, displayWidth).height * BLUEPRINT_MAP_NAMEPLATE_FACE_HEIGHT_RATIO,
+);
 
 export const minimumBlueprintDisplayWidth = (presentation: BlueprintPresentation) => {
   const { body } = presentation;

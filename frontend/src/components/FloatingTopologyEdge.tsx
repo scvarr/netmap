@@ -17,7 +17,7 @@ import {
 } from '../topology/layout';
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
-import { blueprintDisplayDimensions, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
+import { blueprintDisplayDimensions, blueprintMapNameplateHeight, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
 
 export interface NodeRectangle {
   x: number;
@@ -90,7 +90,7 @@ export const getConnectionPointEndpoint = (
     const panelTop = faceIndex * face.height;
     return {
       x: box.x + box.width * slot.external_attachment.x,
-      y: box.y + panelTop + face.height * slot.external_attachment.y,
+      y: box.y + blueprintMapNameplateHeight(presentation, box.width) + panelTop + face.height * slot.external_attachment.y,
       side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
     };
   }
@@ -114,7 +114,7 @@ export const getRenderedConnectionPoint = (
   const side = slot.external_attachment.side;
   return {
     x: box.x + box.width * slot.rendered_position.x,
-    y: box.y + panelTop + face.height * slot.rendered_position.y,
+    y: box.y + blueprintMapNameplateHeight(presentation, box.width) + panelTop + face.height * slot.rendered_position.y,
     side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
   };
 };

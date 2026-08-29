@@ -40,6 +40,12 @@ describe('node footprint presentation geometry', () => {
     expect(rectanglesOverlap(footprint, { x: 0, y: 50, width: 240, height: 20 })).toBe(true);
     expect(nearestFreePosition({ x: 0, y: 0 }, footprint, [{ x: 0, y: 0, width: 240, height: 60 }])).not.toEqual({ x: 0, y: 0 });
   });
+
+  it('keeps the presentation nameplate out of Blueprint collision geometry', () => {
+    const blueprint = node('blueprint', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 2, height: 1 }, slots: [{ face: 'FRONT' }] } });
+    blueprint.measured = { width: 320, height: 179.2 };
+    expect(nodeFootprint(blueprint)).toMatchObject({ width: 320, height: 160 });
+  });
 });
 
 describe('nearest-free Saved Map placement', () => {

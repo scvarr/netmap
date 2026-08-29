@@ -5,11 +5,11 @@ import { displayNodeLabel, physicalClassPresentation } from '../topology/present
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import { internalL1Segments } from '../topology/internalL1Presentation';
 import { InternalL1Continuity } from './InternalL1Continuity';
-import { blueprintDisplayDimensions, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
+import { blueprintDisplayDimensions, blueprintMapNameplateHeight, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
-export function DeviceNode({ data, selected, width, height }: NodeProps<DeviceFlowNode>) {
+export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>) {
   const { projection } = data;
   const physical = projection.kind === 'PHYSICAL_OBJECT';
   const classPresentation = physicalClassPresentation(projection.attributes.class);
@@ -21,7 +21,8 @@ export function DeviceNode({ data, selected, width, height }: NodeProps<DeviceFl
   };
   if (physical && blueprint) {
     const displayWidth = width ?? blueprintNodeDisplayDimensions(blueprint, undefined).width;
-    const displayHeight = height ?? blueprintNodeDisplayDimensions(blueprint, displayWidth).height;
+    const displayHeight = blueprintNodeDisplayDimensions(blueprint, displayWidth).height;
+    const nameplateHeight = blueprintMapNameplateHeight(blueprint, displayWidth);
     const faceDimensions = blueprintDisplayDimensions(blueprint.body, displayWidth);
     const faces = visibleBlueprintFaces(blueprint);
     const traceHighlightedConnectionPointIds = new Set(
@@ -29,20 +30,21 @@ export function DeviceNode({ data, selected, width, height }: NodeProps<DeviceFl
         .filter((link) => data.traceHighlightedConnectionMemberIds?.has(link.connection_member_id))
         .flatMap((link) => [link.from_connection_point_id, link.to_connection_point_id]),
     );
-    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: displayWidth, height: displayHeight }}>
+    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: displayWidth, height: displayHeight + nameplateHeight, gridTemplateRows: `${nameplateHeight}px ${displayHeight}px` }}>
     <NodeResizer
       isVisible={Boolean(selected && data.blueprintResizeEnabled)}
       minWidth={minimumBlueprintDisplayWidth(blueprint)}
       maxWidth={960}
-      minHeight={1}
-      maxHeight={960}
+      minHeight={blueprintNodeDisplayDimensions(blueprint, minimumBlueprintDisplayWidth(blueprint)).height + blueprintMapNameplateHeight(blueprint, minimumBlueprintDisplayWidth(blueprint))}
+      maxHeight={blueprintNodeDisplayDimensions(blueprint, 960).height + blueprintMapNameplateHeight(blueprint, 960)}
       keepAspectRatio
       lineClassName="blueprint-map-node__resizer-line"
       handleClassName="blueprint-map-node__resizer-handle"
       onResizeEnd={(_, dimensions) => { if (objectId) data.onBlueprintDisplayResize?.(objectId, dimensions.width); }}
     />
     <Handle type="target" position={Position.Top} className="device-node__handle" />
-    <strong className="blueprint-map-node__nameplate" title={displayNodeLabel(projection)}>{displayNodeLabel(projection)}</strong>
+    <strong className="blueprint-map-node__nameplate" style={{ height: nameplateHeight }} title={displayNodeLabel(projection)}>{displayNodeLabel(projection)}</strong>
+    <div className="blueprint-map-node__body" style={{ height: displayHeight }}>
     <div className="blueprint-map-node__panels">
       {faces.map((face) => {
         return <section key={face} className="blueprint-map-node__face" data-testid={`blueprint-face-${face}`}>
@@ -53,6 +55,7 @@ export function DeviceNode({ data, selected, width, height }: NodeProps<DeviceFl
       })}
     </div>
     <InternalL1Continuity width={displayWidth} height={displayHeight} segments={internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, displayWidth)} />
+    </div>
     <Handle type="source" position={Position.Top} className="device-node__handle" />
   </div>;
   }

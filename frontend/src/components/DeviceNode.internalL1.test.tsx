@@ -32,7 +32,7 @@ describe('DeviceNode internal L1 overlay', () => {
     const nameplate = screen.getByTitle('PC1');
     expect(nameplate).toHaveTextContent('PC1');
     expect(nameplate).toHaveClass('blueprint-map-node__nameplate');
-    expect(nameplate).not.toHaveAttribute('style');
+    expect(nameplate).toHaveStyle({ height: '14px' });
   });
 
   it('keeps the full long name in title while the small nameplate ellipsizes via CSS', () => {
@@ -47,9 +47,9 @@ describe('DeviceNode internal L1 overlay', () => {
   it('keeps one shared nameplate typography across Blueprint display widths', () => {
     const { rerender } = render(<DeviceNode {...({ data: { projection }, selected: false, width: 160 } as any)} />);
     const nameplate = () => screen.getByTitle('PP1');
-    expect(nameplate()).not.toHaveAttribute('style');
+    expect(nameplate()).toHaveStyle({ height: '14px' });
     rerender(<DeviceNode {...({ data: { projection }, selected: false, width: 320 } as any)} />);
-    expect(nameplate()).not.toHaveAttribute('style');
+    expect(nameplate()).toHaveStyle({ height: '19.2px' });
   });
 
   it('renders both physical faces simultaneously without runtime face tabs and keeps slots on their own surfaces', () => {
@@ -61,9 +61,11 @@ describe('DeviceNode internal L1 overlay', () => {
     expect(screen.queryByRole('button', { name: 'Задняя' })).not.toBeInTheDocument();
     expect(screen.queryByText('Передняя')).not.toBeInTheDocument();
     expect(screen.queryByText('Задняя')).not.toBeInTheDocument();
-    expect(body).toHaveStyle({ height: '320px' });
+    expect(body).toHaveStyle({ height: '339.2px', gridTemplateRows: '19.2px 320px' });
     expect(within(body).getByTitle('PP1')).toHaveClass('blueprint-map-node__nameplate');
     expect(front.nextElementSibling).toBe(rear);
+    expect(front.parentElement?.parentElement).toHaveClass('blueprint-map-node__body');
+    expect(front.parentElement?.parentElement).toHaveStyle({ height: '320px' });
     expect(within(front).getByTitle('Front 01 · CONNECTION_POINT')).toBeInTheDocument();
     expect(within(front).queryByTitle('Rear 01 · CONNECTION_POINT')).not.toBeInTheDocument();
     expect(within(rear).getByTitle('Rear 01 · CONNECTION_POINT')).toBeInTheDocument();
@@ -86,7 +88,9 @@ describe('DeviceNode internal L1 overlay', () => {
     const { rerender } = render(<DeviceNode {...({ data: { projection: frontOnly }, selected: false } as any)} />);
     expect(screen.getByTestId('blueprint-face-FRONT')).toBeInTheDocument();
     expect(screen.queryByTestId('blueprint-face-REAR')).not.toBeInTheDocument();
-    expect(screen.getByTestId('blueprint-map-node')).toHaveStyle({ height: '120px' });
+    const body = screen.getByTestId('blueprint-map-node');
+    expect(body).toHaveStyle({ height: '134.4px' });
+    expect(body.style.gridTemplateRows).toContain('120px');
     const rearOnly = { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots: [projection.attributes.blueprint_presentation.slots[1]] } } };
     rerender(<DeviceNode {...({ data: { projection: rearOnly }, selected: false } as any)} />);
     expect(screen.queryByTestId('blueprint-face-FRONT')).not.toBeInTheDocument();

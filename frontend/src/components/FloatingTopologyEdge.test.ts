@@ -38,20 +38,20 @@ describe('floating topology edge geometry', () => {
     } };
     const endpoint = getConnectionPointEndpoint(projection, node(10, 20), 'rear-01');
     const renderedPort = getRenderedConnectionPoint(projection, node(10, 20), 'rear-01');
-    expect(endpoint).toMatchObject({ x: 60, y: 20, side: Position.Top });
-    expect(renderedPort).toMatchObject({ x: 60, y: 70, side: Position.Top });
+    expect(endpoint).toMatchObject({ x: 60, y: 34, side: Position.Top });
+    expect(renderedPort).toMatchObject({ x: 60, y: 84, side: Position.Top });
     expect(routedCablePath(endpoint!, { x: 300, y: 200, side: Position.Left }, [{ x: 80, y: 30 }]))
-      .toBe('M 60 20 L 80 30 L 300 200');
+      .toBe('M 60 34 L 80 30 L 300 200');
     expect(routedCablePath(renderedPort!, { x: 320, y: 220, side: Position.Left }, [{ x: 80, y: 30 }]))
-      .toBe('M 60 70 L 80 30 L 320 220');
+      .toBe('M 60 84 L 80 30 L 320 220');
   });
 
   it('offsets a REAR slot endpoint to the REAR panel without changing its anchor semantics', () => {
     const projection: TopologyProjectionNode = { id: 'blueprint', kind: 'PHYSICAL_OBJECT', label: 'Patch panel', source_refs: [], attributes: {
       blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, slots: [{ slot_key: 'front', display_name: 'front', kind: 'CONNECTION_POINT', connection_point_id: 'front', rendered_position: { x: .25, y: .5 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }, { slot_key: 'rear', display_name: 'rear', kind: 'CONNECTION_POINT', connection_point_id: 'rear', face: 'REAR', rendered_position: { x: .25, y: .5 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }] },
     } };
-    expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, width: 200, height: 200 }, 'front')).toMatchObject({ x: 60, y: 20, side: Position.Top });
-    expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, width: 200, height: 200 }, 'rear')).toMatchObject({ x: 60, y: 120, side: Position.Top });
+    expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, width: 200, height: 200 }, 'front')).toMatchObject({ x: 60, y: 34, side: Position.Top });
+    expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, width: 200, height: 200 }, 'rear')).toMatchObject({ x: 60, y: 134, side: Position.Top });
   });
 
   it('uses nearest horizontal sides even when raw source is geometrically right of target', () => {
