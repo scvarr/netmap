@@ -1,11 +1,11 @@
 ---
 name: gitnexus-area-tests
-description: "Skill for the Tests area of netmap. 820 symbols across 65 files."
+description: "Skill for the Tests area of netmap. 819 symbols across 65 files."
 ---
 
 # Tests
 
-820 symbols | 65 files | Cohesion: 75%
+819 symbols | 65 files | Cohesion: 75%
 
 ## When to Use
 

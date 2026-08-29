@@ -21,11 +21,11 @@ description: "Skill for the App area of netmap. 505 symbols across 58 files."
 | `app/repository.py` | require_physical_objects, _l2_binding_record, get_l2_bindings_by_context, get_l2_bindings_by_interface, _get_nat_pool_record (+50) |
 | `app/models.py` | BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintInternalLink, BlueprintPortBlockInstance (+43) |
 | `app/l2_resolver.py` | _add_branch, _binding_node, _binding_refs, _boundary_node, _context_node (+31) |
-| `app/topology_projection_resolver.py` | _edge, _node_id, _path_key, _path_refs, _validate_request (+18) |
+| `app/topology_projection_resolver.py` | _dedupe_refs, _internal_l1_link, _off_map_continuations, _oriented_endpoint_pair, _path_refs (+18) |
 | `app/saved_map_catalog.py` | list, _cable_routes, _placements, _require_cable, create (+12) |
 | `app/interface_resolver.py` | visit, _candidate_id, _candidate_schema, _l1_query, _resolve_physical (+12) |
 | `app/packet_processing_executor.py` | _egress_context, _adjacency_identity_refs, _continue_adjacency_unknown, _dedupe, _execute (+9) |
-| `app/device_catalog.py` | create_connection_point, set_physical_object_class, set_physical_object_display_alias, _add_display_alias, create_device_interface (+6) |
+| `app/device_catalog.py` | create_connection_point, set_physical_object_class, set_physical_object_display_alias, _display_aliases, connection_point_display_aliases (+6) |
 | `app/nat_resolver.py` | _apply_transform, _constraint_key, _dedupe, _evaluate_rules, _packet_key (+5) |
 
 ## Entry Points

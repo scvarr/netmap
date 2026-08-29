@@ -1,11 +1,11 @@
 ---
 name: gitnexus-area-topology
-description: "Skill for the Topology area of netmap. 272 symbols across 50 files."
+description: "Skill for the Topology area of netmap. 294 symbols across 60 files."
 ---
 
 # Topology
 
-272 symbols | 50 files | Cohesion: 96%
+294 symbols | 60 files | Cohesion: 96%
 
 ## When to Use
 
@@ -17,7 +17,7 @@ description: "Skill for the Topology area of netmap. 272 symbols across 50 files
 
 | File | Symbols |
 |------|---------|
-| `frontend/src/topology/apiSavedMapDataSource.ts` | cableRoute, malformed, mapRef, object, parseMap (+20) |
+| `frontend/src/topology/apiSavedMapDataSource.ts` | cableRoute, error, malformed, mapRef, object (+20) |
 | `frontend/src/topology/apiObjectBlueprintDataSource.ts` | backendError, isObject, malformed, parseBody, parseCanonicalRef (+17) |
 | `frontend/src/topology/apiTopologyDataSource.ts` | isObject, malformed, parseProjectionDocument, readBackendError, requireObject (+14) |
 | `frontend/src/topology/apiPhysicalObjectDetailsDataSource.ts` | errorMessage, isObject, malformed, parsePhysicalObjectDetailsDocument, validateItems (+11) |
@@ -26,7 +26,7 @@ description: "Skill for the Topology area of netmap. 272 symbols across 50 files
 | `frontend/src/topology/apiBlueprintUpgradeDataSource.ts` | malformed, parseBlueprintUpgradeAnalysisDocument, parseChange, parseLibraryRef, parseStatus (+10) |
 | `frontend/src/topology/apiCatalogInventoryDataSource.ts` | count, endpoint, exactKeys, isObject, label (+9) |
 | `frontend/src/topology/apiPhysicalEndpointConnectionWriteDataSource.ts` | isObject, malformed, parsePhysicalEndpointConnectionCreationDocument, readBackendError, requireArray (+5) |
-| `frontend/src/topology/apiInterfacePhysicalTraceDataSource.ts` | isObject, malformed, parseArtifact, readBackendError, requireEvidenceRefs (+4) |
+| `frontend/src/topology/layoutStore.ts` | applyTopologyPositionOverrides, topologyLayoutViewKey, isPosition, clear, key (+4) |
 
 ## Entry Points
 
@@ -67,16 +67,16 @@ Start here when exploring this area:
 
 | Flow | Type | Steps |
 |------|------|-------|
+| `OnNodeDragStop → BlueprintDisplayDimensions` | cross_community | 6 |
+| `OnNodeDragStop → VisibleBlueprintFaces` | cross_community | 6 |
 | `Load → IsObject` | cross_community | 6 |
 | `Load → Malformed` | cross_community | 6 |
+| `AddContinuationAtViewportCenter → BlueprintDisplayDimensions` | cross_community | 6 |
+| `AddContinuationAtViewportCenter → VisibleBlueprintFaces` | cross_community | 6 |
+| `SubmitInsertion → BlueprintDisplayDimensions` | cross_community | 6 |
+| `SubmitInsertion → VisibleBlueprintFaces` | cross_community | 6 |
 | `CreateObjectBlueprint → IsObject` | intra_community | 5 |
 | `CreateObjectBlueprint → Malformed` | intra_community | 5 |
-| `CreateObjectBlueprintVersion → IsObject` | intra_community | 5 |
-| `CreateObjectBlueprintVersion → Malformed` | intra_community | 5 |
-| `InstantiateObjectBlueprint → IsObject` | intra_community | 5 |
-| `InstantiateObjectBlueprint → Malformed` | intra_community | 5 |
-| `LoadObjectBlueprintVersion → IsObject` | intra_community | 5 |
-| `LoadObjectBlueprintVersion → Malformed` | intra_community | 5 |
 
 ## How to Explore
 
