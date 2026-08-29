@@ -1,11 +1,11 @@
 ---
 name: gitnexus-area-app
-description: "Skill for the App area of netmap. 509 symbols across 58 files."
+description: "Skill for the App area of netmap. 505 symbols across 58 files."
 ---
 
 # App
 
-509 symbols | 58 files | Cohesion: 74%
+505 symbols | 58 files | Cohesion: 74%
 
 ## When to Use
 
@@ -17,15 +17,15 @@ description: "Skill for the App area of netmap. 509 symbols across 58 files."
 
 | File | Symbols |
 |------|---------|
-| `app/main.py` | analyze_physical_object_blueprint_upgrade, create_connection_point, create_l2_forwarding_context, ref, create_physical_object (+62) |
-| `app/repository.py` | require_physical_objects, _l2_binding_record, get_l2_bindings_by_context, get_l2_bindings_by_interface, _get_nat_pool_record (+51) |
-| `app/models.py` | BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintInternalLink, BlueprintPortBlockInstance (+44) |
+| `app/main.py` | analyze_physical_object_blueprint_upgrade, create_connection_point, create_l2_forwarding_context, ref, create_physical_link (+60) |
+| `app/repository.py` | require_physical_objects, _l2_binding_record, get_l2_bindings_by_context, get_l2_bindings_by_interface, _get_nat_pool_record (+50) |
+| `app/models.py` | BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintInternalLink, BlueprintPortBlockInstance (+43) |
 | `app/l2_resolver.py` | _add_branch, _binding_node, _binding_refs, _boundary_node, _context_node (+31) |
-| `app/topology_projection_resolver.py` | _edge, _node, _node_id, _path_key, _path_refs (+16) |
+| `app/topology_projection_resolver.py` | _dedupe_refs, _internal_l1_link, _off_map_continuations, _oriented_endpoint_pair, _path_refs (+18) |
 | `app/saved_map_catalog.py` | list, _cable_routes, _placements, _require_cable, create (+12) |
 | `app/interface_resolver.py` | visit, _candidate_id, _candidate_schema, _l1_query, _resolve_physical (+12) |
 | `app/packet_processing_executor.py` | _egress_context, _adjacency_identity_refs, _continue_adjacency_unknown, _dedupe, _execute (+9) |
-| `app/device_catalog.py` | create_connection_point, set_physical_object_class, set_physical_object_display_alias, physical_object_classes, _add_display_alias (+6) |
+| `app/device_catalog.py` | create_connection_point, set_physical_object_class, set_physical_object_display_alias, _display_aliases, connection_point_display_aliases (+6) |
 | `app/nat_resolver.py` | _apply_transform, _constraint_key, _dedupe, _evaluate_rules, _packet_key (+5) |
 
 ## Entry Points
@@ -43,25 +43,25 @@ Start here when exploring this area:
 | Symbol | Type | File | Line |
 |--------|------|------|------|
 | `Base` | Class | `app/database.py` | 16 |
-| `BlueprintEndpointSlot` | Class | `app/models.py` | 403 |
-| `BlueprintInstance` | Class | `app/models.py` | 443 |
-| `BlueprintInstanceSlot` | Class | `app/models.py` | 456 |
-| `BlueprintInternalLink` | Class | `app/models.py` | 424 |
-| `BlueprintPortBlockInstance` | Class | `app/models.py` | 382 |
-| `Cable` | Class | `app/models.py` | 166 |
-| `Connection` | Class | `app/models.py` | 141 |
-| `ConnectionMember` | Class | `app/models.py` | 185 |
-| `ConnectionPoint` | Class | `app/models.py` | 126 |
-| `EntityMetadata` | Class | `app/models.py` | 251 |
-| `InterfaceAddress` | Class | `app/models.py` | 628 |
-| `InterfacePhysicalBinding` | Class | `app/models.py` | 479 |
-| `L2Binding` | Class | `app/models.py` | 533 |
-| `L2EgressRule` | Class | `app/models.py` | 576 |
-| `L2ForwardingContext` | Class | `app/models.py` | 526 |
-| `L2IngressRule` | Class | `app/models.py` | 560 |
-| `L3Binding` | Class | `app/models.py` | 601 |
-| `MapCableRoute` | Class | `app/models.py` | 107 |
-| `MapPlacement` | Class | `app/models.py` | 49 |
+| `BlueprintEndpointSlot` | Class | `app/models.py` | 384 |
+| `BlueprintInstance` | Class | `app/models.py` | 424 |
+| `BlueprintInstanceSlot` | Class | `app/models.py` | 437 |
+| `BlueprintInternalLink` | Class | `app/models.py` | 405 |
+| `BlueprintPortBlockInstance` | Class | `app/models.py` | 363 |
+| `Connection` | Class | `app/models.py` | 144 |
+| `ConnectionMember` | Class | `app/models.py` | 166 |
+| `ConnectionPoint` | Class | `app/models.py` | 129 |
+| `EntityMetadata` | Class | `app/models.py` | 232 |
+| `InterfaceAddress` | Class | `app/models.py` | 609 |
+| `InterfacePhysicalBinding` | Class | `app/models.py` | 460 |
+| `L2Binding` | Class | `app/models.py` | 514 |
+| `L2EgressRule` | Class | `app/models.py` | 557 |
+| `L2ForwardingContext` | Class | `app/models.py` | 507 |
+| `L2IngressRule` | Class | `app/models.py` | 541 |
+| `L3Binding` | Class | `app/models.py` | 582 |
+| `MapCableRoute` | Class | `app/models.py` | 110 |
+| `MapPlacement` | Class | `app/models.py` | 52 |
+| `MapViewPosition` | Class | `app/models.py` | 80 |
 
 ## Execution Flows
 

@@ -1,11 +1,11 @@
 ---
 name: gitnexus-area-tests
-description: "Skill for the Tests area of netmap. 811 symbols across 66 files."
+description: "Skill for the Tests area of netmap. 819 symbols across 65 files."
 ---
 
 # Tests
 
-811 symbols | 66 files | Cohesion: 75%
+819 symbols | 65 files | Cohesion: 75%
 
 ## When to Use
 
@@ -17,7 +17,7 @@ description: "Skill for the Tests area of netmap. 811 symbols across 66 files."
 
 | File | Symbols |
 |------|---------|
-| `app/repository.py` | _processing_path_exists, _require_packet_processing_plan, add_packet_processing_plan, add_processing_entry_point, add_processing_stage (+40) |
+| `app/repository.py` | _processing_path_exists, _require_packet_processing_plan, add_packet_processing_plan, add_processing_entry_point, add_processing_stage (+41) |
 | `tests/test_packet_processing_plan_e2e.py` | references, terminal_plan, test_adjacency_success_rejects_non_continue_terminal, test_complete_adjacency_plan_missing_outcome_is_rejected, test_complete_adjacency_plan_requires_and_accepts_all_outcomes (+37) |
 | `tests/test_routing_policy_evaluation_e2e.py` | create_context_tables, create_policy, evaluate, select_table, test_allowed_shared_packet_predicates_select_rule_table (+25) |
 | `tests/test_packet_processing_evaluation_e2e.py` | test_complete_nat_plan_is_executable, test_routing_policy_stage_obeys_graph_and_does_not_route_automatically, add_routing_plan, add_terminal, evaluate (+24) |
