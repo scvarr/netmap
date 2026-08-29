@@ -60,6 +60,7 @@ from app.schemas import (
     CreatePhysicalObjectRequest,
     CreatePortBlockRequest,
     CreatePortBlockVersionRequest,
+    CreateMapRegionRequest,
     CreateSavedMapRequest,
     CreateL2ForwardingContextRequest,
     CatalogInventoryDocument,
@@ -76,6 +77,7 @@ from app.schemas import (
     L2ReachabilityTraceArtifact,
     L2ForwardingContextCreationDocument,
     MapPlacementsDocument,
+    MapRegionDocument,
     L3ReachabilityArtifact,
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
@@ -108,6 +110,7 @@ from app.schemas import (
     NATEvaluationQuery,
     MoveMapPlacementRequest,
     SetMapCableRouteRequest,
+    ReplaceMapRegionRequest,
     SetMapViewLockRequest,
     RouteDecisionArtifact,
     RouteDecisionQuery,
@@ -185,6 +188,24 @@ def _saved_map_document(detail) -> dict[str, object]:
                 "waypoints": route.waypoints,
             }
             for route in detail.cable_routes
+        ],
+        "regions": [
+            {
+                "region_ref": {"entity_type": "MapRegion", "entity_id": region.id},
+                "label": region.label,
+                "points": region.points,
+                "label_position": region.label_position,
+                "style": {
+                    "fill_color": region.fill_color,
+                    "fill_opacity": region.fill_opacity,
+                    "stroke_color": region.stroke_color,
+                    "stroke_width": region.stroke_width,
+                    "stroke_style": region.stroke_style,
+                    "label_color": region.label_color,
+                },
+                "z_order": region.z_order,
+            }
+            for region in detail.regions
         ],
     }
 
@@ -329,6 +350,60 @@ def delete_map_cable_route(
 ) -> None:
     with session.begin():
         SavedMapCatalog(session).delete_cable_route(map_id, cable_id)
+
+
+@app.post("/v1/maps/{map_id}/regions", response_model=MapRegionDocument, status_code=201, responses={422: {"model": ErrorResponse}})
+def create_map_region(
+    map_id: uuid.UUID,
+    query: CreateMapRegionRequest,
+    session: Session = Depends(get_session),
+) -> MapRegionDocument:
+    with session.begin():
+        region = SavedMapCatalog(session).create_region(
+            map_id,
+            query.label,
+            [point.model_dump() for point in query.points],
+            None if query.label_position is None else query.label_position.model_dump(),
+            query.style.model_dump(),
+            query.z_order,
+        )
+        return {
+            "region_ref": {"entity_type": "MapRegion", "entity_id": region.id},
+            **query.model_dump(),
+        }
+
+
+@app.put("/v1/maps/{map_id}/regions/{region_id}", response_model=MapRegionDocument, responses={422: {"model": ErrorResponse}})
+def replace_map_region(
+    map_id: uuid.UUID,
+    region_id: uuid.UUID,
+    query: ReplaceMapRegionRequest,
+    session: Session = Depends(get_session),
+) -> MapRegionDocument:
+    with session.begin():
+        region = SavedMapCatalog(session).replace_region(
+            map_id,
+            region_id,
+            query.label,
+            [point.model_dump() for point in query.points],
+            None if query.label_position is None else query.label_position.model_dump(),
+            query.style.model_dump(),
+            query.z_order,
+        )
+        return {
+            "region_ref": {"entity_type": "MapRegion", "entity_id": region.id},
+            **query.model_dump(),
+        }
+
+
+@app.delete("/v1/maps/{map_id}/regions/{region_id}", status_code=204, responses={422: {"model": ErrorResponse}})
+def delete_map_region(
+    map_id: uuid.UUID,
+    region_id: uuid.UUID,
+    session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        SavedMapCatalog(session).delete_region(map_id, region_id)
 
 
 @app.post(

@@ -336,7 +336,28 @@ it is deliberately separate from Port Block Blueprint composition.
 
 ### L1S.7 — Regions / areas
 
-- Presentation-only spatial regions без topology semantics.
+#### L1S.7a — Saved Map Region model / persistence / API contract
+
+**IMPLEMENTED**
+
+- `MapRegion` is a SavedMap-owned, Physical/L1-only presentation polygon with stable
+  UUID identity, non-unique label, optional explicit label position, bounded visual
+  style and region-layer z-order.
+- The authoritative Saved Map includes `regions[]`; bounded create/replace/delete
+  endpoints are independent of MapPlacement and canonical topology. Simple polygon
+  validation rejects invalid vertices and self-intersection; Saved Map deletion cascades
+  Regions.
+- Frontend provides only typed Saved Map parsing and acknowledgement-only transport;
+  rendering and authoring remain absent.
+
+#### L1S.7b — Region drawing and editing UI
+
+**OPEN**
+
+- Separate Region editing mode over a non-interactive topology reference background;
+  cables hidden, Region layer only interactive, optional full object-background hide.
+- Polygon drawing/editing, selection, styling controls and Shift screen-axis segment
+  constraint belong here. No canonical topology semantics are introduced.
 
 ### L1S.8 — MapReference / hierarchical maps
 

@@ -45,6 +45,9 @@ class SavedMap(Base):
     cable_routes: Mapped[list["MapCableRoute"]] = relationship(
         back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
     )
+    regions: Mapped[list["MapRegion"]] = relationship(
+        back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class MapPlacement(Base):
@@ -122,6 +125,36 @@ class MapCableRoute(Base):
     waypoints: Mapped[list[dict[str, float]]] = mapped_column(JSONB, nullable=False, default=list)
     saved_map: Mapped[SavedMap] = relationship(back_populates="cable_routes")
     cable: Mapped["Cable"] = relationship(back_populates="map_routes")
+
+
+class MapRegion(Base):
+    """SavedMap-owned Physical/L1 polygon presentation, never topology evidence."""
+
+    __tablename__ = "map_regions"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(label)) > 0", name="label_not_blank"),
+        CheckConstraint("fill_color ~ '^#[0-9A-Fa-f]{6}$'", name="fill_color_hex"),
+        CheckConstraint("fill_opacity >= 0 AND fill_opacity <= 1", name="fill_opacity_range"),
+        CheckConstraint("stroke_color ~ '^#[0-9A-Fa-f]{6}$'", name="stroke_color_hex"),
+        CheckConstraint("stroke_width >= 0", name="stroke_width_nonnegative"),
+        CheckConstraint("stroke_style IN ('solid', 'dashed', 'dotted')", name="stroke_style_valid"),
+        CheckConstraint("label_color IS NULL OR label_color ~ '^#[0-9A-Fa-f]{6}$'", name="label_color_hex"),
+        Index("ix_map_regions_map_z_order", "map_id", "z_order"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    points: Mapped[list[dict[str, float]]] = mapped_column(JSONB, nullable=False)
+    label_position: Mapped[dict[str, float] | None] = mapped_column(JSONB, nullable=True)
+    fill_color: Mapped[str] = mapped_column(String(7), nullable=False)
+    fill_opacity: Mapped[float] = mapped_column(Float, nullable=False)
+    stroke_color: Mapped[str] = mapped_column(String(7), nullable=False)
+    stroke_width: Mapped[float] = mapped_column(Float, nullable=False)
+    stroke_style: Mapped[str] = mapped_column(String(16), nullable=False)
+    label_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
+    z_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    saved_map: Mapped[SavedMap] = relationship(back_populates="regions")
 
 
 class ConnectionPoint(Base):

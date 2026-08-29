@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
-from app.models import Cable, MapCableRoute, MapPlacement, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import Cable, MapCableRoute, MapPlacement, MapRegion, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -16,6 +16,7 @@ class SavedMapDetail:
     saved_map: SavedMap
     placements: tuple[MapPlacement, ...]
     cable_routes: tuple[MapCableRoute, ...]
+    regions: tuple[MapRegion, ...]
 
 
 class SavedMapCatalog:
@@ -37,7 +38,7 @@ class SavedMapCatalog:
 
     def detail(self, map_id: uuid.UUID) -> SavedMapDetail:
         saved_map = self._require_map(map_id)
-        return SavedMapDetail(saved_map, self._placements(map_id), self._cable_routes(map_id))
+        return SavedMapDetail(saved_map, self._placements(map_id), self._cable_routes(map_id), self._regions(map_id))
 
     def delete(self, map_id: uuid.UUID) -> None:
         self.session.delete(self._require_map(map_id))
@@ -169,6 +170,41 @@ class SavedMapCatalog:
         self.session.delete(route)
         self.session.flush()
 
+    def create_region(
+        self, map_id: uuid.UUID, label: str, points: list[dict[str, float]], label_position: dict[str, float] | None,
+        style: dict[str, object], z_order: int,
+    ) -> MapRegion:
+        self._require_map(map_id)
+        region = MapRegion(map_id=map_id)
+        self._replace_region_state(region, label, points, label_position, style, z_order)
+        self.session.add(region)
+        self._flush()
+        return region
+
+    def replace_region(
+        self, map_id: uuid.UUID, region_id: uuid.UUID, label: str, points: list[dict[str, float]],
+        label_position: dict[str, float] | None, style: dict[str, object], z_order: int,
+    ) -> MapRegion:
+        self._require_map(map_id)
+        region = self.session.scalar(select(MapRegion).where(
+            MapRegion.map_id == map_id, MapRegion.id == region_id
+        ).with_for_update())
+        if region is None:
+            raise ValidationError("MapRegion does not exist", {"map_id": str(map_id), "region_id": str(region_id)})
+        self._replace_region_state(region, label, points, label_position, style, z_order)
+        self._flush()
+        return region
+
+    def delete_region(self, map_id: uuid.UUID, region_id: uuid.UUID) -> None:
+        self._require_map(map_id)
+        region = self.session.scalar(select(MapRegion).where(
+            MapRegion.map_id == map_id, MapRegion.id == region_id
+        ).with_for_update())
+        if region is None:
+            raise ValidationError("MapRegion does not exist", {"map_id": str(map_id), "region_id": str(region_id)})
+        self.session.delete(region)
+        self._flush()
+
     def placements(self, map_id: uuid.UUID) -> SavedMapDetail:
         return self.detail(map_id)
 
@@ -189,6 +225,29 @@ class SavedMapCatalog:
             .where(MapCableRoute.map_id == map_id)
             .order_by(MapCableRoute.cable_id, MapCableRoute.view_key)
         ))
+
+    def _regions(self, map_id: uuid.UUID) -> tuple[MapRegion, ...]:
+        return tuple(self.session.scalars(
+            select(MapRegion).where(MapRegion.map_id == map_id).order_by(MapRegion.z_order, MapRegion.id)
+        ))
+
+    @staticmethod
+    def _replace_region_state(
+        region: MapRegion, label: str, points: list[dict[str, float]], label_position: dict[str, float] | None,
+        style: dict[str, object], z_order: int,
+    ) -> None:
+        region.label = label
+        region.points = [{"x": point["x"], "y": point["y"]} for point in points]
+        region.label_position = None if label_position is None else {
+            "x": label_position["x"], "y": label_position["y"],
+        }
+        region.fill_color = str(style["fill_color"])
+        region.fill_opacity = float(style["fill_opacity"])
+        region.stroke_color = str(style["stroke_color"])
+        region.stroke_width = float(style["stroke_width"])
+        region.stroke_style = str(style["stroke_style"])
+        region.label_color = None if style["label_color"] is None else str(style["label_color"])
+        region.z_order = z_order
 
     def _require_cable(self, cable_id: uuid.UUID) -> None:
         if self.session.get(Cable, cable_id) is None:

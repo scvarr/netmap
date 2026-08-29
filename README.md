@@ -23,6 +23,9 @@ from what remains open.
   collapsed simple cables between two placed endpoints, and one-hop off-map
   cable continuations. Neither a derived cable nor a remote continuation target
   becomes a placement automatically.
+- A Saved Map also persists its own Physical/L1 `MapRegion` polygons and
+  restricted presentation style through the public API. Region rendering and
+  authoring controls are deliberately not part of the current UI.
 - **Catalog** at `/infrastructure/objects` and object-detail/create pages is
   the bounded canonical management surface for physical objects, interfaces,
   connection points and supported physical/L2 operations.
@@ -44,8 +47,8 @@ from what remains open.
   the viewport. Failed writes reload the authoritative map position only.
 - L1 cable collapse and off-map continuation reuse canonical projection facts
   and retain canonical refs/evidence. They are not parallel cable models.
-- Logical dragging, per-scene persisted viewports, MapReference, regions,
-  waypoints, map wiring and multi-hop/off-map continuation are not implemented.
+- Logical dragging, per-scene persisted viewports, MapReference, Region editing,
+  map wiring and multi-hop/off-map continuation are not implemented.
 
 ## Runtime
 

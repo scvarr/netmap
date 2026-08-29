@@ -977,6 +977,33 @@ This is not generic continuation: no off-map normal node, L2/L3 continuation,
 multi-hop expansion, MapReference, regions, cable waypoints or map wiring is
 materialized.
 
+## MAPS.3 — Saved Map Regions
+
+**L1S.7a model/persistence/API IMPLEMENTED; L1S.7b interaction OPEN**
+
+The authoritative `SavedMapDocument` contains `regions[]`. Each item has a
+SavedMap-scoped `MapRegionRef { entity_type: "MapRegion", entity_id }`, trimmed
+non-empty non-unique `label`, ordered simple polygon `points[]` in Physical flow
+coordinates, optional `label_position`, bounded fill/stroke style, and integer
+`z_order`. A Region is available only for the Physical/L1 Saved Map scene. It is not a
+`PhysicalObject`, `Location`, projection source, map placement, topology member, or
+connectivity fact. Its geometry and lifecycle never alter canonical topology.
+
+`POST /v1/maps/{map_id}/regions`, `PUT /v1/maps/{map_id}/regions/{region_id}`, and
+`DELETE /v1/maps/{map_id}/regions/{region_id}` are the bounded write surface. Create
+and replace carry the complete mutable Region presentation state; identity, owning map,
+and view cannot change. Frontend transport treats successful writes as acknowledgements
+and reloads the authoritative Saved Map rather than synthesizing local region state.
+There is intentionally no independent Region list/detail read endpoint.
+
+L1S.7a provides only Saved Map TypeScript parsing and transport methods. It does not
+render Regions in React Flow or provide drawing, polygon editing, selection, style UI,
+or interaction handles. L1S.7b will use an isolated Region editing mode: topology
+objects are a non-interactive real-bounds/contours reference background by default,
+cables are hidden, and only Regions are interactive. Shift-constrained drawing uses
+absolute screen 0/90/180/270-degree directions independently of pan/zoom; a complete
+object background hide option is allowed. These controls do not exist yet.
+
 ## Future Fibre Channel compatibility boundary
 
 **OPEN; no frontend/API/storage work is implied**

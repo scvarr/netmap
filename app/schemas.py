@@ -68,6 +68,15 @@ class SavedMapRef(BaseModel):
     entity_id: uuid.UUID
 
 
+class MapRegionRef(BaseModel):
+    """SavedMap presentation identity; it is not a ProjectionSourceRef."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    entity_type: Literal["MapRegion"] = "MapRegion"
+    entity_id: uuid.UUID
+
+
 class CreateSavedMapRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -135,6 +144,99 @@ class MapCableRouteDocument(BaseModel):
     waypoints: list[MapCableRouteWaypoint]
 
 
+class MapRegionPoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    x: FiniteFloat
+    y: FiniteFloat
+
+
+class MapRegionStyle(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    fill_color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    fill_opacity: FiniteFloat = Field(ge=0, le=1)
+    stroke_color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    stroke_width: FiniteFloat = Field(ge=0)
+    stroke_style: Literal["solid", "dashed", "dotted"]
+    label_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+
+
+def _polygon_segments_intersect(
+    first_start: MapRegionPoint,
+    first_end: MapRegionPoint,
+    second_start: MapRegionPoint,
+    second_end: MapRegionPoint,
+) -> bool:
+    def cross(origin: MapRegionPoint, left: MapRegionPoint, right: MapRegionPoint) -> float:
+        return (left.x - origin.x) * (right.y - origin.y) - (left.y - origin.y) * (right.x - origin.x)
+
+    def on_segment(start: MapRegionPoint, point: MapRegionPoint, end: MapRegionPoint) -> bool:
+        return (
+            min(start.x, end.x) <= point.x <= max(start.x, end.x)
+            and min(start.y, end.y) <= point.y <= max(start.y, end.y)
+        )
+
+    first_left = cross(first_start, first_end, second_start)
+    first_right = cross(first_start, first_end, second_end)
+    second_left = cross(second_start, second_end, first_start)
+    second_right = cross(second_start, second_end, first_end)
+    if ((first_left > 0 > first_right) or (first_left < 0 < first_right)) and (
+        (second_left > 0 > second_right) or (second_left < 0 < second_right)
+    ):
+        return True
+    return (
+        (first_left == 0 and on_segment(first_start, second_start, first_end))
+        or (first_right == 0 and on_segment(first_start, second_end, first_end))
+        or (second_left == 0 and on_segment(second_start, first_start, second_end))
+        or (second_right == 0 and on_segment(second_start, first_end, second_end))
+    )
+
+
+class MapRegionPresentation(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    label: str = Field(min_length=1, max_length=255)
+    points: list[MapRegionPoint] = Field(min_length=3)
+    label_position: MapRegionPoint | None = None
+    style: MapRegionStyle
+    z_order: int
+
+    @model_validator(mode="after")
+    def validate_simple_polygon(self) -> "MapRegionPresentation":
+        point_count = len(self.points)
+        for index, point in enumerate(self.points):
+            next_point = self.points[(index + 1) % point_count]
+            if point.x == next_point.x and point.y == next_point.y:
+                raise PydanticCustomError("map_region_polygon", "Polygon cannot contain a zero-length edge")
+        if len({(point.x, point.y) for point in self.points}) != point_count:
+            raise PydanticCustomError("map_region_polygon", "Polygon cannot repeat a vertex")
+        for first_index in range(point_count):
+            for second_index in range(first_index + 1, point_count):
+                if second_index in {first_index + 1, (first_index - 1) % point_count}:
+                    continue
+                if _polygon_segments_intersect(
+                    self.points[first_index],
+                    self.points[(first_index + 1) % point_count],
+                    self.points[second_index],
+                    self.points[(second_index + 1) % point_count],
+                ):
+                    raise PydanticCustomError("map_region_polygon", "Polygon cannot self-intersect")
+        return self
+
+
+class CreateMapRegionRequest(MapRegionPresentation):
+    pass
+
+
+class ReplaceMapRegionRequest(MapRegionPresentation):
+    pass
+
+
+class MapRegionDocument(MapRegionPresentation):
+    region_ref: MapRegionRef
+
+
 class SavedMapSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -147,6 +249,7 @@ class SavedMapSummary(BaseModel):
 class SavedMapDocument(SavedMapSummary):
     placements: list[MapPlacementDocument]
     cable_routes: list[MapCableRouteDocument]
+    regions: list[MapRegionDocument]
 
 
 class SavedMapListDocument(BaseModel):

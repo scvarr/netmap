@@ -1386,11 +1386,24 @@ endpoints UI ничего не выдумывает.
 
 ### Regions / areas
 
-**FIXED направление; persistence и interaction — OPEN**
+**FIXED; L1S.7a persistence/API implemented, L1S.7b interaction remains OPEN**
 
-Saved Map в будущем может содержать presentation-only regions: помещение, стойку,
-функциональную зону или произвольную визуальную область. Region не создаёт topology
-fact, connectivity или `PhysicalObject`.
+Physical Saved Map contains its own ordered `MapRegion` presentation records.
+Their stable UUID is SavedMap presentation identity, not a `ProjectionSourceRef`, and
+does not depend on label, polygon, style, z-order, placement, or canonical topology.
+One Region belongs to exactly one map and has an ordered, simple (non-self-intersecting)
+polygon in Physical flow coordinates; concave polygons are valid, holes and rotation are
+not modeled. A Region has a trimmed non-empty non-unique label, optional explicit label
+position, restricted fill/stroke presentation style, and a z-order only inside the
+Regions layer. Geometry never creates membership, containment, `Location`, connectivity,
+or any other canonical fact. Deleting a Saved Map cascades its Regions.
+
+L1S.7b will add a separate Region editing mode. In that mode topology objects are a
+non-interactive reference background drawn from their real canvas bounds/contours by
+default (and may be hidden); cables are hidden and only the Regions layer is editable.
+While drawing, Shift constrains the new segment to absolute screen horizontal/vertical
+directions regardless of canvas pan/zoom. This is a future UI interaction contract, not
+current rendering or editing behavior.
 
 ### MapReference и иерархические карты
 
