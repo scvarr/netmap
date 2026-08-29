@@ -29,12 +29,7 @@ interface QuickInspectorProps {
   onClose: () => void;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
-  onDeletePhysicalObject?: (id: string) => Promise<void>;
-  onDeleteCable?: (id: string) => Promise<void>;
-  onRemoveFromMap?: (id: string) => Promise<void>;
   onAddContinuationToMap?: (id: string) => Promise<void>;
-  placementLocked?: boolean;
-  onSetPlacementLock?: (locked: boolean) => Promise<void>;
   mapOperation?: {
     kind: "remove" | "add" | "delete";
     id: string;
@@ -103,14 +98,9 @@ export function QuickInspector(props: QuickInspectorProps) {
   );
   const [inventoryError, setInventoryError] = useState<string | null>(null);
   const [readRevision, setReadRevision] = useState(0);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [removeError, setRemoveError] = useState<string | null>(null);
-  const [pending, setPending] = useState<"delete" | "remove" | null>(null);
   const [continuationError, setContinuationError] = useState<string | null>(
     null,
   );
-  const [lockError, setLockError] = useState<string | null>(null);
-  const [lockPending, setLockPending] = useState(false);
   const [sizeDraft, setSizeDraft] = useState("");
   const [sizeError, setSizeError] = useState<string | null>(null);
   const [sizePending, setSizePending] = useState(false);
@@ -229,62 +219,6 @@ export function QuickInspector(props: QuickInspectorProps) {
       : null;
   const activeOperationFor = (objectId: string) =>
     props.mapOperation?.id === objectId ? props.mapOperation : null;
-  const remove = async () => {
-    if (!id || !props.onRemoveFromMap || pending || operationFor("remove", id))
-      return;
-    setPending("remove");
-    setRemoveError(null);
-    try {
-      await props.onRemoveFromMap(id);
-    } catch (e) {
-      setRemoveError(
-        e instanceof Error ? e.message : t("inspector.remove"),
-      );
-    } finally {
-      setPending(null);
-    }
-  };
-  const destroy = async () => {
-    const targetId = cableId ?? id;
-    const deleteTarget = cable ? props.onDeleteCable : props.onDeletePhysicalObject;
-    if (
-      !targetId ||
-      !deleteTarget ||
-      pending ||
-      activeOperationFor(targetId)
-    )
-      return;
-    const message = cable
-      ? `Удалить кабель «${displayNodeLabel(node!)}» и разорвать соединение?`
-      : `Удалить объект «${displayNodeLabel(node!)}»?`;
-    if (!window.confirm(message)) return;
-    setPending("delete");
-    setDeleteError(null);
-    try {
-      await deleteTarget(targetId);
-    } catch (e) {
-      setDeleteError(
-        e instanceof Error ? e.message : t("map.delete"),
-      );
-    } finally {
-      setPending(null);
-    }
-  };
-  const togglePlacementLock = async () => {
-    if (!props.onSetPlacementLock || lockPending) return;
-    setLockPending(true);
-    setLockError(null);
-    try {
-      await props.onSetPlacementLock(!props.placementLocked);
-    } catch (reason) {
-      setLockError(
-        reason instanceof Error ? reason.message : t("view.error.title"),
-      );
-    } finally {
-      setLockPending(false);
-    }
-  };
-  const placementLockAction = null;
   const blueprintSizeAction = props.blueprintSize ? (
     <section className="quick-inspector__blueprint-size">
       <h3>{t("inspector.size")}</h3>
@@ -445,7 +379,6 @@ export function QuickInspector(props: QuickInspectorProps) {
             </>}
           </section>
         )}
-        {deleteError && <p role="alert">{deleteError}</p>}
         {operationFor("delete", cableId)?.status === "refresh-failed" && (
           <>
             <p role="alert">{operationFor("delete", cableId)?.message}</p>
@@ -516,8 +449,6 @@ export function QuickInspector(props: QuickInspectorProps) {
         )}
         <Link to={url(id)}>{t("inspector.open")}</Link>
         {blueprintSizeAction}
-        {removeError && <p role="alert">{removeError}</p>}
-        {deleteError && <p role="alert">{deleteError}</p>}
         {operationFor("remove", id)?.status === "refresh-failed" && (
           <>
             <p role="alert">{operationFor("remove", id)?.message}</p>
@@ -548,7 +479,6 @@ export function QuickInspector(props: QuickInspectorProps) {
         ) : (
           <p>{t("inspector.noCanonicalRef")}</p>
         )}
-        {placementLockAction}
         {technical}
       </>,
     );

@@ -1165,6 +1165,32 @@ export function MapPage({
     await physicalEndpointConnectionWriteDataSource.deleteExternalPhysicalConnection(connectionId);
     if (mapId) { await reloadMap(mapId); setCanonicalDeleteRevision((revision) => revision + 1); }
   };
+  const deletePhysicalObject = async (id: string) => {
+    if (!physicalObjectDeleteDataSource || !mapId) return;
+    const targetMapId = mapId;
+    setMapOperation({ kind: "delete", id, mapId: targetMapId, status: "pending" });
+    try { await physicalObjectDeleteDataSource.deletePhysicalObject(id); }
+    catch (reason) { if (selectedMapId.current === targetMapId) setMapOperation(null); throw reason; }
+    try {
+      await reloadMap(targetMapId);
+      if (selectedMapId.current === targetMapId) { setCanonicalDeleteRevision((revision) => revision + 1); setMapOperation(null); setSelection(null); }
+    } catch {
+      if (selectedMapId.current === targetMapId) setMapOperation({ kind: "delete", id, mapId: targetMapId, status: "refresh-failed", message: t("map.deleteRefreshFailed") });
+    }
+  };
+  const deleteCable = async (id: string) => {
+    if (!cableDeleteDataSource || !mapId) return;
+    const targetMapId = mapId;
+    setMapOperation({ kind: "delete", id, mapId: targetMapId, status: "pending" });
+    try { await cableDeleteDataSource.deleteCable(id); }
+    catch (reason) { if (selectedMapId.current === targetMapId) setMapOperation(null); throw reason; }
+    try {
+      await reloadMap(targetMapId);
+      if (selectedMapId.current === targetMapId) { setCanonicalDeleteRevision((revision) => revision + 1); setMapOperation(null); setSelection(null); }
+    } catch {
+      if (selectedMapId.current === targetMapId) setMapOperation({ kind: "delete", id, mapId: targetMapId, status: "refresh-failed", message: t("map.deleteRefreshFailed") });
+    }
+  };
 
   return (
     <main className="map-page">
@@ -1325,8 +1351,8 @@ export function MapPage({
         onResetRoute={(id) => void resetCableRoute(id)}
         onConnectFromPort={connectFromPort}
         onDisconnect={(connectionId, label) => void disconnectPort(connectionId, label).catch((reason) => setError(errorMessage(reason, t("view.error.title"))))}
-        onDeleteObject={(id, label) => { if (physicalObjectDeleteDataSource && mapId && window.confirm(t("map.context.deleteObjectConfirm", { name: label }))) void physicalObjectDeleteDataSource.deletePhysicalObject(id).then(() => reloadMap(mapId)); }}
-        onDeleteCable={(id, label) => { if (cableDeleteDataSource && mapId && window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void cableDeleteDataSource.deleteCable(id).then(() => reloadMap(mapId)); }}
+        onDeleteObject={(id, label) => { if (window.confirm(t("map.context.deleteObjectConfirm", { name: label }))) void deletePhysicalObject(id).catch((reason) => setError(errorMessage(reason, t("view.error.title")))); }}
+        onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("view.error.title")))); }}
       />}
       {error && <p role="alert">{error}</p>}
       {document &&
@@ -1467,88 +1493,11 @@ export function MapPage({
         }
         physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
         catalogInventoryDataSource={catalogInventoryDataSource}
-        onRemoveFromMap={
-          !legacy &&
-          viewMode === "physical" &&
-          ids.includes(physicalObjectIdForSelection(selection) ?? "")
-            ? remove
-            : undefined
-        }
-        placementLocked={selectedPlacementPosition?.locked}
         blueprintSize={selectedBlueprintSize}
         onApplyBlueprintSize={selectedBlueprintSize && physicalObjectIdForSelection(selection) ? (displayWidth) => resizeBlueprint(physicalObjectIdForSelection(selection)!, displayWidth) : undefined}
         onCopyBlueprintSize={selectedBlueprintSize ? () => setCopiedBlueprintDisplayWidth(selectedBlueprintSize.displayWidth) : undefined}
         onApplyCopiedBlueprintSize={selectedBlueprintSize && copiedBlueprintDisplayWidth !== undefined && physicalObjectIdForSelection(selection) ? () => resizeBlueprint(physicalObjectIdForSelection(selection)!, copiedBlueprintDisplayWidth) : undefined}
         onApplyBlueprintSizeToSameBlueprint={selectedBlueprintSize ? applySizeToSameBlueprint : undefined}
-        onSetPlacementLock={
-          !legacy && selectedPlacementPosition && physicalObjectIdForSelection(selection)
-            ? (locked) => setPlacementLock(physicalObjectIdForSelection(selection)!, locked)
-            : undefined
-        }
-        onDeletePhysicalObject={
-          physicalObjectDeleteDataSource
-            ? async (id) => {
-                if (!mapId) return;
-                const targetMapId = mapId;
-                setMapOperation({
-                  kind: "delete",
-                  id,
-                  mapId: targetMapId,
-                  status: "pending",
-                });
-                try {
-                  await physicalObjectDeleteDataSource.deletePhysicalObject(id);
-                } catch (reason) {
-                  if (selectedMapId.current === targetMapId)
-                    setMapOperation(null);
-                  throw reason;
-                }
-                try {
-                  await reloadMap(targetMapId);
-                  if (selectedMapId.current === targetMapId) {
-                    setCanonicalDeleteRevision((revision) => revision + 1);
-                    setMapOperation(null);
-                    setSelection(null);
-                  }
-                } catch {
-                  if (selectedMapId.current === targetMapId)
-                    setMapOperation({
-                      kind: "delete",
-                      id,
-                      mapId: targetMapId,
-                      status: "refresh-failed",
-                      message: t("map.deleteRefreshFailed"),
-                    });
-                }
-              }
-            : undefined
-        }
-        onDeleteCable={
-          cableDeleteDataSource
-            ? async (id) => {
-                if (!mapId) return;
-                const targetMapId = mapId;
-                setMapOperation({ kind: "delete", id, mapId: targetMapId, status: "pending" });
-                try {
-                  await cableDeleteDataSource.deleteCable(id);
-                } catch (reason) {
-                  if (selectedMapId.current === targetMapId) setMapOperation(null);
-                  throw reason;
-                }
-                try {
-                  await reloadMap(targetMapId);
-                  if (selectedMapId.current === targetMapId) {
-                    setCanonicalDeleteRevision((revision) => revision + 1);
-                    setMapOperation(null);
-                    setSelection(null);
-                  }
-                } catch {
-                  if (selectedMapId.current === targetMapId)
-                    setMapOperation({ kind: "delete", id, mapId: targetMapId, status: "refresh-failed", message: t("map.deleteRefreshFailed") });
-                }
-              }
-            : undefined
-        }
         mapOperation={mapOperation?.mapId === mapId ? mapOperation : null}
         onRetryMapRefresh={retryMapRefresh}
       />

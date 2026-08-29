@@ -14,14 +14,10 @@ const document = (layer: 'L1' | 'L2', item = node()): TopologyProjectionDocument
   schema_version: '1.0', layer, detail_level: layer === 'L1' ? 'PHYSICAL_OBJECT' : 'DEVICE', nodes: [item], edges: [], gaps: [], warnings: [],
 });
 
-describe('QuickInspector physical delete', () => {
-  it('confirms physical object name and delegates only after confirmation', async () => {
-    const remove = vi.fn().mockResolvedValue(undefined);
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    render(<BrowserRouter><QuickInspector document={document('L1')} selection={{ type: 'node', item: node() }} onClose={vi.fn()} onSelectNode={vi.fn()} onDeletePhysicalObject={remove} /></BrowserRouter>);
-    await userEvent.click(screen.getByRole('button', { name: 'Удалить объект из NetMap' }));
-    expect(confirm).toHaveBeenCalledWith('Удалить объект «PC1»?');
-    expect(remove).toHaveBeenCalledWith('object-1');
+describe('QuickInspector selection detail', () => {
+  it('does not expose ordinary destructive actions', () => {
+    render(<BrowserRouter><QuickInspector document={document('L1')} selection={{ type: 'node', item: node() }} onClose={vi.fn()} onSelectNode={vi.fn()} /></BrowserRouter>);
+    expect(screen.queryByRole('button', { name: 'Удалить объект из NetMap' })).not.toBeInTheDocument();
   });
 
   it('explains an off-map L1 continuation and can add or open its remote object', async () => {
