@@ -188,6 +188,10 @@ per-version deletion, archive, soft-delete, deprecation, or Blueprint rewrite.
 уже реализованные части L1. Они сохраняют canonical topology как источник
 истины; Saved Map placement/view остаётся map-local presentation state.
 
+### UX.7 — Context menu / Inspector interaction model
+
+**IMPLEMENTED.** Toolbar сохраняет map-level Add to map и глобальный Connect ports mode. Один transient context menu закрывается по action, outside click, Escape, смене view или следующему context target и остаётся в viewport. Empty Physical canvas открывает существующий coordinate-based Add flow; object/cable right-click одновременно выбирает target и открывает его quick actions. Exact port right-click остаётся transient: authoritative cardinality-1 free port начинает существующий selecting-target wiring flow, occupied port разрывается только по exact authoritative Connection с confirmation; ambiguous state не предлагает guessed operation. Inspector остаётся selection-bound detailed context: object identity/connections/open/Blueprint size controls и cable endpoints/status/route editor retained, тогда как ordinary lock/remove/delete и route entry/reset перенесены в context menu. No canonical or backend contract changes are introduced.
+
 ### UX.3 — Presentation controls для объекта
 
 **IMPLEMENTED (size only).** Для выбранного Blueprint-backed `PhysicalObject`

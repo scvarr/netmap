@@ -6,6 +6,7 @@ import {
   mapCandidateChoices,
 } from "../components/MapInsertionPicker";
 import { QuickInspector } from "../components/QuickInspector";
+import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
 import { perfMark } from "../perfMarks";
@@ -86,10 +87,6 @@ interface InsertionState {
   error: string | null;
   requestedObjectId?: string;
 }
-interface ContextMenuState {
-  anchor: XYPosition;
-  screen: XYPosition;
-}
 interface MapOperation {
   kind: "remove" | "add" | "delete";
   id: string;
@@ -169,9 +166,7 @@ export function MapPage({
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [insertion, setInsertion] = useState<InsertionState | null>(null);
-  const [contextAnchor, setContextAnchor] = useState<ContextMenuState | null>(
-    null,
-  );
+  const [contextAnchor, setContextAnchor] = useState<MapContextTarget | null>(null);
   const [continuationAnchor, setContinuationAnchor] = useState<{
     continuationId: string;
     mapId: string;
@@ -564,6 +559,7 @@ export function MapPage({
   }, [activeMap, addIntent, coordinateBridgeRevision, document, ids, mapId, openInsertion, setParams, viewMode]);
 
   const setViewMode = (nextView: TopologyViewMode) => {
+    setContextAnchor(null);
     if (nextView !== "physical") setWiring({ status: "idle" });
     setParams((current) => {
       const next = new URLSearchParams(current);
@@ -1020,11 +1016,11 @@ export function MapPage({
     }
   };
 
-  const beginCableRouteEdit = () => {
-    if (!activeMap || !selectedCableId || !drawableSelectedCable || viewMode !== "physical") return;
-    const existing = (activeMap.cable_routes ?? []).find((route) => route.cable_ref.entity_id === selectedCableId);
+  const beginCableRouteEdit = (requestedCableId = selectedCableId) => {
+    if (!activeMap || !requestedCableId || viewMode !== "physical") return;
+    const existing = (activeMap.cable_routes ?? []).find((route) => route.cable_ref.entity_id === requestedCableId);
     const copied = existing?.waypoints.map((point) => ({ ...point })) ?? [];
-    setCableRouteEdit({ mapId: activeMap.map_ref.entity_id, cableId: selectedCableId, originalRoutePresent: Boolean(existing), originalWaypoints: copied, draftWaypoints: copied, selectedWaypointIndex: null, status: "editing", error: null });
+    setCableRouteEdit({ mapId: activeMap.map_ref.entity_id, cableId: requestedCableId, originalRoutePresent: Boolean(existing), originalWaypoints: copied, draftWaypoints: copied, selectedWaypointIndex: null, status: "editing", error: null });
   };
   const saveCableRoute = async () => {
     if (!savedMapDataSource || !cableRouteEdit || cableRouteEdit.status === "saving") return;
@@ -1051,9 +1047,9 @@ export function MapPage({
       if (selectedMapId.current === operation.mapId) setCableRouteEdit({ ...operation, status: "refresh-failed", error: t("map.routeSavedRefreshFailed") });
     }
   };
-  const resetCableRoute = async () => {
-    if (!savedMapDataSource || !activeMap || !selectedCableId || !selectedCableRoute) return;
-    const operation = { mapId: activeMap.map_ref.entity_id, cableId: selectedCableId, status: "pending" as const };
+  const resetCableRoute = async (requestedCableId = selectedCableId) => {
+    if (!savedMapDataSource || !activeMap || !requestedCableId || !(activeMap.cable_routes ?? []).some((route) => route.cable_ref.entity_id === requestedCableId)) return;
+    const operation = { mapId: activeMap.map_ref.entity_id, cableId: requestedCableId, status: "pending" as const };
     setCableRouteReset(operation);
     try { await savedMapDataSource.deleteCableRoute(operation.mapId, operation.cableId); }
     catch (reason) { if (selectedMapId.current === operation.mapId) setCableRouteReset(null); setError(errorMessage(reason, t("inspector.resetRoute"))); return; }
@@ -1148,6 +1144,27 @@ export function MapPage({
     },
     [],
   );
+  const contextBusy = wiring.status !== "idle" || Boolean(cableRouteEdit) || Boolean(insertion) || Boolean(mapDeletion) || Boolean(mapOperation);
+  const openPortContext = (port: { physicalObjectId: string; connectionPointId: string; label: string }, screen: XYPosition) => {
+    if (contextBusy || !physicalObjectDetailsDataSource) return;
+    setSelection((current) => document?.nodes.find((node) => physicalObjectIdForNode(node) === port.physicalObjectId) ? { type: "node", item: document.nodes.find((node) => physicalObjectIdForNode(node) === port.physicalObjectId)! } : current);
+    setContextAnchor({ kind: "port", objectId: port.physicalObjectId, connectionPointId: port.connectionPointId, label: port.label, screen, action: "loading" });
+    void physicalObjectDetailsDataSource.loadPhysicalObjectDetails(port.physicalObjectId).then((details) => {
+      const point = details.connection_points.find((item) => item.connection_point_ref.entity_id === port.connectionPointId);
+      const attachments = point?.external_physical_attachments;
+      const action: MapContextTarget extends infer _ ? "connect" | "unavailable" | { disconnectConnectionId: string } : never = point?.cardinality === 1 && Array.isArray(attachments) && attachments.length === 0 ? "connect" : point?.cardinality === 1 && attachments?.length === 1 ? { disconnectConnectionId: attachments[0].connection_ref.entity_id } : "unavailable";
+      setContextAnchor((current) => current?.kind === "port" && current.connectionPointId === port.connectionPointId ? { ...current, action } : current);
+    }, () => setContextAnchor((current) => current?.kind === "port" && current.connectionPointId === port.connectionPointId ? { ...current, action: "unavailable" } : current));
+  };
+  const connectFromPort = (physicalObjectId: string, connectionPointId: string) => {
+    const source = endpointFor({ physicalObjectId, connectionPointId, label: "" });
+    if (source && activeMap && wiring.status === "idle" && !cableRouteEdit) setWiring({ status: "selecting-target", mapId: activeMap.map_ref.entity_id, source, draftWaypoints: [], selectedWaypointIndex: null });
+  };
+  const disconnectPort = async (connectionId: string, label: string) => {
+    if (!physicalEndpointConnectionWriteDataSource?.deleteExternalPhysicalConnection || contextBusy || !window.confirm(t("map.context.disconnectConfirm", { name: label }))) return;
+    await physicalEndpointConnectionWriteDataSource.deleteExternalPhysicalConnection(connectionId);
+    if (mapId) { await reloadMap(mapId); setCanonicalDeleteRevision((revision) => revision + 1); }
+  };
 
   return (
     <main className="map-page">
@@ -1298,21 +1315,19 @@ export function MapPage({
         {wiring.status === "route-failed" && <><p role="alert">{t("map.routeFailed")}</p><button type="button" onClick={() => void retryWiringRoute()}>{t("map.retrySaveRoute")}</button><button type="button" onClick={() => setWiring({ status: "idle" })}>{t("action.close")}</button></>}
         {wiring.status === "refresh-failed" && <><p role="alert">{t("map.wiringRefreshFailed")}</p><button type="button" onClick={() => void retryWiringRefresh()}>{t("map.retryRefresh")}</button></>}
       </div></section>}
-      {contextAnchor && viewMode === "physical" && (
-        <div
-          className="map-context-menu"
-          role="menu"
-          style={{ left: contextAnchor.screen.x, top: contextAnchor.screen.y }}
-        >
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => openInsertion(contextAnchor.anchor)}
-          >
-            Добавить на карту…
-          </button>
-        </div>
-      )}
+      {contextAnchor && viewMode === "physical" && !contextBusy && <MapContextMenu
+        target={contextAnchor}
+        onClose={() => setContextAnchor(null)}
+        onAdd={(anchor) => openInsertion(anchor)}
+        onSetLock={(id, locked) => void setPlacementLock(id, locked)}
+        onRemove={(id) => void remove(id)}
+        onEditRoute={(id) => beginCableRouteEdit(id)}
+        onResetRoute={(id) => void resetCableRoute(id)}
+        onConnectFromPort={connectFromPort}
+        onDisconnect={(connectionId, label) => void disconnectPort(connectionId, label).catch((reason) => setError(errorMessage(reason, t("view.error.title"))))}
+        onDeleteObject={(id, label) => { if (physicalObjectDeleteDataSource && mapId && window.confirm(t("map.context.deleteObjectConfirm", { name: label }))) void physicalObjectDeleteDataSource.deletePhysicalObject(id).then(() => reloadMap(mapId)); }}
+        onDeleteCable={(id, label) => { if (cableDeleteDataSource && mapId && window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void cableDeleteDataSource.deleteCable(id).then(() => reloadMap(mapId)); }}
+      />}
       {error && <p role="alert">{error}</p>}
       {document &&
         params.get("focus") &&
@@ -1401,9 +1416,22 @@ export function MapPage({
                   }
                   onPhysicalPaneContextMenu={
                     viewMode === "physical"
-                      ? (anchor, screen) => setContextAnchor({ anchor, screen })
+                      ? (anchor, screen) => !contextBusy && setContextAnchor({ kind: "empty", anchor, screen })
                       : undefined
                   }
+                  onPhysicalNodeContextMenu={viewMode === "physical" ? (node, screen) => {
+                    if (contextBusy) return;
+                    const id = physicalObjectIdForNode(node); if (!id) return;
+                    setSelection({ type: "node", item: node });
+                    setContextAnchor({ kind: "object", id, label: displayNodeLabel(node), locked: Boolean(activeMap?.placements.find((placement) => placement.physical_object_ref.entity_id === id)?.positions["L1/PHYSICAL_OBJECT"]?.locked), screen });
+                  } : undefined}
+                  onPhysicalCableContextMenu={viewMode === "physical" ? (node, screen) => {
+                    if (contextBusy) return;
+                    const id = cableIdForNode(node); if (!id) return;
+                    setSelection({ type: "node", item: node });
+                    setContextAnchor({ kind: "cable", id, label: displayNodeLabel(node), hasRoute: Boolean(activeMap?.cable_routes?.some((route) => route.cable_ref.entity_id === id)), screen });
+                  } : undefined}
+                  onPhysicalPortContextMenu={viewMode === "physical" ? openPortContext : undefined}
                   onPaneClick={(anchor) => {
                     setContextAnchor(null);
                     setSelection(null);

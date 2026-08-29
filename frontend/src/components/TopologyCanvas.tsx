@@ -24,6 +24,7 @@ import {
 } from "../topology/layout";
 import type {
   TopologyProjectionDocument,
+  TopologyProjectionNode,
   TopologySelection,
 } from "../topology/types";
 import {
@@ -68,6 +69,9 @@ interface TopologyCanvasProps {
   disableAutoLayout?: boolean;
   onViewportCenterReady?: (getter: (() => XYPosition) | null) => void;
   onPhysicalPaneContextMenu?: (anchor: XYPosition, screen: XYPosition) => void;
+  onPhysicalNodeContextMenu?: (node: TopologyProjectionNode, screen: XYPosition) => void;
+  onPhysicalCableContextMenu?: (node: TopologyProjectionNode, screen: XYPosition) => void;
+  onPhysicalPortContextMenu?: (port: { physicalObjectId: string; connectionPointId: string; label: string }, screen: XYPosition) => void;
   onPaneClick?: (anchor: XYPosition) => void;
   onContinuationClickAnchor?: (
     continuationId: string,
@@ -107,6 +111,9 @@ export function TopologyCanvas({
   disableAutoLayout,
   onViewportCenterReady,
   onPhysicalPaneContextMenu,
+  onPhysicalNodeContextMenu,
+  onPhysicalCableContextMenu,
+  onPhysicalPortContextMenu,
   onPaneClick,
   onContinuationClickAnchor,
   cableRoutes,
@@ -279,6 +286,7 @@ export function TopologyCanvas({
       wiringContinuationConnectionPointIds,
       physicalPortStates,
       onPhysicalPortClick,
+      onPhysicalPortContextMenu,
       onBlueprintDisplayResize,
       blueprintResizeEnabled: Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
     },
@@ -337,6 +345,17 @@ export function TopologyCanvas({
     } else if (edge.data?.cableNode)
       onSelectionChange({ type: "node", item: edge.data.cableNode });
     else if (item) onSelectionChange({ type: "edge", item });
+  };
+  const onNodeContextMenu: NodeMouseHandler<DeviceFlowNode> = (event, node) => {
+    event.preventDefault();
+    const projectionNode = node.data.projection;
+    if (cableIdForNode(projectionNode)) onPhysicalCableContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
+    else onPhysicalNodeContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
+  };
+  const onEdgeContextMenu: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
+    if (!edge.data?.cableNode) return;
+    event.preventDefault();
+    onPhysicalCableContextMenu?.(edge.data.cableNode, { x: event.clientX, y: event.clientY });
   };
   const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
     setProjection((current) =>
@@ -415,6 +434,8 @@ export function TopologyCanvas({
         onNodeDragStop={onNodeDragStop}
         onNodeClick={onNodeClick}
         onEdgeClick={onEdgeClick}
+        onNodeContextMenu={onNodeContextMenu}
+        onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={(event) => {
           onSelectionChange(null);
           onPaneClick?.(screenToFlowPosition({ x: event.clientX, y: event.clientY }));

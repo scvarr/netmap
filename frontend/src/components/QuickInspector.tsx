@@ -284,14 +284,7 @@ export function QuickInspector(props: QuickInspectorProps) {
       setLockPending(false);
     }
   };
-  const placementLockAction = props.onSetPlacementLock ? (
-    <>
-      <button disabled={lockPending} onClick={() => void togglePlacementLock()}>
-        {props.placementLocked ? t("inspector.unlock") : t("inspector.lock")}
-      </button>
-      {lockError && <p role="alert">{lockError}</p>}
-    </>
-  ) : null;
+  const placementLockAction = null;
   const blueprintSizeAction = props.blueprintSize ? (
     <section className="quick-inspector__blueprint-size">
       <h3>{t("inspector.size")}</h3>
@@ -443,11 +436,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           <section className="quick-inspector__cable-route">
             <h3>{t("inspector.route")}</h3>
             {props.cableRoutePresentation.present ? <p>{t("inspector.routePoints", { count: props.cableRoutePresentation.waypointCount })}</p> : <p>{t("inspector.noRoute")}</p>}
-            {!props.cableRoutePresentation.editing ? <>
-              <button onClick={props.onEditCableRoute}>{t("inspector.editRoute")}</button>
-              {props.cableRoutePresentation.present && <button disabled={props.cableRoutePresentation.resetPending} onClick={props.onResetCableRoute}>{t("inspector.resetRoute")}</button>}
-              {props.cableRoutePresentation.resetRefreshFailed && <><p role="alert">{t("inspector.routeResetFailed")}</p><button onClick={props.onRetryCableRouteReset}>{t("map.retryRefresh")}</button></>}
-            </> : <>
+            {props.cableRoutePresentation.editing && <>
               <p>{t("inspector.routeEditHelp")}</p>
               <button disabled={props.cableRoutePresentation.selectedWaypointIndex === null} onClick={props.onDeleteCableRouteWaypoint}>{t("inspector.deleteSelectedPoint")}</button>
               {props.cableRoutePresentation.refreshFailed ? <button onClick={props.onRetryCableRouteRefresh}>{t("map.retryRefresh")}</button> : <button disabled={props.cableRoutePresentation.savePending} onClick={props.onSaveCableRoute}>{t("inspector.saveRoute")}</button>}
@@ -456,17 +445,6 @@ export function QuickInspector(props: QuickInspectorProps) {
             </>}
           </section>
         )}
-        <details>
-          <summary>{t("inspector.actions")}</summary>
-          {props.onDeleteCable && (
-            <button
-              disabled={Boolean(activeOperationFor(cableId))}
-              onClick={() => void destroy()}
-            >
-              Удалить кабель и разорвать физическое соединение
-            </button>
-          )}
-        </details>
         {deleteError && <p role="alert">{deleteError}</p>}
         {operationFor("delete", cableId)?.status === "refresh-failed" && (
           <>
@@ -538,26 +516,6 @@ export function QuickInspector(props: QuickInspectorProps) {
         )}
         <Link to={url(id)}>{t("inspector.open")}</Link>
         {blueprintSizeAction}
-        {placementLockAction}
-        {props.onRemoveFromMap && (
-          <button
-            disabled={pending !== null || Boolean(activeOperationFor(id))}
-            onClick={() => void remove()}
-          >
-            Убрать с карты
-          </button>
-        )}
-        <details>
-          <summary>{t("inspector.actions")}</summary>
-          {props.onDeletePhysicalObject && (
-            <button
-              disabled={Boolean(activeOperationFor(id))}
-              onClick={() => void destroy()}
-            >
-              Удалить объект из NetMap
-            </button>
-          )}
-        </details>
         {removeError && <p role="alert">{removeError}</p>}
         {deleteError && <p role="alert">{deleteError}</p>}
         {operationFor("remove", id)?.status === "refresh-failed" && (
