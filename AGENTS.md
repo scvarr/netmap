@@ -64,14 +64,8 @@ Testing workflow contract:
 # GitNexus — Code Intelligence
 
 This project is indexed by GitNexus as **netmap**. Use the task-specific
-instructions in `.agents/skills/` for commands, resources, and detailed
-workflows.
-
-- `.agents/skills/gitnexus-area-*` are generated snapshots of the current
-  GitNexus index, not manually maintained architecture documentation. After a
-  milestone that substantially changes the structure or symbols of the
-  corresponding area, regenerate the area skills together with updating the
-  GitNexus index; do not edit generated area skill content manually.
+MCP/CLI commands and resources for targeted discovery, impact analysis, and
+change detection.
 
 - Before changing a function, class, method, or other symbol, run targeted
   upstream impact analysis when the target is not already fully understood.

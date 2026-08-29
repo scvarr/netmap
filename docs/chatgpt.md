@@ -115,10 +115,11 @@ Operational prompt перечисляет только минимально не
 документы. Не требовать от Codex повторного архитектурного анализа, если
 решение уже принято ChatGPT и зафиксировано в milestone contract.
 
-GitNexus использовать для targeted discovery и impact analysis, но не вызывать
-его механически, когда target files или symbols уже известны. Во время
-реализации предпочитать targeted tests; широкую acceptance suite запускать на
-финальной границе milestone, если проектный контракт не требует иного.
+GitNexus использовать для targeted discovery и impact analysis, а перед
+финальным acceptance и commit запускать `detect_changes`. Не вызывать его
+механически, когда target files или symbols уже известны. Во время реализации
+предпочитать targeted tests; широкую acceptance suite запускать на финальной
+границе milestone, если проектный контракт не требует иного.
 
 Testing workflow contract: сохранять нужно behavioural contracts и invariants,
 а не историческую форму или количество test files. Один invariant не следует

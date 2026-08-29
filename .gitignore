@@ -8,6 +8,7 @@ perf/results/
 frontend/test-results/
 frontend/playwright-report/
 .gitnexus/
-.claude/skills/gitnexus/
+.agents/skills/gitnexus-*/
+.claude/skills/gitnexus-*/
 AGENTS.md
 CLAUDE.md
