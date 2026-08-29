@@ -170,6 +170,18 @@ catalog; the exact-version selector and versions-list request are removed. Exist
 composition instances continue to load and display their exact immutable versions;
 they are neither mutated nor automatically upgraded.
 
+### UX.2g — Port Module library deletion lifecycle
+
+**IMPLEMENTED.** A Port Module can be deleted as one atomic library lifecycle:
+its `PortBlockPort` rows, immutable `PortBlockVersion` snapshots, and the
+`PortBlock` record are explicitly removed in that order. Deletion first checks
+all immutable Object Blueprint composition provenance. If any exact Port Module
+version is referenced, the request returns the existing model-conflict `409`
+with `PORT_BLOCK_IN_USE_BY_OBJECT_BLUEPRINT`, leaves every row intact, and the
+library explains the dependency in RU/EN. Database FK `RESTRICT` protection
+continues to prevent deletion through Blueprint history; there is no
+per-version deletion, archive, soft-delete, deprecation, or Blueprint rewrite.
+
 ## UX follow-up decisions после UX.2c
 
 Следующие пункты зафиксированы как bounded future presentation work, а не как

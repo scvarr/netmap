@@ -1,11 +1,11 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.errors import ValidationError
-from app.models import PortBlock, PortBlockPort, PortBlockVersion
+from app.errors import ModelError, ValidationError
+from app.models import BlueprintPortBlockInstance, PortBlock, PortBlockPort, PortBlockVersion
 
 
 @dataclass(frozen=True)
@@ -116,6 +116,33 @@ class PortBlockCatalog:
     def list_versions(self, port_block_id: uuid.UUID) -> tuple[PortBlockVersionSummary, ...]:
         if self.session.get(PortBlock, port_block_id) is None: raise ValidationError("PortBlock was not found", {"port_block_id": str(port_block_id)})
         return tuple(PortBlockVersionSummary(port_block_id, version.id, version.version_number, self.session.scalar(select(func.count()).select_from(PortBlockPort).where(PortBlockPort.port_block_version_id == version.id)) or 0) for version in self.session.scalars(select(PortBlockVersion).where(PortBlockVersion.port_block_id == port_block_id).order_by(PortBlockVersion.version_number)))
+
+    def delete(self, port_block_id: uuid.UUID) -> None:
+        port_block = self.session.scalar(
+            select(PortBlock).where(PortBlock.id == port_block_id).with_for_update()
+        )
+        if port_block is None:
+            raise ValidationError("PortBlock was not found", {"port_block_id": str(port_block_id)})
+        version_ids = tuple(self.session.scalars(
+            select(PortBlockVersion.id).where(PortBlockVersion.port_block_id == port_block.id)
+        ))
+        if version_ids and self.session.scalar(
+            select(BlueprintPortBlockInstance.id)
+            .where(BlueprintPortBlockInstance.port_block_version_id.in_(version_ids))
+            .limit(1)
+        ) is not None:
+            raise ModelError(
+                "PortBlock cannot be deleted because it is used by an ObjectBlueprint",
+                {"reason": "PORT_BLOCK_IN_USE_BY_OBJECT_BLUEPRINT", "port_block_id": str(port_block_id)},
+            )
+        if version_ids:
+            self.session.execute(delete(PortBlockPort).where(
+                PortBlockPort.port_block_version_id.in_(version_ids)
+            ))
+            self.session.execute(delete(PortBlockVersion).where(
+                PortBlockVersion.id.in_(version_ids)
+            ))
+        self.session.delete(port_block)
 
     def _create_version(self, port_block_id: uuid.UUID, version_number: int, query: object) -> PortBlockVersion:
         version = PortBlockVersion(port_block_id=port_block_id, version_number=version_number)

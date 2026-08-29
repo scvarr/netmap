@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 
 from app.database import SessionLocal
 from app.main import app
-from app.models import PortBlock, PortBlockPort, PortBlockVersion
+from app.models import BlueprintPortBlockInstance, PortBlock, PortBlockPort, PortBlockVersion
 
 
 client = TestClient(app)
@@ -103,3 +103,46 @@ def test_port_block_version_read_rejects_missing_and_mismatched_parent():
     second_id, _ = create_block(name="other")
     assert client.get(f"/v1/library/port-blocks/{first_id}/versions/{uuid.uuid4()}").status_code == 422
     assert client.get(f"/v1/library/port-blocks/{second_id}/versions/{version_id}").status_code == 422
+
+
+def test_port_block_delete_removes_all_versions_and_ports_but_rejects_blueprint_provenance():
+    block_id, first_version_id = create_block()
+    next_version = client.post(f"/v1/library/port-blocks/{block_id}/versions", json={
+        "ports": [port("p3", "3", 1, 1, 1)],
+    })
+    assert next_version.status_code == 201, next_version.text
+    assert client.delete(f"/v1/library/port-blocks/{block_id}").status_code == 204
+    assert client.get(f"/v1/library/port-blocks/{block_id}/versions/{first_version_id}").status_code == 422
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(PortBlock)) == 0
+        assert session.scalar(select(func.count()).select_from(PortBlockVersion)) == 0
+        assert session.scalar(select(func.count()).select_from(PortBlockPort)) == 0
+
+    block_id, version_id = create_block(name="Referenced")
+    next_version = client.post(f"/v1/library/port-blocks/{block_id}/versions", json={
+        "ports": [port("p3", "3", 1, 1, 1)],
+    })
+    assert next_version.status_code == 201, next_version.text
+    blueprint = client.post("/v1/library/object-blueprints", json={
+        "name": "Uses port module",
+        "body": {"kind": "RECTANGLE", "width": 100, "height": 40},
+        "internal_links": [],
+        "composition": {"instances": [{
+            "instance_key": "module",
+            "port_block_version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": version_id},
+            "face": "FRONT",
+            "placement": {"x": 0, "y": 0, "width": 1, "height": 1},
+        }]},
+    })
+    assert blueprint.status_code == 201, blueprint.text
+    rejected = client.delete(f"/v1/library/port-blocks/{block_id}")
+    assert rejected.status_code == 409
+    assert rejected.json()["error"]["details"] == {
+        "reason": "PORT_BLOCK_IN_USE_BY_OBJECT_BLUEPRINT", "port_block_id": block_id,
+    }
+    with SessionLocal() as session:
+        assert session.scalar(select(func.count()).select_from(PortBlock).where(PortBlock.id == uuid.UUID(block_id))) == 1
+        assert session.scalar(select(func.count()).select_from(PortBlockVersion).where(PortBlockVersion.port_block_id == uuid.UUID(block_id))) == 2
+        assert session.scalar(select(func.count()).select_from(PortBlockPort)) == 3
+        assert session.scalar(select(func.count()).select_from(BlueprintPortBlockInstance)) == 1
+    assert client.delete(f"/v1/library/port-blocks/{uuid.uuid4()}").status_code == 422

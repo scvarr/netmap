@@ -537,6 +537,17 @@ def list_port_blocks(session: Session = Depends(get_session)) -> PortBlockListDo
         ]
     }
 
+
+@app.delete(
+    "/v1/library/port-blocks/{port_block_id}",
+    status_code=204,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def delete_port_block(port_block_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        PortBlockCatalog(session).delete(port_block_id)
+
+
 @app.get("/v1/library/port-blocks/{port_block_id}/versions", response_model=PortBlockVersionListDocument)
 def list_port_block_versions(port_block_id: uuid.UUID, session: Session = Depends(get_session)) -> PortBlockVersionListDocument:
     return {"versions": [{"port_block_ref": {"entity_type": "PortBlock", "entity_id": item.port_block_id}, "version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.version_id}, "version_number": item.version_number, "port_count": item.port_count} for item in PortBlockCatalog(session).list_versions(port_block_id)]}

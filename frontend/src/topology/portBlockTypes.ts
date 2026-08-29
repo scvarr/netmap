@@ -17,4 +17,5 @@ export interface PortBlockDataSource {
   loadPortBlockVersion(portBlockId: string, versionId: string): Promise<PortBlockVersionDocument>;
   createPortBlock(request: CreatePortBlockRequest): Promise<PortBlockCreationDocument>;
   createPortBlockVersion(portBlockId: string, request: CreatePortBlockVersionRequest): Promise<PortBlockCreationDocument>;
+  deletePortBlock?(portBlockId: string): Promise<void>;
 }
