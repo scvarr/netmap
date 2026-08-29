@@ -154,7 +154,21 @@ instances и их links сохраняются. Операция не удаля
 и не мутирует immutable `PortBlockVersion` или опубликованные
 `ObjectBlueprintVersion`. Замена exact version остаётся явным workflow:
 удалить старый instance, затем добавить instance нужной immutable version;
-автоматический version-upgrade lifecycle не вводится.
+автоматический version-upgrade lifecycle не вводится. Добавление нового
+instance использует текущую authoritative version выбранного Port Module.
+
+### UX.2f — Compact Object Blueprint catalog and latest-only Port Module authoring
+
+**IMPLEMENTED.** The Object Blueprint library table now shows compact, numeric-only
+`Connection Points` and `Network Ports` columns instead of the aggregate endpoint
+and textual port-composition presentation. Create object, edit, and delete retain
+their existing routes and destructive semantics, but are compact icon actions with
+an accessible name and native tooltip. Current Object Blueprint version information
+remains visible. In normal composition authoring, the selected Port Module is added
+using the authoritative current immutable `version_ref` returned by the Port Block
+catalog; the exact-version selector and versions-list request are removed. Existing
+composition instances continue to load and display their exact immutable versions;
+they are neither mutated nor automatically upgraded.
 
 ## UX follow-up decisions после UX.2c
 

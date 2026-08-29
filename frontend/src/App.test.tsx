@@ -391,14 +391,14 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     expect(await screen.findByRole('rowheader', { name: 'Generic cable' })).toBeInTheDocument();
     expect(screen.getByRole('table')).toHaveTextContent('Тип объекта');
     expect(screen.getByRole('table')).toHaveTextContent('120 × 6');
-    expect(screen.getByRole('table')).toHaveTextContent('Точки подключения: 2');
+    expect(screen.getByRole('columnheader', { name: 'Точки подключения' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: '2' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Предпросмотр шаблона «Generic cable»')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Шаблоны объектов' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Создать объект' })).toHaveAttribute('href', '/infrastructure/objects/new?blueprint=bp-1&version=v-1');
     await userEvent.click(screen.getByRole('link', { name: 'Создать шаблон' }));
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Cable from editor');
     await userEvent.selectOptions(screen.getByLabelText('Логический Port Block'), 'pb-1');
-    await userEvent.selectOptions(await screen.findByLabelText('Точная версия'), 'pb-v1');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить Port Block' }));
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
     await waitFor(() => expect(objectBlueprintDataSource.createObjectBlueprint).toHaveBeenCalled());

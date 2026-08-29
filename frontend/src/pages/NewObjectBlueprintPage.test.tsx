@@ -14,20 +14,20 @@ const source = () => ({
 const blueprintSource = () => ({ loadObjectBlueprints: vi.fn(), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn().mockResolvedValue({}) });
 
 describe('NewObjectBlueprintPage composition', () => {
-  it('requires a logical block and exact version, and allows the same exact version twice', async () => {
+  it('adds the catalog current version and never exposes historical-version selection', async () => {
     const portBlocks = source();
     render(<MemoryRouter><NewObjectBlueprintPage dataSource={blueprintSource()} portBlockDataSource={portBlocks} /></MemoryRouter>);
     const add = screen.getByRole('button', { name: 'Добавить Port Block' });
     expect(add).toBeDisabled();
     await screen.findByRole('option', { name: 'Patch panel' });
     await userEvent.selectOptions(screen.getByLabelText('Логический Port Block'), 'pb-1');
-    await waitFor(() => expect(portBlocks.loadPortBlockVersions).toHaveBeenCalledWith('pb-1'));
-    await userEvent.selectOptions(screen.getByLabelText('Точная версия'), 'v-1');
+    expect(screen.queryByLabelText('Точная версия')).toBeNull();
     await userEvent.click(add);
     await waitFor(() => expect(document.querySelectorAll('.blueprint-composition-canvas__block')).toHaveLength(1));
     await userEvent.click(add);
     await waitFor(() => expect(document.querySelectorAll('.blueprint-composition-canvas__block')).toHaveLength(2));
-    expect(portBlocks.loadPortBlockVersion).toHaveBeenCalledWith('pb-1', 'v-1');
+    expect(portBlocks.loadPortBlockVersions).not.toHaveBeenCalled();
+    expect(portBlocks.loadPortBlockVersion).toHaveBeenCalledWith('pb-1', 'v-2');
   });
 
   it('preserves body fields and submits only composition plus explicit links', async () => {
@@ -39,7 +39,6 @@ describe('NewObjectBlueprintPage composition', () => {
     await userEvent.clear(screen.getByLabelText('Пропорция высоты корпуса')); await userEvent.type(screen.getByLabelText('Пропорция высоты корпуса'), '40');
     await screen.findByRole('option', { name: 'Patch panel' });
     await userEvent.selectOptions(screen.getByLabelText('Логический Port Block'), 'pb-1');
-    await userEvent.selectOptions(await screen.findByLabelText('Точная версия'), 'v-2');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить Port Block' }));
     await waitFor(() => expect(document.querySelectorAll('.blueprint-composition-canvas__block')).toHaveLength(1));
     await userEvent.click(screen.getByRole('button', { name: 'Добавить связь' }));
