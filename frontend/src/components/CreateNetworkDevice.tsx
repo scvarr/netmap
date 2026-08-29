@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { DeviceDetailsDocument } from '../topology/deviceDetailsTypes';
 import type { DeviceWriteDataSource } from '../topology/deviceWriteTypes';
+import { useI18n } from '../i18n';
 
 interface CreateNetworkDeviceProps {
   dataSource: DeviceWriteDataSource;
@@ -9,6 +10,7 @@ interface CreateNetworkDeviceProps {
 }
 
 export function CreateNetworkDevice({ dataSource, onCreated, variant = 'popover' }: CreateNetworkDeviceProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(variant === 'page');
   const [deviceName, setDeviceName] = useState('');
   const [interfaceName, setInterfaceName] = useState('');
@@ -30,8 +32,8 @@ export function CreateNetworkDevice({ dataSource, onCreated, variant = 'popover'
       setInterfaceName('');
       setOpen(false);
       onCreated(created);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+    } catch {
+      setError(t('create.failedDeviceGeneric'));
     } finally {
       setSubmitting(false);
     }
@@ -49,20 +51,20 @@ export function CreateNetworkDevice({ dataSource, onCreated, variant = 'popover'
             setError(null);
           }}
         >
-          + Добавить
+          {t('create.add')}
         </button>
       )}
       {open && (
         <form className={`create-device__form${variant === 'page' ? ' create-device__form--page' : ''}`} onSubmit={submit} noValidate>
           <div className="create-device__heading">
             <div>
-              <span className="eyebrow">Новый объект</span>
-              <h2>Сетевое устройство</h2>
+              <span className="eyebrow">{t('create.newObject')}</span>
+              <h2>{t('create.networkDevice')}</h2>
             </div>
-            {variant === 'popover' && <button type="button" onClick={() => setOpen(false)} aria-label="Закрыть форму">×</button>}
+            {variant === 'popover' && <button type="button" onClick={() => setOpen(false)} aria-label={t('create.closeForm')}>×</button>}
           </div>
           <label>
-            <span>Название устройства</span>
+            <span>{t('create.deviceName')}</span>
             <input
               autoFocus
               value={deviceName}
@@ -71,16 +73,16 @@ export function CreateNetworkDevice({ dataSource, onCreated, variant = 'popover'
             />
           </label>
           <label>
-            <span>Первый интерфейс</span>
+            <span>{t('create.firstInterface')}</span>
             <input
               value={interfaceName}
               onChange={(event) => setInterfaceName(event.target.value)}
               disabled={submitting}
             />
           </label>
-          {error && <p className="create-device__error" role="alert">Не удалось создать устройство. {error}</p>}
+          {error && <p className="create-device__error" role="alert">{error}</p>}
           <button className="create-device__submit" type="submit" disabled={!valid || submitting}>
-            {submitting ? 'Создаём…' : 'Создать'}
+            {submitting ? t('create.creating') : t('create.create')}
           </button>
         </form>
       )}

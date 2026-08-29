@@ -1,11 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { I18nProvider, localeStorageKey } from '../i18n';
 import { physicalObjectDocument } from '../test/physicalObjectDetailsFixture';
 import type { PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import { CreatePhysicalObject } from './CreatePhysicalObject';
 
 describe('CreatePhysicalObject', () => {
+  afterEach(() => localStorage.clear());
   it('guards blank names and prevents double submit', async () => {
     let resolveRequest!: (value: PhysicalObjectDetailsDocument) => void;
     const createPhysicalObject = vi.fn(() => new Promise<PhysicalObjectDetailsDocument>((resolve) => {
@@ -14,7 +16,7 @@ describe('CreatePhysicalObject', () => {
     const onCreated = vi.fn();
     render(<CreatePhysicalObject dataSource={{ createPhysicalObject }} onCreated={onCreated} />);
 
-    await userEvent.click(screen.getByRole('button', { name: '+ Добавить' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     const submit = screen.getByRole('button', { name: 'Создать' });
     expect(submit).toBeDisabled();
     await userEvent.type(screen.getByLabelText('Название'), '  Розетка 101-1  ');
@@ -28,24 +30,35 @@ describe('CreatePhysicalObject', () => {
       initial_connection_point: { display_name: 'Порт' },
     });
     resolveRequest(physicalObjectDocument);
-    expect(await screen.findByRole('button', { name: '+ Добавить' })).toHaveAttribute(
+    expect(await screen.findByRole('button', { name: 'Добавить' })).toHaveAttribute(
       'aria-expanded', 'false',
     );
     expect(onCreated).toHaveBeenCalledWith(physicalObjectDocument);
   });
 
-  it('keeps a backend error in the form for retry', async () => {
+  it('keeps a localized operation error in the form for retry', async () => {
     const createPhysicalObject = vi.fn().mockRejectedValue(new Error('backend unavailable'));
     render(<CreatePhysicalObject dataSource={{ createPhysicalObject }} onCreated={vi.fn()} />);
 
-    await userEvent.click(screen.getByRole('button', { name: '+ Добавить' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     await userEvent.type(screen.getByLabelText('Название'), 'Розетка 101-1');
     await userEvent.type(screen.getByLabelText('Первая точка подключения'), 'Порт');
     await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('backend unavailable');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось создать физический объект.');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('backend unavailable');
     expect(screen.getByLabelText('Название')).toHaveValue('Розетка 101-1');
     expect(screen.getByRole('button', { name: 'Создать' })).toBeEnabled();
+  });
+
+  it('renders the active form in English', async () => {
+    localStorage.setItem(localeStorageKey, 'en');
+    render(<I18nProvider><CreatePhysicalObject dataSource={{ createPhysicalObject: vi.fn() }} onCreated={vi.fn()} /></I18nProvider>);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    expect(screen.getByRole('heading', { name: 'Physical object' })).toBeInTheDocument();
+    expect(screen.getByLabelText('First connection point')).toBeInTheDocument();
+    expect(screen.queryByText('Физический объект')).not.toBeInTheDocument();
   });
 
   it('sends the selected bounded category', async () => {
@@ -55,7 +68,7 @@ describe('CreatePhysicalObject', () => {
     });
     render(<CreatePhysicalObject dataSource={{ createPhysicalObject }} onCreated={vi.fn()} />);
 
-    await userEvent.click(screen.getByRole('button', { name: '+ Добавить' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
     await userEvent.type(screen.getByLabelText('Название'), 'Outlet1');
     await userEvent.type(screen.getByLabelText('Первая точка подключения'), 'Port');
     await userEvent.selectOptions(screen.getByLabelText('Категория'), 'outlet');

@@ -31,7 +31,7 @@ export function NewInfrastructureObjectPage({
   const [target, setTarget] = useState<BlueprintInstantiationTarget | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
 
-  useEffect(() => { if (!objectBlueprintDataSource) { setBlueprints(null); return; } let active = true; setBlueprints(null); setBlueprintError(null); void objectBlueprintDataSource.loadObjectBlueprints().then((next) => { if (active) setBlueprints(next); }, (reason: unknown) => { if (active) setBlueprintError(reason instanceof Error ? reason.message : 'Не удалось загрузить шаблоны.'); }); return () => { active = false; }; }, [objectBlueprintDataSource, retryKey]);
+  useEffect(() => { if (!objectBlueprintDataSource) { setBlueprints(null); return; } let active = true; setBlueprints(null); setBlueprintError(null); void objectBlueprintDataSource.loadObjectBlueprints().then((next) => { if (active) setBlueprints(next); }, () => { if (active) setBlueprintError(t('create.blueprintsLoadFailed')); }); return () => { active = false; }; }, [objectBlueprintDataSource, retryKey, t]);
   useEffect(() => { if (!blueprints || target || !params.get('blueprint')) return; const item = blueprints.blueprints.find((blueprint) => blueprint.blueprint_ref.entity_id === params.get('blueprint') && blueprint.version_ref.entity_id === params.get('version')); if (item) setTarget({ id: item.blueprint_ref.entity_id, versionId: item.version_ref.entity_id, name: item.name, versionNumber: item.version_number }); }, [blueprints, params, target]);
 
   return (
@@ -44,12 +44,12 @@ export function NewInfrastructureObjectPage({
       <header className="catalog-page__header">
         <div><span className="eyebrow">{t('catalog.infrastructure')}</span><h1>{t('catalog.createObject')}</h1><p>{t('create.physicalObject')}</p></div>
       </header>
-      <section className="creation-form-surface" aria-label="Шаблоны объектов">
-        {!objectBlueprintDataSource && <p className="catalog-note catalog-note--gap">Библиотека шаблонов не настроена.</p>}
-        {objectBlueprintDataSource && !blueprints && !blueprintError && <p>Загружаем шаблоны…</p>}
-        {blueprintError && <p role="alert" className="catalog-note catalog-note--gap">{blueprintError} <button type="button" onClick={() => setRetryKey((value) => value + 1)}>Повторить</button></p>}
-        {blueprints?.blueprints.length === 0 && <div className="catalog-note"><h2>Сначала создайте шаблон</h2><p>Обычный объект создаётся из Object Blueprint. Шаблон задаёт его структуру и версию materialization.</p><Link className="primary-action" to="/library/object-blueprints/new">Создать первый шаблон</Link></div>}
-        {blueprints && blueprints.blueprints.length > 0 && <div className="blueprint-library-grid">{blueprints.blueprints.map((blueprint) => <article className="blueprint-card" key={blueprint.blueprint_ref.entity_id}><h2>{blueprint.name}</h2><p>Версия: v{blueprint.version_number}{blueprint.default_physical_object_class ? ` · ${blueprint.default_physical_object_class}` : ''}</p><p>Портов: {blueprint.slot_count} · внутренних связей: {blueprint.internal_link_count}</p><button type="button" className="primary-action" onClick={() => setTarget({ id: blueprint.blueprint_ref.entity_id, versionId: blueprint.version_ref.entity_id, name: blueprint.name, versionNumber: blueprint.version_number })}>Выбрать шаблон</button></article>)}</div>}
+      <section className="creation-form-surface" aria-label={t('create.blueprints')}>
+        {!objectBlueprintDataSource && <p className="catalog-note catalog-note--gap">{t('create.blueprintsUnavailable')}</p>}
+        {objectBlueprintDataSource && !blueprints && !blueprintError && <p>{t('create.blueprintsLoading')}</p>}
+        {blueprintError && <p role="alert" className="catalog-note catalog-note--gap">{blueprintError} <button type="button" onClick={() => setRetryKey((value) => value + 1)}>{t('action.retry')}</button></p>}
+        {blueprints?.blueprints.length === 0 && <div className="catalog-note"><h2>{t('create.blueprintsEmptyTitle')}</h2><p>{t('create.blueprintsEmptyBody')}</p><Link className="primary-action" to="/library/object-blueprints/new">{t('create.blueprintsCreateFirst')}</Link></div>}
+        {blueprints && blueprints.blueprints.length > 0 && <div className="blueprint-library-grid">{blueprints.blueprints.map((blueprint) => <article className="blueprint-card" key={blueprint.blueprint_ref.entity_id}><h2>{blueprint.name}</h2><p>{t('create.blueprintVersion', { version: blueprint.version_number, objectClass: blueprint.default_physical_object_class ? ` · ${blueprint.default_physical_object_class}` : '' })}</p><p>{t('create.blueprintPorts', { ports: blueprint.slot_count, links: blueprint.internal_link_count })}</p><button type="button" className="primary-action" onClick={() => setTarget({ id: blueprint.blueprint_ref.entity_id, versionId: blueprint.version_ref.entity_id, name: blueprint.name, versionNumber: blueprint.version_number })}>{t('create.blueprintSelect')}</button></article>)}</div>}
       </section>
       <section className="creation-form-surface" aria-label={t('create.manual')}>
         {!manualOpen && <button type="button" className="secondary-action" onClick={() => setManualOpen(true)}>{t('create.manual')}</button>}

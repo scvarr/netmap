@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import type { PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import type { PhysicalObjectWriteDataSource } from '../topology/physicalObjectWriteTypes';
+import { useI18n } from '../i18n';
 
 interface CreatePhysicalObjectProps {
   dataSource: PhysicalObjectWriteDataSource;
@@ -9,6 +10,7 @@ interface CreatePhysicalObjectProps {
 }
 
 export function CreatePhysicalObject({ dataSource, onCreated, variant = 'popover' }: CreatePhysicalObjectProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(variant === 'page');
   const [objectName, setObjectName] = useState('');
   const [pointName, setPointName] = useState('');
@@ -38,8 +40,8 @@ export function CreatePhysicalObject({ dataSource, onCreated, variant = 'popover
       setCustomClass('');
       setOpen(false);
       onCreated(created);
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+    } catch {
+      setError(t('create.failedObjectGeneric'));
     } finally {
       setSubmitting(false);
     }
@@ -57,20 +59,20 @@ export function CreatePhysicalObject({ dataSource, onCreated, variant = 'popover
             setError(null);
           }}
         >
-          + Добавить
+          {t('create.add')}
         </button>
       )}
       {open && (
         <form className={`create-device__form${variant === 'page' ? ' create-device__form--page' : ''}`} onSubmit={submit} noValidate>
           <div className="create-device__heading">
             <div>
-              <span className="eyebrow">Новый объект</span>
-              <h2>Физический объект</h2>
+              <span className="eyebrow">{t('create.newObject')}</span>
+              <h2>{t('create.physicalObject')}</h2>
             </div>
-            {variant === 'popover' && <button type="button" onClick={() => setOpen(false)} aria-label="Закрыть форму">×</button>}
+            {variant === 'popover' && <button type="button" onClick={() => setOpen(false)} aria-label={t('create.closeForm')}>×</button>}
           </div>
           <label>
-            <span>Название</span>
+            <span>{t('create.name')}</span>
             <input
               autoFocus
               value={objectName}
@@ -79,7 +81,7 @@ export function CreatePhysicalObject({ dataSource, onCreated, variant = 'popover
             />
           </label>
           <label>
-            <span>Первая точка подключения</span>
+            <span>{t('create.firstPoint')}</span>
             <input
               value={pointName}
               onChange={(event) => setPointName(event.target.value)}
@@ -87,22 +89,22 @@ export function CreatePhysicalObject({ dataSource, onCreated, variant = 'popover
             />
           </label>
           <label>
-            <span>Категория</span>
+            <span>{t('create.category')}</span>
             <select
-              aria-label="Категория"
+              aria-label={t('create.category')}
               value={category}
               onChange={(event) => setCategory(event.target.value)}
               disabled={submitting}
             >
-              <option value="">Другое / не указано</option>
-              <option value="outlet">Розетка</option>
-              <option value="patch_panel">Патч-панель</option>
-              <option value="__custom__">Другое значение</option>
+              <option value="">{t('create.otherUnspecified')}</option>
+              <option value="outlet">{t('physical.class.outlet')}</option>
+              <option value="patch_panel">{t('physical.class.patchPanel')}</option>
+              <option value="__custom__">{t('create.otherValue')}</option>
             </select>
           </label>
           {category === '__custom__' && (
             <label>
-              <span>Значение типа</span>
+              <span>{t('create.classValue')}</span>
               <input
                 value={customClass}
                 onChange={(event) => setCustomClass(event.target.value)}
@@ -110,9 +112,9 @@ export function CreatePhysicalObject({ dataSource, onCreated, variant = 'popover
               />
             </label>
           )}
-          {error && <p className="create-device__error" role="alert">Не удалось создать физический объект. {error}</p>}
+          {error && <p className="create-device__error" role="alert">{error}</p>}
           <button className="create-device__submit" type="submit" disabled={!valid || submitting}>
-            {submitting ? 'Создаём…' : 'Создать'}
+            {submitting ? t('create.creating') : t('create.create')}
           </button>
         </form>
       )}
