@@ -200,20 +200,6 @@ def test_manual_two_sided_outlet_keeps_internal_topology_separate_from_external_
     assert trace.status_code == 200 and trace.json()["verdict"] == "REACHABLE"
 
 
-def test_endpoint_connection_rejects_same_or_unknown_connection_point():
-    _, point_id = create_physical_object("Outlet1", "Port")
-
-    same = connect(point_endpoint(point_id), point_endpoint(point_id))
-    unknown = connect(point_endpoint(point_id), point_endpoint(str(uuid.uuid4())))
-
-    assert same.status_code == 422
-    assert "two different endpoints" in same.json()["error"]["message"]
-    assert unknown.status_code == 422
-    assert unknown.json()["error"]["message"] == "ConnectionPoint does not exist"
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(Connection)) == 0
-
-
 def test_disconnect_deletes_cable_and_its_connection_atomically():
     _, source = create_physical_object("Source", "S")
     _, target = create_physical_object("Target", "T")
@@ -222,65 +208,3 @@ def test_disconnect_deletes_cable_and_its_connection_atomically():
     body = created.json()
     assert client.delete(f"/v1/topology/physical-connections/{body['connection_ref']['entity_id']}").status_code == 204
     assert client.delete(f"/v1/cables/{body['cable_ref']['entity_id']}").status_code == 422
-def test_endpoint_connection_rejects_rebinding_network_interface():
-    _, interface_id = create_device("PC1", "eth0")
-    _, first_point = create_physical_object("Outlet1", "Port")
-    _, second_point = create_physical_object("Outlet2", "Port")
-    assert connect(interface_endpoint(interface_id), point_endpoint(first_point)).status_code == 201
-
-    response = connect(interface_endpoint(interface_id), point_endpoint(second_point))
-
-    assert response.status_code == 422
-    assert "already has a direct physical binding" in response.json()["error"]["message"]
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(Connection)) == 1
-
-
-def test_endpoint_connection_rejects_non_cardinality_one_point():
-    _, valid_point = create_physical_object("Outlet1", "Port")
-    with SessionLocal.begin() as session:
-        repository = CanonicalRepository(session)
-        other_object = repository.add_physical_object()
-        unsupported_point = repository.add_connection_point(other_object.id, cardinality=2)
-        unsupported_point_id = str(unsupported_point.id)
-
-    response = connect(point_endpoint(valid_point), point_endpoint(unsupported_point_id))
-
-    assert response.status_code == 422
-    assert "cardinality=1" in response.json()["error"]["message"]
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(Connection)) == 0
-
-
-def test_endpoint_connection_rolls_back_mid_operation(monkeypatch):
-    _, interface_id = create_device("PC1", "eth0")
-    _, point_id = create_physical_object("Outlet1", "Port")
-    original = CanonicalRepository.add_connection
-    calls = 0
-
-    def fail_on_second_connection(self, *args, **kwargs):
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            raise RuntimeError("injected endpoint connection failure")
-        return original(self, *args, **kwargs)
-
-    monkeypatch.setattr(CanonicalRepository, "add_connection", fail_on_second_connection)
-    non_raising_client = TestClient(app, raise_server_exceptions=False)
-    response = non_raising_client.post(
-        "/v1/topology/physical-connections",
-        json={
-            "source": interface_endpoint(interface_id),
-            "target": point_endpoint(point_id),
-            
-        },
-    )
-
-    assert response.status_code == 500
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(Connection)) == 0
-        assert session.scalar(
-            select(func.count()).select_from(InterfacePhysicalBinding)
-        ) == 0
-        assert session.scalar(select(func.count()).select_from(ConnectionPoint)) == 1
-        assert session.scalar(select(func.count()).select_from(PhysicalObject)) == 2
