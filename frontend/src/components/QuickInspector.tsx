@@ -281,7 +281,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           <>
             <p role="alert">{operationFor("add", remote)?.message}</p>
             <button onClick={() => void props.onRetryMapRefresh?.()}>
-              Повторить обновление
+              {t("map.retryRefresh")}
             </button>
           </>
         )}
@@ -331,7 +331,7 @@ export function QuickInspector(props: QuickInspectorProps) {
         {inventoryError && <p role="alert">{inventoryError}</p>}
         {inventoryError && (
           <button onClick={() => setReadRevision((revision) => revision + 1)}>
-            Повторить
+            {t("action.retry")}
           </button>
         )}
         {item?.resolution === "RESOLVED" && (
@@ -373,7 +373,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           <>
             <p role="alert">{operationFor("delete", cableId)?.message}</p>
             <button onClick={() => void props.onRetryMapRefresh?.()}>
-              Повторить обновление
+              {t("map.retryRefresh")}
             </button>
           </>
         )}
@@ -397,7 +397,7 @@ export function QuickInspector(props: QuickInspectorProps) {
         {detailError && <p role="alert">{detailError}</p>}
         {detailError && (
           <button onClick={() => setReadRevision((revision) => revision + 1)}>
-            Повторить
+            {t("action.retry")}
           </button>
         )}
         {details && (
@@ -443,7 +443,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           <>
             <p role="alert">{operationFor("remove", id)?.message}</p>
             <button onClick={() => void props.onRetryMapRefresh?.()}>
-              Повторить обновление
+              {t("map.retryRefresh")}
             </button>
           </>
         )}
@@ -451,7 +451,7 @@ export function QuickInspector(props: QuickInspectorProps) {
           <>
             <p role="alert">{operationFor("delete", id)?.message}</p>
             <button onClick={() => void props.onRetryMapRefresh?.()}>
-              Повторить обновление
+              {t("map.retryRefresh")}
             </button>
           </>
         )}

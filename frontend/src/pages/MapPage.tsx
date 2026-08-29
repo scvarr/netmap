@@ -1358,7 +1358,7 @@ export function MapPage({
         params.get("focus") &&
         !nodeForPhysicalObject(document.nodes, params.get("focus")!) && (
           <p>
-            Объект с указанной canonical-ссылкой отсутствует в этой проекции.
+            {t("map.objectMissing")}
           </p>
         )}
       {!legacy && maps?.length === 0 && (
@@ -1385,7 +1385,7 @@ export function MapPage({
               setTraceArtifact(artifact);
               setSelectedTraceBranchId(artifact?.verdict === "REACHABLE" ? artifact.branches[0]?.branch_id ?? null : null);
               if (artifact?.verdict === "REACHABLE" && viewMode === "logical") {
-                setTraceViewNotice("L1 trace показан на физической карте.");
+                setTraceViewNotice(t("map.tracePhysical"));
                 setParams((current) => {
                   const next = new URLSearchParams(current);
                   next.set("view", "physical");

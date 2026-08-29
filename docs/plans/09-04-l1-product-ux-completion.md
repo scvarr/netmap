@@ -2,7 +2,7 @@
 
 ## Статус и граница
 
-**ACTIVE** — короткий product/UX execution pass после завершения текущих
+**IMPLEMENTED** — короткий product/UX execution pass после завершения текущих
 L1S.1–L1S.6 и до L1S.7. Его цель — сделать существующий L1 workflow надёжным и
 понятным перед добавлением spatial hierarchy. Это не implementation
 specification: он не фиксирует schema, API, DTO, persistence model или точный
@@ -45,9 +45,10 @@ provenance constructs, а immutable Blueprint history не изменяется.
 7. **Понятные L1 errors.** Primary UI не показывает raw
    Malformed/HTTP/schema сообщения; техническая причина остаётся доступной как
    diagnostic detail.
-8. **LOC-001.** После переработки Inspector и context menus завершить typed
-   RU/EN localization активных поверхностей согласно
-   [[plans/stabilization/10-02-stabilization-backlog|LOC-001]].
+8. **LOC-001 — IMPLEMENTED.** Typed RU/EN localization завершена для active
+   L1 Map, Inspector, context menus, create/edit flows, Object Blueprint и
+   Port Module surfaces. User-facing terminology — «Портовый модуль» /
+   `Port Module`; internal `PortBlock` symbols and API contracts сохранены.
 
 ### UX.1 — Cable routing reliability
 

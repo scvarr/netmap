@@ -52,12 +52,12 @@ export function CreateConnectionPoint({
           setError(null);
         }}
       >
-        + Добавить точку
+        {t('create.addPoint')}
       </button>
       {open && (
         <form className="create-interface__form" onSubmit={submit} noValidate>
           <label>
-            <span>Название</span>
+            <span>{t('create.name')}</span>
             <input
               autoFocus
               value={name}
@@ -71,9 +71,9 @@ export function CreateConnectionPoint({
             </p>
           )}
           <div className="create-interface__actions">
-            <button type="button" onClick={() => setOpen(false)} disabled={submitting}>Отмена</button>
+            <button type="button" onClick={() => setOpen(false)} disabled={submitting}>{t('action.cancel')}</button>
             <button type="submit" disabled={!valid || submitting}>
-              {submitting ? 'Создаём…' : error ? 'Повторить' : 'Создать'}
+              {submitting ? t('create.creating') : error ? t('action.retry') : t('create.create')}
             </button>
           </div>
         </form>

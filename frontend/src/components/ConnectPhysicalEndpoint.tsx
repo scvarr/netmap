@@ -51,8 +51,8 @@ const sort = <T,>(items: T[], label: (item: T) => string) =>
         collator.compare(label(a.item), label(b.item)) || a.index - b.index,
     )
     .map(({ item }) => item);
-const label = (point: ConnectionPointDetails) =>
-  /^ConnectionPoint\s+/i.test(point.label) ? "Точка" : point.label;
+const label = (point: ConnectionPointDetails, fallback: string) =>
+  /^ConnectionPoint\s+/i.test(point.label) ? fallback : point.label;
 const freePort = (point: ConnectionPointDetails, sourceId: string) =>
   isAvailablePhysicalPort(point) &&
   point.connection_point_ref.entity_id !== sourceId;
@@ -182,7 +182,7 @@ export function ConnectPhysicalEndpoint({
           targetState.document.connection_points.filter((point) =>
             freePort(point, sourcePoint.connection_point_ref.entity_id),
           ),
-          label,
+          (point) => label(point, t("physical.point", { id: "" }).trim()),
         )
       : [];
   const interfaces =
@@ -229,8 +229,8 @@ export function ConnectPhysicalEndpoint({
       <button
         type="button"
         className="connect-interface__trigger port-icon-action"
-        aria-label="Подключить порт"
-        title="Подключить порт"
+        aria-label={t("connect.connectPort")}
+        title={t("connect.connectPort")}
         aria-expanded={open}
         disabled={
           (sourcePoint.external_connection_count ?? 0) >=
@@ -250,29 +250,29 @@ export function ConnectPhysicalEndpoint({
         <form className="connect-interface__form" onSubmit={submit} noValidate>
           <strong>
             {mode === "PORT"
-              ? "Подключить порт кабелем"
-              : "Подключить к свободному интерфейсу"}
+              ? t("connect.portCable")
+              : t("connect.freeInterface")}
           </strong>
           {mode === "PORT" ? (
             <>
               <label>
-                <span>Поиск объекта</span>
+                <span>{t("connect.searchObject")}</span>
                 <input
-                  aria-label="Поиск целевого физического объекта"
+                  aria-label={t("connect.searchTarget")}
                   value={query}
                   disabled={submitting}
                   onChange={(event) => setQuery(event.target.value)}
                 />
               </label>
               <label>
-                <span>Целевой физический объект</span>
+                <span>{t("connect.targetObject")}</span>
                 <select
-                  aria-label="Целевой физический объект"
+                  aria-label={t("connect.targetObject")}
                   value={targetObjectId}
                   disabled={submitting}
                   onChange={(event) => setTargetObjectId(event.target.value)}
                 >
-                  <option value="">Выберите объект</option>
+                  <option value="">{t("connect.selectObject")}</option>
                   {candidates.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.label}
@@ -281,26 +281,26 @@ export function ConnectPhysicalEndpoint({
                 </select>
               </label>
               <label>
-                <span>Свободный физический порт</span>
+                <span>{t("connect.freePort")}</span>
                 <select
-                  aria-label="Свободный физический порт"
+                  aria-label={t("connect.freePort")}
                   value={targetEntityId}
                   disabled={submitting || targetState.kind !== "points"}
                   onChange={(event) => setTargetEntityId(event.target.value)}
                 >
-                  <option value="">Выберите порт</option>
+                  <option value="">{t("connect.selectPort")}</option>
                   {points.map((point) => (
                     <option
                       key={point.connection_point_ref.entity_id}
                       value={point.connection_point_ref.entity_id}
                     >
-                      {label(point)}
+                      {label(point, t("physical.point", { id: "" }).trim())}
                     </option>
                   ))}
                 </select>
               </label>
               {targetState.kind === "points" && !points.length && (
-                <p className="muted">Нет свободных точек подключения.</p>
+                <p className="muted">{t("connect.noFreePoints")}</p>
               )}
               <button
                 type="button"
@@ -312,20 +312,20 @@ export function ConnectPhysicalEndpoint({
                   setTargetObjectId("");
                 }}
               >
-                Дополнительно: подключить к свободному интерфейсу
+                {t("connect.advanced")}
               </button>
             </>
           ) : (
             <>
               <label>
-                <span>Целевой физический объект</span>
+                <span>{t("connect.targetObject")}</span>
                 <select
-                  aria-label="Целевой физический объект"
+                  aria-label={t("connect.targetObject")}
                   value={targetObjectId}
                   disabled={submitting}
                   onChange={(event) => setTargetObjectId(event.target.value)}
                 >
-                  <option value="">Выберите объект</option>
+                  <option value="">{t("connect.selectObject")}</option>
                   {candidates.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.label}
@@ -334,14 +334,14 @@ export function ConnectPhysicalEndpoint({
                 </select>
               </label>
               <label>
-                <span>Свободный интерфейс</span>
+                <span>{t("connect.interface")}</span>
                 <select
-                  aria-label="Свободный интерфейс"
+                  aria-label={t("connect.interface")}
                   value={targetEntityId}
                   disabled={submitting || targetState.kind !== "interfaces"}
                   onChange={(event) => setTargetEntityId(event.target.value)}
                 >
-                  <option value="">Выберите интерфейс</option>
+                  <option value="">{t("connect.selectInterface")}</option>
                   {interfaces.map((item) => (
                     <option
                       key={item.interface_ref.entity_id}
@@ -362,12 +362,12 @@ export function ConnectPhysicalEndpoint({
                   setTargetObjectId("");
                 }}
               >
-                Назад к физическим портам
+                {t("connect.backPorts")}
               </button>
             </>
           )}
           {targetState.kind === "loading" && (
-            <p className="muted">Загружаем endpoints…</p>
+            <p className="muted">{t("connect.loading")}</p>
           )}
           {targetState.kind === "error" && (
             <div className="connect-interface__target-error">
@@ -376,7 +376,7 @@ export function ConnectPhysicalEndpoint({
                 type="button"
                 onClick={() => setRetry((value) => value + 1)}
               >
-                Повторить загрузку
+                {t("connect.retryLoad")}
               </button>
             </div>
           )}
@@ -387,7 +387,7 @@ export function ConnectPhysicalEndpoint({
           )}
           <div className="connect-interface__actions">
             <button type="button" disabled={submitting} onClick={reset}>
-              Отмена
+              {t("action.cancel")}
             </button>
             <button
               type="submit"
@@ -395,7 +395,7 @@ export function ConnectPhysicalEndpoint({
                 !targetEntityId || !selectedObjectIsVisible || submitting
               }
             >
-              {submitting ? "Подключаем…" : error ? "Повторить" : "Подключить"}
+              {submitting ? t("connect.connecting") : error ? t("action.retry") : t("connect.connect")}
             </button>
           </div>
         </form>

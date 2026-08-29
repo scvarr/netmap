@@ -48,10 +48,10 @@ const physicalObjectIdentity = (node: TopologyProjectionNode): string | null => 
   return refs.length === 1 ? refs[0].entity_id : null;
 };
 
-const displayPointLabel = (point: ConnectionPointDetails): string => {
+const displayPointLabel = (point: ConnectionPointDetails, fallback: string): string => {
   const technical = /^ConnectionPoint\s+(.+)$/i.exec(point.label.trim());
   if (point.label_source !== 'TECHNICAL_FALLBACK' && !technical) return point.label;
-  return `Точка ${shortId(technical?.[1] ?? point.connection_point_ref.entity_id)}`;
+  return `${fallback} ${shortId(technical?.[1] ?? point.connection_point_ref.entity_id)}`;
 };
 
 const pointLabelCollator = new Intl.Collator(undefined, {
@@ -65,12 +65,12 @@ const isTechnicalPointLabel = (point: ConnectionPointDetails): boolean => (
   || /^Точка\s+/i.test(point.label)
 );
 
-const sortedConnectionPoints = (points: ConnectionPointDetails[]): ConnectionPointDetails[] => (
+const sortedConnectionPoints = (points: ConnectionPointDetails[], fallback: string): ConnectionPointDetails[] => (
   points
     .map((point, index) => ({ point, index }))
     .sort((left, right) => (
       Number(isTechnicalPointLabel(left.point)) - Number(isTechnicalPointLabel(right.point))
-      || pointLabelCollator.compare(displayPointLabel(left.point), displayPointLabel(right.point))
+      || pointLabelCollator.compare(displayPointLabel(left.point, fallback), displayPointLabel(right.point, fallback))
       || left.index - right.index
     ))
     .map(({ point }) => point)
@@ -128,41 +128,36 @@ const PhysicalObjectClassEditor = ({
   };
 
   return (
-    <section className="physical-class-editor" aria-label="Тип объекта">
-      <h3>Тип объекта</h3>
+    <section className="physical-class-editor" aria-label={t('physical.classEditor')}>
+      <h3>{t('physical.classEditor')}</h3>
       <p className="physical-class-editor__current">
         {physicalClassPresentation(currentClass).label}
         {currentClass && !KNOWN_CLASSES.has(currentClass) ? ` · ${currentClass}` : ''}
       </p>
       <label>
-        <span>Классификация</span>
+        <span>{t('physical.classification')}</span>
         <select
           value={preset}
           onChange={(event) => setPreset(event.target.value)}
           disabled={pending}
         >
-          <option value="workstation">ПК</option>
-          <option value="switch">Коммутатор</option>
-          <option value="cable">Кабель</option>
-          <option value="outlet">Розетка</option>
-          <option value="patch_panel">Патч-панель</option>
-          <option value="__custom__">Другое</option>
+          <option value="workstation">{t('physical.class.workstation')}</option><option value="switch">{t('physical.class.switch')}</option><option value="cable">{t('physical.class.cable')}</option><option value="outlet">{t('physical.class.outlet')}</option><option value="patch_panel">{t('physical.class.patchPanel')}</option><option value="__custom__">{t('physical.other')}</option>
         </select>
       </label>
       {preset === '__custom__' && (
         <label>
-          <span>Значение</span>
+          <span>{t('physical.value')}</span>
           <input
             value={customValue}
             onChange={(event) => setCustomValue(event.target.value)}
             disabled={pending}
-            placeholder="Например: ups"
+            placeholder={t('physical.valueExample')}
           />
         </label>
       )}
       {error && <p className="physical-class-editor__error" role="alert">{error}</p>}
       <button type="button" onClick={() => void submit()} disabled={!value || pending || unchanged}>
-        {pending ? 'Сохраняем…' : 'Сохранить тип'}
+        {pending ? t('physical.saving') : t('physical.saveClass')}
       </button>
     </section>
   );
@@ -177,20 +172,20 @@ interface PortRowProps {
   onConnected: () => void;
 }
 
-const attachmentLabel = (point: ConnectionPointDetails): string => {
+const attachmentLabel = (point: ConnectionPointDetails, t: ReturnType<typeof useI18n>['t']): string => {
   const attachments = point.external_physical_attachments ?? [];
   if (!attachments.length) return '—';
   return attachments.map((attachment) => {
     const remote = [attachment.remote_physical_object_label, attachment.remote_connection_point_label].filter(Boolean).join(' · ');
     return attachment.kind === 'CABLE'
-      ? `${remote || 'Удалённый endpoint'}${attachment.cable_label ? ` · ${attachment.cable_label}` : ''}`
-      : remote || 'Физическое подключение';
+      ? `${remote || t('physical.remoteEndpoint')}${attachment.cable_label ? ` · ${attachment.cable_label}` : ''}`
+      : remote || t('physical.connection');
   }).join('; ');
 };
 
-const statusLabel = (point: ConnectionPointDetails): string => {
-  if (point.cardinality !== 1) return `Связей: ${point.incident_connection_count}; внешних: ${point.external_connection_count ?? 0}`;
-  return (point.external_physical_attachments ?? []).length ? 'Подключён' : 'Свободен';
+const statusLabel = (point: ConnectionPointDetails, t: ReturnType<typeof useI18n>['t']): string => {
+  if (point.cardinality !== 1) return t('physical.connections', { count: point.incident_connection_count, external: point.external_connection_count ?? 0 });
+  return (point.external_physical_attachments ?? []).length ? t('physical.connected') : t('physical.free');
 };
 
 const interfaceLabel = (point: ConnectionPointDetails): string => (
@@ -210,7 +205,7 @@ const DisconnectPhysicalConnection = ({ point, writeDataSource, onDisconnected }
   const attachment = point.cardinality === 1 ? point.external_physical_attachments?.[0] : undefined;
   if (!attachment || !writeDataSource?.deleteExternalPhysicalConnection) return null;
   const disconnect = async () => {
-    if (pending || !window.confirm(`Разорвать физическое подключение порта «${displayPointLabel(point)}»?`)) return;
+    if (pending || !window.confirm(t('physical.disconnectConfirm', { name: displayPointLabel(point, t('physical.point', { id: '' }).trim()) }))) return;
     setPending(true);
     setError(null);
     try {
@@ -222,7 +217,7 @@ const DisconnectPhysicalConnection = ({ point, writeDataSource, onDisconnected }
       setPending(false);
     }
   };
-  return <><button type="button" className="port-icon-action port-icon-action--danger" aria-label="Разорвать физическое подключение" title="Разорвать физическое подключение" disabled={pending} onClick={() => void disconnect()}>×</button>{error && <p className="port-action-error" role="alert">{error}</p>}</>;
+  return <><button type="button" className="port-icon-action port-icon-action--danger" aria-label={t('physical.disconnect')} title={t('physical.disconnect')} disabled={pending} onClick={() => void disconnect()}>×</button>{error && <p className="port-action-error" role="alert">{error}</p>}</>;
 };
 
 const PortActions = ({ point, topologyNodes, physicalDetailsDataSource, deviceDetailsDataSource, writeDataSource, onConnected }: PortActionProps) => <>
@@ -239,13 +234,13 @@ const PortRow = ({
   deviceDetailsDataSource,
   writeDataSource,
   onConnected,
-}: PortRowProps) => (
-  <tr>
-    <th scope="row">{displayPointLabel(point)}</th>
-    <td>{statusLabel(point)}</td><td>{attachmentLabel(point)}</td><td>{interfaceLabel(point)}</td>
+}: PortRowProps) => {
+  const { t } = useI18n(); return <tr>
+    <th scope="row">{displayPointLabel(point, t('physical.point', { id: '' }).trim())}</th>
+    <td>{statusLabel(point, t)}</td><td>{attachmentLabel(point, t)}</td><td>{interfaceLabel(point)}</td>
     <td><PortActions point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} /></td>
-  </tr>
-);
+  </tr>;
+};
 
 const pairedChannels = (points: ConnectionPointDetails[]): Array<[ConnectionPointDetails, ConnectionPointDetails]> | null => {
   if (!points.length || points.some((point) => (
@@ -318,7 +313,7 @@ export function PhysicalObjectDetailsSection({
   const [state, setState] = useState<DetailsState>(() => (
     physicalObjectId
       ? { kind: 'loading' }
-      : { kind: 'unavailable', message: 'Детали недоступны: нет однозначной ссылки на PhysicalObject.' }
+      : { kind: 'unavailable', message: t('physical.noCanonicalRef') }
   ));
   const onDocumentChangeRef = useRef(onDocumentChange);
   onDocumentChangeRef.current = onDocumentChange;
@@ -327,7 +322,7 @@ export function PhysicalObjectDetailsSection({
     if (!physicalObjectId) {
       setState({
         kind: 'unavailable',
-        message: 'Детали недоступны: нет однозначной ссылки на PhysicalObject.',
+        message: t('physical.noCanonicalRef'),
       });
       return undefined;
     }
@@ -350,27 +345,27 @@ export function PhysicalObjectDetailsSection({
       },
     );
     return () => { current = false; };
-  }, [dataSource, physicalObjectId, retryKey]);
+  }, [dataSource, physicalObjectId, retryKey, t]);
 
   return (
     <section className="physical-object-details" aria-labelledby="connection-points-heading">
-      {state.kind === 'loading' && <p className="device-details-state">Загружаем точки подключения…</p>}
+      {state.kind === 'loading' && <p className="device-details-state">{t('physical.loading')}</p>}
       {state.kind === 'unavailable' && <p className="device-details-state">{state.message}</p>}
       {state.kind === 'error' && (
         <div className="device-details-state device-details-state--error">
           <p>{state.message}</p>
-          <button onClick={() => setRetryKey((key) => key + 1)}>Повторить</button>
+          <button onClick={() => setRetryKey((key) => key + 1)}>{t('action.retry')}</button>
         </div>
       )}
       {state.kind === 'loaded' && (
         <>
           <div className="physical-object-details__summary">
-            <span>Портов: <strong>{state.document.connection_points.length}</strong></span>
+            <span>{t('physical.portCount', { count: state.document.connection_points.length })}</span>
             {state.document.connection_points.length > 0 && state.document.connection_points.every((point) => point.cardinality === 1 && Array.isArray(point.external_physical_attachments)) && (() => {
               const connected = state.document.connection_points.filter((point) => point.external_physical_attachments!.length > 0).length;
-              return <><span>Подключено: <strong>{connected}</strong></span><span>Свободно: <strong>{state.document.connection_points.length - connected}</strong></span></>;
+              return <><span>{t('physical.connectedCount', { count: connected })}</span><span>{t('physical.freeCount', { count: state.document.connection_points.length - connected })}</span></>;
             })()}
-            <span>Интерфейсов: <strong>{state.document.owned_interface_count}</strong></span>
+            <span>{t('physical.interfaceCount', { count: state.document.owned_interface_count })}</span>
           </div>
           {classWriteDataSource && physicalObjectId && (
             <PhysicalObjectClassEditor
@@ -386,19 +381,19 @@ export function PhysicalObjectDetailsSection({
             />
           )}
           {state.document.blueprint_provenance && (
-            <><p className="blueprint-provenance">Объект создан из шаблона · версия {state.document.blueprint_provenance.version_number}. Структурные изменения выполняются через версию шаблона. <Link to={`/library/object-blueprints/${state.document.blueprint_provenance.blueprint_ref.entity_id}/versions/${state.document.blueprint_provenance.version_ref.entity_id}/edit`}>Открыть шаблон</Link></p>{physicalObjectId && <BlueprintUpgrade physicalObjectId={physicalObjectId} provenance={state.document.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={async () => { const document = await dataSource.loadPhysicalObjectDetails(physicalObjectId); setState({ kind: 'loaded', document }); onDocumentChange(document); }} />}</>
+            <><p className="blueprint-provenance">{t('physical.fromBlueprint', { version: state.document.blueprint_provenance.version_number })} <Link to={`/library/object-blueprints/${state.document.blueprint_provenance.blueprint_ref.entity_id}/versions/${state.document.blueprint_provenance.version_ref.entity_id}/edit`}>{t('physical.openBlueprint')}</Link></p>{physicalObjectId && <BlueprintUpgrade physicalObjectId={physicalObjectId} provenance={state.document.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={async () => { const document = await dataSource.loadPhysicalObjectDetails(physicalObjectId); setState({ kind: 'loaded', document }); onDocumentChange(document); }} />}</>
           )}
-          <h3 id="connection-points-heading">Порты <span>{state.document.connection_points.length}</span></h3>
+          <h3 id="connection-points-heading">{t('physical.ports')} <span>{state.document.connection_points.length}</span></h3>
           {!state.document.blueprint_provenance && connectionPointWriteDataSource && physicalObjectId && (
-            <div className="manual-point-action"><strong>Ручная структура</strong><CreateConnectionPoint physicalObjectId={physicalObjectId} dataSource={connectionPointWriteDataSource} onCreated={(document) => { setState({ kind: 'loaded', document }); onDocumentChange(document); onConnectionPointCreated(); }} /></div>
+            <div className="manual-point-action"><strong>{t('physical.manualStructure')}</strong><CreateConnectionPoint physicalObjectId={physicalObjectId} dataSource={connectionPointWriteDataSource} onCreated={(document) => { setState({ kind: 'loaded', document }); onDocumentChange(document); onConnectionPointCreated(); }} /></div>
           )}
           {state.document.connection_points.length ? (() => {
-            const points = sortedConnectionPoints(state.document.connection_points); const channels = pairedChannels(points);
-            if (channels) return <div className="ports-table-wrap"><h4>Каналы</h4><table className="ports-table"><thead><tr><th>Канал</th><th>Порт A</th><th>Подключение A</th><th>Действия A</th><th>Порт B</th><th>Подключение B</th><th>Действия B</th></tr></thead><tbody>{channels.map(([left, right], index) => <tr key={left.connection_point_ref.entity_id}><th scope="row">{index + 1}</th><td>{displayPointLabel(left)}</td><td>{attachmentLabel(left)}</td><td><PortActions point={left} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td><td>{displayPointLabel(right)}</td><td>{attachmentLabel(right)}</td><td><PortActions point={right} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td></tr>)}</tbody></table></div>;
-            return <div className="ports-table-wrap"><table className="ports-table"><thead><tr><th>Порт</th><th>Status</th><th>Connected to</th><th>Interface</th><th>Actions</th></tr></thead><tbody>{points.map((point) => <PortRow key={point.connection_point_ref.entity_id} point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} />)}</tbody></table></div>;
-          })() : <p className="device-details-state">Точки подключения не заданы.</p>}
+            const points = sortedConnectionPoints(state.document.connection_points, t('physical.point', { id: '' }).trim()); const channels = pairedChannels(points);
+            if (channels) return <div className="ports-table-wrap"><h4>{t('physical.channels')}</h4><table className="ports-table"><thead><tr><th>{t('physical.channel')}</th><th>{t('physical.port')} A</th><th>{t('physical.connectionA')}</th><th>{t('physical.actionsA')}</th><th>{t('physical.port')} B</th><th>{t('physical.connectionB')}</th><th>{t('physical.actionsB')}</th></tr></thead><tbody>{channels.map(([left, right], index) => <tr key={left.connection_point_ref.entity_id}><th scope="row">{index + 1}</th><td>{displayPointLabel(left, t('physical.point', { id: '' }).trim())}</td><td>{attachmentLabel(left, t)}</td><td><PortActions point={left} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td><td>{displayPointLabel(right, t('physical.point', { id: '' }).trim())}</td><td>{attachmentLabel(right, t)}</td><td><PortActions point={right} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td></tr>)}</tbody></table></div>;
+            return <div className="ports-table-wrap"><table className="ports-table"><thead><tr><th>{t('physical.port')}</th><th>{t('physical.status')}</th><th>{t('physical.connectedTo')}</th><th>{t('physical.interface')}</th><th>{t('physical.actions')}</th></tr></thead><tbody>{points.map((point) => <PortRow key={point.connection_point_ref.entity_id} point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} />)}</tbody></table></div>;
+          })() : <p className="device-details-state">{t('physical.noPoints')}</p>}
           <details className="technical-details physical-object-details__technical">
-            <summary>Технические данные объекта</summary>
+            <summary>{t('physical.objectTechnical')}</summary>
             <SourceRefs refs={[state.document.physical_object.source_ref]} />
           </details>
         </>

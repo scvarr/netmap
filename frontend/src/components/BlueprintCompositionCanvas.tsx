@@ -2,10 +2,12 @@ import { useRef, useState, type PointerEvent } from 'react';
 import type { BlueprintFace, BlueprintInternalLink, BlueprintPortBlockPlacement } from '../topology/objectBlueprintTypes';
 import { fallbackPlacement, type BlueprintBlockInstance } from '../blueprints/editorModel';
 import { compositionCanvas, placementRect, portCenter, resizePlacement, resolvePlacement, screenToPlacementPoint, type AlignmentGuide, type ResizeHandle } from '../blueprints/compositionGeometry';
+import { useI18n } from '../i18n';
 
 interface Props { body: { width: number; height: number; fillColor: string }; face: BlueprintFace; instances: BlueprintBlockInstance[]; links: BlueprintInternalLink[]; selectedKey?: string; onSelect: (key: string) => void; onPlacement: (key: string, placement: BlueprintPortBlockPlacement) => void; }
 
 export function BlueprintCompositionCanvas({ body, face, instances, links, selectedKey, onSelect, onPlacement }: Props) {
+  const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null); const canvas = compositionCanvas(body);
   const [gesture, setGesture] = useState<{ key: string; mode: 'drag' | 'resize'; handle?: ResizeHandle; start: BlueprintPortBlockPlacement; pointer: { x: number; y: number } }>();
   const [guides, setGuides] = useState<AlignmentGuide[]>([]);
@@ -15,7 +17,7 @@ export function BlueprintCompositionCanvas({ body, face, instances, links, selec
   const points = new Map<string, { x: number; y: number }>();
   visible.forEach(({ item, index }) => { const placement = item.placement ?? fallbackPlacement(index); item.ports.forEach((port) => { const key = item.resolvedSlotKeys[port.local_id]; const point = portCenter(item, port.local_id, placement, canvas); if (key && point) points.set(key, point); }); });
   const endGesture = () => { setGesture(undefined); setGuides([]); };
-  return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 ${canvas.width} ${canvas.height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={`Композиция: ${face === 'FRONT' ? 'передняя' : 'задняя'} панель`} onPointerMove={update} onPointerUp={endGesture} onPointerCancel={endGesture}>
+  return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 ${canvas.width} ${canvas.height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.composition.canvas', { face: t(face === 'FRONT' ? 'blueprint.face.front' : 'blueprint.face.rear') })} onPointerMove={update} onPointerUp={endGesture} onPointerCancel={endGesture}>
     <rect className="blueprint-composition-canvas__body" width={canvas.width} height={canvas.height} fill={body.fillColor} />
     {links.map((link) => { const from = points.get(link.from_slot_key); const to = points.get(link.to_slot_key); return from && to ? <line key={`${link.from_slot_key}-${link.to_slot_key}`} className="blueprint-composition-canvas__link" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null; })}
     {guides.map((guide, index) => guide.axis === 'x' ? <line key={`guide-${index}`} className="blueprint-composition-canvas__guide" x1={guide.position * canvas.width} x2={guide.position * canvas.width} y1="0" y2={canvas.height} /> : <line key={`guide-${index}`} className="blueprint-composition-canvas__guide" x1="0" x2={canvas.width} y1={guide.position * canvas.height} y2={guide.position * canvas.height} />)}
