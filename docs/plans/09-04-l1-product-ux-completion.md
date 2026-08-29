@@ -107,15 +107,22 @@ Continuity remains behind port markers and keeps normal, selected, trace, and
 wiring-highlighted presentation states without introducing routing or
 persistence.
 
-### UX.2c — Object identification & map search
+### UX.2c — Object identification, selection & map search
 
 **IMPLEMENTED.** Blueprint-backed objects render their display name in a
 single-line, width-matched rectangular header directly attached to the
 intrinsic body; the header uses a shared compact UI typography and ellipsizes
 only when needed. Its full value is available through the native title tooltip.
-The nameplate is presentation-only:
-it does not change body dimensions, footprint, port/cable attachment, internal
-continuity, or Saved Map persistence. Physical Saved Map also provides a
+Nameplate и body — единая визуальная card-composition и единая object hit-area:
+обычный click по обоим выбирает тот же `PhysicalObject`; selected state охватывает
+всю композицию. Port click сохраняет отдельную wiring interaction и не становится
+object selection. Для selected Blueprint-backed объекта canvas показывает только
+компактные стилизованные resize handles вместо технического React Flow default;
+сохраняются Blueprint-only eligibility, aspect ratio, min/max и persistence
+`MapViewPosition.display_width`. Числового ввода размера через Inspector в этот
+pass не добавляется. Nameplate остаётся presentation-only: он не меняет canonical
+topology, Blueprint, port/cable attachment, internal continuity или Saved Map
+persistence model. Physical Saved Map также предоставляет
 case-insensitive, map-local substring search over placed PhysicalObject display
 names. A result selects the existing object selection; selection/search do not
 move the viewport.
@@ -206,12 +213,6 @@ product default.
 
 Следующие наблюдения зафиксированы для будущей UX-работы и не являются
 implementation specification или расширением текущего scope.
-
-- **Blueprint-backed object canvas presentation.** Nameplate должен вести себя
-  как часть объекта для обычного selection; header и body должны
-  восприниматься как единая визуальная композиция. Текущий технический resize
-  affordance требует нормализации. При этом числовой
-  `MapViewPosition.display_width` через Inspector остаётся запланированным.
 
 - **Object Blueprint catalog/list compaction.** Текущая таблица каталога
   перегружена по ширине. «Состав портов» / port composition следует разложить

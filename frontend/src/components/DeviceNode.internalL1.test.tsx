@@ -1,9 +1,9 @@
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@xyflow/react', () => ({
   Handle: () => null,
-  NodeResizer: ({ onResizeEnd }: { onResizeEnd: (event: unknown, dimensions: { width: number }) => void }) => <button type="button" aria-label="resize" onClick={() => onResizeEnd({}, { width: 360 })} />,
+  NodeResizer: ({ onResizeEnd, lineClassName, handleClassName, isVisible, minWidth, maxWidth, keepAspectRatio }: { onResizeEnd: (event: unknown, dimensions: { width: number }) => void; lineClassName?: string; handleClassName?: string; isVisible?: boolean; minWidth?: number; maxWidth?: number; keepAspectRatio?: boolean }) => <button type="button" aria-label="resize" data-line-class={lineClassName} data-handle-class={handleClassName} data-visible={String(isVisible)} data-min-width={minWidth} data-max-width={maxWidth} data-aspect-ratio={String(keepAspectRatio)} onClick={() => onResizeEnd({}, { width: 360 })} />,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
 }));
 
@@ -98,6 +98,34 @@ describe('DeviceNode internal L1 overlay', () => {
     render(<DeviceNode {...({ data: { projection, blueprintResizeEnabled: true, onBlueprintDisplayResize }, selected: true, width: 320 } as any)} />);
     screen.getByRole('button', { name: 'resize' }).click();
     expect(onBlueprintDisplayResize).toHaveBeenCalledWith('object-1', 360);
+  });
+
+  it('uses compact styled resize handles while retaining Blueprint width and aspect constraints', () => {
+    render(<DeviceNode {...({ data: { projection, blueprintResizeEnabled: true }, selected: true, width: 320 } as any)} />);
+    const resize = screen.getByRole('button', { name: 'resize' });
+    expect(resize).toHaveAttribute('data-visible', 'true');
+    expect(resize).toHaveAttribute('data-line-class', 'blueprint-map-node__resizer-line');
+    expect(resize).toHaveAttribute('data-handle-class', 'blueprint-map-node__resizer-handle');
+    expect(resize).toHaveAttribute('data-min-width', '32');
+    expect(resize).toHaveAttribute('data-max-width', '960');
+    expect(resize).toHaveAttribute('data-aspect-ratio', 'true');
+  });
+
+  it('keeps the nameplate in the object card hit area and lets port wiring stop selection', () => {
+    const onObjectClick = vi.fn();
+    const onPhysicalPortClick = vi.fn();
+    render(<div onClick={onObjectClick}><DeviceNode {...({ data: { projection, physicalPortStates: { 'front-01': 'eligible' }, onPhysicalPortClick }, selected: true, width: 320 } as any)} /></div>);
+    const body = screen.getByTestId('blueprint-map-node');
+    const nameplate = within(body).getByTitle('PP1');
+    expect(body).toHaveClass('blueprint-map-node--selected');
+    expect(nameplate).toHaveClass('blueprint-map-node__nameplate');
+    fireEvent.click(nameplate);
+    fireEvent.click(body);
+    expect(onObjectClick).toHaveBeenCalledTimes(2);
+    onObjectClick.mockClear();
+    fireEvent.click(screen.getByTitle('Front 01 · CONNECTION_POINT'));
+    expect(onPhysicalPortClick).toHaveBeenCalledWith({ physicalObjectId: 'object-1', connectionPointId: 'front-01', label: 'Front 01' });
+    expect(onObjectClick).not.toHaveBeenCalled();
   });
 
   it('keeps a wiring-highlighted cross-face line in the object layer while ports remain above it', () => {
