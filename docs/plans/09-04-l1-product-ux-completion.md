@@ -190,3 +190,19 @@ font size и другие подобные настройки. Это не св�
 Blueprint; точная persistence/user/workspace model сейчас не проектируется.
 До отдельного settings milestone единый nameplate font остаётся hard-coded
 product default.
+
+## Наблюдения для будущего L1 Product UX work
+
+Следующие наблюдения зафиксированы для будущей UX-работы и не являются
+implementation specification или расширением текущего scope.
+
+- **Blueprint-backed object canvas presentation.** Nameplate должен вести себя
+  как часть объекта для обычного selection; header и body должны
+  восприниматься как единая визуальная композиция. Текущий технический resize
+  affordance требует нормализации. При этом числовой
+  `MapViewPosition.display_width` через Inspector остаётся запланированным.
+- **Blueprint composition lifecycle.** Пользователь должен уметь удалить
+  конкретный `Port Module` instance из редактируемой Blueprint composition, в
+  том числе чтобы заменить instance старой immutable Port Module version
+  новой. Речь идёт об удалении instance из composition, а не об удалении
+  `Port Module`/library history; immutable versions не мутируются.
