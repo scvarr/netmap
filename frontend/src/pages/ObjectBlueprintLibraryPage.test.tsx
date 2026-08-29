@@ -25,4 +25,30 @@ describe('ObjectBlueprintLibraryPage', () => {
       expect(action).toHaveAttribute('title', label);
     }
   });
+
+  it('uses numeric zero only for a loaded empty version and marks an unavailable detail neutrally', async () => {
+    const unavailableBlueprintRef = { ...blueprintRef, entity_id: 'blueprint-2' };
+    const unavailableVersionRef = { ...versionRef, entity_id: 'version-2' };
+    const dataSource = {
+      loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprints: [
+        { blueprint_ref: blueprintRef, version_ref: versionRef, name: 'Empty panel', version_number: 1, version_count: 1, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, slot_count: 0, internal_link_count: 0 },
+        { blueprint_ref: unavailableBlueprintRef, version_ref: unavailableVersionRef, name: 'Unavailable panel', version_number: 1, version_count: 1, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, slot_count: 0, internal_link_count: 0 },
+      ] }),
+      loadObjectBlueprintVersion: vi.fn().mockImplementation(async (blueprintId: string) => {
+        if (blueprintId === 'blueprint-2') throw new Error('detail unavailable');
+        return { schema_version: '1.0' as const, blueprint_ref: blueprintRef, version_ref: versionRef, name: 'Empty panel', version_number: 1, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, slots: [], internal_links: [] };
+      }),
+      createObjectBlueprint: vi.fn(), deleteObjectBlueprint: vi.fn(),
+    };
+    render(<MemoryRouter><ObjectBlueprintLibraryPage dataSource={dataSource} /></MemoryRouter>);
+    await waitFor(() => expect(dataSource.loadObjectBlueprintVersion).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getAllByRole('row')).toHaveLength(3));
+    const rows = screen.getAllByRole('row');
+    expect(rows[1]).toHaveTextContent('Empty panel');
+    expect(rows[1].querySelectorAll('.blueprint-library-table__numeric')[1]).toHaveTextContent('0');
+    expect(rows[1].querySelectorAll('.blueprint-library-table__numeric')[2]).toHaveTextContent('0');
+    expect(rows[2]).toHaveTextContent('Unavailable panel');
+    expect(rows[2].querySelectorAll('.blueprint-library-table__numeric')[1]).toHaveTextContent('—');
+    expect(rows[2].querySelectorAll('.blueprint-library-table__numeric')[2]).toHaveTextContent('—');
+  });
 });
