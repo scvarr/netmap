@@ -27,6 +27,16 @@ export const composedSlotKey = async (instanceKey: string, localId: string) => {
 export const resolveSlotKeys = async (item: BlueprintBlockInstance) => Object.fromEntries(await Promise.all(item.ports.map(async (port) => [port.local_id, await composedSlotKey(item.instanceKey, port.local_id)])));
 export const slotsForInstance = (item: BlueprintBlockInstance) => item.ports.flatMap((port) => item.resolvedSlotKeys?.[port.local_id] ? [{ key:item.resolvedSlotKeys[port.local_id], label: `${item.portBlockName ?? item.portBlockVersionRef} · ${port.display_label}`, kind: port.kind }] : []);
 export const cleanupLinks = (links: BlueprintInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
+/** Removes authoring state only; immutable Port Block and Blueprint versions stay untouched. */
+export const removeBlueprintBlockInstance = (state: BlueprintEditorState, instanceKey: string): BlueprintEditorState => {
+  const instance = state.instances.find((item) => item.instanceKey === instanceKey);
+  if (!instance) return state;
+  return {
+    ...state,
+    instances: state.instances.filter((item) => item.instanceKey !== instanceKey),
+    individualLinks: cleanupLinks(state.individualLinks, new Set(Object.values(instance.resolvedSlotKeys))),
+  };
+};
 export const internalLinkPairKey = (first: string, second: string) => [first, second].sort().join('\u0000');
 const orderedSlotKeys = (item: BlueprintBlockInstance) => item.ports.slice().sort((first, second) => first.layout_order - second.layout_order).flatMap((port) => item.resolvedSlotKeys[port.local_id] ? [item.resolvedSlotKeys[port.local_id]] : []);
 export const addBulkInternalLinks = (links: BlueprintInternalLink[], first: BlueprintBlockInstance | undefined, second: BlueprintBlockInstance | undefined, mode: BulkInternalLinkMode): BlueprintInternalLink[] => {

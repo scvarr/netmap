@@ -134,6 +134,17 @@ participating PhysicalObject or ConnectionPoint. After acknowledgement, the UI
 only reloads authoritative details/projection; retry cannot repeat the
 destructive write.
 
+### UX.2e — Blueprint Port Module instance removal
+
+**IMPLEMENTED.** В visual Blueprint composition editor выбранный instance
+удаляется только из текущей editable composition. Перед сохранением из authoring
+state удаляются все internal links, ссылающиеся на slots этого instance; другие
+instances и их links сохраняются. Операция не удаляет `Port Module` из library
+и не мутирует immutable `PortBlockVersion` или опубликованные
+`ObjectBlueprintVersion`. Замена exact version остаётся явным workflow:
+удалить старый instance, затем добавить instance нужной immutable version;
+автоматический version-upgrade lifecycle не вводится.
+
 ## UX follow-up decisions после UX.2c
 
 Следующие пункты зафиксированы как bounded future presentation work, а не как
@@ -201,8 +212,3 @@ implementation specification или расширением текущего scop
   восприниматься как единая визуальная композиция. Текущий технический resize
   affordance требует нормализации. При этом числовой
   `MapViewPosition.display_width` через Inspector остаётся запланированным.
-- **Blueprint composition lifecycle.** Пользователь должен уметь удалить
-  конкретный `Port Module` instance из редактируемой Blueprint composition, в
-  том числе чтобы заменить instance старой immutable Port Module version
-  новой. Речь идёт об удалении instance из composition, а не об удалении
-  `Port Module`/library history; immutable versions не мутируются.

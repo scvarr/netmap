@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addBulkInternalLinks, clampPlacement, composedSlotKey, createBlueprintRequest, faceLocalIndex, fallbackPlacement, generateBlueprint, hydrateBlueprintEditorState, removeInternalLinksBetweenInstances, type BlueprintBlockInstance } from './editorModel';
+import { addBulkInternalLinks, clampPlacement, composedSlotKey, createBlueprintRequest, faceLocalIndex, fallbackPlacement, generateBlueprint, hydrateBlueprintEditorState, removeBlueprintBlockInstance, removeInternalLinksBetweenInstances, type BlueprintBlockInstance } from './editorModel';
 
 const blockRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' };
 const versionRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'v-1' };
@@ -51,6 +51,19 @@ describe('Object Blueprint composition editor model', () => {
   it('assigns historical fallback indexes independently on FRONT and REAR', () => {
     const instances = [{ face: 'FRONT' as const }, { face: 'REAR' as const }, { face: 'FRONT' as const }, { face: 'REAR' as const }];
     expect(instances.map((_, index) => faceLocalIndex(instances, index))).toEqual([0, 0, 1, 1]);
+  });
+
+  it('removes only the selected composition instance and every link that references its slots', () => {
+    const left = instance('left', ['one', 'two']); const right = instance('right', ['one', 'two']);
+    const state = { name: 'Blueprint', defaultClass: '', width: 100, height: 40, fillColor: '#28565a', instances: [left, right], individualLinks: [
+      { from_slot_key: 'left-one', to_slot_key: 'right-one' },
+      { from_slot_key: 'left-two', to_slot_key: 'right-two' },
+      { from_slot_key: 'right-one', to_slot_key: 'right-two' },
+    ] };
+    const removed = removeBlueprintBlockInstance(state, 'left');
+    expect(removed.instances).toEqual([right]);
+    expect(removed.individualLinks).toEqual([{ from_slot_key: 'right-one', to_slot_key: 'right-two' }]);
+    expect(removeBlueprintBlockInstance(state, 'missing')).toBe(state);
   });
 
   it('creates sequential bulk links in the exact Port Block layout order', () => {
