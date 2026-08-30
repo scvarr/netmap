@@ -257,7 +257,7 @@ class MapTextAnnotationPresentation(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
     position: MapRegionPoint
     text_color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
-    font_size: float = Field(gt=0)
+    font_size: FiniteFloat = Field(gt=0)
 
 
 class CreateMapTextAnnotationRequest(MapTextAnnotationPresentation):

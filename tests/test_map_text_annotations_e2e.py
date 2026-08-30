@@ -41,7 +41,7 @@ def test_text_annotation_is_saved_map_owned_presentation_with_create_read_replac
 
 def test_text_annotation_rejects_blank_text_and_invalid_presentation_values():
     map_id = create_map(client, "Text validation")
-    for invalid in ({**payload(" \n \t ")}, {**payload(), "position": {"x": "bad", "y": 0}}, {**payload(), "text_color": "blue"}, {**payload(), "font_size": 0}):
+    for invalid in ({**payload(" \n \t ")}, {**payload(), "position": {"x": "bad", "y": 0}}, {**payload(), "text_color": "blue"}, {**payload(), "font_size": 0}, {**payload(), "font_size": "Infinity"}):
         assert client.post(f"/v1/maps/{map_id}/text-annotations", json=invalid).status_code == 422
 
 
