@@ -1397,8 +1397,16 @@ One Region belongs to exactly one map and has an ordered, simple (non-self-inter
 polygon in Physical flow coordinates; concave polygons are valid, holes and rotation are
 not modeled. A Region has a trimmed non-empty non-unique label, optional explicit label
 position, restricted fill/stroke presentation style, and a z-order only inside the
-Regions layer. Geometry never creates membership, containment, `Location`, connectivity,
-or any other canonical fact. Deleting a Saved Map cascades its Regions.
+Regions layer. The Region set of one Saved Map is a laminar presentation hierarchy:
+two polygons are either spatially disjoint or one strictly contains the other. Boundary
+touching of every kind, coincident polygons, and partial overlap are invalid; nesting can
+have arbitrary depth, so siblings are spatially disjoint. This hierarchy is derived from
+geometry only and is never persisted: the immediate parent is the strictly containing
+Region with the smallest absolute polygon area. `z_order`, label, and UUID do not affect it.
+Geometry and this derived hierarchy never create membership, containment, `Location`,
+connectivity, topology, or any other canonical fact; objects do not move with Regions.
+Deleting a Region leaves nested Regions intact and their derived hierarchy is recalculated.
+Deleting a Saved Map cascades its Regions.
 
 L1S.7b.1 provides the separate frontend-session `Области` mode. In that mode topology
 objects are a non-interactive reference background drawn from their real current canvas

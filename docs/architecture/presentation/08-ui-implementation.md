@@ -991,6 +991,13 @@ coordinates, optional `label_position`, bounded fill/stroke style, and integer
 `PhysicalObject`, `Location`, projection source, map placement, topology member, or
 connectivity fact. Its geometry and lifecycle never alter canonical topology.
 
+The Region set is a laminar presentation hierarchy derived only from `regions[]` geometry,
+never persisted as a parent field. Two Regions must be disjoint or related by strict
+containment; all boundary touching, coincident polygons, and partial overlap are invalid.
+The immediate parent is the strictly containing polygon with minimum absolute area, while
+siblings are necessarily spatially disjoint and nesting may have arbitrary depth. This is
+not a Location or topology hierarchy and has no object-membership or movement semantics.
+
 `POST /v1/maps/{map_id}/regions`, `PUT /v1/maps/{map_id}/regions/{region_id}`, and
 `DELETE /v1/maps/{map_id}/regions/{region_id}` are the bounded write surface. Create
 and replace carry the complete mutable Region presentation state; identity, owning map,
@@ -1011,8 +1018,8 @@ POST is only acknowledgement; the UI reloads the Saved Map and never synthesizes
 POST retries retain the local draft, while an acknowledged POST with failed refresh can retry only
 the reload. Cancel, `Escape`, map/view/mode exit discard unacknowledged local draft state.
 L1S.7b.3a constrains Shift-held current segments by dominant screen-space axis before converting
-the endpoint to flow coordinates; preview and click use that same endpoint. Existing Region
-selection, editing, styling, and deletion UI remain OPEN L1S.7b work.
+the endpoint to flow coordinates; preview and click use that same endpoint. Region list/tree
+UI, existing Region geometry editing, styling, and deletion UI remain OPEN L1S.7b work.
 
 ## Future Fibre Channel compatibility boundary
 

@@ -19,10 +19,10 @@ STYLE = {
 }
 
 
-def region_payload(label: str = "Zone A", *, z_order: int = 4) -> dict:
+def region_payload(label: str = "Zone A", *, z_order: int = 4, points: list[dict[str, float]] | None = None) -> dict:
     return {
         "label": label,
-        "points": [{"x": 0, "y": 0}, {"x": 80, "y": 0}, {"x": 30, "y": 20}, {"x": 0, "y": 60}],
+        "points": points or [{"x": 0, "y": 0}, {"x": 80, "y": 0}, {"x": 30, "y": 20}, {"x": 0, "y": 60}],
         "label_position": {"x": 10, "y": 12},
         "style": STYLE,
         "z_order": z_order,
@@ -67,7 +67,9 @@ def test_region_delete_leaves_placements_and_other_regions_unchanged():
         f"/v1/maps/{map_id}/placements", json={"physical_object_id": object_id, "x": 4, "y": 8}
     ).status_code == 201
     first = client.post(f"/v1/maps/{map_id}/regions", json=region_payload("First", z_order=1)).json()
-    second = client.post(f"/v1/maps/{map_id}/regions", json=region_payload("Second", z_order=2)).json()
+    second = client.post(f"/v1/maps/{map_id}/regions", json=region_payload("Second", z_order=2, points=[
+        {"x": 100, "y": 0}, {"x": 180, "y": 0}, {"x": 130, "y": 20}, {"x": 100, "y": 60},
+    ])).json()
 
     assert client.delete(f"/v1/maps/{map_id}/regions/{first['region_ref']['entity_id']}").status_code == 204
     saved = client.get(f"/v1/maps/{map_id}").json()
@@ -96,3 +98,65 @@ def test_invalid_region_polygon_contract_is_rejected():
     zero_area = region_payload()
     zero_area["points"] = [{"x": 0, "y": 0}, {"x": 40, "y": 40}, {"x": 80, "y": 80}]
     assert client.post(f"/v1/maps/{map_id}/regions", json=zero_area).status_code == 422
+
+
+def test_region_create_accepts_disjoint_and_strictly_nested_polygons():
+    map_id = create_map(client, "Laminar create")
+    outer = region_payload("Outer", points=[
+        {"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100},
+    ])
+    nested = region_payload("Nested", points=[
+        {"x": 20, "y": 20}, {"x": 40, "y": 20}, {"x": 40, "y": 40}, {"x": 20, "y": 40},
+    ])
+    disjoint = region_payload("Disjoint", points=[
+        {"x": 120, "y": 0}, {"x": 140, "y": 0}, {"x": 140, "y": 20}, {"x": 120, "y": 20},
+    ])
+    assert client.post(f"/v1/maps/{map_id}/regions", json=outer).status_code == 201
+    assert client.post(f"/v1/maps/{map_id}/regions", json=nested).status_code == 201
+    assert client.post(f"/v1/maps/{map_id}/regions", json=disjoint).status_code == 201
+
+
+def test_region_create_rejects_overlap_and_touch_with_stable_reason():
+    map_id = create_map(client, "Spatial conflicts")
+    first = region_payload("First", points=[
+        {"x": 0, "y": 0}, {"x": 10, "y": 0}, {"x": 10, "y": 10}, {"x": 0, "y": 10},
+    ])
+    assert client.post(f"/v1/maps/{map_id}/regions", json=first).status_code == 201
+    overlap = region_payload("Overlap", points=[
+        {"x": 5, "y": 5}, {"x": 15, "y": 5}, {"x": 15, "y": 15}, {"x": 5, "y": 15},
+    ])
+    touch = region_payload("Touch", points=[
+        {"x": 10, "y": 10}, {"x": 14, "y": 10}, {"x": 14, "y": 14}, {"x": 10, "y": 14},
+    ])
+    for payload in (overlap, touch):
+        response = client.post(f"/v1/maps/{map_id}/regions", json=payload)
+        assert response.status_code == 422
+        assert response.json()["error"]["details"]["reason"] == "MAP_REGION_SPATIAL_CONFLICT"
+        assert response.json()["error"]["details"]["conflicting_region_id"]
+
+
+def test_region_replace_allows_nesting_excludes_self_and_preserves_conflict_free_state():
+    map_id = create_map(client, "Laminar replace")
+    outer = client.post(f"/v1/maps/{map_id}/regions", json=region_payload("Outer", points=[
+        {"x": 0, "y": 0}, {"x": 100, "y": 0}, {"x": 100, "y": 100}, {"x": 0, "y": 100},
+    ])).json()
+    inner = client.post(f"/v1/maps/{map_id}/regions", json=region_payload("Inner", points=[
+        {"x": 120, "y": 0}, {"x": 140, "y": 0}, {"x": 140, "y": 20}, {"x": 120, "y": 20},
+    ])).json()
+    inner_id = inner["region_ref"]["entity_id"]
+
+    nested = region_payload("Inner nested", points=[
+        {"x": 20, "y": 20}, {"x": 40, "y": 20}, {"x": 40, "y": 40}, {"x": 20, "y": 40},
+    ])
+    assert client.put(f"/v1/maps/{map_id}/regions/{inner_id}", json=nested).status_code == 200
+    assert client.put(f"/v1/maps/{map_id}/regions/{inner_id}", json=nested).status_code == 200
+
+    conflict = region_payload("Conflicting", points=[
+        {"x": 90, "y": 90}, {"x": 120, "y": 90}, {"x": 120, "y": 120}, {"x": 90, "y": 120},
+    ])
+    response = client.put(f"/v1/maps/{map_id}/regions/{inner_id}", json=conflict)
+    assert response.status_code == 422
+    assert response.json()["error"]["details"]["reason"] == "MAP_REGION_SPATIAL_CONFLICT"
+    saved = client.get(f"/v1/maps/{map_id}").json()
+    assert next(region for region in saved["regions"] if region["region_ref"]["entity_id"] == inner_id)["points"] == nested["points"]
+    assert outer["region_ref"]["entity_id"] != inner_id

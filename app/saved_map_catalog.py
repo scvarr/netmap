@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
+from app.map_region_geometry import MapRegionSpatialRelation, classify_map_region_polygons
 from app.models import Cable, MapCableRoute, MapPlacement, MapRegion, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
@@ -174,7 +175,8 @@ class SavedMapCatalog:
         self, map_id: uuid.UUID, label: str, points: list[dict[str, float]], label_position: dict[str, float] | None,
         style: dict[str, object], z_order: int,
     ) -> MapRegion:
-        self._require_map(map_id)
+        self._lock_map_for_region_write(map_id)
+        self._validate_region_spatial_relation(map_id, points)
         region = MapRegion(map_id=map_id)
         self._replace_region_state(region, label, points, label_position, style, z_order)
         self.session.add(region)
@@ -185,12 +187,13 @@ class SavedMapCatalog:
         self, map_id: uuid.UUID, region_id: uuid.UUID, label: str, points: list[dict[str, float]],
         label_position: dict[str, float] | None, style: dict[str, object], z_order: int,
     ) -> MapRegion:
-        self._require_map(map_id)
+        self._lock_map_for_region_write(map_id)
         region = self.session.scalar(select(MapRegion).where(
             MapRegion.map_id == map_id, MapRegion.id == region_id
         ).with_for_update())
         if region is None:
             raise ValidationError("MapRegion does not exist", {"map_id": str(map_id), "region_id": str(region_id)})
+        self._validate_region_spatial_relation(map_id, points, excluded_region_id=region.id)
         self._replace_region_state(region, label, points, label_position, style, z_order)
         self._flush()
         return region
@@ -214,6 +217,12 @@ class SavedMapCatalog:
             raise ValidationError("SavedMap does not exist", {"map_id": str(map_id)})
         return saved_map
 
+    def _lock_map_for_region_write(self, map_id: uuid.UUID) -> SavedMap:
+        saved_map = self.session.scalar(select(SavedMap).where(SavedMap.id == map_id).with_for_update())
+        if saved_map is None:
+            raise ValidationError("SavedMap does not exist", {"map_id": str(map_id)})
+        return saved_map
+
     def _placements(self, map_id: uuid.UUID) -> tuple[MapPlacement, ...]:
         return tuple(self.session.scalars(select(MapPlacement).options(selectinload(MapPlacement.view_positions)).where(
             MapPlacement.map_id == map_id
@@ -230,6 +239,19 @@ class SavedMapCatalog:
         return tuple(self.session.scalars(
             select(MapRegion).where(MapRegion.map_id == map_id).order_by(MapRegion.z_order, MapRegion.id)
         ))
+
+    def _validate_region_spatial_relation(
+        self, map_id: uuid.UUID, points: list[dict[str, float]], excluded_region_id: uuid.UUID | None = None,
+    ) -> None:
+        for existing_region in self._regions(map_id):
+            if existing_region.id == excluded_region_id:
+                continue
+            relation = classify_map_region_polygons(points, existing_region.points)
+            if relation == MapRegionSpatialRelation.CONFLICT:
+                raise ValidationError("MapRegion spatial relation conflicts with an existing Region", {
+                    "reason": "MAP_REGION_SPATIAL_CONFLICT",
+                    "conflicting_region_id": str(existing_region.id),
+                })
 
     @staticmethod
     def _replace_region_state(

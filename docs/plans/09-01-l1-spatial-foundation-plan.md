@@ -400,8 +400,13 @@ it is deliberately separate from Port Block Blueprint composition.
 
 **OPEN**
 
-- Existing Region selection/editing, styling controls, deletion, and other Region lifecycle
-  work remain future bounded work. No canonical topology semantics are introduced.
+- **L1S.7b.4a — Region spatial relation contract — IMPLEMENTED**: every Saved Map Region
+  set is a geometry-derived, never-persisted laminar presentation hierarchy. Regions are
+  disjoint or strictly nested; touching, coincident boundaries and partial overlap are rejected
+  authoritatively on create/replace. This does not create Location, object-membership, or
+  topology semantics.
+- Region list/hierarchy UI, Region geometry editing, properties/style/delete, and other Region
+  lifecycle work remain OPEN. No canonical topology semantics are introduced.
 
 ### L1S.8 — MapReference / hierarchical maps
 
