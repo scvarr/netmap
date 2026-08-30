@@ -10,6 +10,7 @@ import { MapContextMenu, type MapContextTarget } from "../components/MapContextM
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
 import type { MapRegionDraft } from "../components/MapRegionLayer";
+import { MapRegionTree } from "../components/MapRegionTree";
 import { perfMark } from "../perfMarks";
 import { ViewState } from "../components/ViewState";
 import { physicalTraceOverlayFor } from "../topology/interfacePhysicalTraceOverlay";
@@ -183,6 +184,7 @@ export function MapPage({
   const [showRegionReferenceOutlines, setShowRegionReferenceOutlines] = useState(true);
   const [regionDraft, setRegionDraft] = useState<MapRegionDraft | null>(null);
   const [regionCreate, setRegionCreate] = useState<RegionCreateOperation | null>(null);
+  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
@@ -248,6 +250,7 @@ export function MapPage({
     setRegionMode(false);
     setRegionDraft(null);
     setRegionCreate(null);
+    setSelectedRegionId(null);
   }, [mapId, viewMode]);
 
   useEffect(() => {
@@ -255,6 +258,7 @@ export function MapPage({
       regionOperationSequence.current += 1;
       setRegionDraft(null);
       setRegionCreate(null);
+      setSelectedRegionId(null);
       return;
     }
     setSelection(null);
@@ -265,6 +269,10 @@ export function MapPage({
     setCableRouteReset(null);
     setWiring({ status: "idle" });
   }, [physicalRegionMode]);
+
+  useEffect(() => {
+    if (selectedRegionId && !activeMap?.regions.some((region) => region.region_ref.entity_id === selectedRegionId)) setSelectedRegionId(null);
+  }, [activeMap, selectedRegionId]);
 
   useEffect(() => {
     if (!physicalRegionMode || regionDraft?.status !== 'drawing') return;
@@ -1393,7 +1401,8 @@ export function MapPage({
           <span>{t("map.regionReference")}</span>
           <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t("map.regionOutlines")}</button>
           <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t("map.regionHideObjects")}</button>
-          <button type="button" onClick={() => { regionOperationSequence.current += 1; setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); }}>{t("map.regionNew")}</button>
+          <button type="button" onClick={() => { regionOperationSequence.current += 1; setSelectedRegionId(null); setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); }}>{t("map.regionNew")}</button>
+          <MapRegionTree regions={activeMap?.regions ?? []} selectedRegionId={selectedRegionId} onSelect={(regionId) => setSelectedRegionId((current) => current === regionId ? null : regionId)} />
           {regionDraft?.status === 'drawing' && <>
             <span>{t("map.regionPoints", { count: regionDraft.points.length })}</span>
             <button type="button" disabled={regionDraft.points.length < 3} onClick={completeRegionDraft}>{t("map.regionDone")}</button>
@@ -1613,6 +1622,7 @@ export function MapPage({
                     setContinuationAnchor({ continuationId, mapId, anchor })
                   : undefined}
                   regions={viewMode === "physical" ? activeMap?.regions : undefined}
+                  selectedRegionId={physicalRegionMode ? selectedRegionId : undefined}
                   regionMode={physicalRegionMode ? {
                     showReferenceOutlines: showRegionReferenceOutlines,
                     draft: regionDraft ?? undefined,

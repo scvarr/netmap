@@ -423,8 +423,13 @@ the external-review branch `8ab163f` is not merged here.
   disjoint or strictly nested; touching, coincident boundaries and partial overlap are rejected
   authoritatively on create/replace. This does not create Location, object-membership, or
   topology semantics.
-- Region list/hierarchy UI, Region geometry editing, properties/style/delete, and other Region
-  lifecycle work remain OPEN. No canonical topology semantics are introduced.
+- **L1S.7b.4b — Region hierarchy tree + selection — IMPLEMENTED**: Physical `Области` mode
+  derives a deterministic arbitrary-depth tree only from authoritative `regions[]`, using strict
+  geometry containment and never storing or returning a parent field. It has session-only row
+  selection and a separate persisted-polygon presentation highlight; selection resets on the
+  bounded scene lifecycle and never mutates Region data.
+- Region geometry editing and properties/style/delete remain **OPEN**. No canonical topology
+  semantics are introduced.
 
 ### Location foundation
 

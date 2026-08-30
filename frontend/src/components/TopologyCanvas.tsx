@@ -86,6 +86,7 @@ interface TopologyCanvasProps {
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   regions?: readonly MapRegion[];
+  selectedRegionId?: string | null;
   regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void };
 }
 
@@ -168,6 +169,7 @@ export function TopologyCanvas({
   wiringHighlightedConnectionMemberIds,
   wiringContinuationConnectionPointIds,
   regions = [],
+  selectedRegionId,
   regionMode,
 }: TopologyCanvasProps) {
   const { t } = useI18n();
@@ -585,6 +587,7 @@ export function TopologyCanvas({
           <ViewportPortal>
             <MapRegionLayer
               regions={regions}
+              selectedRegionId={selectedRegionId}
               referenceOutlines={referenceOutlines}
               showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
               draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget }}

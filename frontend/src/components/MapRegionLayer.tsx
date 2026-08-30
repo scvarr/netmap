@@ -48,11 +48,13 @@ export function MapRegionLayer({
   referenceOutlines,
   showReferenceOutlines,
   draft,
+  selectedRegionId,
 }: {
   regions: readonly MapRegion[];
   referenceOutlines: readonly MapReferenceOutline[];
   showReferenceOutlines: boolean;
   draft?: MapRegionDraft;
+  selectedRegionId?: string | null;
 }) {
   return (
     <svg className="map-region-layer" aria-hidden="true" data-testid="map-region-layer">
@@ -62,7 +64,7 @@ export function MapRegionLayer({
           .map((region) => {
             const label = region.label_position ?? polygonCentroid(region);
             return (
-              <g key={region.region_ref.entity_id} data-testid={`map-region-${region.region_ref.entity_id}`}>
+              <g key={region.region_ref.entity_id} className={selectedRegionId === region.region_ref.entity_id ? 'map-region-layer__region map-region-layer__region--selected' : 'map-region-layer__region'} data-testid={`map-region-${region.region_ref.entity_id}`} data-selected={selectedRegionId === region.region_ref.entity_id || undefined}>
                 <polygon
                   points={points(region)}
                   fill={region.style.fill_color}
