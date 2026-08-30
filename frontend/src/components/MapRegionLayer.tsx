@@ -1,6 +1,7 @@
 import type { MapRegion } from '../topology/savedMapTypes';
 import type { XYPosition } from '@xyflow/react';
 import type { SegmentAssistResult } from '../topology/geometryAssist';
+import type { PointerEvent } from 'react';
 
 export interface MapReferenceOutline {
   id: string;
@@ -53,6 +54,9 @@ export function MapRegionLayer({
   draft,
   selectedRegionId,
   hiddenRegionId,
+  previewRegion,
+  interactiveLabelRegionId,
+  onLabelPointerDown,
 }: {
   regions: readonly MapRegion[];
   referenceOutlines: readonly MapReferenceOutline[];
@@ -61,11 +65,18 @@ export function MapRegionLayer({
   selectedRegionId?: string | null;
   /** The authoritative target stays passive but is suppressed behind its active local editor. */
   hiddenRegionId?: string | null;
+  /** Local-only properties preview; it is never substituted into authoritative map state. */
+  previewRegion?: MapRegion;
+  interactiveLabelRegionId?: string | null;
+  onLabelPointerDown?: (event: PointerEvent<SVGTextElement>) => void;
 }) {
+  const displayedRegions = previewRegion
+    ? [...regions.filter((region) => region.region_ref.entity_id !== previewRegion.region_ref.entity_id), previewRegion]
+    : regions;
   return (
     <svg className="map-region-layer" aria-hidden="true" data-testid="map-region-layer">
       <g className="map-region-layer__regions">
-        {[...regions]
+        {[...displayedRegions]
           .sort((left, right) => left.z_order - right.z_order || left.region_ref.entity_id.localeCompare(right.region_ref.entity_id))
           .filter((region) => region.region_ref.entity_id !== hiddenRegionId)
           .map((region) => {
@@ -80,7 +91,7 @@ export function MapRegionLayer({
                   strokeWidth={region.style.stroke_width}
                   strokeDasharray={dashArray(region.style.stroke_style)}
                 />
-                <text x={label.x} y={label.y} fill={region.style.label_color ?? region.style.stroke_color} textAnchor="middle" dominantBaseline="central">
+                <text className={interactiveLabelRegionId === region.region_ref.entity_id ? 'map-region-layer__label--interactive' : undefined} data-testid={`map-region-label-${region.region_ref.entity_id}`} x={label.x} y={label.y} fill={region.style.label_color ?? region.style.stroke_color} textAnchor="middle" dominantBaseline="central" onPointerDown={interactiveLabelRegionId === region.region_ref.entity_id ? onLabelPointerDown : undefined}>
                   {region.label}
                 </text>
               </g>

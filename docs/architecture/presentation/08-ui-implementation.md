@@ -983,7 +983,7 @@ materialized.
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
 and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c/d
 new-Region draft geometry editor and transient assisted geometry, and L1S.7b.4e existing-Region
-geometry editing with authoritative replace lifecycle IMPLEMENTED; properties/presentation OPEN**
+geometry editing and L1S.7b.4f presentation/properties with authoritative lifecycle IMPLEMENTED**
 
 The authoritative `SavedMapDocument` contains `regions[]`. Each item has a
 SavedMap-scoped `MapRegionRef { entity_type: "MapRegion", entity_id }`, trimmed
@@ -1045,9 +1045,19 @@ synthesizing a Region. Existing non-geometry state is preserved, except a rigid 
 translates explicit `label_position` by the same delta; vertex and topology edits leave it untouched.
 PUT failure keeps the local editor repairable (including a localized spatial-conflict message), while
 an acknowledged write with failed reload retries only reload. Tree hierarchy remains authoritative
-until that reload. Region properties/presentation remain open: rename, movable Region name label,
-style, delete, and arbitrary user text annotations. A Region `label` is its name/tree identity/
-presentation name; an arbitrary text annotation is separate presentation content, not the label.
+until that reload. L1S.7b.4f provides a distinct local Region properties draft:
+trimmed non-empty non-unique name, the existing bounded fill/stroke style,
+automatic-or-explicit label color, and automatic-or-explicit label position. It
+previews only locally and locks tree selection; neither `activeMap.regions` nor
+geometry is mutated. The preview label alone is freely draggable in map
+coordinates without assist/snap, and reset stores `null` to retain the existing
+automatic centroid fallback. Save performs one complete `replaceRegion` with
+unchanged points and `z_order`, then reloads authoritatively; failed PUT remains
+retryable, while failed post-acknowledgement reload retries only reload. A
+separate confirmation deletes only the selected Region by one DELETE, then uses
+the same authoritative refresh-only retry contract; derived descendants remain.
+An arbitrary user text annotation is still separate future presentation content,
+not a Region label.
 
 `MapReference` remains a future presentation object targeting another SavedMap for
 hierarchical navigation. It is not a Location, Connection, topology fact, or

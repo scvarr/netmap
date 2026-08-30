@@ -118,6 +118,8 @@ interface CableRouteEditState {
 interface CableRouteResetOperation { mapId: string; cableId: string; status: "pending" | "refresh-failed"; message?: string; }
 interface RegionCreateOperation { mapId: string; label: string; status: "editing" | "saving" | "refresh-failed"; error: string | null; }
 interface RegionEditOperation { mapId: string; regionId: string; original: MapRegion; labelPosition: { x: number; y: number } | null; status: "editing" | "saving" | "refresh-failed"; error: string | null; }
+interface RegionPropertiesOperation { mapId: string; regionId: string; original: MapRegion; label: string; labelPosition: { x: number; y: number } | null; style: MapRegion['style']; status: "editing" | "saving" | "refresh-failed"; error: string | null; }
+interface RegionDeleteOperation { mapId: string; regionId: string; label: string; status: "confirming" | "deleting" | "refresh-failed"; error: string | null; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; canonicalResult?: PhysicalEndpointConnectionCreationDocument; error: string | null; }
@@ -188,6 +190,8 @@ export function MapPage({
   const [regionDraft, setRegionDraft] = useState<MapRegionDraft | null>(null);
   const [regionCreate, setRegionCreate] = useState<RegionCreateOperation | null>(null);
   const [regionEdit, setRegionEdit] = useState<RegionEditOperation | null>(null);
+  const [regionProperties, setRegionProperties] = useState<RegionPropertiesOperation | null>(null);
+  const [regionDeletion, setRegionDeletion] = useState<RegionDeleteOperation | null>(null);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
@@ -255,6 +259,8 @@ export function MapPage({
     setRegionDraft(null);
     setRegionCreate(null);
     setRegionEdit(null);
+    setRegionProperties(null);
+    setRegionDeletion(null);
     setSelectedRegionId(null);
   }, [mapId, viewMode]);
 
@@ -264,6 +270,8 @@ export function MapPage({
       setRegionDraft(null);
       setRegionCreate(null);
       setRegionEdit(null);
+      setRegionProperties(null);
+      setRegionDeletion(null);
       setSelectedRegionId(null);
       return;
     }
@@ -290,6 +298,10 @@ export function MapPage({
     setRegionDraft(null);
     setRegionEdit(null);
   }, []);
+  const cancelRegionProperties = useCallback(() => {
+    regionOperationSequence.current += 1;
+    setRegionProperties(null);
+  }, []);
   const deleteSelectedRegionDraftVertex = useCallback(() => {
     setRegionDraft((current) => current?.status === 'editing' && current.selectedVertexIndex !== null && current.selectedVertexIndex !== undefined && current.points.length > 3
       ? { ...current, points: deleteRegionDraftVertex(current.points, current.selectedVertexIndex), selectedVertexIndex: Math.min(current.selectedVertexIndex, current.points.length - 2) }
@@ -305,6 +317,9 @@ export function MapPage({
       } else if (event.key === 'Escape' && regionEdit?.status === 'editing') {
         event.preventDefault();
         cancelRegionEdit();
+      } else if (event.key === 'Escape' && regionProperties?.status === 'editing') {
+        event.preventDefault();
+        cancelRegionProperties();
       } else if (event.key === 'Enter' && regionDraft.status === 'drawing' && regionDraft.points.length >= 3) {
         event.preventDefault();
         completeRegionDraft();
@@ -318,7 +333,7 @@ export function MapPage({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [cancelRegionDraft, cancelRegionEdit, completeRegionDraft, deleteSelectedRegionDraftVertex, physicalRegionMode, regionCreate?.status, regionDraft, regionEdit?.status]);
+  }, [cancelRegionDraft, cancelRegionEdit, cancelRegionProperties, completeRegionDraft, deleteSelectedRegionDraftVertex, physicalRegionMode, regionCreate?.status, regionDraft, regionEdit?.status, regionProperties?.status]);
 
   const selectMap = useCallback(
     (id: string) => {
@@ -1218,7 +1233,7 @@ export function MapPage({
   };
 
   const startRegionEdit = useCallback(() => {
-    if (!activeMap || !selectedRegionId || regionDraft || regionEdit) return;
+    if (!activeMap || !selectedRegionId || regionDraft || regionEdit || regionProperties || regionDeletion) return;
     const region = activeMap.regions.find((item) => item.region_ref.entity_id === selectedRegionId);
     if (!region) return;
     const original: MapRegion = {
@@ -1229,7 +1244,29 @@ export function MapPage({
     };
     setRegionDraft({ status: 'editing', points: original.points.map(({ x, y }) => ({ x, y })), selectedVertexIndex: null });
     setRegionEdit({ mapId: activeMap.map_ref.entity_id, regionId: selectedRegionId, original, labelPosition: original.label_position ? { ...original.label_position } : null, status: 'editing', error: null });
-  }, [activeMap, regionDraft, regionEdit, selectedRegionId]);
+  }, [activeMap, regionDraft, regionEdit, regionProperties, regionDeletion, selectedRegionId]);
+
+  const cloneRegion = (region: MapRegion): MapRegion => ({
+    ...region,
+    points: region.points.map(({ x, y }) => ({ x, y })),
+    label_position: region.label_position ? { ...region.label_position } : null,
+    style: { ...region.style },
+  });
+
+  const startRegionProperties = useCallback(() => {
+    if (!activeMap || !selectedRegionId || regionDraft || regionEdit || regionProperties || regionDeletion) return;
+    const original = activeMap.regions.find((region) => region.region_ref.entity_id === selectedRegionId);
+    if (!original) return;
+    const copied = cloneRegion(original);
+    setRegionProperties({ mapId: activeMap.map_ref.entity_id, regionId: selectedRegionId, original: copied, label: copied.label, labelPosition: copied.label_position ? { ...copied.label_position } : null, style: { ...copied.style }, status: 'editing', error: null });
+  }, [activeMap, regionDraft, regionEdit, regionProperties, regionDeletion, selectedRegionId]);
+
+  const regionPropertiesPreview = regionProperties ? {
+    ...regionProperties.original,
+    label: regionProperties.label,
+    label_position: regionProperties.labelPosition ? { ...regionProperties.labelPosition } : null,
+    style: { ...regionProperties.style },
+  } : undefined;
 
   const regionReplaceError = (reason: unknown) =>
     reason instanceof Error && reason.message.includes('MAP_REGION_SPATIAL_CONFLICT')
@@ -1287,6 +1324,88 @@ export function MapPage({
     } catch {
       if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
         setRegionEdit({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
+    }
+  };
+
+  const saveRegionProperties = async () => {
+    if (!savedMapDataSource || !regionProperties || regionProperties.status !== 'editing') return;
+    const label = regionProperties.label.trim();
+    if (!label) {
+      setRegionProperties((current) => current ? { ...current, error: t('map.regionLabelRequired') } : current);
+      return;
+    }
+    const operation = regionProperties;
+    const request = ++regionOperationSequence.current;
+    const replacement = { label, points: operation.original.points.map(({ x, y }) => ({ x, y })), label_position: operation.labelPosition ? { ...operation.labelPosition } : null, style: { ...operation.style }, z_order: operation.original.z_order };
+    setRegionProperties({ ...operation, status: 'saving', error: null });
+    try { await savedMapDataSource.replaceRegion(operation.mapId, operation.regionId, replacement); }
+    catch (reason) {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionProperties({ ...operation, status: 'editing', error: regionReplaceError(reason) });
+      return;
+    }
+    try {
+      const refreshed = await reloadMap(operation.mapId);
+      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
+      if (refreshed) setRegionProperties(null);
+      else setRegionProperties({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
+    } catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionProperties({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
+    }
+  };
+
+  const retryRegionPropertiesRefresh = async () => {
+    if (!regionProperties || regionProperties.status !== 'refresh-failed') return;
+    const operation = regionProperties;
+    const request = ++regionOperationSequence.current;
+    setRegionProperties({ ...operation, status: 'saving', error: null });
+    try {
+      const refreshed = await reloadMap(operation.mapId);
+      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
+      if (refreshed) setRegionProperties(null);
+      else setRegionProperties({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
+    } catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionProperties({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
+    }
+  };
+
+  const beginRegionDeletion = () => {
+    if (!activeMap || !selectedRegionId || regionDraft || regionEdit || regionProperties || regionDeletion) return;
+    const region = activeMap.regions.find((item) => item.region_ref.entity_id === selectedRegionId);
+    if (region) setRegionDeletion({ mapId: activeMap.map_ref.entity_id, regionId: selectedRegionId, label: region.label, status: 'confirming', error: null });
+  };
+
+  const confirmRegionDeletion = async () => {
+    if (!savedMapDataSource || !regionDeletion || regionDeletion.status !== 'confirming') return;
+    const operation = regionDeletion;
+    const request = ++regionOperationSequence.current;
+    setRegionDeletion({ ...operation, status: 'deleting', error: null });
+    try { await savedMapDataSource.deleteRegion(operation.mapId, operation.regionId); }
+    catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionDeletion({ ...operation, status: 'confirming', error: t('map.regionDeleteFailed') });
+      return;
+    }
+    try {
+      const refreshed = await reloadMap(operation.mapId);
+      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
+      if (refreshed) { setRegionDeletion(null); setSelectedRegionId(null); }
+      else setRegionDeletion({ ...operation, status: 'refresh-failed', error: t('map.regionDeletedRefreshFailed') });
+    } catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionDeletion({ ...operation, status: 'refresh-failed', error: t('map.regionDeletedRefreshFailed') });
+    }
+  };
+
+  const retryRegionDeletionRefresh = async () => {
+    if (!regionDeletion || regionDeletion.status !== 'refresh-failed') return;
+    const operation = regionDeletion;
+    const request = ++regionOperationSequence.current;
+    setRegionDeletion({ ...operation, status: 'deleting', error: null });
+    try {
+      const refreshed = await reloadMap(operation.mapId);
+      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
+      if (refreshed) { setRegionDeletion(null); setSelectedRegionId(null); }
+      else setRegionDeletion({ ...operation, status: 'refresh-failed', error: t('map.regionDeletedRefreshFailed') });
+    } catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionDeletion({ ...operation, status: 'refresh-failed', error: t('map.regionDeletedRefreshFailed') });
     }
   };
 
@@ -1503,9 +1622,13 @@ export function MapPage({
           <span>{t("map.regionReference")}</span>
           <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t("map.regionOutlines")}</button>
           <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t("map.regionHideObjects")}</button>
-          <button type="button" disabled={Boolean(regionDraft || regionEdit)} onClick={() => { regionOperationSequence.current += 1; setSelectedRegionId(null); setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); setRegionEdit(null); }}>{t("map.regionNew")}</button>
-          <MapRegionTree regions={activeMap?.regions ?? []} selectedRegionId={selectedRegionId} selectionDisabled={Boolean(regionEdit)} onSelect={(regionId) => setSelectedRegionId((current) => current === regionId ? null : regionId)} />
-          {selectedRegionId && !regionDraft && !regionEdit && <button type="button" onClick={startRegionEdit}>{t('map.regionEdit')}</button>}
+          <button type="button" disabled={Boolean(regionDraft || regionEdit || regionProperties || regionDeletion)} onClick={() => { regionOperationSequence.current += 1; setSelectedRegionId(null); setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); setRegionEdit(null); setRegionProperties(null); setRegionDeletion(null); }}>{t("map.regionNew")}</button>
+          <MapRegionTree regions={activeMap?.regions ?? []} selectedRegionId={selectedRegionId} selectionDisabled={Boolean(regionEdit || regionProperties || regionDeletion)} onSelect={(regionId) => setSelectedRegionId((current) => current === regionId ? null : regionId)} />
+          {selectedRegionId && !regionDraft && !regionEdit && !regionProperties && !regionDeletion && <>
+            <button type="button" onClick={startRegionEdit}>{t('map.regionEdit')}</button>
+            <button type="button" onClick={startRegionProperties}>{t('map.regionProperties')}</button>
+            <button type="button" onClick={beginRegionDeletion}>{t('map.regionDelete')}</button>
+          </>}
           {regionDraft?.status === 'drawing' && <>
             <span>{t("map.regionPoints", { count: regionDraft.points.length })}</span>
             <button type="button" disabled={regionDraft.points.length < 3} onClick={completeRegionDraft}>{t("map.regionDone")}</button>
@@ -1535,6 +1658,28 @@ export function MapPage({
               {regionEdit.status === 'editing' && <button type="button" onClick={cancelRegionEdit}>{t('map.cancel')}</button>}
             </>}
           </>}
+          {regionProperties && <>
+            <label>{t('map.regionLabel')}<input value={regionProperties.label} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, label: event.target.value, error: null } : current)} /></label>
+            <label>{t('map.regionFillColor')}<input aria-label={t('map.regionFillColor')} type="color" value={regionProperties.style.fill_color} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, fill_color: event.target.value }, error: null } : current)} /></label>
+            <label>{t('map.regionFillOpacity')}<input aria-label={t('map.regionFillOpacity')} type="number" min="0" max="1" step="0.01" value={regionProperties.style.fill_opacity} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, fill_opacity: Number(event.target.value) }, error: null } : current)} /></label>
+            <label>{t('map.regionStrokeColor')}<input aria-label={t('map.regionStrokeColor')} type="color" value={regionProperties.style.stroke_color} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, stroke_color: event.target.value }, error: null } : current)} /></label>
+            <label>{t('map.regionStrokeWidth')}<input aria-label={t('map.regionStrokeWidth')} type="number" min="0" step="0.5" value={regionProperties.style.stroke_width} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, stroke_width: Number(event.target.value) }, error: null } : current)} /></label>
+            <label>{t('map.regionStrokeStyle')}<select aria-label={t('map.regionStrokeStyle')} value={regionProperties.style.stroke_style} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, stroke_style: event.target.value as MapRegion['style']['stroke_style'] }, error: null } : current)}><option value="solid">{t('map.regionStrokeSolid')}</option><option value="dashed">{t('map.regionStrokeDashed')}</option><option value="dotted">{t('map.regionStrokeDotted')}</option></select></label>
+            <label>{t('map.regionLabelColor')}<input aria-label={t('map.regionLabelColor')} type="color" value={regionProperties.style.label_color ?? regionProperties.style.stroke_color} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, label_color: event.target.value }, error: null } : current)} /></label>
+            <button type="button" disabled={regionProperties.status !== 'editing'} onClick={() => setRegionProperties((current) => current ? { ...current, style: { ...current.style, label_color: null }, error: null } : current)}>{t('map.regionLabelColorAutomatic')}</button>
+            <button type="button" disabled={regionProperties.status !== 'editing'} onClick={() => setRegionProperties((current) => current ? { ...current, labelPosition: null, error: null } : current)}>{t('map.regionLabelPositionAutomatic')}</button>
+            {regionProperties.error && <span role="alert">{regionProperties.error}</span>}
+            {regionProperties.status === 'saving' && <span role="status">{t('map.regionSaving')}</span>}
+            {regionProperties.status === 'editing' && <><button type="button" onClick={() => void saveRegionProperties()}>{t('map.save')}</button><button type="button" onClick={cancelRegionProperties}>{t('map.cancel')}</button></>}
+            {regionProperties.status === 'refresh-failed' && <button type="button" onClick={() => void retryRegionPropertiesRefresh()}>{t('map.retryRefresh')}</button>}
+          </>}
+          {regionDeletion && <section role="alertdialog" aria-label={t('map.regionDeleteConfirm', { label: regionDeletion.label })}>
+            <span>{t('map.regionDeleteConfirm', { label: regionDeletion.label })}</span>
+            {regionDeletion.error && <span role="alert">{regionDeletion.error}</span>}
+            {regionDeletion.status === 'confirming' && <><button type="button" onClick={() => void confirmRegionDeletion()}>{t('map.regionDeleteConfirmAction')}</button><button type="button" onClick={() => setRegionDeletion(null)}>{t('map.cancel')}</button></>}
+            {regionDeletion.status === 'deleting' && <span role="status">{t('map.regionDeleting')}</span>}
+            {regionDeletion.status === 'refresh-failed' && <button type="button" onClick={() => void retryRegionDeletionRefresh()}>{t('map.retryRefresh')}</button>}
+          </section>}
         </section>
       )}
 
@@ -1742,7 +1887,10 @@ export function MapPage({
                     draft: regionDraft ?? undefined,
                     editableDraft: regionCreate?.status === 'editing' || regionEdit?.status === 'editing',
                     invalidDraft: regionDraftValidation ? !regionDraftValidation.valid : false,
-                    hiddenRegionId: regionEdit?.regionId,
+                  hiddenRegionId: regionEdit?.regionId,
+                  previewRegion: regionPropertiesPreview,
+                  editableLabelRegionId: regionProperties?.status === 'editing' ? regionProperties.regionId : null,
+                  onMoveLabel: (position) => setRegionProperties((current) => current?.status === 'editing' ? { ...current, labelPosition: { ...position }, error: null } : current),
                     onDraftPoint: (point) => setRegionDraft((current) => current?.status === 'drawing' ? { ...current, points: [...current.points, point] } : current),
                     onCompleteDraft: completeRegionDraft,
                     onMoveDraftVertex: (index, point) => { if (regionCreate?.status === 'editing' || regionEdit?.status === 'editing') setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: moveRegionDraftVertex(current.points, index, point) } : current); },

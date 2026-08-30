@@ -89,7 +89,7 @@ interface TopologyCanvasProps {
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   regions?: readonly MapRegion[];
   selectedRegionId?: string | null;
-  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; hiddenRegionId?: string | null; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
+  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; hiddenRegionId?: string | null; previewRegion?: MapRegion; editableLabelRegionId?: string | null; onMoveLabel?: (position: XYPosition) => void; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -175,7 +175,7 @@ export function TopologyCanvas({
   const [regionDraftAssist, setRegionDraftAssist] = useState<SegmentAssistResult | undefined>();
   const [regionDraftEditorFeedback, setRegionDraftEditorFeedback] = useState<readonly RegionDraftSegmentFeedback[]>([]);
   const [regionDraftClosingTarget, setRegionDraftClosingTarget] = useState(false);
-  const regionDraftDrag = useRef<{ kind: 'vertex'; index: number } | { kind: 'polygon'; last: XYPosition } | null>(null);
+  const regionDraftDrag = useRef<{ kind: 'vertex'; index: number } | { kind: 'polygon'; last: XYPosition } | { kind: 'label' } | null>(null);
   const fitAfterLayout = useRef(false);
   const fittedSceneKey = useRef<string | null>(null);
   const appliedAuthoritativePositionRevision = useRef(
@@ -193,15 +193,20 @@ export function TopologyCanvas({
   currentDocument.current = document;
 
   useEffect(() => {
-    if (!regionMode?.editableDraft) regionDraftDrag.current = null;
-  }, [regionMode?.editableDraft]);
+    if (!regionMode?.editableDraft && !regionMode?.editableLabelRegionId) regionDraftDrag.current = null;
+  }, [regionMode?.editableDraft, regionMode?.editableLabelRegionId]);
 
   useEffect(() => {
     const onPointerMove = (event: globalThis.PointerEvent) => {
       const drag = regionDraftDrag.current;
-      if (!drag || !regionMode?.editableDraft || !regionMode.draft || regionMode.draft.status !== 'editing') return;
+      if (!drag) return;
       const pointerScreen = { x: event.clientX, y: event.clientY };
       const point = screenToFlowPosition(pointerScreen);
+      if (drag.kind === 'label') {
+        regionMode?.onMoveLabel?.(point);
+        return;
+      }
+      if (!regionMode?.editableDraft || !regionMode.draft || regionMode.draft.status !== 'editing') return;
       if (drag.kind === 'vertex') {
         const points = regionMode.draft.points;
         const previousIndex = (drag.index + points.length - 1) % points.length;
@@ -246,6 +251,12 @@ export function TopologyCanvas({
       regionMode.onSelectDraftVertex?.(null);
       regionDraftDrag.current = { kind: 'polygon', last: point };
     }
+  };
+
+  const onRegionLabelPointerDown = (event: PointerEvent<SVGTextElement>) => {
+    if (!regionMode?.editableLabelRegionId) return;
+    event.preventDefault(); event.stopPropagation();
+    regionDraftDrag.current = { kind: 'label' };
   };
 
   useEffect(() => {
@@ -623,7 +634,7 @@ export function TopologyCanvas({
         )}
         nodesConnectable={false}
         elementsSelectable={!regionMode}
-        panOnDrag={!regionMode?.editableDraft}
+        panOnDrag={!regionMode?.editableDraft && !regionMode?.editableLabelRegionId}
         proOptions={{ hideAttribution: true }}
       >
         <Panel position="top-left">
@@ -649,6 +660,9 @@ export function TopologyCanvas({
               regions={regions}
               selectedRegionId={selectedRegionId}
               hiddenRegionId={regionMode?.hiddenRegionId}
+              previewRegion={regionMode?.previewRegion}
+              interactiveLabelRegionId={regionMode?.editableLabelRegionId}
+              onLabelPointerDown={onRegionLabelPointerDown}
               referenceOutlines={referenceOutlines}
               showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
               draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget, assist: regionDraftAssist }}

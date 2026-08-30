@@ -448,10 +448,17 @@ planned capability is not treated as implemented.
   `label_position`, while rigid translation moves it by the same delta. PUT acknowledgement reloads
   the authoritative Saved Map; failed PUT keeps the editable local geometry, including a localized
   spatial-conflict error, while failed post-acknowledgement refresh retries only that refresh.
-- Properties/presentation remain **OPEN**: rename Region label, move Region name label, style,
-  delete, and arbitrary user text blocks/annotations. Region `label` is the Region name/tree identity/
-  presentation name; a future arbitrary text annotation is separate presentation content, not a
-  Region label. Location association and `MapReference` also remain open. L1S.7 remains **OPEN**.
+- **L1S.7b.4f — Region presentation / properties — IMPLEMENTED**: selected Region has separate
+  geometry, properties and deletion actions. Properties are a local-only preview draft for trimmed
+  non-unique name, bounded style, automatic label-color fallback and label position; tree selection
+  is locked and geometry stays passive. Only the label drags freely in flow coordinates without
+  assist/snap; reset makes `label_position` `null`. One PUT preserves points and `z_order`, followed
+  by authoritative refresh with refresh-only retry after acknowledgement. A separately confirmed
+  DELETE removes only the selected Region and likewise retries only refresh after acknowledgement;
+  nested Regions stay intact and hierarchy remains derived.
+- Arbitrary user text blocks/annotations remain **OPEN**. Region `label` is the Region name/tree
+  identity/presentation name; a future arbitrary text annotation is separate presentation content,
+  not a Region label. Location association and `MapReference` also remain open. L1S.7 remains **OPEN**.
 
 ### Location foundation
 

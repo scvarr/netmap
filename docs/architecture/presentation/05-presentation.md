@@ -1389,7 +1389,7 @@ endpoints UI ничего не выдумывает.
 **FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
 and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c/d
-new-Region draft geometry editing and transient assisted geometry implemented; remaining existing-Region editing remains OPEN**
+new-Region draft geometry editing and transient assisted geometry, existing geometry editing, and Region properties/presentation implemented; arbitrary annotations remain OPEN**
 
 Physical Saved Map contains its own ordered `MapRegion` presentation records.
 Their stable UUID is SavedMap presentation identity, not a `ProjectionSourceRef`, and
@@ -1434,8 +1434,18 @@ under zoom; Ctrl bypasses automatic magnets while Shift keeps the explicit scree
 not a persisted engineering dimension, physical measurement, or CAD capability. L1S.7b.4b derives a deterministic
 arbitrary-depth Region tree only from authoritative `regions[]`; its row selection is session-only,
 the selected persisted polygon highlight is presentation-only, and parent is never persisted.
-Existing Region geometry editing, styling, and deletion remain future L1S.7b interaction work;
-they are not topology invariants.
+L1S.7b.4e supplies separate selected-Region geometry editing. L1S.7b.4f adds
+separate `Свойства` and deletion actions: properties are one local draft with
+name, bounded Region style and optional label position only. Its preview never
+mutates authoritative `regions[]`, locks tree selection, and makes geometry
+passive. Only the label can be dragged freely in flow coordinates, without
+geometry assistance or snapping; reset returns it to the automatic centroid
+fallback (`label_position = null`). Save sends exactly one complete replace with
+the original points and `z_order`, then reloads the Saved Map; an acknowledged
+write with failed reload retries only that reload. Deletion is separately
+confirmed, uses one DELETE plus the same refresh-only retry behaviour, and does
+not cascade to nested Regions. These remain presentation interactions and are
+not topology invariants; arbitrary text annotations remain future work.
 
 ### MapReference и иерархические карты
 
