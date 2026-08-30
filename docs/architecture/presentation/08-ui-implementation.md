@@ -1066,6 +1066,14 @@ assistance, editable, and separately confirmed for deletion. Every write is one
 acknowledged mutation followed by authoritative reload; failed write is retryable
 or cancellable, and a failed post-acknowledgement reload retries only reload.
 
+**L1S.7b.4h IMPLEMENTED.** Presentation authoring uses a bounded panel beside
+the Physical canvas. Its toolbar is limited to reference-outline choice and
+creation of a Region or text item; the panel owns the Regions/Text switch,
+derived Region tree or simple annotation list, session-local selection,
+contextual actions, and vertical editors. This changes no Region or annotation
+lifecycle contract: all writes and refresh-only retries remain in the existing
+Map page callbacks.
+
 `MapReference` remains a future presentation object targeting another SavedMap for
 hierarchical navigation. It is not a Location, Connection, topology fact, or
 containment evidence.

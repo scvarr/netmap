@@ -18,6 +18,7 @@ const document: any = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSI
 const renderPage = (maps: any) => render(<MemoryRouter initialEntries={[`/map?map=${mapId}&view=physical`]}><MapPage dataSource={{ loadProjection: vi.fn().mockResolvedValue(document) }} savedMapDataSource={maps} /></MemoryRouter>);
 
 const enterRegionMode = async () => { fireEvent.click(await screen.findByRole('button', { name: 'Области' })); };
+const selectText = () => fireEvent.click(screen.getByRole('tab', { name: 'Текст' }));
 
 describe('MapPage text annotations', () => {
   it('keeps a new annotation local through placement and editing, then creates exactly once and reloads authoritatively', async () => {
@@ -28,7 +29,7 @@ describe('MapPage text annotations', () => {
     fireEvent.click(screen.getByText('place text'));
     expect(createTextAnnotation).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '  Local\npreview  ' } });
-    fireEvent.change(screen.getByLabelText('Размер шрифта'), { target: { value: '22' } });
+    fireEvent.change(screen.getAllByLabelText('Размер шрифта').at(-1)!, { target: { value: '22' } });
     expect(screen.getByTestId('annotation-preview')).toHaveTextContent('Local\\npreview');
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(createTextAnnotation).toHaveBeenCalledTimes(1));
@@ -45,7 +46,7 @@ describe('MapPage text annotations', () => {
   it('free-drags an existing annotation, replaces it once, and retries only reload after acknowledgement', async () => {
     const replaceTextAnnotation = vi.fn().mockResolvedValue(undefined);
     const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), replaceTextAnnotation, createMap: vi.fn() };
-    renderPage(maps); await enterRegionMode(); fireEvent.click(screen.getByRole('button', { name: 'Existing' })); fireEvent.click(screen.getByRole('button', { name: 'Изменить текст' })); fireEvent.click(screen.getByText('drag text'));
+    renderPage(maps); await enterRegionMode(); selectText(); fireEvent.click(screen.getByRole('button', { name: 'Existing' })); fireEvent.click(screen.getByRole('button', { name: 'Изменить текст' })); fireEvent.click(screen.getByText('drag text'));
     expect(screen.getByTestId('annotation-preview')).toHaveTextContent('70');
     maps.loadMap.mockRejectedValueOnce(new Error('refresh'));
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await screen.findByRole('button', { name: 'Повторить обновление' }); fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
@@ -55,7 +56,7 @@ describe('MapPage text annotations', () => {
 
   it('confirms deletion and retries only refresh after one acknowledged DELETE', async () => {
     const deleteTextAnnotation = vi.fn().mockResolvedValue(undefined); const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), deleteTextAnnotation, createMap: vi.fn() };
-    renderPage(maps); await enterRegionMode(); fireEvent.click(screen.getByRole('button', { name: 'Existing' })); fireEvent.click(screen.getByRole('button', { name: 'Удалить текст' })); expect(deleteTextAnnotation).not.toHaveBeenCalled(); maps.loadMap.mockRejectedValueOnce(new Error('refresh'));
+    renderPage(maps); await enterRegionMode(); selectText(); fireEvent.click(screen.getByRole('button', { name: 'Existing' })); fireEvent.click(screen.getByRole('button', { name: 'Удалить текст' })); expect(deleteTextAnnotation).not.toHaveBeenCalled(); maps.loadMap.mockRejectedValueOnce(new Error('refresh'));
     fireEvent.click(screen.getByRole('alertdialog').querySelector('button')!); await screen.findByRole('button', { name: 'Повторить обновление' }); fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
     await waitFor(() => expect(deleteTextAnnotation).toHaveBeenCalledTimes(1));
   });
@@ -68,7 +69,7 @@ describe('MapPage text annotations', () => {
     expect(screen.getByRole('button', { name: 'Region' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Редактировать геометрию' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Новая область' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Новая область' })); selectText();
     expect(screen.getByRole('button', { name: 'Existing' })).toBeDisabled();
     fireEvent.click(screen.getByText('select annotation'));
     expect(screen.getByRole('button', { name: 'Existing' })).toHaveAttribute('aria-pressed', 'false');

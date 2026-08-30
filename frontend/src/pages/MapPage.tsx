@@ -11,6 +11,15 @@ import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
 import type { MapRegionDraft } from "../components/MapRegionLayer";
 import { MapRegionTree } from "../components/MapRegionTree";
+import {
+  PresentationAuthoringPanel,
+  type RegionCreateOperation,
+  type RegionDeleteOperation,
+  type RegionEditOperation,
+  type RegionPropertiesOperation,
+  type TextAnnotationDeleteOperation,
+  type TextAnnotationOperation,
+} from "../components/PresentationAuthoringPanel";
 import { perfMark } from "../perfMarks";
 import { ViewState } from "../components/ViewState";
 import { physicalTraceOverlayFor } from "../topology/interfacePhysicalTraceOverlay";
@@ -117,12 +126,6 @@ interface CableRouteEditState {
   error: string | null;
 }
 interface CableRouteResetOperation { mapId: string; cableId: string; status: "pending" | "refresh-failed"; message?: string; }
-interface RegionCreateOperation { mapId: string; label: string; status: "editing" | "saving" | "refresh-failed"; error: string | null; }
-interface RegionEditOperation { mapId: string; regionId: string; original: MapRegion; labelPosition: { x: number; y: number } | null; status: "editing" | "saving" | "refresh-failed"; error: string | null; }
-interface RegionPropertiesOperation { mapId: string; regionId: string; original: MapRegion; label: string; labelPosition: { x: number; y: number } | null; style: MapRegion['style']; status: "editing" | "saving" | "refresh-failed"; error: string | null; }
-interface RegionDeleteOperation { mapId: string; regionId: string; label: string; status: "confirming" | "deleting" | "refresh-failed"; error: string | null; }
-interface TextAnnotationOperation { mapId: string; annotationId?: string; original?: MapTextAnnotation; text: string; position: { x: number; y: number } | null; textColor: string; fontSize: number; status: 'placing' | 'editing' | 'saving' | 'refresh-failed'; error: string | null; }
-interface TextAnnotationDeleteOperation { mapId: string; annotationId: string; text: string; status: 'confirming' | 'deleting' | 'refresh-failed'; error: string | null; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; canonicalResult?: PhysicalEndpointConnectionCreationDocument; error: string | null; }
@@ -1709,13 +1712,13 @@ export function MapPage({
       )}
 
       {physicalRegionMode && (
-        <section className="map-region-mode" aria-label={t("map.regions")}>
+        <section hidden className="map-region-mode" aria-label={t("map.regions")}>
           <span>{t("map.regionReference")}</span>
           <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t("map.regionOutlines")}</button>
           <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t("map.regionHideObjects")}</button>
           <button type="button" disabled={regionOperationActive || textAnnotationOperationActive} onClick={() => { if (regionOperationActive || textAnnotationOperationActive) return; regionOperationSequence.current += 1; setSelectedRegionId(null); setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); setRegionEdit(null); setRegionProperties(null); setRegionDeletion(null); }}>{t("map.regionNew")}</button>
           <button type="button" disabled={regionOperationActive || textAnnotationOperationActive} onClick={startTextAnnotation}>{t('map.textAnnotationAdd')}</button>
-          {activeMap?.text_annotations.map((annotation) => <button key={annotation.annotation_ref.entity_id} type="button" aria-pressed={selectedTextAnnotationId === annotation.annotation_ref.entity_id} disabled={regionOperationActive || textAnnotationOperationActive} onClick={() => { if (regionOperationActive || textAnnotationOperationActive) return; setSelectedTextAnnotationId((current) => current === annotation.annotation_ref.entity_id ? null : annotation.annotation_ref.entity_id); }}>{annotation.text.split('\n')[0] || t('map.textAnnotation')}</button>)}
+          {activeMap?.text_annotations?.map((annotation) => <button key={annotation.annotation_ref.entity_id} type="button" aria-pressed={selectedTextAnnotationId === annotation.annotation_ref.entity_id} disabled={regionOperationActive || textAnnotationOperationActive} onClick={() => { if (regionOperationActive || textAnnotationOperationActive) return; setSelectedTextAnnotationId((current) => current === annotation.annotation_ref.entity_id ? null : annotation.annotation_ref.entity_id); }}>{annotation.text.split('\n')[0] || t('map.textAnnotation')}</button>)}
           <MapRegionTree regions={activeMap?.regions ?? []} selectedRegionId={selectedRegionId} selectionDisabled={regionOperationActive || textAnnotationOperationActive} onSelect={(regionId) => { if (regionOperationActive || textAnnotationOperationActive) return; setSelectedRegionId((current) => current === regionId ? null : regionId); }} />
           {selectedRegionId && !regionOperationActive && !textAnnotationOperationActive && <>
             <button type="button" onClick={startRegionEdit}>{t('map.regionEdit')}</button>
@@ -1793,6 +1796,34 @@ export function MapPage({
           {textAnnotationDeletion && <section role="alertdialog" aria-label={t('map.textAnnotationDeleteConfirm')}><span>{t('map.textAnnotationDeleteConfirm')}</span>{textAnnotationDeletion.error && <span role="alert">{textAnnotationDeletion.error}</span>}{textAnnotationDeletion.status === 'confirming' && <><button type="button" onClick={() => void confirmTextAnnotationDeletion()}>{t('map.textAnnotationDelete')}</button><button type="button" onClick={() => setTextAnnotationDeletion(null)}>{t('map.cancel')}</button></>}{textAnnotationDeletion.status === 'deleting' && <span role="status">{t('map.textAnnotationDeleting')}</span>}{textAnnotationDeletion.status === 'refresh-failed' && <button type="button" onClick={() => void retryTextAnnotationDeletionRefresh()}>{t('map.retryRefresh')}</button>}</section>}
         </section>
       )}
+
+      {physicalRegionMode && activeMap && <>
+        <section className="map-presentation-toolbar" aria-label={t('map.regions')}>
+          <div className="map-presentation-toolbar__reference" role="group" aria-label={t('map.regionReference')}>
+            <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t('map.regionOutlines')}</button>
+            <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t('map.regionHideObjects')}</button>
+          </div>
+          <button type="button" className="primary-action" aria-label={t('map.regionNew')} disabled={regionOperationActive || textAnnotationOperationActive} onClick={() => { if (regionOperationActive || textAnnotationOperationActive) return; regionOperationSequence.current += 1; setSelectedRegionId(null); setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); setRegionEdit(null); setRegionProperties(null); setRegionDeletion(null); }}>{`+ ${t('map.regions')}`}</button>
+          <button type="button" className="primary-action" aria-label={t('map.textAnnotationAdd')} disabled={regionOperationActive || textAnnotationOperationActive} onClick={startTextAnnotation}>{`+ ${t('map.textAnnotation')}`}</button>
+        </section>
+        <PresentationAuthoringPanel
+          regions={activeMap.regions ?? []} annotations={activeMap.text_annotations ?? []}
+          selectedRegionId={selectedRegionId} selectedAnnotationId={selectedTextAnnotationId}
+          selectionDisabled={regionOperationActive || textAnnotationOperationActive}
+          regionDraft={regionDraft} regionDraftValidation={regionDraftValidation}
+          regionCreate={regionCreate} regionEdit={regionEdit} regionProperties={regionProperties} regionDeletion={regionDeletion}
+          textAnnotationEdit={textAnnotationEdit} textAnnotationDeletion={textAnnotationDeletion}
+          setRegionCreate={setRegionCreate} setRegionProperties={setRegionProperties} setRegionDeletion={setRegionDeletion}
+          setTextAnnotationEdit={setTextAnnotationEdit} setTextAnnotationDeletion={setTextAnnotationDeletion}
+          onSelectRegion={(id) => { if (!regionOperationActive && !textAnnotationOperationActive) setSelectedRegionId((current) => current === id ? null : id); }}
+          onSelectAnnotation={(id) => { if (!regionOperationActive && !textAnnotationOperationActive) setSelectedTextAnnotationId((current) => current === id ? null : id); }}
+          onGeometry={startRegionEdit} onProperties={startRegionProperties} onDeleteRegion={beginRegionDeletion}
+          onDraftDone={completeRegionDraft} onCancelDraft={cancelRegionDraft} onDeleteVertex={deleteSelectedRegionDraftVertex} onSaveRegion={() => void saveRegion()} onRetryRegionRefresh={() => void retryRegionRefresh()}
+          onSaveExistingRegion={() => void saveExistingRegion()} onCancelRegionEdit={cancelRegionEdit} onRetryExistingRegionRefresh={() => void retryExistingRegionRefresh()}
+          onSaveProperties={() => void saveRegionProperties()} onCancelProperties={cancelRegionProperties} onRetryPropertiesRefresh={() => void retryRegionPropertiesRefresh()} onConfirmRegionDeletion={() => void confirmRegionDeletion()} onRetryRegionDeletionRefresh={() => void retryRegionDeletionRefresh()}
+          onEditAnnotation={editTextAnnotation} onDeleteAnnotation={beginTextAnnotationDeletion} onSaveAnnotation={() => void saveTextAnnotation()} onRetryAnnotationRefresh={() => void retryTextAnnotationRefresh()} onConfirmAnnotationDeletion={() => void confirmTextAnnotationDeletion()} onRetryAnnotationDeletionRefresh={() => void retryTextAnnotationDeletionRefresh()}
+        />
+      </>}
 
       {creating && (
         <section
