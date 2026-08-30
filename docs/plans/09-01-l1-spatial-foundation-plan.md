@@ -375,11 +375,20 @@ it is deliberately separate from Port Block Blueprint composition.
   mode discards it. This step performs no Region API write and creates no synthetic `MapRegion`
   identity.
 
+##### L1S.7b.3a — Region draft Shift screen-axis constraint
+
+**IMPLEMENTED**
+
+- While drawing a session-local Region draft, Shift constrains only the current segment endpoint
+  to its dominant horizontal or vertical screen-space axis. The constrained screen point is
+  converted back to the flow-coordinate draft point, so preview and click agree under pan and
+  zoom. Persistence and Region editing remain open.
+
 ##### Remaining L1S.7b drawing and editing steps
 
 **OPEN**
 
-- Shift screen-axis segment constraint, Saved Map persistence, Region selection/editing, and
+- Saved Map persistence, Region selection/editing, and
   styling controls remain future bounded work. No canonical topology semantics are introduced.
 
 ### L1S.8 — MapReference / hierarchical maps

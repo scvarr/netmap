@@ -1,12 +1,16 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TopologyCanvas } from './TopologyCanvas';
 import type { FlowProjection, TopologyLayoutEngine } from '../topology/layout';
 import type { TopologyProjectionDocument } from '../topology/types';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { MapRegion } from '../topology/savedMapTypes';
 
-const { fitViewMock, flowNodesMock } = vi.hoisted(() => ({ fitViewMock: vi.fn(), flowNodesMock: [] as any[] }));
+const { fitViewMock, flowNodesMock, screenTransform } = vi.hoisted(() => ({
+  fitViewMock: vi.fn(),
+  flowNodesMock: [] as any[],
+  screenTransform: { scale: 1, offsetX: 0, offsetY: 0 },
+}));
 
 vi.mock('@xyflow/react', () => ({
   applyNodeChanges: (changes: Array<{ id: string; position?: { x: number; y: number } }>, nodes: FlowProjection['nodes']) => (
@@ -31,8 +35,8 @@ vi.mock('@xyflow/react', () => ({
     onNodesChange: (changes: unknown[]) => void;
     onNodeDragStart: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     onNodeDragStop: (event: unknown, node: FlowProjection['nodes'][number]) => void;
-    onPaneClick?: (event: { clientX: number; clientY: number }) => void;
-    onPaneMouseMove?: (event: { clientX: number; clientY: number }) => void;
+    onPaneClick?: (event: { clientX: number; clientY: number; shiftKey: boolean }) => void;
+    onPaneMouseMove?: (event: { clientX: number; clientY: number; shiftKey: boolean }) => void;
     children: React.ReactNode;
   }) => (
     <div data-testid="flow">
@@ -54,14 +58,18 @@ vi.mock('@xyflow/react', () => ({
           }}>drag {node.id}</button>
         </div>
       ))}
-      <button onClick={() => onPaneMouseMove?.({ clientX: 30, clientY: 40 })}>move pane</button>
-      <button onClick={() => onPaneClick?.({ clientX: 10, clientY: 20 })}>click pane</button>
+      <button onClick={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey })} onMouseMove={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey })}>move pane</button>
+      <button onClick={(event) => onPaneClick?.({ clientX: event.clientX || 10, clientY: event.clientY || 20, shiftKey: event.shiftKey })}>click pane</button>
       {children}
     </div>
   ),
   useInternalNode: () => undefined,
   useNodes: () => flowNodesMock,
-  useReactFlow: () => ({ fitView: fitViewMock, screenToFlowPosition: (position: { x: number; y: number }) => position }),
+  useReactFlow: () => ({
+    fitView: fitViewMock,
+    screenToFlowPosition: (position: { x: number; y: number }) => ({ x: (position.x - screenTransform.offsetX) / screenTransform.scale, y: (position.y - screenTransform.offsetY) / screenTransform.scale }),
+    flowToScreenPosition: (position: { x: number; y: number }) => ({ x: position.x * screenTransform.scale + screenTransform.offsetX, y: position.y * screenTransform.scale + screenTransform.offsetY }),
+  }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -98,6 +106,12 @@ const deferred = <T,>() => {
   const promise = new Promise<T>((next) => { resolve = next; });
   return { promise, resolve };
 };
+
+afterEach(() => {
+  screenTransform.scale = 1;
+  screenTransform.offsetX = 0;
+  screenTransform.offsetY = 0;
+});
 
 describe('TopologyCanvas async layout boundary', () => {
   it('enriches only a collapsed cable edge from current SavedMap routes without rerunning layout', async () => {
@@ -274,6 +288,49 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '30');
     fireEvent.click(screen.getByRole('button', { name: 'click pane' }));
     expect(onDraftPoint).toHaveBeenCalledWith({ x: 10, y: 20 });
+  });
+
+  it('uses the same screen-axis constrained point for Region draft preview and click', async () => {
+    screenTransform.scale = 2;
+    screenTransform.offsetX = 100;
+    screenTransform.offsetY = 50;
+    const onDraftPoint = vi.fn();
+    render(<TopologyCanvas document={documentFor('physical-region-shift')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }] }, onDraftPoint }} />);
+
+    await screen.findByTestId('map-region-draft');
+    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 150, clientY: 100, shiftKey: true });
+    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '25');
+    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '20');
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 150, clientY: 100, shiftKey: true });
+    expect(onDraftPoint).toHaveBeenCalledWith({ x: 25, y: 20 });
+  });
+
+  it('uses the dominant screen-space Y delta for a vertical Shift-constrained Region segment', async () => {
+    screenTransform.scale = 2;
+    screenTransform.offsetX = 100;
+    screenTransform.offsetY = 50;
+    render(<TopologyCanvas document={documentFor('physical-region-shift-y')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }] }, onDraftPoint: vi.fn() }} />);
+
+    await screen.findByTestId('map-region-draft');
+    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 130, clientY: 120, shiftKey: true });
+    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '10');
+    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '35');
+  });
+
+  it('keeps Region points free without Shift and does not constrain the first point', async () => {
+    screenTransform.scale = 2;
+    screenTransform.offsetX = 100;
+    screenTransform.offsetY = 50;
+    const onDraftPoint = vi.fn();
+    const view = render(<TopologyCanvas document={documentFor('physical-region-free')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }] }, onDraftPoint }} />);
+
+    await screen.findByTestId('map-region-draft');
+    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 150, clientY: 120 });
+    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '25');
+    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '35');
+    view.rerender(<TopologyCanvas document={documentFor('physical-region-first')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [] }, onDraftPoint }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 151, clientY: 119, shiftKey: true });
+    expect(onDraftPoint).toHaveBeenLastCalledWith({ x: 25.5, y: 34.5 });
   });
 
   it('applies stored overrides and saves a manual drag for the current view', async () => {

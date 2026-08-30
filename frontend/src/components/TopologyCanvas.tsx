@@ -96,6 +96,32 @@ const edgeTypes = {
   continuation: OffMapContinuationEdge,
 };
 
+interface ScreenPosition { x: number; y: number }
+
+const regionDraftPointForPointer = ({
+  points,
+  pointerScreen,
+  shiftKey,
+  screenToFlowPosition,
+  flowToScreenPosition,
+}: {
+  points: readonly XYPosition[];
+  pointerScreen: ScreenPosition;
+  shiftKey: boolean;
+  screenToFlowPosition: (position: ScreenPosition) => XYPosition;
+  flowToScreenPosition: (position: XYPosition) => ScreenPosition;
+}): XYPosition => {
+  if (!shiftKey || points.length === 0) return screenToFlowPosition(pointerScreen);
+
+  const previousScreen = flowToScreenPosition(points.at(-1)!);
+  const dx = pointerScreen.x - previousScreen.x;
+  const dy = pointerScreen.y - previousScreen.y;
+  const constrainedScreen = Math.abs(dx) >= Math.abs(dy)
+    ? { x: pointerScreen.x, y: previousScreen.y }
+    : { x: previousScreen.x, y: pointerScreen.y };
+  return screenToFlowPosition(constrainedScreen);
+};
+
 export function TopologyCanvas({
   document,
   selection,
@@ -145,7 +171,7 @@ export function TopologyCanvas({
   const confirmedNodePositions = useRef(new Map<string, XYPosition>());
   const latestReferenceOutlines = useRef<MapReferenceOutline[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const { fitView, screenToFlowPosition } = useReactFlow();
+  const { fitView, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const renderedNodes = useNodes<DeviceFlowNode>();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
@@ -468,17 +494,32 @@ export function TopologyCanvas({
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={(event) => {
-          const anchor = screenToFlowPosition({ x: event.clientX, y: event.clientY });
           if (regionMode) {
-            if (regionMode.draft?.status === 'drawing') regionMode.onDraftPoint?.(anchor);
+            if (regionMode.draft?.status === 'drawing') {
+              regionMode.onDraftPoint?.(regionDraftPointForPointer({
+                points: regionMode.draft.points,
+                pointerScreen: { x: event.clientX, y: event.clientY },
+                shiftKey: event.shiftKey,
+                screenToFlowPosition,
+                flowToScreenPosition,
+              }));
+            }
             return;
           }
+          const anchor = screenToFlowPosition({ x: event.clientX, y: event.clientY });
           onSelectionChange(null);
           onPaneClick?.(anchor);
         }}
         onPaneMouseMove={(event) => {
-          if (regionMode?.draft?.status === 'drawing')
-            setRegionDraftPreview(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+          if (regionMode?.draft?.status === 'drawing') {
+            setRegionDraftPreview(regionDraftPointForPointer({
+              points: regionMode.draft.points,
+              pointerScreen: { x: event.clientX, y: event.clientY },
+              shiftKey: event.shiftKey,
+              screenToFlowPosition,
+              flowToScreenPosition,
+            }));
+          }
         }}
         onPaneContextMenu={(event) => {
           if (regionMode || !onPhysicalPaneContextMenu) return;

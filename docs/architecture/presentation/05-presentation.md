@@ -1386,8 +1386,9 @@ endpoints UI ничего не выдумывает.
 
 ### Regions / areas
 
-**FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, and L1S.7b.2
-session-local polygon draft drawing implemented; remaining L1S.7b persistence/editing remains OPEN**
+**FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
+polygon draft drawing, and L1S.7b.3a Shift screen-axis constraint implemented; remaining L1S.7b
+persistence/editing remains OPEN**
 
 Physical Saved Map contains its own ordered `MapRegion` presentation records.
 Their stable UUID is SavedMap presentation identity, not a `ProjectionSourceRef`, and
@@ -1406,8 +1407,10 @@ remain a presentation-only layer. L1S.7b.2 adds a separately typed session-local
 draft in the same flow-coordinate layer: its vertices are drawn from canvas clicks, `Enter`
 completes it after three vertices, and `Escape`/cancel or leaving the Physical Region mode
 discards it. Completion does not create a `MapRegion`, mutate `regions[]`, or write the Saved
-Map API. Shift-constrained screen-axis segments, persistence, Region selection, and editing
-remain future L1S.7b interaction work; they are not topology invariants.
+Map API. L1S.7b.3a makes Shift constrain the current draft segment in screen space by dominant
+axis, then converts that endpoint back to flow coordinates for both preview and click. Persistence,
+Region selection, and editing remain future L1S.7b interaction work; they are not topology
+invariants.
 
 ### MapReference и иерархические карты
 
