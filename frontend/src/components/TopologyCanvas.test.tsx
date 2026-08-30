@@ -6,7 +6,7 @@ import type { TopologyProjectionDocument } from '../topology/types';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { MapRegion } from '../topology/savedMapTypes';
 
-const { fitViewMock } = vi.hoisted(() => ({ fitViewMock: vi.fn() }));
+const { fitViewMock, flowNodesMock } = vi.hoisted(() => ({ fitViewMock: vi.fn(), flowNodesMock: [] as any[] }));
 
 vi.mock('@xyflow/react', () => ({
   applyNodeChanges: (changes: Array<{ id: string; position?: { x: number; y: number } }>, nodes: FlowProjection['nodes']) => (
@@ -56,7 +56,7 @@ vi.mock('@xyflow/react', () => ({
     </div>
   ),
   useInternalNode: () => undefined,
-  useNodes: () => [],
+  useNodes: () => flowNodesMock,
   useReactFlow: () => ({ fitView: fitViewMock }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -217,13 +217,36 @@ describe('TopologyCanvas async layout boundary', () => {
       edges: [{ id: 'edge-a', source: 'object-a', target: 'object-a', type: 'floating', data: { projection: document.edges[0] } }],
     });
     const onSelectionChange = vi.fn();
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={layoutEngine} regions={[region]} regionMode={{ showReferenceOutlines: true }} />);
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={layoutEngine} regions={[region]} />);
+    await screen.findByRole('button', { name: 'object-a' });
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={layoutEngine} regions={[region]} regionMode={{ showReferenceOutlines: true }} />);
 
     expect(await screen.findByTestId('map-reference-outline-object-a')).toHaveAttribute('width', '320');
     expect(screen.getByTestId('map-reference-outline-object-a')).toHaveAttribute('height', '80');
     expect(screen.queryByRole('button', { name: 'object-a' })).not.toBeInTheDocument();
     expect(screen.queryByTestId('svg-path-edge-a')).not.toBeInTheDocument();
     expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it('uses React Flow measurement for an ordinary object outline without explicit layout dimensions', async () => {
+    const document: TopologyProjectionDocument = {
+      ...documentFor('physical-measured-region-mode'),
+      nodes: [{ id: 'ordinary-object', kind: 'PHYSICAL_OBJECT', label: 'Ordinary', source_refs: [], attributes: {} }],
+    };
+    const layoutEngine: TopologyLayoutEngine = async () => ({
+      nodes: [{ id: 'ordinary-object', type: 'device', position: { x: 10, y: 20 }, data: { projection: document.nodes[0] } }],
+      edges: [],
+    });
+    flowNodesMock.splice(0, flowNodesMock.length, {
+      id: 'ordinary-object', position: { x: 15, y: 25 }, measured: { width: 178, height: 112 }, data: { projection: document.nodes[0] },
+    });
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} />);
+    await screen.findByRole('button', { name: 'ordinary-object' });
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} regionMode={{ showReferenceOutlines: true }} />);
+    expect(await screen.findByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('x', '15');
+    expect(screen.getByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('width', '178');
+    expect(screen.getByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('height', '112');
+    flowNodesMock.splice(0, flowNodesMock.length);
   });
 
   it('can hide Region-mode object outlines while keeping the persisted Region layer', async () => {
