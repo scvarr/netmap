@@ -222,6 +222,13 @@ class MapRegionPresentation(BaseModel):
                     self.points[(second_index + 1) % point_count],
                 ):
                     raise PydanticCustomError("map_region_polygon", "Polygon cannot self-intersect")
+        twice_area = sum(
+            point.x * self.points[(index + 1) % point_count].y
+            - self.points[(index + 1) % point_count].x * point.y
+            for index, point in enumerate(self.points)
+        )
+        if twice_area == 0:
+            raise PydanticCustomError("map_region_polygon", "Polygon must have non-zero area")
         return self
 
 

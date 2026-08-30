@@ -92,3 +92,7 @@ def test_invalid_region_polygon_contract_is_rejected():
     too_few = region_payload()
     too_few["points"] = [{"x": 0, "y": 0}, {"x": 1, "y": 1}]
     assert client.post(f"/v1/maps/{map_id}/regions", json=too_few).status_code == 422
+
+    zero_area = region_payload()
+    zero_area["points"] = [{"x": 0, "y": 0}, {"x": 40, "y": 40}, {"x": 80, "y": 80}]
+    assert client.post(f"/v1/maps/{map_id}/regions", json=zero_area).status_code == 422
