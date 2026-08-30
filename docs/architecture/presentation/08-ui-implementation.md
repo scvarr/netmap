@@ -980,8 +980,9 @@ materialized.
 ## MAPS.3 — Saved Map Regions
 
 **L1S.7a model/persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
-polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, and L1S.7b.3b create/persistence
-IMPLEMENTED; remaining existing-Region editing OPEN**
+polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
+and L1S.7b.4a/b laminar contract, derived tree and selection IMPLEMENTED; remaining
+existing-Region editing OPEN**
 
 The authoritative `SavedMapDocument` contains `regions[]`. Each item has a
 SavedMap-scoped `MapRegionRef { entity_type: "MapRegion", entity_id }`, trimmed
@@ -1024,8 +1025,10 @@ POST is only acknowledgement; the UI reloads the Saved Map and never synthesizes
 POST retries retain the local draft, while an acknowledged POST with failed refresh can retry only
 the reload. Cancel, `Escape`, map/view/mode exit discard unacknowledged local draft state.
 L1S.7b.3a constrains Shift-held current segments by dominant screen-space axis before converting
-the endpoint to flow coordinates; preview and click use that same endpoint. Region list/tree
-UI, existing Region geometry editing, styling, and deletion UI remain OPEN L1S.7b work.
+the endpoint to flow coordinates; preview and click use that same endpoint. L1S.7b.4b derives a
+deterministic arbitrary-depth Region tree only from authoritative `regions[]`; its row selection is
+session-only, and the selected persisted polygon highlight is presentation-only. Parent is never
+persisted. Existing Region geometry editing, styling, and deletion UI remain OPEN L1S.7b work.
 
 `MapReference` remains a future presentation object targeting another SavedMap for
 hierarchical navigation. It is not a Location, Connection, topology fact, or

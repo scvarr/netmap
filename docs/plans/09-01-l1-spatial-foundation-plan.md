@@ -346,12 +346,13 @@ It also includes the laminar spatial contract: Regions are disjoint or strictly
 contained; touching and all overlap are rejected; hierarchy is derived from
 geometry and no parent is stored.
 
-The remaining work is Region list/tree selection UI, a full existing-Region
-geometry editor (vertices, midpoints and whole-region editing), and the
-properties/style/delete workflow where it is still absent. Other missing Region
-workflow pieces remain open until verified against the current `main`; planned
-capability is not treated as implemented. The hierarchy/tree selection work from
-the external-review branch `8ab163f` is not merged here.
+The implemented L1S.7b.4b Region list/tree derives hierarchy only from the
+authoritative `regions[]`, keeps selection session-only, and uses a selected-polygon
+highlight only as presentation. Parent is derived and never persisted. Remaining
+work is a full existing-Region geometry editor (vertices, midpoints and whole-region
+editing), plus the properties/style/delete workflow where it is still absent. Other
+missing Region workflow pieces remain open until verified against the current `main`;
+planned capability is not treated as implemented.
 
 #### L1S.7a — Saved Map Region model / persistence / API contract
 

@@ -1387,8 +1387,9 @@ endpoints UI ничего не выдумывает.
 ### Regions / areas
 
 **FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
-polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, and L1S.7b.3b create/persistence
-implemented; remaining existing-Region editing remains OPEN**
+polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
+and L1S.7b.4a/b laminar contract, derived tree and selection implemented; remaining
+existing-Region editing remains OPEN**
 
 Physical Saved Map contains its own ordered `MapRegion` presentation records.
 Their stable UUID is SavedMap presentation identity, not a `ProjectionSourceRef`, and
@@ -1427,8 +1428,11 @@ the trimmed label and exact flow points are acknowledged by the Region POST, the
 authoritative Saved Map reload supplies `regions[]`. A failed POST keeps the draft for an explicit
 retry; after acknowledgement a failed reload retries only that reload. L1S.7b.3a makes Shift
 constrain the current draft segment in screen space by dominant axis, then converts that endpoint
-back to flow coordinates for both preview and click. Existing Region selection, editing, styling,
-and deletion remain future L1S.7b interaction work; they are not topology invariants.
+back to flow coordinates for both preview and click. L1S.7b.4b derives a deterministic
+arbitrary-depth Region tree only from authoritative `regions[]`; its row selection is session-only,
+the selected persisted polygon highlight is presentation-only, and parent is never persisted.
+Existing Region geometry editing, styling, and deletion remain future L1S.7b interaction work;
+they are not topology invariants.
 
 ### MapReference и иерархические карты
 

@@ -17,6 +17,7 @@ describe('deriveRegionHierarchy', () => {
     ['supports arbitrary nesting depth', [region('outer', 'Outer', 0, 30), region('middle', 'Middle', 4, 20), region('inner', 'Inner', 6, 10)], [['outer', [['middle', [['inner', []]]]]]]],
     ['keeps siblings under their immediate parent', [region('parent', 'Parent', 0, 50), region('left', 'Left', 5, 15), region('right', 'Right', 20, 30)], [['parent', [['left', []], ['right', []]]]]],
     ['chooses the smallest containing Region as parent', [region('outer', 'Outer', 0, 50), region('middle', 'Middle', 5, 30), region('inner', 'Inner', 10, 15)], [['outer', [['middle', [['inner', []]]]]]]],
+    ['keeps strict nesting with a sub-nanounit containment gap', [region('outer', 'Outer', 0, 1), region('inner', 'Inner', 5e-10, 1 - 5e-10)], [['outer', [['inner', []]]]]],
   ])('%s', (_, regions, expected) => expect(shape(regions)).toEqual(expected));
 
   it('does not depend on input order', () => {
