@@ -6,17 +6,20 @@ import type { TopologyProjectionDocument } from '../topology/types';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { MapRegion } from '../topology/savedMapTypes';
 
-const { fitViewMock, flowNodesMock, screenTransform } = vi.hoisted(() => ({
+const { fitViewMock, screenTransform } = vi.hoisted(() => ({
   fitViewMock: vi.fn(),
-  flowNodesMock: [] as any[],
   screenTransform: { scale: 1, offsetX: 0, offsetY: 0 },
 }));
 
 vi.mock('@xyflow/react', () => ({
-  applyNodeChanges: (changes: Array<{ id: string; position?: { x: number; y: number } }>, nodes: FlowProjection['nodes']) => (
+  applyNodeChanges: (changes: Array<{ id: string; position?: { x: number; y: number }; dimensions?: { width?: number; height?: number } }>, nodes: FlowProjection['nodes']) => (
     nodes.map((node) => {
       const change = changes.find((item) => item.id === node.id);
-      return change?.position ? { ...node, position: change.position } : node;
+      return change?.position
+        ? { ...node, position: change.position }
+        : change?.dimensions
+          ? { ...node, measured: { width: change.dimensions.width, height: change.dimensions.height } }
+          : node;
     })
   ),
   Background: () => null,
@@ -56,6 +59,7 @@ vi.mock('@xyflow/react', () => ({
             onNodesChange([{ id: node.id, type: 'position', position: dragged.position }]);
             onNodeDragStop({}, dragged);
           }}>drag {node.id}</button>
+          <button onClick={() => onNodesChange([{ id: node.id, type: 'dimensions', dimensions: { width: 178, height: 112 } }])}>measure {node.id}</button>
         </div>
       ))}
       <button onClick={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey })} onMouseMove={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey })}>move pane</button>
@@ -64,7 +68,7 @@ vi.mock('@xyflow/react', () => ({
     </div>
   ),
   useInternalNode: () => undefined,
-  useNodes: () => flowNodesMock,
+  useNodes: () => [],
   useReactFlow: () => ({
     fitView: fitViewMock,
     screenToFlowPosition: (position: { x: number; y: number }) => ({ x: (position.x - screenTransform.offsetX) / screenTransform.scale, y: (position.y - screenTransform.offsetY) / screenTransform.scale }),
@@ -255,16 +259,13 @@ describe('TopologyCanvas async layout boundary', () => {
       nodes: [{ id: 'ordinary-object', type: 'device', position: { x: 10, y: 20 }, data: { projection: document.nodes[0] } }],
       edges: [],
     });
-    flowNodesMock.splice(0, flowNodesMock.length, {
-      id: 'ordinary-object', position: { x: 15, y: 25 }, measured: { width: 178, height: 112 }, data: { projection: document.nodes[0] },
-    });
     const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} />);
     await screen.findByRole('button', { name: 'ordinary-object' });
+    fireEvent.click(screen.getByRole('button', { name: 'measure ordinary-object' }));
     view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} regionMode={{ showReferenceOutlines: true }} />);
-    expect(await screen.findByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('x', '15');
+    expect(await screen.findByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('x', '10');
     expect(screen.getByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('width', '178');
     expect(screen.getByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('height', '112');
-    flowNodesMock.splice(0, flowNodesMock.length);
   });
 
   it('can hide Region-mode object outlines while keeping the persisted Region layer', async () => {

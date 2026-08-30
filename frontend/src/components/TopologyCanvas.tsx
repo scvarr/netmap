@@ -9,7 +9,6 @@ import {
   ReactFlow,
   ViewportPortal,
   useReactFlow,
-  useNodes,
   type EdgeMouseHandler,
   type NodeMouseHandler,
   type OnNodeDrag,
@@ -172,7 +171,6 @@ export function TopologyCanvas({
   const latestReferenceOutlines = useRef<MapReferenceOutline[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const { fitView, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
-  const renderedNodes = useNodes<DeviceFlowNode>();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
 
@@ -305,17 +303,15 @@ export function TopologyCanvas({
     );
   }
 
-  const renderedNodeById = new Map(renderedNodes.map((node) => [node.id, node]));
   const currentReferenceOutlines: MapReferenceOutline[] = projection.nodes
     .filter((node) => node.data.projection.kind === "PHYSICAL_OBJECT" && node.data.projection.attributes.class !== "cable")
     .map((node) => {
-      const rendered = renderedNodeById.get(node.id);
       return {
         id: node.id,
-        x: rendered?.position.x ?? node.position.x,
-        y: rendered?.position.y ?? node.position.y,
-        width: rendered?.measured?.width ?? rendered?.width ?? node.measured?.width ?? node.width ?? 0,
-        height: rendered?.measured?.height ?? rendered?.height ?? node.measured?.height ?? node.height ?? 0,
+        x: node.position.x,
+        y: node.position.y,
+        width: node.measured?.width ?? node.width ?? 0,
+        height: node.measured?.height ?? node.height ?? 0,
       };
     });
   if (!regionMode) latestReferenceOutlines.current = currentReferenceOutlines;
