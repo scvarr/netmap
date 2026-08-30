@@ -46,7 +46,7 @@ identity. Без этого они сохраняли бы старый runtime 
 
 ## Out of scope
 
-- Cable metadata storage/API shape, включая label/category/capacity class;
+- Cable.3 metadata storage/API shape, включая label/transport category/capacity class;
 - redesign Object Details, новый Cable product UX или presentation polish;
 - новая route geometry, visual redesign или изменение пользовательских
   interaction patterns поверх уже заменённой Cable identity;
@@ -86,7 +86,7 @@ identity. Без этого они сохраняли бы старый runtime 
   model. Он не переносит старую Cable identity и не возвращает legacy paths.
 - **Cable.3 — Cable metadata foundation + further presentation capabilities.**
   Добавляет описательные Cable metadata прежде всего для
-  label/category/capacity class и расширяет presentation capability только
+  label/transport category/capacity class и расширяет presentation capability только
   поверх canonical Cable refs. Cable не становится physical inventory;
   material characteristics и inventory lifecycle не входят в scope. Cable
   Bundle остаётся отдельным последующим presentation work.

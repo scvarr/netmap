@@ -6,9 +6,9 @@
 развития продукта и границы будущих систем, но не является детальным
 implementation plan и не создаёт implementation milestones.
 
-Активный [[plans/09-04-l1-product-ux-completion|09.4 L1 Product UX completion]]
-pass выполняется перед L1S.7; затем продолжается оставшаяся spatial foundation
-последовательность.
+L1S.7 остаётся **IN PROGRESS / OPEN**: часть Region foundation уже реализована,
+но Region selection/tree и полноценное редактирование существующих Regions ещё
+не закрыты. Этот документ фиксирует оставшийся bounded путь до L1 COMPLETE.
 
 Связанные contracts:
 
@@ -22,20 +22,34 @@ pass выполняется перед L1S.7; затем продолжаетс�
 
 **FIXED direction**
 
-1. Завершить [[plans/09-04-l1-product-ux-completion|L1 Product UX completion]]
-   pass.
-2. Выполнить L1S.7 Regions, L1S.8 MapReference/hierarchical maps и финальный
-   L1 usability/acceptance.
-3. Закрыть обязательные до-L2 stabilization/performance пункты.
-4. Развивать semantic presentation L2, а затем L3.
-5. Сформировать полноценную многопользовательскую основу NetMap:
+1. Завершить оставшийся [[plans/09-01-l1-spatial-foundation-plan|L1S.7
+   Regions]] Region UX/editor work.
+2. Зафиксировать Location foundation и bounded Location ↔ MapRegion
+   presentation assistance.
+3. Выполнить L1S.8 MapReference / hierarchical map navigation.
+4. Выполнить Cable.3 minimal metadata foundation.
+5. Закрыть MapCableRoute usability / assisted geometry: overlap-safe trace,
+   compact edit handles, straight segments, initial angle snapping/feedback и
+   обоснованные magnets.
+6. Закрыть mandatory stabilization/performance gate.
+7. Выполнить real-world L1 acceptance; это финальная acceptance stage, не новый
+   feature milestone.
+8. Только если acceptance покажет blocking pain ручного создания 100–500
+   объектов, добавить bounded CSV/JSON bootstrap importer.
+9. Объявить L1 COMPLETE и перейти к semantic presentation L2, а затем L3.
+10. Сформировать полноценную многопользовательскую основу NetMap:
    authentication, ownership/isolation workspace, sharing/access control,
    comments/annotations, activity/audit.
-6. Развивать portability и reusable content: workspace export/import,
+11. Развивать portability и reusable content: workspace export/import,
    packages библиотек Blueprint, а при реальной потребности — map templates
    или cloning.
-7. После появления реальных L2/L3 UI use cases развивать observations,
+12. После появления реальных L2/L3 UI use cases развивать observations,
    collectors/adapters, dynamic maps и monitoring/health overlays.
+
+Location поставлен сразу после Regions: он даёт canonical смысл физического
+места, на который может опираться будущая Region assistance, но не смешивает
+canonical state с presentation geometry. MapReference следует после этого,
+потому что navigation между SavedMaps не является Location hierarchy.
 
 Порядок шагов после L2/L3 foundation может корректироваться по реальной
 product need. Это не повод расширять core «на всякий случай»: L2/L3 backend
@@ -81,6 +95,63 @@ Blueprint/template
 - Quick Inspector как рабочая поверхность, а не debug panel;
 - trace как пользовательская операция «куда уходит этот порт?» или «покажи
   физический путь».
+
+## Canonical Location и MapRegion boundary
+
+**FIXED semantic direction; implementation остаётся отдельным bounded milestone**
+
+`Location` — canonical physical place: stable identity, optional parent, name и
+optional bounded kind/classification в arbitrary-depth physical tree. A
+`PhysicalObject` may have an optional canonical Location association. Location
+не зависит от SavedMap и canvas coordinates и не выводится из polygon geometry.
+Room, Rack, Cabinet, Outdoor zone, Well, Splice enclosure, Shelf и Bay пока
+являются обычными Location kinds/classes, а не отдельными фундаментальными
+entity families. Batch helper для `U01..U42` — лишь создание дочерних Locations.
+
+`MapRegion` — presentation of an area on one SavedMap. В будущем он может иметь
+optional association с Location, но это не меняет presentation-only nature:
+Location → presentation assistance, never reverse. Перемещение объекта на карте
+не меняет Location, выход за Region её не очищает, а polygon containment не
+является canonical membership.
+
+Если Region связан с Location L, UI может подсветить на текущей карте объекты с
+`location == L` или descendant Location, приглушить unrelated objects и
+предложить editable padded bounding draft только для уже размещённых объектов.
+При отсутствии таких объектов допустим небольшой default draft около viewport
+или выбранного anchor. Это initial suggestion, не auto-layout и не перемещение.
+Диагностика «canonical Location R824, map representation вне Region R824» может
+быть warning/highlight/badge, но ничего сама не изменяет.
+
+## MapReference
+
+`MapReference` — presentation object с target на другую SavedMap для
+hierarchical navigation. Это не Connection, Location, topology и не доказательство
+containment. Region может иметь navigation entry рядом с собой, но это отдельная
+capability.
+
+## Cable.3 и capacity semantics
+
+Cable.3 планирует только optional label, optional `transport_category` и
+optional `capacity_class`; candidate categories: `ETHERNET`, `FIBRE_CHANNEL`,
+`OTHER`, `UNSPECIFIED/null`. Exact enum/null semantics остаются implementation
+решением. Capacity examples: `1G`, `10G`, `25G`, `40G`, `100G`, `8GFC`, `16GFC`,
+`32GFC`, `64GFC`.
+
+`capacity_class` означает rated/nominal Cable capacity. Он не означает interface
+capability, configured rate, negotiated operational rate или observed throughput;
+future resolvers не должны делать такой вывод. Material/inventory metadata
+(Cat5e/Cat6/Cat6A, OM3/OM4/OS2, DAC/AOC, manufacturer, part number, connectors,
+length, stock, splice decomposition) сейчас не входят.
+
+## MapCableRoute remaining capability family
+
+Remaining route work is bounded to presentation geometry: overlapping routes
+need trace priority plus a halo/outline/z-order/slight offset so neighboring
+routes are not mistaken for the trace; waypoint handles should be compact and
+full-sized only in explicit edit mode; drawing needs straight-segment preview,
+initial 10° angular snap, direction/angle feedback, and justified presentation-
+only magnets. Configurable snap presets are future scope, not a first-milestone
+promise. NetMap is a schematic infrastructure editor, not CAD.
 
 ## L1, L2 и L3 как presentation
 

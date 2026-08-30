@@ -997,6 +997,12 @@ containment; all boundary touching, coincident polygons, and partial overlap are
 The immediate parent is the strictly containing polygon with minimum absolute area, while
 siblings are necessarily spatially disjoint and nesting may have arbitrary depth. This is
 not a Location or topology hierarchy and has no object-membership or movement semantics.
+A future optional association with canonical `Location` is presentation assistance only:
+members are objects at that Location or descendants, never polygon-contained objects.
+Map movement does not mutate Location, and a consistency warning does not move objects,
+rewrite Regions, or alter canonical state. Region creation assistance may suggest an
+editable padded bounding draft from members already placed on the current map, or a
+small default near the viewport/anchor when there are none; it is not auto-layout.
 
 `POST /v1/maps/{map_id}/regions`, `PUT /v1/maps/{map_id}/regions/{region_id}`, and
 `DELETE /v1/maps/{map_id}/regions/{region_id}` are the bounded write surface. Create
@@ -1020,6 +1026,10 @@ the reload. Cancel, `Escape`, map/view/mode exit discard unacknowledged local dr
 L1S.7b.3a constrains Shift-held current segments by dominant screen-space axis before converting
 the endpoint to flow coordinates; preview and click use that same endpoint. Region list/tree
 UI, existing Region geometry editing, styling, and deletion UI remain OPEN L1S.7b work.
+
+`MapReference` remains a future presentation object targeting another SavedMap for
+hierarchical navigation. It is not a Location, Connection, topology fact, or
+containment evidence.
 
 ## Future Fibre Channel compatibility boundary
 

@@ -1,5 +1,12 @@
 # 10.2 Stabilization backlog
 
+Этот backlog является обязательным L1 readiness gate перед L1 COMPLETE, а не
+опциональной post-L1 оптимизацией. Сохраняются только реально открытые пункты;
+в частности, bounded reads, object details/inventory, projection и N+1 SQL,
+повторные object-level trace обходы и frontend computational hotspots должны
+быть синхронизированы с актуальным main. Baseline около 500 объектов / 4,000
+портов уже показал seconds-level endpoints и тысячи SQL queries.
+
 Единый канонический список работ по итогам аудитов (источники и детали —
 [[reviews/10-01-audit-findings|10.1]]). Все пункты в статусе `TODO` на момент фиксации.
 

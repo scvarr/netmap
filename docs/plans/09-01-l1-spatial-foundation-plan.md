@@ -326,15 +326,32 @@ exists solely to preserve development Blueprint authoring data. This exception
 does not relax canonical topology, immutable Blueprint snapshot, Saved Map,
 provenance, or L1S.6 upgrade invariants.
 
-### L1 Product UX completion pass before L1S.7
+### L1 Product UX completion context
 
-Before Regions, complete the active
-[[plans/09-04-l1-product-ux-completion|09.4 L1 Product UX completion]] pass.
-It owns the remaining reliability and usability work around cable routing,
-port/module workflows, Inspector/context menus, error presentation and LOC-001;
-it is deliberately separate from Port Block Blueprint composition.
+The separate [[plans/09-04-l1-product-ux-completion|09.4 L1 Product UX completion]]
+pass owns reliability and usability work around cable routing, port/module
+workflows, Inspector/context menus, error presentation and LOC-001. Its work is
+separate from Port Block Blueprint composition and must not be silently treated as
+completed merely because Region work has started.
 
 ### L1S.7 — Regions / areas
+
+**IN PROGRESS / OPEN**
+
+L1S.7 is not complete. The current `main` branch includes the SavedMap-owned
+Region model, polygon persistence/API, rendering, isolated Region mode, polygon
+draft authoring, the Shift screen-axis constraint, closure by clicking the first
+vertex, and the acknowledged POST followed by an authoritative SavedMap reload.
+It also includes the laminar spatial contract: Regions are disjoint or strictly
+contained; touching and all overlap are rejected; hierarchy is derived from
+geometry and no parent is stored.
+
+The remaining work is Region list/tree selection UI, a full existing-Region
+geometry editor (vertices, midpoints and whole-region editing), and the
+properties/style/delete workflow where it is still absent. Other missing Region
+workflow pieces remain open until verified against the current `main`; planned
+capability is not treated as implemented. The hierarchy/tree selection work from
+the external-review branch `8ab163f` is not merged here.
 
 #### L1S.7a — Saved Map Region model / persistence / API contract
 
@@ -347,8 +364,9 @@ it is deliberately separate from Port Block Blueprint composition.
   endpoints are independent of MapPlacement and canonical topology. Simple polygon
   validation rejects invalid vertices and self-intersection; Saved Map deletion cascades
   Regions.
-- L1S.7a itself provided only typed Saved Map parsing and acknowledgement-only transport;
-  rendering is now supplied by L1S.7b.1, while authoring remains absent.
+- L1S.7a provided the typed Saved Map parsing and bounded Region transport;
+  rendering is supplied by L1S.7b.1 and authoring by the implemented L1S.7b
+  drawing/create slices. Existing-Region editing remains open below.
 
 #### L1S.7b — Region drawing and editing UI
 
@@ -408,26 +426,138 @@ it is deliberately separate from Port Block Blueprint composition.
 - Region list/hierarchy UI, Region geometry editing, properties/style/delete, and other Region
   lifecycle work remain OPEN. No canonical topology semantics are introduced.
 
+### Location foundation
+
+**OPEN bounded L1 foundation**
+
+`Location` is canonical physical place: a stable-ID arbitrary-depth tree with
+an optional parent, name, and optional bounded kind/classification. It answers
+“where is the physical object?” A `PhysicalObject` may have an optional
+canonical Location association. Location is independent of SavedMap and canvas
+coordinates; it is never inferred from presentation geometry. Do not introduce
+fundamental Site/Building/Floor/Room/Rack/RackUnit entities yet: these are
+ordinary Location kinds/classes. Rack-unit authoring may later offer batch
+creation of children such as `U01..U42`, still as Locations.
+
+The next bounded Location/Region capability may associate a MapRegion with a
+Location for presentation assistance. It must not turn Region geometry into
+canonical membership or movement: Location remains the source of truth, and map
+geometry cannot change or clear it without an explicit domain action. A linked
+Region may highlight objects at the Location or its descendants and may suggest
+an editable padded bounding Region from members already placed on the current
+SavedMap. With no placed members, it may suggest a small editable default near a
+viewport/chosen anchor. This is not auto-layout, object movement, or geometry →
+Location inference. A warning that an object's canonical Location is outside its
+Region is diagnostic only.
+
 ### L1S.8 — MapReference / hierarchical maps
 
-- Presentation object со ссылкой на другую Saved Map.
-- Navigation hierarchy без implied connectivity.
+**OPEN future L1 capability; not canonical hierarchy**
 
-### L1S.9 — L1 acceptance
+`MapReference` is a presentation object whose target is another SavedMap. It
+supports hierarchical navigation (“open the detailed map”) and is not a
+Connection, Location, topology fact, or containment evidence. A Region may have
+a nearby navigation entry, but Region/Location association and MapReference are
+independent presentation capabilities.
 
-- Выполнить ручной end-to-end проход: template -> object -> ports -> cabling ->
-  maps -> cable routing -> internal continuity -> trace.
-- Синхронизировать документацию.
-- После acceptance перевести основной product/UI track на L2.
+### Cable.3 — minimal Cable metadata foundation
+
+**OPEN future bounded capability**
+
+Planned minimal descriptive Cable metadata is optional `label`, optional
+`transport_category`, and optional `capacity_class`. Candidate transport
+categories include `ETHERNET`, `FIBRE_CHANNEL`, `OTHER`, and
+`UNSPECIFIED/null`; the enum name and null semantics are implementation-time
+decisions. `capacity_class` may use values such as `1G`, `10G`, `25G`, `40G`,
+`100G`, `8GFC`, `16GFC`, `32GFC`, and `64GFC`.
+
+This is not a physical material/inventory model. Do not add Cat5e/Cat6/Cat6A,
+OM3/OM4/OS2, DAC/AOC, manufacturer, part number, connector inventory, length,
+stock state, or splice/member decomposition in this milestone. Rated/nominal
+Cable capacity is distinct from interface capability, configured rate,
+negotiated operational rate, and observed throughput. Future resolvers must not
+interpret Cable metadata as operational state.
+
+### MapCableRoute usability / assisted geometry
+
+**OPEN bounded remaining L1 capability family**
+
+- **ROUTE-001:** overlap-safe trace visualization; exact traced topology has
+  visual priority and neighboring coincident/partially coincident routes remain
+  distinguishable using presentation-only z-order, halo, outline, or slight
+  parallel offset.
+- **ROUTE-002:** compact waypoint handles; full handles appear only in explicit
+  route edit mode, which is distinct from selection, with small visual radius and
+  a potentially larger hitbox.
+- **ROUTE-003:** straight-segment authoring with live previous-waypoint → pointer
+  preview and ordinary polyline confirmation.
+- **ROUTE-004:** initial angular snapping candidate is 10°. Configurable presets
+  such as 5°, 10°, 15°, 30°, 45°, and 90° are future scope and are not promised
+  by the first milestone.
+- **ROUTE-005:** draw/edit feedback shows preview, snapped direction, angle, and
+  a subtle snap indicator.
+- **ROUTE-006:** future presentation-only magnets may target ConnectionPoints,
+  waypoints, segments, H/V axes, an angular grid, and later object edges or
+  anchors. None infer topology.
+
+NetMap is a schematic infrastructure editor, not CAD: dimensions, precision
+coordinate forms, generic constraints, Bézier/boolean geometry, engineering
+drawing standards, and sub-degree precision are out of scope.
+
+### Mandatory stabilization/performance gate
+
+Stabilization remains a mandatory L1 readiness gate, not optional future polish.
+The existing backlog remains canonical; synchronize and complete its real open
+items for bounded reads, object details, inventory, projection/N+1 SQL, repeated
+object-level trace work, and frontend computational hotspots where still
+applicable. The measured baseline around 500 objects / 4,000 ports already
+showed seconds-level endpoints and thousands of SQL queries.
+
+### Real-world L1 acceptance
+
+This is a final acceptance stage, not another feature milestone. On a real
+infrastructure fragment, verify:
+
+```text
+Blueprint / Port Module
+    → PhysicalObject
+    → ConnectionPoints
+    → Connections + Cable
+    → SavedMaps
+    → Regions / Locations
+    → Cable Routes
+    → internal continuity
+    → L1 trace
+```
+
+Candidate scope is one server room or dense rack with a switch, patch panel,
+several servers, Ethernet, preferably one Fibre Channel path, and several
+SavedMaps/Regions. During this acceptance, assess the pain of manually creating
+100–500 objects. Import is not a precondition: add only a bounded CSV/JSON
+bootstrap importer if manual setup is demonstrated to be a blocking usability
+problem. SNMP, LLDP, CMDB sync, and a generic integrations framework are not
+prebuilt.
+
+Only after this acceptance is L1 COMPLETE and the main product track moves to
+L2.
 
 ## Что не является gate для L2
 
 Следующие вещи не блокируют начало L2 до появления конкретного use case:
 
-- `PointMember`/`member_index` UI refinement;
-- полный optical/fiber-member UX;
+- detailed optical/fiber-member UX;
+- Cat6/OM3/OS2 inventory;
+- cable length calculation;
 - ducts/bundles;
-- вычисление физической длины кабеля;
-- другие speculative L1 extensions.
+- warehouse/inventory;
+- negotiated link state;
+- monitoring;
+- transceiver database;
+- LLDP/SNMP collectors;
+- full rack elevation/DCIM;
+- auto-layout;
+- multiuser/auth/comments/audit;
+- sophisticated import framework;
+- perfect polish of every screen.
 
 Принцип «довести L1 foundation» не должен превращаться в бесконечную L1-разработку.

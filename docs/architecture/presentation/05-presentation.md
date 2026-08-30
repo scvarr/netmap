@@ -1405,6 +1405,14 @@ geometry only and is never persisted: the immediate parent is the strictly conta
 Region with the smallest absolute polygon area. `z_order`, label, and UUID do not affect it.
 Geometry and this derived hierarchy never create membership, containment, `Location`,
 connectivity, topology, or any other canonical fact; objects do not move with Regions.
+In a future bounded capability a Region may optionally be associated with a
+canonical `Location` for presentation assistance. That association remains
+presentation-only: canonical members are objects whose Location equals that Location
+or is its descendant, not objects inside the polygon. Moving an object on the map or
+outside the polygon never changes or clears its Location without an explicit domain
+action. The UI may highlight current-map members, dim unrelated objects, and suggest
+an editable padded bounding draft; with no current-map members it may use a small
+default near the viewport/anchor. A mismatch warning is diagnostic only.
 Deleting a Region leaves nested Regions intact and their derived hierarchy is recalculated.
 Deleting a Saved Map cascades its Regions.
 
@@ -1431,6 +1439,8 @@ Saved Map может содержать presentation object со ссылкой 
 утверждение network connectivity. Это основной предполагаемый способ
 масштабирования детальных L1 «точечных» карт: карта этажа ведёт на подробную карту
 помещения, стойки или узла.
+`MapReference` не является `Location`, `Connection` или доказательством
+containment; navigation entry рядом с Region остаётся независимой capability.
 
 ## Future media, capacity и transport views
 
