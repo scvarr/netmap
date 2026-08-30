@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.map_region_geometry import MapRegionSpatialRelation, classify_map_region_polygons
-from app.models import Cable, MapCableRoute, MapPlacement, MapRegion, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import Cable, MapCableRoute, MapPlacement, MapRegion, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -18,6 +18,7 @@ class SavedMapDetail:
     placements: tuple[MapPlacement, ...]
     cable_routes: tuple[MapCableRoute, ...]
     regions: tuple[MapRegion, ...]
+    text_annotations: tuple[MapTextAnnotation, ...]
 
 
 class SavedMapCatalog:
@@ -39,7 +40,7 @@ class SavedMapCatalog:
 
     def detail(self, map_id: uuid.UUID) -> SavedMapDetail:
         saved_map = self._require_map(map_id)
-        return SavedMapDetail(saved_map, self._placements(map_id), self._cable_routes(map_id), self._regions(map_id))
+        return SavedMapDetail(saved_map, self._placements(map_id), self._cable_routes(map_id), self._regions(map_id), self._text_annotations(map_id))
 
     def delete(self, map_id: uuid.UUID) -> None:
         self.session.delete(self._require_map(map_id))
@@ -208,6 +209,30 @@ class SavedMapCatalog:
         self.session.delete(region)
         self._flush()
 
+    def create_text_annotation(self, map_id: uuid.UUID, text: str, position: dict[str, float], text_color: str, font_size: float) -> MapTextAnnotation:
+        self._require_map(map_id)
+        annotation = MapTextAnnotation(map_id=map_id, text=text, position=position, text_color=text_color, font_size=font_size)
+        self.session.add(annotation)
+        self._flush()
+        return annotation
+
+    def replace_text_annotation(self, map_id: uuid.UUID, annotation_id: uuid.UUID, text: str, position: dict[str, float], text_color: str, font_size: float) -> MapTextAnnotation:
+        self._require_map(map_id)
+        annotation = self.session.scalar(select(MapTextAnnotation).where(MapTextAnnotation.map_id == map_id, MapTextAnnotation.id == annotation_id).with_for_update())
+        if annotation is None:
+            raise ValidationError("MapTextAnnotation does not exist", {"map_id": str(map_id), "annotation_id": str(annotation_id)})
+        annotation.text, annotation.position, annotation.text_color, annotation.font_size = text, position, text_color, font_size
+        self._flush()
+        return annotation
+
+    def delete_text_annotation(self, map_id: uuid.UUID, annotation_id: uuid.UUID) -> None:
+        self._require_map(map_id)
+        annotation = self.session.scalar(select(MapTextAnnotation).where(MapTextAnnotation.map_id == map_id, MapTextAnnotation.id == annotation_id).with_for_update())
+        if annotation is None:
+            raise ValidationError("MapTextAnnotation does not exist", {"map_id": str(map_id), "annotation_id": str(annotation_id)})
+        self.session.delete(annotation)
+        self._flush()
+
     def placements(self, map_id: uuid.UUID) -> SavedMapDetail:
         return self.detail(map_id)
 
@@ -238,6 +263,11 @@ class SavedMapCatalog:
     def _regions(self, map_id: uuid.UUID) -> tuple[MapRegion, ...]:
         return tuple(self.session.scalars(
             select(MapRegion).where(MapRegion.map_id == map_id).order_by(MapRegion.z_order, MapRegion.id)
+        ))
+
+    def _text_annotations(self, map_id: uuid.UUID) -> tuple[MapTextAnnotation, ...]:
+        return tuple(self.session.scalars(
+            select(MapTextAnnotation).where(MapTextAnnotation.map_id == map_id).order_by(MapTextAnnotation.id)
         ))
 
     def _validate_region_spatial_relation(

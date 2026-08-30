@@ -983,7 +983,7 @@ materialized.
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
 and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c/d
 new-Region draft geometry editor and transient assisted geometry, and L1S.7b.4e existing-Region
-geometry editing and L1S.7b.4f presentation/properties with authoritative lifecycle IMPLEMENTED**
+geometry editing and L1S.7b.4f presentation/properties with authoritative lifecycle, and L1S.7b.4g Map text annotations IMPLEMENTED**
 
 The authoritative `SavedMapDocument` contains `regions[]`. Each item has a
 SavedMap-scoped `MapRegionRef { entity_type: "MapRegion", entity_id }`, trimmed
@@ -1056,8 +1056,15 @@ unchanged points and `z_order`, then reloads authoritatively; failed PUT remains
 retryable, while failed post-acknowledgement reload retries only reload. A
 separate confirmation deletes only the selected Region by one DELETE, then uses
 the same authoritative refresh-only retry contract; derived descendants remain.
-An arbitrary user text annotation is still separate future presentation content,
-not a Region label.
+L1S.7b.4g adds SavedMap-owned arbitrary text annotations as separate Physical/L1
+presentation content. Each has stable `MapTextAnnotationRef` identity, trimmed
+non-empty multiline text, free flow-coordinate position, text color and font
+size, without Region, Location, object, topology or MapReference association.
+`Добавить текст` selects placement by map click and keeps a local preview until
+save. Existing text is selectable, freely draggable without snap/geometry
+assistance, editable, and separately confirmed for deletion. Every write is one
+acknowledged mutation followed by authoritative reload; failed write is retryable
+or cancellable, and a failed post-acknowledgement reload retries only reload.
 
 `MapReference` remains a future presentation object targeting another SavedMap for
 hierarchical navigation. It is not a Location, Connection, topology fact, or

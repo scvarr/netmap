@@ -456,9 +456,13 @@ planned capability is not treated as implemented.
   by authoritative refresh with refresh-only retry after acknowledgement. A separately confirmed
   DELETE removes only the selected Region and likewise retries only refresh after acknowledgement;
   nested Regions stay intact and hierarchy remains derived.
-- Arbitrary user text blocks/annotations remain **OPEN**. Region `label` is the Region name/tree
-  identity/presentation name; a future arbitrary text annotation is separate presentation content,
-  not a Region label. Location association and `MapReference` also remain open. L1S.7 remains **OPEN**.
+- **L1S.7b.4g — Map text annotations — IMPLEMENTED**: a text annotation is separate
+  SavedMap-owned Physical/L1 presentation content, not `Region.label`. It has stable UUID,
+  trimmed non-empty multiline text, free map position, text color and font size; no Region,
+  Location, object or topology association. The UI supports click placement, local preview,
+  free drag, complete replace and confirmed deletion through the authoritative-reload lifecycle.
+  Rich text, callouts, backgrounds, rotation, z-order and generic scene-object work remain out
+  of scope. Location association and `MapReference` also remain open. L1S.7 remains **OPEN**.
 
 ### Location foundation
 

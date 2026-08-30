@@ -49,6 +49,7 @@ import type {
   SavedMapViewKey,
   MapCableRouteWaypoint,
   MapRegion,
+  MapTextAnnotation,
 } from "../topology/savedMapTypes";
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { physicalCablePresentation } from "../topology/physicalCablePresentation";
@@ -120,6 +121,8 @@ interface RegionCreateOperation { mapId: string; label: string; status: "editing
 interface RegionEditOperation { mapId: string; regionId: string; original: MapRegion; labelPosition: { x: number; y: number } | null; status: "editing" | "saving" | "refresh-failed"; error: string | null; }
 interface RegionPropertiesOperation { mapId: string; regionId: string; original: MapRegion; label: string; labelPosition: { x: number; y: number } | null; style: MapRegion['style']; status: "editing" | "saving" | "refresh-failed"; error: string | null; }
 interface RegionDeleteOperation { mapId: string; regionId: string; label: string; status: "confirming" | "deleting" | "refresh-failed"; error: string | null; }
+interface TextAnnotationOperation { mapId: string; annotationId?: string; original?: MapTextAnnotation; text: string; position: { x: number; y: number } | null; textColor: string; fontSize: number; status: 'placing' | 'editing' | 'saving' | 'refresh-failed'; error: string | null; }
+interface TextAnnotationDeleteOperation { mapId: string; annotationId: string; text: string; status: 'confirming' | 'deleting' | 'refresh-failed'; error: string | null; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; canonicalResult?: PhysicalEndpointConnectionCreationDocument; error: string | null; }
@@ -193,6 +196,9 @@ export function MapPage({
   const [regionProperties, setRegionProperties] = useState<RegionPropertiesOperation | null>(null);
   const [regionDeletion, setRegionDeletion] = useState<RegionDeleteOperation | null>(null);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
+  const [selectedTextAnnotationId, setSelectedTextAnnotationId] = useState<string | null>(null);
+  const [textAnnotationEdit, setTextAnnotationEdit] = useState<TextAnnotationOperation | null>(null);
+  const [textAnnotationDeletion, setTextAnnotationDeletion] = useState<TextAnnotationDeleteOperation | null>(null);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
@@ -262,6 +268,9 @@ export function MapPage({
     setRegionProperties(null);
     setRegionDeletion(null);
     setSelectedRegionId(null);
+    setSelectedTextAnnotationId(null);
+    setTextAnnotationEdit(null);
+    setTextAnnotationDeletion(null);
   }, [mapId, viewMode]);
 
   useEffect(() => {
@@ -273,6 +282,9 @@ export function MapPage({
       setRegionProperties(null);
       setRegionDeletion(null);
       setSelectedRegionId(null);
+      setSelectedTextAnnotationId(null);
+      setTextAnnotationEdit(null);
+      setTextAnnotationDeletion(null);
       return;
     }
     setSelection(null);
@@ -287,6 +299,10 @@ export function MapPage({
   useEffect(() => {
     if (selectedRegionId && !activeMap?.regions.some((region) => region.region_ref.entity_id === selectedRegionId)) setSelectedRegionId(null);
   }, [activeMap, selectedRegionId]);
+
+  useEffect(() => {
+    if (selectedTextAnnotationId && !activeMap?.text_annotations.some((annotation) => annotation.annotation_ref.entity_id === selectedTextAnnotationId)) setSelectedTextAnnotationId(null);
+  }, [activeMap, selectedTextAnnotationId]);
 
   const cancelRegionDraft = useCallback(() => {
     regionOperationSequence.current += 1;
@@ -1409,6 +1425,74 @@ export function MapPage({
     }
   };
 
+  const textAnnotationPreview = textAnnotationEdit?.position ? {
+    annotation_ref: { entity_type: 'MapTextAnnotation' as const, entity_id: textAnnotationEdit.annotationId ?? 'draft-text-annotation' },
+    text: textAnnotationEdit.text,
+    position: textAnnotationEdit.position,
+    text_color: textAnnotationEdit.textColor,
+    font_size: textAnnotationEdit.fontSize,
+  } : undefined;
+  const startTextAnnotation = () => {
+    if (!activeMap || textAnnotationEdit || textAnnotationDeletion) return;
+    setSelectedTextAnnotationId(null);
+    setTextAnnotationEdit({ mapId: activeMap.map_ref.entity_id, text: '', position: null, textColor: '#1f2937', fontSize: 18, status: 'placing', error: null });
+  };
+  const editTextAnnotation = () => {
+    if (!activeMap || !selectedTextAnnotationId || textAnnotationEdit || textAnnotationDeletion) return;
+    const original = activeMap.text_annotations.find((annotation) => annotation.annotation_ref.entity_id === selectedTextAnnotationId);
+    if (!original) return;
+    setTextAnnotationEdit({ mapId: activeMap.map_ref.entity_id, annotationId: selectedTextAnnotationId, original, text: original.text, position: { ...original.position }, textColor: original.text_color, fontSize: original.font_size, status: 'editing', error: null });
+  };
+  const saveTextAnnotation = async () => {
+    if (!savedMapDataSource || !textAnnotationEdit || textAnnotationEdit.status !== 'editing' || !textAnnotationEdit.position) return;
+    const text = textAnnotationEdit.text.trim();
+    if (!text) { setTextAnnotationEdit((current) => current ? { ...current, error: t('map.textAnnotationRequired') } : current); return; }
+    const operation = textAnnotationEdit;
+    const position = operation.position;
+    if (!position) return;
+    const request = ++regionOperationSequence.current;
+    const write = { text, position: { x: position.x!, y: position.y! }, text_color: operation.textColor, font_size: operation.fontSize };
+    setTextAnnotationEdit({ ...operation, status: 'saving', error: null });
+    try {
+      if (operation.annotationId) await savedMapDataSource.replaceTextAnnotation(operation.mapId, operation.annotationId, write);
+      else await savedMapDataSource.createTextAnnotation(operation.mapId, write);
+    } catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setTextAnnotationEdit({ ...operation, status: 'editing', error: t('map.textAnnotationSaveFailed') });
+      return;
+    }
+    try {
+      const refreshed = await reloadMap(operation.mapId);
+      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
+      if (refreshed) setTextAnnotationEdit(null);
+      else setTextAnnotationEdit({ ...operation, status: 'refresh-failed', error: t('map.textAnnotationSavedRefreshFailed') });
+    } catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setTextAnnotationEdit({ ...operation, status: 'refresh-failed', error: t('map.textAnnotationSavedRefreshFailed') });
+    }
+  };
+  const retryTextAnnotationRefresh = async () => {
+    if (!textAnnotationEdit || textAnnotationEdit.status !== 'refresh-failed') return;
+    const operation = textAnnotationEdit;
+    setTextAnnotationEdit({ ...operation, status: 'saving', error: null });
+    try { if (await reloadMap(operation.mapId)) setTextAnnotationEdit(null); }
+    catch { if (selectedMapId.current === operation.mapId) setTextAnnotationEdit({ ...operation, status: 'refresh-failed', error: t('map.textAnnotationSavedRefreshFailed') }); }
+  };
+  const confirmTextAnnotationDeletion = async () => {
+    if (!savedMapDataSource || !textAnnotationDeletion || textAnnotationDeletion.status !== 'confirming') return;
+    const operation = textAnnotationDeletion;
+    setTextAnnotationDeletion({ ...operation, status: 'deleting', error: null });
+    try { await savedMapDataSource.deleteTextAnnotation(operation.mapId, operation.annotationId); }
+    catch { if (selectedMapId.current === operation.mapId) setTextAnnotationDeletion({ ...operation, status: 'confirming', error: t('map.textAnnotationDeleteFailed') }); return; }
+    try { if (await reloadMap(operation.mapId)) { setTextAnnotationDeletion(null); setSelectedTextAnnotationId(null); } else setTextAnnotationDeletion({ ...operation, status: 'refresh-failed', error: t('map.textAnnotationDeletedRefreshFailed') }); }
+    catch { if (selectedMapId.current === operation.mapId) setTextAnnotationDeletion({ ...operation, status: 'refresh-failed', error: t('map.textAnnotationDeletedRefreshFailed') }); }
+  };
+  const retryTextAnnotationDeletionRefresh = async () => {
+    if (!textAnnotationDeletion || textAnnotationDeletion.status !== 'refresh-failed') return;
+    const operation = textAnnotationDeletion;
+    setTextAnnotationDeletion({ ...operation, status: 'deleting', error: null });
+    try { if (await reloadMap(operation.mapId)) { setTextAnnotationDeletion(null); setSelectedTextAnnotationId(null); } }
+    catch { if (selectedMapId.current === operation.mapId) setTextAnnotationDeletion({ ...operation, status: 'refresh-failed', error: t('map.textAnnotationDeletedRefreshFailed') }); }
+  };
+
   const positions = useMemo(() => {
     const positionKey = savedMapViewKey(viewMode);
     return Object.fromEntries(
@@ -1622,7 +1706,9 @@ export function MapPage({
           <span>{t("map.regionReference")}</span>
           <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t("map.regionOutlines")}</button>
           <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t("map.regionHideObjects")}</button>
-          <button type="button" disabled={Boolean(regionDraft || regionEdit || regionProperties || regionDeletion)} onClick={() => { regionOperationSequence.current += 1; setSelectedRegionId(null); setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); setRegionEdit(null); setRegionProperties(null); setRegionDeletion(null); }}>{t("map.regionNew")}</button>
+          <button type="button" disabled={Boolean(regionDraft || regionEdit || regionProperties || regionDeletion || textAnnotationEdit || textAnnotationDeletion)} onClick={() => { regionOperationSequence.current += 1; setSelectedRegionId(null); setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); setRegionEdit(null); setRegionProperties(null); setRegionDeletion(null); }}>{t("map.regionNew")}</button>
+          <button type="button" disabled={Boolean(regionDraft || regionEdit || regionProperties || regionDeletion || textAnnotationEdit || textAnnotationDeletion)} onClick={startTextAnnotation}>{t('map.textAnnotationAdd')}</button>
+          {activeMap?.text_annotations.map((annotation) => <button key={annotation.annotation_ref.entity_id} type="button" aria-pressed={selectedTextAnnotationId === annotation.annotation_ref.entity_id} disabled={Boolean(textAnnotationEdit || textAnnotationDeletion)} onClick={() => setSelectedTextAnnotationId((current) => current === annotation.annotation_ref.entity_id ? null : annotation.annotation_ref.entity_id)}>{annotation.text.split('\n')[0] || t('map.textAnnotation')}</button>)}
           <MapRegionTree regions={activeMap?.regions ?? []} selectedRegionId={selectedRegionId} selectionDisabled={Boolean(regionEdit || regionProperties || regionDeletion)} onSelect={(regionId) => setSelectedRegionId((current) => current === regionId ? null : regionId)} />
           {selectedRegionId && !regionDraft && !regionEdit && !regionProperties && !regionDeletion && <>
             <button type="button" onClick={startRegionEdit}>{t('map.regionEdit')}</button>
@@ -1680,6 +1766,24 @@ export function MapPage({
             {regionDeletion.status === 'deleting' && <span role="status">{t('map.regionDeleting')}</span>}
             {regionDeletion.status === 'refresh-failed' && <button type="button" onClick={() => void retryRegionDeletionRefresh()}>{t('map.retryRefresh')}</button>}
           </section>}
+          {selectedTextAnnotationId && !textAnnotationEdit && !textAnnotationDeletion && <>
+            <button type="button" onClick={editTextAnnotation}>{t('map.textAnnotationEdit')}</button>
+            <button type="button" onClick={() => { const annotation = activeMap?.text_annotations.find((item) => item.annotation_ref.entity_id === selectedTextAnnotationId); if (annotation && activeMap) setTextAnnotationDeletion({ mapId: activeMap.map_ref.entity_id, annotationId: selectedTextAnnotationId, text: annotation.text, status: 'confirming', error: null }); }}>{t('map.textAnnotationDelete')}</button>
+          </>}
+          {textAnnotationEdit && <section aria-label={t('map.textAnnotation')}>
+            {textAnnotationEdit.status === 'placing' && <span>{t('map.textAnnotationPlace')}</span>}
+            {textAnnotationEdit.status !== 'placing' && <>
+              <label>{t('map.textAnnotationText')}<textarea value={textAnnotationEdit.text} disabled={textAnnotationEdit.status !== 'editing'} onChange={(event) => setTextAnnotationEdit((current) => current ? { ...current, text: event.target.value, error: null } : current)} /></label>
+              <label>{t('map.textAnnotationColor')}<input aria-label={t('map.textAnnotationColor')} type="color" value={textAnnotationEdit.textColor} disabled={textAnnotationEdit.status !== 'editing'} onChange={(event) => setTextAnnotationEdit((current) => current ? { ...current, textColor: event.target.value, error: null } : current)} /></label>
+              <label>{t('map.textAnnotationFontSize')}<input aria-label={t('map.textAnnotationFontSize')} type="number" min="1" value={textAnnotationEdit.fontSize} disabled={textAnnotationEdit.status !== 'editing'} onChange={(event) => setTextAnnotationEdit((current) => current ? { ...current, fontSize: Number(event.target.value), error: null } : current)} /></label>
+              {textAnnotationEdit.error && <span role="alert">{textAnnotationEdit.error}</span>}
+              {textAnnotationEdit.status === 'saving' && <span role="status">{t('map.textAnnotationSaving')}</span>}
+              {textAnnotationEdit.status === 'editing' && <><button type="button" disabled={!textAnnotationEdit.position || textAnnotationEdit.fontSize <= 0} onClick={() => void saveTextAnnotation()}>{t('map.save')}</button><button type="button" onClick={() => setTextAnnotationEdit(null)}>{t('map.cancel')}</button></>}
+              {textAnnotationEdit.status === 'refresh-failed' && <button type="button" onClick={() => void retryTextAnnotationRefresh()}>{t('map.retryRefresh')}</button>}
+            </>}
+            {textAnnotationEdit.status === 'placing' && <button type="button" onClick={() => setTextAnnotationEdit(null)}>{t('map.cancel')}</button>}
+          </section>}
+          {textAnnotationDeletion && <section role="alertdialog" aria-label={t('map.textAnnotationDeleteConfirm')}><span>{t('map.textAnnotationDeleteConfirm')}</span>{textAnnotationDeletion.error && <span role="alert">{textAnnotationDeletion.error}</span>}{textAnnotationDeletion.status === 'confirming' && <><button type="button" onClick={() => void confirmTextAnnotationDeletion()}>{t('map.textAnnotationDelete')}</button><button type="button" onClick={() => setTextAnnotationDeletion(null)}>{t('map.cancel')}</button></>}{textAnnotationDeletion.status === 'deleting' && <span role="status">{t('map.textAnnotationDeleting')}</span>}{textAnnotationDeletion.status === 'refresh-failed' && <button type="button" onClick={() => void retryTextAnnotationDeletionRefresh()}>{t('map.retryRefresh')}</button>}</section>}
         </section>
       )}
 
@@ -1881,6 +1985,7 @@ export function MapPage({
                     setContinuationAnchor({ continuationId, mapId, anchor })
                   : undefined}
                   regions={viewMode === "physical" ? activeMap?.regions : undefined}
+                  textAnnotations={viewMode === "physical" ? activeMap?.text_annotations : undefined}
                   selectedRegionId={physicalRegionMode && !regionEdit ? selectedRegionId : undefined}
                   regionMode={physicalRegionMode ? {
                     showReferenceOutlines: showRegionReferenceOutlines,
@@ -1890,6 +1995,13 @@ export function MapPage({
                   hiddenRegionId: regionEdit?.regionId,
                   previewRegion: regionPropertiesPreview,
                   editableLabelRegionId: regionProperties?.status === 'editing' ? regionProperties.regionId : null,
+                  annotationPlacement: textAnnotationEdit?.status === 'placing',
+                  previewAnnotation: textAnnotationPreview,
+                  selectedAnnotationId: selectedTextAnnotationId,
+                  editableAnnotationId: textAnnotationEdit?.status === 'editing' && textAnnotationEdit.annotationId ? textAnnotationEdit.annotationId : null,
+                  onAnnotationPlace: (position) => setTextAnnotationEdit((current) => current?.status === 'placing' ? { ...current, position, status: 'editing' } : current),
+                  onAnnotationSelect: (annotationId) => { if (!textAnnotationEdit && !textAnnotationDeletion) setSelectedTextAnnotationId((current) => current === annotationId ? null : annotationId); },
+                  onMoveAnnotation: (annotationId, position) => setTextAnnotationEdit((current) => current?.status === 'editing' && current.annotationId === annotationId ? { ...current, position, error: null } : current),
                   onMoveLabel: (position) => setRegionProperties((current) => current?.status === 'editing' ? { ...current, labelPosition: { ...position }, error: null } : current),
                     onDraftPoint: (point) => setRegionDraft((current) => current?.status === 'drawing' ? { ...current, points: [...current.points, point] } : current),
                     onCompleteDraft: completeRegionDraft,

@@ -1,4 +1,4 @@
-import type { MapRegion } from '../topology/savedMapTypes';
+import type { MapRegion, MapTextAnnotation } from '../topology/savedMapTypes';
 import type { XYPosition } from '@xyflow/react';
 import type { SegmentAssistResult } from '../topology/geometryAssist';
 import type { PointerEvent } from 'react';
@@ -57,6 +57,12 @@ export function MapRegionLayer({
   previewRegion,
   interactiveLabelRegionId,
   onLabelPointerDown,
+  annotations = [],
+  previewAnnotation,
+  selectedAnnotationId,
+  interactiveAnnotationId,
+  onAnnotationPointerDown,
+  onAnnotationClick,
 }: {
   regions: readonly MapRegion[];
   referenceOutlines: readonly MapReferenceOutline[];
@@ -69,6 +75,12 @@ export function MapRegionLayer({
   previewRegion?: MapRegion;
   interactiveLabelRegionId?: string | null;
   onLabelPointerDown?: (event: PointerEvent<SVGTextElement>) => void;
+  annotations?: readonly MapTextAnnotation[];
+  previewAnnotation?: MapTextAnnotation;
+  selectedAnnotationId?: string | null;
+  interactiveAnnotationId?: string | null;
+  onAnnotationPointerDown?: (annotationId: string, event: PointerEvent<SVGTextElement>) => void;
+  onAnnotationClick?: (annotationId: string) => void;
 }) {
   const displayedRegions = previewRegion
     ? [...regions.filter((region) => region.region_ref.entity_id !== previewRegion.region_ref.entity_id), previewRegion]
@@ -97,6 +109,12 @@ export function MapRegionLayer({
               </g>
             );
           })}
+      </g>
+      <g className="map-text-annotation-layer" data-testid="map-text-annotation-layer">
+        {[...annotations.filter((annotation) => annotation.annotation_ref.entity_id !== previewAnnotation?.annotation_ref.entity_id), ...(previewAnnotation ? [previewAnnotation] : [])].map((annotation) => {
+          const id = annotation.annotation_ref.entity_id;
+          return <text key={id} data-testid={`map-text-annotation-${id}`} className={selectedAnnotationId === id ? 'map-text-annotation--selected' : undefined} x={annotation.position.x} y={annotation.position.y} fill={annotation.text_color} fontSize={annotation.font_size} dominantBaseline="hanging" onClick={(event) => { event.stopPropagation(); onAnnotationClick?.(id); }} onPointerDown={interactiveAnnotationId === id ? (event) => onAnnotationPointerDown?.(id, event) : undefined}>{annotation.text.split('\n').map((line, index) => <tspan key={index} x={annotation.position.x} dy={index === 0 ? 0 : '1.2em'}>{line}</tspan>)}</text>;
+        })}
       </g>
       {draft?.status === 'drawing' && (
         <g className={`map-region-layer__draft map-region-layer__draft--${draft.status}`} data-testid="map-region-draft">

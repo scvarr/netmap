@@ -48,6 +48,9 @@ class SavedMap(Base):
     regions: Mapped[list["MapRegion"]] = relationship(
         back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
     )
+    text_annotations: Mapped[list["MapTextAnnotation"]] = relationship(
+        back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
+    )
 
 
 class MapPlacement(Base):
@@ -155,6 +158,26 @@ class MapRegion(Base):
     label_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     z_order: Mapped[int] = mapped_column(Integer, nullable=False)
     saved_map: Mapped[SavedMap] = relationship(back_populates="regions")
+
+
+class MapTextAnnotation(Base):
+    """SavedMap-owned Physical/L1 text presentation, never topology evidence."""
+
+    __tablename__ = "map_text_annotations"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(text)) > 0", name="text_not_blank"),
+        CheckConstraint("text_color ~ '^#[0-9A-Fa-f]{6}$'", name="text_color_hex"),
+        CheckConstraint("font_size > 0", name="font_size_positive"),
+        Index("ix_map_text_annotations_map_id", "map_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
+    text: Mapped[str] = mapped_column(String(2000), nullable=False)
+    position: Mapped[dict[str, float]] = mapped_column(JSONB, nullable=False)
+    text_color: Mapped[str] = mapped_column(String(7), nullable=False)
+    font_size: Mapped[float] = mapped_column(Float, nullable=False)
+    saved_map: Mapped[SavedMap] = relationship(back_populates="text_annotations")
 
 
 class ConnectionPoint(Base):

@@ -43,7 +43,7 @@ import { overlapsAnyNode } from "../topology/nodeFootprint";
 import type { MapCableRoute, MapRegion } from "../topology/savedMapTypes";
 import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation";
 import { cableIdForNode } from "../topology/projection";
-import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
+import type { MapCableRouteWaypoint, MapTextAnnotation } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { MapRegionLayer, type MapReferenceOutline, type MapRegionDraft } from "./MapRegionLayer";
@@ -88,8 +88,9 @@ interface TopologyCanvasProps {
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   regions?: readonly MapRegion[];
+  textAnnotations?: readonly MapTextAnnotation[];
   selectedRegionId?: string | null;
-  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; hiddenRegionId?: string | null; previewRegion?: MapRegion; editableLabelRegionId?: string | null; onMoveLabel?: (position: XYPosition) => void; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
+  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; hiddenRegionId?: string | null; previewRegion?: MapRegion; editableLabelRegionId?: string | null; onMoveLabel?: (position: XYPosition) => void; annotationPlacement?: boolean; previewAnnotation?: MapTextAnnotation; selectedAnnotationId?: string | null; editableAnnotationId?: string | null; onAnnotationPlace?: (position: XYPosition) => void; onAnnotationSelect?: (annotationId: string) => void; onMoveAnnotation?: (annotationId: string, position: XYPosition) => void; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -164,6 +165,7 @@ export function TopologyCanvas({
   wiringHighlightedConnectionMemberIds,
   wiringContinuationConnectionPointIds,
   regions = [],
+  textAnnotations = [],
   selectedRegionId,
   regionMode,
 }: TopologyCanvasProps) {
@@ -175,7 +177,7 @@ export function TopologyCanvas({
   const [regionDraftAssist, setRegionDraftAssist] = useState<SegmentAssistResult | undefined>();
   const [regionDraftEditorFeedback, setRegionDraftEditorFeedback] = useState<readonly RegionDraftSegmentFeedback[]>([]);
   const [regionDraftClosingTarget, setRegionDraftClosingTarget] = useState(false);
-  const regionDraftDrag = useRef<{ kind: 'vertex'; index: number } | { kind: 'polygon'; last: XYPosition } | { kind: 'label' } | null>(null);
+  const regionDraftDrag = useRef<{ kind: 'vertex'; index: number } | { kind: 'polygon'; last: XYPosition } | { kind: 'label' } | { kind: 'annotation'; id: string } | null>(null);
   const fitAfterLayout = useRef(false);
   const fittedSceneKey = useRef<string | null>(null);
   const appliedAuthoritativePositionRevision = useRef(
@@ -204,6 +206,10 @@ export function TopologyCanvas({
       const point = screenToFlowPosition(pointerScreen);
       if (drag.kind === 'label') {
         regionMode?.onMoveLabel?.(point);
+        return;
+      }
+      if (drag.kind === 'annotation') {
+        regionMode?.onMoveAnnotation?.(drag.id, point);
         return;
       }
       if (!regionMode?.editableDraft || !regionMode.draft || regionMode.draft.status !== 'editing') return;
@@ -257,6 +263,11 @@ export function TopologyCanvas({
     if (!regionMode?.editableLabelRegionId) return;
     event.preventDefault(); event.stopPropagation();
     regionDraftDrag.current = { kind: 'label' };
+  };
+  const onAnnotationPointerDown = (annotationId: string, event: PointerEvent<SVGTextElement>) => {
+    if (regionMode?.editableAnnotationId !== annotationId) return;
+    event.preventDefault(); event.stopPropagation();
+    regionDraftDrag.current = { kind: 'annotation', id: annotationId };
   };
 
   useEffect(() => {
@@ -574,6 +585,10 @@ export function TopologyCanvas({
         onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={(event) => {
           if (regionMode) {
+            if (regionMode.annotationPlacement) {
+              regionMode.onAnnotationPlace?.(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+              return;
+            }
             if (regionMode.draft?.status === 'drawing') {
               const pointerScreen = { x: event.clientX, y: event.clientY };
               if (isRegionDraftClosingTarget({ draft: regionMode.draft, pointerScreen, flowToScreenPosition })) {
@@ -654,7 +669,7 @@ export function TopologyCanvas({
           size={1.4}
           color="#25383c"
         />
-        {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (regions.length > 0 || regionMode) && (
+        {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (regions.length > 0 || textAnnotations.length > 0 || regionMode) && (
           <ViewportPortal>
             <MapRegionLayer
               regions={regions}
@@ -663,6 +678,12 @@ export function TopologyCanvas({
               previewRegion={regionMode?.previewRegion}
               interactiveLabelRegionId={regionMode?.editableLabelRegionId}
               onLabelPointerDown={onRegionLabelPointerDown}
+              annotations={textAnnotations}
+              previewAnnotation={regionMode?.previewAnnotation}
+              selectedAnnotationId={regionMode?.selectedAnnotationId}
+              interactiveAnnotationId={regionMode?.editableAnnotationId}
+              onAnnotationPointerDown={onAnnotationPointerDown}
+              onAnnotationClick={(annotationId) => regionMode?.onAnnotationSelect?.(annotationId)}
               referenceOutlines={referenceOutlines}
               showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
               draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget, assist: regionDraftAssist }}

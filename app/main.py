@@ -61,6 +61,7 @@ from app.schemas import (
     CreatePortBlockRequest,
     CreatePortBlockVersionRequest,
     CreateMapRegionRequest,
+    CreateMapTextAnnotationRequest,
     CreateSavedMapRequest,
     CreateL2ForwardingContextRequest,
     CatalogInventoryDocument,
@@ -78,6 +79,7 @@ from app.schemas import (
     L2ForwardingContextCreationDocument,
     MapPlacementsDocument,
     MapRegionDocument,
+    MapTextAnnotationDocument,
     L3ReachabilityArtifact,
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
@@ -111,6 +113,7 @@ from app.schemas import (
     MoveMapPlacementRequest,
     SetMapCableRouteRequest,
     ReplaceMapRegionRequest,
+    ReplaceMapTextAnnotationRequest,
     SetMapViewLockRequest,
     RouteDecisionArtifact,
     RouteDecisionQuery,
@@ -206,6 +209,16 @@ def _saved_map_document(detail) -> dict[str, object]:
                 "z_order": region.z_order,
             }
             for region in detail.regions
+        ],
+        "text_annotations": [
+            {
+                "annotation_ref": {"entity_type": "MapTextAnnotation", "entity_id": annotation.id},
+                "text": annotation.text,
+                "position": annotation.position,
+                "text_color": annotation.text_color,
+                "font_size": annotation.font_size,
+            }
+            for annotation in detail.text_annotations
         ],
     }
 
@@ -404,6 +417,26 @@ def delete_map_region(
 ) -> None:
     with session.begin():
         SavedMapCatalog(session).delete_region(map_id, region_id)
+
+
+@app.post("/v1/maps/{map_id}/text-annotations", response_model=MapTextAnnotationDocument, status_code=201, responses={422: {"model": ErrorResponse}})
+def create_map_text_annotation(map_id: uuid.UUID, query: CreateMapTextAnnotationRequest, session: Session = Depends(get_session)) -> MapTextAnnotationDocument:
+    with session.begin():
+        annotation = SavedMapCatalog(session).create_text_annotation(map_id, query.text, query.position.model_dump(), query.text_color, query.font_size)
+        return {"annotation_ref": {"entity_type": "MapTextAnnotation", "entity_id": annotation.id}, **query.model_dump()}
+
+
+@app.put("/v1/maps/{map_id}/text-annotations/{annotation_id}", response_model=MapTextAnnotationDocument, responses={422: {"model": ErrorResponse}})
+def replace_map_text_annotation(map_id: uuid.UUID, annotation_id: uuid.UUID, query: ReplaceMapTextAnnotationRequest, session: Session = Depends(get_session)) -> MapTextAnnotationDocument:
+    with session.begin():
+        annotation = SavedMapCatalog(session).replace_text_annotation(map_id, annotation_id, query.text, query.position.model_dump(), query.text_color, query.font_size)
+        return {"annotation_ref": {"entity_type": "MapTextAnnotation", "entity_id": annotation.id}, **query.model_dump()}
+
+
+@app.delete("/v1/maps/{map_id}/text-annotations/{annotation_id}", status_code=204, responses={422: {"model": ErrorResponse}})
+def delete_map_text_annotation(map_id: uuid.UUID, annotation_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        SavedMapCatalog(session).delete_text_annotation(map_id, annotation_id)
 
 
 @app.post(

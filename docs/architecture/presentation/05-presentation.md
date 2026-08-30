@@ -1389,7 +1389,7 @@ endpoints UI ничего не выдумывает.
 **FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
 and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c/d
-new-Region draft geometry editing and transient assisted geometry, existing geometry editing, and Region properties/presentation implemented; arbitrary annotations remain OPEN**
+new-Region draft geometry editing and transient assisted geometry, existing geometry editing, Region properties/presentation, and L1S.7b.4g Map text annotations implemented**
 
 Physical Saved Map contains its own ordered `MapRegion` presentation records.
 Their stable UUID is SavedMap presentation identity, not a `ProjectionSourceRef`, and
@@ -1445,7 +1445,16 @@ the original points and `z_order`, then reloads the Saved Map; an acknowledged
 write with failed reload retries only that reload. Deletion is separately
 confirmed, uses one DELETE plus the same refresh-only retry behaviour, and does
 not cascade to nested Regions. These remain presentation interactions and are
-not topology invariants; arbitrary text annotations remain future work.
+not topology invariants. L1S.7b.4g adds SavedMap-owned arbitrary text annotations
+as separate Physical/L1 presentation content: stable UUID, trimmed non-empty
+multiline `text`, free flow-coordinate `position`, `text_color` and positive
+`font_size`. An annotation has no Region, Location, object, topology or
+MapReference association. Create, complete replace and delete acknowledge only
+persistence, followed by authoritative SavedMap reload; the local preview/draft
+remains retryable after a failed write, while an acknowledged write retries only
+reload. Text placement and drag are free, without snap or geometry assistance.
+Rich text, callouts, backgrounds, rotation, z-order and a generic scene-object
+abstraction remain out of scope.
 
 ### MapReference и иерархические карты
 

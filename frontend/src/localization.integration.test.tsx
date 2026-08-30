@@ -21,7 +21,7 @@ afterEach(() => window.localStorage.clear());
 describe('RU/EN localization integration', () => {
   it('switches the Map surface to English and restores Russian without translating a map name', async () => {
     const map = { map_ref: { entity_type: 'SavedMap' as const, entity_id: 'map-1' }, name: 'Карта', created_at: 'now', updated_at: 'now', placements: [] };
-    renderLocalized(<MemoryRouter initialEntries={['/map?map=map-1&view=physical']}><MapPage dataSource={{ loadProjection: vi.fn() }} savedMapDataSource={{ listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn(), deleteMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), setPositionLock: vi.fn(), setCableRoute: vi.fn(), deleteCableRoute: vi.fn(), createRegion: vi.fn(), replaceRegion: vi.fn(), deleteRegion: vi.fn(), removePlacement: vi.fn() }} /></MemoryRouter>);
+    renderLocalized(<MemoryRouter initialEntries={['/map?map=map-1&view=physical']}><MapPage dataSource={{ loadProjection: vi.fn() }} savedMapDataSource={{ listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn(), deleteMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), setPositionLock: vi.fn(), setCableRoute: vi.fn(), deleteCableRoute: vi.fn(), createRegion: vi.fn(), replaceRegion: vi.fn(), deleteRegion: vi.fn(), createTextAnnotation: vi.fn(), replaceTextAnnotation: vi.fn(), deleteTextAnnotation: vi.fn(), removePlacement: vi.fn() }} /></MemoryRouter>);
 
     await screen.findByLabelText('Карты');
     expect(screen.getByRole('option', { name: 'Карта' })).toBeInTheDocument();

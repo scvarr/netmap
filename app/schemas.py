@@ -244,6 +244,34 @@ class MapRegionDocument(MapRegionPresentation):
     region_ref: MapRegionRef
 
 
+class MapTextAnnotationRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_type: Literal["MapTextAnnotation"]
+    entity_id: uuid.UUID
+
+
+class MapTextAnnotationPresentation(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    text: str = Field(min_length=1, max_length=2000)
+    position: MapRegionPoint
+    text_color: str = Field(pattern=r"^#[0-9A-Fa-f]{6}$")
+    font_size: float = Field(gt=0)
+
+
+class CreateMapTextAnnotationRequest(MapTextAnnotationPresentation):
+    pass
+
+
+class ReplaceMapTextAnnotationRequest(MapTextAnnotationPresentation):
+    pass
+
+
+class MapTextAnnotationDocument(MapTextAnnotationPresentation):
+    annotation_ref: MapTextAnnotationRef
+
+
 class SavedMapSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -257,6 +285,7 @@ class SavedMapDocument(SavedMapSummary):
     placements: list[MapPlacementDocument]
     cable_routes: list[MapCableRouteDocument]
     regions: list[MapRegionDocument]
+    text_annotations: list[MapTextAnnotationDocument]
 
 
 class SavedMapListDocument(BaseModel):

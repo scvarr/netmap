@@ -12,7 +12,10 @@ export interface MapRegionPoint { x: number; y: number }
 export interface MapRegionStyle { fill_color: string; fill_opacity: number; stroke_color: string; stroke_width: number; stroke_style: 'solid' | 'dashed' | 'dotted'; label_color?: string | null }
 export interface MapRegion { region_ref: MapRegionRef; label: string; points: MapRegionPoint[]; label_position?: MapRegionPoint | null; style: MapRegionStyle; z_order: number }
 export interface MapRegionWrite { label: string; points: MapRegionPoint[]; label_position?: MapRegionPoint | null; style: MapRegionStyle; z_order: number }
-export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; placements: MapPlacement[]; cable_routes: MapCableRoute[]; regions: MapRegion[] }
+export interface MapTextAnnotationRef { entity_type: 'MapTextAnnotation'; entity_id: string }
+export interface MapTextAnnotation { annotation_ref: MapTextAnnotationRef; text: string; position: MapRegionPoint; text_color: string; font_size: number }
+export interface MapTextAnnotationWrite { text: string; position: MapRegionPoint; text_color: string; font_size: number }
+export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; placements: MapPlacement[]; cable_routes: MapCableRoute[]; regions: MapRegion[]; text_annotations: MapTextAnnotation[] }
 export interface SavedMapSummary { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string }
 export interface SavedMapDataSource {
   listMaps(): Promise<SavedMapSummary[]>;
@@ -30,4 +33,8 @@ export interface SavedMapDataSource {
   createRegion(mapId: string, region: MapRegionWrite): Promise<void>;
   replaceRegion(mapId: string, regionId: string, region: MapRegionWrite): Promise<void>;
   deleteRegion(mapId: string, regionId: string): Promise<void>;
+  /** Text annotation writes only acknowledge persistence; reload SavedMap for authoritative state. */
+  createTextAnnotation(mapId: string, annotation: MapTextAnnotationWrite): Promise<void>;
+  replaceTextAnnotation(mapId: string, annotationId: string, annotation: MapTextAnnotationWrite): Promise<void>;
+  deleteTextAnnotation(mapId: string, annotationId: string): Promise<void>;
 }
