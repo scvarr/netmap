@@ -348,9 +348,10 @@ geometry and no parent is stored.
 
 The implemented L1S.7b.4b Region list/tree derives hierarchy only from the
 authoritative `regions[]`, keeps selection session-only, and uses a selected-polygon
-highlight only as presentation. Parent is derived and never persisted. Remaining
-work is a full existing-Region geometry editor (vertices, midpoints and whole-region
-editing), plus the properties/style/delete workflow where it is still absent. Other
+highlight only as presentation. L1S.7b.4c provides that geometry editor only for a
+new local draft after closure; it has no persisted Region identity. Parent is derived and never
+persisted. Remaining work is to connect the same editor to an existing Region and replace
+persistence, plus the properties/style/delete workflow where it is still absent. Other
 missing Region workflow pieces remain open until verified against the current `main`;
 planned capability is not treated as implemented.
 
@@ -429,7 +430,13 @@ planned capability is not treated as implemented.
   geometry containment and never storing or returning a parent field. It has session-only row
   selection and a separate persisted-polygon presentation highlight; selection resets on the
   bounded scene lifecycle and never mutates Region data.
-- Region geometry editing and properties/style/delete remain **OPEN**. No canonical topology
+- **L1S.7b.4c — Region draft geometry editor — IMPLEMENTED**: after closing a new local draft,
+  compact real vertex and transient midpoint handles support vertex move/insert/delete and whole
+  polygon translation in flow coordinates. A pure exact simple-polygon validator keeps invalid
+  intermediate geometry editable but blocks save. Persisted Regions remain a passive reference layer;
+  create continues to post only the current draft points and reloads authoritative state.
+- Existing Region geometry editing + `replaceRegion` persistence and properties/style/delete remain
+  **OPEN**. No canonical topology
   semantics are introduced.
 
 ### Location foundation

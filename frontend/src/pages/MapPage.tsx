@@ -52,6 +52,7 @@ import type {
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { physicalCablePresentation } from "../topology/physicalCablePresentation";
 import { defaultMapRegionStyle, nextMapRegionZOrder } from "../topology/regionPresentation";
+import { deleteRegionDraftVertex, insertRegionDraftVertex, moveRegionDraftVertex, translateRegionDraft, validateRegionDraftPolygon } from '../topology/regionDraftGeometry';
 import type {
   TopologyDataSource,
   TopologyProjectionDocument,
@@ -218,7 +219,7 @@ export function MapPage({
   const hasLoadedMap = legacy || Boolean(activeMap);
   const physicalRegionMode = regionMode && !legacy && Boolean(activeMap) && viewMode === "physical";
   const completeRegionDraft = useCallback(() => {
-    setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'completed' } : current);
+    setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'editing', selectedVertexIndex: null } : current);
     if (activeMap) setRegionCreate({ mapId: activeMap.map_ref.entity_id, label: '', status: 'editing', error: null });
   }, [activeMap]);
   const objectSearchResults = useMemo(() => {
@@ -274,22 +275,34 @@ export function MapPage({
     if (selectedRegionId && !activeMap?.regions.some((region) => region.region_ref.entity_id === selectedRegionId)) setSelectedRegionId(null);
   }, [activeMap, selectedRegionId]);
 
+  const cancelRegionDraft = useCallback(() => {
+    regionOperationSequence.current += 1;
+    setRegionDraft(null);
+    setRegionCreate(null);
+  }, []);
+  const deleteSelectedRegionDraftVertex = useCallback(() => {
+    setRegionDraft((current) => current?.status === 'editing' && current.selectedVertexIndex !== null && current.selectedVertexIndex !== undefined && current.points.length > 3
+      ? { ...current, points: deleteRegionDraftVertex(current.points, current.selectedVertexIndex), selectedVertexIndex: Math.min(current.selectedVertexIndex, current.points.length - 2) }
+      : current);
+  }, []);
+  const regionDraftValidation = useMemo(() => regionDraft?.status === 'editing' ? validateRegionDraftPolygon(regionDraft.points) : null, [regionDraft]);
   useEffect(() => {
-    if (!physicalRegionMode || regionDraft?.status !== 'drawing') return;
+    if (!physicalRegionMode || !regionDraft) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        regionOperationSequence.current += 1;
-        setRegionDraft(null);
-        setRegionCreate(null);
-      } else if (event.key === 'Enter' && regionDraft.points.length >= 3) {
+        cancelRegionDraft();
+      } else if (event.key === 'Enter' && regionDraft.status === 'drawing' && regionDraft.points.length >= 3) {
         event.preventDefault();
         completeRegionDraft();
+      } else if ((event.key === 'Delete' || event.key === 'Backspace') && regionDraft.status === 'editing' && regionDraft.selectedVertexIndex !== null && regionDraft.points.length > 3) {
+        event.preventDefault();
+        deleteSelectedRegionDraftVertex();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [completeRegionDraft, physicalRegionMode, regionDraft]);
+  }, [cancelRegionDraft, completeRegionDraft, deleteSelectedRegionDraftVertex, physicalRegionMode, regionDraft]);
 
   const selectMap = useCallback(
     (id: string) => {
@@ -1130,7 +1143,7 @@ export function MapPage({
   };
 
   const saveRegion = async () => {
-    if (!savedMapDataSource || !activeMap || !regionCreate || regionCreate.status !== 'editing' || regionDraft?.status !== 'completed') return;
+    if (!savedMapDataSource || !activeMap || !regionCreate || regionCreate.status !== 'editing' || regionDraft?.status !== 'editing' || !regionDraftValidation?.valid) return;
     const label = regionCreate.label.trim();
     if (!label) {
       setRegionCreate((current) => current?.mapId === regionCreate.mapId ? { ...current, error: t('map.regionLabelRequired') } : current);
@@ -1406,20 +1419,22 @@ export function MapPage({
           {regionDraft?.status === 'drawing' && <>
             <span>{t("map.regionPoints", { count: regionDraft.points.length })}</span>
             <button type="button" disabled={regionDraft.points.length < 3} onClick={completeRegionDraft}>{t("map.regionDone")}</button>
-            <button type="button" onClick={() => { regionOperationSequence.current += 1; setRegionDraft(null); setRegionCreate(null); }}>{t("map.cancel")}</button>
+            <button type="button" onClick={cancelRegionDraft}>{t("map.cancel")}</button>
           </>}
-          {regionDraft?.status === 'completed' && <>
+          {regionDraft?.status === 'editing' && <>
             {regionCreate && <>
               <label>
                 {t('map.regionLabel')}
                 <input value={regionCreate.label} disabled={regionCreate.status !== 'editing'} onChange={(event) => setRegionCreate((current) => current ? { ...current, label: event.target.value, error: null } : current)} />
               </label>
+              <button type="button" disabled={regionCreate.status !== 'editing' || regionDraft.selectedVertexIndex === null || regionDraft.points.length <= 3} onClick={deleteSelectedRegionDraftVertex}>{t('map.regionDeleteVertex')}</button>
+              {regionDraftValidation && !regionDraftValidation.valid && <span role="alert">{t(`map.regionInvalid.${regionDraftValidation.reason}`)}</span>}
               {regionCreate.error && <span role="alert">{regionCreate.error}</span>}
               {regionCreate.status === 'saving' && <span role="status">{t('map.regionSaving')}</span>}
-              {regionCreate.status === 'editing' && <button type="button" onClick={() => void saveRegion()}>{t('map.save')}</button>}
+              {regionCreate.status === 'editing' && <button type="button" disabled={!regionDraftValidation?.valid} onClick={() => void saveRegion()}>{t('map.save')}</button>}
               {regionCreate.status === 'refresh-failed' && <button type="button" onClick={() => void retryRegionRefresh()}>{t('map.retryRefresh')}</button>}
             </>}
-            <button type="button" disabled={regionCreate?.status === 'saving'} onClick={() => { regionOperationSequence.current += 1; setRegionDraft(null); setRegionCreate(null); }}>{t("map.cancel")}</button>
+            {regionCreate?.status === 'editing' && <button type="button" onClick={cancelRegionDraft}>{t("map.cancel")}</button>}
           </>}
         </section>
       )}
@@ -1626,8 +1641,13 @@ export function MapPage({
                   regionMode={physicalRegionMode ? {
                     showReferenceOutlines: showRegionReferenceOutlines,
                     draft: regionDraft ?? undefined,
+                    invalidDraft: regionDraftValidation ? !regionDraftValidation.valid : false,
                     onDraftPoint: (point) => setRegionDraft((current) => current?.status === 'drawing' ? { ...current, points: [...current.points, point] } : current),
                     onCompleteDraft: completeRegionDraft,
+                    onMoveDraftVertex: (index, point) => setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: moveRegionDraftVertex(current.points, index, point) } : current),
+                    onInsertDraftVertex: (edgeStartIndex, point) => setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: insertRegionDraftVertex(current.points, edgeStartIndex, point), selectedVertexIndex: edgeStartIndex + 1 } : current),
+                    onTranslateDraft: (delta) => setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: translateRegionDraft(current.points, delta) } : current),
+                    onSelectDraftVertex: (index) => setRegionDraft((current) => current?.status === 'editing' ? { ...current, selectedVertexIndex: index } : current),
                   } : undefined}
                 />
               </ReactFlowProvider>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
 import {
   applyNodeChanges,
   Background,
@@ -47,6 +47,7 @@ import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { MapRegionLayer, type MapReferenceOutline, type MapRegionDraft } from "./MapRegionLayer";
+import { RegionDraftEditor, type RegionDraftPointerTarget } from './RegionDraftEditor';
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -87,7 +88,7 @@ interface TopologyCanvasProps {
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   regions?: readonly MapRegion[];
   selectedRegionId?: string | null;
-  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void };
+  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; invalidDraft?: boolean; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -178,6 +179,7 @@ export function TopologyCanvas({
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [regionDraftPreview, setRegionDraftPreview] = useState<XYPosition | undefined>();
   const [regionDraftClosingTarget, setRegionDraftClosingTarget] = useState(false);
+  const regionDraftDrag = useRef<{ kind: 'vertex'; index: number } | { kind: 'polygon'; last: XYPosition } | null>(null);
   const fitAfterLayout = useRef(false);
   const fittedSceneKey = useRef<string | null>(null);
   const appliedAuthoritativePositionRevision = useRef(
@@ -193,6 +195,41 @@ export function TopologyCanvas({
   const presentationSceneKey = sceneKey ?? viewKey;
 
   currentDocument.current = document;
+
+  useEffect(() => {
+    const onPointerMove = (event: globalThis.PointerEvent) => {
+      const drag = regionDraftDrag.current;
+      if (!drag || !regionMode?.draft || regionMode.draft.status !== 'editing') return;
+      const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      if (drag.kind === 'vertex') regionMode.onMoveDraftVertex?.(drag.index, point);
+      else {
+        regionMode.onTranslateDraft?.({ x: point.x - drag.last.x, y: point.y - drag.last.y });
+        drag.last = point;
+      }
+    };
+    const finish = () => { regionDraftDrag.current = null; };
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', finish);
+    window.addEventListener('pointercancel', finish);
+    return () => { window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', finish); };
+  }, [regionMode, screenToFlowPosition]);
+
+  const onRegionDraftEditorPointerDown = (target: RegionDraftPointerTarget, event: PointerEvent<SVGElement>) => {
+    if (regionMode?.draft?.status !== 'editing') return;
+    event.preventDefault(); event.stopPropagation();
+    const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    if (target.kind === 'vertex') {
+      regionMode.onSelectDraftVertex?.(target.index);
+      regionDraftDrag.current = target;
+    } else if (target.kind === 'midpoint') {
+      const insertedIndex = target.index + 1;
+      regionMode.onInsertDraftVertex?.(target.index, point);
+      regionDraftDrag.current = { kind: 'vertex', index: insertedIndex };
+    } else {
+      regionMode.onSelectDraftVertex?.(null);
+      regionDraftDrag.current = { kind: 'polygon', last: point };
+    }
+  };
 
   useEffect(() => {
     let current = true;
@@ -592,6 +629,7 @@ export function TopologyCanvas({
               showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
               draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget }}
             />
+            {regionMode?.draft?.status === 'editing' && <RegionDraftEditor points={regionMode.draft.points} selectedVertexIndex={regionMode.draft.selectedVertexIndex ?? null} invalid={Boolean(regionMode.invalidDraft)} onPointerDown={onRegionDraftEditorPointerDown} />}
           </ViewportPortal>
         )}
         <MiniMap

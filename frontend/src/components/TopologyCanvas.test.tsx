@@ -329,6 +329,18 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(onCompleteDraft).toHaveBeenCalledTimes(1); expect(onDraftPoint).not.toHaveBeenCalled();
   });
 
+  it('edits only the active draft through vertex, midpoint, and polygon pointer drags', async () => {
+    const onMoveDraftVertex = vi.fn(); const onInsertDraftVertex = vi.fn(); const onTranslateDraft = vi.fn(); const onSelectDraftVertex = vi.fn();
+    render(<TopologyCanvas document={documentFor('physical-region-editor')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: true, draft: { status: 'editing', points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 50 }] }, onMoveDraftVertex, onInsertDraftVertex, onTranslateDraft, onSelectDraftVertex }} />);
+    await screen.findByTestId('region-draft-editor');
+    fireEvent.pointerDown(screen.getByTestId('region-draft-editor-vertex-1'), { clientX: 40, clientY: 20 }); fireEvent.pointerMove(window, { clientX: 44, clientY: 25 }); fireEvent.pointerUp(window);
+    expect(onSelectDraftVertex).toHaveBeenCalledWith(1); expect(onMoveDraftVertex).toHaveBeenCalledWith(1, { x: 44, y: 25 });
+    fireEvent.pointerDown(screen.getByTestId('region-draft-midpoint-1'), { clientX: 40, clientY: 35 }); fireEvent.pointerMove(window, { clientX: 43, clientY: 37 }); fireEvent.pointerUp(window);
+    expect(onInsertDraftVertex).toHaveBeenCalledWith(1, { x: 40, y: 35 }); expect(onMoveDraftVertex).toHaveBeenLastCalledWith(2, { x: 43, y: 37 });
+    fireEvent.pointerDown(screen.getByTestId('region-draft-editor').querySelector('polygon')!, { clientX: 20, clientY: 25 }); fireEvent.pointerMove(window, { clientX: 24, clientY: 30 }); fireEvent.pointerUp(window);
+    expect(onSelectDraftVertex).toHaveBeenLastCalledWith(null); expect(onTranslateDraft).toHaveBeenCalledWith({ x: 4, y: 5 });
+  });
+
   it('uses the dominant screen-space Y delta for a vertical Shift-constrained Region segment', async () => {
     screenTransform.scale = 2;
     screenTransform.offsetX = 100;

@@ -1388,8 +1388,8 @@ endpoints UI ничего не выдумывает.
 
 **FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
-and L1S.7b.4a/b laminar contract, derived tree and selection implemented; remaining
-existing-Region editing remains OPEN**
+and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c
+new-Region draft geometry editing implemented; remaining existing-Region editing remains OPEN**
 
 Physical Saved Map contains its own ordered `MapRegion` presentation records.
 Their stable UUID is SavedMap presentation identity, not a `ProjectionSourceRef`, and

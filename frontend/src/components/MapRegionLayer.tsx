@@ -11,8 +11,9 @@ export interface MapReferenceOutline {
 
 /** Ephemeral authoring geometry; it is deliberately not a Saved Map Region. */
 export interface MapRegionDraft {
-  status: 'drawing' | 'completed';
+  status: 'drawing' | 'editing';
   points: readonly XYPosition[];
+  selectedVertexIndex?: number | null;
   previewPoint?: XYPosition;
   closingTarget?: boolean;
 }
@@ -80,7 +81,7 @@ export function MapRegionLayer({
             );
           })}
       </g>
-      {draft && (
+      {draft?.status === 'drawing' && (
         <g className={`map-region-layer__draft map-region-layer__draft--${draft.status}`} data-testid="map-region-draft">
           {draft.points.length >= 3 && <polygon data-testid="map-region-draft-fill" points={draft.points.map((point) => `${point.x},${point.y}`).join(' ')} />}
           {draft.points.length >= 2 && <polyline data-testid="map-region-draft-segments" points={draft.points.map((point) => `${point.x},${point.y}`).join(' ')} />}
