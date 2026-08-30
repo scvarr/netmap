@@ -215,6 +215,10 @@ export function MapPage({
   const placementMembershipKey = ids.join(",");
   const hasLoadedMap = legacy || Boolean(activeMap);
   const physicalRegionMode = regionMode && !legacy && Boolean(activeMap) && viewMode === "physical";
+  const completeRegionDraft = useCallback(() => {
+    setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'completed' } : current);
+    if (activeMap) setRegionCreate({ mapId: activeMap.map_ref.entity_id, label: '', status: 'editing', error: null });
+  }, [activeMap]);
   const objectSearchResults = useMemo(() => {
     const query = objectSearch.trim().toLocaleLowerCase();
     if (viewMode !== "physical" || !query) return [];
@@ -272,13 +276,12 @@ export function MapPage({
         setRegionCreate(null);
       } else if (event.key === 'Enter' && regionDraft.points.length >= 3) {
         event.preventDefault();
-        setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'completed' } : current);
-        if (activeMap) setRegionCreate({ mapId: activeMap.map_ref.entity_id, label: '', status: 'editing', error: null });
+        completeRegionDraft();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeMap, physicalRegionMode, regionDraft]);
+  }, [completeRegionDraft, physicalRegionMode, regionDraft]);
 
   const selectMap = useCallback(
     (id: string) => {
@@ -1393,7 +1396,7 @@ export function MapPage({
           <button type="button" onClick={() => { regionOperationSequence.current += 1; setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); }}>{t("map.regionNew")}</button>
           {regionDraft?.status === 'drawing' && <>
             <span>{t("map.regionPoints", { count: regionDraft.points.length })}</span>
-            <button type="button" disabled={regionDraft.points.length < 3} onClick={() => { setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'completed' } : current); if (activeMap) setRegionCreate({ mapId: activeMap.map_ref.entity_id, label: '', status: 'editing', error: null }); }}>{t("map.regionDone")}</button>
+            <button type="button" disabled={regionDraft.points.length < 3} onClick={completeRegionDraft}>{t("map.regionDone")}</button>
             <button type="button" onClick={() => { regionOperationSequence.current += 1; setRegionDraft(null); setRegionCreate(null); }}>{t("map.cancel")}</button>
           </>}
           {regionDraft?.status === 'completed' && <>
@@ -1614,6 +1617,7 @@ export function MapPage({
                     showReferenceOutlines: showRegionReferenceOutlines,
                     draft: regionDraft ?? undefined,
                     onDraftPoint: (point) => setRegionDraft((current) => current?.status === 'drawing' ? { ...current, points: [...current.points, point] } : current),
+                    onCompleteDraft: completeRegionDraft,
                   } : undefined}
                 />
               </ReactFlowProvider>

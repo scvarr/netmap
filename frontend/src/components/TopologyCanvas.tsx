@@ -86,7 +86,7 @@ interface TopologyCanvasProps {
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   regions?: readonly MapRegion[];
-  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; onDraftPoint?: (point: XYPosition) => void };
+  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void };
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -96,6 +96,21 @@ const edgeTypes = {
 };
 
 interface ScreenPosition { x: number; y: number }
+const REGION_DRAFT_CLOSE_RADIUS_PX = 12;
+
+const isRegionDraftClosingTarget = ({
+  draft,
+  pointerScreen,
+  flowToScreenPosition,
+}: {
+  draft: MapRegionDraft;
+  pointerScreen: ScreenPosition;
+  flowToScreenPosition: (position: XYPosition) => ScreenPosition;
+}) => {
+  if (draft.status !== 'drawing' || draft.points.length < 3) return false;
+  const firstScreen = flowToScreenPosition(draft.points[0]);
+  return Math.hypot(pointerScreen.x - firstScreen.x, pointerScreen.y - firstScreen.y) <= REGION_DRAFT_CLOSE_RADIUS_PX;
+};
 
 const regionDraftPointForPointer = ({
   points,
@@ -160,6 +175,7 @@ export function TopologyCanvas({
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [regionDraftPreview, setRegionDraftPreview] = useState<XYPosition | undefined>();
+  const [regionDraftClosingTarget, setRegionDraftClosingTarget] = useState(false);
   const fitAfterLayout = useRef(false);
   const fittedSceneKey = useRef<string | null>(null);
   const appliedAuthoritativePositionRevision = useRef(
@@ -492,9 +508,14 @@ export function TopologyCanvas({
         onPaneClick={(event) => {
           if (regionMode) {
             if (regionMode.draft?.status === 'drawing') {
+              const pointerScreen = { x: event.clientX, y: event.clientY };
+              if (isRegionDraftClosingTarget({ draft: regionMode.draft, pointerScreen, flowToScreenPosition })) {
+                regionMode.onCompleteDraft?.();
+                return;
+              }
               regionMode.onDraftPoint?.(regionDraftPointForPointer({
                 points: regionMode.draft.points,
-                pointerScreen: { x: event.clientX, y: event.clientY },
+                pointerScreen,
                 shiftKey: event.shiftKey,
                 screenToFlowPosition,
                 flowToScreenPosition,
@@ -508,9 +529,12 @@ export function TopologyCanvas({
         }}
         onPaneMouseMove={(event) => {
           if (regionMode?.draft?.status === 'drawing') {
-            setRegionDraftPreview(regionDraftPointForPointer({
+            const pointerScreen = { x: event.clientX, y: event.clientY };
+            const closingTarget = isRegionDraftClosingTarget({ draft: regionMode.draft, pointerScreen, flowToScreenPosition });
+            setRegionDraftClosingTarget(closingTarget);
+            setRegionDraftPreview(closingTarget ? regionMode.draft.points[0] : regionDraftPointForPointer({
               points: regionMode.draft.points,
-              pointerScreen: { x: event.clientX, y: event.clientY },
+              pointerScreen,
               shiftKey: event.shiftKey,
               screenToFlowPosition,
               flowToScreenPosition,
@@ -563,7 +587,7 @@ export function TopologyCanvas({
               regions={regions}
               referenceOutlines={referenceOutlines}
               showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
-              draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined }}
+              draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget }}
             />
           </ViewportPortal>
         )}

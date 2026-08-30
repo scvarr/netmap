@@ -14,6 +14,7 @@ export interface MapRegionDraft {
   status: 'drawing' | 'completed';
   points: readonly XYPosition[];
   previewPoint?: XYPosition;
+  closingTarget?: boolean;
 }
 
 const points = (region: MapRegion) => region.points.map((point) => `${point.x},${point.y}`).join(' ');
@@ -85,7 +86,7 @@ export function MapRegionLayer({
             <line data-testid="map-region-draft-preview" x1={draft.points.at(-1)!.x} y1={draft.points.at(-1)!.y} x2={draft.previewPoint.x} y2={draft.previewPoint.y} />
           )}
           {draft.points.length >= 3 && <line data-testid="map-region-draft-close" x1={draft.points.at(-1)!.x} y1={draft.points.at(-1)!.y} x2={draft.points[0].x} y2={draft.points[0].y} />}
-          {draft.points.map((point, index) => <circle key={index} data-testid={`map-region-draft-vertex-${index}`} cx={point.x} cy={point.y} r="5" />)}
+          {draft.points.map((point, index) => <circle key={index} data-testid={`map-region-draft-vertex-${index}`} data-closing-target={index === 0 && draft.closingTarget ? 'true' : undefined} cx={point.x} cy={point.y} r={index === 0 && draft.closingTarget ? 7 : 5} />)}
         </g>
       )}
       {showReferenceOutlines && (

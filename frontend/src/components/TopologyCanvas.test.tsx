@@ -306,6 +306,29 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(onDraftPoint).toHaveBeenCalledWith({ x: 25, y: 20 });
   });
 
+  it('completes a three-point draft by screen-space click on its first vertex without appending it', async () => {
+    const onDraftPoint = vi.fn(); const onCompleteDraft = vi.fn();
+    render(<TopologyCanvas document={documentFor('physical-region-close')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 50 }] }, onDraftPoint, onCompleteDraft }} />);
+    await screen.findByTestId('map-region-draft');
+    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 17, clientY: 25 });
+    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '10');
+    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '20');
+    expect(screen.getByTestId('map-region-draft-vertex-0')).toHaveAttribute('data-closing-target', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 17, clientY: 25 });
+    expect(onCompleteDraft).toHaveBeenCalledTimes(1); expect(onDraftPoint).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 80, clientY: 20 });
+    expect(onDraftPoint).toHaveBeenCalledWith({ x: 80, y: 20 });
+  });
+
+  it('uses the same closing hit radius under pan, zoom, and Shift', async () => {
+    screenTransform.scale = 2; screenTransform.offsetX = 100; screenTransform.offsetY = 50;
+    const onDraftPoint = vi.fn(); const onCompleteDraft = vi.fn();
+    render(<TopologyCanvas document={documentFor('physical-region-close-scaled')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 50 }] }, onDraftPoint, onCompleteDraft }} />);
+    await screen.findByTestId('map-region-draft');
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 126, clientY: 94, shiftKey: true });
+    expect(onCompleteDraft).toHaveBeenCalledTimes(1); expect(onDraftPoint).not.toHaveBeenCalled();
+  });
+
   it('uses the dominant screen-space Y delta for a vertical Shift-constrained Region segment', async () => {
     screenTransform.scale = 2;
     screenTransform.offsetX = 100;
