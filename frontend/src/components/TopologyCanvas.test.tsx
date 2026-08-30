@@ -331,7 +331,7 @@ describe('TopologyCanvas async layout boundary', () => {
 
   it('edits only the active draft through vertex, midpoint, and polygon pointer drags', async () => {
     const onMoveDraftVertex = vi.fn(); const onInsertDraftVertex = vi.fn(); const onTranslateDraft = vi.fn(); const onSelectDraftVertex = vi.fn();
-    render(<TopologyCanvas document={documentFor('physical-region-editor')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: true, draft: { status: 'editing', points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 50 }] }, onMoveDraftVertex, onInsertDraftVertex, onTranslateDraft, onSelectDraftVertex }} />);
+    render(<TopologyCanvas document={documentFor('physical-region-editor')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: true, editableDraft: true, draft: { status: 'editing', points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 50 }] }, onMoveDraftVertex, onInsertDraftVertex, onTranslateDraft, onSelectDraftVertex }} />);
     await screen.findByTestId('region-draft-editor');
     fireEvent.pointerDown(screen.getByTestId('region-draft-editor-vertex-1'), { clientX: 40, clientY: 20 }); fireEvent.pointerMove(window, { clientX: 44, clientY: 25 }); fireEvent.pointerUp(window);
     expect(onSelectDraftVertex).toHaveBeenCalledWith(1); expect(onMoveDraftVertex).toHaveBeenCalledWith(1, { x: 44, y: 25 });

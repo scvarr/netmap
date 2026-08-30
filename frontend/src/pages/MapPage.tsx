@@ -289,20 +289,20 @@ export function MapPage({
   useEffect(() => {
     if (!physicalRegionMode || !regionDraft) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && (regionDraft.status === 'drawing' || regionCreate?.status === 'editing')) {
         event.preventDefault();
         cancelRegionDraft();
       } else if (event.key === 'Enter' && regionDraft.status === 'drawing' && regionDraft.points.length >= 3) {
         event.preventDefault();
         completeRegionDraft();
-      } else if ((event.key === 'Delete' || event.key === 'Backspace') && regionDraft.status === 'editing' && regionDraft.selectedVertexIndex !== null && regionDraft.points.length > 3) {
+      } else if ((event.key === 'Delete' || event.key === 'Backspace') && regionCreate?.status === 'editing' && regionDraft.status === 'editing' && regionDraft.selectedVertexIndex !== null && regionDraft.points.length > 3) {
         event.preventDefault();
         deleteSelectedRegionDraftVertex();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [cancelRegionDraft, completeRegionDraft, deleteSelectedRegionDraftVertex, physicalRegionMode, regionDraft]);
+  }, [cancelRegionDraft, completeRegionDraft, deleteSelectedRegionDraftVertex, physicalRegionMode, regionCreate?.status, regionDraft]);
 
   const selectMap = useCallback(
     (id: string) => {
@@ -1641,13 +1641,14 @@ export function MapPage({
                   regionMode={physicalRegionMode ? {
                     showReferenceOutlines: showRegionReferenceOutlines,
                     draft: regionDraft ?? undefined,
+                    editableDraft: regionCreate?.status === 'editing',
                     invalidDraft: regionDraftValidation ? !regionDraftValidation.valid : false,
                     onDraftPoint: (point) => setRegionDraft((current) => current?.status === 'drawing' ? { ...current, points: [...current.points, point] } : current),
                     onCompleteDraft: completeRegionDraft,
-                    onMoveDraftVertex: (index, point) => setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: moveRegionDraftVertex(current.points, index, point) } : current),
-                    onInsertDraftVertex: (edgeStartIndex, point) => setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: insertRegionDraftVertex(current.points, edgeStartIndex, point), selectedVertexIndex: edgeStartIndex + 1 } : current),
-                    onTranslateDraft: (delta) => setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: translateRegionDraft(current.points, delta) } : current),
-                    onSelectDraftVertex: (index) => setRegionDraft((current) => current?.status === 'editing' ? { ...current, selectedVertexIndex: index } : current),
+                    onMoveDraftVertex: (index, point) => { if (regionCreate?.status === 'editing') setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: moveRegionDraftVertex(current.points, index, point) } : current); },
+                    onInsertDraftVertex: (edgeStartIndex, point) => { if (regionCreate?.status === 'editing') setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: insertRegionDraftVertex(current.points, edgeStartIndex, point), selectedVertexIndex: edgeStartIndex + 1 } : current); },
+                    onTranslateDraft: (delta) => { if (regionCreate?.status === 'editing') setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: translateRegionDraft(current.points, delta) } : current); },
+                    onSelectDraftVertex: (index) => { if (regionCreate?.status === 'editing') setRegionDraft((current) => current?.status === 'editing' ? { ...current, selectedVertexIndex: index } : current); },
                   } : undefined}
                 />
               </ReactFlowProvider>

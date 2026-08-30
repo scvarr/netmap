@@ -154,6 +154,19 @@ describe('MapPage SavedMap scope', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(createRegion).toHaveBeenCalledTimes(2));
   });
+  it('freezes draft mutation and Escape during save, then restores the same geometry after POST failure', async () => {
+    let rejectCreate!: (reason?: unknown) => void;
+    const createRegion = vi.fn().mockImplementation(() => new Promise<void>((_, reject) => { rejectCreate = reject; }));
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([saved(A, [])]), loadMap: vi.fn().mockResolvedValue(saved(A, [[PP, 1, 2]])), createMap: vi.fn(), createRegion, addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() };
+    renderPage({ loadProjection: vi.fn(scopedProjection) }, maps);
+    await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: 'Области' })); fireEvent.click(screen.getByRole('button', { name: 'Новая область' }));
+    fireEvent.click(screen.getByRole('button', { name: 'draft point 1' })); fireEvent.click(screen.getByRole('button', { name: 'draft point 2' })); fireEvent.click(screen.getByRole('button', { name: 'draft point 3' })); fireEvent.click(screen.getByRole('button', { name: 'Готово' })); fireEvent.click(screen.getByRole('button', { name: 'move region vertex' }));
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Frozen' } }); fireEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(createRegion).toHaveBeenCalledTimes(1));
+    const frozen = screen.getByTestId('canvas').getAttribute('data-region-draft'); fireEvent.click(screen.getByRole('button', { name: 'move region polygon' })); fireEvent.keyDown(window, { key: 'Escape' }); fireEvent.keyDown(window, { key: 'Delete' });
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-draft', frozen); expect(screen.queryByRole('button', { name: 'Отмена' })).not.toBeInTheDocument();
+    await act(async () => { rejectCreate(new Error('failed')); }); await screen.findByRole('alert');
+    expect(screen.getByLabelText('Название')).toHaveValue('Frozen'); expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-draft', frozen); expect(screen.getByRole('button', { name: 'Отмена' })).toBeInTheDocument();
+  });
   it('retries only the authoritative Region refresh after an acknowledged POST', async () => {
     const createRegion = vi.fn().mockResolvedValue(undefined);
     const maps: any = { listMaps: vi.fn().mockResolvedValue([saved(A, [])]), loadMap: vi.fn().mockResolvedValueOnce(saved(A, [[PP, 1, 2]])).mockResolvedValueOnce(saved(A, [[PP, 1, 2]])).mockRejectedValueOnce(new Error('refresh failed')).mockResolvedValueOnce(saved(A, [[PP, 1, 2]])), createMap: vi.fn(), createRegion, addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() };
@@ -163,6 +176,8 @@ describe('MapPage SavedMap scope', () => {
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Refresh zone' } }); fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     expect(await screen.findByText('Область сохранена, но карту не удалось обновить.')).toBeInTheDocument();
     expect(createRegion).toHaveBeenCalledTimes(1);
+    const frozen = screen.getByTestId('canvas').getAttribute('data-region-draft'); fireEvent.click(screen.getByRole('button', { name: 'move region vertex' })); fireEvent.keyDown(window, { key: 'Escape' }); fireEvent.keyDown(window, { key: 'Delete' });
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-draft', frozen); expect(screen.queryByRole('button', { name: 'Отмена' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
     await waitFor(() => expect(maps.loadMap).toHaveBeenCalledTimes(4));
     expect(createRegion).toHaveBeenCalledTimes(1);

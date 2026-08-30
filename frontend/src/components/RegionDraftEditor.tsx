@@ -6,14 +6,15 @@ export type RegionDraftPointerTarget = { kind: 'vertex'; index: number } | { kin
 const polygonPoints = (points: readonly XYPosition[]) => points.map((point) => `${point.x},${point.y}`).join(' ');
 
 /** Interactive overlay for the one local, unsaved Region draft only. */
-export function RegionDraftEditor({ points, selectedVertexIndex, invalid, onPointerDown }: {
+export function RegionDraftEditor({ points, selectedVertexIndex, invalid, interactive, onPointerDown }: {
   points: readonly XYPosition[];
   selectedVertexIndex: number | null;
   invalid: boolean;
+  interactive: boolean;
   onPointerDown: (target: RegionDraftPointerTarget, event: PointerEvent<SVGElement>) => void;
 }) {
   return (
-    <svg className="region-draft-editor" data-testid="region-draft-editor">
+    <svg className={interactive ? 'region-draft-editor region-draft-editor--interactive' : 'region-draft-editor'} data-testid="region-draft-editor">
       <g className={`region-draft-editor__polygon${invalid ? ' region-draft-editor__polygon--invalid' : ''}`}>
         <polygon points={polygonPoints(points)} onPointerDown={(event) => onPointerDown({ kind: 'polygon' }, event)} />
         <polyline points={`${polygonPoints(points)} ${points[0]?.x},${points[0]?.y}`} />

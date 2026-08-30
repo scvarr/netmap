@@ -88,7 +88,7 @@ interface TopologyCanvasProps {
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   regions?: readonly MapRegion[];
   selectedRegionId?: string | null;
-  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; invalidDraft?: boolean; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
+  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -197,9 +197,13 @@ export function TopologyCanvas({
   currentDocument.current = document;
 
   useEffect(() => {
+    if (!regionMode?.editableDraft) regionDraftDrag.current = null;
+  }, [regionMode?.editableDraft]);
+
+  useEffect(() => {
     const onPointerMove = (event: globalThis.PointerEvent) => {
       const drag = regionDraftDrag.current;
-      if (!drag || !regionMode?.draft || regionMode.draft.status !== 'editing') return;
+      if (!drag || !regionMode?.editableDraft || !regionMode.draft || regionMode.draft.status !== 'editing') return;
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       if (drag.kind === 'vertex') regionMode.onMoveDraftVertex?.(drag.index, point);
       else {
@@ -215,7 +219,7 @@ export function TopologyCanvas({
   }, [regionMode, screenToFlowPosition]);
 
   const onRegionDraftEditorPointerDown = (target: RegionDraftPointerTarget, event: PointerEvent<SVGElement>) => {
-    if (regionMode?.draft?.status !== 'editing') return;
+    if (!regionMode?.editableDraft || regionMode.draft?.status !== 'editing') return;
     event.preventDefault(); event.stopPropagation();
     const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     if (target.kind === 'vertex') {
@@ -601,6 +605,7 @@ export function TopologyCanvas({
         )}
         nodesConnectable={false}
         elementsSelectable={!regionMode}
+        panOnDrag={!regionMode?.editableDraft}
         proOptions={{ hideAttribution: true }}
       >
         <Panel position="top-left">
@@ -629,7 +634,7 @@ export function TopologyCanvas({
               showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
               draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget }}
             />
-            {regionMode?.draft?.status === 'editing' && <RegionDraftEditor points={regionMode.draft.points} selectedVertexIndex={regionMode.draft.selectedVertexIndex ?? null} invalid={Boolean(regionMode.invalidDraft)} onPointerDown={onRegionDraftEditorPointerDown} />}
+            {regionMode?.draft?.status === 'editing' && <RegionDraftEditor points={regionMode.draft.points} selectedVertexIndex={regionMode.draft.selectedVertexIndex ?? null} invalid={Boolean(regionMode.invalidDraft)} interactive={Boolean(regionMode.editableDraft)} onPointerDown={onRegionDraftEditorPointerDown} />}
           </ViewportPortal>
         )}
         <MiniMap
