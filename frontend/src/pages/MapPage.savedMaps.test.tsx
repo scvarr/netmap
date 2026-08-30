@@ -6,7 +6,7 @@ import { MapPage } from './MapPage';
 import type { SavedMapDataSource } from '../topology/savedMapTypes';
 import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
 
-vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => { useEffect(() => { props.onViewportCenterReady?.(() => ({ x: 123, y: 456 })); }, [props.onViewportCenterReady]); return <div data-testid="canvas" data-layer={props.document.layer} data-scene={props.sceneKey} data-position={JSON.stringify(props.positionOverrides)} data-display-widths={JSON.stringify(props.displayWidthOverrides)} data-locked={JSON.stringify([...props.lockedNodeIds ?? []])} data-cable-routes={JSON.stringify(props.cableRoutes ?? [])} data-regions={JSON.stringify(props.regions ?? [])} data-region-mode={JSON.stringify(props.regionMode ?? null)}>{!props.regionMode && props.document.nodes.map((node: any) => <button key={node.id} onClick={() => props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}<button onClick={() => props.onPhysicalNodeDragStop?.(PP, { x: 77, y: 88 })}>drag</button><button onClick={() => props.onBlueprintDisplayResize?.(PP, 320)}>resize</button><button onClick={() => props.onPhysicalPaneContextMenu?.({ x: 12, y: 34 }, { x: 120, y: 340 })}>pane context</button></div>; } }));
+vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => { useEffect(() => { props.onViewportCenterReady?.(() => ({ x: 123, y: 456 })); }, [props.onViewportCenterReady]); return <div data-testid="canvas" data-layer={props.document.layer} data-scene={props.sceneKey} data-position={JSON.stringify(props.positionOverrides)} data-display-widths={JSON.stringify(props.displayWidthOverrides)} data-locked={JSON.stringify([...props.lockedNodeIds ?? []])} data-cable-routes={JSON.stringify(props.cableRoutes ?? [])} data-regions={JSON.stringify(props.regions ?? [])} data-region-mode={JSON.stringify(props.regionMode ?? null)} data-region-draft={JSON.stringify(props.regionMode?.draft ?? null)}>{!props.regionMode && props.document.nodes.map((node: any) => <button key={node.id} onClick={() => props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}<button onClick={() => props.onPhysicalNodeDragStop?.(PP, { x: 77, y: 88 })}>drag</button><button onClick={() => props.onBlueprintDisplayResize?.(PP, 320)}>resize</button><button onClick={() => props.onPhysicalPaneContextMenu?.({ x: 12, y: 34 }, { x: 120, y: 340 })}>pane context</button><button onClick={() => props.regionMode?.onDraftPoint?.({ x: 10, y: 20 })}>draft point 1</button><button onClick={() => props.regionMode?.onDraftPoint?.({ x: 40, y: 20 })}>draft point 2</button><button onClick={() => props.regionMode?.onDraftPoint?.({ x: 40, y: 50 })}>draft point 3</button></div>; } }));
 vi.mock('../components/TraceCommandBar', () => ({ TraceCommandBar: (props: any) => <div data-testid="trace-logical" data-branch={props.selectedBranchId ?? ''} data-artifact={props.traceArtifact?.verdict ?? ''}>{props.logicalDocument?.nodes.map((node: any) => node.label).join(',')}<button onClick={() => props.onTraceArtifact({ verdict: 'REACHABLE', nodes: [], edges: [], branches: [{ branch_id: 'branch-a', edge_ids: [], evidence_refs: [] }] })}>reachable</button></div> }));
 vi.mock('../components/QuickInspector', () => ({ QuickInspector: (props: any) => props.selection ? <div data-testid="inspector" data-selected={props.selection.item.label}><button onClick={() => props.onRemoveFromMap?.(PP)}>remove</button><button onClick={() => props.onDeletePhysicalObject?.(PP)}>delete</button></div> : null }));
 
@@ -44,6 +44,42 @@ describe('MapPage SavedMap scope', () => {
     fireEvent.change(screen.getByLabelText('Карты'), { target: { value: B } });
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-scene', `${B}/physical`));
     expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-mode', 'null');
+  });
+  it('keeps polygon drafts local, completes only after three flow points, and discards them on cancellation or scene changes', async () => {
+    const persistedRegion = { region_ref: { entity_type: 'MapRegion', entity_id: 'region-a' }, label: 'Zone A', points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 0, y: 10 }], style: { fill_color: '#123456', fill_opacity: .2, stroke_color: '#abcdef', stroke_width: 2, stroke_style: 'solid' }, z_order: 0 };
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([saved(A, []), saved(B, [])]), loadMap: vi.fn((id: string) => Promise.resolve(id === A ? saved(A, [[PP, 1, 2]], [], [persistedRegion]) : saved(B, [[SW, 3, 4]]))), createMap: vi.fn(), createRegion: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() };
+    renderPage({ loadProjection: vi.fn(scopedProjection) }, maps);
+    await screen.findByText('PP1');
+    expect(screen.queryByRole('button', { name: 'Новая область' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Области' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Новая область' }));
+    expect(screen.getByRole('button', { name: 'Готово' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'draft point 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'draft point 2' }));
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-draft', expect.stringContaining('"x":40'));
+    expect(screen.getByRole('button', { name: 'Готово' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'draft point 3' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
+    expect(screen.getByText('Черновик области не сохранён.')).toBeInTheDocument();
+    expect(maps.createRegion).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-draft', 'null');
+    fireEvent.click(screen.getByRole('button', { name: 'Новая область' }));
+    fireEvent.click(screen.getByRole('button', { name: 'draft point 1' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-draft', 'null'));
+    fireEvent.click(screen.getByRole('button', { name: 'Новая область' }));
+    fireEvent.click(screen.getByRole('button', { name: 'draft point 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Логическая' }));
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-mode', 'null'));
+    fireEvent.click(screen.getByRole('button', { name: 'Физическая' }));
+    await screen.findByRole('button', { name: 'Области' });
+    fireEvent.click(screen.getByRole('button', { name: 'Области' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Новая область' }));
+    fireEvent.click(screen.getByRole('button', { name: 'draft point 1' }));
+    fireEvent.change(screen.getByLabelText('Карты'), { target: { value: B } });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-scene', `${B}/physical`));
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-draft', 'null');
   });
   it('searches only the active Physical Saved Map by case-insensitive display-name substring and selects the chosen result without changing the URL', async () => {
     const maps: any = { listMaps: vi.fn().mockResolvedValue([saved(A, []), saved(B, [])]), loadMap: vi.fn((id: string) => Promise.resolve(id === A ? saved(A, [[PP, 1, 2], [PC, 3, 4]]) : saved(B, [[SW, 5, 6]]))), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() };

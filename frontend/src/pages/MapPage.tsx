@@ -9,6 +9,7 @@ import { QuickInspector } from "../components/QuickInspector";
 import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
+import type { MapRegionDraft } from "../components/MapRegionLayer";
 import { perfMark } from "../perfMarks";
 import { ViewState } from "../components/ViewState";
 import { physicalTraceOverlayFor } from "../topology/interfacePhysicalTraceOverlay";
@@ -178,6 +179,7 @@ export function MapPage({
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
   const [regionMode, setRegionMode] = useState(false);
   const [showRegionReferenceOutlines, setShowRegionReferenceOutlines] = useState(true);
+  const [regionDraft, setRegionDraft] = useState<MapRegionDraft | null>(null);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
@@ -235,10 +237,14 @@ export function MapPage({
 
   useEffect(() => {
     setRegionMode(false);
+    setRegionDraft(null);
   }, [mapId, viewMode]);
 
   useEffect(() => {
-    if (!physicalRegionMode) return;
+    if (!physicalRegionMode) {
+      setRegionDraft(null);
+      return;
+    }
     setSelection(null);
     setContextAnchor(null);
     setContinuationAnchor(null);
@@ -247,6 +253,21 @@ export function MapPage({
     setCableRouteReset(null);
     setWiring({ status: "idle" });
   }, [physicalRegionMode]);
+
+  useEffect(() => {
+    if (!physicalRegionMode || regionDraft?.status !== 'drawing') return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setRegionDraft(null);
+      } else if (event.key === 'Enter' && regionDraft.points.length >= 3) {
+        event.preventDefault();
+        setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'completed' } : current);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [physicalRegionMode, regionDraft]);
 
   const selectMap = useCallback(
     (id: string) => {
@@ -1299,6 +1320,16 @@ export function MapPage({
           <span>{t("map.regionReference")}</span>
           <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t("map.regionOutlines")}</button>
           <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t("map.regionHideObjects")}</button>
+          <button type="button" onClick={() => setRegionDraft({ status: 'drawing', points: [] })}>{t("map.regionNew")}</button>
+          {regionDraft?.status === 'drawing' && <>
+            <span>{t("map.regionPoints", { count: regionDraft.points.length })}</span>
+            <button type="button" disabled={regionDraft.points.length < 3} onClick={() => setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'completed' } : current)}>{t("map.regionDone")}</button>
+            <button type="button" onClick={() => setRegionDraft(null)}>{t("map.cancel")}</button>
+          </>}
+          {regionDraft?.status === 'completed' && <>
+            <span role="status">{t("map.regionDraftUnsaved")}</span>
+            <button type="button" onClick={() => setRegionDraft(null)}>{t("map.cancel")}</button>
+          </>}
         </section>
       )}
 
@@ -1500,7 +1531,11 @@ export function MapPage({
                     setContinuationAnchor({ continuationId, mapId, anchor })
                   : undefined}
                   regions={viewMode === "physical" ? activeMap?.regions : undefined}
-                  regionMode={physicalRegionMode ? { showReferenceOutlines: showRegionReferenceOutlines } : undefined}
+                  regionMode={physicalRegionMode ? {
+                    showReferenceOutlines: showRegionReferenceOutlines,
+                    draft: regionDraft ?? undefined,
+                    onDraftPoint: (point) => setRegionDraft((current) => current?.status === 'drawing' ? { ...current, points: [...current.points, point] } : current),
+                  } : undefined}
                 />
               </ReactFlowProvider>
             )}

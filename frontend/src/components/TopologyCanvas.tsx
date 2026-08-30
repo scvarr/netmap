@@ -47,7 +47,7 @@ import { cableIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
-import { MapRegionLayer, type MapReferenceOutline } from "./MapRegionLayer";
+import { MapRegionLayer, type MapReferenceOutline, type MapRegionDraft } from "./MapRegionLayer";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -87,7 +87,7 @@ interface TopologyCanvasProps {
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   regions?: readonly MapRegion[];
-  regionMode?: { showReferenceOutlines: boolean };
+  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; onDraftPoint?: (point: XYPosition) => void };
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -134,6 +134,7 @@ export function TopologyCanvas({
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
+  const [regionDraftPreview, setRegionDraftPreview] = useState<XYPosition | undefined>();
   const fitAfterLayout = useRef(false);
   const fittedSceneKey = useRef<string | null>(null);
   const appliedAuthoritativePositionRevision = useRef(
@@ -467,9 +468,17 @@ export function TopologyCanvas({
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={(event) => {
-          if (regionMode) return;
+          const anchor = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          if (regionMode) {
+            if (regionMode.draft?.status === 'drawing') regionMode.onDraftPoint?.(anchor);
+            return;
+          }
           onSelectionChange(null);
-          onPaneClick?.(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+          onPaneClick?.(anchor);
+        }}
+        onPaneMouseMove={(event) => {
+          if (regionMode?.draft?.status === 'drawing')
+            setRegionDraftPreview(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
         }}
         onPaneContextMenu={(event) => {
           if (regionMode || !onPhysicalPaneContextMenu) return;
@@ -517,6 +526,7 @@ export function TopologyCanvas({
               regions={regions}
               referenceOutlines={referenceOutlines}
               showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
+              draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined }}
             />
           </ViewportPortal>
         )}

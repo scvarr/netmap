@@ -363,12 +363,24 @@ it is deliberately separate from Port Block Blueprint composition.
 - The frontend-only `Области` mode clears/suppresses topology interaction, hides cables,
   and defaults to real current object-bound reference outlines with a bounded hide option.
 
+##### L1S.7b.2 — Region polygon draft drawing
+
+**IMPLEMENTED**
+
+- `Области` mode provides an explicit `Новая область` session-local flow-coordinate polygon
+  draft. Canvas clicks add vertices; draft points, segments, pointer preview and prospective
+  closure remain visibly distinct from persisted `regions[]`.
+- `Готово`/`Enter` is available only after three vertices and leaves a completed, explicitly
+  unsaved local draft. `Отмена`/`Escape`, map change, leaving Physical view, or leaving Region
+  mode discards it. This step performs no Region API write and creates no synthetic `MapRegion`
+  identity.
+
 ##### Remaining L1S.7b drawing and editing steps
 
 **OPEN**
 
-- Polygon drawing/editing, Region selection, styling controls and Shift screen-axis
-  segment constraint remain future bounded work. No canonical topology semantics are introduced.
+- Shift screen-axis segment constraint, Saved Map persistence, Region selection/editing, and
+  styling controls remain future bounded work. No canonical topology semantics are introduced.
 
 ### L1S.8 — MapReference / hierarchical maps
 

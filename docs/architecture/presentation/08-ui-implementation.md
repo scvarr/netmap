@@ -979,8 +979,8 @@ materialized.
 
 ## MAPS.3 — Saved Map Regions
 
-**L1S.7a model/persistence/API and L1S.7b.1 rendering/isolated mode IMPLEMENTED;
-remaining L1S.7b drawing/editing OPEN**
+**L1S.7a model/persistence/API, L1S.7b.1 rendering/isolated mode, and L1S.7b.2
+session-local polygon draft drawing IMPLEMENTED; remaining L1S.7b persistence/editing OPEN**
 
 The authoritative `SavedMapDocument` contains `regions[]`. Each item has a
 SavedMap-scoped `MapRegionRef { entity_type: "MapRegion", entity_id }`, trimmed
@@ -1001,8 +1001,12 @@ L1S.7b.1 renders persisted Regions as a non-interactive Physical presentation la
 outside React Flow topology nodes and below topology objects, cables, ports and overlays.
 It also provides an isolated frontend-session `Области` mode: topology interaction is
 suppressed, cables are hidden, and real current object bounds/contours are the default
-reference background with a bounded complete hide option. Polygon drawing, selection,
-editing, styling UI and Shift-constrained screen-axis drawing remain OPEN L1S.7b work.
+reference background with a bounded complete hide option. L1S.7b.2 adds a typed local draft
+to that same layer, rather than synthesizing a `MapRegion`: canvas clicks add flow-coordinate
+vertices; the layer shows vertices, segments, a pointer preview, and closure after three
+points. Completing the draft leaves only an explicitly unsaved local polygon and makes no API
+write; cancel, `Escape`, map/view/mode exit discard it. Shift-constrained drawing, persistence,
+selection, editing, and styling UI remain OPEN L1S.7b work.
 
 ## Future Fibre Channel compatibility boundary
 

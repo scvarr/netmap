@@ -24,13 +24,15 @@ vi.mock('@xyflow/react', () => ({
   MiniMap: () => null,
   Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
-  ReactFlow: ({ nodes, edges, onNodeClick, onNodesChange, onNodeDragStart, onNodeDragStop, children }: {
+  ReactFlow: ({ nodes, edges, onNodeClick, onNodesChange, onNodeDragStart, onNodeDragStop, onPaneClick, onPaneMouseMove, children }: {
     nodes: FlowProjection['nodes'];
     edges: FlowProjection['edges'];
     onNodeClick: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     onNodesChange: (changes: unknown[]) => void;
     onNodeDragStart: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     onNodeDragStop: (event: unknown, node: FlowProjection['nodes'][number]) => void;
+    onPaneClick?: (event: { clientX: number; clientY: number }) => void;
+    onPaneMouseMove?: (event: { clientX: number; clientY: number }) => void;
     children: React.ReactNode;
   }) => (
     <div data-testid="flow">
@@ -52,12 +54,14 @@ vi.mock('@xyflow/react', () => ({
           }}>drag {node.id}</button>
         </div>
       ))}
+      <button onClick={() => onPaneMouseMove?.({ clientX: 30, clientY: 40 })}>move pane</button>
+      <button onClick={() => onPaneClick?.({ clientX: 10, clientY: 20 })}>click pane</button>
       {children}
     </div>
   ),
   useInternalNode: () => undefined,
   useNodes: () => flowNodesMock,
-  useReactFlow: () => ({ fitView: fitViewMock }),
+  useReactFlow: () => ({ fitView: fitViewMock, screenToFlowPosition: (position: { x: number; y: number }) => position }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -254,6 +258,22 @@ describe('TopologyCanvas async layout boundary', () => {
     render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: false }} />);
     expect(await screen.findByTestId('map-region-region-a')).toBeInTheDocument();
     expect(screen.queryByTestId('map-reference-outlines')).not.toBeInTheDocument();
+  });
+
+  it('renders an active draft above persisted Regions and sends pane points in flow coordinates', async () => {
+    const document = documentFor('physical-region-draft');
+    const onDraftPoint = vi.fn();
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 1, y: 2 }, { x: 30, y: 2 }, { x: 30, y: 40 }] }, onDraftPoint }} />);
+
+    expect(await screen.findByTestId('map-region-region-a')).toBeInTheDocument();
+    expect(screen.getByTestId('map-reference-outlines')).toBeInTheDocument();
+    expect(screen.getByTestId('map-region-draft-fill')).toHaveAttribute('points', '1,2 30,2 30,40');
+    expect(screen.getByTestId('map-region-draft-segments')).toBeInTheDocument();
+    expect(screen.getByTestId('map-region-draft-close')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'move pane' }));
+    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '30');
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }));
+    expect(onDraftPoint).toHaveBeenCalledWith({ x: 10, y: 20 });
   });
 
   it('applies stored overrides and saves a manual drag for the current view', async () => {

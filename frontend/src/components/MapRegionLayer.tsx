@@ -1,4 +1,5 @@
 import type { MapRegion } from '../topology/savedMapTypes';
+import type { XYPosition } from '@xyflow/react';
 
 export interface MapReferenceOutline {
   id: string;
@@ -6,6 +7,13 @@ export interface MapReferenceOutline {
   y: number;
   width: number;
   height: number;
+}
+
+/** Ephemeral authoring geometry; it is deliberately not a Saved Map Region. */
+export interface MapRegionDraft {
+  status: 'drawing' | 'completed';
+  points: readonly XYPosition[];
+  previewPoint?: XYPosition;
 }
 
 const points = (region: MapRegion) => region.points.map((point) => `${point.x},${point.y}`).join(' ');
@@ -38,10 +46,12 @@ export function MapRegionLayer({
   regions,
   referenceOutlines,
   showReferenceOutlines,
+  draft,
 }: {
   regions: readonly MapRegion[];
   referenceOutlines: readonly MapReferenceOutline[];
   showReferenceOutlines: boolean;
+  draft?: MapRegionDraft;
 }) {
   return (
     <svg className="map-region-layer" aria-hidden="true" data-testid="map-region-layer">
@@ -67,6 +77,17 @@ export function MapRegionLayer({
             );
           })}
       </g>
+      {draft && (
+        <g className={`map-region-layer__draft map-region-layer__draft--${draft.status}`} data-testid="map-region-draft">
+          {draft.points.length >= 3 && <polygon data-testid="map-region-draft-fill" points={draft.points.map((point) => `${point.x},${point.y}`).join(' ')} />}
+          {draft.points.length >= 2 && <polyline data-testid="map-region-draft-segments" points={draft.points.map((point) => `${point.x},${point.y}`).join(' ')} />}
+          {draft.status === 'drawing' && draft.previewPoint && draft.points.length > 0 && (
+            <line data-testid="map-region-draft-preview" x1={draft.points.at(-1)!.x} y1={draft.points.at(-1)!.y} x2={draft.previewPoint.x} y2={draft.previewPoint.y} />
+          )}
+          {draft.points.length >= 3 && <line data-testid="map-region-draft-close" x1={draft.points.at(-1)!.x} y1={draft.points.at(-1)!.y} x2={draft.points[0].x} y2={draft.points[0].y} />}
+          {draft.points.map((point, index) => <circle key={index} data-testid={`map-region-draft-vertex-${index}`} cx={point.x} cy={point.y} r="5" />)}
+        </g>
+      )}
       {showReferenceOutlines && (
         <g className="map-region-layer__reference-outlines" data-testid="map-reference-outlines">
           {referenceOutlines.map((outline) => (

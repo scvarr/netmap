@@ -1386,8 +1386,8 @@ endpoints UI ничего не выдумывает.
 
 ### Regions / areas
 
-**FIXED; L1S.7a persistence/API and L1S.7b.1 rendering/isolated mode implemented;
-remaining L1S.7b drawing/editing remains OPEN**
+**FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, and L1S.7b.2
+session-local polygon draft drawing implemented; remaining L1S.7b persistence/editing remains OPEN**
 
 Physical Saved Map contains its own ordered `MapRegion` presentation records.
 Their stable UUID is SavedMap presentation identity, not a `ProjectionSourceRef`, and
@@ -1402,8 +1402,12 @@ or any other canonical fact. Deleting a Saved Map cascades its Regions.
 L1S.7b.1 provides the separate frontend-session `Области` mode. In that mode topology
 objects are a non-interactive reference background drawn from their real current canvas
 bounds/contours by default (and may be hidden), cables are hidden, and persisted Regions
-remain a presentation-only layer. Drawing, Region selection/editing and Shift-constrained
-screen-axis segments remain future L1S.7b interaction work; they are not topology invariants.
+remain a presentation-only layer. L1S.7b.2 adds a separately typed session-local polygon
+draft in the same flow-coordinate layer: its vertices are drawn from canvas clicks, `Enter`
+completes it after three vertices, and `Escape`/cancel or leaving the Physical Region mode
+discards it. Completion does not create a `MapRegion`, mutate `regions[]`, or write the Saved
+Map API. Shift-constrained screen-axis segments, persistence, Region selection, and editing
+remain future L1S.7b interaction work; they are not topology invariants.
 
 ### MapReference и иерархические карты
 
