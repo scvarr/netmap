@@ -384,12 +384,24 @@ it is deliberately separate from Port Block Blueprint composition.
   converted back to the flow-coordinate draft point, so preview and click agree under pan and
   zoom. Persistence and Region editing remain open.
 
+##### L1S.7b.3b — create Region from completed draft
+
+**IMPLEMENTED**
+
+- A completed draft has a bounded label / save / cancel form. Its trimmed non-empty label,
+  exact flow-coordinate points, `null` label position, one centralized default presentation
+  style, and next Region-layer order are posted through the Saved Map Region create route.
+- A successful write is acknowledgement only: the UI reloads the authoritative Saved Map and
+  never synthesizes a local Region. A failed write keeps the draft for an explicit save retry;
+  an acknowledged write followed by failed refresh offers a refresh-only retry and never repeats
+  the POST.
+
 ##### Remaining L1S.7b drawing and editing steps
 
 **OPEN**
 
-- Saved Map persistence, Region selection/editing, and
-  styling controls remain future bounded work. No canonical topology semantics are introduced.
+- Existing Region selection/editing, styling controls, deletion, and other Region lifecycle
+  work remain future bounded work. No canonical topology semantics are introduced.
 
 ### L1S.8 — MapReference / hierarchical maps
 

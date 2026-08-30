@@ -50,6 +50,7 @@ import type {
 } from "../topology/savedMapTypes";
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { physicalCablePresentation } from "../topology/physicalCablePresentation";
+import { defaultMapRegionStyle, nextMapRegionZOrder } from "../topology/regionPresentation";
 import type {
   TopologyDataSource,
   TopologyProjectionDocument,
@@ -112,6 +113,7 @@ interface CableRouteEditState {
   error: string | null;
 }
 interface CableRouteResetOperation { mapId: string; cableId: string; status: "pending" | "refresh-failed"; message?: string; }
+interface RegionCreateOperation { mapId: string; label: string; status: "editing" | "saving" | "refresh-failed"; error: string | null; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; canonicalResult?: PhysicalEndpointConnectionCreationDocument; error: string | null; }
@@ -180,6 +182,7 @@ export function MapPage({
   const [regionMode, setRegionMode] = useState(false);
   const [showRegionReferenceOutlines, setShowRegionReferenceOutlines] = useState(true);
   const [regionDraft, setRegionDraft] = useState<MapRegionDraft | null>(null);
+  const [regionCreate, setRegionCreate] = useState<RegionCreateOperation | null>(null);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
@@ -193,6 +196,7 @@ export function MapPage({
   const latestPhysicalDocument = useRef<TopologyProjectionDocument | null>(null);
   const viewportCenter = useRef<(() => XYPosition) | null>(null);
   const consumedAddIntent = useRef<string | null>(null);
+  const regionOperationSequence = useRef(0);
 
   selectedMapId.current = mapId;
   const legacy = !savedMapDataSource;
@@ -236,13 +240,17 @@ export function MapPage({
   }, [cableRouteEdit, mapId, selectedCableId, viewMode]);
 
   useEffect(() => {
+    regionOperationSequence.current += 1;
     setRegionMode(false);
     setRegionDraft(null);
+    setRegionCreate(null);
   }, [mapId, viewMode]);
 
   useEffect(() => {
     if (!physicalRegionMode) {
+      regionOperationSequence.current += 1;
       setRegionDraft(null);
+      setRegionCreate(null);
       return;
     }
     setSelection(null);
@@ -259,15 +267,18 @@ export function MapPage({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
+        regionOperationSequence.current += 1;
         setRegionDraft(null);
+        setRegionCreate(null);
       } else if (event.key === 'Enter' && regionDraft.points.length >= 3) {
         event.preventDefault();
         setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'completed' } : current);
+        if (activeMap) setRegionCreate({ mapId: activeMap.map_ref.entity_id, label: '', status: 'editing', error: null });
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [physicalRegionMode, regionDraft]);
+  }, [activeMap, physicalRegionMode, regionDraft]);
 
   const selectMap = useCallback(
     (id: string) => {
@@ -1107,6 +1118,65 @@ export function MapPage({
     catch { if (selectedMapId.current === operation.mapId) setCableRouteReset(operation); }
   };
 
+  const saveRegion = async () => {
+    if (!savedMapDataSource || !activeMap || !regionCreate || regionCreate.status !== 'editing' || regionDraft?.status !== 'completed') return;
+    const label = regionCreate.label.trim();
+    if (!label) {
+      setRegionCreate((current) => current?.mapId === regionCreate.mapId ? { ...current, error: t('map.regionLabelRequired') } : current);
+      return;
+    }
+    const operation = regionCreate;
+    const request = ++regionOperationSequence.current;
+    const region = {
+      label,
+      points: regionDraft.points.map(({ x, y }) => ({ x, y })),
+      label_position: null,
+      style: defaultMapRegionStyle(),
+      z_order: nextMapRegionZOrder(activeMap.regions),
+    };
+    setRegionCreate((current) => current?.mapId === operation.mapId ? { ...current, status: 'saving', error: null } : current);
+    try {
+      await savedMapDataSource.createRegion(operation.mapId, region);
+    } catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
+        setRegionCreate((current) => current?.mapId === operation.mapId ? { ...current, status: 'editing', error: t('map.regionSaveFailed') } : current);
+      return;
+    }
+    try {
+      const refreshed = await reloadMap(operation.mapId);
+      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
+      if (refreshed) {
+        setRegionDraft(null);
+        setRegionCreate(null);
+      } else {
+        setRegionCreate((current) => current?.mapId === operation.mapId ? { ...current, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') } : current);
+      }
+    } catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
+        setRegionCreate((current) => current?.mapId === operation.mapId ? { ...current, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') } : current);
+    }
+  };
+
+  const retryRegionRefresh = async () => {
+    if (!regionCreate || regionCreate.status !== 'refresh-failed') return;
+    const operation = regionCreate;
+    const request = ++regionOperationSequence.current;
+    setRegionCreate({ ...operation, status: 'saving', error: null });
+    try {
+      const refreshed = await reloadMap(operation.mapId);
+      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
+      if (refreshed) {
+        setRegionDraft(null);
+        setRegionCreate(null);
+      } else {
+        setRegionCreate({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
+      }
+    } catch {
+      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
+        setRegionCreate({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
+    }
+  };
+
   const positions = useMemo(() => {
     const positionKey = savedMapViewKey(viewMode);
     return Object.fromEntries(
@@ -1320,15 +1390,24 @@ export function MapPage({
           <span>{t("map.regionReference")}</span>
           <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t("map.regionOutlines")}</button>
           <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t("map.regionHideObjects")}</button>
-          <button type="button" onClick={() => setRegionDraft({ status: 'drawing', points: [] })}>{t("map.regionNew")}</button>
+          <button type="button" onClick={() => { regionOperationSequence.current += 1; setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); }}>{t("map.regionNew")}</button>
           {regionDraft?.status === 'drawing' && <>
             <span>{t("map.regionPoints", { count: regionDraft.points.length })}</span>
-            <button type="button" disabled={regionDraft.points.length < 3} onClick={() => setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'completed' } : current)}>{t("map.regionDone")}</button>
-            <button type="button" onClick={() => setRegionDraft(null)}>{t("map.cancel")}</button>
+            <button type="button" disabled={regionDraft.points.length < 3} onClick={() => { setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'completed' } : current); if (activeMap) setRegionCreate({ mapId: activeMap.map_ref.entity_id, label: '', status: 'editing', error: null }); }}>{t("map.regionDone")}</button>
+            <button type="button" onClick={() => { regionOperationSequence.current += 1; setRegionDraft(null); setRegionCreate(null); }}>{t("map.cancel")}</button>
           </>}
           {regionDraft?.status === 'completed' && <>
-            <span role="status">{t("map.regionDraftUnsaved")}</span>
-            <button type="button" onClick={() => setRegionDraft(null)}>{t("map.cancel")}</button>
+            {regionCreate && <>
+              <label>
+                {t('map.regionLabel')}
+                <input value={regionCreate.label} disabled={regionCreate.status !== 'editing'} onChange={(event) => setRegionCreate((current) => current ? { ...current, label: event.target.value, error: null } : current)} />
+              </label>
+              {regionCreate.error && <span role="alert">{regionCreate.error}</span>}
+              {regionCreate.status === 'saving' && <span role="status">{t('map.regionSaving')}</span>}
+              {regionCreate.status === 'editing' && <button type="button" onClick={() => void saveRegion()}>{t('map.save')}</button>}
+              {regionCreate.status === 'refresh-failed' && <button type="button" onClick={() => void retryRegionRefresh()}>{t('map.retryRefresh')}</button>}
+            </>}
+            <button type="button" disabled={regionCreate?.status === 'saving'} onClick={() => { regionOperationSequence.current += 1; setRegionDraft(null); setRegionCreate(null); }}>{t("map.cancel")}</button>
           </>}
         </section>
       )}

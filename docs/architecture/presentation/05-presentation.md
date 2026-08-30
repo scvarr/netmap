@@ -1387,8 +1387,8 @@ endpoints UI ничего не выдумывает.
 ### Regions / areas
 
 **FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
-polygon draft drawing, and L1S.7b.3a Shift screen-axis constraint implemented; remaining L1S.7b
-persistence/editing remains OPEN**
+polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, and L1S.7b.3b create/persistence
+implemented; remaining existing-Region editing remains OPEN**
 
 Physical Saved Map contains its own ordered `MapRegion` presentation records.
 Their stable UUID is SavedMap presentation identity, not a `ProjectionSourceRef`, and
@@ -1406,11 +1406,13 @@ bounds/contours by default (and may be hidden), cables are hidden, and persisted
 remain a presentation-only layer. L1S.7b.2 adds a separately typed session-local polygon
 draft in the same flow-coordinate layer: its vertices are drawn from canvas clicks, `Enter`
 completes it after three vertices, and `Escape`/cancel or leaving the Physical Region mode
-discards it. Completion does not create a `MapRegion`, mutate `regions[]`, or write the Saved
-Map API. L1S.7b.3a makes Shift constrain the current draft segment in screen space by dominant
-axis, then converts that endpoint back to flow coordinates for both preview and click. Persistence,
-Region selection, and editing remain future L1S.7b interaction work; they are not topology
-invariants.
+discards it. L1S.7b.3b turns a completed draft into a bounded label/save/cancel creation flow:
+the trimmed label and exact flow points are acknowledged by the Region POST, then only an
+authoritative Saved Map reload supplies `regions[]`. A failed POST keeps the draft for an explicit
+retry; after acknowledgement a failed reload retries only that reload. L1S.7b.3a makes Shift
+constrain the current draft segment in screen space by dominant axis, then converts that endpoint
+back to flow coordinates for both preview and click. Existing Region selection, editing, styling,
+and deletion remain future L1S.7b interaction work; they are not topology invariants.
 
 ### MapReference и иерархические карты
 
