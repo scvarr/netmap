@@ -435,6 +435,11 @@ planned capability is not treated as implemented.
   polygon translation in flow coordinates. A pure exact simple-polygon validator keeps invalid
   intermediate geometry editable but blocks save. Persisted Regions remain a passive reference layer;
   create continues to post only the current draft points and reloads authoritative state.
+- **L1S.7b.4d — Region assisted geometry — IMPLEMENTED**: new local draft drawing and vertex
+  dragging provide transient angle/flow-coordinate length feedback plus magnetic 10° and 10-unit
+  assistance. Capture is screen-space, Ctrl bypasses automatic magnets, and Shift keeps its explicit
+  screen-axis constraint. This is edit-time presentation only: it creates neither persisted dimensions
+  nor CAD/physical-length semantics. Polygon translation remains rigid and unsnapped.
 - Existing Region geometry editing + `replaceRegion` persistence and properties/style/delete remain
   **OPEN**. No canonical topology
   semantics are introduced.

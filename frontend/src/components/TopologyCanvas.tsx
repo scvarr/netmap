@@ -47,7 +47,8 @@ import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { MapRegionLayer, type MapReferenceOutline, type MapRegionDraft } from "./MapRegionLayer";
-import { RegionDraftEditor, type RegionDraftPointerTarget } from './RegionDraftEditor';
+import { RegionDraftEditor, type RegionDraftPointerTarget, type RegionDraftSegmentFeedback } from './RegionDraftEditor';
+import { assistSegment, type SegmentAssistResult } from '../topology/geometryAssist';
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -114,28 +115,21 @@ const isRegionDraftClosingTarget = ({
   return Math.hypot(pointerScreen.x - firstScreen.x, pointerScreen.y - firstScreen.y) <= REGION_DRAFT_CLOSE_RADIUS_PX;
 };
 
-const regionDraftPointForPointer = ({
+const regionDraftAssistForPointer = ({
   points,
   pointerScreen,
-  shiftKey,
+  shiftKey, ctrlKey,
   screenToFlowPosition,
   flowToScreenPosition,
 }: {
   points: readonly XYPosition[];
   pointerScreen: ScreenPosition;
-  shiftKey: boolean;
+  shiftKey: boolean; ctrlKey: boolean;
   screenToFlowPosition: (position: ScreenPosition) => XYPosition;
   flowToScreenPosition: (position: XYPosition) => ScreenPosition;
-}): XYPosition => {
-  if (!shiftKey || points.length === 0) return screenToFlowPosition(pointerScreen);
-
-  const previousScreen = flowToScreenPosition(points.at(-1)!);
-  const dx = pointerScreen.x - previousScreen.x;
-  const dy = pointerScreen.y - previousScreen.y;
-  const constrainedScreen = Math.abs(dx) >= Math.abs(dy)
-    ? { x: pointerScreen.x, y: previousScreen.y }
-    : { x: previousScreen.x, y: pointerScreen.y };
-  return screenToFlowPosition(constrainedScreen);
+}): SegmentAssistResult | undefined => {
+  if (points.length === 0) return undefined;
+  return assistSegment({ anchor: points.at(-1)!, pointerScreen, shiftKey, ctrlKey, screenToFlowPosition, flowToScreenPosition });
 };
 
 export function TopologyCanvas({
@@ -178,6 +172,8 @@ export function TopologyCanvas({
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const [regionDraftPreview, setRegionDraftPreview] = useState<XYPosition | undefined>();
+  const [regionDraftAssist, setRegionDraftAssist] = useState<SegmentAssistResult | undefined>();
+  const [regionDraftEditorFeedback, setRegionDraftEditorFeedback] = useState<readonly RegionDraftSegmentFeedback[]>([]);
   const [regionDraftClosingTarget, setRegionDraftClosingTarget] = useState(false);
   const regionDraftDrag = useRef<{ kind: 'vertex'; index: number } | { kind: 'polygon'; last: XYPosition } | null>(null);
   const fitAfterLayout = useRef(false);
@@ -204,19 +200,36 @@ export function TopologyCanvas({
     const onPointerMove = (event: globalThis.PointerEvent) => {
       const drag = regionDraftDrag.current;
       if (!drag || !regionMode?.editableDraft || !regionMode.draft || regionMode.draft.status !== 'editing') return;
-      const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      if (drag.kind === 'vertex') regionMode.onMoveDraftVertex?.(drag.index, point);
+      const pointerScreen = { x: event.clientX, y: event.clientY };
+      const point = screenToFlowPosition(pointerScreen);
+      if (drag.kind === 'vertex') {
+        const points = regionMode.draft.points;
+        const previousIndex = (drag.index + points.length - 1) % points.length;
+        const nextIndex = (drag.index + 1) % points.length;
+        const candidates = [previousIndex, nextIndex].map((anchorIndex) => ({ anchorIndex, assist: assistSegment({ anchor: points[anchorIndex], pointerScreen, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, screenToFlowPosition, flowToScreenPosition }) }));
+        const chosen = candidates.reduce((best, candidate) => {
+          const bestDistance = Math.hypot(flowToScreenPosition(best.assist.point).x - pointerScreen.x, flowToScreenPosition(best.assist.point).y - pointerScreen.y);
+          const candidateDistance = Math.hypot(flowToScreenPosition(candidate.assist.point).x - pointerScreen.x, flowToScreenPosition(candidate.assist.point).y - pointerScreen.y);
+          return candidateDistance < bestDistance ? candidate : best;
+        });
+        regionMode.onMoveDraftVertex?.(drag.index, chosen.assist.point);
+        const edited = points.map((current, index) => index === drag.index ? chosen.assist.point : current);
+        setRegionDraftEditorFeedback([
+          { start: edited[previousIndex], end: edited[drag.index], snappedAngle: chosen.anchorIndex === previousIndex && chosen.assist.snappedAngle, snappedLength: chosen.anchorIndex === previousIndex && chosen.assist.snappedLength },
+          { start: edited[drag.index], end: edited[nextIndex], snappedAngle: chosen.anchorIndex === nextIndex && chosen.assist.snappedAngle, snappedLength: chosen.anchorIndex === nextIndex && chosen.assist.snappedLength },
+        ]);
+      }
       else {
         regionMode.onTranslateDraft?.({ x: point.x - drag.last.x, y: point.y - drag.last.y });
         drag.last = point;
       }
     };
-    const finish = () => { regionDraftDrag.current = null; };
+    const finish = () => { regionDraftDrag.current = null; setRegionDraftEditorFeedback([]); };
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', finish);
     window.addEventListener('pointercancel', finish);
     return () => { window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', finish); };
-  }, [regionMode, screenToFlowPosition]);
+  }, [flowToScreenPosition, regionMode, screenToFlowPosition]);
 
   const onRegionDraftEditorPointerDown = (target: RegionDraftPointerTarget, event: PointerEvent<SVGElement>) => {
     if (!regionMode?.editableDraft || regionMode.draft?.status !== 'editing') return;
@@ -556,13 +569,15 @@ export function TopologyCanvas({
                 regionMode.onCompleteDraft?.();
                 return;
               }
-              regionMode.onDraftPoint?.(regionDraftPointForPointer({
+              const assist = regionDraftAssistForPointer({
                 points: regionMode.draft.points,
                 pointerScreen,
                 shiftKey: event.shiftKey,
+                ctrlKey: event.ctrlKey,
                 screenToFlowPosition,
                 flowToScreenPosition,
-              }));
+              });
+              regionMode.onDraftPoint?.(assist?.point ?? screenToFlowPosition(pointerScreen));
             }
             return;
           }
@@ -575,13 +590,16 @@ export function TopologyCanvas({
             const pointerScreen = { x: event.clientX, y: event.clientY };
             const closingTarget = isRegionDraftClosingTarget({ draft: regionMode.draft, pointerScreen, flowToScreenPosition });
             setRegionDraftClosingTarget(closingTarget);
-            setRegionDraftPreview(closingTarget ? regionMode.draft.points[0] : regionDraftPointForPointer({
+            const assist = closingTarget ? undefined : regionDraftAssistForPointer({
               points: regionMode.draft.points,
               pointerScreen,
               shiftKey: event.shiftKey,
+              ctrlKey: event.ctrlKey,
               screenToFlowPosition,
               flowToScreenPosition,
-            }));
+            });
+            setRegionDraftAssist(assist);
+            setRegionDraftPreview(closingTarget ? regionMode.draft.points[0] : assist?.point);
           }
         }}
         onPaneContextMenu={(event) => {
@@ -632,9 +650,9 @@ export function TopologyCanvas({
               selectedRegionId={selectedRegionId}
               referenceOutlines={referenceOutlines}
               showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
-              draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget }}
+              draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget, assist: regionDraftAssist }}
             />
-            {regionMode?.draft?.status === 'editing' && <RegionDraftEditor points={regionMode.draft.points} selectedVertexIndex={regionMode.draft.selectedVertexIndex ?? null} invalid={Boolean(regionMode.invalidDraft)} interactive={Boolean(regionMode.editableDraft)} onPointerDown={onRegionDraftEditorPointerDown} />}
+            {regionMode?.draft?.status === 'editing' && <RegionDraftEditor points={regionMode.draft.points} selectedVertexIndex={regionMode.draft.selectedVertexIndex ?? null} invalid={Boolean(regionMode.invalidDraft)} interactive={Boolean(regionMode.editableDraft)} feedback={regionDraftEditorFeedback} onPointerDown={onRegionDraftEditorPointerDown} />}
           </ViewportPortal>
         )}
         <MiniMap

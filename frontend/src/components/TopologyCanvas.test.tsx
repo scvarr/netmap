@@ -38,8 +38,8 @@ vi.mock('@xyflow/react', () => ({
     onNodesChange: (changes: unknown[]) => void;
     onNodeDragStart: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     onNodeDragStop: (event: unknown, node: FlowProjection['nodes'][number]) => void;
-    onPaneClick?: (event: { clientX: number; clientY: number; shiftKey: boolean }) => void;
-    onPaneMouseMove?: (event: { clientX: number; clientY: number; shiftKey: boolean }) => void;
+    onPaneClick?: (event: { clientX: number; clientY: number; shiftKey: boolean; ctrlKey: boolean }) => void;
+    onPaneMouseMove?: (event: { clientX: number; clientY: number; shiftKey: boolean; ctrlKey: boolean }) => void;
     children: React.ReactNode;
   }) => (
     <div data-testid="flow">
@@ -62,8 +62,8 @@ vi.mock('@xyflow/react', () => ({
           <button onClick={() => onNodesChange([{ id: node.id, type: 'dimensions', dimensions: { width: 178, height: 112 } }])}>measure {node.id}</button>
         </div>
       ))}
-      <button onClick={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey })} onMouseMove={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey })}>move pane</button>
-      <button onClick={(event) => onPaneClick?.({ clientX: event.clientX || 10, clientY: event.clientY || 20, shiftKey: event.shiftKey })}>click pane</button>
+      <button onClick={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey })} onMouseMove={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey })}>move pane</button>
+      <button onClick={(event) => onPaneClick?.({ clientX: event.clientX || 10, clientY: event.clientY || 20, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey })}>click pane</button>
       {children}
     </div>
   ),
@@ -287,7 +287,7 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(screen.getByTestId('map-region-draft-close')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'move pane' }));
     expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '30');
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }));
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { ctrlKey: true });
     expect(onDraftPoint).toHaveBeenCalledWith({ x: 10, y: 20 });
   });
 
@@ -316,7 +316,7 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(screen.getByTestId('map-region-draft-vertex-0')).toHaveAttribute('data-closing-target', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 17, clientY: 25 });
     expect(onCompleteDraft).toHaveBeenCalledTimes(1); expect(onDraftPoint).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 80, clientY: 20 });
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 80, clientY: 20, ctrlKey: true });
     expect(onDraftPoint).toHaveBeenCalledWith({ x: 80, y: 20 });
   });
 
@@ -333,9 +333,9 @@ describe('TopologyCanvas async layout boundary', () => {
     const onMoveDraftVertex = vi.fn(); const onInsertDraftVertex = vi.fn(); const onTranslateDraft = vi.fn(); const onSelectDraftVertex = vi.fn();
     render(<TopologyCanvas document={documentFor('physical-region-editor')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: true, editableDraft: true, draft: { status: 'editing', points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 50 }] }, onMoveDraftVertex, onInsertDraftVertex, onTranslateDraft, onSelectDraftVertex }} />);
     await screen.findByTestId('region-draft-editor');
-    fireEvent.pointerDown(screen.getByTestId('region-draft-editor-vertex-1'), { clientX: 40, clientY: 20 }); fireEvent.pointerMove(window, { clientX: 44, clientY: 25 }); fireEvent.pointerUp(window);
+    fireEvent.pointerDown(screen.getByTestId('region-draft-editor-vertex-1'), { clientX: 40, clientY: 20 }); fireEvent.pointerMove(window, { clientX: 44, clientY: 25, ctrlKey: true }); fireEvent.pointerUp(window);
     expect(onSelectDraftVertex).toHaveBeenCalledWith(1); expect(onMoveDraftVertex).toHaveBeenCalledWith(1, { x: 44, y: 25 });
-    fireEvent.pointerDown(screen.getByTestId('region-draft-midpoint-1'), { clientX: 40, clientY: 35 }); fireEvent.pointerMove(window, { clientX: 43, clientY: 37 }); fireEvent.pointerUp(window);
+    fireEvent.pointerDown(screen.getByTestId('region-draft-midpoint-1'), { clientX: 40, clientY: 35 }); fireEvent.pointerMove(window, { clientX: 43, clientY: 37, ctrlKey: true }); fireEvent.pointerUp(window);
     expect(onInsertDraftVertex).toHaveBeenCalledWith(1, { x: 40, y: 35 }); expect(onMoveDraftVertex).toHaveBeenLastCalledWith(2, { x: 43, y: 37 });
     fireEvent.pointerDown(screen.getByTestId('region-draft-editor').querySelector('polygon')!, { clientX: 20, clientY: 25 }); fireEvent.pointerMove(window, { clientX: 24, clientY: 30 }); fireEvent.pointerUp(window);
     expect(onSelectDraftVertex).toHaveBeenLastCalledWith(null); expect(onTranslateDraft).toHaveBeenCalledWith({ x: 4, y: 5 });
@@ -353,7 +353,7 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '35');
   });
 
-  it('keeps Region points free without Shift and does not constrain the first point', async () => {
+  it('keeps Region points free with Ctrl and does not constrain the first point', async () => {
     screenTransform.scale = 2;
     screenTransform.offsetX = 100;
     screenTransform.offsetY = 50;
@@ -361,12 +361,24 @@ describe('TopologyCanvas async layout boundary', () => {
     const view = render(<TopologyCanvas document={documentFor('physical-region-free')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }] }, onDraftPoint }} />);
 
     await screen.findByTestId('map-region-draft');
-    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 150, clientY: 120 });
+    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 150, clientY: 120, ctrlKey: true });
     expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '25');
     expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '35');
     view.rerender(<TopologyCanvas document={documentFor('physical-region-first')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [] }, onDraftPoint }} />);
     fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 151, clientY: 119, shiftKey: true });
     expect(onDraftPoint).toHaveBeenLastCalledWith({ x: 25.5, y: 34.5 });
+  });
+
+  it('uses one assisted point and feedback for drawing preview and committed click', async () => {
+    const onDraftPoint = vi.fn();
+    render(<TopologyCanvas document={documentFor('physical-region-assist')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 0, y: 0 }] }, onDraftPoint }} />);
+    await screen.findByTestId('map-region-draft');
+    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 98, clientY: 18 });
+    expect(screen.getByTestId('map-region-draft-assist-feedback')).toHaveAttribute('data-snapped-angle', 'true');
+    expect(screen.getByTestId('map-region-draft-assist-feedback')).toHaveAttribute('data-snapped-length', 'true');
+    const preview = screen.getByTestId('map-region-draft-preview');
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 98, clientY: 18 });
+    expect(onDraftPoint).toHaveBeenCalledWith({ x: Number(preview.getAttribute('x2')), y: Number(preview.getAttribute('y2')) });
   });
 
   it('applies stored overrides and saves a manual drag for the current view', async () => {

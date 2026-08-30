@@ -1,5 +1,6 @@
 import type { MapRegion } from '../topology/savedMapTypes';
 import type { XYPosition } from '@xyflow/react';
+import type { SegmentAssistResult } from '../topology/geometryAssist';
 
 export interface MapReferenceOutline {
   id: string;
@@ -16,6 +17,7 @@ export interface MapRegionDraft {
   selectedVertexIndex?: number | null;
   previewPoint?: XYPosition;
   closingTarget?: boolean;
+  assist?: SegmentAssistResult;
 }
 
 const points = (region: MapRegion) => region.points.map((point) => `${point.x},${point.y}`).join(' ');
@@ -88,6 +90,14 @@ export function MapRegionLayer({
           {draft.status === 'drawing' && draft.previewPoint && draft.points.length > 0 && (
             <line data-testid="map-region-draft-preview" x1={draft.points.at(-1)!.x} y1={draft.points.at(-1)!.y} x2={draft.previewPoint.x} y2={draft.previewPoint.y} />
           )}
+          {draft.status === 'drawing' && draft.previewPoint && draft.assist && draft.points.length > 0 && (() => {
+            const start = draft.points.at(-1)!;
+            const midpoint = { x: (start.x + draft.previewPoint.x) / 2, y: (start.y + draft.previewPoint.y) / 2 };
+            return <g className={`map-region-layer__assist${draft.assist.snappedAngle || draft.assist.snappedLength ? ' map-region-layer__assist--snapped' : ''}`} data-testid="map-region-draft-assist-feedback" data-snapped-angle={draft.assist.snappedAngle || undefined} data-snapped-length={draft.assist.snappedLength || undefined} transform={`translate(${midpoint.x} ${midpoint.y - 10})`}>
+              <text textAnchor="middle">{Math.round(draft.assist.angle)}° · {Math.round(draft.assist.length)}</text>
+              {(draft.assist.snappedAngle || draft.assist.snappedLength) && <circle cx={0} cy={-13} r={2.5} />}
+            </g>;
+          })()}
           {draft.points.length >= 3 && <line data-testid="map-region-draft-close" x1={draft.points.at(-1)!.x} y1={draft.points.at(-1)!.y} x2={draft.points[0].x} y2={draft.points[0].y} />}
           {draft.points.map((point, index) => <circle key={index} data-testid={`map-region-draft-vertex-${index}`} data-closing-target={index === 0 && draft.closingTarget ? 'true' : undefined} cx={point.x} cy={point.y} r={index === 0 && draft.closingTarget ? 7 : 5} />)}
         </g>

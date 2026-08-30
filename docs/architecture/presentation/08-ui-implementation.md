@@ -981,8 +981,8 @@ materialized.
 
 **L1S.7a model/persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
-and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c
-new-Region draft geometry editor IMPLEMENTED; existing-Region editing OPEN**
+and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c/d
+new-Region draft geometry editor and transient assisted geometry IMPLEMENTED; existing-Region editing OPEN**
 
 The authoritative `SavedMapDocument` contains `regions[]`. Each item has a
 SavedMap-scoped `MapRegionRef { entity_type: "MapRegion", entity_id }`, trimmed
@@ -1025,7 +1025,11 @@ POST is only acknowledgement; the UI reloads the Saved Map and never synthesizes
 POST retries retain the local draft, while an acknowledged POST with failed refresh can retry only
 the reload. Cancel, `Escape`, map/view/mode exit discard unacknowledged local draft state.
 L1S.7b.3a constrains Shift-held current segments by dominant screen-space axis before converting
-the endpoint to flow coordinates; preview and click use that same endpoint. L1S.7b.4c turns only a
+the endpoint to flow coordinates; preview and click use that same endpoint. L1S.7b.4d adds compact,
+transient angle and flow-coordinate segment-length feedback and magnetic 10°/10-unit assistance to
+new-draft drawing and vertex drags. The screen-space capture keeps it stable under zoom; Ctrl bypasses
+automatic magnets and Shift retains its stronger screen-axis constraint. These are edit-time presentation
+helps, not persisted engineering dimensions, physical length, or CAD semantics. L1S.7b.4c turns only a
 closed new draft into a local geometry editor: real vertex and transient edge-midpoint handles can
 move/insert/delete vertices or translate the whole polygon in flow coordinates. It validates one
 simple polygon exactly (including self-contact), marks invalid drafts and disables save while keeping

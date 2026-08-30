@@ -6,9 +6,9 @@
 развития продукта и границы будущих систем, но не является детальным
 implementation plan и не создаёт implementation milestones.
 
-L1S.7 остаётся **IN PROGRESS / OPEN**: Region spatial laminar contract и derived
-Region tree с session-only selection уже реализованы, но полноценное редактирование
-существующих Regions ещё не закрыто. Этот документ фиксирует оставшийся bounded путь
+L1S.7 остаётся **IN PROGRESS / OPEN**: Region spatial laminar contract, derived
+Region tree с session-only selection, new-draft geometry editor и transient assisted
+geometry уже реализованы, но полноценное редактирование существующих Regions ещё не закрыто. Этот документ фиксирует оставшийся bounded путь
 до L1 COMPLETE.
 
 Связанные contracts:
