@@ -1,0 +1,74 @@
+import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
+import { MapPage } from './MapPage';
+
+vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <>
+  <button onClick={() => props.regionMode?.onMoveDraftVertex?.(0, { x: 7, y: 8 })}>move vertex</button>
+  <button onClick={() => props.regionMode?.onInsertDraftVertex?.(0, { x: 5, y: 0 })}>insert vertex</button>
+  <button onClick={() => props.regionMode?.onTranslateDraft?.({ x: 10, y: 20 })}>translate region</button>
+</> }));
+
+const mapId = 'map-a';
+const region = {
+  region_ref: { entity_type: 'MapRegion' as const, entity_id: 'region-a' }, label: 'Стойка 01',
+  points: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 20 }], label_position: { x: 3, y: 4 },
+  style: { fill_color: '#123456', fill_opacity: .3, stroke_color: '#abcdef', stroke_width: 2, stroke_style: 'dashed' as const }, z_order: 4,
+};
+const map = { map_ref: { entity_type: 'SavedMap' as const, entity_id: mapId }, name: 'A', created_at: '', updated_at: '', placements: [], cable_routes: [], regions: [region] };
+const document: any = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] };
+
+const renderPage = (maps: any) => render(<MemoryRouter initialEntries={[`/map?map=${mapId}&view=physical`]}><MapPage dataSource={{ loadProjection: vi.fn().mockResolvedValue(document) }} savedMapDataSource={maps} /></MemoryRouter>);
+
+describe('MapPage existing Region geometry editing', () => {
+  it('clones selected authoritative geometry, preserves non-geometry metadata, and translates an explicit label position only with the polygon', async () => {
+    const after = { ...map, regions: [region] };
+    const replaceRegion = vi.fn().mockResolvedValue(undefined);
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValueOnce(map).mockResolvedValueOnce(after), replaceRegion, createMap: vi.fn() };
+    renderPage(maps);
+    await screen.findByRole('button', { name: 'Области' });
+    fireEvent.click(screen.getByRole('button', { name: 'Области' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Стойка 01' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Редактировать' }));
+    fireEvent.click(screen.getByText('translate region'));
+    expect(region.points).toEqual([{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 20 }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(replaceRegion).toHaveBeenCalledTimes(1));
+    const [, , write] = replaceRegion.mock.calls[0];
+    expect(write).toMatchObject({ label: 'Стойка 01', style: region.style, z_order: 4 });
+    const delta = { x: write.label_position.x - region.label_position.x, y: write.label_position.y - region.label_position.y };
+    expect(write.points).toEqual(region.points.map((point: any) => ({ x: point.x + delta.x, y: point.y + delta.y })));
+    expect(replaceRegion).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps local geometry editable on a spatial-conflict failure and cancel performs no write', async () => {
+    const replaceRegion = vi.fn().mockRejectedValue(new Error('MAP_REGION_SPATIAL_CONFLICT: conflict'));
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), replaceRegion, createMap: vi.fn() };
+    renderPage(maps);
+    fireEvent.click(await screen.findByRole('button', { name: 'Области' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Стойка 01' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Редактировать' }));
+    fireEvent.click(screen.getByText('move vertex'));
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Область пересекается или касается другой области.');
+    expect(screen.getByRole('button', { name: 'Сохранить' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+    expect(replaceRegion).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Стойка 01' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('retries only refresh after acknowledgement and leaves the target selected', async () => {
+    const replaceRegion = vi.fn().mockResolvedValue(undefined);
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), replaceRegion, createMap: vi.fn() };
+    renderPage(maps);
+    fireEvent.click(await screen.findByRole('button', { name: 'Области' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Стойка 01' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Редактировать' }));
+    maps.loadMap.mockRejectedValueOnce(new Error('refresh'));
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await screen.findByRole('button', { name: 'Повторить обновление' });
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
+    await waitFor(() => expect(replaceRegion).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole('button', { name: 'Стойка 01' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});

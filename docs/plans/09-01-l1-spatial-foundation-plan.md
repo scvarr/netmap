@@ -350,8 +350,8 @@ The implemented L1S.7b.4b Region list/tree derives hierarchy only from the
 authoritative `regions[]`, keeps selection session-only, and uses a selected-polygon
 highlight only as presentation. L1S.7b.4c provides that geometry editor only for a
 new local draft after closure; it has no persisted Region identity. Parent is derived and never
-persisted. Remaining work is to connect the same editor to an existing Region and replace
-persistence, plus the properties/style/delete workflow where it is still absent. Other
+persisted. L1S.7b.4e now connects that same editor to an existing selected Region through an
+authoritative replace lifecycle. Remaining work is the properties/style/delete workflow. Other
 missing Region workflow pieces remain open until verified against the current `main`;
 planned capability is not treated as implemented.
 
@@ -440,9 +440,18 @@ planned capability is not treated as implemented.
   assistance. Capture is screen-space, Ctrl bypasses automatic magnets, and Shift keeps its explicit
   screen-axis constraint. This is edit-time presentation only: it creates neither persisted dimensions
   nor CAD/physical-length semantics. Polygon translation remains rigid and unsnapped.
-- Existing Region geometry editing + `replaceRegion` persistence and properties/style/delete remain
-  **OPEN**. No canonical topology
-  semantics are introduced.
+- **L1S.7b.4e — existing Region geometry edit + replace lifecycle — IMPLEMENTED**: explicit
+  `Редактировать` starts a local clone of the selected authoritative geometry and reuses the
+  vertex/midpoint/delete/rigid-translation editor and its assisted geometry. Persisted Regions stay
+  passive; the active target is suppressed beneath the local overlay. A single `replaceRegion` PUT
+  carries edited points and preserved label/style/z-order; vertex-only edits preserve explicit
+  `label_position`, while rigid translation moves it by the same delta. PUT acknowledgement reloads
+  the authoritative Saved Map; failed PUT keeps the editable local geometry, including a localized
+  spatial-conflict error, while failed post-acknowledgement refresh retries only that refresh.
+- Properties/presentation remain **OPEN**: rename Region label, move Region name label, style,
+  delete, and arbitrary user text blocks/annotations. Region `label` is the Region name/tree identity/
+  presentation name; a future arbitrary text annotation is separate presentation content, not a
+  Region label. Location association and `MapReference` also remain open. L1S.7 remains **OPEN**.
 
 ### Location foundation
 

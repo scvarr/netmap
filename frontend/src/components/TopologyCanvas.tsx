@@ -89,7 +89,7 @@ interface TopologyCanvasProps {
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   regions?: readonly MapRegion[];
   selectedRegionId?: string | null;
-  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
+  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; hiddenRegionId?: string | null; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -648,6 +648,7 @@ export function TopologyCanvas({
             <MapRegionLayer
               regions={regions}
               selectedRegionId={selectedRegionId}
+              hiddenRegionId={regionMode?.hiddenRegionId}
               referenceOutlines={referenceOutlines}
               showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
               draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget, assist: regionDraftAssist }}

@@ -982,7 +982,8 @@ materialized.
 **L1S.7a model/persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
 and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c/d
-new-Region draft geometry editor and transient assisted geometry IMPLEMENTED; existing-Region editing OPEN**
+new-Region draft geometry editor and transient assisted geometry, and L1S.7b.4e existing-Region
+geometry editing with authoritative replace lifecycle IMPLEMENTED; properties/presentation OPEN**
 
 The authoritative `SavedMapDocument` contains `regions[]`. Each item has a
 SavedMap-scoped `MapRegionRef { entity_type: "MapRegion", entity_id }`, trimmed
@@ -1037,7 +1038,16 @@ them repairable. The overlay never makes persisted Regions pointer-interactive; 
 or write occurs until create acknowledgement. L1S.7b.4b derives a
 deterministic arbitrary-depth Region tree only from authoritative `regions[]`; its row selection is
 session-only, and the selected persisted polygon highlight is presentation-only. Parent is never
-persisted. Existing Region geometry editing/replacement, styling, and deletion UI remain OPEN L1S.7b work.
+persisted. L1S.7b.4e lets an explicitly selected existing Region enter the same local geometry
+editor without mutating `activeMap.regions`; its passive target is suppressed beneath the active
+overlay. Save performs one replace acknowledgement then authoritative Saved Map reload, never
+synthesizing a Region. Existing non-geometry state is preserved, except a rigid polygon translation
+translates explicit `label_position` by the same delta; vertex and topology edits leave it untouched.
+PUT failure keeps the local editor repairable (including a localized spatial-conflict message), while
+an acknowledged write with failed reload retries only reload. Tree hierarchy remains authoritative
+until that reload. Region properties/presentation remain open: rename, movable Region name label,
+style, delete, and arbitrary user text annotations. A Region `label` is its name/tree identity/
+presentation name; an arbitrary text annotation is separate presentation content, not the label.
 
 `MapReference` remains a future presentation object targeting another SavedMap for
 hierarchical navigation. It is not a Location, Connection, topology fact, or

@@ -52,18 +52,22 @@ export function MapRegionLayer({
   showReferenceOutlines,
   draft,
   selectedRegionId,
+  hiddenRegionId,
 }: {
   regions: readonly MapRegion[];
   referenceOutlines: readonly MapReferenceOutline[];
   showReferenceOutlines: boolean;
   draft?: MapRegionDraft;
   selectedRegionId?: string | null;
+  /** The authoritative target stays passive but is suppressed behind its active local editor. */
+  hiddenRegionId?: string | null;
 }) {
   return (
     <svg className="map-region-layer" aria-hidden="true" data-testid="map-region-layer">
       <g className="map-region-layer__regions">
         {[...regions]
           .sort((left, right) => left.z_order - right.z_order || left.region_ref.entity_id.localeCompare(right.region_ref.entity_id))
+          .filter((region) => region.region_ref.entity_id !== hiddenRegionId)
           .map((region) => {
             const label = region.label_position ?? polygonCentroid(region);
             return (
