@@ -979,7 +979,8 @@ materialized.
 
 ## MAPS.3 — Saved Map Regions
 
-**L1S.7a model/persistence/API IMPLEMENTED; L1S.7b interaction OPEN**
+**L1S.7a model/persistence/API and L1S.7b.1 rendering/isolated mode IMPLEMENTED;
+remaining L1S.7b drawing/editing OPEN**
 
 The authoritative `SavedMapDocument` contains `regions[]`. Each item has a
 SavedMap-scoped `MapRegionRef { entity_type: "MapRegion", entity_id }`, trimmed
@@ -996,13 +997,12 @@ and view cannot change. Frontend transport treats successful writes as acknowled
 and reloads the authoritative Saved Map rather than synthesizing local region state.
 There is intentionally no independent Region list/detail read endpoint.
 
-L1S.7a provides only Saved Map TypeScript parsing and transport methods. It does not
-render Regions in React Flow or provide drawing, polygon editing, selection, style UI,
-or interaction handles. L1S.7b will use an isolated Region editing mode: topology
-objects are a non-interactive real-bounds/contours reference background by default,
-cables are hidden, and only Regions are interactive. Shift-constrained drawing uses
-absolute screen 0/90/180/270-degree directions independently of pan/zoom; a complete
-object background hide option is allowed. These controls do not exist yet.
+L1S.7b.1 renders persisted Regions as a non-interactive Physical presentation layer,
+outside React Flow topology nodes and below topology objects, cables, ports and overlays.
+It also provides an isolated frontend-session `Области` mode: topology interaction is
+suppressed, cables are hidden, and real current object bounds/contours are the default
+reference background with a bounded complete hide option. Polygon drawing, selection,
+editing, styling UI and Shift-constrained screen-axis drawing remain OPEN L1S.7b work.
 
 ## Future Fibre Channel compatibility boundary
 

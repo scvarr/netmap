@@ -347,17 +347,28 @@ it is deliberately separate from Port Block Blueprint composition.
   endpoints are independent of MapPlacement and canonical topology. Simple polygon
   validation rejects invalid vertices and self-intersection; Saved Map deletion cascades
   Regions.
-- Frontend provides only typed Saved Map parsing and acknowledgement-only transport;
-  rendering and authoring remain absent.
+- L1S.7a itself provided only typed Saved Map parsing and acknowledgement-only transport;
+  rendering is now supplied by L1S.7b.1, while authoring remains absent.
 
 #### L1S.7b — Region drawing and editing UI
 
 **OPEN**
 
-- Separate Region editing mode over a non-interactive topology reference background;
-  cables hidden, Region layer only interactive, optional full object-background hide.
-- Polygon drawing/editing, selection, styling controls and Shift screen-axis segment
-  constraint belong here. No canonical topology semantics are introduced.
+##### L1S.7b.1 — Region rendering + isolated Region mode
+
+**IMPLEMENTED**
+
+- Persisted Physical Saved Map Regions render as a non-interactive presentation layer
+  behind topology objects, ordered by `z_order`, with persisted style and label position.
+- The frontend-only `Области` mode clears/suppresses topology interaction, hides cables,
+  and defaults to real current object-bound reference outlines with a bounded hide option.
+
+##### Remaining L1S.7b drawing and editing steps
+
+**OPEN**
+
+- Polygon drawing/editing, Region selection, styling controls and Shift screen-axis
+  segment constraint remain future bounded work. No canonical topology semantics are introduced.
 
 ### L1S.8 — MapReference / hierarchical maps
 

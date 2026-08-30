@@ -40,12 +40,13 @@ import { physicalObjectIdForNode } from "../topology/projection";
 import { perfMark, perfMeasure } from "../perfMarks";
 import type { XYPosition } from "@xyflow/react";
 import { overlapsAnyNode } from "../topology/nodeFootprint";
-import type { MapCableRoute } from "../topology/savedMapTypes";
+import type { MapCableRoute, MapRegion } from "../topology/savedMapTypes";
 import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation";
 import { cableIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
+import { MapRegionLayer, type MapReferenceOutline } from "./MapRegionLayer";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -84,6 +85,8 @@ interface TopologyCanvasProps {
   wiringRoute?: { source: { physicalObjectId: string; connectionPointId: string }; target?: { physicalObjectId: string; connectionPointId: string }; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
+  regions?: readonly MapRegion[];
+  regionMode?: { showReferenceOutlines: boolean };
 }
 
 const nodeTypes = { device: DeviceNode };
@@ -123,6 +126,8 @@ export function TopologyCanvas({
   wiringRoute,
   wiringHighlightedConnectionMemberIds,
   wiringContinuationConnectionPointIds,
+  regions = [],
+  regionMode,
 }: TopologyCanvasProps) {
   const { t } = useI18n();
   const [projection, setProjection] = useState<FlowProjection | null>(null);
@@ -270,7 +275,10 @@ export function TopologyCanvas({
     );
   }
 
-  const nodes = projection.nodes.map((node) => ({
+  const referenceOutlines: MapReferenceOutline[] = projection.nodes
+    .filter((node) => node.data.projection.kind === "PHYSICAL_OBJECT" && node.data.projection.attributes.class !== "cable")
+    .map((node) => ({ id: node.id, x: node.position.x, y: node.position.y, width: node.width ?? 0, height: node.height ?? 0 }));
+  const nodes = (regionMode ? [] : projection.nodes).map((node) => ({
     ...node,
     draggable: draggableNodeIds
       ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id)
@@ -292,7 +300,7 @@ export function TopologyCanvas({
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));
-  const edges = projection.edges.map((edge) => {
+  const edges = (regionMode ? [] : projection.edges).map((edge) => {
     const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
       : undefined;
@@ -332,9 +340,11 @@ export function TopologyCanvas({
   });
 
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
+    if (regionMode) return;
     onSelectionChange({ type: "node", item: node.data.projection });
   };
   const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
+    if (regionMode) return;
     const item = edge.data?.projection;
     if (edge.data?.continuation) {
       onContinuationClickAnchor?.(
@@ -347,17 +357,20 @@ export function TopologyCanvas({
     else if (item) onSelectionChange({ type: "edge", item });
   };
   const onNodeContextMenu: NodeMouseHandler<DeviceFlowNode> = (event, node) => {
+    if (regionMode) return;
     event.preventDefault();
     const projectionNode = node.data.projection;
     if (cableIdForNode(projectionNode)) onPhysicalCableContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
     else onPhysicalNodeContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
   };
   const onEdgeContextMenu: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
+    if (regionMode) return;
     if (!edge.data?.cableNode) return;
     event.preventDefault();
     onPhysicalCableContextMenu?.(edge.data.cableNode, { x: event.clientX, y: event.clientY });
   };
   const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
+    if (regionMode) return;
     setProjection((current) =>
       current
         ? {
@@ -368,9 +381,11 @@ export function TopologyCanvas({
     );
   };
   const onNodeDragStart: OnNodeDrag<DeviceFlowNode> = (_, node) => {
+    if (regionMode) return;
     confirmedNodePositions.current.set(node.id, node.position);
   };
   const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
+    if (regionMode) return;
     const confirmedPosition = confirmedNodePositions.current.get(draggedNode.id);
     const placedNodes = draggableNodeIds
       ? projection.nodes.filter((node) => draggableNodeIds.has(node.id))
@@ -437,11 +452,12 @@ export function TopologyCanvas({
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={(event) => {
+          if (regionMode) return;
           onSelectionChange(null);
           onPaneClick?.(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
         }}
         onPaneContextMenu={(event) => {
-          if (!onPhysicalPaneContextMenu) return;
+          if (regionMode || !onPhysicalPaneContextMenu) return;
           event.preventDefault();
           onPhysicalPaneContextMenu(
             screenToFlowPosition({ x: event.clientX, y: event.clientY }),
@@ -455,12 +471,12 @@ export function TopologyCanvas({
         }}
         minZoom={0.35}
         maxZoom={document.layer === "L1" ? 4 : 1.8}
-        nodesDraggable={
+        nodesDraggable={!regionMode && (
           Boolean(onPhysicalNodeDragStop) ||
           (!disableAutoLayout && document.layer === "L1")
-        }
+        )}
         nodesConnectable={false}
-        elementsSelectable
+        elementsSelectable={!regionMode}
         proOptions={{ hideAttribution: true }}
       >
         <Panel position="top-left">
@@ -480,6 +496,15 @@ export function TopologyCanvas({
           size={1.4}
           color="#25383c"
         />
+        {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (regions.length > 0 || regionMode) && (
+          <ViewportPortal>
+            <MapRegionLayer
+              regions={regions}
+              referenceOutlines={referenceOutlines}
+              showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
+            />
+          </ViewportPortal>
+        )}
         <MiniMap
           pannable
           zoomable
@@ -489,8 +514,8 @@ export function TopologyCanvas({
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} />
-        {wiringRoute && <ViewportPortal><svg className="cable-routes-foreground cable-routes-foreground--wiring" aria-hidden="true"><WiringRoute {...wiringRoute} /></svg></ViewportPortal>}
+        {!regionMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} />}
+        {!regionMode && wiringRoute && <ViewportPortal><svg className="cable-routes-foreground cable-routes-foreground--wiring" aria-hidden="true"><WiringRoute {...wiringRoute} /></svg></ViewportPortal>}
       </ReactFlow>
     </div>
   );

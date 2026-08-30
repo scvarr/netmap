@@ -4,6 +4,7 @@ import { TopologyCanvas } from './TopologyCanvas';
 import type { FlowProjection, TopologyLayoutEngine } from '../topology/layout';
 import type { TopologyProjectionDocument } from '../topology/types';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
+import type { MapRegion } from '../topology/savedMapTypes';
 
 const { fitViewMock } = vi.hoisted(() => ({ fitViewMock: vi.fn() }));
 
@@ -79,6 +80,14 @@ const flowFor = (document: TopologyProjectionDocument): FlowProjection => ({
   })),
   edges: [],
 });
+
+const region: MapRegion = {
+  region_ref: { entity_type: 'MapRegion', entity_id: 'region-a' },
+  label: 'Zone A',
+  points: [{ x: 10, y: 20 }, { x: 110, y: 20 }, { x: 110, y: 90 }, { x: 10, y: 90 }],
+  style: { fill_color: '#123456', fill_opacity: .25, stroke_color: '#abcdef', stroke_width: 3, stroke_style: 'dashed' },
+  z_order: 2,
+};
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -183,6 +192,45 @@ describe('TopologyCanvas async layout boundary', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'logical-A' }));
     expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: document.nodes[0] });
+  });
+
+  it('renders persisted Regions without intercepting normal topology selection', async () => {
+    const document = documentFor('physical-region');
+    const onSelectionChange = vi.fn();
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={async (input) => flowFor(input)} regions={[region]} />);
+
+    const rendered = await screen.findByTestId('map-region-region-a');
+    expect(rendered.querySelector('polygon')).toHaveAttribute('fill', '#123456');
+    expect(rendered.querySelector('text')).toHaveTextContent('Zone A');
+    fireEvent.click(screen.getByRole('button', { name: 'physical-region' }));
+    expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: document.nodes[0] });
+  });
+
+  it('replaces topology interaction and cables with real-bounds reference outlines in Region mode', async () => {
+    const document: TopologyProjectionDocument = {
+      ...documentFor('physical-region-mode'),
+      nodes: [{ id: 'object-a', kind: 'PHYSICAL_OBJECT', label: 'Object A', source_refs: [], attributes: {} }],
+      edges: [{ id: 'edge-a', from_node_id: 'object-a', to_node_id: 'object-a', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }],
+    };
+    const layoutEngine: TopologyLayoutEngine = async () => ({
+      nodes: [{ id: 'object-a', type: 'device', position: { x: 40, y: 60 }, width: 320, height: 80, data: { projection: document.nodes[0] } }],
+      edges: [{ id: 'edge-a', source: 'object-a', target: 'object-a', type: 'floating', data: { projection: document.edges[0] } }],
+    });
+    const onSelectionChange = vi.fn();
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={layoutEngine} regions={[region]} regionMode={{ showReferenceOutlines: true }} />);
+
+    expect(await screen.findByTestId('map-reference-outline-object-a')).toHaveAttribute('width', '320');
+    expect(screen.getByTestId('map-reference-outline-object-a')).toHaveAttribute('height', '80');
+    expect(screen.queryByRole('button', { name: 'object-a' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('svg-path-edge-a')).not.toBeInTheDocument();
+    expect(onSelectionChange).not.toHaveBeenCalled();
+  });
+
+  it('can hide Region-mode object outlines while keeping the persisted Region layer', async () => {
+    const document = documentFor('physical-region-hidden');
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: false }} />);
+    expect(await screen.findByTestId('map-region-region-a')).toBeInTheDocument();
+    expect(screen.queryByTestId('map-reference-outlines')).not.toBeInTheDocument();
   });
 
   it('applies stored overrides and saves a manual drag for the current view', async () => {

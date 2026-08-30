@@ -176,6 +176,8 @@ export function MapPage({
   const [cableRouteEdit, setCableRouteEdit] = useState<CableRouteEditState | null>(null);
   const [cableRouteReset, setCableRouteReset] = useState<CableRouteResetOperation | null>(null);
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
+  const [regionMode, setRegionMode] = useState(false);
+  const [showRegionReferenceOutlines, setShowRegionReferenceOutlines] = useState(true);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
@@ -206,6 +208,7 @@ export function MapPage({
     [];
   const placementMembershipKey = ids.join(",");
   const hasLoadedMap = legacy || Boolean(activeMap);
+  const physicalRegionMode = regionMode && !legacy && Boolean(activeMap) && viewMode === "physical";
   const objectSearchResults = useMemo(() => {
     const query = objectSearch.trim().toLocaleLowerCase();
     if (viewMode !== "physical" || !query) return [];
@@ -229,6 +232,21 @@ export function MapPage({
     if (viewMode !== "physical" || mapId !== cableRouteEdit.mapId || selectedCableId !== cableRouteEdit.cableId)
       setCableRouteEdit(null);
   }, [cableRouteEdit, mapId, selectedCableId, viewMode]);
+
+  useEffect(() => {
+    setRegionMode(false);
+  }, [mapId, viewMode]);
+
+  useEffect(() => {
+    if (!physicalRegionMode) return;
+    setSelection(null);
+    setContextAnchor(null);
+    setContinuationAnchor(null);
+    setInsertion(null);
+    setCableRouteEdit(null);
+    setCableRouteReset(null);
+    setWiring({ status: "idle" });
+  }, [physicalRegionMode]);
 
   const selectMap = useCallback(
     (id: string) => {
@@ -559,6 +577,7 @@ export function MapPage({
 
   const setViewMode = (nextView: TopologyViewMode) => {
     setContextAnchor(null);
+    setRegionMode(false);
     if (nextView !== "physical") setWiring({ status: "idle" });
     setParams((current) => {
       const next = new URLSearchParams(current);
@@ -1230,7 +1249,7 @@ export function MapPage({
             >
               {t("map.delete")}
             </button>
-            <button type="button" onClick={() => activeMap && setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id })} disabled={!activeMap || viewMode !== "physical" || !document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
+            <button type="button" onClick={() => activeMap && setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id })} disabled={!activeMap || viewMode !== "physical" || physicalRegionMode || !document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
           </>
         )}
         <button
@@ -1247,9 +1266,14 @@ export function MapPage({
         >
           {t("map.physical")}
         </button>
+        {!legacy && activeMap && viewMode === "physical" && (
+          <button type="button" aria-pressed={physicalRegionMode} onClick={() => setRegionMode((active) => !active)}>
+            {t("map.regions")}
+          </button>
+        )}
       </div>
 
-      {!legacy && activeMap && viewMode === "physical" && (
+      {!legacy && activeMap && viewMode === "physical" && !physicalRegionMode && (
         <section className="map-object-search" aria-label={t("map.objectSearch")}>
           <label>
             {t("map.objectSearch")}
@@ -1267,6 +1291,14 @@ export function MapPage({
               ))}
             </div>
           )}
+        </section>
+      )}
+
+      {physicalRegionMode && (
+        <section className="map-region-mode" aria-label={t("map.regions")}>
+          <span>{t("map.regionReference")}</span>
+          <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t("map.regionOutlines")}</button>
+          <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t("map.regionHideObjects")}</button>
         </section>
       )}
 
@@ -1374,7 +1406,7 @@ export function MapPage({
       )}
       {(legacy || activeMap) && (
         <>
-          <TraceCommandBar
+          {!physicalRegionMode && <TraceCommandBar
             catalogInventoryDataSource={catalogInventoryDataSource}
             physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
             traceDataSource={traceDataSource}
@@ -1393,15 +1425,15 @@ export function MapPage({
                 });
               }
             }}
-          />
-          {traceViewNotice && viewMode === "physical" && <p className="map-page__trace-notice" role="status">{traceViewNotice}</p>}
+          />}
+          {!physicalRegionMode && traceViewNotice && viewMode === "physical" && <p className="map-page__trace-notice" role="status">{traceViewNotice}</p>}
           <section className="map-page__canvas">
             {!document && <ViewState kind="loading" />}
             {document && (
               <ReactFlowProvider>
                 <TopologyCanvas
                   document={document}
-                  selection={selection}
+                  selection={physicalRegionMode ? null : selection}
                   onSelectionChange={(nextSelection) => {
                     setContextAnchor(null);
                     if (nextSelection?.type !== "continuation")
@@ -1414,8 +1446,8 @@ export function MapPage({
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}
                   lockedNodeIds={!legacy ? lockedNodeIds : undefined}
                   authoritativePositionRevision={authoritativePositionRevision}
-                  onPhysicalNodeDragStop={!legacy ? move : undefined}
-                  onBlueprintDisplayResize={!legacy && viewMode === "physical" ? (id, displayWidth) => {
+                  onPhysicalNodeDragStop={!legacy && !physicalRegionMode ? move : undefined}
+                  onBlueprintDisplayResize={!legacy && viewMode === "physical" && !physicalRegionMode ? (id, displayWidth) => {
                     void resizeBlueprint(id, displayWidth).catch((reason) => setError(errorMessage(reason, t("map.sizeFailed"))));
                   } : undefined}
                   onNodeCollisionRejected={() =>
@@ -1428,44 +1460,47 @@ export function MapPage({
                     selectedTraceBranchId,
                   )}
                   cableRoutes={
-                    viewMode === "physical" ? activeMap?.cable_routes : undefined
+                    !physicalRegionMode && viewMode === "physical" ? activeMap?.cable_routes : undefined
                   }
-                  cableRouteDraft={cableRouteEdit ? { cableId: cableRouteEdit.cableId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
-                  wiringRoute={wiring.status !== "idle" && wiring.status !== "selecting-source" ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target, waypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex, onWaypointSelect: (index) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}
-                  physicalPortStates={physicalPortStates}
+                  cableRouteDraft={!physicalRegionMode && cableRouteEdit ? { cableId: cableRouteEdit.cableId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
+                  wiringRoute={!physicalRegionMode && wiring.status !== "idle" && wiring.status !== "selecting-source" ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target, waypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex, onWaypointSelect: (index) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}
+                  physicalPortStates={physicalRegionMode ? undefined : physicalPortStates}
                   wiringHighlightedConnectionMemberIds={wiringInternalContinuity.members}
                   wiringContinuationConnectionPointIds={wiringInternalContinuity.points}
-                  onPhysicalPortClick={wiring.status === "selecting-source" || wiring.status === "selecting-target" ? onPhysicalPortClick : undefined}
+                  onPhysicalPortClick={!physicalRegionMode && (wiring.status === "selecting-source" || wiring.status === "selecting-target") ? onPhysicalPortClick : undefined}
                   onViewportCenterReady={
                     viewMode === "physical" ? receiveViewportCenter : undefined
                   }
                   onPhysicalPaneContextMenu={
-                    viewMode === "physical"
+                    viewMode === "physical" && !physicalRegionMode
                       ? (anchor, screen) => !contextBusy && setContextAnchor({ kind: "empty", anchor, screen })
                       : undefined
                   }
-                  onPhysicalNodeContextMenu={viewMode === "physical" ? (node, screen) => {
+                  onPhysicalNodeContextMenu={viewMode === "physical" && !physicalRegionMode ? (node, screen) => {
                     if (contextBusy) return;
                     const id = physicalObjectIdForNode(node); if (!id) return;
                     setSelection({ type: "node", item: node });
                     setContextAnchor({ kind: "object", id, label: displayNodeLabel(node), locked: Boolean(activeMap?.placements.find((placement) => placement.physical_object_ref.entity_id === id)?.positions["L1/PHYSICAL_OBJECT"]?.locked), screen });
                   } : undefined}
-                  onPhysicalCableContextMenu={viewMode === "physical" ? (node, screen) => {
+                  onPhysicalCableContextMenu={viewMode === "physical" && !physicalRegionMode ? (node, screen) => {
                     if (contextBusy) return;
                     const id = cableIdForNode(node); if (!id) return;
                     setSelection({ type: "node", item: node });
                     setContextAnchor({ kind: "cable", id, label: displayNodeLabel(node), hasRoute: Boolean(activeMap?.cable_routes?.some((route) => route.cable_ref.entity_id === id)), screen });
                   } : undefined}
-                  onPhysicalPortContextMenu={viewMode === "physical" ? openPortContext : undefined}
+                  onPhysicalPortContextMenu={viewMode === "physical" && !physicalRegionMode ? openPortContext : undefined}
                   onPaneClick={(anchor) => {
+                    if (physicalRegionMode) return;
                     setContextAnchor(null);
                     setSelection(null);
                     setWiring((current) => current.status === "selecting-target" ? { ...current, draftWaypoints: [...current.draftWaypoints, anchor], selectedWaypointIndex: current.draftWaypoints.length } : current);
                   }}
-                  onContinuationClickAnchor={(continuationId, anchor) =>
+                  onContinuationClickAnchor={!physicalRegionMode ? (continuationId, anchor) =>
                     mapId &&
                     setContinuationAnchor({ continuationId, mapId, anchor })
-                  }
+                  : undefined}
+                  regions={viewMode === "physical" ? activeMap?.regions : undefined}
+                  regionMode={physicalRegionMode ? { showReferenceOutlines: showRegionReferenceOutlines } : undefined}
                 />
               </ReactFlowProvider>
             )}
@@ -1474,7 +1509,7 @@ export function MapPage({
       )}
       <QuickInspector
         document={document}
-        selection={selection}
+        selection={physicalRegionMode ? null : selection}
         onSelectNode={(node) => setSelection({ type: "node", item: node })}
         onClose={() => setSelection(null)}
         cableRoutePresentation={(!legacy && viewMode === "physical" && selectedCableId && drawableSelectedCable) ? { present: Boolean(selectedCableRoute), waypointCount: selectedCableRoute?.waypoints.length ?? 0, editing: Boolean(cableRouteEdit), selectedWaypointIndex: cableRouteEdit?.selectedWaypointIndex ?? null, savePending: cableRouteEdit?.status === "saving", refreshFailed: cableRouteEdit?.status === "refresh-failed", error: cableRouteEdit?.error ?? null, resetPending: cableRouteReset?.status === "pending", resetRefreshFailed: cableRouteReset?.status === "refresh-failed" } : undefined}
