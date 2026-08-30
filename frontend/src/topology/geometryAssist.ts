@@ -62,7 +62,7 @@ export const assistSegment = ({
   if (ctrlKey || rawLength === 0) return { point: rawPoint, angle: rawAngle, length: rawLength, snappedAngle: false, snappedLength: false };
 
   const targetAngle = Math.round(rawAngle / ANGLE_STEP_DEGREES) * ANGLE_STEP_DEGREES % 360;
-  const targetLength = Math.round(rawLength / LENGTH_STEP) * LENGTH_STEP;
+  const targetLength = Math.max(LENGTH_STEP, Math.round(rawLength / LENGTH_STEP) * LENGTH_STEP);
   const anglePoint = pointAt(anchor, targetAngle, rawLength);
   const lengthPoint = pointAt(anchor, rawAngle, targetLength);
   const combinedPoint = pointAt(anchor, targetAngle, targetLength);

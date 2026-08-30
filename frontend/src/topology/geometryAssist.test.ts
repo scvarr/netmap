@@ -14,6 +14,7 @@ describe('geometry assist', () => {
   it('does not snap an angle outside capture', () => expect(assist(100, 27)).toMatchObject({ snappedAngle: false }));
   it('magnetically snaps a near 10-unit length', () => expect(assist(103, 0)).toMatchObject({ snappedLength: true, length: 100 }));
   it('does not snap a length outside capture', () => expect(assist(105, 0)).toMatchObject({ snappedLength: false }));
+  it('does not snap a short non-zero segment to the zero-length anchor', () => expect(assist(1, 0)).toMatchObject({ point: { x: 1, y: 0 }, snappedLength: false }));
   it('combines direction and length when their joint point is nearby', () => {
     const result = assist(98, 18); expect(result).toMatchObject({ snappedAngle: true, snappedLength: true, angle: 10 }); expect(result.length).toBeCloseTo(100);
   });
