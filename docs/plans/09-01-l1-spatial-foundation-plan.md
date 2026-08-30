@@ -506,12 +506,15 @@ drawing standards, and sub-degree precision are out of scope.
 
 ### Mandatory stabilization/performance gate
 
-Stabilization remains a mandatory L1 readiness gate, not optional future polish.
-The existing backlog remains canonical; synchronize and complete its real open
-items for bounded reads, object details, inventory, projection/N+1 SQL, repeated
-object-level trace work, and frontend computational hotspots where still
-applicable. The measured baseline around 500 objects / 4,000 ports already
-showed seconds-level endpoints and thousands of SQL queries.
+The stabilization backlog remains the canonical backlog. L1 COMPLETE is blocked
+by backlog items explicitly marked `До L2: ДА`, plus any new issue explicitly
+promoted to an L1 acceptance blocker; items marked `До L2: НЕТ` do not block it
+automatically. Thus bounded reads, object details/inventory, projection/N+1 SQL,
+repeated object-level trace work, and still-relevant frontend computational
+hotspots remain mandatory L1 readiness work when so classified. Real-world
+acceptance may identify a new concrete blocker, but does not silently promote
+the entire backlog. The measured baseline around 500 objects / 4,000 ports
+already showed seconds-level endpoints and thousands of SQL queries.
 
 ### Real-world L1 acceptance
 

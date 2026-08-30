@@ -31,7 +31,9 @@ L1S.7 остаётся **IN PROGRESS / OPEN**: часть Region foundation уж
 5. Закрыть MapCableRoute usability / assisted geometry: overlap-safe trace,
    compact edit handles, straight segments, initial angle snapping/feedback и
    обоснованные magnets.
-6. Закрыть mandatory stabilization/performance gate.
+6. Закрыть mandatory stabilization/performance gate: все пункты backlog с
+   `До L2: ДА` и отдельно promoted L1 acceptance blockers; `До L2: НЕТ` не
+   блокируют L1 COMPLETE автоматически.
 7. Выполнить real-world L1 acceptance; это финальная acceptance stage, не новый
    feature milestone.
 8. Только если acceptance покажет blocking pain ручного создания 100–500
