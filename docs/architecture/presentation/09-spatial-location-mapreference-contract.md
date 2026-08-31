@@ -1,0 +1,104 @@
+# Spatial presentation contract: Location, Region, SavedMap и MapReference
+
+## Статус
+
+Действующий архитектурный contract для пространственной семантики NetMap.
+Документ фиксирует границы понятий; конкретные DB columns, API endpoints,
+DTO и algorithm details здесь намеренно не определяются.
+
+## Четыре разных понятия
+
+### Location
+
+`Location` — отдельное canonical понятие физического местоположения. Оно
+отвечает на вопрос: «где физически находится объект?». Location существует
+независимо от SavedMap и canvas/presentation coordinates.
+
+Location образуют произвольную физическую иерархию любой глубины, ltree-like
+по смыслу. Конкретная технология хранения (например, `ltree`, adjacency list
+или другая) пока не фиксируется. Не вводятся фундаментальные backend-типы
+`Site`, `Building`, `Floor`, `Room`, `Rack` или `RackUnit`: такие значения могут
+быть kind/classification или metadata обычного Location.
+
+В будущем `PhysicalObject` может иметь явную optional canonical association с
+Location. Эта association и сама иерархия Location являются canonical facts;
+они не выводятся из карты. Положение объекта на SavedMap никогда не создаёт и
+не изменяет Location. Region geometry также никогда не создаёт и не изменяет
+Location.
+
+### Region
+
+`Region` — только SavedMap-owned presentation geometry для одной Physical/L1
+карты: polygon, label, style и label position. Hierarchy Regions derives only
+from geometry; она не является canonical physical hierarchy.
+
+Region не имеет canonical containment/member semantics: объект внутри polygon
+не становится member Location или Region. Движение Region не двигает canonical
+objects и не меняет их Location. В будущем Region может иметь explicit
+association с Location для presentation assistance, но это не превращает
+polygon в источник canonical truth.
+
+Фактически реализованный Region family включает persistence/API, rendering,
+isolated mode, draft creation, geometry editor, assisted geometry, laminar
+hierarchy, existing Region edit, properties/style/label drag/delete,
+произвольные текстовые annotations и consolidated presentation authoring panel.
+Это не означает, что глобальный UI polish завершён: cross-app visual
+unification остаётся отдельной будущей задачей.
+
+### SavedMap
+
+`SavedMap` — уже существующий presentation scope. Она содержит размещения
+canonical topology objects и реализованные presentation records текущего
+contract, включая Regions и text annotations. SavedMap не является canonical
+physical hierarchy и не является topology container.
+
+Будущий `MapReference` будет SavedMap-owned presentation composition одной
+SavedMap внутри другой; текущая persisted SavedMap не содержит таких
+compositions.
+
+Membership объекта в SavedMap — это membership представления, а не membership
+в Location. Одна и та же canonical topology может представляться несколькими
+разными SavedMaps; изменения размещения на карте не изменяют canonical topology
+или Location.
+
+### MapReference
+
+`MapReference` — presentation composition одной SavedMap внутри другой SavedMap.
+Например, подробная SavedMap стойки может отображаться на карте помещения как
+один collapsed/composite presentation object. На родительской карте внутренние
+объекты и внутренние связи target-map скрыты; наружу представляются только
+canonical connectivity crossings между объектами target SavedMap и
+canonical objects вне её membership.
+
+Внешнее представление не создаёт новые `Connection`, `PhysicalObject` или
+другие topology facts. Внешние connections должны следовать из canonical
+topology и membership target SavedMap, а не из вручную придуманной отдельной
+topology. Точный algorithm external-port derivation, API и schema пока не
+фиксируются.
+
+Drill-down/open target map является частью этого composite presentation
+concept. Отдельный параллельный объект «простой hyperlink MapReference» не
+вводится.
+
+MapReference не является Location, не доказывает physical containment, не
+является Region и не является отдельным canonical topology aggregate.
+
+## Relationship matrix
+
+| Понятие | Роль | Граница семантики |
+| --- | --- | --- |
+| `Location` | canonical physical place | независим от карт; отвечает, где физически находится объект |
+| `Region` | presentation | geometry одной SavedMap; не создаёт canonical containment |
+| `SavedMap` | presentation scope | выбранное представление canonical topology; не physical hierarchy и не topology container |
+| `MapReference` | presentation composition | collapsed representation другой SavedMap; crossing connectivity остаётся derived из canonical topology + membership |
+
+## Инварианты границ
+
+- Canvas placement, Region geometry и MapReference composition не создают и не
+  изменяют canonical Location.
+- Ни Region, ни SavedMap, ни MapReference не являются доказательством
+  physical containment.
+- Presentation records могут помогать навигации и чтению topology, но
+  canonical topology остаётся source of truth.
+- Location foundation и MapReference/composed SavedMaps — разные будущие
+  capability families; они не объединяются в одну иерархию.

@@ -19,6 +19,13 @@
 
 Идентичность сущности задаётся стабильным ID. Человекочитаемое имя — alias/metadata и может изменяться без изменения топологии.
 
+## Canonical Location boundary
+
+`Location` — canonical physical-place concept, образующий произвольную
+иерархию любой глубины. Он независим от SavedMap и Region geometry; физическое
+местоположение не выводится из presentation. Точная storage technology и
+API-форма пока OPEN. Полный spatial boundary contract: [[architecture/presentation/09-spatial-location-mapreference-contract|Location, Region, SavedMap и MapReference]].
+
 ## Граница физики и сетевых уровней
 
 `ConnectionPoint` и `NetworkInterface` являются разными сущностями. Первая описывает физическую точку соединения, вторая — логическую точку сетевой обработки. Их связывает явный `InterfacePhysicalBinding`.

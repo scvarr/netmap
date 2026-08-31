@@ -1074,9 +1074,17 @@ contextual actions, and vertical editors. This changes no Region or annotation
 lifecycle contract: all writes and refresh-only retries remain in the existing
 Map page callbacks.
 
-`MapReference` remains a future presentation object targeting another SavedMap for
-hierarchical navigation. It is not a Location, Connection, topology fact, or
-containment evidence.
+Region authoring is implemented for the current Region family. This does not
+claim completion of global cross-app visual unification, which remains a separate
+future UI-polish task.
+
+`MapReference` is a future presentation composition of one SavedMap inside
+another: a collapsed target-map object with drill-down, hidden internal target
+content, and only canonical connectivity crossings represented externally.
+It is not a Location, Region, Connection, physical-containment evidence or
+canonical topology aggregate. Crossings derive from canonical topology plus
+target-map membership; the exact derivation algorithm, API and schema remain
+OPEN. It is not a separate simple hyperlink object. See [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract]].
 
 ## Future Fibre Channel compatibility boundary
 

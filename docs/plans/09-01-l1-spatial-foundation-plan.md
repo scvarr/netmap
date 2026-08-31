@@ -336,24 +336,18 @@ completed merely because Region work has started.
 
 ### L1S.7 — Regions / areas
 
-**IN PROGRESS / OPEN**
+**IMPLEMENTED for the current Region authoring family**
 
-L1S.7 is not complete. The current `main` branch includes the SavedMap-owned
-Region model, polygon persistence/API, rendering, isolated Region mode, polygon
-draft authoring, the Shift screen-axis constraint, closure by clicking the first
-vertex, and the acknowledged POST followed by an authoritative SavedMap reload.
-It also includes the laminar spatial contract: Regions are disjoint or strictly
-contained; touching and all overlap are rejected; hierarchy is derived from
-geometry and no parent is stored.
+The current `main` branch includes the SavedMap-owned Region model,
+persistence/API, rendering, isolated Region mode, draft creation, geometry
+editor, assisted geometry, laminar hierarchy, existing Region edit,
+properties/style/label drag/delete, arbitrary text annotations and the
+consolidated presentation authoring panel. Region hierarchy derives only from
+geometry; it does not create Location, object membership or topology semantics.
+Global cross-app visual unification remains a separate future UI-polish task.
 
-The implemented L1S.7b.4b Region list/tree derives hierarchy only from the
-authoritative `regions[]`, keeps selection session-only, and uses a selected-polygon
-highlight only as presentation. L1S.7b.4c provides that geometry editor only for a
-new local draft after closure; it has no persisted Region identity. Parent is derived and never
-persisted. L1S.7b.4e now connects that same editor to an existing selected Region through an
-authoritative replace lifecycle. Remaining work is the properties/style/delete workflow. Other
-missing Region workflow pieces remain open until verified against the current `main`;
-planned capability is not treated as implemented.
+The focused contract for the four spatial/presentation concepts is
+[[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract: Location, Region, SavedMap и MapReference]].
 
 #### L1S.7a — Saved Map Region model / persistence / API contract
 
@@ -367,12 +361,11 @@ planned capability is not treated as implemented.
   validation rejects invalid vertices and self-intersection; Saved Map deletion cascades
   Regions.
 - L1S.7a provided the typed Saved Map parsing and bounded Region transport;
-  rendering is supplied by L1S.7b.1 and authoring by the implemented L1S.7b
-  drawing/create slices. Existing-Region editing remains open below.
+  rendering and authoring are implemented by the L1S.7b slices below.
 
 #### L1S.7b — Region drawing and editing UI
 
-**OPEN**
+**IMPLEMENTED for the listed capabilities**
 
 ##### L1S.7b.1 — Region rendering + isolated Region mode
 
@@ -402,7 +395,7 @@ planned capability is not treated as implemented.
 - While drawing a session-local Region draft, Shift constrains only the current segment endpoint
   to its dominant horizontal or vertical screen-space axis. The constrained screen point is
   converted back to the flow-coordinate draft point, so preview and click agree under pan and
-  zoom. Persistence and Region editing remain open.
+  zoom. Persistence and Region editing are covered by the implemented slices below.
 
 ##### L1S.7b.3b — create Region from completed draft
 
@@ -415,10 +408,6 @@ planned capability is not treated as implemented.
   never synthesizes a local Region. A failed write keeps the draft for an explicit save retry;
   an acknowledged write followed by failed refresh offers a refresh-only retry and never repeats
   the POST.
-
-##### Remaining L1S.7b drawing and editing steps
-
-**OPEN**
 
 - **L1S.7b.4a — Region spatial relation contract — IMPLEMENTED**: every Saved Map Region
   set is a geometry-derived, never-persisted laminar presentation hierarchy. Regions are
@@ -462,41 +451,33 @@ planned capability is not treated as implemented.
   Location, object or topology association. The UI supports click placement, local preview,
   free drag, complete replace and confirmed deletion through the authoritative-reload lifecycle.
   Rich text, callouts, backgrounds, rotation, z-order and generic scene-object work remain out
-  of scope. Location association and `MapReference` also remain open. L1S.7 remains **OPEN**.
+  of scope. Location association and `MapReference` are separate capability families below.
 
 ### Location foundation
 
 **OPEN bounded L1 foundation**
 
-`Location` is canonical physical place: a stable-ID arbitrary-depth tree with
-an optional parent, name, and optional bounded kind/classification. It answers
-“where is the physical object?” A `PhysicalObject` may have an optional
-canonical Location association. Location is independent of SavedMap and canvas
-coordinates; it is never inferred from presentation geometry. Do not introduce
-fundamental Site/Building/Floor/Room/Rack/RackUnit entities yet: these are
-ordinary Location kinds/classes. Rack-unit authoring may later offer batch
-creation of children such as `U01..U42`, still as Locations.
+Location remains a separate OPEN capability family. Its current semantic
+contract is [[architecture/presentation/09-spatial-location-mapreference-contract|defined here]]:
+canonical physical place, arbitrary depth, independent of SavedMap, with no
+fundamental Site/Building/Floor/Room/Rack/RackUnit backend types. No Location
+implementation is started by this plan update. Any future Region association
+is presentation assistance only and cannot make geometry a source of canonical
+membership or movement.
 
-The next bounded Location/Region capability may associate a MapRegion with a
-Location for presentation assistance. It must not turn Region geometry into
-canonical membership or movement: Location remains the source of truth, and map
-geometry cannot change or clear it without an explicit domain action. A linked
-Region may highlight objects at the Location or its descendants and may suggest
-an editable padded bounding Region from members already placed on the current
-SavedMap. With no placed members, it may suggest a small editable default near a
-viewport/chosen anchor. This is not auto-layout, object movement, or geometry →
-Location inference. A warning that an object's canonical Location is outside its
-Region is diagnostic only.
-
-### L1S.8 — MapReference / hierarchical maps
+### L1S.8 — MapReference / composed SavedMaps
 
 **OPEN future L1 capability; not canonical hierarchy**
 
-`MapReference` is a presentation object whose target is another SavedMap. It
-supports hierarchical navigation (“open the detailed map”) and is not a
-Connection, Location, topology fact, or containment evidence. A Region may have
-a nearby navigation entry, but Region/Location association and MapReference are
-independent presentation capabilities.
+`MapReference` is the presentation composition of one SavedMap inside another:
+the target is shown as a collapsed/composite object, with drill-down as part of
+the same concept. Internal target objects and connections are hidden on the
+parent map; external connections are derived from canonical topology and target
+SavedMap membership. The external representation creates no new
+`Connection`, `PhysicalObject` or topology facts, and does not prove Location or
+physical containment. Exact external-port derivation, API and schema remain
+OPEN; no implementation plan is introduced here and no separate simple
+hyperlink object is defined. See the [[architecture/presentation/09-spatial-location-mapreference-contract|focused spatial contract]].
 
 ### Cable.3 — minimal Cable metadata foundation
 

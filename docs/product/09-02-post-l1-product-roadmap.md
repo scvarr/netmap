@@ -6,10 +6,11 @@
 развития продукта и границы будущих систем, но не является детальным
 implementation plan и не создаёт implementation milestones.
 
-L1S.7 остаётся **IN PROGRESS / OPEN**: Region spatial laminar contract, derived
-Region tree с session-only selection, new-draft geometry editor и transient assisted
-geometry уже реализованы, но полноценное редактирование существующих Regions ещё не закрыто. Этот документ фиксирует оставшийся bounded путь
-до L1 COMPLETE.
+L1S.7 Region authoring family реализован: persistence/API, rendering, isolated
+mode, draft creation, geometry editor, assisted geometry, laminar hierarchy,
+existing Region edit, properties/style/label drag/delete, text annotations и
+consolidated presentation authoring panel. Cross-app visual unification остаётся
+отдельной будущей UI-polish задачей и не является L1S.7 gap.
 
 Связанные contracts:
 
@@ -23,35 +24,33 @@ geometry уже реализованы, но полноценное редакт
 
 **FIXED direction**
 
-1. Завершить оставшийся [[plans/09-01-l1-spatial-foundation-plan|L1S.7
-   Regions]] Region UX/editor work.
-2. Зафиксировать Location foundation и bounded Location ↔ MapRegion
+1. Зафиксировать Location foundation и bounded Location ↔ MapRegion
    presentation assistance.
-3. Выполнить L1S.8 MapReference / hierarchical map navigation.
-4. Выполнить Cable.3 minimal metadata foundation.
-5. Закрыть MapCableRoute usability / assisted geometry: overlap-safe trace,
+2. Выполнить L1S.8 MapReference / composed SavedMaps.
+3. Выполнить Cable.3 minimal metadata foundation.
+4. Закрыть MapCableRoute usability / assisted geometry: overlap-safe trace,
    compact edit handles, straight segments, initial angle snapping/feedback и
    обоснованные magnets.
-6. Закрыть mandatory stabilization/performance gate: все пункты backlog с
+5. Закрыть mandatory stabilization/performance gate: все пункты backlog с
    `До L2: ДА` и отдельно promoted L1 acceptance blockers; `До L2: НЕТ` не
    блокируют L1 COMPLETE автоматически.
-7. Выполнить real-world L1 acceptance; это финальная acceptance stage, не новый
+6. Выполнить real-world L1 acceptance; это финальная acceptance stage, не новый
    feature milestone.
-8. Только если acceptance покажет blocking pain ручного создания 100–500
+7. Только если acceptance покажет blocking pain ручного создания 100–500
    объектов, добавить bounded CSV/JSON bootstrap importer.
-9. Объявить L1 COMPLETE и перейти к semantic presentation L2, а затем L3.
-10. Сформировать полноценную многопользовательскую основу NetMap:
+8. Объявить L1 COMPLETE и перейти к semantic presentation L2, а затем L3.
+9. Сформировать полноценную многопользовательскую основу NetMap:
    authentication, ownership/isolation workspace, sharing/access control,
    comments/annotations, activity/audit.
-11. Развивать portability и reusable content: workspace export/import,
+10. Развивать portability и reusable content: workspace export/import,
    packages библиотек Blueprint, а при реальной потребности — map templates
    или cloning.
-12. После появления реальных L2/L3 UI use cases развивать observations,
+11. После появления реальных L2/L3 UI use cases развивать observations,
    collectors/adapters, dynamic maps и monitoring/health overlays.
 
 Location поставлен сразу после Regions: он даёт canonical смысл физического
 места, на который может опираться будущая Region assistance, но не смешивает
-canonical state с presentation geometry. MapReference следует после этого,
+canonical state с presentation geometry. MapReference/composed SavedMaps следует после этого,
 потому что navigation между SavedMaps не является Location hierarchy.
 
 Порядок шагов после L2/L3 foundation может корректироваться по реальной
@@ -62,11 +61,12 @@ Backend и API расширяются для конкретного UI/use case.
 
 ## L1 Product UX / Usability Pass
 
-**FIXED direction перед L1S.7**
+**IMPLEMENTED pass; retained acceptance principles**
 
-Цель отдельного pass — сделать L1 NetMap самостоятельным удобным рабочим
-инструментом, а не демонстрацией корректной архитектуры. Это будущий usability
-review, не перечень уже утверждённых implementation milestones.
+Этот pass сделал L1 NetMap самостоятельным удобным рабочим инструментом, а не
+демонстрацией корректной архитектуры. Ниже сохранены его product principles и
+критерии пользовательской проверки; это не отдельная будущая работа до
+завершённого Region authoring.
 
 Проверяется непрерывный пользовательский workflow:
 
@@ -127,10 +127,13 @@ Location → presentation assistance, never reverse. Перемещение об
 
 ## MapReference
 
-`MapReference` — presentation object с target на другую SavedMap для
-hierarchical navigation. Это не Connection, Location, topology и не доказательство
-containment. Region может иметь navigation entry рядом с собой, но это отдельная
-capability.
+`MapReference` — presentation composition одной SavedMap внутри другой:
+collapsed/composite representation с drill-down, скрытыми внутренними объектами
+и связями target-map и внешними crossings, выведенными из canonical topology и
+target SavedMap membership. Это не Location, Region, Connection, доказательство
+physical containment или canonical topology aggregate. Точный algorithm, API и
+schema остаются OPEN; отдельный простой hyperlink-object не вводится. Полный
+contract: [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract]].
 
 ## Cable.3 и capacity semantics
 

@@ -21,6 +21,7 @@
 - [[architecture/graph/02-graph|Graph / resolver / projection / cache]]
 - [[architecture/tracing/03-tracing|Tracing]]
 - [[architecture/presentation/05-presentation|Presentation / UX]] и [[architecture/presentation/08-ui-implementation|UI implementation contract]]
+- [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract: Location, Region, SavedMap и MapReference]]
 - [[architecture/workspaces/07-workspaces|Workspaces]]
 - [[architecture/blueprints/09-03-port-block-blueprint-architecture|Blueprint / Port Block]]
 

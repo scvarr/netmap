@@ -79,7 +79,7 @@ remains specific rather than falling back to a generic error.
 ```text
 09.4 L1 Product UX completion
     -> L1S.7 Regions
-    -> L1S.8 MapReference / hierarchical maps
+    -> L1S.8 MapReference / composed SavedMaps
     -> финальный L1 usability / acceptance
     -> обязательные до-L2 stabilization и performance пункты
     -> L2

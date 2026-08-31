@@ -26,6 +26,7 @@
   - [[architecture/tracing/03-03-l3-trace|03.3 L3 Trace]]
   - [[architecture/tracing/03-04-packet-flow-trace|03.4 Packet Flow Trace]]
 - [[architecture/presentation/05-presentation|05. Представление]]
+  - [[architecture/presentation/09-spatial-location-mapreference-contract|05.1 Spatial contract: Location, Region, SavedMap и MapReference]]
 - [[architecture/workspaces/07-workspaces|07. Workspace и canonical isolation]]
 - [[architecture/presentation/08-ui-implementation|08. UI implementation contract]]
 - [[reviews/09-ui-ux-review|09. Рабочий L1 UI/UX review]]

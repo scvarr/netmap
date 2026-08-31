@@ -125,6 +125,9 @@ Aggregate presentation object не становится canonical network entity
 
 ## Реализованный SavedMap presentation subset
 
+Краткий contract границ `Location`, `Region`, `SavedMap` и `MapReference`
+зафиксирован в [[architecture/presentation/09-spatial-location-mapreference-contract|отдельной spatial заметке]].
+
 Current application deployment has one implicit `NetworkWorkspace`; it is not a
 persisted table or a foreign key on canonical facts. `SavedMap` belongs to that
 implicit workspace and is a presentation scope, not a canonical network fact.
@@ -1144,102 +1147,9 @@ NAT
 
 **FIXED**
 
-UI использует ту же базовую модель местоположений, что и canonical backend:
-
-```text
-Location
-    id
-    parent_id?
-    path
-```
-
-Иерархические уровни не зашиваются в UI или schema как обязательные типы:
-
-```text
-здание
-этаж
-помещение
-стойка
-unit
-```
-
-Это обычные узлы одного произвольного дерева. Человекочитаемое название, класс и дополнительный смысл задаются aliases/metadata.
-
-Допустимы структуры любой формы, например:
-
-```text
-Площадка
-└── Здание
-    └── Этаж
-        └── Кабинет 101
-```
-
-или:
-
-```text
-Площадка
-└── Улица
-    └── Колодец 17
-        └── Муфта 17-3
-```
-
-UI не должен предполагать фиксированную глубину или допустимую последовательность классов Location.
-
-### Location можно создать без родителя
-
-**FIXED**
-
-Как и PhysicalObject, Location поддерживает progressive modeling.
-
-Если пользователь сейчас знает только:
-
-```text
-Кабинет 101
-```
-
-он может создать этот Location как корневой узел и сразу размещать в нём известные объекты.
-
-Позднее существующий узел можно встроить в более полную иерархию:
-
-```text
-Главный корпус
-└── 2 этаж
-    └── Кабинет 101
-```
-
-и затем, например:
-
-```text
-Мурманск
-└── Площадка 1
-    └── Главный корпус
-        └── 2 этаж
-            └── Кабинет 101
-```
-
-Перемещение Location в дереве не меняет его stable identity.
-
-PhysicalObject, ConnectionPoint и другие сущности, которые уже ссылаются на этот Location, не должны требовать ручной перепривязки только из-за изменения его parent/path.
-
-### Базовые действия с Location
-
-**FIXED как interaction direction; конкретная форма остаётся OPEN**
-
-UI должен позволять как минимум:
-
-```text
-создать Location
-выбрать optional parent
-переименовать
-изменить metadata/class
-переместить в другой parent
-создать дочерний Location
-выбрать Location при размещении объекта
-```
-
-Выбор местоположения должен поддерживать поиск и просмотр дерева.
-
-Создание нового Location должно быть доступно непосредственно из workflow, где пользователь назначает объекту местоположение; не требуется заранее переходить в отдельный административный раздел и строить полное дерево.
+Для действующего domain contract Location, его arbitrary-depth семантики,
+progressive modeling и границ с presentation см. [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract]].
+Конкретные поля, storage technology, endpoints и DTO здесь не фиксируются.
 
 ## Что пока не фиксируется
 
@@ -1454,19 +1364,23 @@ persistence, followed by authoritative SavedMap reload; the local preview/draft
 remains retryable after a failed write, while an acknowledged write retries only
 reload. Text placement and drag are free, without snap or geometry assistance.
 Rich text, callouts, backgrounds, rotation, z-order and a generic scene-object
-abstraction remain out of scope.
+abstraction remain out of scope. Cross-app visual unification is a separate
+future UI-polish task and is not implied by Region completion.
 
-### MapReference и иерархические карты
+### MapReference и composed SavedMaps
 
-**FIXED направление; persistence и interaction — OPEN**
+**FIXED product concept; implementation remains OPEN**
 
-Saved Map может содержать presentation object со ссылкой на другую Saved Map.
-Это navigation/presentation hierarchy, а не canonical topology entity и не
-утверждение network connectivity. Это основной предполагаемый способ
-масштабирования детальных L1 «точечных» карт: карта этажа ведёт на подробную карту
-помещения, стойки или узла.
-`MapReference` не является `Location`, `Connection` или доказательством
-containment; navigation entry рядом с Region остаётся независимой capability.
+`MapReference` — composition одной SavedMap внутри другой: подробная карта
+стойки представляется на карте помещения одним collapsed/composite object,
+внутренние objects и connections target-map скрыты, а наружу выводятся только
+canonical connectivity crossings. Drill-down является частью этого composite
+presentation concept. Новые topology facts не создаются; crossings выводятся
+из canonical topology и membership target SavedMap. Это не Location, Region,
+physical containment и не canonical topology aggregate. Точный algorithm,
+API и schema остаются OPEN; отдельный простой hyperlink-object не вводится.
+
+Подробности и relationship matrix: [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract]].
 
 ## Future media, capacity и transport views
 
