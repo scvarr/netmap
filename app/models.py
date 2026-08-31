@@ -9,10 +9,43 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 
-class PhysicalObject(Base):
-    __tablename__ = "physical_objects"
+class Location(Base):
+    """Canonical physical place, independent from all SavedMap presentation state."""
+
+    __tablename__ = "locations"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),
+        CheckConstraint("type IS NULL OR char_length(btrim(type)) > 0", name="type_not_blank"),
+        CheckConstraint("parent_location_id IS NULL OR parent_location_id <> id", name="parent_not_self"),
+        Index("ix_locations_parent_location_id", "parent_location_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    parent_location_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
+    )
+    parent: Mapped["Location | None"] = relationship(
+        back_populates="children", remote_side="Location.id"
+    )
+    children: Mapped[list["Location"]] = relationship(
+        back_populates="parent", passive_deletes=True
+    )
+    physical_objects: Mapped[list["PhysicalObject"]] = relationship(
+        back_populates="location", passive_deletes=True
+    )
+
+
+class PhysicalObject(Base):
+    __tablename__ = "physical_objects"
+    __table_args__ = (Index("ix_physical_objects_location_id", "location_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("locations.id", ondelete="RESTRICT"), nullable=True
+    )
+    location: Mapped[Location | None] = relationship(back_populates="physical_objects")
     connection_points: Mapped[list["ConnectionPoint"]] = relationship(back_populates="physical_object")
     network_interface_owners: Mapped[list["NetworkInterfacePhysicalOwner"]] = relationship(
         back_populates="physical_object"

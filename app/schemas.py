@@ -77,6 +77,65 @@ class MapRegionRef(BaseModel):
     entity_id: uuid.UUID
 
 
+class LocationRef(BaseModel):
+    """Canonical identity for a physical place."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ref_type: Literal["CANONICAL_FACT"] = "CANONICAL_FACT"
+    entity_type: Literal["Location"] = "Location"
+    entity_id: uuid.UUID
+
+
+class LocationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    location_ref: LocationRef
+    name: str = Field(min_length=1, max_length=255)
+    type: str | None = Field(default=None, min_length=1, max_length=255)
+    parent_location_ref: LocationRef | None = None
+
+
+class LocationListDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    locations: list[LocationDocument]
+
+
+class CreateLocationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=255)
+    type: str | None = Field(default=None, min_length=1, max_length=255)
+    parent_location_id: uuid.UUID | None = None
+
+
+class UpdateLocationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    name: str = Field(min_length=1, max_length=255)
+    type: str | None = Field(default=None, min_length=1, max_length=255)
+
+
+class ReparentLocationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    parent_location_id: uuid.UUID | None = None
+
+
+class PhysicalObjectLocationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    physical_object_ref: ProjectionSourceRef
+    location_ref: LocationRef | None = None
+
+
+class SetPhysicalObjectLocationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: uuid.UUID | None = None
+
+
 class CreateSavedMapRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

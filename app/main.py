@@ -24,6 +24,7 @@ from app.l2_catalog import L2Catalog, L2ForwardingContextBindingInput
 from app.l3_resolver import SelectedTableRouteDecisionResolver
 from app.models import MapViewKey, PortBlockVersion
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
+from app.location_catalog import LocationCatalog
 from app.next_hop_resolver import SelectedTableNextHopResolver
 from app.nat_resolver import ConfiguredNATPolicyResolver
 from app.nat_evaluation_resolver import ConfiguredNATEvaluationResolver
@@ -62,6 +63,7 @@ from app.schemas import (
     CreatePortBlockVersionRequest,
     CreateMapRegionRequest,
     CreateMapTextAnnotationRequest,
+    CreateLocationRequest,
     CreateSavedMapRequest,
     CreateL2ForwardingContextRequest,
     CatalogInventoryDocument,
@@ -77,6 +79,8 @@ from app.schemas import (
     L2ReachabilityQuery,
     L2ReachabilityTraceArtifact,
     L2ForwardingContextCreationDocument,
+    LocationDocument,
+    LocationListDocument,
     MapPlacementsDocument,
     MapRegionDocument,
     MapTextAnnotationDocument,
@@ -108,6 +112,7 @@ from app.schemas import (
     PhysicalEndpointConnectionCreationDocument,
     PhysicalEndpointMaterialization,
     PhysicalObjectDetailsDocument,
+    PhysicalObjectLocationDocument,
     NATEvaluationArtifact,
     NATEvaluationQuery,
     MoveMapPlacementRequest,
@@ -125,6 +130,7 @@ from app.schemas import (
     SecurityEvaluationQuery,
     SetPhysicalObjectClassRequest,
     SetPhysicalObjectDisplayNameRequest,
+    SetPhysicalObjectLocationRequest,
     SavedMapDocument,
     SavedMapListDocument,
     StructuralAdjacencyArtifact,
@@ -132,6 +138,8 @@ from app.schemas import (
     TopologyProjectionDocument,
     TopologyProjectionRequest,
     TraceArtifact,
+    ReparentLocationRequest,
+    UpdateLocationRequest,
 )
 from app.structural_adjacency_resolver import StructuralAdjacencyProofResolver
 from app.topology_projection_resolver import ConfiguredTopologyProjectionResolver
@@ -248,6 +256,150 @@ async def request_validation_error_handler(
 def health(session: Session = Depends(get_session)) -> dict[str, str]:
     session.execute(text("SELECT 1"))
     return {"status": "ok"}
+
+
+def _location_document(location) -> dict[str, object]:
+    return {
+        "location_ref": {
+            "ref_type": "CANONICAL_FACT",
+            "entity_type": "Location",
+            "entity_id": location.id,
+        },
+        "name": location.name,
+        "type": location.type,
+        "parent_location_ref": (
+            {
+                "ref_type": "CANONICAL_FACT",
+                "entity_type": "Location",
+                "entity_id": location.parent_location_id,
+            }
+            if location.parent_location_id is not None
+            else None
+        ),
+    }
+
+
+def _physical_object_location_document(physical_object) -> dict[str, object]:
+    return {
+        "physical_object_ref": {
+            "ref_type": "CANONICAL_FACT",
+            "entity_type": "PhysicalObject",
+            "entity_id": physical_object.id,
+        },
+        "location_ref": (
+            {
+                "ref_type": "CANONICAL_FACT",
+                "entity_type": "Location",
+                "entity_id": physical_object.location_id,
+            }
+            if physical_object.location_id is not None
+            else None
+        ),
+    }
+
+
+@app.get("/v1/locations", response_model=LocationListDocument, response_model_exclude_none=True)
+def list_locations(session: Session = Depends(get_session)) -> LocationListDocument:
+    return {"locations": [_location_document(location) for location in LocationCatalog(session).list()]}
+
+
+@app.post(
+    "/v1/locations",
+    response_model=LocationDocument,
+    response_model_exclude_none=True,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}},
+)
+def create_location(
+    query: CreateLocationRequest, session: Session = Depends(get_session)
+) -> LocationDocument:
+    with session.begin():
+        location = LocationCatalog(session).create(query.name, query.type, query.parent_location_id)
+        return _location_document(location)
+
+
+@app.get(
+    "/v1/locations/{location_id}",
+    response_model=LocationDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}},
+)
+def get_location(location_id: uuid.UUID, session: Session = Depends(get_session)) -> LocationDocument:
+    return _location_document(LocationCatalog(session).get(location_id))
+
+
+@app.put(
+    "/v1/locations/{location_id}",
+    response_model=LocationDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}},
+)
+def update_location(
+    location_id: uuid.UUID,
+    query: UpdateLocationRequest,
+    session: Session = Depends(get_session),
+) -> LocationDocument:
+    with session.begin():
+        location = LocationCatalog(session).update(location_id, query.name, query.type)
+        return _location_document(location)
+
+
+@app.put(
+    "/v1/locations/{location_id}/parent",
+    response_model=LocationDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}},
+)
+def reparent_location(
+    location_id: uuid.UUID,
+    query: ReparentLocationRequest,
+    session: Session = Depends(get_session),
+) -> LocationDocument:
+    with session.begin():
+        location = LocationCatalog(session).reparent(location_id, query.parent_location_id)
+        return _location_document(location)
+
+
+@app.delete(
+    "/v1/locations/{location_id}",
+    status_code=204,
+    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+)
+def delete_location(location_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        LocationCatalog(session).delete(location_id)
+
+
+@app.get(
+    "/v1/topology/physical-objects/{physical_object_id}/location",
+    response_model=PhysicalObjectLocationDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}},
+)
+def get_physical_object_location(
+    physical_object_id: uuid.UUID, session: Session = Depends(get_session)
+) -> PhysicalObjectLocationDocument:
+    return _physical_object_location_document(
+        LocationCatalog(session).get_physical_object_location(physical_object_id)
+    )
+
+
+@app.put(
+    "/v1/topology/physical-objects/{physical_object_id}/location",
+    response_model=PhysicalObjectLocationDocument,
+    response_model_exclude_none=True,
+    responses={422: {"model": ErrorResponse}},
+)
+def set_physical_object_location(
+    physical_object_id: uuid.UUID,
+    query: SetPhysicalObjectLocationRequest,
+    session: Session = Depends(get_session),
+) -> PhysicalObjectLocationDocument:
+    with session.begin():
+        physical_object = LocationCatalog(session).set_physical_object_location(
+            physical_object_id, query.location_id
+        )
+        return _physical_object_location_document(physical_object)
 
 
 @app.get("/v1/maps", response_model=SavedMapListDocument)

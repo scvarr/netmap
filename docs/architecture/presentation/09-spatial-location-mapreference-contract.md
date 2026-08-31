@@ -6,6 +6,12 @@
 Документ фиксирует границы понятий; конкретные DB columns, API endpoints,
 DTO и algorithm details здесь намеренно не определяются.
 
+Location.1 implemented the minimal canonical foundation: stable Location
+identity, arbitrary-depth explicit parent hierarchy, arbitrary user-defined
+optional type and explicit optional `PhysicalObject -> Location` assignment.
+It does not implement Region association/assistance, a Location UI/tree editor,
+MapReference or any fixed Location taxonomy.
+
 ## Четыре разных понятия
 
 ### Location
@@ -20,8 +26,8 @@ Location образуют произвольную физическую иера
 `Site`, `Building`, `Floor`, `Room`, `Rack` или `RackUnit`: такие значения могут
 быть kind/classification или metadata обычного Location.
 
-В будущем `PhysicalObject` может иметь явную optional canonical association с
-Location. Эта association и сама иерархия Location являются canonical facts;
+`PhysicalObject` имеет явную optional canonical association с Location. Эта
+association и сама иерархия Location являются canonical facts;
 они не выводятся из карты. Положение объекта на SavedMap никогда не создаёт и
 не изменяет Location. Region geometry также никогда не создаёт и не изменяет
 Location.

@@ -35,6 +35,7 @@ from app.models import (
     MapRegion,
     MapPlacement,
     MapViewPosition,
+    Location,
     PhysicalObject,
     SavedMap,
     ProcessingEntryPoint,
@@ -140,4 +141,5 @@ def clean_database(request: pytest.FixtureRequest):
         session.execute(delete(Connection))
         session.execute(delete(ConnectionPoint))
         session.execute(delete(PhysicalObject))
+        session.execute(delete(Location))
     yield

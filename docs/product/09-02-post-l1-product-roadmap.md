@@ -101,11 +101,11 @@ Blueprint/template
 
 ## Canonical Location и MapRegion boundary
 
-**FIXED semantic direction; implementation остаётся отдельным bounded milestone**
+**Location.1 canonical foundation IMPLEMENTED; remaining Location/Region UX is a separate bounded milestone**
 
 `Location` — canonical physical place: stable identity, optional parent, name и
-optional bounded kind/classification в arbitrary-depth physical tree. A
-`PhysicalObject` may have an optional canonical Location association. Location
+optional arbitrary user-defined type в arbitrary-depth physical tree. A
+`PhysicalObject` has an optional canonical Location association. Location
 не зависит от SavedMap и canvas coordinates и не выводится из polygon geometry.
 Room, Rack, Cabinet, Outdoor zone, Well, Splice enclosure, Shelf и Bay пока
 являются обычными Location kinds/classes, а не отдельными фундаментальными
