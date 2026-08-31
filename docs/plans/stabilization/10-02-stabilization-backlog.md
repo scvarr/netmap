@@ -1,9 +1,10 @@
 # 10.2 Stabilization backlog
 
-Этот backlog целиком остаётся каноническим списком stabilization work. L1
-COMPLETE блокируют пункты, явно помеченные `До L2: ДА`, а также новая проблема,
+Этот backlog целиком остаётся каноническим списком stabilization work.
+Обязательный pre-L2 stabilization gate для `L1 PRODUCT COMPLETE` блокируют
+пункты, явно помеченные `До L2: ДА`, а также новая проблема,
 если она отдельно и явно promoted в L1 acceptance blocker. Поэтому TODO с
-`До L2: НЕТ` не блокируют L1 COMPLETE автоматически. Performance/read-path
+`До L2: НЕТ` не блокируют `L1 PRODUCT COMPLETE` автоматически. Performance/read-path
 issues, уже классифицированные как `До L2: ДА`, остаются обязательной L1
 readiness work; весь backlog целиком не становится gate только из-за наличия
 TODO. Real-world acceptance может выявить новый конкретный blocker, но не

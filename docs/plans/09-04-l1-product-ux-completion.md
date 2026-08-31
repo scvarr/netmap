@@ -23,15 +23,16 @@ provenance constructs, а immutable Blueprint history не изменяется.
 2. **Видимость в плотной карте.** Выбранный или редактируемый кабель остаётся
    хорошо видимым; мешающие объекты могут становиться полупрозрачными, а
    остальные элементы не должны мешать routing workflow.
-3. **Пользовательская терминология.** В UI использовать «Группа портов» /
+3. **Пользовательская терминология.** В UI использовать «Портовый модуль» /
    `Port Module`. Внутренние architecture/code symbols `PortBlock` этим UX
-   этапом не переименовываются.
+   этапом не переименовываются. Текущая согласованная RU-терминология «Группа
+   портов / Группы портов» еще не означает, что L1R-006 выполнен.
 4. **Рабочий список портов объекта.** Natural ordering, компактные строки и
    отсутствие «Технических данных» в primary port list. Основные действия —
    компактные icon-actions с доступными labels/tooltips. Для подключённого
    порта доступен явный разрыв физического соединения с подтверждением.
-5. **Lifecycle библиотеки групп портов.** Пользователь может удалить
-   неиспользуемую Группу портов целиком вместе со всеми ее versions, только
+5. **Lifecycle библиотеки портовых модулей.** Пользователь может удалить
+   неиспользуемый Портовый модуль целиком вместе со всеми его versions, только
    если ни одна version не используется ни одной immutable Object Blueprint
    version. Если используется хотя бы одна version, destructive delete
    запрещён, а UI явно сообщает о зависимости; immutable history/provenance не
@@ -47,8 +48,14 @@ provenance constructs, а immutable Blueprint history не изменяется.
    diagnostic detail.
 8. **LOC-001 — IMPLEMENTED.** Typed RU/EN localization завершена для active
    L1 Map, Inspector, context menus, create/edit flows, Object Blueprint и
-   Port Module surfaces. User-facing terminology — «Группа портов» /
-   `Port Module`; internal `PortBlock` symbols and API contracts сохранены.
+   Port Module surfaces. User-facing terminology этого historical pass —
+   «Портовый модуль» / `Port Module`; internal `PortBlock` symbols and API
+   contracts сохранены.
+
+Normalization note: current agreed pre-L2 RU terminology is «Группа портов» /
+«Группы портов». Ее implementation tracked by `L1R-006` / Phase A in
+[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]] and is
+not claimed as implemented by this historical pass.
 
 ### UX.1 — Cable routing reliability
 
@@ -74,17 +81,11 @@ remains specific rather than falling back to a generic error.
 
 ## Порядок и exit
 
-Последовательность фиксирована:
-
-```text
-09.4 L1 Product UX completion
-    -> L1S.7 Regions
-    -> L1S.8 MapReference / composed SavedMaps
-    -> semantic L1 acceptance
-    -> pre-L2 productization
-    -> final product acceptance / L1 PRODUCT COMPLETE
-    -> L2
-```
+Этот раздел фиксирует historical boundary и exit criteria именно для
+завершенного 09.4 pass, а не текущий execution order. Единственный current
+authoritative completion roadmap —
+[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]];
+MapReference не следует автоматически сразу после L1S.7.
 
 Этот pass не расширяет L1 новыми speculative domain capabilities. L1 acceptance
 подтверждает целостный пользовательский путь от Blueprint/Port Module через

@@ -4,8 +4,12 @@
 
 Документ отделяет исходный ручной обзор от выполненного исправления на текущем
 `main` и от настоящего открытого списка работ. Он не меняет каноническую модель
-предметной области, семантику resolver, API или persistence. Конечный порядок дальнейших работ — в
-[[plans/09-01-l1-spatial-foundation-plan|09.1 Плане завершения L1 spatial foundation]].
+предметной области, семантику resolver, API или persistence. Это historical
+audit trail; current canonical execution order находится в
+[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]].
+[[plans/09-01-l1-spatial-foundation-plan|09.1 L1 spatial foundation]] остается
+spatial foundation/history/contract document, но не current global completion
+roadmap.
 Product/presentation invariants — в [[architecture/presentation/05-presentation|05. Представление]],
 реализованный frontend contract — в [[architecture/presentation/08-ui-implementation|08. UI implementation contract]].
 
@@ -77,7 +81,7 @@ Product/presentation invariants — в [[architecture/presentation/05-presentati
   строит overlay только по canonical evidence выбранной branch, а не по geometry
   или самостоятельному graph traversal.
 
-## Действительно открытый backlog
+## Historical/open backlog at time of this review
 
 ### L1 spatial foundation
 
