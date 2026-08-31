@@ -36,6 +36,48 @@
   highlighted.
 - Статус: RECORDED.
 
+## RVR-004 — Location assignment tree/search/inline-create UX
+
+- Краткое описание: PhysicalObject Location assignment использует плоский
+  select с полными Location paths. Для arbitrary-depth hierarchy, например
+  «здание → помещение → стойка → U01...U42», такой picker плохо масштабируется.
+  Для создания отсутствующего Location пользователь вынужден покидать object
+  workflow и переходить на отдельную Locations page.
+- Тип: UX debt / Location.2 workflow completion.
+- Severity: MEDIUM.
+- Влияние на L1 completion: Location assignment workflow не завершен для
+  больших иерархий; L1 completion блокируется.
+- Blocker до L2: да.
+- Зависимости: существующие Location.1/Location.2 API и semantics.
+- Backend/domain capability: не требуется; canonical semantics сохраняются.
+- Согласованное решение: заменить длинный плоский select основным
+  tree/search picker. Первой строкой является case-insensitive поиск минимум по
+  name и full hierarchical path; результаты сохраняют context через
+  необходимые ancestors. Ниже показывается collapsible tree с accessible
+  expand/collapse controls; дерево не обязано раскрываться целиком, но путь
+  текущего assigned Location раскрывается при открытии picker. Selection
+  остается single-choice.
+- Согласованное решение (create): в каждой раскрытой ветке после children
+  доступно «Добавить» для direct child, а на root level — создание root
+  Location. Inline create использует существующую canonical семантику
+  `name + optional arbitrary user-defined type + explicit parent`, без fixed
+  taxonomy или presentation-owned Location.
+- Согласованное решение (write lifecycle): после успешного create
+  authoritative tree reloads, новый Location становится selected candidate в
+  текущем draft, но PhysicalObject не переназначается автоматически. Create и
+  assignment остаются двумя отдельными canonical writes; association меняется
+  только явным «Сохранить». Ошибка create не меняет association, а retry после
+  acknowledged create и failed refresh повторяет только refresh.
+- Границы: picker не получает edit/reparent/delete; эти actions остаются на
+  полноценной Locations management surface.
+- Acceptance: большая hierarchy просматривается collapsed tree; current path
+  раскрывается; поиск `U42` показывает U42 с ancestors; Add под стойкой создает
+  child именно стойки; новый child после reload выбран как draft candidate;
+  association не меняется до Save; Save назначает Location; create failure и
+  refresh retry не меняют association и retry не повторяет create; edit,
+  reparent и delete в picker отсутствуют.
+- Статус: RECORDED.
+
 ## RVR-002 — Broken Cable catalog link
 
 - Краткое описание: во вкладке «Кабели» имя Cable отображается как clickable

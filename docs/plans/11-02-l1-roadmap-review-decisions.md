@@ -32,3 +32,25 @@ contracts, выявленных текущим review. Обычные bugs бе�
 - Будущая синхронизация canonical docs: после завершения review потребуется
   синхронизировать `docs/architecture/l1/01-01-02-cable.md` и
   `docs/product/09-02-post-l1-product-roadmap.md`.
+
+## D-003 — Location.2 assignment tree/search/inline-create UX semantics
+
+- Решение: основной PhysicalObject Location picker — search-first
+  collapsible tree, а не длинный плоский select. Case-insensitive search
+  работает минимум по Location name и full hierarchical path и сохраняет
+  необходимые ancestor nodes в результатах. При открытии раскрывается path
+  текущего assignment; selection single-choice. В раскрытой ветке доступно
+  создание direct child, на root level — root Location create.
+- Lifecycle invariant: inline create использует существующие canonical
+  `name + optional arbitrary user-defined type + explicit parent` semantics.
+  После успешного create выполняется authoritative reload и новый Location
+  становится draft candidate, но association PhysicalObject не изменяется до
+  отдельного явного Save. Create и assignment — отдельные canonical writes.
+  Create failure не изменяет association, а post-create refresh retry повторяет
+  только refresh. Picker не предоставляет edit/reparent/delete.
+- Характер: уточнение Location.2 product/UX contract; canonical semantics и
+  backend capability не изменяются.
+- Будущая синхронизация canonical docs: после завершения review потребуется
+  синхронизировать `docs/architecture/presentation/09-spatial-location-mapreference-contract.md`
+  и релевантный Location/L1 completion plan или product roadmap, выбранный при
+  финальной раскладке review.

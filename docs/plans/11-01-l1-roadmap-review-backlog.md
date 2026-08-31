@@ -23,6 +23,26 @@ review. Окончательный порядок и принадлежност�
   evidenced Cable/`ConnectionMember`; остальные parallel Cable не highlighted.
 - Статус: TODO.
 
+### L1R-004 — Location assignment tree/search/inline-create UX
+
+- ID: `L1R-004`
+- Категория: UX debt / Location.2 workflow completion.
+- Severity: MEDIUM.
+- До L2: ДА.
+- Зависимости: существующие Location.1/Location.2 API и semantics.
+- Краткий contract: PhysicalObject assignment использует search-first
+  collapsible hierarchical tree вместо длинного плоского select; поиск ищет по
+  name и full path и сохраняет ancestors; single-choice selection раскрывает
+  current path. Picker поддерживает direct-child и root inline create на
+  существующей Location canonical semantics.
+- Acceptance: collapsed large tree; current path expanded; `U42` с ancestors;
+  Add создает child правильного parent; новый child selected как draft;
+  association меняется только явным Save; create failure безопасен; refresh
+  retry не повторяет create; edit/reparent/delete отсутствуют.
+- Ограничение scope: backend/domain capability не требуется; не вводятся
+  alternative Location model, fixed taxonomy или presentation-owned Location.
+- Статус: TODO.
+
 ### L1R-002 — Убрать неверную Cable catalog navigation
 
 - ID: `L1R-002`
