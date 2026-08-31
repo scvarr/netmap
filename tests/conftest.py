@@ -84,12 +84,12 @@ def require_confirmed_test_database(
         )
 
 
-def pytest_sessionstart(session: pytest.Session) -> None:
-    require_confirmed_test_database()
-
-
 @pytest.fixture(autouse=True)
-def clean_database():
+def clean_database(request: pytest.FixtureRequest):
+    if request.node.get_closest_marker("no_database"):
+        yield
+        return
+
     require_confirmed_test_database()
     with SessionLocal.begin() as session:
         session.execute(delete(MapRegion))

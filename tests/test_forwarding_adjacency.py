@@ -9,6 +9,9 @@ from app.forwarding_adjacency import derive_adjacency_target
 from app.schemas import DirectEgressState
 
 
+pytestmark = pytest.mark.no_database
+
+
 def direct_egress(**overrides):
     values = {
         "egress_l3_binding_id": uuid.uuid4(),

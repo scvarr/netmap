@@ -3,6 +3,9 @@ import pytest
 from conftest import require_confirmed_test_database
 
 
+pytestmark = pytest.mark.no_database
+
+
 def test_destructive_cleanup_requires_explicit_test_database_marker():
     with pytest.raises(pytest.UsageError, match="NETMAP_TEST_DATABASE=1"):
         require_confirmed_test_database(

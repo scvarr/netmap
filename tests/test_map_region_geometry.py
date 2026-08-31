@@ -3,6 +3,9 @@ import pytest
 from app.map_region_geometry import MapRegionSpatialRelation, classify_map_region_polygons
 
 
+pytestmark = pytest.mark.no_database
+
+
 def polygon(*coordinates: tuple[float, float]) -> list[dict[str, float]]:
     return [{"x": x, "y": y} for x, y in coordinates]
 
