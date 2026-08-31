@@ -47,9 +47,14 @@ Permanent NetMap rules:
 
 Testing workflow contract:
 
-- During implementation, prefer targeted tests for the affected behavioural
-  contract. Run the full backend/frontend regression suites at the final
-  milestone boundary unless broad or uncertain impact requires them earlier.
+- During implementation and at the final milestone acceptance boundary, make
+  targeted tests for the affected behavioural contract the default. The fact
+  that a milestone has reached its final boundary is not, by itself, a
+  trigger for the full backend/frontend regression suites.
+- Run the full backend/frontend suites only when there is a concrete reason,
+  such as a broad or poorly defined change cone, a cross-domain or integration
+  change, migration/runtime/platform uncertainty, a release or stabilization
+  checkpoint, or a specifically stated acceptance requirement.
 - Preserve behavioural contracts and invariants, not the historical shape or
   number of test files. Do not duplicate one invariant across test layers
   without separate value.
@@ -57,8 +62,12 @@ Testing workflow contract:
   contracts in cheaper layers.
 - First classify a failure outside the current contract as either a regression
   of the current milestone or unrelated/obsolete test debt.
+- An unrelated failure must not automatically expand the scope of a
+  corrective milestone.
 - Do not automatically restore obsolete development-stage expectations merely
   to make an old test suite pass.
+- GitNexus `detect_changes` is a separate acceptance/change-inspection check;
+  it does not, by itself, justify running the full suites.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
