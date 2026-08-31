@@ -39,6 +39,7 @@ export function AppShell() {
               <span className="shell-nav__icon" aria-hidden="true">⌖</span>
               <span className="shell-nav__label">{t('nav.locations')}</span>
             </NavLink>
+            <NavLink className={navClassName} to="/infrastructure/cable-label-templates"><span className="shell-nav__icon" aria-hidden="true">⌁</span><span className="shell-nav__label">{t('cableTemplates.title')}</span></NavLink>
           </div>
           <div className="shell-nav__group">
             <span className="shell-nav__group-label">{t('nav.library')}</span>

@@ -275,10 +275,39 @@ class Cable(Base):
     connection_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("connections.id", ondelete="CASCADE"), nullable=False
     )
+    # Mutable user-facing metadata.  It is deliberately not identity or topology.
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     connection: Mapped[Connection] = relationship(back_populates="cable")
     map_routes: Mapped[list[MapCableRoute]] = relationship(
         back_populates="cable", cascade="all, delete-orphan", passive_deletes=True
     )
+
+
+class CableLabelSettings(Base):
+    """The one application-wide policy record for Cable labels."""
+
+    __tablename__ = "cable_label_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="cable_label_settings_singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    unique_labels: Mapped[bool] = mapped_column(nullable=False, server_default="false")
+
+
+class CableLabelTemplate(Base):
+    """Persisted generator rule; changing it never rewrites Cable labels."""
+
+    __tablename__ = "cable_label_templates"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(name)) > 0", name="cable_label_template_name_not_blank"),
+        CheckConstraint("char_length(btrim(pattern)) > 0", name="cable_label_template_pattern_not_blank"),
+        CheckConstraint("start_at >= 0", name="cable_label_template_start_at_nonnegative"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    pattern: Mapped[str] = mapped_column(String(255), nullable=False)
+    start_at: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 
 class ConnectionMember(Base):

@@ -4,6 +4,7 @@ import uuid
 from sqlalchemy import select
 
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
+from app.cable_labels import resolved_cable_label
 from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, Cable, InterfacePhysicalBinding, ObjectBlueprint, ObjectBlueprintVersion
 from app.repository import CanonicalRepository, PhysicalBindingRecord
 from app.schemas import BlueprintInstanceProvenance, BlueprintLibraryRef, BlueprintSlotMetadata, ConnectionPointDetails, DirectInterfaceBindingDetails, ExternalPhysicalAttachmentDetails, InternalPhysicalCounterpartDetails, PhysicalObjectDetails, PhysicalObjectDetailsDocument, ProjectionSourceRef
@@ -72,7 +73,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
                 connection_ref=self._ref("Connection", member.connection_id),
                 evidence_refs=evidence,
                 cable_ref=self._ref("Cable", cable.id) if cable is not None else None,
-                cable_label=f"Cable {str(cable.id)[:8]}" if cable is not None else None,
+                cable_label=resolved_cable_label(cable)[0] if cable is not None else None,
                 remote_physical_object_ref=self._ref("PhysicalObject", peer_object_id),
                 remote_physical_object_label=self._label(object_aliases.get(peer_object_id), "PhysicalObject", peer_object_id),
                 remote_connection_point_ref=self._ref("ConnectionPoint", peer_point_id),

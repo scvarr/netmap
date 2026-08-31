@@ -11,6 +11,7 @@ import { CreateUntaggedL2ForwardingContext } from './CreateUntaggedL2ForwardingC
 import type { L2ForwardingContextWriteDataSource } from '../topology/l2ForwardingContextWriteTypes';
 import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
 import { displayNodeLabel } from '../topology/presentation';
+import type { CableLabelDataSource } from '../topology/cableLabelTypes';
 import {
   ConnectPhysicalInterface,
   type PhysicalLinkTargetDevice,
@@ -25,6 +26,7 @@ interface DeviceInterfacesSectionProps {
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
   onPhysicalLinkCreated?: (physicalObjectId: string) => void;
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
+  cableLabelDataSource?: CableLabelDataSource;
 }
 
 type DetailsState =
@@ -84,12 +86,14 @@ const InterfaceCard = ({
   detailsDataSource,
   physicalLinkWriteDataSource,
   onConnected,
+  cableLabelDataSource,
 }: {
   item: DeviceInterfaceDetails;
   targetDevices: PhysicalLinkTargetDevice[];
   detailsDataSource: DeviceDetailsDataSource;
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
   onConnected: () => void;
+  cableLabelDataSource?: CableLabelDataSource;
 }) => (
   <article className="interface-card">
     <h4>{displayInterfaceLabel(item)}</h4>
@@ -158,6 +162,7 @@ export function DeviceInterfacesSection({
   physicalLinkWriteDataSource,
   onPhysicalLinkCreated,
   l2ForwardingContextWriteDataSource,
+  cableLabelDataSource,
 }: DeviceInterfacesSectionProps) {
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
@@ -237,6 +242,7 @@ export function DeviceInterfacesSection({
               targetDevices={targetDevices}
               detailsDataSource={dataSource}
               physicalLinkWriteDataSource={physicalLinkWriteDataSource}
+              cableLabelDataSource={cableLabelDataSource}
               onConnected={() => {
                 setRetryKey((key) => key + 1);
                 if (physicalObjectId) onPhysicalLinkCreated?.(physicalObjectId);

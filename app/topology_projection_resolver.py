@@ -9,6 +9,7 @@ from app.device_catalog import (
     PhysicalObjectClassRecord,
 )
 from app.errors import ModelError, ValidationError
+from app.cable_labels import resolved_cable_label
 from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintPortBlockInstance, Cable, ObjectBlueprint, ObjectBlueprintVersion, PortBlockPort
 from app.blueprint_presentation_geometry import PortGeometryInput, derive_port_geometry, fallback_placement
 from app.repository import (
@@ -318,7 +319,7 @@ class ConfiguredTopologyProjectionResolver:
                         else f"ConnectionPoint {str(local_point_id)[:8]}"
                     ),
                     cable_ref=self._ref("Cable", cable.id),
-                    cable_display_name=f"Cable {str(cable.id)[:8]}",
+                    cable_display_name=resolved_cable_label(cable)[0],
                     remote_physical_object_ref=self._ref(
                         "PhysicalObject", remote_object_id
                     ),
@@ -541,7 +542,7 @@ class ConfiguredTopologyProjectionResolver:
         else:
             from_point, from_member, to_point, to_member = member.point_b_id, member.point_b_member, member.point_a_id, member.point_a_member
         cable = cables_by_connection.get(member.connection_id)
-        return {"from_connection_point_id": str(from_point), "from_member_index": from_member, "to_connection_point_id": str(to_point), "to_member_index": to_member, "connection_id": str(member.connection_id), "connection_member_id": str(member.connection_member_id), **({"cable_ref": self._ref("Cable", cable.id).model_dump(mode="json"), "cable_display_name": f"Cable {str(cable.id)[:8]}"} if cable is not None else {})}
+        return {"from_connection_point_id": str(from_point), "from_member_index": from_member, "to_connection_point_id": str(to_point), "to_member_index": to_member, "connection_id": str(member.connection_id), "connection_member_id": str(member.connection_member_id), **({"cable_ref": self._ref("Cable", cable.id).model_dump(mode="json"), "cable_display_name": resolved_cable_label(cable)[0]} if cable is not None else {})}
 
     def _blueprint_presentations(self, object_ids: set[uuid.UUID]) -> dict[uuid.UUID, dict]:
         if not object_ids:

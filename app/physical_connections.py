@@ -5,6 +5,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, aliased
 
 from app.errors import ValidationError
+from app.cable_labels import CableLabelCatalog
 from app.models import Cable, Connection, ConnectionMember, ConnectionPoint, NetworkInterface
 from app.repository import CanonicalRepository, ConnectionMemberInput
 
@@ -58,6 +59,10 @@ class PhysicalConnectionCatalog:
         self,
         source_interface_id: uuid.UUID,
         target_interface_id: uuid.UUID,
+        *,
+        cable_label: str | None = None,
+        cable_label_template_id: uuid.UUID | None = None,
+        generate_cable_label: bool = False,
     ) -> CreatedPhysicalConnection:
         if source_interface_id == target_interface_id:
             raise ValidationError(
@@ -67,6 +72,9 @@ class PhysicalConnectionCatalog:
         created = self.create_endpoint_link(
             NetworkInterfaceEndpoint(source_interface_id),
             NetworkInterfaceEndpoint(target_interface_id),
+            cable_label=cable_label,
+            cable_label_template_id=cable_label_template_id,
+            generate_cable_label=generate_cable_label,
         )
         assert created.source.binding_id is not None
         assert created.target.binding_id is not None
@@ -83,6 +91,10 @@ class PhysicalConnectionCatalog:
         self,
         source: PhysicalEndpoint,
         target: PhysicalEndpoint,
+        *,
+        cable_label: str | None = None,
+        cable_label_template_id: uuid.UUID | None = None,
+        generate_cable_label: bool = False,
     ) -> CreatedEndpointPhysicalConnection:
         if source == target:
             raise ValidationError(
@@ -224,6 +236,12 @@ class PhysicalConnectionCatalog:
         cable = Cable(connection_id=connection.id)
         self.session.add(cable)
         self.session.flush()
+        CableLabelCatalog(self.session).assign_new_cable(
+            cable,
+            label=cable_label,
+            template_id=cable_label_template_id,
+            generate=generate_cable_label,
+        )
 
         return CreatedEndpointPhysicalConnection(
             source=source_materialized,

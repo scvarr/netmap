@@ -26,6 +26,7 @@ import type { BlueprintUpgradeDataSource } from '../topology/blueprintUpgradeTyp
 import type { ObjectBlueprintDataSource } from '../topology/objectBlueprintTypes';
 import type { LocationDataSource } from '../topology/locationTypes';
 import { PhysicalObjectLocationSection } from '../components/PhysicalObjectLocationSection';
+import type { CableLabelDataSource } from '../topology/cableLabelTypes';
 
 interface InfrastructureObjectDetailPageProps {
   dataSource: TopologyDataSource;
@@ -42,6 +43,7 @@ interface InfrastructureObjectDetailPageProps {
   blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
   objectBlueprintDataSource?: ObjectBlueprintDataSource;
   locationDataSource?: LocationDataSource;
+  cableLabelDataSource?: CableLabelDataSource;
 }
 
 const mapLink = (mapId: string, objectId: string) =>
@@ -64,6 +66,7 @@ export function InfrastructureObjectDetailPage({
   blueprintUpgradeDataSource,
   objectBlueprintDataSource,
   locationDataSource,
+  cableLabelDataSource,
 }: InfrastructureObjectDetailPageProps) {
   const { collator, locale, t } = useI18n();
   const { physicalObjectId = '' } = useParams();
@@ -238,6 +241,7 @@ export function InfrastructureObjectDetailPage({
           onConnectionPointCreated={refreshProjection}
           blueprintUpgradeDataSource={blueprintUpgradeDataSource}
           objectBlueprintDataSource={objectBlueprintDataSource}
+          cableLabelDataSource={cableLabelDataSource}
         />
       </section>
       {details && details.owned_interface_count > 0 && (
@@ -252,6 +256,7 @@ export function InfrastructureObjectDetailPage({
             physicalLinkWriteDataSource={physicalLinkWriteDataSource}
             onPhysicalLinkCreated={refreshProjection}
             l2ForwardingContextWriteDataSource={l2ForwardingContextWriteDataSource}
+            cableLabelDataSource={cableLabelDataSource}
           />
         </section>
       )}

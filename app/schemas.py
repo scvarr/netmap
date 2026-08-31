@@ -1030,6 +1030,9 @@ class CreatePhysicalLinkRequest(BaseModel):
 
     source_interface_id: uuid.UUID
     target_interface_id: uuid.UUID
+    cable_label: str | None = None
+    cable_label_template_id: uuid.UUID | None = None
+    generate_cable_label: bool = False
 
 
 class PhysicalConnectionCreationDocument(BaseModel):
@@ -1070,6 +1073,57 @@ class CreatePhysicalEndpointConnectionRequest(BaseModel):
 
     source: PhysicalEndpointRequest
     target: PhysicalEndpointRequest
+    cable_label: str | None = None
+    cable_label_template_id: uuid.UUID | None = None
+    generate_cable_label: bool = False
+
+
+class SetCableLabelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str | None
+
+
+class CableLabelSettingsDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    unique_labels: bool
+
+
+class SetCableLabelSettingsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    unique_labels: bool
+
+
+class CableLabelTemplateDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: uuid.UUID
+    name: str
+    description: str | None = None
+    pattern: str
+    start_at: int
+
+
+class CableLabelTemplateListDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.0"] = "1.0"
+    templates: list[CableLabelTemplateDocument]
+
+
+class CreateCableLabelTemplateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: str | None = None
+    pattern: str
+    start_at: int = Field(ge=0)
+
+
+class UpdateCableLabelTemplateRequest(CreateCableLabelTemplateRequest):
+    pass
 
 
 class PhysicalEndpointMaterialization(BaseModel):

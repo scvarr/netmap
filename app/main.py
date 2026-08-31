@@ -13,6 +13,7 @@ from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.blueprint_catalog import ObjectBlueprintCatalog
 from app.blueprint_upgrade_analysis import BlueprintUpgradeAnalyzer
 from app.catalog_inventory_resolver import CatalogInventoryResolver
+from app.cable_labels import CableLabelCatalog
 from app.database import engine, get_session
 from app.perf_instrumentation import instrument_request, install_listener
 from app.device_catalog import DeviceCatalog
@@ -58,6 +59,7 @@ from app.schemas import (
     CreateNetworkDeviceRequest,
     CreatePhysicalEndpointConnectionRequest,
     CreatePhysicalLinkRequest,
+    CreateCableLabelTemplateRequest,
     CreatePhysicalObjectRequest,
     CreatePortBlockRequest,
     CreatePortBlockVersionRequest,
@@ -67,6 +69,9 @@ from app.schemas import (
     CreateSavedMapRequest,
     CreateL2ForwardingContextRequest,
     CatalogInventoryDocument,
+    CableLabelSettingsDocument,
+    CableLabelTemplateDocument,
+    CableLabelTemplateListDocument,
     DeviceDetailsDocument,
     ErrorResponse,
     EvaluationView,
@@ -120,6 +125,8 @@ from app.schemas import (
     ReplaceMapRegionRequest,
     ReplaceMapTextAnnotationRequest,
     SetMapViewLockRequest,
+    SetCableLabelRequest,
+    SetCableLabelSettingsRequest,
     RouteDecisionArtifact,
     RouteDecisionQuery,
     RoutingPolicyEvaluationArtifact,
@@ -140,6 +147,7 @@ from app.schemas import (
     TraceArtifact,
     ReparentLocationRequest,
     UpdateLocationRequest,
+    UpdateCableLabelTemplateRequest,
 )
 from app.structural_adjacency_resolver import StructuralAdjacencyProofResolver
 from app.topology_projection_resolver import ConfiguredTopologyProjectionResolver
@@ -1197,6 +1205,9 @@ def create_physical_link(
         created = PhysicalConnectionCatalog(session).create_atomic_link(
             query.source_interface_id,
             query.target_interface_id,
+            cable_label=query.cable_label,
+            cable_label_template_id=query.cable_label_template_id,
+            generate_cable_label=query.generate_cable_label,
         )
 
         def ref(entity_type: str, entity_id: uuid.UUID) -> dict[str, object]:
@@ -1269,6 +1280,9 @@ def create_physical_endpoint_connection(
         created = PhysicalConnectionCatalog(session).create_endpoint_link(
             endpoint(query.source),
             endpoint(query.target),
+            cable_label=query.cable_label,
+            cable_label_template_id=query.cable_label_template_id,
+            generate_cable_label=query.generate_cable_label,
         )
         return PhysicalEndpointConnectionCreationDocument(
             source=materialization(created.source),
@@ -1289,6 +1303,95 @@ def delete_cable(
 ) -> None:
     with session.begin():
         PhysicalConnectionCatalog(session).delete_cable(cable_id)
+
+
+def cable_label_template_document(value: object) -> CableLabelTemplateDocument:
+    return CableLabelTemplateDocument(
+        id=value.id,
+        name=value.name,
+        description=value.description,
+        pattern=value.pattern,
+        start_at=value.start_at,
+    )
+
+
+@app.put(
+    "/v1/cables/{cable_id}/label",
+    status_code=204,
+    responses={422: {"model": ErrorResponse}},
+)
+def set_cable_label(
+    cable_id: uuid.UUID,
+    query: SetCableLabelRequest,
+    session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        CableLabelCatalog(session).set_label(cable_id, query.label)
+
+
+@app.get("/v1/cable-label-settings", response_model=CableLabelSettingsDocument)
+def get_cable_label_settings(session: Session = Depends(get_session)) -> CableLabelSettingsDocument:
+    settings = CableLabelCatalog(session).read_settings()
+    return CableLabelSettingsDocument(unique_labels=settings.unique_labels)
+
+
+@app.put(
+    "/v1/cable-label-settings",
+    response_model=CableLabelSettingsDocument,
+    responses={422: {"model": ErrorResponse}},
+)
+def set_cable_label_settings(
+    query: SetCableLabelSettingsRequest,
+    session: Session = Depends(get_session),
+) -> CableLabelSettingsDocument:
+    with session.begin():
+        settings = CableLabelCatalog(session).set_unique_labels(query.unique_labels)
+        return CableLabelSettingsDocument(unique_labels=settings.unique_labels)
+
+
+@app.get("/v1/cable-label-templates", response_model=CableLabelTemplateListDocument)
+def list_cable_label_templates(session: Session = Depends(get_session)) -> CableLabelTemplateListDocument:
+    return CableLabelTemplateListDocument(
+        templates=[cable_label_template_document(value) for value in CableLabelCatalog(session).list_templates()]
+    )
+
+
+@app.post(
+    "/v1/cable-label-templates",
+    response_model=CableLabelTemplateDocument,
+    status_code=201,
+    responses={422: {"model": ErrorResponse}},
+)
+def create_cable_label_template(
+    query: CreateCableLabelTemplateRequest,
+    session: Session = Depends(get_session),
+) -> CableLabelTemplateDocument:
+    with session.begin():
+        return cable_label_template_document(CableLabelCatalog(session).create_template(**query.model_dump()))
+
+
+@app.put(
+    "/v1/cable-label-templates/{template_id}",
+    response_model=CableLabelTemplateDocument,
+    responses={422: {"model": ErrorResponse}},
+)
+def update_cable_label_template(
+    template_id: uuid.UUID,
+    query: UpdateCableLabelTemplateRequest,
+    session: Session = Depends(get_session),
+) -> CableLabelTemplateDocument:
+    with session.begin():
+        return cable_label_template_document(CableLabelCatalog(session).update_template(template_id, **query.model_dump()))
+
+
+@app.delete(
+    "/v1/cable-label-templates/{template_id}",
+    status_code=204,
+    responses={422: {"model": ErrorResponse}},
+)
+def delete_cable_label_template(template_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        CableLabelCatalog(session).delete_template(template_id)
 
 
 @app.delete(

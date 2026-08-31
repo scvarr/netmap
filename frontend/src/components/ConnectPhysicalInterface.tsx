@@ -5,6 +5,8 @@ import type {
   DeviceInterfaceDetails,
 } from '../topology/deviceDetailsTypes';
 import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
+import { CableNamingFields } from './CableNamingFields';
+import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
 
 export interface PhysicalLinkTargetDevice {
   physicalObjectId: string;
@@ -17,6 +19,7 @@ interface ConnectPhysicalInterfaceProps {
   detailsDataSource: DeviceDetailsDataSource;
   writeDataSource: PhysicalLinkWriteDataSource;
   onConnected: () => void;
+  cableLabelDataSource?: CableLabelDataSource;
 }
 
 type TargetState =
@@ -31,6 +34,7 @@ export function ConnectPhysicalInterface({
   detailsDataSource,
   writeDataSource,
   onConnected,
+  cableLabelDataSource,
 }: ConnectPhysicalInterfaceProps) {
   const [open, setOpen] = useState(false);
   const [targetDeviceId, setTargetDeviceId] = useState('');
@@ -39,6 +43,7 @@ export function ConnectPhysicalInterface({
   const [targetRetryKey, setTargetRetryKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cableNaming, setCableNaming] = useState<CableNamingInput>({});
 
   useEffect(() => {
     setTargetInterfaceId('');
@@ -73,13 +78,14 @@ export function ConnectPhysicalInterface({
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!targetInterfaceId || submitting) return;
+    if (!targetInterfaceId || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
     setSubmitting(true);
     setError(null);
     try {
       await writeDataSource.createPhysicalLink({
         source_interface_id: sourceInterface.interface_ref.entity_id,
         target_interface_id: targetInterfaceId,
+        ...cableNaming,
       });
       setOpen(false);
       setTargetDeviceId('');
@@ -155,11 +161,12 @@ export function ConnectPhysicalInterface({
               Не удалось подключить интерфейс. {error}
             </p>
           )}
+          <CableNamingFields dataSource={cableLabelDataSource} disabled={submitting} value={cableNaming} onChange={setCableNaming} />
           <div className="connect-interface__actions">
             <button type="button" onClick={() => setOpen(false)} disabled={submitting}>
               Отмена
             </button>
-            <button type="submit" disabled={!targetInterfaceId || submitting}>
+            <button type="submit" disabled={!targetInterfaceId || submitting || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)}>
               {submitting ? 'Подключаем…' : error ? 'Повторить' : 'Подключить'}
             </button>
           </div>

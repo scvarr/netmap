@@ -24,6 +24,7 @@ import { ApiBlueprintUpgradeDataSource } from './topology/apiBlueprintUpgradeDat
 import { ApiPortBlockDataSource } from './topology/apiPortBlockDataSource';
 import { ApiCableDeleteDataSource } from './topology/apiCableDeleteDataSource';
 import { ApiLocationDataSource } from './topology/apiLocationDataSource';
+import { ApiCableLabelDataSource } from './topology/apiCableLabelDataSource';
 import './styles.css';
 import { I18nProvider } from './i18n';
 
@@ -52,6 +53,7 @@ createRoot(document.getElementById('root')!).render(
         blueprintUpgradeDataSource={new ApiBlueprintUpgradeDataSource()}
         portBlockDataSource={new ApiPortBlockDataSource()}
         locationDataSource={new ApiLocationDataSource()}
+        cableLabelDataSource={new ApiCableLabelDataSource()}
         topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
       /></I18nProvider>
     </BrowserRouter>

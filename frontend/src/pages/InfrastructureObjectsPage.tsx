@@ -10,6 +10,7 @@ import type {
 import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectDeleteTypes';
 import type { PhysicalObjectDisplayNameWriteDataSource } from '../topology/physicalObjectDisplayNameWriteTypes';
 import type { CableDeleteDataSource } from '../topology/cableDeleteTypes';
+import type { CableLabelDataSource } from '../topology/cableLabelTypes';
 import { useI18n } from '../i18n';
 
 interface Props {
@@ -17,12 +18,14 @@ interface Props {
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   cableDeleteDataSource?: CableDeleteDataSource;
   physicalObjectDisplayNameWriteDataSource?: PhysicalObjectDisplayNameWriteDataSource;
+  cableLabelDataSource?: CableLabelDataSource;
 }
 
 interface RenameTarget {
   id: string;
   label: string;
   cable: boolean;
+  userLabel?: string | null;
 }
 
 const known = new Set(['workstation', 'switch', 'cable', 'outlet', 'patch_panel']);
@@ -62,6 +65,7 @@ export function InfrastructureObjectsPage({
   physicalObjectDeleteDataSource,
   cableDeleteDataSource,
   physicalObjectDisplayNameWriteDataSource,
+  cableLabelDataSource,
 }: Props) {
   const { collator, locale, t } = useI18n();
   const [document, setDocument] = useState<CatalogInventoryDocument | null>(null);
@@ -131,23 +135,24 @@ export function InfrastructureObjectsPage({
 
   const openRename = (target: RenameTarget) => {
     setRenameTarget(target);
-    setRenameValue(target.label);
+    setRenameValue(target.cable ? (target.userLabel ?? '') : target.label);
     setRenameError(null);
     setRenameSavedPendingRefresh(false);
   };
 
   const rename = async () => {
-    if (!renameTarget || !physicalObjectDisplayNameWriteDataSource || renaming) {
+    if (!renameTarget || renaming || (!renameTarget.cable && !physicalObjectDisplayNameWriteDataSource) || (renameTarget.cable && !cableLabelDataSource)) {
       return;
     }
     const displayName = renameValue.trim();
-    if (!displayName || displayName === renameTarget.label) {
+    if ((!renameTarget.cable && (!displayName || displayName === renameTarget.label)) || (renameTarget.cable && displayName === (renameTarget.userLabel ?? ''))) {
       return;
     }
     setRenaming(true);
     setRenameError(null);
     try {
-      await physicalObjectDisplayNameWriteDataSource.renamePhysicalObject(renameTarget.id, displayName);
+      if (renameTarget.cable) await cableLabelDataSource!.setCableLabel(renameTarget.id, displayName || null);
+      else await physicalObjectDisplayNameWriteDataSource!.renamePhysicalObject(renameTarget.id, displayName);
       if (await reload()) {
         setRenameTarget(null);
       } else {
@@ -339,6 +344,7 @@ export function InfrastructureObjectsPage({
           <Cables
             rows={cables}
             remove={cableDeleteDataSource ? remove : undefined}
+            onRename={cableLabelDataSource ? openRename : undefined}
           />
         )}
       </section>
@@ -373,6 +379,7 @@ export function InfrastructureObjectsPage({
           error={renameError}
           pending={renaming}
           savedPendingRefresh={renameSavedPendingRefresh}
+          fallback={renameTarget.cable ? renameTarget.label : undefined}
           onChange={setRenameValue}
           onCancel={() => setRenameTarget(null)}
           onSave={() => void rename()}
@@ -389,6 +396,7 @@ function RenameDialog({
   error,
   pending,
   savedPendingRefresh,
+  fallback,
   onChange,
   onCancel,
   onSave,
@@ -399,6 +407,7 @@ function RenameDialog({
   error: string | null;
   pending: boolean;
   savedPendingRefresh: boolean;
+  fallback?: string;
   onChange: (value: string) => void;
   onCancel: () => void;
   onSave: () => void;
@@ -406,7 +415,7 @@ function RenameDialog({
 }) {
   const { t } = useI18n();
   const normalized = value.trim();
-  const unchanged = normalized === target.label;
+  const unchanged = target.cable ? normalized === (target.userLabel ?? '') : normalized === target.label;
 
   return (
     <div className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title">
@@ -427,6 +436,7 @@ function RenameDialog({
             disabled={pending || savedPendingRefresh}
             onChange={(event) => onChange(event.target.value)}
           />
+          {fallback && !target.userLabel && <small>{t('catalog.cableFallbackHint', { name: fallback })}</small>}
         </label>
         {error && <p className="catalog-dialog__error" role="alert">{error}</p>}
         <div className="catalog-dialog__actions">
@@ -438,7 +448,7 @@ function RenameDialog({
               {t('catalog.retryRefresh')}
             </button>
           ) : (
-            <button type="submit" disabled={pending || !normalized || unchanged}>
+            <button type="submit" disabled={pending || (!target.cable && !normalized) || unchanged}>
               {t('catalog.save')}
             </button>
           )}
@@ -515,9 +525,11 @@ function Equipment({
 function Cables({
   rows,
   remove,
+  onRename,
 }: {
   rows: CatalogInventoryDocument['cables'];
   remove?: (id: string, label: string, cable: boolean) => Promise<void>;
+  onRename?: (target: RenameTarget) => void;
 }) {
   const { t } = useI18n();
   const part = (value?: CatalogInventoryCableEndpoint) =>
@@ -554,7 +566,7 @@ function Cables({
                   {part(item.endpoint_b)}
                 </td>
                 <td>{t('catalog.resolved')}</td>
-                <Actions id={id} label={item.label} cable remove={remove} />
+                <Actions id={id} label={item.label} cable remove={remove} onRename={onRename ? () => onRename({ id, label: item.label, cable: true, userLabel: item.label_source === 'TECHNICAL_FALLBACK' ? null : item.label }) : undefined} />
               </tr>
             );
           })}
@@ -583,7 +595,7 @@ function Actions({
       {!cable && <Link className="catalog-table__open" aria-label={`${t('inspector.open')} ${label}`} to={objectLink(id)}>
         →
       </Link>}
-      {onRename && !cable && (
+      {onRename && (
         <button
           type="button"
           className="catalog-table__rename"

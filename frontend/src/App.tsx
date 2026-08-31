@@ -31,7 +31,9 @@ import type { CableDeleteDataSource } from './topology/cableDeleteTypes';
 import { PortBlockLibraryPage } from './pages/PortBlockLibraryPage';
 import { PortBlockEditorPage } from './pages/PortBlockEditorPage';
 import { LocationsPage } from './pages/LocationsPage';
+import { CableLabelTemplatesPage } from './pages/CableLabelTemplatesPage';
 import type { LocationDataSource } from './topology/locationTypes';
+import type { CableLabelDataSource } from './topology/cableLabelTypes';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
@@ -56,6 +58,7 @@ export interface AppProps {
   blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
   portBlockDataSource?: PortBlockDataSource;
   locationDataSource?: LocationDataSource;
+  cableLabelDataSource?: CableLabelDataSource;
 }
 
 export function App(props: AppProps) {
@@ -80,9 +83,10 @@ export function App(props: AppProps) {
         />
         <Route
           path="infrastructure/objects"
-          element={<InfrastructureObjectsPage catalogInventoryDataSource={props.catalogInventoryDataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} cableDeleteDataSource={props.cableDeleteDataSource} physicalObjectDisplayNameWriteDataSource={props.physicalObjectDisplayNameWriteDataSource} />}
+          element={<InfrastructureObjectsPage catalogInventoryDataSource={props.catalogInventoryDataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} cableDeleteDataSource={props.cableDeleteDataSource} physicalObjectDisplayNameWriteDataSource={props.physicalObjectDisplayNameWriteDataSource} cableLabelDataSource={props.cableLabelDataSource} />}
         />
         <Route path="infrastructure/locations" element={props.locationDataSource ? <LocationsPage dataSource={props.locationDataSource} /> : <Navigate replace to="/map" />} />
+        <Route path="infrastructure/cable-label-templates" element={props.cableLabelDataSource ? <CableLabelTemplatesPage dataSource={props.cableLabelDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource && props.portBlockDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} portBlockDataSource={props.portBlockDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/:blueprintId/versions/:versionId/edit" element={props.objectBlueprintDataSource && props.portBlockDataSource ? <EditObjectBlueprintPage dataSource={props.objectBlueprintDataSource} portBlockDataSource={props.portBlockDataSource} /> : <Navigate replace to="/map" />} />
@@ -117,6 +121,7 @@ export function App(props: AppProps) {
               blueprintUpgradeDataSource={props.blueprintUpgradeDataSource}
               objectBlueprintDataSource={props.objectBlueprintDataSource}
               locationDataSource={props.locationDataSource}
+              cableLabelDataSource={props.cableLabelDataSource}
             />
           )}
         />

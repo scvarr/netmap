@@ -4,6 +4,7 @@ from collections import defaultdict
 from sqlalchemy import select
 
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
+from app.cable_labels import resolved_cable_label
 from app.models import Cable, MapPlacement, SavedMap
 from app.repository import CanonicalRepository, ConnectionPointRecord
 from app.schemas import (
@@ -112,11 +113,12 @@ class CatalogInventoryResolver:
                 ],
             ))
         endpoints.sort(key=lambda item: (str(item.remote_physical_object_ref.entity_id), str(item.remote_connection_point_ref.entity_id)))
+        label, label_source = resolved_cable_label(cable)
         return CatalogInventoryCableItem(
             cable_ref=self._ref("Cable", cable.id),
             connection_ref=self._ref("Connection", connection.id),
-            label=f"Cable {str(cable.id)[:8]}",
-            label_source="TECHNICAL_FALLBACK",
+            label=label,
+            label_source=label_source,
             endpoint_a=endpoints[0],
             endpoint_b=endpoints[1],
             gaps=[],

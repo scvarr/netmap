@@ -1,10 +1,11 @@
 import type { ProjectionSourceRef } from './types';
+import type { CableNamingInput } from './cableLabelTypes';
 
 export type PhysicalEndpointRequest =
   | { kind: 'NETWORK_INTERFACE'; network_interface_id: string }
   | { kind: 'CONNECTION_POINT'; connection_point_id: string; member_index: 1 };
 
-export interface CreatePhysicalEndpointConnectionRequest {
+export interface CreatePhysicalEndpointConnectionRequest extends CableNamingInput {
   source: PhysicalEndpointRequest;
   target: PhysicalEndpointRequest;
 }

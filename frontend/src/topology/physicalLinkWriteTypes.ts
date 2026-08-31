@@ -1,6 +1,7 @@
 import type { ProjectionSourceRef } from './types';
+import type { CableNamingInput } from './cableLabelTypes';
 
-export interface CreatePhysicalLinkRequest {
+export interface CreatePhysicalLinkRequest extends CableNamingInput {
   source_interface_id: string;
   target_interface_id: string;
 }

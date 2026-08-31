@@ -16,6 +16,8 @@ import { displayNodeLabel, numericAttribute } from "../topology/presentation";
 import type { TopologyProjectionNode } from "../topology/types";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
 import { useI18n } from "../i18n";
+import { CableNamingFields } from './CableNamingFields';
+import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
 
 interface ConnectPhysicalEndpointProps {
   sourcePoint: ConnectionPointDetails;
@@ -24,6 +26,7 @@ interface ConnectPhysicalEndpointProps {
   deviceDetailsDataSource: DeviceDetailsDataSource;
   writeDataSource: PhysicalEndpointConnectionWriteDataSource;
   onConnected: () => void;
+  cableLabelDataSource?: CableLabelDataSource;
 }
 type Mode = "PORT" | "INTERFACE";
 type TargetState =
@@ -69,6 +72,7 @@ export function ConnectPhysicalEndpoint({
   deviceDetailsDataSource,
   writeDataSource,
   onConnected,
+  cableLabelDataSource,
 }: ConnectPhysicalEndpointProps) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
@@ -80,6 +84,7 @@ export function ConnectPhysicalEndpoint({
   const [retry, setRetry] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cableNaming, setCableNaming] = useState<CableNamingInput>({});
   const reset = () => {
     setOpen(false);
     setMode("PORT");
@@ -88,6 +93,7 @@ export function ConnectPhysicalEndpoint({
     setQuery("");
     setTargetState({ kind: "idle" });
     setError(null);
+    setCableNaming({});
   };
   const candidates = useMemo(
     () =>
@@ -196,7 +202,7 @@ export function ConnectPhysicalEndpoint({
       : [];
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!targetEntityId || submitting) return;
+    if (!targetEntityId || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
     setSubmitting(true);
     setError(null);
     const target: PhysicalEndpointRequest =
@@ -215,6 +221,7 @@ export function ConnectPhysicalEndpoint({
           member_index: 1,
         },
         target,
+        ...cableNaming,
       });
       reset();
       onConnected();
@@ -385,6 +392,7 @@ export function ConnectPhysicalEndpoint({
               {error}
             </p>
           )}
+          <CableNamingFields dataSource={cableLabelDataSource} disabled={submitting} value={cableNaming} onChange={setCableNaming} />
           <div className="connect-interface__actions">
             <button type="button" disabled={submitting} onClick={reset}>
               {t("action.cancel")}
@@ -392,7 +400,7 @@ export function ConnectPhysicalEndpoint({
             <button
               type="submit"
               disabled={
-                !targetEntityId || !selectedObjectIsVisible || submitting
+                !targetEntityId || !selectedObjectIsVisible || submitting || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)
               }
             >
               {submitting ? t("connect.connecting") : error ? t("action.retry") : t("connect.connect")}
