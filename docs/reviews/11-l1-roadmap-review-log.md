@@ -35,3 +35,61 @@
   exact evidenced Cable/`ConnectionMember`; остальные parallel Cable не
   highlighted.
 - Статус: RECORDED.
+
+## RVR-002 — Broken Cable catalog link
+
+- Краткое описание: во вкладке «Кабели» имя Cable отображается как clickable
+  link; клик ведет в PhysicalObject Details и завершается ошибкой
+  `PhysicalObject does not exist`.
+- Тип: bug / regression после Cable-as-PhysicalObject cutover; UX/correctness
+  navigation.
+- Severity: MEDIUM.
+- Влияние на L1 completion: Cable catalog содержит неверную навигацию и
+  вводит в заблуждение о domain identity; L1 completion блокируется.
+- Blocker до L2: да.
+- Behavior-preserving: да.
+- Зависимости: нет.
+- Подтвержденная фактическая причина: для Cable используется
+  `item.cable_ref.entity_id`, имя оборачивается в `Link to={objectLink(id)}`,
+  `objectLink()` ведет на `/infrastructure/objects/:id`, а этот route
+  обслуживается `InfrastructureObjectDetailPage`. По действующему domain
+  contract Cable не является `PhysicalObject`.
+- Согласованное решение: Cable никогда не маршрутизируется через PhysicalObject
+  Details. Пока отдельной Cable Details surface нет, Cable label в catalog —
+  обычный текст без ссылки. Ссылки на PhysicalObject на концах Cable остаются.
+  Отдельная Cable Details page сейчас не создается; при возможном появлении
+  она должна иметь собственный Cable-specific route/lifecycle.
+- Acceptance: в Cable row click-target на самом Cable label отсутствует;
+  endpoint PhysicalObject links остаются рабочими; Cable identity не
+  передается в `/infrastructure/objects/:id`.
+- Статус: RECORDED.
+
+## RVR-003 — User-editable Cable label
+
+- Краткое описание: Cable отображается техническим именем вроде
+  `Cable 3b710bd8`, и пользователь не может задать или изменить нормальное
+  имя.
+- Тип: UX gap / existing planned Cable.3 capability.
+- Severity: MEDIUM.
+- Влияние на L1 completion: обязательная usability-часть Cable.3 не завершена;
+  L1 completion блокируется как часть Cable.3 product usability.
+- Blocker до L2: да.
+- Behavior-preserving: да.
+- Benchmark: нет.
+- Зависимости: Cable.3 metadata foundation.
+- Подтвержденный контекст: действующий Cable.3 contract уже планирует optional
+  `label`; catalog DTO допускает `label_source = TECHNICAL_FALLBACK`.
+- Согласованное решение: Cable получает optional mutable user-facing label.
+  Отсутствие label допустимо; тогда UI использует deterministic technical
+  fallback, например существующий `Cable <short-id>`, который не становится
+  canonical user label автоматически. Пользователь может задать, изменить и
+  очистить label. Это не меняет Cable identity, linked Connection, endpoints,
+  `MapCableRoute` references, trace semantics или topology. Write boundary
+  должна быть Cable-specific и не переиспользовать PhysicalObject rename API.
+  Основной Cable catalog предоставляет понятное rename/edit action. До
+  отдельно согласованной Cable Details surface label остается plain text.
+- Acceptance: (1) Cable без user label показывает technical fallback; (2)
+  rename после authoritative refresh показывает user label; (3) clear label
+  возвращает technical fallback; (4) Cable UUID, Connection, endpoints и
+  routes не меняются; (5) PhysicalObject write boundary не используется.
+- Статус: RECORDED.
