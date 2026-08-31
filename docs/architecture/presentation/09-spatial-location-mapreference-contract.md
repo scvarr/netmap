@@ -11,8 +11,7 @@ identity, arbitrary-depth explicit parent hierarchy, arbitrary user-defined
 optional type and explicit optional `PhysicalObject -> Location` assignment.
 Location.2 implements the Location management tree and PhysicalObject assignment
 UX over that API, with authoritative reload after each acknowledged write. It
-does not implement Region association/assistance, MapReference or any fixed
-Location taxonomy.
+does not implement MapReference or any fixed Location taxonomy.
 
 Location.3 implements the optional `MapRegion -> Location` presentation
 association and bounded current-map focus assistance. The Region reference is
@@ -52,8 +51,8 @@ from geometry; она не является canonical physical hierarchy.
 
 Region не имеет canonical containment/member semantics: объект внутри polygon
 не становится member Location или Region. Движение Region не двигает canonical
-objects и не меняет их Location. В будущем Region может иметь explicit
-association с Location для presentation assistance, но это не превращает
+objects и не меняет их Location. Region имеет optional explicit association с
+Location для presentation assistance, но это не превращает
 polygon в источник canonical truth. It may optionally reference one canonical
 Location solely to focus current-map objects at that Location or explicit
 canonical descendants; unrelated objects may be dimmed, never hidden.
@@ -125,10 +124,13 @@ MapReference не является Location, не доказывает physical 
 
 ## Normalized review boundaries
 
-Location.2 canonical/API foundation остается implemented, но assignment UX
-имеет pre-L2 refinement: search-first collapsible tree, ancestor context и
-inline direct-child/root create. Canonical Location semantics не меняются:
-`Location.type` остается optional arbitrary user value, без fixed taxonomy.
+Location.2 canonical/API foundation and assignment UX remain implemented:
+collapsible arbitrary-depth tree with current-path expansion, search by Location
+name/full path, ancestor context, and inline root/direct-child creation.
+Canonical Location/API semantics не меняются; create Location и assign
+PhysicalObject остаются двумя отдельными writes, а authoritative reload и
+refresh-only retry semantics сохраняются. `Location.type` остается optional
+arbitrary user value, без fixed taxonomy.
 
 MapReference является bounded consumer общего hierarchical/composite
 presentation mechanism, а не standalone parallel composition architecture.

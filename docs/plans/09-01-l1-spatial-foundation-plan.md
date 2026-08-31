@@ -472,9 +472,10 @@ The focused contract for the four spatial/presentation concepts is
 - PhysicalObject Detail provides readable canonical Location path plus explicit
   assign/change/clear. Both surfaces reload authoritative state after every
   acknowledged write and provide refresh-only retry when that reload fails.
-- Assignment picker has a pre-L2 UX refinement: search-first collapsible tree,
-  ancestor context and inline direct-child/root creation.
-  Location.1/Location.2 canonical/API foundation remains implemented.
+- Assignment picker has an implemented search-first collapsible arbitrary-depth
+  tree with current-path expansion and ancestor context, plus inline root and
+  direct-child creation. Location.1/Location.2 canonical/API semantics remain
+  implemented and unchanged.
 
 **Location.3 — IMPLEMENTED**
 

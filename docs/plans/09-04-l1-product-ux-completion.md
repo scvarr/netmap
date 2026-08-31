@@ -24,10 +24,10 @@ provenance constructs, а immutable Blueprint history не изменяется.
    хорошо видимым; мешающие объекты могут становиться полупрозрачными, а
    остальные элементы не должны мешать routing workflow.
 3. **Пользовательская терминология.** В UI использовать «Портовый модуль» /
-   `Port Module`. Внутренние architecture/code symbols `PortBlock` этим UX
-   этапом не переименовываются. Текущая согласованная RU-терминология «Группа
-   портов / Группы портов» еще не означает, что соответствующая работа
-   выполнена.
+  `Port Module`. Внутренние architecture/code symbols `PortBlock` этим UX
+  этапом не переименовываются. Historical pass действительно использовал
+  прежнюю терминологию; current pre-L2 UI после Phase A.4 использует «Группа
+  портов / Группы портов».
 4. **Рабочий список портов объекта.** Natural ordering, компактные строки и
    отсутствие «Технических данных» в primary port list. Основные действия —
    компактные icon-actions с доступными labels/tooltips. Для подключённого
@@ -53,10 +53,10 @@ provenance constructs, а immutable Blueprint history не изменяется.
    «Портовый модуль» / `Port Module`; internal `PortBlock` symbols and API
    contracts сохранены.
 
-Normalization note: current agreed pre-L2 RU terminology is «Группа портов» /
-«Группы портов». Ее implementation tracked by Phase A in
-[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]] and is
-not claimed as implemented by this historical pass.
+Normalization note: the historical 09.4 pass used «Портовый модуль» /
+`Port Module`; current pre-L2 UI after Phase A.4 uses «Группа портов» /
+«Группы портов». Internal identifiers `PortBlock` and PortBlock/API/routes
+were not renamed.
 
 ### UX.1 — Cable routing reliability
 

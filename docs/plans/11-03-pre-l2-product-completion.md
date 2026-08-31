@@ -26,12 +26,24 @@ standalone/multi-user application. L2 не начинается до второ�
 
 ### Phase A — Known L1 correctness / workflow completion
 
+**IMPLEMENTED — Phase A complete.**
+
 Закрыть bounded items: exact-evidence trace highlighting, исправление broken
 Cable catalog navigation, Location assignment tree/search/inline-create,
 compact Port Block table и RU terminology «Группа портов / Группы портов».
 Компактная таблица Port Block и RU terminology могут быть
 одним cheap UI-polish slice, но остаются отдельными acceptance items. Это не
 общий design-system rewrite.
+
+- **A.1 — exact-evidence L1 trace highlighting — IMPLEMENTED.**
+- **A.2 — Cable catalog navigation fix — IMPLEMENTED.**
+- **A.3 — Location assignment tree/search/inline-create — IMPLEMENTED.**
+- **A.4 — compact Port Block catalog + RU terminology — IMPLEMENTED.**
+  Compact table uses «Группа портов» / «Группы портов», separate «Точки
+  подключения» and «Сетевые порты» columns, and counts for the current
+  immutable PortBlockVersion without one version-details load per row.
+
+Current execution position: **Phase A complete -> next Phase B.1 / Cable.3.**
 
 ### Phase B — Remaining bounded L1 capability families
 
