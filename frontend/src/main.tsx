@@ -23,6 +23,7 @@ import { ApiPhysicalObjectDisplayNameWriteDataSource } from './topology/apiPhysi
 import { ApiBlueprintUpgradeDataSource } from './topology/apiBlueprintUpgradeDataSource';
 import { ApiPortBlockDataSource } from './topology/apiPortBlockDataSource';
 import { ApiCableDeleteDataSource } from './topology/apiCableDeleteDataSource';
+import { ApiLocationDataSource } from './topology/apiLocationDataSource';
 import './styles.css';
 import { I18nProvider } from './i18n';
 
@@ -50,6 +51,7 @@ createRoot(document.getElementById('root')!).render(
         physicalObjectDisplayNameWriteDataSource={new ApiPhysicalObjectDisplayNameWriteDataSource()}
         blueprintUpgradeDataSource={new ApiBlueprintUpgradeDataSource()}
         portBlockDataSource={new ApiPortBlockDataSource()}
+        locationDataSource={new ApiLocationDataSource()}
         topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}
       /></I18nProvider>
     </BrowserRouter>

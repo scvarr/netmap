@@ -464,10 +464,17 @@ The focused contract for the four spatial/presentation concepts is
 - Optional explicit canonical `PhysicalObject -> Location` association, independent
   from SavedMap placement and Region geometry.
 
+**Location.2 — IMPLEMENTED**
+
+- `/infrastructure/locations` provides arbitrary-depth canonical Location tree
+  management: root/child creation, name and arbitrary `type` edit/clear,
+  explicit parent picker, detach and backend-validated delete.
+- PhysicalObject Detail provides readable canonical Location path plus explicit
+  assign/change/clear. Both surfaces reload authoritative state after every
+  acknowledged write and provide refresh-only retry when that reload fails.
+
 **OPEN Location-family capabilities**
 
-- Location management UI/tree.
-- Location assignment UX for `PhysicalObject`.
 - `MapRegion -> Location` presentation association and assistance. It can never
   make geometry a source of canonical membership or movement.
 

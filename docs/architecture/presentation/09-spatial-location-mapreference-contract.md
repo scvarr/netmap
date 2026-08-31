@@ -9,8 +9,10 @@ DTO и algorithm details здесь намеренно не определяют
 Location.1 implemented the minimal canonical foundation: stable Location
 identity, arbitrary-depth explicit parent hierarchy, arbitrary user-defined
 optional type and explicit optional `PhysicalObject -> Location` assignment.
-It does not implement Region association/assistance, a Location UI/tree editor,
-MapReference or any fixed Location taxonomy.
+Location.2 implements the Location management tree and PhysicalObject assignment
+UX over that API, with authoritative reload after each acknowledged write. It
+does not implement Region association/assistance, MapReference or any fixed
+Location taxonomy.
 
 ## Четыре разных понятия
 

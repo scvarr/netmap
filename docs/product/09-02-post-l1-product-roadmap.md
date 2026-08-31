@@ -101,7 +101,7 @@ Blueprint/template
 
 ## Canonical Location и MapRegion boundary
 
-**Location.1 canonical foundation IMPLEMENTED; remaining Location/Region UX is a separate bounded milestone**
+**Location.1 canonical foundation and Location.2 management/PhysicalObject assignment UX IMPLEMENTED; Location.3 / Region assistance remains OPEN**
 
 `Location` — canonical physical place: stable identity, optional parent, name и
 optional arbitrary user-defined type в arbitrary-depth physical tree. A

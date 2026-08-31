@@ -30,6 +30,8 @@ import type { PortBlockDataSource } from './topology/portBlockTypes';
 import type { CableDeleteDataSource } from './topology/cableDeleteTypes';
 import { PortBlockLibraryPage } from './pages/PortBlockLibraryPage';
 import { PortBlockEditorPage } from './pages/PortBlockEditorPage';
+import { LocationsPage } from './pages/LocationsPage';
+import type { LocationDataSource } from './topology/locationTypes';
 
 export interface AppProps {
   dataSource: TopologyDataSource;
@@ -53,6 +55,7 @@ export interface AppProps {
   physicalObjectDisplayNameWriteDataSource?: PhysicalObjectDisplayNameWriteDataSource;
   blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
   portBlockDataSource?: PortBlockDataSource;
+  locationDataSource?: LocationDataSource;
 }
 
 export function App(props: AppProps) {
@@ -78,6 +81,7 @@ export function App(props: AppProps) {
           path="infrastructure/objects"
           element={<InfrastructureObjectsPage catalogInventoryDataSource={props.catalogInventoryDataSource} physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource} cableDeleteDataSource={props.cableDeleteDataSource} physicalObjectDisplayNameWriteDataSource={props.physicalObjectDisplayNameWriteDataSource} />}
         />
+        <Route path="infrastructure/locations" element={props.locationDataSource ? <LocationsPage dataSource={props.locationDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource && props.portBlockDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} portBlockDataSource={props.portBlockDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/object-blueprints/:blueprintId/versions/:versionId/edit" element={props.objectBlueprintDataSource && props.portBlockDataSource ? <EditObjectBlueprintPage dataSource={props.objectBlueprintDataSource} portBlockDataSource={props.portBlockDataSource} /> : <Navigate replace to="/map" />} />
@@ -111,6 +115,7 @@ export function App(props: AppProps) {
               savedMapDataSource={props.savedMapDataSource}
               blueprintUpgradeDataSource={props.blueprintUpgradeDataSource}
               objectBlueprintDataSource={props.objectBlueprintDataSource}
+              locationDataSource={props.locationDataSource}
             />
           )}
         />

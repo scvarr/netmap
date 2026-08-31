@@ -165,6 +165,13 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     expect(screen.getByRole('complementary', { name: 'Основная навигация' })).toBeInTheDocument();
   });
 
+  it('exposes the Location management sidebar surface and route', async () => {
+    const locationDataSource = { loadLocations: vi.fn().mockResolvedValue([]), createLocation: vi.fn(), updateLocation: vi.fn(), reparentLocation: vi.fn(), deleteLocation: vi.fn(), loadPhysicalObjectLocation: vi.fn(), setPhysicalObjectLocation: vi.fn() };
+    renderApp('/infrastructure/locations', { locationDataSource });
+    expect(await screen.findByRole('heading', { name: 'Местоположения' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Местоположения' })).toHaveAttribute('href', '/infrastructure/locations');
+  });
+
   it.each([
     ['logical', LOGICAL_PROJECTION_REQUEST, 'Логическая схема сети'],
     ['physical', PHYSICAL_PROJECTION_REQUEST, 'Физическая схема сети'],

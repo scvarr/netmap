@@ -24,6 +24,8 @@ import type { TopologyDataSource, TopologyProjectionDocument } from '../topology
 import { useI18n } from '../i18n';
 import type { BlueprintUpgradeDataSource } from '../topology/blueprintUpgradeTypes';
 import type { ObjectBlueprintDataSource } from '../topology/objectBlueprintTypes';
+import type { LocationDataSource } from '../topology/locationTypes';
+import { PhysicalObjectLocationSection } from '../components/PhysicalObjectLocationSection';
 
 interface InfrastructureObjectDetailPageProps {
   dataSource: TopologyDataSource;
@@ -39,6 +41,7 @@ interface InfrastructureObjectDetailPageProps {
   savedMapDataSource?: SavedMapDataSource;
   blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
   objectBlueprintDataSource?: ObjectBlueprintDataSource;
+  locationDataSource?: LocationDataSource;
 }
 
 const mapLink = (mapId: string, objectId: string) =>
@@ -60,6 +63,7 @@ export function InfrastructureObjectDetailPage({
   savedMapDataSource,
   blueprintUpgradeDataSource,
   objectBlueprintDataSource,
+  locationDataSource,
 }: InfrastructureObjectDetailPageProps) {
   const { collator, locale, t } = useI18n();
   const { physicalObjectId = '' } = useParams();
@@ -215,6 +219,7 @@ export function InfrastructureObjectDetailPage({
           </div>
         </section>
       )}
+      <PhysicalObjectLocationSection physicalObjectId={physicalObjectId} dataSource={locationDataSource} />
       <section className="detail-section detail-section--operations">
         <PhysicalObjectDetailsSection
           key={physicalObjectId}
