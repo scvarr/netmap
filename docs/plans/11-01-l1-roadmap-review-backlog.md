@@ -23,6 +23,24 @@ review. Окончательный порядок и принадлежност�
   evidenced Cable/`ConnectionMember`; остальные parallel Cable не highlighted.
 - Статус: TODO.
 
+### L1R-006 — Русская терминология PortBlock
+
+- ID: `L1R-006`
+- Категория: terminology / localization polish.
+- Severity: LOW.
+- До L2: ДА.
+- Зависимости: нет.
+- Краткий contract: все русские user-facing PortBlock strings используют
+  естественный термин «Группа портов / Группы портов» с контекстным
+  склонением; английская локализация остается без изменений.
+- Acceptance: исправлены navigation, library, breadcrumbs, create/version
+  editor, errors, confirmations, accessibility labels и hints; в русском UI
+  нет «Портовый модуль / Портовые модули»; `PortBlock` identity и implementation
+  terminology не меняются.
+- Scope: terminology-only cleanup без semantic/domain/API changes. Отдельно от
+  L1R-005 по смыслу; возможна совместная реализация как дешевого L1 UI-polish.
+- Статус: TODO.
+
 ### L1R-004 — Location assignment tree/search/inline-create UX
 
 - ID: `L1R-004`

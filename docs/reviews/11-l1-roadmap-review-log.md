@@ -36,6 +36,34 @@
   highlighted.
 - Статус: RECORDED.
 
+## RVR-006 — Русская терминология PortBlock
+
+- Краткое описание: в русской пользовательской локализации PortBlock сейчас
+  называется «Портовый модуль / Портовые модули», что звучит неестественно.
+- Тип: terminology / localization polish.
+- Severity: LOW.
+- Влияние на L1 completion: обязательный UI polish до L1 COMPLETE; correctness
+  не блокирует.
+- Blocker до L2: да. Это не correctness blocker, но переход к L2 предполагает
+  закрытие обязательного L1 terminology polish.
+- Зависимости: нет.
+- Semantic/domain/API changes: нет.
+- Согласованное решение: во всех русских user-facing PortBlock strings,
+  включая navigation, library, breadcrumbs, create/version editor, errors,
+  confirmations, accessibility labels и hints, использовать «Группа портов»
+  в singular и «Группы портов» во plural с корректным склонением по контексту.
+  Английскую локализацию не менять.
+- Границы: внутренний `PortBlock` implementation/domain термин не
+  переименовывается; не меняются types/interfaces, entity names, API, routes,
+  filenames, database/schema и immutable version semantics. Пункт отдельный от
+  RVR-005, хотя при финальной decomposition они могут выполняться вместе как
+  дешевый L1 UI-polish.
+- Acceptance: в русском UI отсутствуют user-facing «Портовый модуль» и
+  «Портовые модули»; используются «Группа портов» и «Группы портов»;
+  implementation/domain identity `PortBlock` и английская локализация не
+  изменены.
+- Статус: RECORDED.
+
 ## RVR-004 — Location assignment tree/search/inline-create UX
 
 - Краткое описание: PhysicalObject Location assignment использует плоский
