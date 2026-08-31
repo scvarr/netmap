@@ -36,6 +36,54 @@
   highlighted.
 - Статус: RECORDED.
 
+## RVR-007 — Composite/hierarchical presentation capability family
+
+- Краткое описание: flat SavedMap scene заставляет пользователя вручную
+  воспроизводить пространственную и составную структуру, уже частично
+  известную из domain facts: Location hierarchy, PhysicalObject composition,
+  nested SavedMap и будущие hosting/virtualization relations. Эти relations
+  имеют разную semantics и не должны сводиться к одному universal parent.
+- Тип: architecture change / new presentation capability family.
+- Architectural priority: HIGH.
+- Влияние на L1 completion: это изменение направления, а не обязательство
+  реализовать весь generic scene engine до L2. Полная generic capability не
+  является blocker L1 COMPLETE / перехода к L2.
+- Blocker до L2: нет для полной capability. До standalone MapReference
+  implementation необходимо сначала согласовать его место в общем
+  composite/hierarchical presentation contract; bounded pre-L2 subset будет
+  определен только после завершения review.
+- Зависимости: existing Projection/Aggregation contract; MapReference должен
+  быть архитектурно reconciled до standalone implementation.
+- Согласованное решение: зафиксировать концептуальную pipeline
+  `canonical/derived facts → Projection → hierarchical/composite scene →
+  layout/presentation → canvas`. Общим является только presentation mechanism;
+  точная граница Projection DTO и scene document остается OPEN.
+- Fixed invariants: не вводить universal canonical `Object.parent`; сохранять
+  независимыми Location parent hierarchy, `PhysicalObject.parent_object`,
+  SavedMap/MapReference composition и будущие hosting relations. Composite node
+  остается derived presentation object; one-way flow не выводит domain facts из
+  position, resize, container geometry, collapse/expand, auto-layout или
+  overrides. Collapsed boundary connectivity выводится из supporting
+  canonical/derived topology/evidence, не создает synthetic Connection и
+  сохраняет refs/explainability.
+- Дополнительные границы: Location может быть composition basis без
+  canonical containment; rack layout — specialized policy без интерпретации
+  `Location.type` как fixed Rack taxonomy и без rack occupancy domain model;
+  PhysicalObject composition не смешивается с Location; MapReference остается
+  presentation-only consumer общего contract; Region остается отдельной
+  manual SavedMap-owned geometry; future VM/VirtualSwitch/hosting domain не
+  вводится этим item.
+- OPEN: persisted composite/scene object; принадлежность hierarchy Projection
+  или отдельному scene layer; сохранение geometry/overrides; rack occupancy и
+  layout policies; boundary attachment algorithm; simultaneous hierarchies;
+  manual-vs-auto layout; grouping UX; incomplete/conflicting data behavior и
+  future virtualization semantics.
+- Roadmap impact: standalone MapReference нельзя начинать только потому, что
+  он следующий в старом roadmap. После полного review будет решено, какой
+  bounded consumer, если вообще какой, нужен до L2. Item является umbrella
+  capability/decomposition item, не огромным implementation milestone.
+- Статус: RECORDED.
+
 ## RVR-006 — Русская терминология PortBlock
 
 - Краткое описание: в русской пользовательской локализации PortBlock сейчас

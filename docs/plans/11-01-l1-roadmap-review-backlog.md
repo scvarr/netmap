@@ -23,6 +23,31 @@ review. Окончательный порядок и принадлежност�
   evidenced Cable/`ConnectionMember`; остальные parallel Cable не highlighted.
 - Статус: TODO.
 
+### L1R-007 — Composite/hierarchical presentation capability family
+
+- ID: `L1R-007`
+- Категория: architecture change / presentation capability family.
+- Severity: N/A (не bug).
+- Architectural priority: HIGH.
+- До L2: НЕТ для полной generic implementation.
+- Зависимости: existing Projection/Aggregation contract.
+- Специальная зависимость: архитектурно согласовать общий
+  composite/hierarchical presentation contract до standalone MapReference
+  implementation.
+- Краткий contract: canonical/derived facts проходят через Projection в
+  hierarchical/composite scene, затем layout/presentation и canvas. Location,
+  `PhysicalObject.parent_object`, SavedMap composition и future hosting
+  relations сохраняют собственную semantics; universal canonical
+  `Object.parent` не вводится. Composite nodes derived/presentation-only,
+  one-way и evidence-preserving.
+- Implementation scope: `NEEDS DECOMPOSITION after roadmap review`.
+- Acceptance будущей decomposition: общий contract согласован до начала
+  standalone MapReference design; fixed invariants и OPEN boundaries из review
+  item сохранены; не создается generic scene-engine milestone автоматически.
+- Placement note: не определяет окончательный milestone order и не является
+  обязательством полной реализации до L2.
+- Статус: TODO.
+
 ### L1R-006 — Русская терминология PortBlock
 
 - ID: `L1R-006`
