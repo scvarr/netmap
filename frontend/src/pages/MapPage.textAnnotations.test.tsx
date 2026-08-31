@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MapPage } from './MapPage';
+import { createMapPageHarness } from './MapPage.testHarness';
 
 vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <>
   <button onClick={() => props.regionMode?.onAnnotationPlace?.({ x: 12, y: 34 })}>place text</button>
@@ -9,13 +9,14 @@ vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) =>
   <button onClick={() => props.regionMode?.onAnnotationSelect?.('annotation-a')}>select annotation</button>
   <output data-testid="annotation-preview">{JSON.stringify(props.regionMode?.previewAnnotation ?? null)}</output>
 </> }));
+const renderMapPage = createMapPageHarness(MapPage);
 
 const mapId = 'map-a';
 const annotation = { annotation_ref: { entity_type: 'MapTextAnnotation' as const, entity_id: 'annotation-a' }, text: 'Existing\ntext', position: { x: 3, y: 4 }, text_color: '#123456', font_size: 16 };
 const region = { region_ref: { entity_type: 'MapRegion' as const, entity_id: 'region-a' }, label: 'Region', points: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 20 }], style: { fill_color: '#123456', fill_opacity: .3, stroke_color: '#abcdef', stroke_width: 2, stroke_style: 'solid' as const }, z_order: 1 };
 const map = { map_ref: { entity_type: 'SavedMap' as const, entity_id: mapId }, name: 'A', created_at: '', updated_at: '', placements: [], cable_routes: [], regions: [region], text_annotations: [annotation] };
 const document: any = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] };
-const renderPage = (maps: any) => render(<MemoryRouter initialEntries={[`/map?map=${mapId}&view=physical`]}><MapPage dataSource={{ loadProjection: vi.fn().mockResolvedValue(document) }} savedMapDataSource={maps} /></MemoryRouter>);
+const renderPage = (maps: any) => renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
 
 const enterRegionMode = async () => { fireEvent.click(await screen.findByRole('button', { name: 'Области' })); };
 const selectText = () => fireEvent.click(screen.getByRole('tab', { name: 'Текст' }));

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MapPage } from './MapPage';
+import { createMapPageHarness } from './MapPage.testHarness';
 
 vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <>
   <button onClick={() => props.regionMode?.onMoveDraftVertex?.(0, { x: 7, y: 8 })}>move vertex</button>
@@ -9,6 +9,7 @@ vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) =>
   <button onClick={() => props.regionMode?.onTranslateDraft?.({ x: 10, y: 20 })}>translate region</button>
   <button onClick={() => props.regionMode?.onMoveLabel?.({ x: 70, y: -30 })}>move label</button>
 </> }));
+const renderMapPage = createMapPageHarness(MapPage);
 
 const mapId = 'map-a';
 const region = {
@@ -19,7 +20,7 @@ const region = {
 const map = { map_ref: { entity_type: 'SavedMap' as const, entity_id: mapId }, name: 'A', created_at: '', updated_at: '', placements: [], cable_routes: [], regions: [region] };
 const document: any = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] };
 
-const renderPage = (maps: any) => render(<MemoryRouter initialEntries={[`/map?map=${mapId}&view=physical`]}><MapPage dataSource={{ loadProjection: vi.fn().mockResolvedValue(document) }} savedMapDataSource={maps} /></MemoryRouter>);
+const renderPage = (maps: any) => renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
 
 describe('MapPage existing Region geometry editing', () => {
   it('clones selected authoritative geometry, preserves non-geometry metadata, and translates an explicit label position only with the polygon', async () => {
