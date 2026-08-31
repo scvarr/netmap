@@ -146,7 +146,9 @@
 - Severity: LOW.
 - Влияние на L1 completion: обязательный UI polish до финального L1
   real-world acceptance; correctness не блокирует.
-- Blocker до L2: нет.
+- Blocker до L2: да. Это не correctness blocker, но обязательный L1
+  UI-polish до real-world acceptance / L1 COMPLETE; переход к L2 предполагает
+  его закрытие.
 - Зависимости: нет.
 - Backend/API capability: не требуется.
 - Подтвержденный scope: существующий `PortBlockListItem` уже содержит `name`,
