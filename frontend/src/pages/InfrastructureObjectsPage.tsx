@@ -145,7 +145,10 @@ export function InfrastructureObjectsPage({
       return;
     }
     const displayName = renameValue.trim();
-    if ((!renameTarget.cable && (!displayName || displayName === renameTarget.label)) || (renameTarget.cable && displayName === (renameTarget.userLabel ?? ''))) {
+    if (
+      (!renameTarget.cable && (!displayName || displayName === renameTarget.label))
+      || (renameTarget.cable && displayName === (renameTarget.userLabel ?? '') && !(!renameTarget.userLabel && renameTarget.label))
+    ) {
       return;
     }
     setRenaming(true);
@@ -415,7 +418,9 @@ function RenameDialog({
 }) {
   const { t } = useI18n();
   const normalized = value.trim();
-  const unchanged = target.cable ? normalized === (target.userLabel ?? '') : normalized === target.label;
+  const unchanged = target.cable
+    ? normalized === (target.userLabel ?? '') && !(!target.userLabel && fallback)
+    : normalized === target.label;
 
   return (
     <div className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="rename-title">

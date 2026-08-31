@@ -22,6 +22,14 @@ const document = (): CatalogInventoryDocument => ({ schema_version: '1.0', equip
 const renderPage = (source = { loadCatalogInventory: vi.fn().mockResolvedValue(document()) }, deletion?: (id: string) => Promise<void>, rename?: (id: string, value: string) => Promise<unknown>) => { render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={source} physicalObjectDeleteDataSource={deletion ? { deletePhysicalObject: deletion } : undefined} physicalObjectDisplayNameWriteDataSource={rename ? { renamePhysicalObject: rename as any } : undefined} /></MemoryRouter>); return source; };
 
 describe('InfrastructureObjectsPage inventory catalog', () => {
+  it('does not prefill a Cable technical fallback and clears through null', async () => {
+    const initial = document(); initial.cables[0] = { ...initial.cables[0], label: 'Cable deadbeef', label_source: 'TECHNICAL_FALLBACK' };
+    const loadCatalogInventory = vi.fn().mockResolvedValueOnce(initial).mockResolvedValueOnce(initial);
+    const setCableLabel = vi.fn().mockResolvedValue(undefined);
+    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel } as any} /></MemoryRouter>);
+    await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать Cable deadbeef' }));
+    expect(screen.getByLabelText('Название')).toHaveValue(''); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(setCableLabel).toHaveBeenCalledWith('cable', null));
+  });
   it('uses one inventory load and renders occupancy, classes, map and detail links', async () => {
     const source = renderPage(); await screen.findByText('SW17');
     expect(source.loadCatalogInventory).toHaveBeenCalledTimes(1); expect(screen.getByText('17 / 52')).toBeInTheDocument(); expect(screen.getAllByText('Состояние не определено')).toHaveLength(2); expect(screen.getAllByText('firewall_x')).toHaveLength(2); expect(screen.getAllByText('Без типа')).toHaveLength(2);
