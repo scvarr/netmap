@@ -32,6 +32,17 @@ describe('MapPage Location.3 focus', () => {
     expect(maps.replaceRegion).not.toHaveBeenCalled();
   });
 
+  it('does not apply Location focus when the selected Region has no association', async () => {
+    const withoutAssociation = { ...map, regions: [{ ...region, location_ref: null }] };
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([withoutAssociation]), loadMap: vi.fn().mockResolvedValue(withoutAssociation), createMap: vi.fn(), replaceRegion: vi.fn() };
+    const locations = { loadLocations: vi.fn().mockResolvedValue([{ location_ref: ref('root'), name: 'Site', type: 'ignored', parent_location_ref: null }]) };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps, locationDataSource: locations }, `/map?map=${mapId}&view=physical`);
+    fireEvent.click(await screen.findByRole('button', { name: 'Области' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Site' }));
+    await waitFor(() => expect(screen.getByTestId('location-focus')).toHaveTextContent(/^$/));
+    expect(maps.replaceRegion).not.toHaveBeenCalled();
+  });
+
   it('shows explicit hierarchy paths and sends select/change/clear only in acknowledged Region replaces', async () => {
     const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), createMap: vi.fn(), replaceRegion: vi.fn().mockResolvedValue(undefined) };
     const locations = { loadLocations: vi.fn().mockResolvedValue([

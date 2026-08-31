@@ -1,3 +1,5 @@
+import uuid
+
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
 
@@ -42,6 +44,23 @@ def test_regions_are_saved_map_presentation_state_and_replace_preserves_identity
         **region_payload("North"),
     }]
 
+    replacement = region_payload("South", z_order=-2)
+    replacement.update({
+        "points": [{"x": -5, "y": -5}, {"x": 45, "y": -5}, {"x": 45, "y": 45}],
+        "label_position": None,
+        "style": {**STYLE, "fill_opacity": 1, "stroke_style": "dotted", "label_color": None},
+    })
+    updated = client.put(f"/v1/maps/{map_id}/regions/{region_id}", json=replacement)
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["region_ref"]["entity_id"] == region_id
+    assert client.get(f"/v1/maps/{map_id}").json()["regions"] == [{
+        "region_ref": {"entity_type": "MapRegion", "entity_id": region_id},
+        "label": "South",
+        "points": replacement["points"],
+        "style": {key: value for key, value in replacement["style"].items() if value is not None},
+        "z_order": -2,
+    }]
+
 
 def test_region_location_association_is_explicit_replaceable_and_deletion_does_not_block_location():
     map_id = create_map(client, "Region location assistance")
@@ -57,6 +76,10 @@ def test_region_location_association_is_explicit_replaceable_and_deletion_does_n
     assert created.status_code == 201
     region_id = created.json()["region_ref"]["entity_id"]
     assert created.json()["location_ref"] == root_ref
+    assert client.get(f"/v1/maps/{map_id}").json()["regions"][0]["location_ref"] == root_ref
+
+    unknown = client.put(f"/v1/maps/{map_id}/regions/{region_id}", json={**payload, "location_id": str(uuid.uuid4())})
+    assert unknown.status_code == 422
     assert client.get(f"/v1/maps/{map_id}").json()["regions"][0]["location_ref"] == root_ref
 
     changed = {**payload, "location_id": replacement_ref["entity_id"]}
@@ -81,23 +104,6 @@ def test_saved_map_placement_returns_live_location_context_without_presentation_
     assert client.post(f"/v1/maps/{map_id}/placements", json={"physical_object_id": object_id, "x": 1, "y": 2}).status_code == 201
     placement = client.get(f"/v1/maps/{map_id}").json()["placements"][0]
     assert placement["location_ref"] == location
-
-    replacement = region_payload("South", z_order=-2)
-    replacement.update({
-        "points": [{"x": -5, "y": -5}, {"x": 45, "y": -5}, {"x": 45, "y": 45}],
-        "label_position": None,
-        "style": {**STYLE, "fill_opacity": 1, "stroke_style": "dotted", "label_color": None},
-    })
-    updated = client.put(f"/v1/maps/{map_id}/regions/{region_id}", json=replacement)
-    assert updated.status_code == 200, updated.text
-    assert updated.json()["region_ref"]["entity_id"] == region_id
-    assert client.get(f"/v1/maps/{map_id}").json()["regions"] == [{
-        "region_ref": {"entity_type": "MapRegion", "entity_id": region_id},
-        "label": "South",
-        "points": replacement["points"],
-        "style": {key: value for key, value in replacement["style"].items() if value is not None},
-        "z_order": -2,
-    }]
 
 
 def test_region_delete_leaves_placements_and_other_regions_unchanged():

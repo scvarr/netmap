@@ -13,7 +13,7 @@ const renderMapPage = createMapPageHarness(MapPage);
 
 const mapId = 'map-a';
 const region = {
-  region_ref: { entity_type: 'MapRegion' as const, entity_id: 'region-a' }, label: 'Стойка 01',
+  region_ref: { entity_type: 'MapRegion' as const, entity_id: 'region-a' }, location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'location-a' }, label: 'Стойка 01',
   points: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 0, y: 20 }], label_position: { x: 3, y: 4 },
   style: { fill_color: '#123456', fill_opacity: .3, stroke_color: '#abcdef', stroke_width: 2, stroke_style: 'dashed' as const }, z_order: 4,
 };
@@ -37,7 +37,7 @@ describe('MapPage existing Region geometry editing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(replaceRegion).toHaveBeenCalledTimes(1));
     const [, , write] = replaceRegion.mock.calls[0];
-    expect(write).toMatchObject({ label: 'Стойка 01', style: region.style, z_order: 4 });
+    expect(write).toMatchObject({ label: 'Стойка 01', style: region.style, z_order: 4, location_id: 'location-a' });
     const delta = { x: write.label_position.x - region.label_position.x, y: write.label_position.y - region.label_position.y };
     expect(write.points).toEqual(region.points.map((point: any) => ({ x: point.x + delta.x, y: point.y + delta.y })));
     expect(replaceRegion).toHaveBeenCalledTimes(1);

@@ -85,7 +85,7 @@ interface MapPageProps {
   deviceDetailsDataSource?: DeviceDetailsDataSource;
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
-  locationDataSource?: LocationDataSource;
+  locationDataSource?: Pick<LocationDataSource, 'loadLocations'>;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   cableDeleteDataSource?: CableDeleteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;

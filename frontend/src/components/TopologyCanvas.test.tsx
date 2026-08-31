@@ -50,6 +50,7 @@ vi.mock('@xyflow/react', () => ({
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
           <span data-testid={`position-${node.id}`}>{node.position.x},{node.position.y}</span>
           <span data-testid={`highlighted-members-${node.id}`}>{[...(node.data.traceHighlightedConnectionMemberIds ?? [])].join(',')}</span>
+          <span data-testid={`location-focus-${node.id}`}>{node.data.locationFocus ?? 'none'}</span>
           <span data-testid={`draggable-${node.id}`}>{String(node.draggable !== false)}</span>
           <button onClick={() => {
             if (node.draggable === false) return;
@@ -118,6 +119,16 @@ afterEach(() => {
 });
 
 describe('TopologyCanvas async layout boundary', () => {
+  it('marks matching Location objects and dims unrelated objects without topology writes', async () => {
+    const matched = { ...documentFor('physical-match').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'matched-object' }] };
+    const unrelated = { ...documentFor('physical-unrelated').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'unrelated-object' }] };
+    const document = { ...documentFor('physical-scene'), nodes: [matched, unrelated] };
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async (input) => flowFor(input));
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} locationFocusObjectIds={new Set(['matched-object'])} />);
+
+    expect(await screen.findByTestId('location-focus-physical-match')).toHaveTextContent('match');
+    expect(screen.getByTestId('location-focus-physical-unrelated')).toHaveTextContent('dim');
+  });
   it('enriches only a collapsed cable edge from current SavedMap routes without rerunning layout', async () => {
     const document: TopologyProjectionDocument = {
       ...documentFor('physical-route'),
