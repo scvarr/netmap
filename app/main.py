@@ -125,6 +125,7 @@ from app.schemas import (
     ReplaceMapRegionRequest,
     ReplaceMapTextAnnotationRequest,
     SetMapViewLockRequest,
+    GenerateCableLabelRequest,
     SetCableLabelRequest,
     SetCableLabelSettingsRequest,
     RouteDecisionArtifact,
@@ -1327,6 +1328,20 @@ def set_cable_label(
 ) -> None:
     with session.begin():
         CableLabelCatalog(session).set_label(cable_id, query.label)
+
+
+@app.post(
+    "/v1/cables/{cable_id}/generated-label",
+    status_code=204,
+    responses={422: {"model": ErrorResponse}},
+)
+def generate_cable_label(
+    cable_id: uuid.UUID,
+    query: GenerateCableLabelRequest,
+    session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        CableLabelCatalog(session).generate_label_for_cable(cable_id, query.template_id)
 
 
 @app.get("/v1/cable-label-settings", response_model=CableLabelSettingsDocument)

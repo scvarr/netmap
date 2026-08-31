@@ -41,6 +41,36 @@ def test_generated_create_sequence_and_gap_reuse():
     reused, _ = cable_pair("generated-3", cable_label_template_id=template_id, generate_cable_label=True)
     assert catalog_cable(reused.json()["cable_ref"]["entity_id"])["label"] == "FC0001"
 
+def test_generated_assignment_to_existing_cable_reuses_gaps_without_changing_topology():
+    template_id = create_template("#####", 1)
+    first, _ = cable_pair("existing-generated-first")
+    second, _ = cable_pair("existing-generated-second")
+    first_id = first.json()["cable_ref"]["entity_id"]
+    second_id = second.json()["cable_ref"]["entity_id"]
+    first_before = catalog_cable(first_id)
+    connection_id = first.json()["connection_ref"]["entity_id"]
+
+    assert client.post(f"/v1/cables/{first_id}/generated-label", json={"template_id": template_id}).status_code == 204
+    assert catalog_cable(first_id)["label"] == "00001"
+    # The cable's own current value is not a conflict when generating again.
+    assert client.post(f"/v1/cables/{first_id}/generated-label", json={"template_id": template_id}).status_code == 204
+    assert catalog_cable(first_id)["label"] == "00001"
+    assert client.post(f"/v1/cables/{second_id}/generated-label", json={"template_id": template_id}).status_code == 204
+    assert catalog_cable(second_id)["label"] == "00002"
+
+    assert client.put(f"/v1/cables/{first_id}/label", json={"label": None}).status_code == 204
+    assert client.post(f"/v1/cables/{second_id}/generated-label", json={"template_id": template_id}).status_code == 204
+    assert catalog_cable(second_id)["label"] == "00001"
+    first_after = catalog_cable(first_id)
+    assert first_after["cable_ref"] == first_before["cable_ref"]
+    assert first_after["connection_ref"] == first_before["connection_ref"] == {"ref_type": "CANONICAL_FACT", "entity_type": "Connection", "entity_id": connection_id}
+    assert first_after["endpoint_a"] == first_before["endpoint_a"]
+    assert first_after["endpoint_b"] == first_before["endpoint_b"]
+
+def test_generated_assignment_requires_an_existing_template():
+    cable, _ = cable_pair("existing-generated-missing-template")
+    assert client.post(f"/v1/cables/{cable.json()['cable_ref']['entity_id']}/generated-label", json={"template_id": "00000000-0000-4000-8000-000000000000"}).status_code == 422
+
 def test_manual_unlabelled_create_generation_errors_and_templates():
     template_id = create_template("FC####")
     manual, _ = cable_pair("manual-pattern", cable_label="not-a-template-value", cable_label_template_id=template_id, generate_cable_label=False)

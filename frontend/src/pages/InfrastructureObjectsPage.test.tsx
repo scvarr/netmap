@@ -26,9 +26,21 @@ describe('InfrastructureObjectsPage inventory catalog', () => {
     const initial = document(); initial.cables[0] = { ...initial.cables[0], label: 'Cable deadbeef', label_source: 'TECHNICAL_FALLBACK' };
     const loadCatalogInventory = vi.fn().mockResolvedValueOnce(initial).mockResolvedValueOnce(initial);
     const setCableLabel = vi.fn().mockResolvedValue(undefined);
-    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel } as any} /></MemoryRouter>);
+    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel, generateCableLabel: vi.fn(), loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [] }) } as any} /></MemoryRouter>);
     await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать Cable deadbeef' }));
-    expect(screen.getByLabelText('Название')).toHaveValue(''); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(setCableLabel).toHaveBeenCalledWith('cable', null));
+    expect(screen.getByLabelText('Имя вручную')).toHaveValue(''); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(setCableLabel).toHaveBeenCalledWith('cable', null));
+  });
+  it('generates an existing Cable label through the authoritative write and retries only catalog reload', async () => {
+    const loadCatalogInventory = vi.fn().mockResolvedValueOnce(document()).mockRejectedValueOnce(new Error('reload')).mockResolvedValueOnce({ ...document(), cables: document().cables.map((item) => item.cable_ref.entity_id === 'cable' ? { ...item, label: 'FC0001' } : item) });
+    const generateCableLabel = vi.fn().mockResolvedValue(undefined);
+    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel: vi.fn(), generateCableLabel, loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template-1', name: 'FC', pattern: 'FC####', start_at: 1 }] }) } as any} /></MemoryRouter>);
+    await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать C10' }));
+    await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template-1'); await userEvent.click(screen.getByLabelText('Сгенерировать'));
+    await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать' }));
+    await waitFor(() => expect(generateCableLabel).toHaveBeenCalledWith('cable', 'template-1'));
+    expect(await screen.findByText('Имя сохранено, но каталог не удалось обновить. Повторите обновление.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
+    await screen.findByText('FC0001'); expect(generateCableLabel).toHaveBeenCalledTimes(1); expect(loadCatalogInventory).toHaveBeenCalledTimes(3);
   });
   it('uses one inventory load and renders occupancy, classes, map and detail links', async () => {
     const source = renderPage(); await screen.findByText('SW17');

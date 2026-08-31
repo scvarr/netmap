@@ -79,6 +79,7 @@ export function App(props: AppProps) {
             savedMapDataSource={props.savedMapDataSource}
             catalogInventoryDataSource={props.catalogInventoryDataSource}
             locationDataSource={props.locationDataSource}
+            cableLabelDataSource={props.cableLabelDataSource}
           />}
         />
         <Route

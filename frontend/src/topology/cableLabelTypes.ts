@@ -5,6 +5,7 @@ export interface CableLabelTemplateWrite { name: string; description?: string | 
 export interface CableNamingInput { cable_label?: string | null; cable_label_template_id?: string | null; generate_cable_label?: boolean }
 export interface CableLabelDataSource {
   setCableLabel(cableId: string, label: string | null): Promise<void>;
+  generateCableLabel(cableId: string, templateId: string): Promise<void>;
   loadCableLabelSettings(): Promise<CableLabelSettings>;
   setCableLabelSettings(settings: CableLabelSettings): Promise<CableLabelSettings>;
   loadCableLabelTemplates(): Promise<CableLabelTemplateListDocument>;

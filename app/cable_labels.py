@@ -103,6 +103,15 @@ class CableLabelCatalog:
         self._assign(cable, normalized_cable_label(value))
         return cable
 
+    def generate_label_for_cable(self, cable_id: uuid.UUID, template_id: uuid.UUID) -> Cable:
+        """Atomically assign the first template value available to this Cable."""
+        cable = self.session.scalar(select(Cable).where(Cable.id == cable_id).with_for_update())
+        if cable is None:
+            raise ValidationError("Cable does not exist", {"cable_id": str(cable_id)})
+        self.settings()
+        self._assign(cable, self._generate(template_id, excluding_cable_id=cable.id))
+        return cable
+
     def assign_new_cable(
         self, cable: Cable, *, label: str | None, template_id: uuid.UUID | None, generate: bool
     ) -> None:
@@ -126,7 +135,7 @@ class CableLabelCatalog:
         cable.label = label
         self.session.flush()
 
-    def _generate(self, template_id: uuid.UUID) -> str:
+    def _generate(self, template_id: uuid.UUID, *, excluding_cable_id: uuid.UUID | None = None) -> str:
         template = self.session.get(CableLabelTemplate, template_id)
         if template is None:
             raise ValidationError("Cable label template does not exist", {"template_id": str(template_id)})
@@ -134,7 +143,10 @@ class CableLabelCatalog:
         # in assign_new_cable by passing its result through _assign.  Acquire it here
         # too, because generation must inspect and reserve a free value atomically.
         self.settings()
-        labels = set(self.session.scalars(select(Cable.label).where(Cable.label.is_not(None))))
+        statement = select(Cable.label).where(Cable.label.is_not(None))
+        if excluding_cable_id is not None:
+            statement = statement.where(Cable.id != excluding_cable_id)
+        labels = set(self.session.scalars(statement))
         ordinal = template.start_at
         while (candidate := sequence_value(template.pattern, ordinal)) is not None:
             if candidate not in labels:

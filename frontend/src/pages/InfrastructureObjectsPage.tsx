@@ -11,6 +11,8 @@ import type { PhysicalObjectDeleteDataSource } from '../topology/physicalObjectD
 import type { PhysicalObjectDisplayNameWriteDataSource } from '../topology/physicalObjectDisplayNameWriteTypes';
 import type { CableDeleteDataSource } from '../topology/cableDeleteTypes';
 import type { CableLabelDataSource } from '../topology/cableLabelTypes';
+import type { CableNamingInput } from '../topology/cableLabelTypes';
+import { CableNamingFields } from '../components/CableNamingFields';
 import { useI18n } from '../i18n';
 
 interface Props {
@@ -80,6 +82,7 @@ export function InfrastructureObjectsPage({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [renameTarget, setRenameTarget] = useState<RenameTarget | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   const [renameError, setRenameError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState(false);
   const [renameSavedPendingRefresh, setRenameSavedPendingRefresh] = useState(false);
@@ -136,6 +139,7 @@ export function InfrastructureObjectsPage({
   const openRename = (target: RenameTarget) => {
     setRenameTarget(target);
     setRenameValue(target.cable ? (target.userLabel ?? '') : target.label);
+    setCableNaming({ cable_label: target.userLabel ?? null, cable_label_template_id: null, generate_cable_label: false });
     setRenameError(null);
     setRenameSavedPendingRefresh(false);
   };
@@ -144,17 +148,19 @@ export function InfrastructureObjectsPage({
     if (!renameTarget || renaming || (!renameTarget.cable && !physicalObjectDisplayNameWriteDataSource) || (renameTarget.cable && !cableLabelDataSource)) {
       return;
     }
-    const displayName = renameValue.trim();
+    const displayName = renameTarget.cable ? (cableNaming.cable_label ?? '').trim() : renameValue.trim();
     if (
       (!renameTarget.cable && (!displayName || displayName === renameTarget.label))
-      || (renameTarget.cable && displayName === (renameTarget.userLabel ?? '') && !(!renameTarget.userLabel && renameTarget.label))
+      || (renameTarget.cable && !cableNaming.generate_cable_label && displayName === (renameTarget.userLabel ?? '') && !(!renameTarget.userLabel && renameTarget.label))
+      || (renameTarget.cable && cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)
     ) {
       return;
     }
     setRenaming(true);
     setRenameError(null);
     try {
-      if (renameTarget.cable) await cableLabelDataSource!.setCableLabel(renameTarget.id, displayName || null);
+      if (renameTarget.cable && cableNaming.generate_cable_label) await cableLabelDataSource!.generateCableLabel(renameTarget.id, cableNaming.cable_label_template_id!);
+      else if (renameTarget.cable) await cableLabelDataSource!.setCableLabel(renameTarget.id, displayName || null);
       else await physicalObjectDisplayNameWriteDataSource!.renamePhysicalObject(renameTarget.id, displayName);
       if (await reload()) {
         setRenameTarget(null);
@@ -383,7 +389,10 @@ export function InfrastructureObjectsPage({
           pending={renaming}
           savedPendingRefresh={renameSavedPendingRefresh}
           fallback={renameTarget.cable ? renameTarget.label : undefined}
+          cableNaming={cableNaming}
+          cableLabelDataSource={cableLabelDataSource}
           onChange={setRenameValue}
+          onCableNamingChange={setCableNaming}
           onCancel={() => setRenameTarget(null)}
           onSave={() => void rename()}
           onRetryRefresh={() => void retryRenameRefresh()}
@@ -400,7 +409,10 @@ function RenameDialog({
   pending,
   savedPendingRefresh,
   fallback,
+  cableNaming,
+  cableLabelDataSource,
   onChange,
+  onCableNamingChange,
   onCancel,
   onSave,
   onRetryRefresh,
@@ -411,15 +423,18 @@ function RenameDialog({
   pending: boolean;
   savedPendingRefresh: boolean;
   fallback?: string;
+  cableNaming: CableNamingInput;
+  cableLabelDataSource?: CableLabelDataSource;
   onChange: (value: string) => void;
+  onCableNamingChange: (value: CableNamingInput) => void;
   onCancel: () => void;
   onSave: () => void;
   onRetryRefresh: () => void;
 }) {
   const { t } = useI18n();
-  const normalized = value.trim();
+  const normalized = (target.cable ? cableNaming.cable_label ?? '' : value).trim();
   const unchanged = target.cable
-    ? normalized === (target.userLabel ?? '') && !(!target.userLabel && fallback)
+    ? !cableNaming.generate_cable_label && normalized === (target.userLabel ?? '') && !(!target.userLabel && fallback)
     : normalized === target.label;
 
   return (
@@ -432,17 +447,10 @@ function RenameDialog({
         }}
       >
         <h2 id="rename-title">{target.cable ? t('catalog.renameCable') : t('catalog.renameObject')}</h2>
-        <label>
+        {target.cable ? <><CableNamingFields dataSource={cableLabelDataSource} disabled={pending || savedPendingRefresh} value={cableNaming} onChange={onCableNamingChange} />{fallback && !target.userLabel && <small>{t('catalog.cableFallbackHint', { name: fallback })}</small>}</> : <label>
           {t('catalog.name')}
-          <input
-            autoFocus
-            aria-label={t('catalog.name')}
-            value={value}
-            disabled={pending || savedPendingRefresh}
-            onChange={(event) => onChange(event.target.value)}
-          />
-          {fallback && !target.userLabel && <small>{t('catalog.cableFallbackHint', { name: fallback })}</small>}
-        </label>
+          <input autoFocus aria-label={t('catalog.name')} value={value} disabled={pending || savedPendingRefresh} onChange={(event) => onChange(event.target.value)} />
+        </label>}
         {error && <p className="catalog-dialog__error" role="alert">{error}</p>}
         <div className="catalog-dialog__actions">
           <button type="button" onClick={onCancel} disabled={pending}>
@@ -453,8 +461,8 @@ function RenameDialog({
               {t('catalog.retryRefresh')}
             </button>
           ) : (
-            <button type="submit" disabled={pending || (!target.cable && !normalized) || unchanged}>
-              {t('catalog.save')}
+            <button type="submit" disabled={pending || (!target.cable && !normalized) || unchanged || (target.cable && cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)}>
+              {target.cable && cableNaming.generate_cable_label ? t('cableNaming.generate') : t('catalog.save')}
             </button>
           )}
         </div>

@@ -1084,6 +1084,12 @@ class SetCableLabelRequest(BaseModel):
     label: str | None
 
 
+class GenerateCableLabelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    template_id: uuid.UUID
+
+
 class CableLabelSettingsDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
