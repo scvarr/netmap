@@ -7,24 +7,27 @@ Baseline: `HEAD = origin/main = f00bf087ebd67ac8279a5947bbad957d10f61801`
 ## Executive summary
 
 Аудит нашёл три наиболее вероятных источника непропорциональной стоимости
-будущих bounded changes:
+будущих bounded changes и один менее frequent concentration hotspot:
 
 1. `P1` — обязательная финальная full backend/frontend regression gate не
    имеет достаточно точного триггера и конфликтует по смыслу с более узким
    milestone guidance. Для небольшого изменения это создаёт test-selection и
    corrective-loop overhead, а не только runtime cost.
-2. `P1` — `CanonicalRepository` является реальным backend change hub: около
-   2905 строк и 30 прямых upstream dependents в GitNexus. Локальная правка
-   storage boundary требует широкого context cone и имеет critical blast-radius
-   signal.
-3. `P1` — frontend MapPage test family и backend global test cleanup усиливают
-   маленькие изменения: повторные page harnesses/моки и autouse cleanup всех
-   таблиц расширяют чтение и test work за пределы конкретного invariant.
+2. `P1` — frontend MapPage test family усиливает маленькие изменения через
+   повторные page harnesses и моки.
+3. `P1` — backend global test cleanup расширяет стоимость каждого E2E теста
+   через autouse cleanup всех таблиц.
+
+`P2` — `CanonicalRepository` остаётся важным architectural concentration
+hotspot (около 2905 строк и 30 прямых upstream dependents), но `0/100` recent
+touches и low/medium фактическая frequency не обосновывают отдельный cleanup
+milestone сейчас.
 
 Следующий bounded cleanup разумно ограничить уточнением validation gate,
 локализацией backend test setup и одним аккуратным MapPage test-harness slice.
-Дробление `MapPage.tsx`, `repository.py` или архитектуры не является выводом
-этого аудита.
+`CanonicalRepository` следует улучшать при естественном repository-touch
+milestone либо после появления evidence повторяющейся стоимости; отдельный
+repository refactor сейчас не рекомендуется.
 
 ## Method / evidence boundary
 
@@ -57,10 +60,8 @@ GitNexus index существует, но на момент аудита соо�
 **Симптом.** `AGENTS.md` требует full backend/frontend regression suites на
 final milestone boundary, если только broad/uncertain impact не требует их
 раньше. При этом `docs/00-implementation-constraints.md` говорит, что не
-каждый milestone обязан иметь полный E2E suite, а `docs/chatgpt.md` прямо
-описывает, что завершение milestone само по себе full suite не требует. README
-также задаёт один compose test-runner command, но не определяет более дешёвую
-область проверки.
+каждый milestone обязан иметь полный E2E suite. README также задаёт один
+compose test-runner command, но не определяет более дешёвую область проверки.
 
 **Evidence.** Frontend package script `test` — весь Vitest suite; inventory
 содержит 81 frontend test file и 66 backend test files. В AGENTS правило
@@ -81,7 +82,7 @@ change milestone boundary, затем выбирать между targeted и fu
 разделить milestone acceptance от optional/full regression evidence. Не менять
 код или тестовую архитектуру.
 
-### P1 — `CanonicalRepository` как backend change hub
+### P2 — `CanonicalRepository` как architectural concentration hotspot
 
 **Симптом.** `app/repository.py` — 2905 строк и class span от строки 301 до
 3082; в одном class сосредоточены persistence, validation и разные domain
@@ -99,22 +100,21 @@ incoming imports из resolver/catalog/main модулей. `impact` upstream п
 может быть вынужден читать большой class даже для bounded storage change;
 critical graph signal повышает обязательный scope reasoning и validation.
 
-**Частота:** medium/low по истории касаний, но overhead high при каждом таком
-изменении. **Выигрыш:** medium/high для repository-touch milestones. **Риск:**
-high — это canonical persistence boundary.
+**Частота:** low по истории касаний, с medium/high overhead при каждом таком
+изменении. **Выигрыш:** medium/high только для repository-touch milestones.
+**Риск:** high — это canonical persistence boundary.
 
-**Bounded corrective.** Только после отдельного impact-confirmed milestone:
-выделить один наиболее часто меняемый cohesive repository slice с сохранением
-canonical identity и transaction contracts, затем сравнить change cone до/после.
-Не дробить файл механически и не вводить compatibility layer.
+**Bounded corrective.** Улучшать только при естественном repository-touch
+milestone либо после evidence повторяющейся стоимости: выбрать один cohesive
+slice с сохранением canonical identity и transaction contracts и сравнить
+change cone до/после. Отдельный repository refactor сейчас не рекомендуется;
+не дробить файл механически и не вводить compatibility layer.
 
-### P1 — test setup и MapPage harness амплифицируют bounded changes
+### P1 — MapPage test harness amplification
 
 **Симптом.** Frontend MapPage behaviour распределён по 9 test files; шесть
 файлов имеют собственный `renderPage` и повторяют datasource/mocking setup.
-Backend `tests/conftest.py` содержит autouse `clean_database`, который перед
-каждым тестом последовательно удаляет 49 model tables с ручным dependency
-order.
+Backend setup рассматривается отдельно ниже.
 
 **Evidence.** MapPage family: 9 files, суммарно 90 `it`/test cases по
 inventory; `MapPage.savedMaps.test.tsx` — 241 строка, 42 теста и 328 `vi.fn`,
@@ -124,26 +124,41 @@ mutationLifecycle и savedMaps. `TopologyCanvas` при этом имеет то
 direct test files и входы MapPage + эти tests — это показывает, что широкая
 MapPage family, а не canvas size, является amplification surface.
 
-Backend evidence: autouse fixture вызывается всеми тестами, а cleanup вручную
+**Механизм agent cost.** Для локальной UI правки agent читает несколько
+вариантов почти одинакового page harness и синхронизирует mocks, поэтому
+изменение одного MapPage invariant расширяет context и test-selection work по
+нескольким файлам. Большой объём test code здесь является следствием
+повторного setup и широкого scope, а не количества тестов как такового.
+
+**Частота:** high для MapPage (27 touches за последние 100 commits; savedMaps
+test — 16). **Выигрыш:** medium/high. **Риск:** medium для harness extraction.
+
+**Bounded corrective.** Один shared MapPage test harness только для
+неизменяемой render/data-source части, без удаления behavioural cases и без
+broad test rewrite. Перед изменением сравнить targeted failure behaviour.
+
+### P1 — backend autouse database cleanup amplification
+
+**Симптом.** Backend `tests/conftest.py` содержит autouse `clean_database`,
+который перед каждым тестом последовательно удаляет 49 model tables с ручным
+dependency order.
+
+**Evidence.** Autouse fixture вызывается всеми тестами, а cleanup вручную
 перечисляет 49 таблиц. Это означает, что добавление модели/relationship может
 требовать изменения общего setup, а любой targeted E2E test наследует весь
 cleanup contract.
 
-**Механизм agent cost.** Для локальной UI правки agent читает несколько
-вариантов почти одинакового page harness и синхронизирует mocks; для backend
-изменения нужно учитывать общий destructive fixture и порядок удаления.
-Большой объём test code здесь является следствием повторного setup и широкого
-scope, а не количества тестов как такового.
+**Механизм agent cost.** Для backend изменения agent должен учитывать общий
+destructive fixture и порядок удаления; targeted E2E test получает setup scope,
+не связанный с его конкретным invariant. Это расширяет context и потенциальный
+corrective work, даже если сам behavioural change локален.
 
-**Частота:** high для MapPage (27 touches за последние 100 commits; savedMaps
-test — 16), medium для backend model changes. **Выигрыш:** medium/high.
-**Риск:** medium для harness extraction, high для изменения isolation/cleanup.
+**Частота:** medium для backend model changes. **Выигрыш:** medium. **Риск:**
+high для изменения isolation/cleanup semantics.
 
-**Bounded corrective.** Два независимых slice, не объединять в broad rewrite:
-(a) один shared MapPage test harness только для неизменяемой render/data-source
-части, без удаления behavioural cases; (b) отдельно проверить fixture scope и
-сделать cleanup contract локальнее либо явно generated, сохранив database
-isolation. Перед любым изменением сравнить targeted failure behaviour.
+**Bounded corrective.** Отдельно проверить fixture scope и сделать cleanup
+contract локальнее либо явно generated, сохранив database isolation. Не
+объединять с MapPage harness cleanup и не делать broad test rewrite.
 
 ### P2 — i18n surface часто затрагивается, но evidence corrective urgency ниже
 
@@ -196,7 +211,7 @@ L3 trace 1162, presentation 1035/891. Но `docs/README.md` прямо гово�
 | Surface | Context cost | Change fan-out | Test fan-out | Frequency of touch | Priority |
 |---|---|---:|---:|---:|---|
 | `AGENTS.md` full-regression gate | medium | project-wide gate | 147 test files at full gate | every milestone | P1 |
-| `app/repository.py` / `CanonicalRepository` | high | 30 direct upstream | broad, not fully enumerated | 0/100 recent commits | P1 |
+| `app/repository.py` / `CanonicalRepository` | high | 30 direct upstream | broad, not fully enumerated | 0/100 recent commits | P2 |
 | MapPage test family | high for MapPage work | 6 repeated page harnesses | 90 tests / 9 files | MapPage 27/100 | P1 |
 | `tests/conftest.py` autouse cleanup | medium | all DB tests | every test invokes 49-table cleanup | model changes recurring | P1 |
 | `frontend/src/i18n.tsx` | medium | 30 `useI18n` callers | locale/integration tests | 23/100 | P2 |
@@ -210,16 +225,16 @@ L3 trace 1162, presentation 1035/891. Но `docs/README.md` прямо гово�
 1. **P1 — clarify the validation gate.** Documentation-only acceptance rule with
    explicit final-boundary trigger, targeted-first default and failure
    classification. Highest leverage and lowest architectural risk.
-2. **P1 — localize shared test setup.** First measure which backend tests truly
-   require the full database reset and isolate only that contract; no suite
-   deletion and no schema change.
-3. **P1 — consolidate one MapPage harness slice.** Share only stable render and
+2. **P1 — consolidate one MapPage harness slice.** Share only stable render and
    datasource construction across the six files; preserve each test family and
    verify the resulting change cone. Do not touch `MapPage.tsx`.
-4. **P1/P2 follow-up — one repository seam.** Choose a frequently changing,
-   cohesive `CanonicalRepository` slice only after current usage is re-indexed
-   and impact is rechecked. This is the highest-risk item and should not be
-   bundled with test cleanup.
+3. **P1 — localize shared backend test setup.** First measure which backend
+   tests truly require the full database reset and isolate only that contract;
+   no suite deletion and no schema change.
+4. **P2 — repository concentration follow-up.** Address one cohesive
+   `CanonicalRepository` slice only when a natural repository-touch milestone or
+   repeated-cost evidence justifies it; do not start a standalone repository
+   refactor and do not bundle it with test cleanup.
 
 ## What not to do
 
