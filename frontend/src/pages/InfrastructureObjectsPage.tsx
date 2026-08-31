@@ -546,7 +546,7 @@ function Cables({
 
             return (
               <tr key={id}>
-                <td><Link to={objectLink(id)}>{item.label}</Link></td>
+                <td>{item.label}</td>
                 <td className="catalog-endpoint">
                   {part(item.endpoint_a)}
                 </td>
