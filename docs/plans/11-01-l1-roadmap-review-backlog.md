@@ -133,12 +133,12 @@ review. Окончательный порядок и принадлежност�
   immutable version/identity/provenance semantics.
 - Статус: TODO.
 
-### L1R-008 — Post-L1 UI/UX audit and shared design system
+### L1R-008 — Pre-L2 UI/UX audit and shared design system
 
 - ID: `L1R-008`
 - Категория: product/UX architecture direction.
 - Severity: N/A.
-- До L2: НЕТ.
+- До L2: ДА.
 - Зависимости: нет.
 - Краткий contract: один shared design system, несколько page archetypes,
   task-based usability validation и controlled surface-by-surface migration
@@ -146,8 +146,37 @@ review. Окончательный порядок и принадлежност�
 - Acceptance: audit определяет primitives/archetypes и migration slices без
   big-bang rewrite; Map/Blueprint canvas patterns сохраняются в рамках общих
   primitives; NetBox/Nautobot используются только как reference.
-- Placement: после functional freeze L1 и до серьезного public release/showcase;
-  не задерживает semantic L2 и не создает новый canonical документ сейчас.
+- Placement: после достаточного functional/semantic freeze L1 и до final
+  product acceptance / L1 PRODUCT COMPLETE. Это не network-semantics или
+  correctness blocker, но обязательная product-readiness работа до L2; не
+  создает новый canonical документ сейчас.
+- Статус: TODO.
+
+### L1R-011 — Pre-L2 product readiness / L1 PRODUCT COMPLETE boundary
+
+- ID: `L1R-011`
+- Категория: product architecture / roadmap direction.
+- Severity: N/A.
+- Architectural/product priority: HIGH.
+- До L2: ДА.
+- Зависимости: decomposition существующих L1 readiness, workspace, identity,
+  access, sharing, accountability, UI/UX и acceptance concerns.
+- Краткий contract: `L1 semantic completeness → pre-L2 productization → L1
+  PRODUCT COMPLETE → L2 semantic expansion → L3`; L2 не начинается до
+  practically usable standalone/multi-user application.
+- Обязательные product families: L1 readiness и representative acceptance;
+  persisted workspace/isolation; authentication; workspace-context
+  authorization; usable sharing; multi-user activity/audit accountability;
+  UI/UX productization; final end-to-end product acceptance.
+- Scope discipline: не все capabilities из workspace architecture становятся
+  pre-L2 автоматически; fork/merge, export/import, packages, comments,
+  public links, groups, copy-on-write, templates/cloning и прочее требуют
+  отдельной product-necessity оценки.
+- Implementation scope: umbrella/decomposition item, не один milestone;
+  exact order, schemas, auth/ACL/sharing contracts и optional collaboration
+  scope остаются OPEN.
+- Placement note: текущую placement multi-user foundation после L2/L3 нужно
+  пересмотреть при final roadmap normalization.
 - Статус: TODO.
 
 ### L1R-009 — Task-based real-world L1 acceptance gate

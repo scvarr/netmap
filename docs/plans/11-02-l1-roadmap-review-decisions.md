@@ -111,9 +111,46 @@ contracts, выявленных текущим review. Обычные bugs бе�
   — только UX reference, не visual clone. Migration идет controlled
   surface-by-surface после audit и functional freeze; big-bang rewrite не
   вводится. Validation task-based, UX defects приоритетнее visual/style defects.
-- Характер: долговременное product/UX direction, не обязательная L1/L2
-  semantic capability.
+- Характер: долговременное product/UX direction; design system не является
+  L1/L2 network semantics, но является обязательной частью pre-L2
+  product-readiness boundary. Semantic L2 начинается только после согласованной
+  productization и final product acceptance.
 - Будущая синхронизация canonical docs: после завершения review потребуется
   синхронизировать `docs/architecture/presentation/05-presentation.md` и
   `docs/product/09-02-post-l1-product-roadmap.md`. Отдельный design-system
   plan/document создавать только при активации работы.
+
+## D-006 — Pre-L2 product-readiness gate
+
+- Fixed direction: L1 network semantic completion и L1 PRODUCT COMPLETE —
+  разные checkpoints. NetMap сначала доводится до полноценного practically
+  usable standalone/multi-user application, и только затем начинается semantic
+  expansion в L2/L3.
+- До L2 по product strategy располагаются application concerns: L1 readiness
+  и representative acceptance; persisted workspace/isolation; application
+  identity/authentication; workspace-context authorization/access control;
+  practically usable sharing; multi-user accountability/activity-audit; UI
+  consistency/productization и final product acceptance. Network core не
+  смешивается с user/workspace/presentation semantics.
+- Product boundary: `L1 semantic completeness → pre-L2 productization → L1
+  PRODUCT COMPLETE → L2 semantic expansion → L3`. Exact decomposition этих
+  families выполняется bounded milestones позже; это не один implementation
+  milestone.
+- Scope discipline: capabilities, перечисленные в workspace architecture,
+  не становятся pre-L2 автоматически. Fork/merge/compare, export/import,
+  `.netmap`, Blueprint packages, comments/annotations, PUBLIC_READ/public
+  links, groups, copy-on-write, map templates/cloning и иные optional
+  collaboration/portability features обязательны до L2 только при явной
+  product-necessity: без них приложение нельзя разумно считать practically
+  usable по итоговому contract. Это предотвращает бесконечное расширение
+  pre-L2 scope.
+- OPEN: exact milestone order; auth provider; ACL/storage strategy; sharing
+  semantics; required optional collaboration/portability capabilities; final
+  public-release gate.
+- Характер: обязательная product/roadmap boundary, не новая network semantics.
+- Будущая синхронизация canonical docs: при final normalization потребуется
+  пересмотреть `docs/product/09-02-post-l1-product-roadmap.md`, status/roadmap
+  placement в `docs/architecture/workspaces/07-workspaces.md`,
+  `docs/architecture/presentation/05-presentation.md` и релевантных final L1
+  completion/readiness docs. В частности, текущую placement multi-user
+  foundation после L2/L3 нужно пересмотреть.

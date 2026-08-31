@@ -245,17 +245,18 @@
   lifecycle/conflict semantics; backend/API changes отсутствуют.
 - Статус: RECORDED.
 
-## RVR-008 — Post-L1 UI/UX audit and shared design system
+## RVR-008 — Pre-L2 UI/UX audit and shared design system
 
 - Краткое описание: frontend развивался несколькими bounded passes и ощущается
   как набор independently evolved surfaces; следующий крупный визуально-UX
   этап требует audit и controlled migration, а не локального CSS cleanup.
 - Тип: product/UX architecture direction.
 - Severity: N/A.
-- Влияние на L1 completion: не blocker L1 COMPLETE; предпочтительное место —
-  после functional freeze L1 и до серьезного public release/showcase, без
-  обязательной задержки semantic L2.
-- Blocker до L2: нет.
+- Влияние на L1 completion: обязательная product-readiness работа до final
+  product acceptance / L1 PRODUCT COMPLETE; это не network-semantics blocker и
+  не correctness blocker.
+- Blocker до L2: да. Это обязательная product-readiness boundary до перехода к
+  L2, хотя не является network-semantics или correctness blocker.
 - Зависимости: нет.
 - Согласованное решение: один shared design system с несколькими page
   archetypes: inventory/list, object detail, form/editor, catalog/library,
@@ -269,8 +270,50 @@
   surface-by-surface migration. Usability validation task-based; UX defects
   (не найдено действие, непонятен термин/state, ошибка workflow) имеют приоритет
   над visual/style defects.
-- Roadmap placement: будущая design-system работа не создает сейчас новый
-  canonical документ или отдельный L1/L2 milestone.
+- Roadmap placement: после достаточного functional/semantic freeze L1 и до
+  final product acceptance / L1 PRODUCT COMPLETE. Работа не создает сейчас
+  новый canonical документ или отдельный implementation milestone.
+- Статус: RECORDED.
+
+## RVR-011 — Pre-L2 product readiness / L1 PRODUCT COMPLETE boundary
+
+- Краткое описание: L1 semantic completion недостаточен для перехода к L2;
+  NetMap должен сначала стать practically usable standalone/multi-user
+  application.
+- Тип: product architecture / roadmap direction.
+- Severity: N/A.
+- Architectural/product priority: HIGH.
+- Влияние на L1 completion: вводит обязательную product-readiness boundary
+  между semantic completion и L1 PRODUCT COMPLETE.
+- Blocker до L2: да.
+- Зависимости: decomposition существующих L1 readiness, workspace, identity,
+  access, sharing, accountability, UI/UX и acceptance concerns.
+- Согласованное решение: различать pipeline `L1 semantic completeness →
+  pre-L2 productization → L1 PRODUCT COMPLETE → L2 semantic expansion → L3`.
+  L1 semantic completeness означает достаточную physical-domain foundation и
+  основные L1 workflows; L1 PRODUCT COMPLETE означает practically usable
+  standalone application. L2 начинается только после L1 PRODUCT COMPLETE.
+- Обязательные product families до L2 (без exact milestones/schemas): L1
+  readiness и promoted real-world gaps; persisted NetworkWorkspace как
+  application isolation boundary и завершение implicit-default transition;
+  application identity/authentication; workspace-context authorization/access
+  control без user/ACL semantics в resolvers; practically usable sharing;
+  sufficient multi-user activity/audit accountability; UI/UX audit, shared
+  design system, controlled migration и task validation; final standalone/
+  multi-user end-to-end product acceptance.
+- Scope discipline: наличие capability в `docs/architecture/workspaces/07-workspaces.md`
+  само по себе не делает ее pre-L2 requirement. Fork/merge/compare,
+  export/import, library packages, comments/annotations, PUBLIC_READ/public
+  links, groups, optimized copy-on-write, map templates/cloning и иные
+  collaboration/portability features требуют отдельной product-necessity
+  оценки. Capability обязательна до L2 только если без нее приложение нельзя
+  разумно считать practically usable согласно итоговому product contract.
+- OPEN: exact milestone order; auth provider; ACL/storage strategy; sharing
+  semantics; optional collaboration/portability scope; точный final
+  public-release gate. Item — umbrella/decomposition, не один implementation
+  milestone и не основание для бесконечного расширения scope.
+- Roadmap impact: текущая placement полноценной multi-user foundation после
+  L2/L3 должна быть пересмотрена при final normalization.
 - Статус: RECORDED.
 
 ## RVR-009 — Task-based real-world L1 acceptance gate
