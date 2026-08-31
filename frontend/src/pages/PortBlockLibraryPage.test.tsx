@@ -10,10 +10,11 @@ afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); });
 
 describe('PortBlockLibraryPage', () => {
   it('renders Port Block records in a compact table and preserves the new-version route', async () => {
+    const dataSource = { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0', port_blocks: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'pb-1' }, name: 'Panel', version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v-3' }, version_number: 3, port_count: 48, connection_point_count: 12, network_port_count: 36, version_count: 5 }] }), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
     render(
       <MemoryRouter initialEntries={['/library/port-blocks']}>
         <Routes>
-          <Route path="/library/port-blocks" element={<PortBlockLibraryPage dataSource={{ loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0', port_blocks: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'pb-1' }, name: 'Panel', version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v-3' }, version_number: 3, port_count: 48, version_count: 5 }] }), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() }} />} />
+          <Route path="/library/port-blocks" element={<PortBlockLibraryPage dataSource={dataSource} />} />
           <Route path="/library/port-blocks/new" element={<h1>New port block</h1>} />
           <Route path="/library/port-blocks/pb-1/versions/v-3/edit" element={<h1>New version</h1>} />
         </Routes>
@@ -25,10 +26,15 @@ describe('PortBlockLibraryPage', () => {
     expect(document.querySelector('.port-block-card__preview')).toBeNull();
     expect(within(table).getByRole('columnheader', { name: 'Название' })).toBeInTheDocument();
     expect(within(table).getByRole('columnheader', { name: 'Текущая версия' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Точки подключения' })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: 'Сетевые порты' })).toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: 'Портов' })).toBeNull();
     expect(within(table).getByRole('rowheader', { name: 'Panel' })).toBeInTheDocument();
     expect(within(table).getByText('v3')).toBeInTheDocument();
     expect(within(table).getByText('5')).toBeInTheDocument();
-    expect(within(table).getByText('48')).toBeInTheDocument();
+    expect(within(table).getByText('12')).toBeInTheDocument();
+    expect(within(table).getByText('36')).toBeInTheDocument();
+    expect(dataSource.loadPortBlockVersion).not.toHaveBeenCalled();
 
     const createButton = screen.getByRole('button', { name: 'Создать группу портов' });
     expect(createButton).toBeVisible();
@@ -41,7 +47,7 @@ describe('PortBlockLibraryPage', () => {
   it('keeps the port group visible and explains an Object Blueprint conflict', async () => {
     const deletePortBlock = vi.fn().mockRejectedValue(new PortBlockDeletionConflictError());
     vi.spyOn(window, 'confirm').mockReturnValue(true);
-    render(<MemoryRouter><PortBlockLibraryPage dataSource={{ loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0', port_blocks: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'pb-1' }, name: 'Panel', version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v-1' }, version_number: 1, port_count: 1, version_count: 1 }] }), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn(), deletePortBlock }} /></MemoryRouter>);
+    render(<MemoryRouter><PortBlockLibraryPage dataSource={{ loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0', port_blocks: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'pb-1' }, name: 'Panel', version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v-1' }, version_number: 1, port_count: 1, connection_point_count: 0, network_port_count: 1, version_count: 1 }] }), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn(), deletePortBlock }} /></MemoryRouter>);
     await userEvent.click(await screen.findByRole('button', { name: 'Удалить группу портов' }));
     expect(deletePortBlock).toHaveBeenCalledWith('pb-1');
     expect(await screen.findByRole('alert')).toHaveTextContent('Группу портов нельзя удалить: она используется в шаблоне объекта.');

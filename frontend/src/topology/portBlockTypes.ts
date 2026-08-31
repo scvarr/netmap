@@ -6,7 +6,7 @@ export interface PortBlockPort { local_id: string; display_label: string; kind: 
 export interface CreatePortBlockRequest { name: string; ports: PortBlockPort[]; }
 export interface CreatePortBlockVersionRequest { port_block_name?: string; ports: PortBlockPort[]; }
 export interface PortBlockCreationDocument { schema_version: '1.0'; port_block_ref: PortBlockRef; version_ref: PortBlockVersionRef; }
-export interface PortBlockListItem { port_block_ref: PortBlockRef; name: string; version_ref: PortBlockVersionRef; version_number: number; port_count: number; version_count: number; }
+export interface PortBlockListItem { port_block_ref: PortBlockRef; name: string; version_ref: PortBlockVersionRef; version_number: number; port_count: number; connection_point_count: number; network_port_count: number; version_count: number; }
 export interface PortBlockListDocument { schema_version: '1.0'; port_blocks: PortBlockListItem[]; }
 export interface PortBlockVersionDocument { schema_version: '1.0'; port_block_ref: PortBlockRef; name: string; version_ref: PortBlockVersionRef; version_number: number; ports: PortBlockPort[]; }
 export interface PortBlockVersionSummary { port_block_ref: PortBlockRef; version_ref: PortBlockVersionRef; version_number: number; port_count: number; }

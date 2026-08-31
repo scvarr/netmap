@@ -855,6 +855,8 @@ class PortBlockListItemDocument(BaseModel):
     version_ref: PortBlockLibraryRef
     version_number: int = Field(ge=1)
     port_count: int = Field(ge=1)
+    connection_point_count: int = Field(ge=0)
+    network_port_count: int = Field(ge=0)
     version_count: int = Field(ge=1)
 
 

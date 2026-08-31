@@ -829,6 +829,8 @@ def list_port_blocks(session: Session = Depends(get_session)) -> PortBlockListDo
                 "version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.version_id},
                 "version_number": item.version_number,
                 "port_count": item.port_count,
+                "connection_point_count": item.connection_point_count,
+                "network_port_count": item.network_port_count,
                 "version_count": item.version_count,
             }
             for item in port_blocks

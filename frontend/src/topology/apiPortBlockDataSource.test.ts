@@ -4,6 +4,11 @@ import { ApiPortBlockDataSource, PortBlockDeletionConflictError } from './apiPor
 afterEach(() => vi.unstubAllGlobals());
 
 describe('ApiPortBlockDataSource deletion', () => {
+  it('reads current-version kind counts, including zero', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ schema_version: '1.0', port_blocks: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'block-1' }, name: 'Panel', version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'version-1' }, version_number: 2, port_count: 3, connection_point_count: 0, network_port_count: 3, version_count: 2 }] }))));
+    await expect(new ApiPortBlockDataSource().loadPortBlocks()).resolves.toMatchObject({ port_blocks: [expect.objectContaining({ connection_point_count: 0, network_port_count: 3 })] });
+  });
+
   it('deletes the exact PortBlock ID', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);

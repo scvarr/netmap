@@ -21,6 +21,8 @@ class PortBlockListItem:
     version_id: uuid.UUID
     version_number: int
     port_count: int
+    connection_point_count: int
+    network_port_count: int
     version_count: int
 
 
@@ -78,16 +80,19 @@ class PortBlockCatalog:
             )
             if version is None:
                 continue
+            counts_by_kind = dict(self.session.execute(
+                select(PortBlockPort.kind, func.count())
+                .where(PortBlockPort.port_block_version_id == version.id)
+                .group_by(PortBlockPort.kind)
+            ).all())
             items.append(PortBlockListItem(
                 port_block_id=port_block.id,
                 name=port_block.name,
                 version_id=version.id,
                 version_number=version.version_number,
-                port_count=self.session.scalar(
-                    select(func.count()).select_from(PortBlockPort).where(
-                        PortBlockPort.port_block_version_id == version.id
-                    )
-                ) or 0,
+                port_count=sum(counts_by_kind.values()),
+                connection_point_count=counts_by_kind.get("CONNECTION_POINT", 0),
+                network_port_count=counts_by_kind.get("NETWORK_PORT", 0),
                 version_count=self.session.scalar(
                     select(func.count()).select_from(PortBlockVersion).where(
                         PortBlockVersion.port_block_id == port_block.id

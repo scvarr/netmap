@@ -53,6 +53,8 @@ def test_port_block_creates_exact_immutable_layout_snapshot_and_lists_latest_ver
         "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "PortBlockVersion", "entity_id": version_id},
         "version_number": 1,
         "port_count": 2,
+        "connection_point_count": 1,
+        "network_port_count": 1,
         "version_count": 1,
     }]
     with SessionLocal() as session:
@@ -78,6 +80,9 @@ def test_port_block_next_version_preserves_prior_snapshot_and_local_identity_is_
     ]
     latest = client.get("/v1/library/port-blocks").json()["port_blocks"][0]
     assert latest["name"] == "24 x SFP+" and latest["version_number"] == 2 and latest["version_count"] == 2
+    assert latest["port_count"] == 2
+    assert latest["connection_point_count"] == 0
+    assert latest["network_port_count"] == 2
 
 
 @pytest.mark.parametrize("ports", [

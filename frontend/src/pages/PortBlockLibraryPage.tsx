@@ -46,12 +46,13 @@ export function PortBlockLibraryPage({ dataSource }: { dataSource: PortBlockData
       {actionError && <p role="alert" className="blueprint-editor__error">{actionError}</p>}
       {document.port_blocks.length === 0 ? <ViewState kind="empty" message={t('portBlock.library.empty')} /> : <div className="port-block-library-table-wrap">
         <table className="port-block-library-table">
-          <thead><tr><th scope="col">{t('portBlock.library.name')}</th><th scope="col">{t('portBlock.library.currentVersion')}</th><th scope="col">{t('portBlock.library.versions')}</th><th scope="col">{t('portBlock.library.ports')}</th><th scope="col">{t('portBlock.library.actions')}</th></tr></thead>
+          <thead><tr><th scope="col">{t('portBlock.library.name')}</th><th scope="col">{t('portBlock.library.currentVersion')}</th><th scope="col">{t('portBlock.library.versions')}</th><th scope="col">{t('portBlock.library.connectionPoints')}</th><th scope="col">{t('portBlock.library.networkPorts')}</th><th scope="col">{t('portBlock.library.actions')}</th></tr></thead>
           <tbody>{document.port_blocks.map((item) => <tr key={item.port_block_ref.entity_id}>
             <th scope="row">{item.name}</th>
             <td className="port-block-library-table__numeric">v{item.version_number}</td>
             <td className="port-block-library-table__numeric">{item.version_count}</td>
-            <td className="port-block-library-table__numeric">{item.port_count}</td>
+            <td className="port-block-library-table__numeric">{item.connection_point_count}</td>
+            <td className="port-block-library-table__numeric">{item.network_port_count}</td>
             <td><div className="port-block-library-table__actions"><Link className="blueprint-icon-action" to={`/library/port-blocks/${item.port_block_ref.entity_id}/versions/${item.version_ref.entity_id}/edit`}>{t('portBlock.library.newVersion')}</Link><button type="button" className="blueprint-icon-action blueprint-icon-action--danger" aria-label={t('portBlock.library.delete')} title={t('portBlock.library.delete')} onClick={() => void remove(item.port_block_ref.entity_id, item.name)}>×</button></div></td>
           </tr>)}</tbody>
         </table>
