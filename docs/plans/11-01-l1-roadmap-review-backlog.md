@@ -132,3 +132,60 @@ review. Окончательный порядок и принадлежност�
   acceptance, не отдельная architecture capability и без изменения
   immutable version/identity/provenance semantics.
 - Статус: TODO.
+
+### L1R-008 — Post-L1 UI/UX audit and shared design system
+
+- ID: `L1R-008`
+- Категория: product/UX architecture direction.
+- Severity: N/A.
+- До L2: НЕТ.
+- Зависимости: нет.
+- Краткий contract: один shared design system, несколько page archetypes,
+  task-based usability validation и controlled surface-by-surface migration
+  после L1 functional freeze; UX defects приоритетнее cosmetic style defects.
+- Acceptance: audit определяет primitives/archetypes и migration slices без
+  big-bang rewrite; Map/Blueprint canvas patterns сохраняются в рамках общих
+  primitives; NetBox/Nautobot используются только как reference.
+- Placement: после functional freeze L1 и до серьезного public release/showcase;
+  не задерживает semantic L2 и не создает новый canonical документ сейчас.
+- Статус: TODO.
+
+### L1R-009 — Task-based real-world L1 acceptance gate
+
+- ID: `L1R-009`
+- Категория: acceptance / product validation gate.
+- Severity: N/A.
+- До L2: ДА.
+- Зависимости: текущий roadmap acceptance stage и финальная L1 readiness.
+- Краткий contract: финальная acceptance stage проверяет representative
+  real-world dataset и end-to-end user tasks от object/Location/ports/cabling
+  до SavedMap, Region/cable presentation и L1 trace без знания internal
+  entities. Dataset наращивается постепенно без fixed taxonomy.
+- Acceptance: findings разделены на correctness, UX, visual/style,
+  performance/readiness и missing domain/authoring capability; конкретный gap
+  явно promoted только при доказанной невозможности representative workflow.
+- Placement: финальный gate, не implementation/feature milestone; не повышает
+  автоматически другие TODO.
+- Статус: TODO.
+
+### L1R-010 — Optical patch panel member-aware Blueprint evidence
+
+- ID: `L1R-010`
+- Категория: concrete domain/authoring capability evidence.
+- Severity: N/A (не bug).
+- Architectural/product priority: MEDIUM pending representative acceptance.
+- До L2: НЕТ ПОКА.
+- Зависимости: существующая canonical L1 cardinality/ConnectionMember
+  foundation.
+- Краткий contract: bounded Blueprint endpoint cardinality и member-aware
+  internal connectivity/fan-out для multi-member rear endpoint → front
+  endpoints; canonical L1 cardinality остается model resolution.
+- Acceptance candidate: fixture с explicit member-aware mapping от multi-member
+  rear endpoint к нескольким front endpoints; coarse/fiber-level forms —
+  examples, не fixed schema.
+- Scope: evidence/decomposition candidate, `NEEDS BOUNDED CONTRACT`; не
+  проектировать сейчас DTO/schema/UI/migration/upgrade compatibility/exact UX.
+  Не promoted в L1 blocker; revisit/promote только на real-world acceptance.
+- Будущая синхронизация review: уточнить evidence status старого optical/fiber
+  statement, если capability будет promoted/agreed.
+- Статус: TODO.

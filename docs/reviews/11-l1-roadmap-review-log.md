@@ -244,3 +244,100 @@
   открывает текущий exact current-version authoring flow; Delete сохраняет
   lifecycle/conflict semantics; backend/API changes отсутствуют.
 - Статус: RECORDED.
+
+## RVR-008 — Post-L1 UI/UX audit and shared design system
+
+- Краткое описание: frontend развивался несколькими bounded passes и ощущается
+  как набор independently evolved surfaces; следующий крупный визуально-UX
+  этап требует audit и controlled migration, а не локального CSS cleanup.
+- Тип: product/UX architecture direction.
+- Severity: N/A.
+- Влияние на L1 completion: не blocker L1 COMPLETE; предпочтительное место —
+  после functional freeze L1 и до серьезного public release/showcase, без
+  обязательной задержки semantic L2.
+- Blocker до L2: нет.
+- Зависимости: нет.
+- Согласованное решение: один shared design system с несколькими page
+  archetypes: inventory/list, object detail, form/editor, catalog/library,
+  canvas/workspace и modal/task flow. Shared primitives покрывают typography,
+  spacing, actions, forms, tables, dialogs, inspectors, selection states,
+  loading/error/empty/destructive states и keyboard/focus conventions.
+- Границы и метод: NetBox/Nautobot допустимы как UX reference для
+  inventory/admin surfaces, но не как visual clone. Map и Blueprint editor
+  сохраняют canvas/workspace patterns при общих primitives/state semantics.
+  Big-bang rewrite не планируется: audit → primitives/archetypes → controlled
+  surface-by-surface migration. Usability validation task-based; UX defects
+  (не найдено действие, непонятен термин/state, ошибка workflow) имеют приоритет
+  над visual/style defects.
+- Roadmap placement: будущая design-system работа не создает сейчас новый
+  canonical документ или отдельный L1/L2 milestone.
+- Статус: RECORDED.
+
+## RVR-009 — Task-based real-world L1 acceptance gate
+
+- Краткое описание: существующий real-world L1 acceptance stage требует
+  уточнения execution/product-quality contract, чтобы проверять NetMap на
+  representative network workflows, а не только на synthetic fixtures/tests.
+- Тип: acceptance / product validation gate.
+- Severity: N/A.
+- Влияние на L1 completion: обязательная acceptance stage; L1 COMPLETE
+  блокируется до ее прохождения.
+- Blocker до L2: да.
+- Зависимости: текущий roadmap acceptance stage и финальная L1 readiness.
+- Согласованное решение: acceptance выполняется на постепенно наращиваемом
+  representative dataset (например rack → room/server room → floor →
+  building/site без фиксации taxonomy) с реальными equipment types, port
+  layouts, physical connections и cable paths.
+- Проверяемые workflows: найти и создать object; создать/выбрать Location;
+  использовать ports; соединить equipment; построить/use SavedMap;
+  редактировать Region/cable presentation где применимо; выполнить L1 trace;
+  понять результат без знания internal implementation entities.
+- Findings: отдельно классифицировать correctness bug/regression, UX defect,
+  visual/style defect, performance/readiness issue и missing domain/authoring
+  capability. Acceptance может явно promote конкретный gap в pre-L2 blocker,
+  если representative workflow без него невозможно выполнить правдиво или
+  приемлемо; остальные TODO автоматически не повышаются.
+- Граница: это финальный acceptance gate, не feature/implementation milestone;
+  цель — проверить также sufficiency domain model, authoring и presentation.
+- Будущая синхронизация: при финальной normalization потребуется wording sync
+  с `docs/product/09-02-post-l1-product-roadmap.md` и, только если нужно,
+  policy/acceptance wording в `docs/plans/stabilization/10-02-stabilization-backlog.md`.
+- Статус: RECORDED.
+
+## RVR-010 — Optical patch panel member-aware Blueprint evidence
+
+- Краткое описание: конкретный optical patch panel use case (24 front
+  endpoints FP1...FP24, shared rear multi-member/splice side, trunk на rear и
+  LC patch cords на front) требует member-aware internal fan-out:
+  multifiber trunk → rear members → internal branches → front endpoints.
+- Тип: concrete domain/authoring capability evidence.
+- Severity: N/A (не bug).
+- Architectural/product priority: MEDIUM pending representative acceptance.
+- Влияние на L1 completion: concrete gap больше не purely speculative, но item
+  не promoted в L1 blocker; promotion возможна только во время real-world L1
+  acceptance, если representative equipment нельзя truthfully моделировать.
+- Blocker до L2: нет пока.
+- Подтвержденная граница: canonical L1 уже поддерживает
+  `ConnectionPoint.cardinality`, `Connection.cardinality` и explicit
+  `ConnectionMember` mapping. Текущая Blueprint/PortBlock authoring boundary
+  не выставляет cardinality на `BlueprintSlot`, хранит internal link только как
+  slot-to-slot keys, а materialization создает point/connection cardinality 1
+  с member 1 → member 1.
+- Рабочее название capability: Blueprint endpoint cardinality + member-aware
+  internal connectivity / fan-out. Future fixture: multi-member rear endpoint
+  → explicit member-aware internal mapping → multiple front endpoints.
+  Возможные coarse (`rear cardinality 24`, member N → front N) и fiber-level
+  (`rear cardinality 48`, pairs → duplex front members) формы — только examples,
+  не fixed schema.
+- Boundary: cardinality означает model resolution, а не обязательную universal
+  physical resolution; cable/duplex/fiber detail может иметь разную глубину по
+  требуемой tracing fidelity. Не проектируются сейчас DTO fields, PortBlock
+  schema, UI, migration, upgrade compatibility или exact mapping authoring UX;
+  всё это NEEDS BOUNDED CONTRACT.
+- Будущая синхронизация: минимум `docs/reviews/09-ui-ux-review.md` для удаления
+  или уточнения устаревшего purely-speculative предположения; при promotion/
+  agreement — bounded boundary в
+  `docs/architecture/blueprints/09-03-port-block-blueprint-architecture.md`
+  и product placement в `docs/product/09-02-post-l1-product-roadmap.md` только
+  если итоговый roadmap действительно разместит capability.
+- Статус: RECORDED.

@@ -97,3 +97,23 @@ contracts, выявленных текущим review. Обычные bugs бе�
   и `docs/product/09-02-post-l1-product-roadmap.md`. Возможно потребуется
   только ссылка/граница в `docs/architecture/l1/01-01-l1.md`; semantics
   `parent_object` менять не следует.
+
+## D-005 — One design system, multiple page archetypes
+
+- Решение: NetMap использует один shared design system и несколько page
+  archetypes: inventory/list, object detail, form/editor, catalog/library,
+  canvas/workspace и modal/task flow. Shared primitives/state semantics
+  унифицируют typography, spacing, actions, forms, tables, dialogs,
+  inspectors, selection, loading/error/empty/destructive states и
+  keyboard/focus conventions. Exact component architecture остается OPEN.
+- Product direction: Map и Blueprint editor могут иметь отличные canvas
+  interaction/layout patterns, но используют общие primitives. NetBox/Nautobot
+  — только UX reference, не visual clone. Migration идет controlled
+  surface-by-surface после audit и functional freeze; big-bang rewrite не
+  вводится. Validation task-based, UX defects приоритетнее visual/style defects.
+- Характер: долговременное product/UX direction, не обязательная L1/L2
+  semantic capability.
+- Будущая синхронизация canonical docs: после завершения review потребуется
+  синхронизировать `docs/architecture/presentation/05-presentation.md` и
+  `docs/product/09-02-post-l1-product-roadmap.md`. Отдельный design-system
+  plan/document создавать только при активации работы.
