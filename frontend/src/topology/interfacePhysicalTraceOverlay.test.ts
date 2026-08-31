@@ -26,4 +26,23 @@ describe('physicalTraceOverlayFor', () => {
     expect(overlay.highlightedConnectionMemberIds).toEqual(new Set(['member-1']));
     expect(overlay.highlightedNodeIds).toEqual(new Set(['panel']));
   });
+  it('identifies only the exact Cable when parallel Cables share one projection edge', () => {
+    const document = {
+      ...physical,
+      edges: [{
+        id: 'a-b', from_node_id: 'a', to_node_id: 'b', kind: 'L1_PHYSICAL_LINK', aggregate: true,
+        source_refs: [ref('Connection', 'connection-one'), ref('Connection', 'connection-two')],
+        attributes: { endpoint_pairs: [
+          { from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection-one', connection_member_id: 'member-one', cable_ref: ref('Cable', 'cable-one') },
+          { from_connection_point_id: 'a-2', from_member_index: 1, to_connection_point_id: 'b-2', to_member_index: 1, connection_id: 'connection-two', connection_member_id: 'member-two', cable_ref: ref('Cable', 'cable-two') },
+        ] },
+      }],
+    } satisfies TopologyProjectionDocument;
+    const result = artifact();
+    result.branches[0] = { ...result.branches[0], evidence_refs: [], edge_ids: ['one'] };
+    result.edges[0] = { ...result.edges[0], evidence_refs: [ref('Connection', 'connection-one'), ref('ConnectionMember', 'member-one')] };
+
+    expect(physicalTraceOverlayFor(result, document, 'first').highlightedCableIds)
+      .toEqual(new Set(['cable-one']));
+  });
 });

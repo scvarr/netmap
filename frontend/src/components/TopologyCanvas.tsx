@@ -452,6 +452,9 @@ export function TopologyCanvas({
       && cableIdForNode(edge.data.cableNode) === cableRouteDraft.cableId
       ? cableRouteDraft
       : undefined;
+    const tracedCableId = edge.data?.cableNode
+      ? cableIdForNode(edge.data.cableNode)
+      : null;
     const isSelected = edge.data?.continuation
       ? selection?.type === "continuation" &&
         selection.item.id === edge.data.continuation.id
@@ -460,10 +463,8 @@ export function TopologyCanvas({
           selection.item.id === edge.data.cableNode.id
         : selection?.type === "edge" &&
           selection.item.id === edge.data?.projection.id;
-    const isTraced = edge.data?.cableNode
-      ? (edge.data.supportingEdgeIds?.every((id) =>
-          traceOverlay?.highlightedEdgeIds.has(id),
-        ) ?? false)
+    const isTraced = tracedCableId !== null
+      ? (traceOverlay?.highlightedCableIds.has(tracedCableId) ?? false)
       : edge.data?.endpointPair
         ? (traceOverlay?.highlightedConnectionMemberIds.has(
             edge.data.endpointPair.connection_member_id,

@@ -5,9 +5,11 @@ export interface PhysicalTraceOverlay {
   highlightedNodeIds: Set<string>;
   highlightedEdgeIds: Set<string>;
   highlightedConnectionMemberIds: Set<string>;
+  /** Exact canonical Cable identities evidenced by the selected branch. */
+  highlightedCableIds: Set<string>;
 }
 
-const emptyOverlay = (): PhysicalTraceOverlay => ({ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set() });
+const emptyOverlay = (): PhysicalTraceOverlay => ({ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(), highlightedCableIds: new Set() });
 
 const sameEvidence = (left: PhysicalTraceEvidenceRef, right: { entity_type: string; entity_id: string }): boolean => (
   left.entity_type === right.entity_type && left.entity_id === right.entity_id
@@ -38,6 +40,20 @@ export const physicalTraceOverlayFor = (
   if (evidence.length === 0) return overlay;
 
   for (const edge of document.edges) {
+    for (const pair of edge.attributes.endpoint_pairs ?? []) {
+      const cable = pair.cable_ref;
+      if (
+        cable?.ref_type === 'CANONICAL_FACT'
+        && cable.entity_type === 'Cable'
+        && evidence.some((item) => (
+          sameEvidence(item, cable)
+          || (item.entity_type === 'Connection' && item.entity_id === pair.connection_id)
+          || (item.entity_type === 'ConnectionMember' && item.entity_id === pair.connection_member_id)
+        ))
+      ) {
+        overlay.highlightedCableIds.add(cable.entity_id);
+      }
+    }
     if (!edge.source_refs.some((ref) => evidence.some((item) => sameEvidence(item, ref)))) continue;
     overlay.highlightedEdgeIds.add(edge.id);
     for (const pair of edge.attributes.endpoint_pairs ?? []) if (evidence.some((item) => item.entity_type === 'ConnectionMember' && item.entity_id === pair.connection_member_id)) overlay.highlightedConnectionMemberIds.add(pair.connection_member_id);

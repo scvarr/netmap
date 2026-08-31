@@ -45,6 +45,7 @@ vi.mock('@xyflow/react', () => ({
     <div data-testid="flow">
       <svg>{edges.map((edge) => <path key={edge.id} data-testid={`svg-path-${edge.id}`} d="M0,0L1,1" />)}</svg>
       {edges.map((edge) => <output key={`route-${edge.id}`} data-testid={`route-${edge.id}`}>{edge.data?.cableRoute ? JSON.stringify(edge.data.cableRoute.waypoints) : 'no-route'}</output>)}
+      {edges.map((edge) => <output key={`traced-${edge.id}`} data-testid={`traced-${edge.id}`}>{String(Boolean(edge.animated))}</output>)}
       {nodes.map((node) => (
         <div key={node.id}>
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
@@ -488,7 +489,7 @@ describe('TopologyCanvas async layout boundary', () => {
     view.rerender(<TopologyCanvas document={document} selection={{ type: 'node', item: document.nodes[1] }} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
     expect(fitViewMock).toHaveBeenCalledTimes(1);
 
-    view.rerender(<TopologyCanvas document={document} selection={{ type: 'node', item: document.nodes[1] }} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(['physical-B']), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set() }} />);
+    view.rerender(<TopologyCanvas document={document} selection={{ type: 'node', item: document.nodes[1] }} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(['physical-B']), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(), highlightedCableIds: new Set() }} />);
     expect(fitViewMock).toHaveBeenCalledTimes(1);
 
     view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
@@ -502,10 +503,30 @@ describe('TopologyCanvas async layout boundary', () => {
     const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
     await screen.findByTestId('flow');
     await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
-    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(['physical-A']), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(['member-1']) }} />);
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(['physical-A']), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(['member-1']), highlightedCableIds: new Set() }} />);
     expect(screen.getByTestId('highlighted-members-physical-A')).toHaveTextContent('member-1');
     expect(layoutEngine).toHaveBeenCalledTimes(1);
     expect(fitViewMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('traces only the selected Cable when parallel Cables share supporting projection edges', async () => {
+    const document: TopologyProjectionDocument = {
+      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', gaps: [], warnings: [],
+      nodes: [{ id: 'a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [], attributes: {} }, { id: 'b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [], attributes: {} }], edges: [],
+    };
+    const cable = (id: string) => ({ id: `cable:${id}`, kind: 'CABLE', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'Cable', entity_id: id }], attributes: {} });
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async () => ({
+      nodes: flowFor(document).nodes,
+      edges: ['cable-one', 'cable-two'].map((id) => ({
+        id: `collapsed-cable:cable:${id}`, source: 'a', target: 'b', type: 'floating' as const,
+        data: { projection: { id: 'shared-edge', from_node_id: 'a', to_node_id: 'b', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableNode: cable(id), supportingEdgeIds: ['shared-edge'] },
+      })),
+    }));
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(['shared-edge']), highlightedConnectionMemberIds: new Set(), highlightedCableIds: new Set(['cable-one']) }} />);
+
+    await screen.findByTestId('flow');
+    expect(screen.getByTestId('traced-collapsed-cable:cable:cable-one')).toHaveTextContent('true');
+    expect(screen.getByTestId('traced-collapsed-cable:cable:cable-two')).toHaveTextContent('false');
   });
 
   it('keeps a locked node selectable but prevents its drag without rebuilding the scene', async () => {
