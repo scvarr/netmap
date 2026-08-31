@@ -455,15 +455,24 @@ The focused contract for the four spatial/presentation concepts is
 
 ### Location foundation
 
-**OPEN bounded L1 foundation**
+**Location.1 — IMPLEMENTED**
 
-Location remains a separate OPEN capability family. Its current semantic
-contract is [[architecture/presentation/09-spatial-location-mapreference-contract|defined here]]:
-canonical physical place, arbitrary depth, independent of SavedMap, with no
-fundamental Site/Building/Floor/Room/Rack/RackUnit backend types. No Location
-implementation is started by this plan update. Any future Region association
-is presentation assistance only and cannot make geometry a source of canonical
-membership or movement.
+- Stable canonical `Location` UUID identity; trimmed non-empty name; arbitrary-depth
+  hierarchy through an explicit optional parent only.
+- Optional arbitrary user-defined `type`; there is no enum, fixed taxonomy or
+  backend-interpreted classification.
+- Optional explicit canonical `PhysicalObject -> Location` association, independent
+  from SavedMap placement and Region geometry.
+
+**OPEN Location-family capabilities**
+
+- Location management UI/tree.
+- Location assignment UX for `PhysicalObject`.
+- `MapRegion -> Location` presentation association and assistance. It can never
+  make geometry a source of canonical membership or movement.
+
+The current semantic contract is
+[[architecture/presentation/09-spatial-location-mapreference-contract|defined here]].
 
 ### L1S.8 — MapReference / composed SavedMaps
 

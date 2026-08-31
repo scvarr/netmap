@@ -22,9 +22,10 @@ MapReference or any fixed Location taxonomy.
 
 Location образуют произвольную физическую иерархию любой глубины, ltree-like
 по смыслу. Конкретная технология хранения (например, `ltree`, adjacency list
-или другая) пока не фиксируется. Не вводятся фундаментальные backend-типы
-`Site`, `Building`, `Floor`, `Room`, `Rack` или `RackUnit`: такие значения могут
-быть kind/classification или metadata обычного Location.
+или другая) пока не фиксируется. `Location.type` — optional arbitrary
+user-defined string. Никакого enum, fixed taxonomy или backend-interpreted
+classification нет: «город», «этаж», «стойка», `Room`, `Rack` и `RackUnit` —
+лишь пользовательские строковые значения, а не фундаментальные backend-типы.
 
 `PhysicalObject` имеет явную optional canonical association с Location. Эта
 association и сама иерархия Location являются canonical facts;

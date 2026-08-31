@@ -107,9 +107,11 @@ Blueprint/template
 optional arbitrary user-defined type в arbitrary-depth physical tree. A
 `PhysicalObject` has an optional canonical Location association. Location
 не зависит от SavedMap и canvas coordinates и не выводится из polygon geometry.
-Room, Rack, Cabinet, Outdoor zone, Well, Splice enclosure, Shelf и Bay пока
-являются обычными Location kinds/classes, а не отдельными фундаментальными
-entity families. Batch helper для `U01..U42` — лишь создание дочерних Locations.
+Никакого enum, fixed taxonomy или backend-interpreted classification нет:
+«город», «этаж», «стойка», `Room`, `Rack`, `Cabinet`, `Outdoor zone`, `Well`,
+`Splice enclosure`, `Shelf` и `Bay` — только пользовательские строки `type`,
+а не отдельные фундаментальные entity families. Batch helper для `U01..U42` —
+лишь создание дочерних Locations.
 
 `MapRegion` — presentation of an area on one SavedMap. В будущем он может иметь
 optional association с Location, но это не меняет presentation-only nature:
