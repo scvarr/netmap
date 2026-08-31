@@ -22,36 +22,26 @@ consolidated presentation authoring panel. Cross-app visual unification оста
 
 ## Стратегический порядок
 
-**FIXED direction**
+**FIXED direction; подробный ordered execution roadmap:**
+[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]].
 
-1. Зафиксировать Location foundation и bounded Location ↔ MapRegion
-   presentation assistance.
-2. Выполнить L1S.8 MapReference / composed SavedMaps.
-3. Выполнить Cable.3 minimal metadata foundation.
-4. Закрыть MapCableRoute usability / assisted geometry: overlap-safe trace,
-   compact edit handles, straight segments, initial angle snapping/feedback и
-   обоснованные magnets.
-5. Закрыть mandatory stabilization/performance gate: все пункты backlog с
-   `До L2: ДА` и отдельно promoted L1 acceptance blockers; `До L2: НЕТ` не
-   блокируют L1 COMPLETE автоматически.
-6. Выполнить real-world L1 acceptance; это финальная acceptance stage, не новый
-   feature milestone.
-7. Только если acceptance покажет blocking pain ручного создания 100–500
-   объектов, добавить bounded CSV/JSON bootstrap importer.
-8. Объявить L1 COMPLETE и перейти к semantic presentation L2, а затем L3.
-9. Сформировать полноценную многопользовательскую основу NetMap:
-   authentication, ownership/isolation workspace, sharing/access control,
-   comments/annotations, activity/audit.
-10. Развивать portability и reusable content: workspace export/import,
-   packages библиотек Blueprint, а при реальной потребности — map templates
-   или cloning.
-11. После появления реальных L2/L3 UI use cases развивать observations,
-   collectors/adapters, dynamic maps и monitoring/health overlays.
+`L1 semantic completeness` не равен `L1 PRODUCT COMPLETE`. Последовательность
+такова: известные L1 correctness/workflow gaps → оставшиеся bounded L1
+capabilities → representative real-world L1 acceptance → promoted L1 gaps →
+pre-L2 UI/UX foundation → workspace/auth/access/sharing/accountability
+productization → controlled UI migration и stabilization → final product
+acceptance → `L1 PRODUCT COMPLETE` → semantic L2 → L3.
+
+Полноценная multi-user/application foundation находится до L2, а не после L2/L3.
+MapReference является bounded consumer composite/hierarchical presentation
+contract и не начинается как независимая standalone architecture.
 
 Location поставлен сразу после Regions: он даёт canonical смысл физического
-места, на который может опираться будущая Region assistance, но не смешивает
-canonical state с presentation geometry. MapReference/composed SavedMaps следует после этого,
-потому что navigation между SavedMaps не является Location hierarchy.
+места, на который может опираться Region assistance, но не смешивает canonical
+state с presentation geometry. MapReference/composed SavedMaps не является
+автоматически следующим standalone milestone: его placement и implementation
+зависят от reconciliation с общим hierarchical/composite presentation contract
+по roadmap 11.3.
 
 Порядок шагов после L2/L3 foundation может корректироваться по реальной
 product need. Это не повод расширять core «на всякий случай»: L2/L3 backend
@@ -63,10 +53,9 @@ Backend и API расширяются для конкретного UI/use case.
 
 **IMPLEMENTED pass; retained acceptance principles**
 
-Этот pass сделал L1 NetMap самостоятельным удобным рабочим инструментом, а не
-демонстрацией корректной архитектуры. Ниже сохранены его product principles и
-критерии пользовательской проверки; это не отдельная будущая работа до
-завершённого Region authoring.
+Этот pass сделал bounded L1 workflow надежнее и понятнее. Его принципы и
+критерии сохраняются, но `L1 PRODUCT COMPLETE` требует отдельной pre-L2
+productization и final acceptance по roadmap 11.3.
 
 Проверяется непрерывный пользовательский workflow:
 

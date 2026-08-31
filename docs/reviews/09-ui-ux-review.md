@@ -111,9 +111,19 @@ semantic projection с объяснимой aggregation/collapse, supporting evi
 aggregation. Точные grouping heuristics намеренно отложены до L2 UI work; принцип
 зафиксирован в [[architecture/presentation/05-presentation|presentation contract]].
 
-## Не является gate для L2
+## Не является automatic gate для L2
 
-После 09.4, L1S.7–L1S.9 и обязательной до-L2 stabilization старт L2 не должен
-ждать `PointMember`/`member_index` UI refinement, полный optical/fiber-member
-UX, ducts/bundles, вычисление физической длины кабеля или другие speculative L1
-extensions без конкретного use case.
+После 09.4, L1S.7–L1S.9, обязательной до-L2 stabilization и pre-L2
+productization L2 не следует понимать как L1 map с VLAN labels. Optical/
+fiber-member capability теперь имеет concrete optical patch-panel use case:
+gap находится в Blueprint/PortBlock authoring/materialization поверх уже
+member-aware canonical L1 foundation. Capability пока не promoted; promotion
+решается на representative real-world L1 acceptance, если без нее нельзя
+truthfully моделировать target equipment. Другие speculative extensions без
+конкретной необходимости не становятся обязательными автоматически.
+
+## Нормализация review status
+
+Этот исторический review остаётся audit trail. Текущий canonical execution
+order находится в [[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product
+completion]].

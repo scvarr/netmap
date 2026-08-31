@@ -4,6 +4,14 @@
 contracts, выявленных текущим review. Обычные bugs без contract impact сюда не
 добавляются.
 
+## Статус normalization
+
+Intake review завершен на текущем checkpoint. Decisions normalized в
+canonical target docs; текущий execution roadmap —
+[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]]. Этот
+файл остается audit trail/provenance, а новые decisions проходят отдельный
+bounded review.
+
 ## D-001 — Exact-evidence invariant для trace presentation
 
 - Решение: визуальная подсветка выбранной L1 trace branch следует exact

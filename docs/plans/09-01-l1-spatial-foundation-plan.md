@@ -472,6 +472,9 @@ The focused contract for the four spatial/presentation concepts is
 - PhysicalObject Detail provides readable canonical Location path plus explicit
   assign/change/clear. Both surfaces reload authoritative state after every
   acknowledged write and provide refresh-only retry when that reload fails.
+- Assignment picker has a pre-L2 UX refinement: search-first collapsible tree,
+  ancestor context and inline direct-child/root creation (`D-003`, `L1R-004`).
+  Location.1/Location.2 canonical/API foundation remains implemented.
 
 **Location.3 — IMPLEMENTED**
 
@@ -498,7 +501,10 @@ SavedMap membership. The external representation creates no new
 `Connection`, `PhysicalObject` or topology facts, and does not prove Location or
 physical containment. Exact external-port derivation, API and schema remain
 OPEN; no implementation plan is introduced here and no separate simple
-hyperlink object is defined. See the [[architecture/presentation/09-spatial-location-mapreference-contract|focused spatial contract]].
+hyperlink object is defined. Before implementation, MapReference must be
+reconciled with the shared hierarchical/composite presentation contract; the
+current ordered execution source is [[plans/11-03-pre-l2-product-completion|11.3
+Pre-L2 product completion]]. See the [[architecture/presentation/09-spatial-location-mapreference-contract|focused spatial contract]].
 
 ### Cable.3 — minimal Cable metadata foundation
 
@@ -581,14 +587,20 @@ bootstrap importer if manual setup is demonstrated to be a blocking usability
 problem. SNMP, LLDP, CMDB sync, and a generic integrations framework are not
 prebuilt.
 
-Only after this acceptance is L1 COMPLETE and the main product track moves to
-L2.
+This acceptance completes the semantic L1 gate only. `L1 PRODUCT COMPLETE`
+requires the pre-L2 productization and final product acceptance sequence in
+[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]] before
+the main product track moves to L2.
 
-## Что не является gate для L2
+## Что не является automatic gate для L2
 
-Следующие вещи не блокируют начало L2 до появления конкретного use case:
+Следующие future capabilities не становятся pre-L2 requirements автоматически;
+их placement определяется product necessity. При этом product-readiness
+families, явно зафиксированные в roadmap 11.3, обязательны до L1 PRODUCT
+COMPLETE.
 
-- detailed optical/fiber-member UX;
+- detailed optical/fiber-member UX (concrete evidence exists, but capability is
+  not promoted automatically; representative acceptance decides);
 - Cat6/OM3/OS2 inventory;
 - cable length calculation;
 - ducts/bundles;
@@ -599,8 +611,10 @@ L2.
 - LLDP/SNMP collectors;
 - full rack elevation/DCIM;
 - auto-layout;
-- multiuser/auth/comments/audit;
+- optional collaboration/portability features beyond the required workspace,
+  authentication, access, sharing and accountability product families;
 - sophisticated import framework;
-- perfect polish of every screen.
+- pixel-perfect polish of inactive or historical screens (active surfaces and
+  agreed design-system consistency remain pre-L2 scope).
 
 Принцип «довести L1 foundation» не должен превращаться в бесконечную L1-разработку.

@@ -54,6 +54,35 @@ canonical facts
 
 UI не создаёт параллельную topology model и не становится source of truth.
 
+## Normalized product/presentation direction
+
+`L1 semantic completeness` и `L1 PRODUCT COMPLETE` — разные checkpoints.
+Pre-L2 productization, UI consistency и final product acceptance должны
+завершиться до semantic L2; это product/application boundary, а не новая
+network semantics. Network core не смешивается с auth, workspace или ACL
+semantics.
+
+В соответствии с D-001 selected L1 trace presentation следует exact canonical
+evidence: shared PhysicalObject projection edge недостаточен для доказательства
+конкретного Cable, parallel Cable не подсвечивается только из-за shared edge,
+а collapse не расширяет trace truth.
+
+В соответствии с D-004 Projection может подавать данные в
+hierarchical/composite scene. Scene node derived и presentation-only, grouping
+basis explicit, one-way flow не выводит canonical facts из geometry или
+collapse/expand, а boundary connectivity сохраняет supporting refs/evidence.
+Universal parent не вводится; exact scene schema/persistence и layout details
+остаются OPEN.
+
+В соответствии с D-005 NetMap использует один shared design system и несколько
+page archetypes: inventory/list, object detail, form/editor, catalog/library,
+canvas/workspace и modal/task flow. Shared primitives включают typography,
+spacing, actions, forms, tables, dialogs, inspectors, selection and state
+semantics, accessibility/focus/keyboard conventions. Audit и controlled
+surface-by-surface migration — обязательная часть pre-L2 product readiness;
+Map и Blueprint остаются canvas/workspace archetypes. Это не big-bang rewrite и
+не pixel-perfect requirement для inactive surfaces.
+
 ## Язык интерфейса
 
 **FIXED**

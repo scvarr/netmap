@@ -620,3 +620,19 @@ API должен различать эти случаи через metadata/gaps
 ## Следующий шаг
 
 [[architecture/graph/02-05-cache-invalidation|02.5 Cache и invalidation]] фиксирует последнюю core backend policy: cache является только оптимизацией и не должен усложнять первую реализацию до появления measurements.
+
+## Hierarchical/composite scene direction (D-004)
+
+Projection может далее формировать hierarchical/composite scene между derived
+facts и layout/canvas. Composition/grouping basis должен быть explicit; composite
+presentation остается derived/read-only и не вводит universal canonical
+`Object.parent`. Location hierarchy, `PhysicalObject.parent_object`, SavedMap
+composition и future hosting relations сохраняют собственную semantics.
+
+Conceptual flow: `canonical/derived facts -> Projection ->
+hierarchical/composite scene -> layout/presentation -> canvas`. Collapse
+сохраняет supporting refs/evidence и explainable boundary connectivity; synthetic
+canonical Connection не создается. Exact DTO, schema и persistence не
+фиксируются. OPEN остаются hierarchy внутри ProjectionDocument или отдельный
+scene layer, persistence, geometry overrides, simultaneous bases и boundary
+attachment algorithm.

@@ -3,6 +3,15 @@
 Временный последовательный журнал текущего docs-only review перед
 пересборкой roadmap NetMap до L2.
 
+## Статус normalization
+
+Intake review завершен на текущем checkpoint. Согласованные decisions
+normalized в canonical target docs; текущий execution roadmap —
+[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]]. Этот
+файл остается audit trail/provenance. Новые L1 observations могут породить
+новые bounded review items, но canonical docs и roadmap 11.3 остаются source
+of truth.
+
 Окончательный порядок implementation items по milestone здесь не фиксируется.
 
 ## RVR-001 — Exact-evidence подсветка L1 trace branch

@@ -122,3 +122,22 @@ MapReference не является Location, не доказывает physical 
   canonical topology остаётся source of truth.
 - Location foundation и MapReference/composed SavedMaps — разные будущие
   capability families; они не объединяются в одну иерархию.
+
+## Normalized review boundaries
+
+Location.2 canonical/API foundation остается implemented, но assignment UX
+имеет pre-L2 refinement: search-first collapsible tree, ancestor context и
+inline direct-child/root create. Canonical Location semantics не меняются:
+`Location.type` остается optional arbitrary user value, без fixed taxonomy.
+
+MapReference является bounded consumer общего hierarchical/composite
+presentation mechanism, а не standalone parallel composition architecture.
+Pipeline: canonical/derived facts -> Projection -> hierarchical/composite scene
+-> layout/presentation -> canvas. Universal parent не вводится; Location и
+другие domain relations независимы. Region остается отдельной manual
+SavedMap-owned presentation geometry. MapReference schema/API и exact boundary
+algorithm остаются OPEN до bounded milestone.
+
+Rack layout может быть specialized presentation policy, но `Location.type` не
+становится backend-interpreted Rack taxonomy и rack occupancy semantics не
+фиксируются этим contract.

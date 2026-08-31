@@ -55,4 +55,8 @@
 - `UNKNOWN` принципиально отличается от `UNREACHABLE`.
 - Каждая существенная transition должна быть объяснима исходными facts/rules и их provenance.
 - Визуальное схлопывание участков пути не меняет canonical trace result.
+- Selected L1 branch presentation follows exact canonical evidence. A shared
+  PhysicalObject projection edge is insufficient to identify a specific Cable;
+  parallel Cable cannot highlight only from shared projected endpoints.
+  Presentation collapse cannot expand trace truth.
 - Реализация поиска может оптимизироваться независимо от семантики трассировки.

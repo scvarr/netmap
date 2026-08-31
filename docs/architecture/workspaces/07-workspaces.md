@@ -8,6 +8,22 @@
 
 > В какой независимой модели сети выполняются canonical writes, projections и traces?
 
+## Pre-L2 product-readiness placement
+
+Persisted `NetworkWorkspace`, authentication, workspace-context access control,
+practically usable sharing и sufficient multi-user accountability/activity-audit
+располагаются как application product-readiness families до L2. Exact bounded
+decomposition остается OPEN. Existing implicit default workspace is
+transitional and должен быть заменен workspace-aware application behavior.
+
+Это не меняет fixed semantics: workspace остается application isolation
+boundary, resolver работает в одном workspace-scoped repository/session, а
+network resolver/core не знает user, permissions или ACL semantics. Optional
+workspace features (fork, merge/compare, export/import, packages,
+comments/annotations, public links, groups, copy-on-write, templates/cloning и
+прочее) не являются pre-L2 автоматически и требуют отдельной product-necessity
+оценки.
+
 ## Мотивация
 
 NetMap должен поддерживать несколько независимых вариантов описания сети:

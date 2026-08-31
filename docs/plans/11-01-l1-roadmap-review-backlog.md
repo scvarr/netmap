@@ -4,6 +4,14 @@
 review. Окончательный порядок и принадлежность к milestone появятся только
 после завершения review.
 
+## Статус normalization
+
+Intake review завершен на текущем checkpoint. Items normalized в canonical
+target docs; текущий execution roadmap —
+[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]]. Этот
+backlog остается audit trail/provenance и не заменяет canonical roadmap. Новые
+observations могут породить новые bounded items.
+
 ## TODO items
 
 ### L1R-001 — Исправить exact-evidence подсветку L1 trace

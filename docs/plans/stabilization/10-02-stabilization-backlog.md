@@ -9,6 +9,12 @@ readiness work; весь backlog целиком не становится gate �
 TODO. Real-world acceptance может выявить новый конкретный blocker, но не
 повышает молча остальные пункты.
 
+Checkpoint wording: stabilization policy остается прежней — `До L2: ДА` и
+явно promoted blockers блокируют обязательный pre-L2 gate, а `До L2: НЕТ` не
+повышается автоматически. Финальная target boundary теперь
+`L1 PRODUCT COMPLETE` before semantic L2; весь backlog целиком не становится
+gate только из-за наличия TODO.
+
 В backlog должны оставаться синхронизированными реально открытые пункты; в
 частности, bounded reads, object details/inventory, projection и N+1 SQL,
 повторные object-level trace обходы и frontend computational hotspots — если
