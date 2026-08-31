@@ -53,8 +53,8 @@ describe('RU/EN localization integration', () => {
     await userEvent.click(screen.getByRole('button', { name: 'English' }));
     expect(screen.getByRole('heading', { name: 'Create object blueprint' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Blueprint name'), 'Карта');
-    expect(screen.getByLabelText('Logical Port Block')).toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText('Logical Port Block'), 'pb-1');
+    expect(screen.getByLabelText('Port Block')).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText('Port Block'), 'pb-1');
     expect(screen.queryByLabelText('Exact version')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Add Port Block' }));
     await waitFor(() => expect(document.querySelectorAll('.blueprint-composition-canvas__block')).toHaveLength(1));
