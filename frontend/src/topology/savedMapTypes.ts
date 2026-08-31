@@ -1,17 +1,19 @@
 import type { ProjectionSourceRef } from './types';
+import type { LocationRef } from './locationTypes';
 
 export interface SavedMapRef { entity_type: 'SavedMap'; entity_id: string }
 export type SavedMapView = 'physical' | 'logical';
 export type SavedMapViewKey = 'L1/PHYSICAL_OBJECT' | 'L2/DEVICE';
 export interface MapViewPosition { x: number; y: number; locked: boolean; display_width?: number }
-export interface MapPlacement { physical_object_ref: ProjectionSourceRef; positions: Partial<Record<SavedMapViewKey, MapViewPosition>> }
+/** `location_ref` is derived/live canonical context for this scene, not MapPlacement state. */
+export interface MapPlacement { physical_object_ref: ProjectionSourceRef; location_ref?: LocationRef | null; positions: Partial<Record<SavedMapViewKey, MapViewPosition>> }
 export interface MapCableRouteWaypoint { x: number; y: number }
 export interface MapCableRoute { cable_ref: ProjectionSourceRef; view: 'L1/PHYSICAL_OBJECT'; waypoints: MapCableRouteWaypoint[] }
 export interface MapRegionRef { entity_type: 'MapRegion'; entity_id: string }
 export interface MapRegionPoint { x: number; y: number }
 export interface MapRegionStyle { fill_color: string; fill_opacity: number; stroke_color: string; stroke_width: number; stroke_style: 'solid' | 'dashed' | 'dotted'; label_color?: string | null }
-export interface MapRegion { region_ref: MapRegionRef; label: string; points: MapRegionPoint[]; label_position?: MapRegionPoint | null; style: MapRegionStyle; z_order: number }
-export interface MapRegionWrite { label: string; points: MapRegionPoint[]; label_position?: MapRegionPoint | null; style: MapRegionStyle; z_order: number }
+export interface MapRegion { region_ref: MapRegionRef; location_ref?: LocationRef | null; label: string; points: MapRegionPoint[]; label_position?: MapRegionPoint | null; style: MapRegionStyle; z_order: number }
+export interface MapRegionWrite { label: string; points: MapRegionPoint[]; label_position?: MapRegionPoint | null; style: MapRegionStyle; z_order: number; location_id?: string | null }
 export interface MapTextAnnotationRef { entity_type: 'MapTextAnnotation'; entity_id: string }
 export interface MapTextAnnotation { annotation_ref: MapTextAnnotationRef; text: string; position: MapRegionPoint; text_color: string; font_size: number }
 export interface MapTextAnnotationWrite { text: string; position: MapRegionPoint; text_color: string; font_size: number }

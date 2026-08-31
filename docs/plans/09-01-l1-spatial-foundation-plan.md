@@ -473,10 +473,15 @@ The focused contract for the four spatial/presentation concepts is
   assign/change/clear. Both surfaces reload authoritative state after every
   acknowledged write and provide refresh-only retry when that reload fails.
 
-**OPEN Location-family capabilities**
+**Location.3 — IMPLEMENTED**
 
-- `MapRegion -> Location` presentation association and assistance. It can never
-  make geometry a source of canonical membership or movement.
+- `MapRegion -> optional Location` is SavedMap-owned presentation assistance,
+  with no containment, movement or geometry-to-Location inference.
+- The bounded SavedMap scene read carries live canonical Location refs for its
+  placed PhysicalObjects without per-object reads. Selected associated Regions
+  focus exact/descendant canonical Locations and merely dim unrelated objects.
+- Bounding drafts and diagnostics remain OPEN optional assistance; MapReference
+  remains a separate future family.
 
 The current semantic contract is
 [[architecture/presentation/09-spatial-location-mapreference-contract|defined here]].

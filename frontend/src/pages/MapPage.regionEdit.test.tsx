@@ -87,9 +87,9 @@ describe('MapPage Region properties and deletion', () => {
     const replaceRegion = vi.fn().mockResolvedValue(undefined);
     const maps: any = { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), replaceRegion, createMap: vi.fn() };
     await openProperties(maps);
-    fireEvent.change(screen.getByLabelText('Название'), { target: { value: '  Повторяющееся имя  ' } });
-    fireEvent.change(screen.getByLabelText('Цвет контура'), { target: { value: '#123123' } });
-    fireEvent.change(screen.getByLabelText('Стиль контура'), { target: { value: 'dotted' } });
+    fireEvent.change(screen.getAllByLabelText('Название').at(-1)!, { target: { value: '  Повторяющееся имя  ' } });
+    fireEvent.change(screen.getAllByLabelText('Цвет контура').at(-1)!, { target: { value: '#123123' } });
+    fireEvent.change(screen.getAllByLabelText('Стиль контура').at(-1)!, { target: { value: 'dotted' } });
     fireEvent.click(screen.getByText('move label'));
     expect(replaceRegion).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));

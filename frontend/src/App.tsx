@@ -75,6 +75,7 @@ export function App(props: AppProps) {
             physicalEndpointConnectionWriteDataSource={props.physicalEndpointConnectionWriteDataSource}
             savedMapDataSource={props.savedMapDataSource}
             catalogInventoryDataSource={props.catalogInventoryDataSource}
+            locationDataSource={props.locationDataSource}
           />}
         />
         <Route

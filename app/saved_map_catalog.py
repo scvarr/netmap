@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.map_region_geometry import MapRegionSpatialRelation, classify_map_region_polygons
-from app.models import Cable, MapCableRoute, MapPlacement, MapRegion, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import Cable, Location, MapCableRoute, MapPlacement, MapRegion, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -174,19 +174,19 @@ class SavedMapCatalog:
 
     def create_region(
         self, map_id: uuid.UUID, label: str, points: list[dict[str, float]], label_position: dict[str, float] | None,
-        style: dict[str, object], z_order: int,
+        style: dict[str, object], z_order: int, location_id: uuid.UUID | None,
     ) -> MapRegion:
         self._lock_map_for_region_write(map_id)
         self._validate_region_spatial_relation(map_id, points)
         region = MapRegion(map_id=map_id)
-        self._replace_region_state(region, label, points, label_position, style, z_order)
+        self._replace_region_state(region, label, points, label_position, style, z_order, location_id)
         self.session.add(region)
         self._flush()
         return region
 
     def replace_region(
         self, map_id: uuid.UUID, region_id: uuid.UUID, label: str, points: list[dict[str, float]],
-        label_position: dict[str, float] | None, style: dict[str, object], z_order: int,
+        label_position: dict[str, float] | None, style: dict[str, object], z_order: int, location_id: uuid.UUID | None,
     ) -> MapRegion:
         self._lock_map_for_region_write(map_id)
         region = self.session.scalar(select(MapRegion).where(
@@ -195,7 +195,7 @@ class SavedMapCatalog:
         if region is None:
             raise ValidationError("MapRegion does not exist", {"map_id": str(map_id), "region_id": str(region_id)})
         self._validate_region_spatial_relation(map_id, points, excluded_region_id=region.id)
-        self._replace_region_state(region, label, points, label_position, style, z_order)
+        self._replace_region_state(region, label, points, label_position, style, z_order, location_id)
         self._flush()
         return region
 
@@ -249,7 +249,11 @@ class SavedMapCatalog:
         return saved_map
 
     def _placements(self, map_id: uuid.UUID) -> tuple[MapPlacement, ...]:
-        return tuple(self.session.scalars(select(MapPlacement).options(selectinload(MapPlacement.view_positions)).where(
+        # The Location ref is live canonical context adjacent to a placement. Loading
+        # it here is bounded for the one SavedMap scene, never per-object API reads.
+        return tuple(self.session.scalars(select(MapPlacement).options(
+            selectinload(MapPlacement.view_positions), selectinload(MapPlacement.physical_object)
+        ).where(
             MapPlacement.map_id == map_id
         ).order_by(MapPlacement.physical_object_id)))
 
@@ -283,11 +287,14 @@ class SavedMapCatalog:
                     "conflicting_region_id": str(existing_region.id),
                 })
 
-    @staticmethod
     def _replace_region_state(
-        region: MapRegion, label: str, points: list[dict[str, float]], label_position: dict[str, float] | None,
-        style: dict[str, object], z_order: int,
+        self, region: MapRegion, label: str, points: list[dict[str, float]], label_position: dict[str, float] | None,
+        style: dict[str, object], z_order: int, location_id: uuid.UUID | None,
     ) -> None:
+        if location_id is not None and region.location_id != location_id:
+            # Only validates an explicit canonical reference; geometry never infers it.
+            if self.session.get(Location, location_id) is None:
+                raise ValidationError("Location does not exist", {"location_id": str(location_id)})
         region.label = label
         region.points = [{"x": point["x"], "y": point["y"]} for point in points]
         region.label_position = None if label_position is None else {
@@ -300,6 +307,7 @@ class SavedMapCatalog:
         region.stroke_style = str(style["stroke_style"])
         region.label_color = None if style["label_color"] is None else str(style["label_color"])
         region.z_order = z_order
+        region.location_id = location_id
 
     def _require_cable(self, cable_id: uuid.UUID) -> None:
         if self.session.get(Cable, cable_id) is None:

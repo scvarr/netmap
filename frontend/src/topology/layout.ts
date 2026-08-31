@@ -27,6 +27,7 @@ const loadElk = (): Promise<ELK> => {
 export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
   traceHighlighted?: boolean;
+  locationFocus?: 'match' | 'dim';
   traceHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;

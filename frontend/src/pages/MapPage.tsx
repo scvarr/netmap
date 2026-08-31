@@ -72,6 +72,9 @@ import type {
 import type { PhysicalEndpointConnectionCreationDocument, PhysicalEndpointConnectionWriteDataSource } from "../topology/physicalEndpointConnectionWriteTypes";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
 import { displayNodeLabel } from "../topology/presentation";
+import type { LocationDataSource, LocationDocument } from "../topology/locationTypes";
+import { locationPath } from "../topology/locationPresentation";
+import { locationDescendantIds } from "../topology/locationFocus";
 import { useI18n } from "../i18n";
 
 export { mapCandidateChoices } from "../components/MapInsertionPicker";
@@ -82,6 +85,7 @@ interface MapPageProps {
   deviceDetailsDataSource?: DeviceDetailsDataSource;
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
+  locationDataSource?: LocationDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   cableDeleteDataSource?: CableDeleteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
@@ -152,6 +156,7 @@ export function MapPage({
   dataSource,
   savedMapDataSource,
   catalogInventoryDataSource,
+  locationDataSource,
   physicalObjectDeleteDataSource,
   cableDeleteDataSource,
   physicalObjectDetailsDataSource,
@@ -198,6 +203,7 @@ export function MapPage({
   const [regionEdit, setRegionEdit] = useState<RegionEditOperation | null>(null);
   const [regionProperties, setRegionProperties] = useState<RegionPropertiesOperation | null>(null);
   const [regionDeletion, setRegionDeletion] = useState<RegionDeleteOperation | null>(null);
+  const [locations, setLocations] = useState<readonly LocationDocument[]>([]);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   const [selectedTextAnnotationId, setSelectedTextAnnotationId] = useState<string | null>(null);
   const [textAnnotationEdit, setTextAnnotationEdit] = useState<TextAnnotationOperation | null>(null);
@@ -238,8 +244,28 @@ export function MapPage({
   const textAnnotationOperationActive = Boolean(textAnnotationEdit || textAnnotationDeletion);
   const completeRegionDraft = useCallback(() => {
     setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'editing', selectedVertexIndex: null } : current);
-    if (activeMap) setRegionCreate({ mapId: activeMap.map_ref.entity_id, label: '', status: 'editing', error: null });
+    if (activeMap) setRegionCreate({ mapId: activeMap.map_ref.entity_id, label: '', locationId: null, status: 'editing', error: null });
   }, [activeMap]);
+  useEffect(() => {
+    let active = true;
+    if (!locationDataSource) { setLocations([]); return () => { active = false; }; }
+    void locationDataSource.loadLocations().then((items) => { if (active) setLocations(items); }).catch(() => { if (active) setLocations([]); });
+    return () => { active = false; };
+  }, [locationDataSource]);
+  const locationChoices = useMemo(() => locations.map((location) => ({
+    id: location.location_ref.entity_id,
+    path: locationPath([...locations], location.location_ref.entity_id) ?? location.name,
+  })).sort((left, right) => natural(left.path, right.path)), [locations]);
+  const locationFocusObjectIds = useMemo(() => {
+    if (viewMode !== 'physical' || !selectedRegionId || !activeMap) return null;
+    const region = activeMap.regions.find((item) => item.region_ref.entity_id === selectedRegionId);
+    const locationId = region?.location_ref?.entity_id;
+    if (!locationId) return null;
+    const focusedLocations = locationDescendantIds(locations, locationId);
+    return new Set(activeMap.placements
+      .filter((placement) => placement.location_ref && focusedLocations.has(placement.location_ref.entity_id))
+      .map((placement) => placement.physical_object_ref.entity_id));
+  }, [activeMap, locations, selectedRegionId, viewMode]);
   const objectSearchResults = useMemo(() => {
     const query = objectSearch.trim().toLocaleLowerCase();
     if (viewMode !== "physical" || !query) return [];
@@ -286,7 +312,6 @@ export function MapPage({
       setRegionEdit(null);
       setRegionProperties(null);
       setRegionDeletion(null);
-      setSelectedRegionId(null);
       setSelectedTextAnnotationId(null);
       setTextAnnotationEdit(null);
       setTextAnnotationDeletion(null);
@@ -1209,6 +1234,7 @@ export function MapPage({
       label_position: null,
       style: defaultMapRegionStyle(),
       z_order: nextMapRegionZOrder(activeMap.regions),
+      location_id: operation.locationId,
     };
     setRegionCreate((current) => current?.mapId === operation.mapId ? { ...current, status: 'saving', error: null } : current);
     try {
@@ -1279,7 +1305,7 @@ export function MapPage({
     const original = activeMap.regions.find((region) => region.region_ref.entity_id === selectedRegionId);
     if (!original) return;
     const copied = cloneRegion(original);
-    setRegionProperties({ mapId: activeMap.map_ref.entity_id, regionId: selectedRegionId, original: copied, label: copied.label, labelPosition: copied.label_position ? { ...copied.label_position } : null, style: { ...copied.style }, status: 'editing', error: null });
+    setRegionProperties({ mapId: activeMap.map_ref.entity_id, regionId: selectedRegionId, original: copied, label: copied.label, locationId: copied.location_ref?.entity_id ?? null, labelPosition: copied.label_position ? { ...copied.label_position } : null, style: { ...copied.style }, status: 'editing', error: null });
   }, [activeMap, regionOperationActive, selectedRegionId, textAnnotationOperationActive]);
 
   const regionPropertiesPreview = regionProperties ? {
@@ -1287,6 +1313,7 @@ export function MapPage({
     label: regionProperties.label,
     label_position: regionProperties.labelPosition ? { ...regionProperties.labelPosition } : null,
     style: { ...regionProperties.style },
+    location_ref: regionProperties.locationId ? { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: regionProperties.locationId } : null,
   } : undefined;
 
   const regionReplaceError = (reason: unknown) =>
@@ -1304,6 +1331,7 @@ export function MapPage({
       label_position: operation.labelPosition ? { ...operation.labelPosition } : null,
       style: { ...operation.original.style },
       z_order: operation.original.z_order,
+      location_id: operation.original.location_ref?.entity_id ?? null,
     };
     setRegionEdit((current) => current?.regionId === operation.regionId ? { ...current, status: 'saving', error: null } : current);
     try {
@@ -1357,7 +1385,7 @@ export function MapPage({
     }
     const operation = regionProperties;
     const request = ++regionOperationSequence.current;
-    const replacement = { label, points: operation.original.points.map(({ x, y }) => ({ x, y })), label_position: operation.labelPosition ? { ...operation.labelPosition } : null, style: { ...operation.style }, z_order: operation.original.z_order };
+    const replacement = { label, points: operation.original.points.map(({ x, y }) => ({ x, y })), label_position: operation.labelPosition ? { ...operation.labelPosition } : null, style: { ...operation.style }, z_order: operation.original.z_order, location_id: operation.locationId };
     setRegionProperties({ ...operation, status: 'saving', error: null });
     try { await savedMapDataSource.replaceRegion(operation.mapId, operation.regionId, replacement); }
     catch (reason) {
@@ -1808,6 +1836,7 @@ export function MapPage({
         </section>
         <PresentationAuthoringPanel
           regions={activeMap.regions ?? []} annotations={activeMap.text_annotations ?? []}
+          locationChoices={locationChoices}
           selectedRegionId={selectedRegionId} selectedAnnotationId={selectedTextAnnotationId}
           selectionDisabled={regionOperationActive || textAnnotationOperationActive}
           regionDraft={regionDraft} regionDraftValidation={regionDraftValidation}
@@ -2024,7 +2053,8 @@ export function MapPage({
                   : undefined}
                   regions={viewMode === "physical" ? activeMap?.regions : undefined}
                   textAnnotations={viewMode === "physical" ? activeMap?.text_annotations : undefined}
-                  selectedRegionId={physicalRegionMode && !regionEdit ? selectedRegionId : undefined}
+                  selectedRegionId={!regionEdit ? selectedRegionId : undefined}
+                  locationFocusObjectIds={locationFocusObjectIds}
                   regionMode={physicalRegionMode ? {
                     showReferenceOutlines: showRegionReferenceOutlines,
                     draft: regionDraft ?? undefined,

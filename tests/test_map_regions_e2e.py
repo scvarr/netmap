@@ -42,6 +42,46 @@ def test_regions_are_saved_map_presentation_state_and_replace_preserves_identity
         **region_payload("North"),
     }]
 
+
+def test_region_location_association_is_explicit_replaceable_and_deletion_does_not_block_location():
+    map_id = create_map(client, "Region location assistance")
+    root = client.post("/v1/locations", json={"name": "Building", "type": "Anything"})
+    assert root.status_code == 201
+    root_ref = root.json()["location_ref"]
+    replacement_location = client.post("/v1/locations", json={"name": "Floor", "parent_location_id": root_ref["entity_id"]})
+    assert replacement_location.status_code == 201
+    replacement_ref = replacement_location.json()["location_ref"]
+
+    payload = {**region_payload(), "location_id": root_ref["entity_id"]}
+    created = client.post(f"/v1/maps/{map_id}/regions", json=payload)
+    assert created.status_code == 201
+    region_id = created.json()["region_ref"]["entity_id"]
+    assert created.json()["location_ref"] == root_ref
+    assert client.get(f"/v1/maps/{map_id}").json()["regions"][0]["location_ref"] == root_ref
+
+    changed = {**payload, "location_id": replacement_ref["entity_id"]}
+    assert client.put(f"/v1/maps/{map_id}/regions/{region_id}", json=changed).json()["location_ref"] == replacement_ref
+    cleared = {**changed, "location_id": None}
+    assert "location_ref" not in client.put(f"/v1/maps/{map_id}/regions/{region_id}", json=cleared).json()
+    assert "location_ref" not in client.get(f"/v1/maps/{map_id}").json()["regions"][0]
+
+    associated = client.put(f"/v1/maps/{map_id}/regions/{region_id}", json=changed)
+    assert associated.status_code == 200
+    # The Region reference is SET NULL, whereas a PhysicalObject assignment remains a canonical blocker.
+    assert client.delete(f"/v1/locations/{replacement_ref['entity_id']}").status_code == 204
+    saved = client.get(f"/v1/maps/{map_id}").json()
+    assert "location_ref" not in saved["regions"][0]
+
+
+def test_saved_map_placement_returns_live_location_context_without_presentation_membership():
+    map_id = create_map(client, "Bulk location context")
+    location = client.post("/v1/locations", json={"name": "Room"}).json()["location_ref"]
+    object_id, _ = create_object_with_point(client, "Located placement")
+    assert client.put(f"/v1/topology/physical-objects/{object_id}/location", json={"location_id": location["entity_id"]}).status_code == 200
+    assert client.post(f"/v1/maps/{map_id}/placements", json={"physical_object_id": object_id, "x": 1, "y": 2}).status_code == 201
+    placement = client.get(f"/v1/maps/{map_id}").json()["placements"][0]
+    assert placement["location_ref"] == location
+
     replacement = region_payload("South", z_order=-2)
     replacement.update({
         "points": [{"x": -5, "y": -5}, {"x": 45, "y": -5}, {"x": 45, "y": 45}],

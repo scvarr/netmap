@@ -1078,6 +1078,16 @@ Region authoring is implemented for the current Region family. This does not
 claim completion of global cross-app visual unification, which remains a separate
 future UI-polish task.
 
+**Location.3 — IMPLEMENTED.** Region create/properties editing offers a
+canonical Location picker with readable explicit-parent paths, selection/change/
+clear and no type interpretation. Full Region writes retain the supplied
+association, then reload the authoritative SavedMap with the existing
+refresh-only retry lifecycle. The current Physical SavedMap read includes live
+derived canonical Location refs adjacent to its placements (not stored
+MapPlacement state); selecting an associated Region highlights exact and
+descendant Location objects and dims unrelated objects without writes. Bounding
+drafts and diagnostics remain OPEN optional assistance.
+
 `MapReference` is a future presentation composition of one SavedMap inside
 another: a collapsed target-map object with drill-down, hidden internal target
 content, and only canonical connectivity crossings represented externally.

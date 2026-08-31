@@ -176,6 +176,17 @@ def _saved_map_document(detail) -> dict[str, object]:
                     "entity_type": "PhysicalObject",
                     "entity_id": placement.physical_object_id,
                 },
+                # Live canonical context for this SavedMap scene; it is not
+                # MapPlacement-owned state or Location membership.
+                "location_ref": (
+                    {
+                        "ref_type": "CANONICAL_FACT",
+                        "entity_type": "Location",
+                        "entity_id": placement.physical_object.location_id,
+                    }
+                    if placement.physical_object.location_id is not None
+                    else None
+                ),
                 "positions": {
                     str(position.view_key): {
                         "x": position.x,
@@ -203,6 +214,15 @@ def _saved_map_document(detail) -> dict[str, object]:
         "regions": [
             {
                 "region_ref": {"entity_type": "MapRegion", "entity_id": region.id},
+                "location_ref": (
+                    {
+                        "ref_type": "CANONICAL_FACT",
+                        "entity_type": "Location",
+                        "entity_id": region.location_id,
+                    }
+                    if region.location_id is not None
+                    else None
+                ),
                 "label": region.label,
                 "points": region.points,
                 "label_position": region.label_position,
@@ -531,10 +551,19 @@ def create_map_region(
             None if query.label_position is None else query.label_position.model_dump(),
             query.style.model_dump(),
             query.z_order,
+            query.location_id,
         )
         return {
             "region_ref": {"entity_type": "MapRegion", "entity_id": region.id},
-            **query.model_dump(),
+            "label": region.label,
+            "points": region.points,
+            "label_position": region.label_position,
+            "style": query.style.model_dump(),
+            "z_order": region.z_order,
+            "location_ref": (
+                {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": region.location_id}
+                if region.location_id is not None else None
+            ),
         }
 
 
@@ -554,10 +583,19 @@ def replace_map_region(
             None if query.label_position is None else query.label_position.model_dump(),
             query.style.model_dump(),
             query.z_order,
+            query.location_id,
         )
         return {
             "region_ref": {"entity_type": "MapRegion", "entity_id": region.id},
-            **query.model_dump(),
+            "label": region.label,
+            "points": region.points,
+            "label_position": region.label_position,
+            "style": query.style.model_dump(),
+            "z_order": region.z_order,
+            "location_ref": (
+                {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": region.location_id}
+                if region.location_id is not None else None
+            ),
         }
 
 

@@ -178,6 +178,8 @@ class MapPlacementDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     physical_object_ref: ProjectionSourceRef
+    # Derived/live canonical read context, never SavedMap-owned placement state.
+    location_ref: LocationRef | None = None
     positions: dict[Literal["L1/PHYSICAL_OBJECT", "L2/DEVICE"], MapViewPositionDocument]
 
 
@@ -292,15 +294,16 @@ class MapRegionPresentation(BaseModel):
 
 
 class CreateMapRegionRequest(MapRegionPresentation):
-    pass
+    location_id: uuid.UUID | None = None
 
 
 class ReplaceMapRegionRequest(MapRegionPresentation):
-    pass
+    location_id: uuid.UUID | None = None
 
 
 class MapRegionDocument(MapRegionPresentation):
     region_ref: MapRegionRef
+    location_ref: LocationRef | None = None
 
 
 class MapTextAnnotationRef(BaseModel):

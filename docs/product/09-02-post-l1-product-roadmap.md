@@ -101,7 +101,8 @@ Blueprint/template
 
 ## Canonical Location и MapRegion boundary
 
-**Location.1 canonical foundation and Location.2 management/PhysicalObject assignment UX IMPLEMENTED; Location.3 / Region assistance remains OPEN**
+**Location.1 canonical foundation, Location.2 management/PhysicalObject assignment UX,
+and Location.3 Region assistance IMPLEMENTED**
 
 `Location` — canonical physical place: stable identity, optional parent, name и
 optional arbitrary user-defined type в arbitrary-depth physical tree. A
@@ -113,8 +114,8 @@ optional arbitrary user-defined type в arbitrary-depth physical tree. A
 а не отдельные фундаментальные entity families. Batch helper для `U01..U42` —
 лишь создание дочерних Locations.
 
-`MapRegion` — presentation of an area on one SavedMap. В будущем он может иметь
-optional association с Location, но это не меняет presentation-only nature:
+`MapRegion` — presentation of an area on one SavedMap. Он может иметь optional
+association с Location, но это не меняет presentation-only nature:
 Location → presentation assistance, never reverse. Перемещение объекта на карте
 не меняет Location, выход за Region её не очищает, а polygon containment не
 является canonical membership.

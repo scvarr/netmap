@@ -14,6 +14,15 @@ UX over that API, with authoritative reload after each acknowledged write. It
 does not implement Region association/assistance, MapReference or any fixed
 Location taxonomy.
 
+Location.3 implements the optional `MapRegion -> Location` presentation
+association and bounded current-map focus assistance. The Region reference is
+not containment: polygon geometry, Region movement and object placement never
+derive or mutate canonical Location. SavedMap reads carry only live derived
+canonical Location context beside each placed object, not MapPlacement-owned
+Location state. A Region association uses `SET NULL` semantics on Location
+deletion, while canonical PhysicalObject assignments retain their Location.1
+deletion blocker semantics. MapReference remains a separate OPEN family.
+
 ## Четыре разных понятия
 
 ### Location
@@ -45,7 +54,9 @@ Region не имеет canonical containment/member semantics: объект вн
 не становится member Location или Region. Движение Region не двигает canonical
 objects и не меняет их Location. В будущем Region может иметь explicit
 association с Location для presentation assistance, но это не превращает
-polygon в источник canonical truth.
+polygon в источник canonical truth. It may optionally reference one canonical
+Location solely to focus current-map objects at that Location or explicit
+canonical descendants; unrelated objects may be dimmed, never hidden.
 
 Фактически реализованный Region family включает persistence/API, rendering,
 isolated mode, draft creation, geometry editor, assisted geometry, laminar

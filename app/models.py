@@ -35,6 +35,9 @@ class Location(Base):
     physical_objects: Mapped[list["PhysicalObject"]] = relationship(
         back_populates="location", passive_deletes=True
     )
+    map_regions: Mapped[list["MapRegion"]] = relationship(
+        back_populates="location", passive_deletes=True
+    )
 
 
 class PhysicalObject(Base):
@@ -176,10 +179,15 @@ class MapRegion(Base):
         CheckConstraint("stroke_style IN ('solid', 'dashed', 'dotted')", name="stroke_style_valid"),
         CheckConstraint("label_color IS NULL OR label_color ~ '^#[0-9A-Fa-f]{6}$'", name="label_color_hex"),
         Index("ix_map_regions_map_z_order", "map_id", "z_order"),
+        Index("ix_map_regions_location_id", "location_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
+    # Presentation assistance only. This is never containment or topology evidence.
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
+    )
     label: Mapped[str] = mapped_column(String(255), nullable=False)
     points: Mapped[list[dict[str, float]]] = mapped_column(JSONB, nullable=False)
     label_position: Mapped[dict[str, float] | None] = mapped_column(JSONB, nullable=True)
@@ -191,6 +199,7 @@ class MapRegion(Base):
     label_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
     z_order: Mapped[int] = mapped_column(Integer, nullable=False)
     saved_map: Mapped[SavedMap] = relationship(back_populates="regions")
+    location: Mapped[Location | None] = relationship(back_populates="map_regions")
 
 
 class MapTextAnnotation(Base):

@@ -17,6 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   toFlowProjection,
+  type DeviceNodeData,
   type DeviceFlowNode,
   type FlowProjection,
   type LogicalFlowEdge,
@@ -90,6 +91,8 @@ interface TopologyCanvasProps {
   regions?: readonly MapRegion[];
   textAnnotations?: readonly MapTextAnnotation[];
   selectedRegionId?: string | null;
+  /** Session-only Region→Location reading aid; no map or topology mutation follows. */
+  locationFocusObjectIds?: ReadonlySet<string> | null;
   regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; hiddenRegionId?: string | null; previewRegion?: MapRegion; editableLabelRegionId?: string | null; onMoveLabel?: (position: XYPosition) => void; annotationPlacement?: boolean; previewAnnotation?: MapTextAnnotation; selectedAnnotationId?: string | null; editableAnnotationId?: string | null; onAnnotationPlace?: (position: XYPosition) => void; onAnnotationSelect?: (annotationId: string) => void; onMoveAnnotation?: (annotationId: string, position: XYPosition) => void; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
 }
 
@@ -167,6 +170,7 @@ export function TopologyCanvas({
   regions = [],
   textAnnotations = [],
   selectedRegionId,
+  locationFocusObjectIds,
   regionMode,
 }: TopologyCanvasProps) {
   const { t } = useI18n();
@@ -410,7 +414,12 @@ export function TopologyCanvas({
     });
   if (!regionMode) latestReferenceOutlines.current = currentReferenceOutlines;
   const referenceOutlines = regionMode ? latestReferenceOutlines.current : currentReferenceOutlines;
-  const nodes = (regionMode ? [] : projection.nodes).map((node) => ({
+  const nodes = (regionMode ? [] : projection.nodes).map((node) => {
+    const objectId = physicalObjectIdForNode(node.data.projection);
+    const locationFocus: DeviceNodeData['locationFocus'] = locationFocusObjectIds && objectId
+      ? (locationFocusObjectIds.has(objectId) ? 'match' : 'dim')
+      : undefined;
+    return ({
     ...node,
     draggable: draggableNodeIds
       ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id)
@@ -419,6 +428,7 @@ export function TopologyCanvas({
         : undefined,
     data: {
       ...node.data,
+      locationFocus,
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
       traceHighlightedConnectionMemberIds:
         traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
@@ -431,7 +441,8 @@ export function TopologyCanvas({
       blueprintResizeEnabled: Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
-  }));
+    });
+  });
   const edges = (regionMode ? [] : projection.edges).map((edge) => {
     const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
