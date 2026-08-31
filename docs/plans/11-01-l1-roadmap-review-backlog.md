@@ -71,3 +71,21 @@ review. Окончательный порядок и принадлежност�
   authoritative refresh; сохранение Cable UUID/Connection/endpoints/routes;
   отсутствие PhysicalObject rename API.
 - Статус: TODO.
+
+### L1R-005 — Compact Port Block library table
+
+- ID: `L1R-005`
+- Категория: UX debt / visual consistency / library usability.
+- Severity: LOW.
+- До L2: ДА.
+- Зависимости: нет.
+- Краткий contract: основной Port Module / Port Block catalog использует
+  компактную таблицу с колонками name, current version, version count, port
+  count и actions; partial port thumbnails из catalog удаляются.
+- Acceptance: table surface без card/grid previews; все обязательные колонки
+  присутствуют; New version сохраняет текущий authoring flow; Delete сохраняет
+  lifecycle/conflict semantics; list API не расширяется.
+- Placement note: кандидат в bounded L1 UI-polish перед real-world
+  acceptance, не отдельная architecture capability и без изменения
+  immutable version/identity/provenance semantics.
+- Статус: TODO.

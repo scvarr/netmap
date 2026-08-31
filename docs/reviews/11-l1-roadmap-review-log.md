@@ -135,3 +135,34 @@
   возвращает technical fallback; (4) Cable UUID, Connection, endpoints и
   routes не меняются; (5) PhysicalObject write boundary не используется.
 - Статус: RECORDED.
+
+## RVR-005 — Compact Port Block library table
+
+- Краткое описание: Port Module / Port Block library сейчас использует grid
+  карточек с миниатюрами портов. Preview показывает ограниченное число
+  numbered cells и не является authoritative representation реального layout;
+  при росте библиотеки карточки также занимают слишком много места.
+- Тип: UX debt / visual consistency / library usability.
+- Severity: LOW.
+- Влияние на L1 completion: обязательный UI polish до финального L1
+  real-world acceptance; correctness не блокирует.
+- Blocker до L2: нет.
+- Зависимости: нет.
+- Backend/API capability: не требуется.
+- Подтвержденный scope: существующий `PortBlockListItem` уже содержит `name`,
+  `version_number`, `version_count` и `port_count`; list API расширять не
+  требуется.
+- Согласованное решение: основной catalog переводится на компактную таблицу
+  NetMap с колонками Название, Текущая версия, Версий, Портов и Действия.
+  Миниатюры из catalog удаляются. New version сохраняется как компактное row
+  action, Delete — как компактное destructive action с tooltip и accessible
+  label. Реальное visual/layout представление остается на version editor и
+  composition surfaces для конкретной immutable `PortBlockVersion`.
+- Границы: immutable version semantics, PortBlock identity, Blueprint
+  provenance и deletion lifecycle не меняются. Это кандидат в bounded L1
+  UI-polish перед real-world acceptance, не отдельная architecture capability.
+- Acceptance: library отображается таблицей без card/grid previews; строки
+  показывают name/current version/version count/port count; New version
+  открывает текущий exact current-version authoring flow; Delete сохраняет
+  lifecycle/conflict semantics; backend/API changes отсутствуют.
+- Статус: RECORDED.
