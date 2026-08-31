@@ -62,19 +62,19 @@ Pre-L2 productization, UI consistency и final product acceptance должны
 network semantics. Network core не смешивается с auth, workspace или ACL
 semantics.
 
-В соответствии с D-001 selected L1 trace presentation следует exact canonical
+Selected L1 trace presentation следует exact canonical
 evidence: shared PhysicalObject projection edge недостаточен для доказательства
 конкретного Cable, parallel Cable не подсвечивается только из-за shared edge,
 а collapse не расширяет trace truth.
 
-В соответствии с D-004 Projection может подавать данные в
+Projection может подавать данные в
 hierarchical/composite scene. Scene node derived и presentation-only, grouping
 basis explicit, one-way flow не выводит canonical facts из geometry или
 collapse/expand, а boundary connectivity сохраняет supporting refs/evidence.
 Universal parent не вводится; exact scene schema/persistence и layout details
 остаются OPEN.
 
-В соответствии с D-005 NetMap использует один shared design system и несколько
+NetMap использует один shared design system и несколько
 page archetypes: inventory/list, object detail, form/editor, catalog/library,
 canvas/workspace и modal/task flow. Shared primitives включают typography,
 spacing, actions, forms, tables, dialogs, inspectors, selection and state

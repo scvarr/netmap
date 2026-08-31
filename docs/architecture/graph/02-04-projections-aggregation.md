@@ -621,7 +621,7 @@ API должен различать эти случаи через metadata/gaps
 
 [[architecture/graph/02-05-cache-invalidation|02.5 Cache и invalidation]] фиксирует последнюю core backend policy: cache является только оптимизацией и не должен усложнять первую реализацию до появления measurements.
 
-## Hierarchical/composite scene direction (D-004)
+## Hierarchical/composite scene direction
 
 Projection может далее формировать hierarchical/composite scene между derived
 facts и layout/canvas. Composition/grouping basis должен быть explicit; composite

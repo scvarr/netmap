@@ -47,10 +47,5 @@
 - [[reviews/09-ui-ux-review|L1 UI/UX review]]
 - [[reviews/10-01-audit-findings|Audit findings]]
 - [[reviews/10-03-performance-baseline|Performance baseline]]
-- [[reviews/11-l1-roadmap-review-log|11 L1 roadmap review log]] и
-  [[plans/11-01-l1-roadmap-review-backlog|11.1 review backlog]] /
-  [[plans/11-02-l1-roadmap-review-decisions|11.2 review decisions]] —
-  completed review/audit inputs и provenance; source of truth для execution
-  order — roadmap 11.3.
 
 Выбирайте документы по задаче: например, для L2 trace достаточно соответствующих контрактов в `architecture/l2/` и `architecture/tracing/`, а для UI — `architecture/presentation/` плюс нужный plan или review.

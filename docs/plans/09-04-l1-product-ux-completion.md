@@ -26,7 +26,8 @@ provenance constructs, а immutable Blueprint history не изменяется.
 3. **Пользовательская терминология.** В UI использовать «Портовый модуль» /
    `Port Module`. Внутренние architecture/code symbols `PortBlock` этим UX
    этапом не переименовываются. Текущая согласованная RU-терминология «Группа
-   портов / Группы портов» еще не означает, что L1R-006 выполнен.
+   портов / Группы портов» еще не означает, что соответствующая работа
+   выполнена.
 4. **Рабочий список портов объекта.** Natural ordering, компактные строки и
    отсутствие «Технических данных» в primary port list. Основные действия —
    компактные icon-actions с доступными labels/tooltips. Для подключённого
@@ -53,7 +54,7 @@ provenance constructs, а immutable Blueprint history не изменяется.
    contracts сохранены.
 
 Normalization note: current agreed pre-L2 RU terminology is «Группа портов» /
-«Группы портов». Ее implementation tracked by `L1R-006` / Phase A in
+«Группы портов». Ее implementation tracked by Phase A in
 [[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]] and is
 not claimed as implemented by this historical pass.
 

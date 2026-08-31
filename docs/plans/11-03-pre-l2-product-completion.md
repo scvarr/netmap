@@ -26,10 +26,10 @@ standalone/multi-user application. L2 не начинается до второ�
 
 ### Phase A — Known L1 correctness / workflow completion
 
-Закрыть bounded items `L1R-001` exact-evidence trace highlighting,
-`L1R-002` broken Cable catalog navigation, `L1R-004` Location assignment
-tree/search/inline-create, `L1R-005` compact Port Block table и `L1R-006` RU
-terminology «Группа портов / Группы портов». `L1R-005` и `L1R-006` могут быть
+Закрыть bounded items: exact-evidence trace highlighting, исправление broken
+Cable catalog navigation, Location assignment tree/search/inline-create,
+compact Port Block table и RU terminology «Группа портов / Группы портов».
+Компактная таблица Port Block и RU terminology могут быть
 одним cheap UI-polish slice, но остаются отдельными acceptance items. Это не
 общий design-system rewrite.
 
@@ -62,7 +62,7 @@ Findings классифицируются как correctness, UX, visual/style,
 performance/readiness или missing domain/authoring capability. Только конкретный
 доказанный gap может быть явно promoted.
 
-`L1R-010` optical patch panel — concrete evidence, не purely speculative; его
+Optical patch panel — concrete evidence, не purely speculative; его
 canonical member-aware L1 foundation уже существует, а Blueprint/PortBlock
 authoring/materialization пока cardinality=1 / 1:1. Capability не обязательна
 автоматически; если representative equipment нельзя truthfully моделировать,
@@ -135,6 +135,5 @@ architecture само по себе не делает ее pre-L2 requirement: �
 без нее разумно считать NetMap practically usable согласно итоговому product
 contract.
 
-Ссылки на review items — audit trail; текущим source of truth для execution
-order является этот roadmap. Новые bounded findings могут появляться в review,
-но не изменяют roadmap молча.
+Этот roadmap самостоятельно является source of truth для execution order. Новые
+bounded findings могут появляться в review, но не изменяют roadmap молча.

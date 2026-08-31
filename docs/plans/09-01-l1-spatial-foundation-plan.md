@@ -473,7 +473,7 @@ The focused contract for the four spatial/presentation concepts is
   assign/change/clear. Both surfaces reload authoritative state after every
   acknowledged write and provide refresh-only retry when that reload fails.
 - Assignment picker has a pre-L2 UX refinement: search-first collapsible tree,
-  ancestor context and inline direct-child/root creation (`D-003`, `L1R-004`).
+  ancestor context and inline direct-child/root creation.
   Location.1/Location.2 canonical/API foundation remains implemented.
 
 **Location.3 — IMPLEMENTED**
