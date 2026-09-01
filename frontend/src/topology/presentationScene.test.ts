@@ -34,6 +34,38 @@ describe('presentationSceneDocument', () => {
     ]);
   });
 
+  it('merges multiple endpoint pairs for one Cable while retaining every member evidence', () => {
+    const source = document([
+      { from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member-one', cable_ref: ref('Cable', 'cable') },
+      { from_connection_point_id: 'a-2', from_member_index: 2, to_connection_point_id: 'b-2', to_member_index: 2, connection_id: 'connection', connection_member_id: 'member-two', cable_ref: ref('Cable', 'cable') },
+    ]);
+    const scene = presentationSceneDocument(source);
+    const cableEdges = scene.edges.filter((edge) => edge.kind === 'cable');
+
+    expect(cableEdges).toHaveLength(1);
+    expect(new Set(scene.edges.map((edge) => edge.id)).size).toBe(scene.edges.length);
+    expect(cableEdges[0]).toMatchObject({
+      id: 'collapsed-cable:cable',
+      endpointPair: { connection_member_id: 'member-one' },
+      supportingProjectionEdgeIds: ['ab'],
+      cableEvidence: [
+        { endpointPair: { connection_member_id: 'member-one' }, projectionEdge: source.edges[0] },
+        { endpointPair: { connection_member_id: 'member-two' }, projectionEdge: source.edges[0] },
+      ],
+    });
+  });
+
+  it('leaves L2 projection edges one-to-one even when they contain artificial endpoint pairs', () => {
+    const source: TopologyProjectionDocument = {
+      ...document([{ from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member', cable_ref: ref('Cable', 'cable') }]),
+      layer: 'L2', detail_level: 'DEVICE',
+    };
+    const scene = presentationSceneDocument(source);
+
+    expect(scene.edges).toEqual([{ id: 'ab', source: 'a', target: 'b', kind: 'projection', projectionEdge: source.edges[0] }]);
+    expect(scene.composites).toEqual([]);
+  });
+
   it('keeps an off-map continuation as an evidence-backed presentation edge', () => {
     const source = document();
     source.l1_off_map_continuations = [{ id: 'continuation', local_node_id: 'a', local_physical_object_ref: ref('PhysicalObject', 'a'), local_connection_point_ref: ref('ConnectionPoint', 'a-1'), local_connection_point_display_name: 'A1', cable_ref: ref('Cable', 'cable'), cable_display_name: 'C-1', remote_physical_object_ref: ref('PhysicalObject', 'remote'), remote_display_name: 'Remote', remote_connection_point_ref: ref('ConnectionPoint', 'remote-1'), remote_connection_point_display_name: 'R1', source_refs: [ref('ConnectionMember', 'member')] }];

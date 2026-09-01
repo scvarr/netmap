@@ -16,6 +16,21 @@ export interface PresentationSceneDocument {
   detail_level: TopologyProjectionDocument['detail_level'];
   nodes: TopologyProjectionNode[];
   edges: PresentationSceneEdge[];
+  composites: PresentationSceneComposite[];
+}
+
+/** Scene-only future composition boundary; it never replaces topology nodes. */
+export interface PresentationSceneComposite {
+  id: string;
+  displayName: string;
+  memberNodeIds: string[];
+  boundaryNodeIds: string[];
+  compositionBasis: string;
+}
+
+export interface CableSceneEvidence {
+  endpointPair: PhysicalEndpointPair;
+  projectionEdge: TopologyProjectionEdge;
 }
 
 export interface PresentationSceneEdge {
@@ -28,6 +43,9 @@ export interface PresentationSceneEdge {
   endpointPair?: PhysicalEndpointPair;
   /** A display node which carries the exact canonical Cable reference. */
   cableNode?: TopologyProjectionNode;
+  /** All members and projection edges represented by a deduplicated Cable. */
+  cableEvidence?: CableSceneEvidence[];
+  supportingProjectionEdgeIds?: string[];
   continuation?: L1OffMapContinuation;
 }
 
@@ -43,43 +61,94 @@ const cableNodeFor = (pair: PhysicalEndpointPair): TopologyProjectionNode => {
   };
 };
 
-const sceneEdgesForProjection = (edge: TopologyProjectionEdge): PresentationSceneEdge[] => {
-  const pairs = edge.attributes.endpoint_pairs;
-  if (!pairs?.length) {
-    return [{ id: edge.id, source: edge.from_node_id, target: edge.to_node_id, kind: 'projection', projectionEdge: edge }];
-  }
-  return pairs.map((endpointPair) => {
-    const cable = endpointPair.cable_ref;
-    const isCable = cable?.ref_type === 'CANONICAL_FACT' && cable.entity_type === 'Cable';
-    return {
-      id: isCable
-        ? `collapsed-cable:${cable.entity_id}`
-        : `${edge.id}::member::${endpointPair.connection_member_id}`,
-      source: edge.from_node_id,
-      target: edge.to_node_id,
-      kind: isCable ? 'cable' : 'projection',
-      projectionEdge: edge,
-      endpointPair,
-      ...(isCable ? { cableNode: cableNodeFor(endpointPair) } : {}),
-    };
-  });
-};
+const isPhysicalProjection = (document: TopologyProjectionDocument): boolean => (
+  document.layer === 'L1' && document.detail_level === 'PHYSICAL_OBJECT'
+);
+
+const projectionSceneEdge = (edge: TopologyProjectionEdge): PresentationSceneEdge => ({
+  id: edge.id,
+  source: edge.from_node_id,
+  target: edge.to_node_id,
+  kind: 'projection',
+  projectionEdge: edge,
+});
 
 /** Form all display semantics before coordinates and edge geometry are computed. */
 export const presentationSceneDocument = (
   document: TopologyProjectionDocument,
-): PresentationSceneDocument => ({
-  layer: document.layer,
-  detail_level: document.detail_level,
-  nodes: [...document.nodes],
-  edges: [
-    ...document.edges.flatMap(sceneEdgesForProjection),
-    ...(document.l1_off_map_continuations ?? []).map((continuation) => ({
+): PresentationSceneDocument => {
+  if (!isPhysicalProjection(document)) {
+    return {
+      layer: document.layer,
+      detail_level: document.detail_level,
+      nodes: [...document.nodes],
+      edges: document.edges.map(projectionSceneEdge),
+      composites: [],
+    };
+  }
+
+  const edges: PresentationSceneEdge[] = [];
+  const cables = new Map<string, PresentationSceneEdge>();
+  for (const projectionEdge of document.edges) {
+    const pairs = projectionEdge.attributes.endpoint_pairs;
+    if (!pairs?.length) {
+      edges.push(projectionSceneEdge(projectionEdge));
+      continue;
+    }
+    for (const endpointPair of pairs) {
+      const cable = endpointPair.cable_ref;
+      const isCable = cable?.ref_type === 'CANONICAL_FACT' && cable.entity_type === 'Cable';
+      if (!isCable) {
+        edges.push({
+          id: `${projectionEdge.id}::member::${endpointPair.connection_member_id}`,
+          source: projectionEdge.from_node_id,
+          target: projectionEdge.to_node_id,
+          kind: 'projection',
+          projectionEdge,
+          endpointPair,
+        });
+        continue;
+      }
+
+      const evidence: CableSceneEvidence = { endpointPair, projectionEdge };
+      const existing = cables.get(cable.entity_id);
+      if (existing) {
+        existing.cableEvidence!.push(evidence);
+        if (!existing.supportingProjectionEdgeIds!.includes(projectionEdge.id)) {
+          existing.supportingProjectionEdgeIds!.push(projectionEdge.id);
+        }
+        continue;
+      }
+      const sceneEdge: PresentationSceneEdge = {
+        id: `collapsed-cable:${cable.entity_id}`,
+        source: projectionEdge.from_node_id,
+        target: projectionEdge.to_node_id,
+        kind: 'cable',
+        projectionEdge,
+        endpointPair,
+        cableNode: cableNodeFor(endpointPair),
+        cableEvidence: [evidence],
+        supportingProjectionEdgeIds: [projectionEdge.id],
+      };
+      cables.set(cable.entity_id, sceneEdge);
+      edges.push(sceneEdge);
+    }
+  }
+
+  return {
+    layer: document.layer,
+    detail_level: document.detail_level,
+    nodes: [...document.nodes],
+    edges: [
+      ...edges,
+      ...(document.l1_off_map_continuations ?? []).map((continuation) => ({
       id: `off-map-continuation:${continuation.id}`,
       source: continuation.local_node_id,
       target: continuation.local_node_id,
       kind: 'off-map-continuation' as const,
       continuation,
     })),
-  ],
-});
+    ],
+    composites: [],
+  };
+};

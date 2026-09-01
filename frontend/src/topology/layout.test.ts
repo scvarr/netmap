@@ -64,6 +64,7 @@ describe('ELK topology layout', () => {
       layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
       nodes: documentFor(['A', 'B'], [], 'L1', 'PHYSICAL_OBJECT').nodes,
       edges: [{ id: 'displayed-cable', source: 'A', target: 'B', kind: 'cable' }],
+      composites: [],
     };
 
     const flow = await toFlowProjection(scene);
