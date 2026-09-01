@@ -78,6 +78,13 @@ class SavedMapCatalog:
         self._flush()
         return variant
 
+    def delete_variant(self, map_id: uuid.UUID, variant_id: uuid.UUID) -> None:
+        variant = self._require_variant(map_id, variant_id)
+        if variant.name == "Основной":
+            raise ValidationError("Основной MapPresentationVariant cannot be deleted", {"variant_id": str(variant_id)})
+        self.session.delete(variant)
+        self._flush()
+
     def create_composite(self, map_id: uuid.UUID, name: str, physical_object_ids: list[uuid.UUID]) -> MapComposite:
         self._require_map(map_id)
         if len(set(physical_object_ids)) != len(physical_object_ids):

@@ -28,6 +28,7 @@ export interface SavedMapDataSource {
   deleteMap(mapId: string): Promise<void>;
   loadMap(mapId: string, variantId?: string): Promise<SavedMap>;
   createPresentationVariant?(mapId: string, name: string, sourceVariantId: string): Promise<SavedMap>;
+  deletePresentationVariant?(mapId: string, variantId: string): Promise<void>;
   createComposite?(mapId: string, name: string, physicalObjectIds: string[], variantId?: string): Promise<SavedMap>;
   addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
   movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;

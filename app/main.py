@@ -472,6 +472,12 @@ def create_map_presentation_variant(map_id: uuid.UUID, query: CreateMapPresentat
         return _saved_map_document(catalog.detail(map_id, variant.id))
 
 
+@app.delete("/v1/maps/{map_id}/presentation-variants/{variant_id}", status_code=204, responses={422: {"model": ErrorResponse}})
+def delete_map_presentation_variant(map_id: uuid.UUID, variant_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        SavedMapCatalog(session).delete_variant(map_id, variant_id)
+
+
 @app.post("/v1/maps/{map_id}/composites", response_model=SavedMapDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
 def create_map_composite(map_id: uuid.UUID, query: CreateMapCompositeRequest, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> SavedMapDocument:
     with session.begin():

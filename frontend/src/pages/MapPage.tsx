@@ -194,6 +194,7 @@ export function MapPage({
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [variantDeletion, setVariantDeletion] = useState<{ mapId: string; primaryVariantId: string } | null>(null);
   const [name, setName] = useState("");
   const [insertion, setInsertion] = useState<InsertionState | null>(null);
   const [contextAnchor, setContextAnchor] = useState<MapContextTarget | null>(null);
@@ -232,6 +233,7 @@ export function MapPage({
   const insertionSequence = useRef(0);
   const latestActiveMap = useRef<SavedMap | null>(null);
   const latestPhysicalDocument = useRef<TopologyProjectionDocument | null>(null);
+  const skipNextMapLoad = useRef<string | null>(null);
   const viewportCenter = useRef<(() => XYPosition) | null>(null);
   const consumedAddIntent = useRef<string | null>(null);
   const regionOperationSequence = useRef(0);
@@ -459,6 +461,48 @@ export function MapPage({
     [mapId, savedMapDataSource, variantId],
   );
 
+  const refreshDeletedPresentationVariant = async (deletion: { mapId: string; primaryVariantId: string }) => {
+    if (!savedMapDataSource) return;
+    const detail = await savedMapDataSource.loadMap(deletion.mapId, deletion.primaryVariantId);
+    skipNextMapLoad.current = `${deletion.mapId}/${deletion.primaryVariantId}`;
+    setMap(detail);
+    setVariantDeletion(null);
+  };
+
+  const retryPresentationVariantDeletionRefresh = async () => {
+    if (!variantDeletion) return;
+    try {
+      await refreshDeletedPresentationVariant(variantDeletion);
+    } catch {
+      // Keep the bounded retry visible; diagnostics stay inside the data source.
+    }
+  };
+
+  const deleteCurrentPresentationVariant = async () => {
+    if (!savedMapDataSource?.deletePresentationVariant || !activeMap) return;
+    const current = activeMap.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
+    const primary = activeMap.variants.find((item) => item.name === "Основной");
+    if (!current || !primary || current.name === "Основной" || !window.confirm(`Удалить компоновку «${current.name}»?`)) return;
+    try {
+      await savedMapDataSource.deletePresentationVariant(activeMap.map_ref.entity_id, current.variant_ref.entity_id);
+    } catch (reason) {
+      setError(errorMessage(reason, "Не удалось удалить компоновку карты."));
+      return;
+    }
+    const deletion = { mapId: activeMap.map_ref.entity_id, primaryVariantId: primary.variant_ref.entity_id };
+    setVariantDeletion(deletion);
+    setParams((currentParams) => {
+      const next = new URLSearchParams(currentParams);
+      next.set("variant", primary.variant_ref.entity_id);
+      return next;
+    });
+    try {
+      await refreshDeletedPresentationVariant(deletion);
+    } catch {
+      // Acknowledged deletion is never retried; only the primary read is retryable.
+    }
+  };
+
   useEffect(() => {
     if (!savedMapDataSource) return undefined;
     let active = true;
@@ -492,6 +536,12 @@ export function MapPage({
       setError(t("map.choose"));
       return undefined;
     }
+    const loadKey = `${mapId}/${variantId ?? ""}`;
+    if (skipNextMapLoad.current === loadKey) {
+      skipNextMapLoad.current = null;
+      return undefined;
+    }
+    if (variantDeletion?.mapId === mapId && variantDeletion.primaryVariantId === variantId) return undefined;
     let active = true;
     setError(null);
     void savedMapDataSource.loadMap(mapId, variantId ?? undefined).then(
@@ -502,7 +552,7 @@ export function MapPage({
     return () => {
       active = false;
     };
-  }, [mapId, maps, savedMapDataSource, variantId]);
+  }, [mapId, maps, savedMapDataSource, variantDeletion, variantId]);
 
   useEffect(() => {
     if (savedMapDataSource && !hasLoadedMap) {
@@ -1740,6 +1790,7 @@ export function MapPage({
               if (!variantName?.trim() || !savedMapDataSource?.createPresentationVariant) return;
               void savedMapDataSource.createPresentationVariant(activeMap.map_ref.entity_id, variantName.trim(), activeMap.active_variant_ref.entity_id).then((detail) => { setMap(detail); setParams((current) => { const next = new URLSearchParams(current); next.set("variant", detail.active_variant_ref.entity_id); return next; }); }).catch(() => setError("Не удалось создать компоновку карты"));
             }}>Создать копию компоновки…</button>
+            <button type="button" disabled={activeMap.variants.find((item) => item.name === "Основной")?.variant_ref.entity_id === activeMap.active_variant_ref.entity_id || !savedMapDataSource?.deletePresentationVariant} onClick={() => void deleteCurrentPresentationVariant()}>Удалить текущую компоновку…</button>
           </>
         )}
         {!legacy && (
@@ -2005,6 +2056,7 @@ export function MapPage({
         onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("map.deleteCableFailed")))); }}
       />}
       {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
+      {variantDeletion && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
       {error && <p role="alert">{error}</p>}
       {document &&
