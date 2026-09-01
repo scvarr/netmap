@@ -43,14 +43,30 @@ compact Port Block table и RU terminology «Группа портов / Гру�
   подключения» and «Сетевые порты» columns, and counts for the current
   immutable PortBlockVersion without one version-details load per row.
 
-Current execution position: **Phase B.1 / Cable.3 complete -> next Phase B.2.**
+Current execution position: **Phase B.3 — next milestone.**
 
 ### Phase B — Remaining bounded L1 capability families
 
 1. `Cable.3`: optional mutable Cable label, deterministic fallback, clear,
    Cable-specific write boundary; label не меняет Cable identity, Connection,
    endpoints, routes или trace. Cable Details не создается только ради label.
-2. Reconcile composite/hierarchical presentation через
+2. **B.2 — hierarchical/composite presentation reconciliation — IMPLEMENTED.**
+   Фактически реализованная граница:
+
+   ```text
+   TopologyProjectionDocument
+       -> PresentationSceneDocument
+       -> layout
+       -> canvas
+   ```
+
+   Сцена является временным клиентским представлением; semantic reconciliation
+   выполняется до layout. Cable-backed endpoint pairs и off-map continuations
+   формируются на уровне сцены, layout отвечает за геометрию, а точная
+   Cable/ConnectionMember evidence сохраняется. Зафиксирован минимальный
+   scene-only контракт будущего composite: composite не является физическим
+   endpoint. B.3 MapReference остаётся следующим отдельным milestone.
+   Reconcile composite/hierarchical presentation через
    `canonical/derived facts -> Projection -> hierarchical/composite scene ->
    layout/presentation -> canvas`; no universal `Object.parent`. Свёрнутый
    composite block остаётся только представлением: он не становится концом
