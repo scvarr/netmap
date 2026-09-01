@@ -1994,8 +1994,8 @@ export function MapPage({
         target={contextAnchor}
         onClose={() => setContextAnchor(null)}
         onAdd={(anchor) => openInsertion(anchor)}
-        onSetLock={(id, locked) => void setPlacementLock(id, locked)}
-        onRemove={(id) => void remove(id)}
+        onSetLock={(id, locked) => void setPlacementLock(id, locked).catch((reason) => setError(errorMessage(reason, t("map.lockFailed"))))}
+        onRemove={(id) => void remove(id).catch((reason) => setError(errorMessage(reason, t("map.removeFailed"))))}
         onRenameCable={catalogInventoryDataSource && cableLabelDataSource ? (id, label) => void beginCableRename(id, label) : undefined}
         onEditRoute={(id) => beginCableRouteEdit(id)}
         onResetRoute={(id) => void resetCableRoute(id)}
@@ -2005,6 +2005,7 @@ export function MapPage({
         onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("map.deleteCableFailed")))); }}
       />}
       {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
+      {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
       {error && <p role="alert">{error}</p>}
       {document &&
         params.get("focus") &&
