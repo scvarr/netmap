@@ -29,13 +29,13 @@ export interface SavedMapDataSource {
   loadMap(mapId: string, variantId?: string): Promise<SavedMap>;
   createPresentationVariant?(mapId: string, name: string): Promise<SavedMap>;
   createComposite?(mapId: string, name: string, physicalObjectIds: string[], variantId?: string): Promise<SavedMap>;
-  addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number): Promise<void>;
-  movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number): Promise<void>;
-  setPositionLock(mapId: string, physicalObjectId: string, view: SavedMapView, locked: boolean): Promise<void>;
+  addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
+  movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
+  setPositionLock(mapId: string, physicalObjectId: string, view: SavedMapView, locked: boolean, variantId?: string): Promise<void>;
   removePlacement(mapId: string, physicalObjectId: string): Promise<void>;
   /** A successful resolution only acknowledges the route write; read SavedMap separately for authoritative state. */
-  setCableRoute(mapId: string, cableId: string, waypoints: MapCableRouteWaypoint[]): Promise<void>;
-  deleteCableRoute(mapId: string, cableId: string): Promise<void>;
+  setCableRoute(mapId: string, cableId: string, waypoints: MapCableRouteWaypoint[], variantId?: string): Promise<void>;
+  deleteCableRoute(mapId: string, cableId: string, variantId?: string): Promise<void>;
   /** Region writes only acknowledge persistence; reload SavedMap for authoritative state. */
   createRegion(mapId: string, region: MapRegionWrite): Promise<void>;
   replaceRegion(mapId: string, regionId: string, region: MapRegionWrite): Promise<void>;

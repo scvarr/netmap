@@ -508,10 +508,10 @@ def list_map_placements(map_id: uuid.UUID, session: Session = Depends(get_sessio
 
 
 @app.post("/v1/maps/{map_id}/placements", response_model=MapPlacementsDocument, response_model_exclude_none=True, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
-def add_map_placement(map_id: uuid.UUID, query: CreateMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+def add_map_placement(map_id: uuid.UUID, query: CreateMapPlacementRequest, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> MapPlacementsDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)
-        catalog.add_placement(map_id, query.physical_object_id, query.x, query.y, query.display_width)
+        catalog.add_placement(map_id, query.physical_object_id, query.x, query.y, query.display_width, variant_id)
         return _map_placements_document(catalog.placements(map_id))
 
 
@@ -577,10 +577,10 @@ def set_map_cable_route(
 def delete_map_cable_route(
     map_id: uuid.UUID,
     cable_id: uuid.UUID,
-    session: Session = Depends(get_session),
+    variant_id: uuid.UUID | None = None, session: Session = Depends(get_session),
 ) -> None:
     with session.begin():
-        SavedMapCatalog(session).delete_cable_route(map_id, cable_id)
+        SavedMapCatalog(session).delete_cable_route(map_id, cable_id, variant_id)
 
 
 @app.post("/v1/maps/{map_id}/regions", response_model=MapRegionDocument, status_code=201, responses={422: {"model": ErrorResponse}})

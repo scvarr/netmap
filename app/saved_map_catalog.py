@@ -93,7 +93,7 @@ class SavedMapCatalog:
         physical_object_id: uuid.UUID,
         x: float,
         y: float,
-        display_width: float | None = None,
+        display_width: float | None = None, variant_id: uuid.UUID | None = None,
     ) -> MapPlacement:
         self._require_map(map_id)
         if self.session.get(PhysicalObject, physical_object_id) is None:
@@ -106,7 +106,7 @@ class SavedMapCatalog:
             })
         placement = MapPlacement(map_id=map_id, physical_object_id=physical_object_id)
         placement.view_positions.append(MapViewPosition(
-            variant_id=self._require_variant(map_id, None).id, view_key=MapViewKey.PHYSICAL, x=x, y=y, display_width=display_width
+            variant_id=self._require_variant(map_id, variant_id).id, view_key=MapViewKey.PHYSICAL, x=x, y=y, display_width=display_width
         ))
         self.session.add(placement)
         self._flush()
@@ -195,14 +195,14 @@ class SavedMapCatalog:
         self._flush()
         return route
 
-    def delete_cable_route(self, map_id: uuid.UUID, cable_id: uuid.UUID) -> None:
-        self._require_map(map_id)
+    def delete_cable_route(self, map_id: uuid.UUID, cable_id: uuid.UUID, variant_id: uuid.UUID | None = None) -> None:
+        variant = self._require_variant(map_id, variant_id)
         route = self.session.scalar(
             select(MapCableRoute)
             .where(
                 MapCableRoute.map_id == map_id,
                 MapCableRoute.cable_id == cable_id,
-                MapCableRoute.view_key == MapViewKey.PHYSICAL,
+                MapCableRoute.view_key == MapViewKey.PHYSICAL, MapCableRoute.variant_id == variant.id,
             )
             .with_for_update()
         )
@@ -320,8 +320,8 @@ class SavedMapCatalog:
 
     def _require_variant(self, map_id: uuid.UUID, variant_id: uuid.UUID | None) -> MapPresentationVariant:
         query = select(MapPresentationVariant).where(MapPresentationVariant.map_id == map_id)
-        if variant_id is not None: query = query.where(MapPresentationVariant.id == variant_id)
-        variant = self.session.scalar(query.order_by(MapPresentationVariant.name, MapPresentationVariant.id))
+        query = query.where(MapPresentationVariant.name == "Основной") if variant_id is None else query.where(MapPresentationVariant.id == variant_id)
+        variant = self.session.scalar(query)
         if variant is None: raise ValidationError("MapPresentationVariant does not exist on SavedMap", {"map_id": str(map_id), "variant_id": str(variant_id) if variant_id else None})
         return variant
 

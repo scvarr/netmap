@@ -993,7 +993,7 @@ export function MapPage({
         id,
         viewMode,
         position.x,
-        position.y,
+        position.y, undefined, activeMap?.active_variant_ref.entity_id,
       );
       if (selectedMapId.current === targetMapId) {
         setMap((current) =>
@@ -1194,7 +1194,7 @@ export function MapPage({
     if (!savedMapDataSource || !cableRouteEdit || cableRouteEdit.status === "saving") return;
     const operation = cableRouteEdit;
     setCableRouteEdit({ ...operation, status: "saving", error: null });
-    try { await savedMapDataSource.setCableRoute(operation.mapId, operation.cableId, operation.draftWaypoints); }
+    try { await savedMapDataSource.setCableRoute(operation.mapId, operation.cableId, operation.draftWaypoints, activeMap?.active_variant_ref.entity_id); }
     catch {
       if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cableId === operation.cableId ? { ...current, status: "editing", error: t("map.routeEditorFailed") } : current);
       return;
@@ -1219,7 +1219,7 @@ export function MapPage({
     if (!savedMapDataSource || !activeMap || !requestedCableId || !(activeMap.cable_routes ?? []).some((route) => route.cable_ref.entity_id === requestedCableId)) return;
     const operation = { mapId: activeMap.map_ref.entity_id, cableId: requestedCableId, status: "pending" as const };
     setCableRouteReset(operation);
-    try { await savedMapDataSource.deleteCableRoute(operation.mapId, operation.cableId); }
+    try { await savedMapDataSource.deleteCableRoute(operation.mapId, operation.cableId, activeMap.active_variant_ref.entity_id); }
     catch (reason) { if (selectedMapId.current === operation.mapId) setCableRouteReset(null); setError(errorMessage(reason, t("map.routeEditorFailed"))); return; }
     try {
       const refreshed = await reloadMap(operation.mapId);
