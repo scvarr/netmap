@@ -43,7 +43,7 @@ compact Port Block table и RU terminology «Группа портов / Гру�
   подключения» and «Сетевые порты» columns, and counts for the current
   immutable PortBlockVersion without one version-details load per row.
 
-Current execution position: **Phase A complete -> next Phase B.1 / Cable.3.**
+Current execution position: **Phase B.1 / Cable.3 complete -> next Phase B.2.**
 
 ### Phase B — Remaining bounded L1 capability families
 
@@ -52,14 +52,40 @@ Current execution position: **Phase A complete -> next Phase B.1 / Cable.3.**
    endpoints, routes или trace. Cable Details не создается только ради label.
 2. Reconcile composite/hierarchical presentation через
    `canonical/derived facts -> Projection -> hierarchical/composite scene ->
-   layout/presentation -> canvas`; no universal `Object.parent`. Полный generic
-   scene engine не становится обязательным pre-L2 milestone.
+   layout/presentation -> canvas`; no universal `Object.parent`. Свёрнутый
+   composite block остаётся только представлением: он не становится концом
+   физического `Connection`/`Cable`. Реальное устройство с внешней связью
+   доступно как boundary device с его реальной внешней связью; внутренние
+   устройства и связи, не пересекающие границу, могут быть скрыты. Связь двух
+   свёрнутых блоков по-прежнему идёт между реальными устройствами внутри них.
+   Это не добавляет canonical `Object.parent` или новых topology facts; точный
+   `MapReference` contract остаётся отдельным B.3. Полный generic scene engine
+   не становится обязательным pre-L2 milestone.
 3. Реализовать MapReference/composed SavedMaps как bounded consumer общего
    composite contract, только после отдельного bounded MapReference
    contract с exact API/schema/interaction decisions.
 4. Закрыть MapCableRoute usability: overlap-safe exact trace presentation,
    compact edit handles, straight preview, initial angular snapping/feedback и
-   justified presentation-only magnets. NetMap не превращается в CAD.
+   justified presentation-only magnets. Режим редактирования продолжается до
+   явного Сохранить/Отмена; selection и клик по полотну его не отменяют,
+   Enter может сохранить, Esc — отменить. Опорные точки визуально лишь немного
+   толще линии, при существенно большей области захвата. Применяются общие
+   геометрические правила редактора Region (прямые сегменты, углы, длины,
+   angular snapping/feedback, добавление и перемещение точек). NetMap не
+   превращается в CAD.
+
+Отдельные OPEN product directions, не входящие в B.2: физическое соединение
+можно будет создавать выбором устройства через поиск по всему оборудованию с
+последующим выбором свободного порта из прокручиваемого/поискового списка,
+независимо от присутствия устройств на текущей SavedMap; текущий выбор порта
+кликом по карте остаётся быстрым способом. Для patch panel -> switch нужен
+будущий режим массового сопоставления портов с обязательным предварительным
+просмотром пар; точная атомарность операции OPEN. Выбор физических концов и
+задание маршрута линии на SavedMap — разные действия. Также жгуты остаются
+OPEN presentation direction: canonical Cable отдельны, общий маршрут и
+автоматическая «гребёнка» допустимы только как SavedMap presentation; общий
+участок явно показывает количество кабелей, а trace одного Cable не делает
+весь жгут его evidence. Exact persistence/schema/editor UX OPEN.
 
 ### Phase C — Representative real-world L1 semantic acceptance
 

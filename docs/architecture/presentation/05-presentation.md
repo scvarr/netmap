@@ -1289,6 +1289,15 @@ Canonical Cable/Connection connectivity и нарисованная на Saved M
 сохранённой geometry renderer использует deterministic fallback. Изменение
 waypoint никогда не меняет canonical topology.
 
+Для редактирования route режим сохраняется до явного Сохранить/Отмена:
+обычное изменение selection или клик по полотну его не отменяет, Enter может
+сохранить, Esc — отменить. Видимые опорные точки должны быть компактными
+(визуально лишь немного толще линии), при существенно большей области захвата
+мышью. Route editor использует применимые общие геометрические правила
+редактора Region: прямые сегменты, углы, длины, angular snapping/feedback,
+добавление и перемещение точек. Это не превращает NetMap в CAD; точные
+persistence/API детали остаются OPEN.
+
 ### Visual wiring
 
 **FIXED целевой сценарий**
@@ -1401,13 +1410,18 @@ future UI-polish task and is not implied by Region completion.
 **FIXED product concept; implementation remains OPEN**
 
 `MapReference` — composition одной SavedMap внутри другой: подробная карта
-стойки представляется на карте помещения одним collapsed/composite object,
-внутренние objects и connections target-map скрыты, а наружу выводятся только
-canonical connectivity crossings. Drill-down является частью этого composite
-presentation concept. Новые topology facts не создаются; crossings выводятся
-из canonical topology и membership target SavedMap. Это не Location, Region,
-physical containment и не canonical topology aggregate. Точный algorithm,
-API и schema остаются OPEN; отдельный простой hyperlink-object не вводится.
+стойки представляется на карте помещения одним collapsed/composite object.
+Свёрнутый блок — только представление, не endpoint физического
+`Connection`/`Cable`: реальное устройство с внешней связью доступно как
+boundary device с его реальной внешней связью; внутренние объекты и связи без
+пересечения границы могут быть скрыты. При связи двух свёрнутых блоков
+соединение остаётся между реальными устройствами внутри блоков. Drill-down
+является частью этого composite presentation concept. Новые topology facts не
+создаются; crossings выводятся из canonical topology и membership target
+SavedMap. Это не Location, Region, physical containment или canonical
+topology aggregate. Точный algorithm, API и schema остаются OPEN; отдельный
+простой hyperlink-object не вводится. Точный MapReference contract — отдельный
+B.3, а не часть B.2.
 
 Подробности и relationship matrix: [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract]].
 

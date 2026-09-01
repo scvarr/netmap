@@ -85,15 +85,23 @@ Membership объекта в SavedMap — это membership представле
 `MapReference` — presentation composition одной SavedMap внутри другой SavedMap.
 Например, подробная SavedMap стойки может отображаться на карте помещения как
 один collapsed/composite presentation object. На родительской карте внутренние
-объекты и внутренние связи target-map скрыты; наружу представляются только
-canonical connectivity crossings между объектами target SavedMap и
-canonical objects вне её membership.
+объекты и внутренние связи target-map, не пересекающие границу, могут быть
+скрыты; наружу представляются canonical connectivity crossings между объектами
+target SavedMap и canonical objects вне её membership. Реальное устройство с
+внешней связью должно оставаться доступным в представлении как boundary device
+вместе с его реальной внешней связью. Свёрнутый блок не становится концом
+физического `Connection`/`Cable`; при связи двух свёрнутых блоков endpoints
+остаются реальными устройствами внутри блоков.
 
 Внешнее представление не создаёт новые `Connection`, `PhysicalObject` или
 другие topology facts. Внешние connections должны следовать из canonical
 topology и membership target SavedMap, а не из вручную придуманной отдельной
 topology. Точный algorithm external-port derivation, API и schema пока не
 фиксируются.
+
+Это presentation invariant и не вводит canonical `Object.parent` или новые
+canonical topology facts. Точный `MapReference` contract остаётся отдельным
+bounded B.3 decision.
 
 Drill-down/open target map является частью этого composite presentation
 concept. Отдельный параллельный объект «простой hyperlink MapReference» не

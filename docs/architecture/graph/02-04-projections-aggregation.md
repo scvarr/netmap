@@ -626,8 +626,13 @@ API должен различать эти случаи через metadata/gaps
 Projection может далее формировать hierarchical/composite scene между derived
 facts и layout/canvas. Composition/grouping basis должен быть explicit; composite
 presentation остается derived/read-only и не вводит universal canonical
-`Object.parent`. Location hierarchy, `PhysicalObject.parent_object`, SavedMap
-composition и future hosting relations сохраняют собственную semantics.
+`Object.parent`. Свёрнутый composite block — только представление, не конец
+физического `Connection`/`Cable`: устройство с внешней связью остаётся
+доступным как boundary device с реальной внешней связью. Внутренние устройства
+и связи без пересечения границы могут быть скрыты, а связь двух свёрнутых
+блоков остаётся связью между реальными устройствами внутри них. Location
+hierarchy, `PhysicalObject.parent_object`, SavedMap composition и future
+hosting relations сохраняют собственную semantics.
 
 Conceptual flow: `canonical/derived facts -> Projection ->
 hierarchical/composite scene -> layout/presentation -> canvas`. Collapse
@@ -635,4 +640,24 @@ hierarchical/composite scene -> layout/presentation -> canvas`. Collapse
 canonical Connection не создается. Exact DTO, schema и persistence не
 фиксируются. OPEN остаются hierarchy внутри ProjectionDocument или отдельный
 scene layer, persistence, geometry overrides, simultaneous bases и boundary
-attachment algorithm.
+attachment algorithm. Exact `MapReference` contract остаётся отдельным B.3.
+
+## OPEN product directions: physical connection selection and cable bundles
+
+Удобное создание физического соединения — отдельное product direction, не
+часть composite presentation B.2. Быстрым способом остаётся выбор конечного
+порта кликом по карте; альтернативно устройство выбирается поиском по всему
+оборудованию, затем свободный порт — из прокручиваемого/поискового списка.
+Видимость обоих устройств на текущей SavedMap не является условием создания.
+Для patch panel -> switch нужен будущий bulk port matching с обязательным
+предпросмотром пар; точная атомарность bulk operation OPEN. Выбор физических
+концов и задание MapCableRoute — разные действия. Точный API/schema здесь не
+фиксируется.
+
+Жгут кабелей обоснован сценарием patch panel <-> switch, но не является
+обязательной частью B.4: canonical Cable остаются отдельными, а жгут существует
+только как SavedMap presentation. Несколько Cable могут иметь общий маршрут,
+короткие выходы от реальных портов — автоматически построенную «гребёнку» к
+общему участку, который явно показывает количество кабелей. Trace или выбор
+одного Cable не превращает весь жгут в evidence этого Cable. Exact
+persistence/schema/editor UX остаются OPEN.
