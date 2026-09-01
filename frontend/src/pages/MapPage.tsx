@@ -7,6 +7,7 @@ import {
 } from "../components/MapInsertionPicker";
 import { QuickInspector } from "../components/QuickInspector";
 import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
+import { CableRenameDialog } from "../components/CableRenameDialog";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
 import type { MapRegionDraft } from "../components/MapRegionLayer";
@@ -133,6 +134,7 @@ interface CableRouteEditState {
   error: string | null;
 }
 interface CableRouteResetOperation { mapId: string; cableId: string; status: "pending" | "refresh-failed"; message?: string; }
+interface CableRenameState { cableId: string; fallback: string; userLabel: string | null; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; naming: CableNamingInput; canonicalResult?: PhysicalEndpointConnectionCreationDocument; error: string | null; }
@@ -199,6 +201,7 @@ export function MapPage({
   const [mapDeletion, setMapDeletion] = useState<MapDeletionOperation | null>(null);
   const [cableRouteEdit, setCableRouteEdit] = useState<CableRouteEditState | null>(null);
   const [cableRouteReset, setCableRouteReset] = useState<CableRouteResetOperation | null>(null);
+  const [cableRename, setCableRename] = useState<CableRenameState | null>(null);
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
   const [regionMode, setRegionMode] = useState(false);
   const [showRegionReferenceOutlines, setShowRegionReferenceOutlines] = useState(true);
@@ -1658,6 +1661,20 @@ export function MapPage({
       if (selectedMapId.current === targetMapId) setMapOperation({ kind: "delete", id, mapId: targetMapId, status: "refresh-failed", message: t("map.deleteRefreshFailed") });
     }
   };
+  const beginCableRename = async (cableId: string, fallback: string) => {
+    if (!catalogInventoryDataSource || !cableLabelDataSource) return;
+    try {
+      const cable = (await catalogInventoryDataSource.loadCatalogInventory()).cables.find((item) => item.cable_ref.entity_id === cableId);
+      if (cable) setCableRename({ cableId, fallback, userLabel: cable.label_source === 'TECHNICAL_FALLBACK' ? null : cable.label });
+    } catch (reason) { setError(errorMessage(reason, t('catalog.error.title'))); }
+  };
+  const refreshCableRename = async () => {
+    const currentMap = latestActiveMap.current;
+    if (!currentMap) throw new Error('Map is unavailable');
+    const next = await dataSource.loadProjection(projectionRequestFor('physical', currentMap.placements.map((item) => item.physical_object_ref.entity_id), true));
+    if (selectedMapId.current !== currentMap.map_ref.entity_id || viewMode !== 'physical') throw new Error('Map changed');
+    setSceneDocument({ sceneKey: `${currentMap.map_ref.entity_id}/physical`, document: next });
+  };
 
   return (
     <main className="map-page">
@@ -1934,6 +1951,7 @@ export function MapPage({
         onAdd={(anchor) => openInsertion(anchor)}
         onSetLock={(id, locked) => void setPlacementLock(id, locked)}
         onRemove={(id) => void remove(id)}
+        onRenameCable={catalogInventoryDataSource && cableLabelDataSource ? (id, label) => void beginCableRename(id, label) : undefined}
         onEditRoute={(id) => beginCableRouteEdit(id)}
         onResetRoute={(id) => void resetCableRoute(id)}
         onConnectFromPort={connectFromPort}
@@ -1941,6 +1959,7 @@ export function MapPage({
         onDeleteObject={(id, label) => { if (window.confirm(t("map.context.deleteObjectConfirm", { name: label }))) void deletePhysicalObject(id).catch((reason) => setError(errorMessage(reason, t("map.deleteObjectFailed")))); }}
         onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("map.deleteCableFailed")))); }}
       />}
+      {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
       {error && <p role="alert">{error}</p>}
       {document &&
         params.get("focus") &&

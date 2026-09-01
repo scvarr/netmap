@@ -13,6 +13,7 @@ import type { CableDeleteDataSource } from '../topology/cableDeleteTypes';
 import type { CableLabelDataSource } from '../topology/cableLabelTypes';
 import type { CableNamingInput } from '../topology/cableLabelTypes';
 import { CableNamingFields } from '../components/CableNamingFields';
+import { CableRenameDialog } from '../components/CableRenameDialog';
 import { useI18n } from '../i18n';
 
 interface Props {
@@ -381,7 +382,7 @@ export function InfrastructureObjectsPage({
           {gap}
         </p>
       ))}
-      {renameTarget && (
+      {renameTarget?.cable && cableLabelDataSource ? <CableRenameDialog cableId={renameTarget.id} userLabel={renameTarget.userLabel ?? null} fallback={renameTarget.label} dataSource={cableLabelDataSource} refresh={async () => { if (!await reload()) throw new Error('Catalog refresh failed'); }} onClose={() => setRenameTarget(null)} /> : renameTarget && (
         <RenameDialog
           target={renameTarget}
           value={renameValue}
