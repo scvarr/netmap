@@ -231,7 +231,7 @@ export function ConnectPhysicalEndpoint({
     } catch (reason) {
       if (isHistoricalCableLabelReuseRequired(reason)) setHistoricalCandidate(reason.candidate);
       else if (confirmedHistoricalLabel && isHistoricalCableLabelReuseConfirmationStale(reason)) { setHistoricalCandidate(null); queueMicrotask(() => void submit()); }
-      else setError(`${t('physical.connectFailed')} ${reason instanceof Error ? reason.message : ''}`.trim());
+      else setError(t('physical.connectFailed'));
     } finally {
       setSubmitting(false);
     }

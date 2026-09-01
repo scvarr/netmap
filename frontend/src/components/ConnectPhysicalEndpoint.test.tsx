@@ -41,7 +41,7 @@ describe('ConnectPhysicalEndpoint', () => {
   it('shows authoritative submit errors without announcing success', async () => {
     const create = vi.fn().mockRejectedValue(new Error('порт уже занят')); const onConnected = vi.fn(); renderConnect({ topologyNodes: [node('target', 'Target', [{ connection_point_id: 'port', display_name: 'Port', cardinality: 1, external_connection_count: 0 }])], physicalDetailsDataSource: { loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document('target', [point('port')])) }, writeDataSource: { createPhysicalEndpointConnection: create }, onConnected });
     await userEvent.click(screen.getByRole('button', { name: 'Подключить порт' })); await userEvent.selectOptions(screen.getByLabelText('Целевой физический объект'), 'target'); await userEvent.selectOptions(await screen.findByLabelText('Свободный физический порт'), 'port'); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
-    expect(await screen.findByRole('alert')).toHaveTextContent('порт уже занят'); expect(onConnected).not.toHaveBeenCalled();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось создать физическое подключение.'); expect(onConnected).not.toHaveBeenCalled();
   });
 
   it('clears hidden primary selection after search and does not apply primary search to advanced candidates', async () => {
