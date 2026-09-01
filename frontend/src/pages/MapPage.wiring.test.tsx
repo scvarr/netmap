@@ -41,8 +41,10 @@ describe('MapPage visual wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'blueprint port' }));
     expect(screen.getByText('Выберите конечный свободный порт')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
-    expect(screen.getByText('Источник: Source / A01')).toBeInTheDocument();
-    expect(screen.getByText('Назначение: Target / B01')).toBeInTheDocument();
+    expect(screen.getByText('Source / A01 → Target / B01')).toBeInTheDocument();
+    expect(screen.queryByText('Источник: Source / A01')).not.toBeInTheDocument();
+    expect(screen.queryByText('Назначение: Target / B01')).not.toBeInTheDocument();
+    expect(screen.getByText('Опорные точки: 0')).toBeInTheDocument();
     expect(write).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     await waitFor(() => expect(write).toHaveBeenCalledWith({ source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: 'b-cp', member_index: 1 }, cable_label: null, cable_label_template_id: null, generate_cable_label: false, confirmed_historical_label: null }));
@@ -81,8 +83,8 @@ describe('MapPage visual wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' }));
     expect(screen.getByTestId('canvas').querySelector('span')).toHaveAttribute('data-waypoints', '[]');
     fireEvent.click(screen.getByRole('button', { name: 'pane 1' })); fireEvent.click(screen.getByRole('button', { name: 'pane 2' }));
-    expect(screen.getByText('Точек трассы: 2')).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Назад' })); expect(screen.getByText('Точек трассы: 2')).toBeInTheDocument();
+    expect(screen.getByText('Опорные точки: 2')).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Назад' })); expect(screen.getByText('Опорные точки: 2')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     await waitFor(() => expect(write).toHaveBeenCalledTimes(1)); expect(setCableRoute).toHaveBeenCalledWith('map-1', 'cable-1', [{ x: 10, y: 20 }, { x: 30, y: 40 }]);
   });
