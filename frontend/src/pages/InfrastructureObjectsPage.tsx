@@ -447,7 +447,7 @@ function RenameDialog({
         }}
       >
         <h2 id="rename-title">{target.cable ? t('catalog.renameCable') : t('catalog.renameObject')}</h2>
-        {target.cable ? <><CableNamingFields dataSource={cableLabelDataSource} disabled={pending || savedPendingRefresh} value={cableNaming} onChange={onCableNamingChange} />{fallback && !target.userLabel && <small>{t('catalog.cableFallbackHint', { name: fallback })}</small>}</> : <label>
+        {target.cable ? <><CableNamingFields dataSource={cableLabelDataSource} disabled={pending || savedPendingRefresh} value={cableNaming} onChange={onCableNamingChange} variant="rename" />{!cableNaming.generate_cable_label && fallback && !target.userLabel && <small>{t('catalog.cableFallbackHint', { name: fallback })}</small>}</> : <label>
           {t('catalog.name')}
           <input autoFocus aria-label={t('catalog.name')} value={value} disabled={pending || savedPendingRefresh} onChange={(event) => onChange(event.target.value)} />
         </label>}

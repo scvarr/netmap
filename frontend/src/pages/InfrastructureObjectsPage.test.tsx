@@ -28,14 +28,17 @@ describe('InfrastructureObjectsPage inventory catalog', () => {
     const setCableLabel = vi.fn().mockResolvedValue(undefined);
     render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel, generateCableLabel: vi.fn(), loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [] }) } as any} /></MemoryRouter>);
     await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать Cable deadbeef' }));
-    expect(screen.getByLabelText('Имя вручную')).toHaveValue(''); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(setCableLabel).toHaveBeenCalledWith('cable', null));
+    expect(screen.getByRole('radio', { name: 'Ввести вручную' })).toBeChecked(); expect(screen.getByLabelText('Имя кабеля')).toHaveValue(''); expect(screen.queryByLabelText('Шаблон')).not.toBeInTheDocument(); expect(screen.queryByText(/# — цифра/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(setCableLabel).toHaveBeenCalledWith('cable', null));
   });
   it('generates an existing Cable label through the authoritative write and retries only catalog reload', async () => {
     const loadCatalogInventory = vi.fn().mockResolvedValueOnce(document()).mockRejectedValueOnce(new Error('reload')).mockResolvedValueOnce({ ...document(), cables: document().cables.map((item) => item.cable_ref.entity_id === 'cable' ? { ...item, label: 'FC0001' } : item) });
     const generateCableLabel = vi.fn().mockResolvedValue(undefined);
-    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel: vi.fn(), generateCableLabel, loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template-1', name: 'FC', pattern: 'FC####', start_at: 1 }] }) } as any} /></MemoryRouter>);
+    const setCableLabel = vi.fn().mockResolvedValue(undefined);
+    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel, generateCableLabel, loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template-1', name: 'FC', description: 'Оптический магистральный кабель', pattern: 'FC####', start_at: 1 }] }) } as any} /></MemoryRouter>);
     await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать C10' }));
-    await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template-1'); await userEvent.click(screen.getByLabelText('Сгенерировать'));
+    expect(generateCableLabel).not.toHaveBeenCalled(); await userEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); expect(generateCableLabel).not.toHaveBeenCalled(); expect(setCableLabel).not.toHaveBeenCalled(); expect(screen.queryByLabelText('Имя кабеля')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Сгенерировать' })).toBeDisabled();
+    await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template-1'); expect(screen.getByText('Оптический магистральный кабель')).toBeInTheDocument(); expect(screen.getByText('FC####')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать' }));
     await waitFor(() => expect(generateCableLabel).toHaveBeenCalledWith('cable', 'template-1'));
     expect(await screen.findByText('Имя сохранено, но каталог не удалось обновить. Повторите обновление.')).toBeInTheDocument();
