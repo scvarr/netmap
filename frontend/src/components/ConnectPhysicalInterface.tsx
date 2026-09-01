@@ -45,7 +45,7 @@ export function ConnectPhysicalInterface({
   const [targetRetryKey, setTargetRetryKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cableNaming, setCableNaming] = useState<CableNamingInput>({});
+  const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   const [historicalCandidate, setHistoricalCandidate] = useState<string | null>(null);
 
   useEffect(() => {

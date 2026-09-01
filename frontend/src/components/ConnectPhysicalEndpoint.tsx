@@ -86,7 +86,7 @@ export function ConnectPhysicalEndpoint({
   const [retry, setRetry] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [cableNaming, setCableNaming] = useState<CableNamingInput>({});
+  const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   const [historicalCandidate, setHistoricalCandidate] = useState<string | null>(null);
   const reset = () => {
     setOpen(false);
@@ -96,7 +96,7 @@ export function ConnectPhysicalEndpoint({
     setQuery("");
     setTargetState({ kind: "idle" });
     setError(null);
-    setCableNaming({});
+    setCableNaming({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   };
   const candidates = useMemo(
     () =>
@@ -231,7 +231,7 @@ export function ConnectPhysicalEndpoint({
     } catch (reason) {
       if (isHistoricalCableLabelReuseRequired(reason)) setHistoricalCandidate(reason.candidate);
       else if (confirmedHistoricalLabel && isHistoricalCableLabelReuseConfirmationStale(reason)) { setHistoricalCandidate(null); queueMicrotask(() => void submit()); }
-      else setError(t('physical.connectFailed'));
+      else setError(`${t('physical.connectFailed')} ${reason instanceof Error ? reason.message : ''}`.trim());
     } finally {
       setSubmitting(false);
     }

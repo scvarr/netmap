@@ -92,6 +92,10 @@ describe('ConnectPhysicalInterface', () => {
     expect(createPhysicalLink).toHaveBeenCalledWith({
       source_interface_id: 'core-eth0',
       target_interface_id: 'fw-eth0',
+      cable_label: null,
+      cable_label_template_id: null,
+      generate_cable_label: false,
+      confirmed_historical_label: null,
     });
     resolveRequest(creationDocument);
     expect(await screen.findByRole('button', { name: 'Подключить' })).toHaveAttribute(
@@ -154,7 +158,7 @@ describe('ConnectPhysicalInterface', () => {
   it('submits an authoritative generated Cable naming intent', async () => {
     const createPhysicalLink = vi.fn().mockResolvedValue(creationDocument);
     render(<ConnectPhysicalInterface sourceInterface={interfaceDetails('core-eth0', 'eth0')} targetDevices={[{ physicalObjectId: 'fw-device', label: 'FW' }]} detailsDataSource={{ loadDeviceDetails: vi.fn().mockResolvedValue(targetDocument) }} writeDataSource={{ createPhysicalLink }} cableLabelDataSource={{ loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template', name: 'FC', pattern: 'FC####', start_at: 1 }] }) } as any} onConnected={vi.fn()} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Подключить' })); await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), 'fw-device'); await screen.findByRole('option', { name: 'eth0' }); await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0'); await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template'); await userEvent.click(screen.getByLabelText('Сгенерировать')); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить' })); await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), 'fw-device'); await screen.findByRole('option', { name: 'eth0' }); await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0'); await userEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template'); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
     expect(createPhysicalLink).toHaveBeenCalledWith(expect.objectContaining({ cable_label_template_id: 'template', generate_cable_label: true }));
   });
 });

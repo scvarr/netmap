@@ -58,21 +58,21 @@ describe('MapPage visual wiring', () => {
   it('passes generated and manual Cable naming through the map create request and requires a template for generation', async () => {
     const { write } = renderPage(); await screen.findByTestId('canvas');
     fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
-    await screen.findByRole('option', { name: /FC · FC####/ }); fireEvent.click(screen.getByLabelText('Сгенерировать')); expect(screen.getByRole('button', { name: 'Создать кабель' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await screen.findByRole('option', { name: 'FC' }); expect(screen.getByRole('button', { name: 'Создать кабель' })).toBeDisabled();
     fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); expect(screen.getByRole('button', { name: 'Создать кабель' })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     await waitFor(() => expect(write).toHaveBeenCalledWith(expect.objectContaining({ cable_label: null, cable_label_template_id: 'template-1', generate_cable_label: true })));
   });
   it('confirms exact historical generated label reuse without replaying post-write refresh', async () => {
     const write = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('FC0003')).mockResolvedValue(creation); const { loadProjection } = renderPage(write); await screen.findByTestId('canvas');
-    fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); await screen.findByRole('option', { name: /FC · FC####/ }); fireEvent.click(screen.getByLabelText('Сгенерировать')); fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await screen.findByRole('option', { name: 'FC' }); fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     expect(await screen.findByRole('heading', { name: 'Имя FC0003 использовалось ранее' })).toBeInTheDocument(); expect(write).toHaveBeenCalledTimes(1); fireEvent.click(screen.getByRole('button', { name: 'Использовать FC0003' })); await waitFor(() => expect(write).toHaveBeenLastCalledWith(expect.objectContaining({ confirmed_historical_label: 'FC0003', cable_label_template_id: 'template-1', generate_cable_label: true }))); expect(loadProjection.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('passes a manual Cable label through the map create request without generation', async () => {
     const { write } = renderPage(); await screen.findByTestId('canvas');
     fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' }));
-    fireEvent.change(screen.getByLabelText('Имя вручную'), { target: { value: 'MANUAL-01' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    fireEvent.change(screen.getByLabelText('Имя кабеля'), { target: { value: 'MANUAL-01' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     await waitFor(() => expect(write).toHaveBeenCalledWith(expect.objectContaining({ cable_label: 'MANUAL-01', cable_label_template_id: null, generate_cable_label: false })));
   });
 
