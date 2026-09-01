@@ -108,8 +108,12 @@ implementation:
 3. workspace-context authorization/access control (ACL schema/roles OPEN);
 4. practically usable sharing network workspaces/SavedMaps (exact semantics
    OPEN, отдельный contract обязателен);
-5. append-only activity/audit: who/what/when/workspace после multi-user writes;
-   event sourcing не требуется.
+5. **Application change history / activity**: append-only mutation journal,
+   global activity feed и per-entity history projection. Attribution к actor и
+   workspace появляется после соответствующих application foundations и
+   multi-user writes; event sourcing не требуется. Domain-specific correctness
+   history может появляться раньше generic history: `CableLabelHistory` — уже
+   реализованный bounded пример такого исключения.
 
 Не становятся MUST автоматически: fork, merge/compare, export/import, `.netmap`,
 Blueprint packages, comments/annotations, `PUBLIC_READ`/public links, groups,

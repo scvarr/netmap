@@ -24,6 +24,7 @@
 - [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract: Location, Region, SavedMap и MapReference]]
 - [[architecture/workspaces/07-workspaces|Workspaces]]
 - [[architecture/blueprints/09-03-port-block-blueprint-architecture|Blueprint / Port Block]]
+- [[architecture/10-application-change-history|Application Change History]]
 
 ## Product direction
 
