@@ -28,6 +28,14 @@ export interface PresentationSceneComposite {
   compositionBasis: string;
 }
 
+/** Persisted B.3 composite input, consumed before any layout is attempted. */
+export interface MapCompositeSceneInput {
+  id: string;
+  displayName: string;
+  memberNodeIds: string[];
+  collapsed: boolean;
+}
+
 export interface CableSceneEvidence {
   endpointPair: PhysicalEndpointPair;
   projectionEdge: TopologyProjectionEdge;
@@ -76,6 +84,7 @@ const projectionSceneEdge = (edge: TopologyProjectionEdge): PresentationSceneEdg
 /** Form all display semantics before coordinates and edge geometry are computed. */
 export const presentationSceneDocument = (
   document: TopologyProjectionDocument,
+  compositeInputs: readonly MapCompositeSceneInput[] = [],
 ): PresentationSceneDocument => {
   if (!isPhysicalProjection(document)) {
     return {
@@ -135,12 +144,32 @@ export const presentationSceneDocument = (
     }
   }
 
+  const collapsed = compositeInputs.filter((item) => item.collapsed);
+  const hiddenNodeIds = new Set<string>();
+  const composites: PresentationSceneComposite[] = collapsed.map((item) => {
+    const members = new Set(item.memberNodeIds);
+    const boundary = new Set<string>();
+    for (const edge of edges) {
+      const sourceMember = members.has(edge.source);
+      const targetMember = members.has(edge.target);
+      if (sourceMember !== targetMember) {
+        if (sourceMember) boundary.add(edge.source);
+        if (targetMember) boundary.add(edge.target);
+      }
+    }
+    for (const member of members) if (!boundary.has(member)) hiddenNodeIds.add(member);
+    return { id: item.id, displayName: item.displayName, memberNodeIds: [...members], boundaryNodeIds: [...boundary], compositionBasis: "MapComposite placement membership" };
+  });
+  const visibleEdges = edges.filter((edge) => !hiddenNodeIds.has(edge.source) && !hiddenNodeIds.has(edge.target));
   return {
     layer: document.layer,
     detail_level: document.detail_level,
-    nodes: [...document.nodes],
+    nodes: [
+      ...document.nodes.filter((node) => !hiddenNodeIds.has(node.id)),
+      ...collapsed.map((item) => ({ id: `map-composite:${item.id}`, kind: 'MAP_COMPOSITE', label: item.displayName, source_refs: [], attributes: { presentation_only: true }, status: 'CONFIGURED' })),
+    ],
     edges: [
-      ...edges,
+      ...visibleEdges,
       ...(document.l1_off_map_continuations ?? []).map((continuation) => ({
       id: `off-map-continuation:${continuation.id}`,
       source: continuation.local_node_id,
@@ -149,6 +178,6 @@ export const presentationSceneDocument = (
       continuation,
     })),
     ],
-    composites: [],
+    composites,
   };
 };

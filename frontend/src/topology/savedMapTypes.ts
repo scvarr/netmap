@@ -2,6 +2,9 @@ import type { ProjectionSourceRef } from './types';
 import type { LocationRef } from './locationTypes';
 
 export interface SavedMapRef { entity_type: 'SavedMap'; entity_id: string }
+export interface MapPresentationVariantRef { entity_type: 'MapPresentationVariant'; entity_id: string }
+export interface MapPresentationVariant { variant_ref: MapPresentationVariantRef; name: string }
+export interface MapComposite { composite_ref: { entity_type: 'MapComposite'; entity_id: string }; name: string; physical_object_refs: ProjectionSourceRef[]; presentation: { variant_ref: MapPresentationVariantRef; collapsed: boolean; x: number; y: number; width: number; height: number } }
 export type SavedMapView = 'physical' | 'logical';
 export type SavedMapViewKey = 'L1/PHYSICAL_OBJECT' | 'L2/DEVICE';
 export interface MapViewPosition { x: number; y: number; locked: boolean; display_width?: number }
@@ -17,13 +20,15 @@ export interface MapRegionWrite { label: string; points: MapRegionPoint[]; label
 export interface MapTextAnnotationRef { entity_type: 'MapTextAnnotation'; entity_id: string }
 export interface MapTextAnnotation { annotation_ref: MapTextAnnotationRef; text: string; position: MapRegionPoint; text_color: string; font_size: number }
 export interface MapTextAnnotationWrite { text: string; position: MapRegionPoint; text_color: string; font_size: number }
-export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; placements: MapPlacement[]; cable_routes: MapCableRoute[]; regions: MapRegion[]; text_annotations: MapTextAnnotation[] }
+export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; active_variant_ref: MapPresentationVariantRef; variants: MapPresentationVariant[]; placements: MapPlacement[]; cable_routes: MapCableRoute[]; composites: MapComposite[]; regions: MapRegion[]; text_annotations: MapTextAnnotation[] }
 export interface SavedMapSummary { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string }
 export interface SavedMapDataSource {
   listMaps(): Promise<SavedMapSummary[]>;
   createMap(name: string): Promise<SavedMap>;
   deleteMap(mapId: string): Promise<void>;
-  loadMap(mapId: string): Promise<SavedMap>;
+  loadMap(mapId: string, variantId?: string): Promise<SavedMap>;
+  createPresentationVariant?(mapId: string, name: string): Promise<SavedMap>;
+  createComposite?(mapId: string, name: string, physicalObjectIds: string[], variantId?: string): Promise<SavedMap>;
   addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number): Promise<void>;
   movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number): Promise<void>;
   setPositionLock(mapId: string, physicalObjectId: string, view: SavedMapView, locked: boolean): Promise<void>;

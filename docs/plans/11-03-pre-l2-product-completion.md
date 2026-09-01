@@ -43,7 +43,7 @@ compact Port Block table и RU terminology «Группа портов / Гру�
   подключения» and «Сетевые порты» columns, and counts for the current
   immutable PortBlockVersion without one version-details load per row.
 
-Current execution position: **Phase B.3 — next milestone.**
+Current execution position: **Phase B.3 — MapComposite and presentation variants (in progress).**
 
 ### Phase B — Remaining bounded L1 capability families
 
@@ -77,9 +77,13 @@ Current execution position: **Phase B.3 — next milestone.**
    Это не добавляет canonical `Object.parent` или новых topology facts; точный
    `MapReference` contract остаётся отдельным B.3. Полный generic scene engine
    не становится обязательным pre-L2 milestone.
-3. Реализовать MapReference/composed SavedMaps как bounded consumer общего
-   composite contract, только после отдельного bounded MapReference
-   contract с exact API/schema/interaction decisions.
+3. **B.3 — MapComposite и presentation variants.** Одна SavedMap остаётся
+   полной картой; уже размещённые PhysicalObject могут быть объединены в
+   presentation-only MapComposite внутри этой же карты. Composite не является
+   endpoint, не меняет topology и не допускает overlap/nesting. Пользовательские
+   варианты представления той же SavedMap хранят независимые координаты,
+   collapsed-composite geometry и маршруты Cable. MapReference composition между
+   SavedMap в B.3 не реализуется.
 4. Закрыть MapCableRoute usability: overlap-safe exact trace presentation,
    compact edit handles, straight preview, initial angular snapping/feedback и
    justified presentation-only magnets. Режим редактирования продолжается до

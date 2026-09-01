@@ -47,7 +47,7 @@ import { cableIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint, MapTextAnnotation } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
-import { presentationSceneDocument } from "../topology/presentationScene";
+import { presentationSceneDocument, type MapCompositeSceneInput } from "../topology/presentationScene";
 import { MapRegionLayer, type MapReferenceOutline, type MapRegionDraft } from "./MapRegionLayer";
 import { RegionDraftEditor, type RegionDraftPointerTarget, type RegionDraftSegmentFeedback } from './RegionDraftEditor';
 import { assistSegment, type SegmentAssistResult } from '../topology/geometryAssist';
@@ -83,6 +83,7 @@ interface TopologyCanvasProps {
     anchor: XYPosition,
   ) => void;
   cableRoutes?: readonly MapCableRoute[];
+  compositeInputs?: readonly MapCompositeSceneInput[];
   cableRouteDraft?: { cableId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
@@ -162,6 +163,7 @@ export function TopologyCanvas({
   onPaneClick,
   onContinuationClickAnchor,
   cableRoutes,
+  compositeInputs,
   cableRouteDraft,
   physicalPortStates,
   onPhysicalPortClick,
@@ -196,7 +198,7 @@ export function TopologyCanvas({
   const { fitView, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
-  const presentationScene = useMemo(() => presentationSceneDocument(document), [document]);
+  const presentationScene = useMemo(() => presentationSceneDocument(document, compositeInputs), [document, compositeInputs]);
 
   currentDocument.current = document;
 

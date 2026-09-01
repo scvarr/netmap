@@ -173,6 +173,7 @@ export function MapPage({
   const { t } = useI18n();
   const [params, setParams] = useSearchParams();
   const mapId = params.get("map");
+  const variantId = params.get("variant");
   const addIntent = mapId ? params.get("add") : null;
   const viewMode = view(params.get("view"));
   const [maps, setMaps] = useState<SavedMapSummary[] | null>(null);
@@ -187,6 +188,7 @@ export function MapPage({
   const [selectedTraceBranchId, setSelectedTraceBranchId] = useState<string | null>(null);
   const [traceViewNotice, setTraceViewNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
+  const [compositeMemberIds, setCompositeMemberIds] = useState<Set<string>>(new Set());
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -284,6 +286,12 @@ export function MapPage({
       .filter((item) => item.label.toLocaleLowerCase().includes(query))
       .sort((left, right) => natural(left.label, right.label)) ?? [];
   }, [document, objectSearch, viewMode]);
+  const compositeInputs = useMemo(() => (activeMap?.composites ?? []).map((composite) => ({
+    id: composite.composite_ref.entity_id,
+    displayName: composite.name,
+    collapsed: composite.presentation.collapsed,
+    memberNodeIds: composite.physical_object_refs.map((reference) => nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id)?.id).filter((id): id is string => Boolean(id)),
+  })), [activeMap, document]);
 
   const selectedCableId = selection?.type === "node" ? cableIdForNode(selection.item) : null;
   const drawableSelectedCable = Boolean(
@@ -441,12 +449,12 @@ export function MapPage({
   const reloadMap = useCallback(
     async (targetMapId = mapId): Promise<boolean> => {
       if (!savedMapDataSource || !targetMapId) return false;
-      const detail = await savedMapDataSource.loadMap(targetMapId);
+      const detail = await savedMapDataSource.loadMap(targetMapId, variantId ?? undefined);
       if (selectedMapId.current !== targetMapId) return false;
       setMap(detail);
       return true;
     },
-    [mapId, savedMapDataSource],
+    [mapId, savedMapDataSource, variantId],
   );
 
   useEffect(() => {
@@ -484,7 +492,7 @@ export function MapPage({
     }
     let active = true;
     setError(null);
-    void savedMapDataSource.loadMap(mapId).then(
+    void savedMapDataSource.loadMap(mapId, variantId ?? undefined).then(
       (detail) => active && selectedMapId.current === mapId && !deletedMapIds.current.has(mapId) && setMap(detail),
       (reason) =>
         active && setError(errorMessage(reason, t("map.loadFailed"))),
@@ -492,7 +500,7 @@ export function MapPage({
     return () => {
       active = false;
     };
-  }, [mapId, maps, savedMapDataSource]);
+  }, [mapId, maps, savedMapDataSource, variantId]);
 
   useEffect(() => {
     if (savedMapDataSource && !hasLoadedMap) {
@@ -1705,6 +1713,28 @@ export function MapPage({
             </select>
           )}
         </label>
+        {!legacy && activeMap && (
+          <label>
+            Вариант:{" "}
+            <select aria-label="Вариант представления" value={activeMap.active_variant_ref.entity_id} onChange={(event) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", event.target.value); return next; })}>
+              {activeMap.variants.map((item) => <option key={item.variant_ref.entity_id} value={item.variant_ref.entity_id}>{item.name}</option>)}
+            </select>
+          </label>
+        )}
+        {!legacy && activeMap && viewMode === "physical" && (
+          <>
+            <button type="button" disabled={compositeMemberIds.size < 2 || !savedMapDataSource?.createComposite} onClick={() => {
+              const compositeName = window.prompt("Название composite");
+              if (!compositeName?.trim() || !savedMapDataSource?.createComposite) return;
+              void savedMapDataSource.createComposite(activeMap.map_ref.entity_id, compositeName.trim(), [...compositeMemberIds], activeMap.active_variant_ref.entity_id).then((detail) => { setMap(detail); setCompositeMemberIds(new Set()); }).catch(() => setError("Не удалось создать composite"));
+            }}>Создать composite</button>
+            <button type="button" disabled={!savedMapDataSource?.createPresentationVariant} onClick={() => {
+              const variantName = window.prompt("Название варианта представления");
+              if (!variantName?.trim() || !savedMapDataSource?.createPresentationVariant) return;
+              void savedMapDataSource.createPresentationVariant(activeMap.map_ref.entity_id, variantName.trim()).then((detail) => { setMap(detail); setParams((current) => { const next = new URLSearchParams(current); next.set("variant", detail.active_variant_ref.entity_id); return next; }); }).catch(() => setError("Не удалось создать вариант представления"));
+            }}>Новый вариант</button>
+          </>
+        )}
         {!legacy && (
           <>
             <button type="button" onClick={() => setCreating(true)}>
@@ -1759,6 +1789,12 @@ export function MapPage({
               ))}
             </div>
           )}
+          <div aria-label="Участники composite">
+            {activeMap.placements.map((placement) => {
+              const id = placement.physical_object_ref.entity_id;
+              return <label key={id}><input type="checkbox" checked={compositeMemberIds.has(id)} onChange={() => setCompositeMemberIds((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; })} />{id.slice(0, 8)}</label>;
+            })}
+          </div>
         </section>
       )}
 
@@ -2039,6 +2075,7 @@ export function MapPage({
                   cableRoutes={
                     !physicalRegionMode && viewMode === "physical" ? activeMap?.cable_routes : undefined
                   }
+                  compositeInputs={viewMode === "physical" ? compositeInputs : undefined}
                   cableRouteDraft={!physicalRegionMode && cableRouteEdit ? { cableId: cableRouteEdit.cableId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
                   wiringRoute={!physicalRegionMode && wiring.status !== "idle" && wiring.status !== "selecting-source" ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target, waypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex, onWaypointSelect: (index) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}
                   physicalPortStates={physicalRegionMode ? undefined : physicalPortStates}

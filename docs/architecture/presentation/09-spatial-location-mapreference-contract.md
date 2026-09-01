@@ -1,4 +1,4 @@
-# Spatial presentation contract: Location, Region, SavedMap и MapReference
+# Spatial presentation contract: Location, Region, SavedMap, MapComposite и MapReference
 
 ## Статус
 
@@ -66,46 +66,39 @@ unification остаётся отдельной будущей задачей.
 
 ### SavedMap
 
-`SavedMap` — уже существующий presentation scope. Она содержит размещения
+`SavedMap` — одна полная сохранённая presentation scope. Она содержит размещения
 canonical topology objects и реализованные presentation records текущего
 contract, включая Regions и text annotations. SavedMap не является canonical
 physical hierarchy и не является topology container.
 
-Будущий `MapReference` будет SavedMap-owned presentation composition одной
-SavedMap внутри другой; текущая persisted SavedMap не содержит таких
-compositions.
+Варианты presentation одной и той же SavedMap могут иметь независимую geometry,
+но не дублируют topology или membership. B.3 не использует одну SavedMap как
+вложенную стойку, комнату или контейнер другой карты.
 
 Membership объекта в SavedMap — это membership представления, а не membership
 в Location. Одна и та же canonical topology может представляться несколькими
 разными SavedMaps; изменения размещения на карте не изменяют canonical topology
 или Location.
 
+### MapComposite
+
+`MapComposite` принадлежит одной SavedMap и содержит только её уже существующие
+MapPlacement. Это presentation-only grouping: не PhysicalObject, Location,
+Region, Connection endpoint или canonical containment. Один placement входит
+не более чем в один composite; overlap и nesting не поддерживаются. Удаление
+composite не удаляет placement, PhysicalObject, Cable или Connection.
+
+В collapsed variant внутренние non-boundary members и связи между ними могут
+быть скрыты. Связь member с object вне composite остаётся реальной связью между
+реальными PhysicalObject, а member остаётся boundary node. Это derived scene
+context до layout, а не topology fact или layout heuristic.
+
 ### MapReference
 
-`MapReference` — presentation composition одной SavedMap внутри другой SavedMap.
-Например, подробная SavedMap стойки может отображаться на карте помещения как
-один collapsed/composite presentation object. На родительской карте внутренние
-объекты и внутренние связи target-map, не пересекающие границу, могут быть
-скрыты; наружу представляются canonical connectivity crossings между объектами
-target SavedMap и canonical objects вне её membership. Реальное устройство с
-внешней связью должно оставаться доступным в представлении как boundary device
-вместе с его реальной внешней связью. Свёрнутый блок не становится концом
-физического `Connection`/`Cable`; при связи двух свёрнутых блоков endpoints
-остаются реальными устройствами внутри блоков.
-
-Внешнее представление не создаёт новые `Connection`, `PhysicalObject` или
-другие topology facts. Внешние connections должны следовать из canonical
-topology и membership target SavedMap, а не из вручную придуманной отдельной
-topology. Точный algorithm external-port derivation, API и schema пока не
-фиксируются.
-
-Это presentation invariant и не вводит canonical `Object.parent` или новые
-canonical topology facts. Точный `MapReference` contract остаётся отдельным
-bounded B.3 decision.
-
-Drill-down/open target map является частью этого composite presentation
-concept. Отдельный параллельный объект «простой hyperlink MapReference» не
-вводится.
+MapReference composition между SavedMap не реализуется в B.3. Если
+MapReference когда-либо понадобится, это может быть отдельная будущая
+навигационная ссылка между независимыми картами; её schema, API и interaction
+не проектируются этим contract.
 
 MapReference не является Location, не доказывает physical containment, не
 является Region и не является отдельным canonical topology aggregate.
@@ -117,7 +110,8 @@ MapReference не является Location, не доказывает physical 
 | `Location` | canonical physical place | независим от карт; отвечает, где физически находится объект |
 | `Region` | presentation | geometry одной SavedMap; не создаёт canonical containment |
 | `SavedMap` | presentation scope | выбранное представление canonical topology; не physical hierarchy и не topology container |
-| `MapReference` | presentation composition | collapsed representation другой SavedMap; crossing connectivity остаётся derived из canonical topology + membership |
+| `MapComposite` | presentation grouping | collapsed representation placement в одной SavedMap; boundary остаётся реальными PhysicalObject |
+| `MapReference` | future navigation | не является B.3 composition contract |
 
 ## Инварианты границ
 

@@ -52,7 +52,7 @@ from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
     CreateConnectionPointRequest,
-    CreateMapPlacementRequest,
+    CreateMapPlacementRequest, CreateMapPresentationVariantRequest, CreateMapCompositeRequest, SetMapCompositePresentationRequest,
     CreateObjectBlueprintRequest,
     CreateObjectBlueprintVersionRequest,
     CreateDeviceInterfaceRequest,
@@ -88,7 +88,7 @@ from app.schemas import (
     LocationListDocument,
     MapPlacementsDocument,
     MapRegionDocument,
-    MapTextAnnotationDocument,
+    MapTextAnnotationDocument, MapCompositeDocument, MapPresentationVariantDocument,
     L3ReachabilityArtifact,
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
@@ -178,6 +178,8 @@ def _saved_map_document(detail) -> dict[str, object]:
         "name": saved_map.name,
         "created_at": saved_map.created_at,
         "updated_at": saved_map.updated_at,
+        "active_variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": detail.variant.id},
+        "variants": [{"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id}, "name": variant.name} for variant in detail.variants],
         "placements": [
             {
                 "physical_object_ref": {
@@ -203,7 +205,7 @@ def _saved_map_document(detail) -> dict[str, object]:
                         "locked": position.locked,
                         **({"display_width": position.display_width} if position.display_width is not None else {}),
                     }
-                    for position in placement.view_positions
+                    for position in placement.view_positions if position.variant_id == detail.variant.id
                 },
             }
             for placement in detail.placements
@@ -219,6 +221,15 @@ def _saved_map_document(detail) -> dict[str, object]:
                 "waypoints": route.waypoints,
             }
             for route in detail.cable_routes
+        ],
+        "composites": [
+            {"composite_ref": {"entity_type": "MapComposite", "entity_id": composite.id}, "name": composite.name,
+             "physical_object_refs": [{"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": member.placement.physical_object_id} for member in composite.members],
+             "presentation": {"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": detail.variant.id},
+                 "collapsed": next((item.collapsed for item in composite.presentations if item.variant_id == detail.variant.id), False),
+                 "x": next((item.x for item in composite.presentations if item.variant_id == detail.variant.id), 0), "y": next((item.y for item in composite.presentations if item.variant_id == detail.variant.id), 0),
+                 "width": next((item.width for item in composite.presentations if item.variant_id == detail.variant.id), 280), "height": next((item.height for item in composite.presentations if item.variant_id == detail.variant.id), 180)}}
+            for composite in detail.composites
         ],
         "regions": [
             {
@@ -450,8 +461,34 @@ def create_saved_map(query: CreateSavedMapRequest, session: Session = Depends(ge
 
 
 @app.get("/v1/maps/{map_id}", response_model=SavedMapDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
-def get_saved_map(map_id: uuid.UUID, session: Session = Depends(get_session)) -> SavedMapDocument:
-    return _saved_map_document(SavedMapCatalog(session).detail(map_id))
+def get_saved_map(map_id: uuid.UUID, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> SavedMapDocument:
+    return _saved_map_document(SavedMapCatalog(session).detail(map_id, variant_id))
+
+
+@app.post("/v1/maps/{map_id}/presentation-variants", response_model=SavedMapDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
+def create_map_presentation_variant(map_id: uuid.UUID, query: CreateMapPresentationVariantRequest, session: Session = Depends(get_session)) -> SavedMapDocument:
+    with session.begin():
+        catalog = SavedMapCatalog(session); variant = catalog.create_variant(map_id, query.name)
+        return _saved_map_document(catalog.detail(map_id, variant.id))
+
+
+@app.post("/v1/maps/{map_id}/composites", response_model=SavedMapDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
+def create_map_composite(map_id: uuid.UUID, query: CreateMapCompositeRequest, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> SavedMapDocument:
+    with session.begin():
+        catalog = SavedMapCatalog(session); catalog.create_composite(map_id, query.name, query.physical_object_ids)
+        return _saved_map_document(catalog.detail(map_id, variant_id))
+
+
+@app.delete("/v1/maps/{map_id}/composites/{composite_id}", status_code=204, responses={422: {"model": ErrorResponse}})
+def delete_map_composite(map_id: uuid.UUID, composite_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin(): SavedMapCatalog(session).delete_composite(map_id, composite_id)
+
+
+@app.put("/v1/maps/{map_id}/composites/{composite_id}/presentation", response_model=SavedMapDocument, responses={422: {"model": ErrorResponse}})
+def set_map_composite_presentation(map_id: uuid.UUID, composite_id: uuid.UUID, query: SetMapCompositePresentationRequest, variant_id: uuid.UUID, session: Session = Depends(get_session)) -> SavedMapDocument:
+    with session.begin():
+        catalog = SavedMapCatalog(session); catalog.set_composite_presentation(map_id, composite_id, variant_id, query.collapsed, query.x, query.y, query.width, query.height)
+        return _saved_map_document(catalog.detail(map_id, variant_id))
 
 
 @app.delete("/v1/maps/{map_id}", status_code=204, responses={422: {"model": ErrorResponse}})
@@ -488,27 +525,27 @@ def move_map_placement(map_id: uuid.UUID, physical_object_id: uuid.UUID, query: 
 
 
 @app.put("/v1/maps/{map_id}/placements/{physical_object_id}/positions/{view_key}", response_model=MapPlacementsDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
-def set_map_view_position(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: MoveMapPlacementRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+def set_map_view_position(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: MoveMapPlacementRequest, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> MapPlacementsDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)
         catalog.set_view_position(
             map_id,
             physical_object_id,
             MapViewKey.PHYSICAL if view_key == "physical" else MapViewKey.LOGICAL,
-            query.x, query.y, query.display_width,
+            query.x, query.y, query.display_width, variant_id,
         )
         return _map_placements_document(catalog.placements(map_id))
 
 
 @app.put("/v1/maps/{map_id}/placements/{physical_object_id}/locks/{view_key}", response_model=MapPlacementsDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
-def set_map_view_lock(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: SetMapViewLockRequest, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+def set_map_view_lock(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: SetMapViewLockRequest, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> MapPlacementsDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)
         catalog.set_view_lock(
             map_id,
             physical_object_id,
             MapViewKey.PHYSICAL if view_key == "physical" else MapViewKey.LOGICAL,
-            query.locked,
+            query.locked, variant_id,
         )
         return _map_placements_document(catalog.placements(map_id))
 
@@ -524,16 +561,16 @@ def set_map_cable_route(
     map_id: uuid.UUID,
     cable_id: uuid.UUID,
     query: SetMapCableRouteRequest,
-    session: Session = Depends(get_session),
+    variant_id: uuid.UUID | None = None, session: Session = Depends(get_session),
 ) -> SavedMapDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)
         catalog.set_cable_route(
             map_id,
             cable_id,
-            [waypoint.model_dump() for waypoint in query.waypoints],
+            [waypoint.model_dump() for waypoint in query.waypoints], variant_id,
         )
-        return _saved_map_document(catalog.detail(map_id))
+        return _saved_map_document(catalog.detail(map_id, variant_id))
 
 
 @app.delete("/v1/maps/{map_id}/cable-routes/{cable_id}", status_code=204, responses={422: {"model": ErrorResponse}})

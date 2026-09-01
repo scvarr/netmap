@@ -71,4 +71,14 @@ describe('presentationSceneDocument', () => {
     source.l1_off_map_continuations = [{ id: 'continuation', local_node_id: 'a', local_physical_object_ref: ref('PhysicalObject', 'a'), local_connection_point_ref: ref('ConnectionPoint', 'a-1'), local_connection_point_display_name: 'A1', cable_ref: ref('Cable', 'cable'), cable_display_name: 'C-1', remote_physical_object_ref: ref('PhysicalObject', 'remote'), remote_display_name: 'Remote', remote_connection_point_ref: ref('ConnectionPoint', 'remote-1'), remote_connection_point_display_name: 'R1', source_refs: [ref('ConnectionMember', 'member')] }];
     expect(presentationSceneDocument(source).edges.at(-1)).toMatchObject({ id: 'off-map-continuation:continuation', kind: 'off-map-continuation', source: 'a', target: 'a', continuation: source.l1_off_map_continuations[0] });
   });
+
+  it('hides only internal non-boundary members of a collapsed MapComposite before layout', () => {
+    const source = document();
+    source.nodes.push({ id: 'c', kind: 'PHYSICAL_OBJECT', label: 'C', source_refs: [ref('PhysicalObject', 'c')], attributes: {}, status: 'CONFIGURED' });
+    source.edges.push({ id: 'bc', from_node_id: 'b', to_node_id: 'c', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [] } });
+    const scene = presentationSceneDocument(source, [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], collapsed: true }]);
+    expect(scene.nodes.map((node) => node.id)).toEqual(['b', 'c', 'map-composite:rack']);
+    expect(scene.edges.map((edge) => edge.id)).toEqual(['bc']);
+    expect(scene.composites).toMatchObject([{ id: 'rack', boundaryNodeIds: ['b'] }]);
+  });
 });

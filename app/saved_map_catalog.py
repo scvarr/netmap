@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.map_region_geometry import MapRegionSpatialRelation, classify_map_region_polygons
-from app.models import Cable, Location, MapCableRoute, MapPlacement, MapRegion, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import Cable, Location, MapCableRoute, MapComposite, MapCompositeMember, MapCompositePresentation, MapPlacement, MapPresentationVariant, MapRegion, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,9 @@ class SavedMapDetail:
     cable_routes: tuple[MapCableRoute, ...]
     regions: tuple[MapRegion, ...]
     text_annotations: tuple[MapTextAnnotation, ...]
+    variant: MapPresentationVariant
+    variants: tuple[MapPresentationVariant, ...]
+    composites: tuple[MapComposite, ...]
 
 
 class SavedMapCatalog:
@@ -33,14 +36,52 @@ class SavedMapCatalog:
         saved_map = SavedMap(name=name)
         self.session.add(saved_map)
         self._flush()
+        self.session.add(MapPresentationVariant(map_id=saved_map.id, name="Основной"))
+        self._flush()
         return saved_map
 
     def list(self) -> tuple[SavedMap, ...]:
         return tuple(self.session.scalars(select(SavedMap).order_by(SavedMap.name, SavedMap.id)))
 
-    def detail(self, map_id: uuid.UUID) -> SavedMapDetail:
+    def detail(self, map_id: uuid.UUID, variant_id: uuid.UUID | None = None) -> SavedMapDetail:
         saved_map = self._require_map(map_id)
-        return SavedMapDetail(saved_map, self._placements(map_id), self._cable_routes(map_id), self._regions(map_id), self._text_annotations(map_id))
+        variant = self._require_variant(map_id, variant_id)
+        return SavedMapDetail(saved_map, self._placements(map_id, variant.id), self._cable_routes(map_id, variant.id), self._regions(map_id), self._text_annotations(map_id), variant, self._variants(map_id), self._composites(map_id, variant.id))
+
+    def create_variant(self, map_id: uuid.UUID, name: str) -> MapPresentationVariant:
+        self._require_map(map_id)
+        variant = MapPresentationVariant(map_id=map_id, name=name)
+        self.session.add(variant)
+        self._flush()
+        return variant
+
+    def create_composite(self, map_id: uuid.UUID, name: str, physical_object_ids: list[uuid.UUID]) -> MapComposite:
+        self._require_map(map_id)
+        if len(set(physical_object_ids)) != len(physical_object_ids):
+            raise ValidationError("MapComposite members must be distinct", {"reason": "MAP_COMPOSITE_DUPLICATE_MEMBER"})
+        placements = list(self.session.scalars(select(MapPlacement).where(MapPlacement.map_id == map_id, MapPlacement.physical_object_id.in_(physical_object_ids)).with_for_update()))
+        if len(placements) != len(physical_object_ids):
+            raise ValidationError("MapComposite members must be existing placements of this SavedMap", {"reason": "MAP_COMPOSITE_MEMBER_NOT_PLACED"})
+        composite = MapComposite(map_id=map_id, name=name)
+        composite.members = [MapCompositeMember(placement_id=item.id) for item in placements]
+        self.session.add(composite)
+        self._flush()
+        return composite
+
+    def delete_composite(self, map_id: uuid.UUID, composite_id: uuid.UUID) -> None:
+        composite = self.session.scalar(select(MapComposite).where(MapComposite.map_id == map_id, MapComposite.id == composite_id).with_for_update())
+        if composite is None: raise ValidationError("MapComposite does not exist", {"composite_id": str(composite_id)})
+        self.session.delete(composite); self._flush()
+
+    def set_composite_presentation(self, map_id: uuid.UUID, composite_id: uuid.UUID, variant_id: uuid.UUID, collapsed: bool, x: float, y: float, width: float, height: float) -> MapCompositePresentation:
+        self._require_variant(map_id, variant_id)
+        composite = self.session.scalar(select(MapComposite).where(MapComposite.map_id == map_id, MapComposite.id == composite_id).with_for_update())
+        if composite is None: raise ValidationError("MapComposite does not exist", {"composite_id": str(composite_id)})
+        presentation = self.session.scalar(select(MapCompositePresentation).where(MapCompositePresentation.composite_id == composite_id, MapCompositePresentation.variant_id == variant_id).with_for_update())
+        if presentation is None:
+            presentation = MapCompositePresentation(composite_id=composite_id, variant_id=variant_id, collapsed=collapsed, x=x, y=y, width=width, height=height); self.session.add(presentation)
+        else: presentation.collapsed, presentation.x, presentation.y, presentation.width, presentation.height = collapsed, x, y, width, height
+        self._flush(); return presentation
 
     def delete(self, map_id: uuid.UUID) -> None:
         self.session.delete(self._require_map(map_id))
@@ -65,7 +106,7 @@ class SavedMapCatalog:
             })
         placement = MapPlacement(map_id=map_id, physical_object_id=physical_object_id)
         placement.view_positions.append(MapViewPosition(
-            view_key=MapViewKey.PHYSICAL, x=x, y=y, display_width=display_width
+            variant_id=self._require_variant(map_id, None).id, view_key=MapViewKey.PHYSICAL, x=x, y=y, display_width=display_width
         ))
         self.session.add(placement)
         self._flush()
@@ -75,10 +116,10 @@ class SavedMapCatalog:
         """Compatibility operation: update the physical presentation position only."""
         return self.set_view_position(map_id, physical_object_id, MapViewKey.PHYSICAL, x, y, display_width)
 
-    def set_view_position(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, x: float, y: float, display_width: float | None = None) -> MapPlacement:
+    def set_view_position(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, x: float, y: float, display_width: float | None = None, variant_id: uuid.UUID | None = None) -> MapPlacement:
         if display_width is not None and view_key != MapViewKey.PHYSICAL:
             raise ValidationError("display_width is supported only by the physical map view", {"view_key": str(view_key)})
-        self._require_map(map_id)
+        variant = self._require_variant(map_id, variant_id)
         placement = self.session.scalar(select(MapPlacement).where(
             MapPlacement.map_id == map_id, MapPlacement.physical_object_id == physical_object_id
         ).with_for_update())
@@ -86,9 +127,9 @@ class SavedMapCatalog:
             raise ValidationError("MapPlacement does not exist", {
                 "map_id": str(map_id), "physical_object_id": str(physical_object_id),
             })
-        position = next((item for item in placement.view_positions if item.view_key == view_key), None)
+        position = next((item for item in placement.view_positions if item.view_key == view_key and item.variant_id == variant.id), None)
         if position is None:
-            placement.view_positions.append(MapViewPosition(view_key=view_key, x=x, y=y, display_width=display_width))
+            placement.view_positions.append(MapViewPosition(variant_id=variant.id, view_key=view_key, x=x, y=y, display_width=display_width))
         else:
             position.x, position.y = x, y
             if display_width is not None:
@@ -96,8 +137,8 @@ class SavedMapCatalog:
         self._flush()
         return placement
 
-    def set_view_lock(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, locked: bool) -> MapPlacement:
-        self._require_map(map_id)
+    def set_view_lock(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, locked: bool, variant_id: uuid.UUID | None = None) -> MapPlacement:
+        variant = self._require_variant(map_id, variant_id)
         placement = self.session.scalar(select(MapPlacement).where(
             MapPlacement.map_id == map_id, MapPlacement.physical_object_id == physical_object_id
         ).with_for_update())
@@ -105,7 +146,7 @@ class SavedMapCatalog:
             raise ValidationError("MapPlacement does not exist", {
                 "map_id": str(map_id), "physical_object_id": str(physical_object_id),
             })
-        position = next((item for item in placement.view_positions if item.view_key == view_key), None)
+        position = next((item for item in placement.view_positions if item.view_key == view_key and item.variant_id == variant.id), None)
         if position is None:
             raise ValidationError("MapViewPosition does not exist", {
                 "map_id": str(map_id), "physical_object_id": str(physical_object_id), "view_key": str(view_key),
@@ -130,22 +171,22 @@ class SavedMapCatalog:
         self,
         map_id: uuid.UUID,
         cable_id: uuid.UUID,
-        waypoints: list[dict[str, float]],
+        waypoints: list[dict[str, float]], variant_id: uuid.UUID | None = None,
     ) -> MapCableRoute:
-        self._require_map(map_id)
+        variant = self._require_variant(map_id, variant_id)
         self._require_cable(cable_id)
         route = self.session.scalar(
             select(MapCableRoute)
             .where(
                 MapCableRoute.map_id == map_id,
                 MapCableRoute.cable_id == cable_id,
-                MapCableRoute.view_key == MapViewKey.PHYSICAL,
+                MapCableRoute.view_key == MapViewKey.PHYSICAL, MapCableRoute.variant_id == variant.id,
             )
             .with_for_update()
         )
         if route is None:
             route = MapCableRoute(
-                map_id=map_id,
+                map_id=map_id, variant_id=variant.id,
                 cable_id=cable_id,
                 view_key=MapViewKey.PHYSICAL,
             )
@@ -248,7 +289,7 @@ class SavedMapCatalog:
             raise ValidationError("SavedMap does not exist", {"map_id": str(map_id)})
         return saved_map
 
-    def _placements(self, map_id: uuid.UUID) -> tuple[MapPlacement, ...]:
+    def _placements(self, map_id: uuid.UUID, variant_id: uuid.UUID | None = None) -> tuple[MapPlacement, ...]:
         # The Location ref is live canonical context adjacent to a placement. Loading
         # it here is bounded for the one SavedMap scene, never per-object API reads.
         return tuple(self.session.scalars(select(MapPlacement).options(
@@ -257,10 +298,10 @@ class SavedMapCatalog:
             MapPlacement.map_id == map_id
         ).order_by(MapPlacement.physical_object_id)))
 
-    def _cable_routes(self, map_id: uuid.UUID) -> tuple[MapCableRoute, ...]:
+    def _cable_routes(self, map_id: uuid.UUID, variant_id: uuid.UUID | None = None) -> tuple[MapCableRoute, ...]:
         return tuple(self.session.scalars(
             select(MapCableRoute)
-            .where(MapCableRoute.map_id == map_id)
+            .where(MapCableRoute.map_id == map_id, MapCableRoute.variant_id == self._require_variant(map_id, variant_id).id)
             .order_by(MapCableRoute.cable_id, MapCableRoute.view_key)
         ))
 
@@ -273,6 +314,19 @@ class SavedMapCatalog:
         return tuple(self.session.scalars(
             select(MapTextAnnotation).where(MapTextAnnotation.map_id == map_id).order_by(MapTextAnnotation.id)
         ))
+
+    def _variants(self, map_id: uuid.UUID) -> tuple[MapPresentationVariant, ...]:
+        return tuple(self.session.scalars(select(MapPresentationVariant).where(MapPresentationVariant.map_id == map_id).order_by(MapPresentationVariant.name, MapPresentationVariant.id)))
+
+    def _require_variant(self, map_id: uuid.UUID, variant_id: uuid.UUID | None) -> MapPresentationVariant:
+        query = select(MapPresentationVariant).where(MapPresentationVariant.map_id == map_id)
+        if variant_id is not None: query = query.where(MapPresentationVariant.id == variant_id)
+        variant = self.session.scalar(query.order_by(MapPresentationVariant.name, MapPresentationVariant.id))
+        if variant is None: raise ValidationError("MapPresentationVariant does not exist on SavedMap", {"map_id": str(map_id), "variant_id": str(variant_id) if variant_id else None})
+        return variant
+
+    def _composites(self, map_id: uuid.UUID, variant_id: uuid.UUID) -> tuple[MapComposite, ...]:
+        return tuple(self.session.scalars(select(MapComposite).options(selectinload(MapComposite.members).selectinload(MapCompositeMember.placement), selectinload(MapComposite.presentations)).where(MapComposite.map_id == map_id).order_by(MapComposite.name, MapComposite.id)))
 
     def _validate_region_spatial_relation(
         self, map_id: uuid.UUID, points: list[dict[str, float]], excluded_region_id: uuid.UUID | None = None,

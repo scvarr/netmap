@@ -68,6 +68,18 @@ class SavedMapRef(BaseModel):
     entity_id: uuid.UUID
 
 
+class MapPresentationVariantRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    entity_type: Literal["MapPresentationVariant"] = "MapPresentationVariant"
+    entity_id: uuid.UUID
+
+
+class MapCompositeRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    entity_type: Literal["MapComposite"] = "MapComposite"
+    entity_id: uuid.UUID
+
+
 class MapRegionRef(BaseModel):
     """SavedMap presentation identity; it is not a ProjectionSourceRef."""
 
@@ -197,12 +209,56 @@ class SetMapCableRouteRequest(BaseModel):
     waypoints: list[MapCableRouteWaypoint]
 
 
+class CreateMapPresentationVariantRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=255)
+
+
+class CreateMapCompositeRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    name: str = Field(min_length=1, max_length=255)
+    physical_object_ids: list[uuid.UUID] = Field(min_length=2)
+
+
+class SetMapCompositePresentationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    collapsed: bool
+    x: FiniteFloat
+    y: FiniteFloat
+    width: FiniteFloat = Field(gt=0)
+    height: FiniteFloat = Field(gt=0)
+
+
 class MapCableRouteDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     cable_ref: ProjectionSourceRef
     view: Literal["L1/PHYSICAL_OBJECT"]
     waypoints: list[MapCableRouteWaypoint]
+
+
+class MapPresentationVariantDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    variant_ref: MapPresentationVariantRef
+    name: str
+
+
+class MapCompositePresentationDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    variant_ref: MapPresentationVariantRef
+    collapsed: bool
+    x: FiniteFloat
+    y: FiniteFloat
+    width: FiniteFloat
+    height: FiniteFloat
+
+
+class MapCompositeDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    composite_ref: MapCompositeRef
+    name: str
+    physical_object_refs: list[ProjectionSourceRef]
+    presentation: MapCompositePresentationDocument
 
 
 class MapRegionPoint(BaseModel):
@@ -344,8 +400,11 @@ class SavedMapSummary(BaseModel):
 
 
 class SavedMapDocument(SavedMapSummary):
+    active_variant_ref: MapPresentationVariantRef
+    variants: list[MapPresentationVariantDocument]
     placements: list[MapPlacementDocument]
     cable_routes: list[MapCableRouteDocument]
+    composites: list[MapCompositeDocument]
     regions: list[MapRegionDocument]
     text_annotations: list[MapTextAnnotationDocument]
 

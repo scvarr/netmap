@@ -154,7 +154,7 @@ Aggregate presentation object не становится canonical network entity
 
 ## Реализованный SavedMap presentation subset
 
-Краткий contract границ `Location`, `Region`, `SavedMap` и `MapReference`
+Краткий contract границ `Location`, `Region`, `SavedMap` и `MapComposite`
 зафиксирован в [[architecture/presentation/09-spatial-location-mapreference-contract|отдельной spatial заметке]].
 
 Current application deployment has one implicit `NetworkWorkspace`; it is not a
@@ -164,8 +164,9 @@ When `NetworkWorkspace` becomes a persisted boundary, a separate migration adds
 the explicit `workspace_id` to `SavedMap`.
 
 `MapPlacement` is membership only: one canonical `PhysicalObject` in one
-`SavedMap`. `MapViewPosition` stores that membership's presentation coordinates
-independently for each supported network view (`L1 / PHYSICAL_OBJECT` and
+`SavedMap`. `MapPresentationVariant` stores a user-named independent
+presentation of that same map. `MapViewPosition` stores that membership's
+presentation coordinates independently for each variant and supported network view (`L1 / PHYSICAL_OBJECT` and
 `L2 / DEVICE`). Map scope and network view are orthogonal dimensions: absence
 of a view position means the frontend may initialize that view's layout, never
 that coordinates are copied from another view. Canonical existence does not
@@ -176,7 +177,7 @@ state; the Map page turns explicit placement refs into a bounded projection
 scope.
 
 `MapCableRoute` is separate SavedMap-owned Physical/L1 presentation state,
-keyed by `(map, canonical Cable, view)`. It stores only ordered
+keyed by `(variant, canonical Cable, view)`. It stores only ordered
 flow-coordinate `{x, y}` waypoints: endpoints are not persisted, no route row
 is distinct from an explicit empty waypoint list, and it does not require a
 `MapPlacement`. SavedMap/cable deletion cascades route removal; placement and
@@ -1405,23 +1406,19 @@ Rich text, callouts, backgrounds, rotation, z-order and a generic scene-object
 abstraction remain out of scope. Cross-app visual unification is a separate
 future UI-polish task and is not implied by Region completion.
 
-### MapReference и composed SavedMaps
+### MapComposite и presentation variants
 
-**FIXED product concept; implementation remains OPEN**
+**B.3 contract**
 
-`MapReference` — composition одной SavedMap внутри другой: подробная карта
-стойки представляется на карте помещения одним collapsed/composite object.
-Свёрнутый блок — только представление, не endpoint физического
-`Connection`/`Cable`: реальное устройство с внешней связью доступно как
-boundary device с его реальной внешней связью; внутренние объекты и связи без
-пересечения границы могут быть скрыты. При связи двух свёрнутых блоков
-соединение остаётся между реальными устройствами внутри блоков. Drill-down
-является частью этого composite presentation concept. Новые topology facts не
-создаются; crossings выводятся из canonical topology и membership target
-SavedMap. Это не Location, Region, physical containment или canonical
-topology aggregate. Точный algorithm, API и schema остаются OPEN; отдельный
-простой hyperlink-object не вводится. Точный MapReference contract — отдельный
-B.3, а не часть B.2.
+SavedMap остаётся полной картой. `MapComposite` groups only existing placements
+of that map and never becomes a topology node or Cable/Connection endpoint. A
+placement belongs to at most one composite; no overlap or nesting. Collapsed
+scenes hide internal non-boundary nodes/edges before layout while retaining real
+boundary devices and their real crossing edges. `MapPresentationVariant` is a
+user-named SavedMap presentation, not a detailed/overview enum: positions,
+composite state/geometry and Cable routes are variant-owned. MapReference
+composition between SavedMaps is not implemented by B.3; a future independent
+navigation link is outside this contract.
 
 Подробности и relationship matrix: [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract]].
 

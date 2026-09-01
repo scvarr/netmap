@@ -81,6 +81,12 @@ class SavedMap(Base):
     cable_routes: Mapped[list["MapCableRoute"]] = relationship(
         back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
     )
+    presentation_variants: Mapped[list["MapPresentationVariant"]] = relationship(
+        back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
+    )
+    composites: Mapped[list["MapComposite"]] = relationship(
+        back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
+    )
     regions: Mapped[list["MapRegion"]] = relationship(
         back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -112,6 +118,55 @@ class MapPlacement(Base):
     physical_object: Mapped[PhysicalObject] = relationship(back_populates="map_placements")
 
 
+class MapPresentationVariant(Base):
+    """A named, SavedMap-owned presentation only; never topology or membership."""
+    __tablename__ = "map_presentation_variants"
+    __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"), UniqueConstraint("map_id", "name", name="uq_map_presentation_variants_map_name"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    saved_map: Mapped[SavedMap] = relationship(back_populates="presentation_variants")
+    positions: Mapped[list["MapViewPosition"]] = relationship(back_populates="variant", passive_deletes=True)
+    cable_routes: Mapped[list["MapCableRoute"]] = relationship(back_populates="variant", passive_deletes=True)
+    composite_presentations: Mapped[list["MapCompositePresentation"]] = relationship(back_populates="variant", passive_deletes=True)
+
+
+class MapComposite(Base):
+    """SavedMap-local presentation grouping of placements, never a topology entity."""
+    __tablename__ = "map_composites"
+    __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    saved_map: Mapped[SavedMap] = relationship(back_populates="composites")
+    members: Mapped[list["MapCompositeMember"]] = relationship(back_populates="composite", cascade="all, delete-orphan", passive_deletes=True)
+    presentations: Mapped[list["MapCompositePresentation"]] = relationship(back_populates="composite", cascade="all, delete-orphan", passive_deletes=True)
+
+
+class MapCompositeMember(Base):
+    __tablename__ = "map_composite_members"
+    __table_args__ = (UniqueConstraint("placement_id", name="uq_map_composite_members_placement"),)
+    composite_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_composites.id", ondelete="CASCADE"), primary_key=True)
+    placement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_placements.id", ondelete="CASCADE"), primary_key=True)
+    composite: Mapped[MapComposite] = relationship(back_populates="members")
+    placement: Mapped[MapPlacement] = relationship()
+
+
+class MapCompositePresentation(Base):
+    __tablename__ = "map_composite_presentations"
+    __table_args__ = (UniqueConstraint("composite_id", "variant_id", name="uq_map_composite_presentations_composite_variant"), CheckConstraint("width > 0 AND height > 0", name="dimensions_positive"))
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    composite_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_composites.id", ondelete="CASCADE"), nullable=False)
+    variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_presentation_variants.id", ondelete="CASCADE"), nullable=False)
+    collapsed: Mapped[bool] = mapped_column(nullable=False, server_default="false")
+    x: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    y: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    width: Mapped[float] = mapped_column(Float, nullable=False, default=280)
+    height: Mapped[float] = mapped_column(Float, nullable=False, default=180)
+    composite: Mapped[MapComposite] = relationship(back_populates="presentations")
+    variant: Mapped[MapPresentationVariant] = relationship(back_populates="composite_presentations")
+
+
 class MapViewKey(StrEnum):
     PHYSICAL = "L1/PHYSICAL_OBJECT"
     LOGICAL = "L2/DEVICE"
@@ -122,7 +177,7 @@ class MapViewPosition(Base):
 
     __tablename__ = "map_view_positions"
     __table_args__ = (
-        UniqueConstraint("placement_id", "view_key", name="uq_map_view_positions_placement_view"),
+        UniqueConstraint("placement_id", "variant_id", "view_key", name="uq_map_view_positions_placement_variant_view"),
         CheckConstraint(
             "view_key IN ('L1/PHYSICAL_OBJECT', 'L2/DEVICE')",
             name="map_view_positions_view_key_valid",
@@ -137,6 +192,7 @@ class MapViewPosition(Base):
     placement_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("map_placements.id", ondelete="CASCADE"), nullable=False
     )
+    variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_presentation_variants.id", ondelete="CASCADE"), nullable=False)
     view_key: Mapped[MapViewKey] = mapped_column(String(32), nullable=False)
     x: Mapped[float] = mapped_column(Float, nullable=False)
     y: Mapped[float] = mapped_column(Float, nullable=False)
@@ -145,6 +201,7 @@ class MapViewPosition(Base):
     # positions; readers apply the deterministic L1 display default.
     display_width: Mapped[float | None] = mapped_column(Float, nullable=True)
     placement: Mapped[MapPlacement] = relationship(back_populates="view_positions")
+    variant: Mapped[MapPresentationVariant] = relationship(back_populates="positions")
 
 
 class MapCableRoute(Base):
@@ -152,17 +209,19 @@ class MapCableRoute(Base):
 
     __tablename__ = "map_cable_routes"
     __table_args__ = (
-        UniqueConstraint("map_id", "cable_id", "view_key", name="uq_map_cable_routes_map_cable_view"),
+        UniqueConstraint("variant_id", "cable_id", "view_key", name="uq_map_cable_routes_variant_cable_view"),
         CheckConstraint("view_key = 'L1/PHYSICAL_OBJECT'", name="map_cable_routes_view_key_physical_only"),
         Index("ix_map_cable_routes_cable_id", "cable_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
+    variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_presentation_variants.id", ondelete="CASCADE"), nullable=False)
     cable_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cables.id", ondelete="CASCADE"), nullable=False)
     view_key: Mapped[MapViewKey] = mapped_column(String(32), nullable=False)
     waypoints: Mapped[list[dict[str, float]]] = mapped_column(JSONB, nullable=False, default=list)
     saved_map: Mapped[SavedMap] = relationship(back_populates="cable_routes")
+    variant: Mapped[MapPresentationVariant] = relationship(back_populates="cable_routes")
     cable: Mapped["Cable"] = relationship(back_populates="map_routes")
 
 
