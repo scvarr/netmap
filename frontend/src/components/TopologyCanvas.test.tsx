@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TopologyCanvas } from './TopologyCanvas';
 import type { FlowProjection, TopologyLayoutEngine } from '../topology/layout';
 import type { TopologyProjectionDocument } from '../topology/types';
+import type { PresentationSceneDocument } from '../topology/presentationScene';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { MapRegion } from '../topology/savedMapTypes';
 
@@ -89,8 +90,8 @@ const documentFor = (id: string): TopologyProjectionDocument => ({
   warnings: [],
 });
 
-const flowFor = (document: TopologyProjectionDocument): FlowProjection => ({
-  nodes: document.nodes.map((projection) => ({
+const flowFor = (scene: PresentationSceneDocument): FlowProjection => ({
+  nodes: scene.nodes.map((projection) => ({
     id: projection.id,
     type: 'device',
     position: { x: 0, y: 0 },
@@ -175,7 +176,7 @@ describe('TopologyCanvas async layout boundary', () => {
     const base: TopologyProjectionDocument = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] };
     const document: TopologyProjectionDocument = { ...base, nodes: [left, right], edges: [{ ...directEdge, attributes: { endpoint_pairs: [{ ...directEdge.attributes.endpoint_pairs![0], ...(collapsedCable ? { cable_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Cable', entity_id: 'cable' } } : {}) }] } }] };
     render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => (await import('../topology/layout')).toFlowProjection(input)} />);
-    expect(await screen.findByTestId(collapsedCable ? 'svg-path-collapsed-cable:cable:cable' : 'svg-path-left-right::member::member')).toHaveAttribute('d', 'M0,0L1,1');
+    expect(await screen.findByTestId(collapsedCable ? 'svg-path-collapsed-cable:cable' : 'svg-path-left-right::member::member')).toHaveAttribute('d', 'M0,0L1,1');
   });
 
   it('does not apply a stale layout after a fast projection switch', async () => {
@@ -183,8 +184,8 @@ describe('TopologyCanvas async layout boundary', () => {
     const physical = documentFor('physical-B');
     const logicalResult = deferred<FlowProjection>();
     const physicalResult = deferred<FlowProjection>();
-    const layoutEngine: TopologyLayoutEngine = vi.fn((document) => (
-      document.layer === 'L1' ? physicalResult.promise : logicalResult.promise
+    const layoutEngine: TopologyLayoutEngine = vi.fn((scene) => (
+      scene.layer === 'L1' ? physicalResult.promise : logicalResult.promise
     ));
     const onSelectionChange = vi.fn();
     const view = render(
@@ -204,10 +205,10 @@ describe('TopologyCanvas async layout boundary', () => {
       />,
     );
 
-    await act(async () => { physicalResult.resolve(flowFor(physical)); });
+    await act(async () => { physicalResult.resolve(flowFor((await import('../topology/presentationScene')).presentationSceneDocument(physical))); });
     expect(screen.getByRole('button', { name: 'physical-B' })).toBeInTheDocument();
 
-    await act(async () => { logicalResult.resolve(flowFor(logical)); });
+    await act(async () => { logicalResult.resolve(flowFor((await import('../topology/presentationScene')).presentationSceneDocument(logical))); });
     expect(screen.queryByRole('button', { name: 'logical-A' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'physical-B' })).toBeInTheDocument();
   });
@@ -461,14 +462,14 @@ describe('TopologyCanvas async layout boundary', () => {
     const first = documentFor('physical-A');
     const refreshed = { ...documentFor('physical-A'), warnings: ['refreshed'] };
     const next = deferred<FlowProjection>();
-    const layoutEngine: TopologyLayoutEngine = vi.fn((document) => document === first ? Promise.resolve(flowFor(document)) : next.promise);
+    const layoutEngine: TopologyLayoutEngine = vi.fn((scene) => scene.nodes[0]?.id === first.nodes[0]?.id ? Promise.resolve(flowFor(scene)) : next.promise);
     const view = render(<TopologyCanvas document={first} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
     await screen.findByTestId('flow');
     await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
     view.rerender(<TopologyCanvas document={refreshed} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
     expect(screen.getByTestId('flow')).toBeInTheDocument();
     expect(fitViewMock).toHaveBeenCalledTimes(1);
-    await act(async () => { next.resolve(flowFor(refreshed)); });
+    await act(async () => { next.resolve(flowFor((await import('../topology/presentationScene')).presentationSceneDocument(refreshed))); });
     await screen.findByTestId('flow');
     expect(fitViewMock).toHaveBeenCalledTimes(1);
   });
@@ -478,7 +479,7 @@ describe('TopologyCanvas async layout boundary', () => {
     const first = documentFor('physical-A');
     const second = { ...first.nodes[0], id: 'physical-B' };
     const document = { ...first, nodes: [first.nodes[0], second] };
-    const layoutEngine: TopologyLayoutEngine = vi.fn(async (document) => flowFor(document));
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async (scene) => flowFor(scene));
     const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
     await screen.findByTestId('flow');
     await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
@@ -516,7 +517,7 @@ describe('TopologyCanvas async layout boundary', () => {
     };
     const cable = (id: string) => ({ id: `cable:${id}`, kind: 'CABLE', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'Cable', entity_id: id }], attributes: {} });
     const layoutEngine: TopologyLayoutEngine = vi.fn(async () => ({
-      nodes: flowFor(document).nodes,
+      nodes: flowFor((await import('../topology/presentationScene')).presentationSceneDocument(document)).nodes,
       edges: ['cable-one', 'cable-two'].map((id) => ({
         id: `collapsed-cable:cable:${id}`, source: 'a', target: 'b', type: 'floating' as const,
         data: { projection: { id: 'shared-edge', from_node_id: 'a', to_node_id: 'b', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableNode: cable(id), supportingEdgeIds: ['shared-edge'] },

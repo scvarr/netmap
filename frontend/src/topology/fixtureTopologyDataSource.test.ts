@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FixtureTopologyDataSource } from './fixtureTopologyDataSource';
 import { toFlowProjection } from './layout';
+import { presentationSceneDocument } from './presentationScene';
 
 const request = {
   layer: 'L2' as const,
@@ -26,7 +27,7 @@ describe('FixtureTopologyDataSource', () => {
   it('maps projection DTOs to stable UI layout without mutating the document', async () => {
     const document = await new FixtureTopologyDataSource().loadProjection(request);
     const snapshot = structuredClone(document);
-    const flow = await toFlowProjection(document);
+    const flow = await toFlowProjection(presentationSceneDocument(document));
 
     expect(flow.nodes.every((node) => Number.isFinite(node.position.x))).toBe(true);
     expect(flow.edges.find((edge) => edge.id === 'link-core-a-edge-a')).toMatchObject({

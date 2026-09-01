@@ -4,6 +4,8 @@ import {
   LAYOUT_NODE_WIDTH,
   toFlowProjection,
 } from './layout';
+import { presentationSceneDocument } from './presentationScene';
+import type { PresentationSceneDocument } from './presentationScene';
 import type {
   TopologyDetailLevel,
   TopologyLayer,
@@ -41,12 +43,12 @@ const documentFor = (
 });
 
 const position = async (document: TopologyProjectionDocument, id: string) => {
-  const flow = await toFlowProjection(document);
+  const flow = await toFlowProjection(presentationSceneDocument(document));
   return flow.nodes.find((node) => node.id === id)!.position;
 };
 
 const bounds = async (document: TopologyProjectionDocument, ids: string[]) => {
-  const flow = await toFlowProjection(document);
+  const flow = await toFlowProjection(presentationSceneDocument(document));
   const nodes = flow.nodes.filter((node) => ids.includes(node.id));
   return {
     left: Math.min(...nodes.map((node) => node.position.x)),
@@ -57,6 +59,17 @@ const bounds = async (document: TopologyProjectionDocument, ids: string[]) => {
 };
 
 describe('ELK topology layout', () => {
+  it('receives already-formed scene edges without inspecting projection endpoint pairs', async () => {
+    const scene: PresentationSceneDocument = {
+      layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
+      nodes: documentFor(['A', 'B'], [], 'L1', 'PHYSICAL_OBJECT').nodes,
+      edges: [{ id: 'displayed-cable', source: 'A', target: 'B', kind: 'cable' }],
+    };
+
+    const flow = await toFlowProjection(scene);
+    expect(flow.edges).toMatchObject([{ id: 'displayed-cable', data: { cableNode: undefined, endpointPair: undefined } }]);
+  });
+
   it('places the middle node between both endpoints for A-X-B regardless of edge DTO direction', async () => {
     const document = documentFor(['A', 'X', 'B'], [['X', 'A'], ['B', 'X']]);
     const [a, x, b] = await Promise.all(['A', 'X', 'B'].map((id) => position(document, id)));
@@ -66,10 +79,10 @@ describe('ELK topology layout', () => {
   });
 
   it('lays out a branch without overlapping X, B, and C', async () => {
-    const flow = await toFlowProjection(documentFor(
+    const flow = await toFlowProjection(presentationSceneDocument(documentFor(
       ['A', 'X', 'B', 'C'],
       [['A', 'X'], ['X', 'B'], ['X', 'C']],
-    ));
+    )));
     const x = flow.nodes.find((node) => node.id === 'X')!.position;
     const leaves = flow.nodes.filter((node) => ['B', 'C'].includes(node.id));
 
@@ -117,8 +130,8 @@ describe('ELK topology layout', () => {
       ['C', 'A', 'X', 'B'],
       [['X', 'C'], ['B', 'X'], ['X', 'A']],
     );
-    const first = await toFlowProjection(document);
-    const second = await toFlowProjection(structuredClone(document));
+    const first = await toFlowProjection(presentationSceneDocument(document));
+    const second = await toFlowProjection(presentationSceneDocument(structuredClone(document)));
 
     expect(second.nodes.map(({ id, position: nodePosition }) => ({ id, nodePosition }))).toEqual(
       first.nodes.map(({ id, position: nodePosition }) => ({ id, nodePosition })),
@@ -129,7 +142,7 @@ describe('ELK topology layout', () => {
     const document = documentFor(['panel', 'cable', 'manual'], [], 'L1', 'PHYSICAL_OBJECT');
     document.nodes[0].attributes.blueprint_presentation = { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v' }, body: { kind: 'RECTANGLE', width: 480, height: 70 }, slots: [{ slot_key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', connection_point_id: 'front', rendered_position: { x: .5, y: .5 }, external_attachment: { x: .5, y: 0, side: 'TOP' } }] };
     document.nodes[1].attributes.blueprint_presentation = { ...document.nodes[0].attributes.blueprint_presentation, body: { kind: 'RECTANGLE', width: 120, height: 6 } };
-    const flow = await toFlowProjection(document);
+    const flow = await toFlowProjection(presentationSceneDocument(document));
     expect(flow.nodes.find((node) => node.id === 'panel')).toMatchObject({ width: 240, height: 35 });
     expect(flow.nodes.find((node) => node.id === 'cable')).toMatchObject({ width: 240, height: 12 });
     expect(flow.nodes.find((node) => node.id === 'manual')).toMatchObject({ width: undefined, height: undefined });
@@ -149,7 +162,7 @@ describe('ELK topology layout', () => {
     }];
     document.nodes[0].attributes.connection_points = [{ connection_point_id: 'local-port', display_name: 'Rear', cardinality: 1, external_connection_count: 1 }];
 
-    const flow = await toFlowProjection(document);
+    const flow = await toFlowProjection(presentationSceneDocument(document));
 
     expect(flow.nodes.map((node) => node.id)).toEqual(['local']);
     expect(flow.edges).toMatchObject([{ id: 'off-map-continuation:local-cable-remote', source: 'local', target: 'local', type: 'continuation', data: { continuation: { cable_display_name: 'cable-17', remote_display_name: 'PP1' } } }]);
@@ -159,12 +172,12 @@ describe('ELK topology layout', () => {
     ['logical', 'L2', 'DEVICE'],
     ['physical', 'L1', 'PHYSICAL_OBJECT'],
   ] as const)('lays out %s projections through the same graph boundary', async (_, layer, detail) => {
-    const flow = await toFlowProjection(documentFor(
+    const flow = await toFlowProjection(presentationSceneDocument(documentFor(
       ['A', 'X', 'B'],
       [['A', 'X'], ['X', 'B']],
       layer,
       detail,
-    ));
+    )));
 
     expect(flow.nodes).toHaveLength(3);
     expect(flow.edges).toHaveLength(2);

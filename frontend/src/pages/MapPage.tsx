@@ -62,7 +62,7 @@ import type {
   MapTextAnnotation,
 } from "../topology/savedMapTypes";
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
-import { physicalCablePresentation } from "../topology/physicalCablePresentation";
+import { presentationSceneDocument } from "../topology/presentationScene";
 import { defaultMapRegionStyle, nextMapRegionZOrder } from "../topology/regionPresentation";
 import { deleteRegionDraftVertex, insertRegionDraftVertex, moveRegionDraftVertex, translateRegionDraft, validateRegionDraftPolygon } from '../topology/regionDraftGeometry';
 import type {
@@ -99,7 +99,7 @@ interface MapPageProps {
   topologyLayoutStore?: TopologyLayoutStore;
 }
 
-interface SceneDocument {
+interface LoadedSceneDocument {
   sceneKey: string;
   document: TopologyProjectionDocument;
 }
@@ -177,7 +177,7 @@ export function MapPage({
   const viewMode = view(params.get("view"));
   const [maps, setMaps] = useState<SavedMapSummary[] | null>(null);
   const [map, setMap] = useState<SavedMap | null>(null);
-  const [sceneDocument, setSceneDocument] = useState<SceneDocument | null>(
+  const [sceneDocument, setSceneDocument] = useState<LoadedSceneDocument | null>(
     null,
   );
   const [logicalDocument, setLogicalDocument] =
@@ -287,7 +287,7 @@ export function MapPage({
 
   const selectedCableId = selection?.type === "node" ? cableIdForNode(selection.item) : null;
   const drawableSelectedCable = Boolean(
-    selectedCableId && document && viewMode === "physical" && physicalCablePresentation(document).cables.some((item) => cableIdForNode(item.cable) === selectedCableId),
+    selectedCableId && document && viewMode === "physical" && presentationSceneDocument(document).edges.some((edge) => edge.kind === 'cable' && edge.cableNode && cableIdForNode(edge.cableNode) === selectedCableId),
   );
   const selectedCableRoute = selectedCableId
     ? (activeMap?.cable_routes ?? []).find((route) => route.cable_ref.entity_id === selectedCableId)

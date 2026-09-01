@@ -3,11 +3,10 @@ import type { Edge, Node } from '@xyflow/react';
 import type {
   PhysicalEndpointPair,
   L1OffMapContinuation,
-  TopologyProjectionDocument,
   TopologyProjectionEdge,
   TopologyProjectionNode,
 } from './types';
-import { physicalCablePresentation } from './physicalCablePresentation';
+import type { PresentationSceneDocument } from './presentationScene';
 import type { MapCableRoute } from './savedMapTypes';
 import type { MapCableRouteWaypoint } from './savedMapTypes';
 import { blueprintNodeDisplayDimensions } from './blueprintDisplaySize';
@@ -39,7 +38,7 @@ export interface DeviceNodeData extends Record<string, unknown> {
 }
 
 export interface LogicalEdgeData extends Record<string, unknown> {
-  projection: TopologyProjectionEdge;
+  projection?: TopologyProjectionEdge;
   endpointPair?: PhysicalEndpointPair;
   cableNode?: TopologyProjectionNode;
   supportingEdgeIds?: string[];
@@ -67,7 +66,7 @@ export interface FlowProjection {
 }
 
 export type TopologyLayoutEngine = (
-  document: TopologyProjectionDocument,
+  scene: PresentationSceneDocument,
 ) => Promise<FlowProjection>;
 
 interface OrientedEdge {
@@ -136,12 +135,15 @@ const orientLayoutEdges = (
   });
 };
 
-export const toFlowProjection: TopologyLayoutEngine = async (document) => {
-  const presentation = physicalCablePresentation(document);
-  const orderedNodes = [...presentation.nodes].sort((left, right) => left.id.localeCompare(right.id));
-  const orderedEdges = [...presentation.edges].sort((left, right) => left.id.localeCompare(right.id));
-  const synthetic = presentation.cables.map((cable) => ({ id: `layout:${cable.cable.id}`, from_node_id: cable.source, to_node_id: cable.target } as TopologyProjectionEdge));
-  const layoutEdges: ElkExtendedEdge[] = orientLayoutEdges(orderedNodes, [...orderedEdges, ...synthetic]).map((edge) => ({
+export const toFlowProjection: TopologyLayoutEngine = async (scene) => {
+  const orderedNodes = [...scene.nodes].sort((left, right) => left.id.localeCompare(right.id));
+  const orderedEdges = [...scene.edges]
+    .filter((edge) => edge.kind !== 'off-map-continuation')
+    .sort((left, right) => left.id.localeCompare(right.id));
+  const layoutEdges: ElkExtendedEdge[] = orientLayoutEdges(
+    orderedNodes,
+    orderedEdges.map((edge) => ({ id: edge.id, from_node_id: edge.source, to_node_id: edge.target } as TopologyProjectionEdge)),
+  ).map((edge) => ({
     id: edge.id,
     sources: [edge.source],
     targets: [edge.target],
@@ -185,9 +187,17 @@ export const toFlowProjection: TopologyLayoutEngine = async (document) => {
       position: positions.get(projection.id) ?? { x: 0, y: 0 },
       data: { projection },
     })),
-    edges: [...orderedEdges.flatMap((projection) => {
-      const pairs = projection.attributes.endpoint_pairs;
-      return pairs?.length ? pairs.map((endpointPair) => ({ id: `${projection.id}::member::${endpointPair.connection_member_id}`, source: projection.from_node_id, target: projection.to_node_id, type: 'floating' as const, data: { projection, endpointPair } })) : [{ id: projection.id, source: projection.from_node_id, target: projection.to_node_id, type: 'floating' as const, data: { projection } }];
-    }), ...presentation.cables.map((cable) => ({ id: `collapsed-cable:${cable.cable.id}`, source: cable.source, target: cable.target, type: 'floating' as const, data: { projection: { id: `presentation:${cable.cable.id}`, from_node_id: cable.source, to_node_id: cable.target, kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, endpointPair: cable.endpointPair, cableNode: cable.cable, supportingEdgeIds: cable.supportingEdgeIds } })), ...(document.l1_off_map_continuations ?? []).map((continuation) => ({ id: `off-map-continuation:${continuation.id}`, source: continuation.local_node_id, target: continuation.local_node_id, type: 'continuation' as const, data: { projection: { id: `presentation:${continuation.id}`, from_node_id: continuation.local_node_id, to_node_id: continuation.local_node_id, kind: 'L1_OFF_MAP_CONTINUATION', aggregate: false, source_refs: continuation.source_refs, attributes: {} }, continuation } }))],
+    edges: scene.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: edge.kind === 'off-map-continuation' ? 'continuation' as const : 'floating' as const,
+      data: {
+        projection: edge.projectionEdge,
+        endpointPair: edge.endpointPair,
+        cableNode: edge.cableNode,
+        continuation: edge.continuation,
+      },
+    })),
   };
 };

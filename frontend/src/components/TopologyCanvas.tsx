@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   applyNodeChanges,
   Background,
@@ -47,6 +47,7 @@ import { cableIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint, MapTextAnnotation } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
+import { presentationSceneDocument } from "../topology/presentationScene";
 import { MapRegionLayer, type MapReferenceOutline, type MapRegionDraft } from "./MapRegionLayer";
 import { RegionDraftEditor, type RegionDraftPointerTarget, type RegionDraftSegmentFeedback } from './RegionDraftEditor';
 import { assistSegment, type SegmentAssistResult } from '../topology/geometryAssist';
@@ -195,6 +196,7 @@ export function TopologyCanvas({
   const { fitView, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
+  const presentationScene = useMemo(() => presentationSceneDocument(document), [document]);
 
   currentDocument.current = document;
 
@@ -281,7 +283,7 @@ export function TopologyCanvas({
     if (sceneChanged) setProjection(null);
     setLayoutError(null);
     perfMark("layout-start");
-    void layoutEngine(document).then(
+    void layoutEngine(presentationScene).then(
       (nextProjection) => {
         if (!current || currentDocument.current !== document) return;
         const storedPositions =
@@ -318,7 +320,7 @@ export function TopologyCanvas({
     return () => {
       current = false;
     };
-  }, [document, layoutEngine, layoutRevision, layoutStore, t, viewKey]);
+  }, [document, layoutEngine, layoutRevision, layoutStore, presentationScene, t, viewKey]);
 
   useEffect(() => {
     if (!displayWidthOverrides) return;
@@ -462,7 +464,7 @@ export function TopologyCanvas({
         ? selection?.type === "node" &&
           selection.item.id === edge.data.cableNode.id
         : selection?.type === "edge" &&
-          selection.item.id === edge.data?.projection.id;
+          selection.item.id === edge.data?.projection?.id;
     const isTraced = tracedCableId !== null
       ? (traceOverlay?.highlightedCableIds.has(tracedCableId) ?? false)
       : edge.data?.endpointPair
