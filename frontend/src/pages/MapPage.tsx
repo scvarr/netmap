@@ -8,6 +8,7 @@ import {
 import { QuickInspector } from "../components/QuickInspector";
 import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
 import { CableRenameDialog } from "../components/CableRenameDialog";
+import { HistoricalCableLabelReuseDialog } from "../components/HistoricalCableLabelReuseDialog";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
 import type { MapRegionDraft } from "../components/MapRegionLayer";
@@ -72,6 +73,7 @@ import type {
 } from "../topology/types";
 import type { PhysicalEndpointConnectionCreationDocument, PhysicalEndpointConnectionWriteDataSource } from "../topology/physicalEndpointConnectionWriteTypes";
 import type { CableLabelDataSource, CableNamingInput } from "../topology/cableLabelTypes";
+import { isHistoricalCableLabelReuseConfirmationStale, isHistoricalCableLabelReuseRequired } from "../topology/historicalCableLabelReuse";
 import { CableNamingFields } from "../components/CableNamingFields";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
 import { displayNodeLabel } from "../topology/presentation";
@@ -202,6 +204,7 @@ export function MapPage({
   const [cableRouteEdit, setCableRouteEdit] = useState<CableRouteEditState | null>(null);
   const [cableRouteReset, setCableRouteReset] = useState<CableRouteResetOperation | null>(null);
   const [cableRename, setCableRename] = useState<CableRenameState | null>(null);
+  const [wiringHistoricalCandidate, setWiringHistoricalCandidate] = useState<string | null>(null);
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
   const [regionMode, setRegionMode] = useState(false);
   const [showRegionReferenceOutlines, setShowRegionReferenceOutlines] = useState(true);
@@ -786,14 +789,14 @@ export function MapPage({
     try { if (await refreshWiringAfterRouteWrite(operation)) setWiring({ status: "idle" }); }
     catch { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "refresh-failed", error: null }); }
   };
-  const createWiring = async () => {
+  const createWiring = async (confirmedHistoricalLabel?: string) => {
     if (!physicalEndpointConnectionWriteDataSource || wiring.status !== "confirming" || (wiring.naming.generate_cable_label && !wiring.naming.cable_label_template_id)) return;
     const operation = wiring;
     if (!endpointFor({ physicalObjectId: operation.source.physicalObjectId, connectionPointId: operation.source.connectionPointId, label: operation.source.portLabel }) || !endpointFor({ physicalObjectId: operation.target.physicalObjectId, connectionPointId: operation.target.connectionPointId, label: operation.target.portLabel }, operation.source.connectionPointId)) { setWiring({ ...operation, error: t("map.wiring.source") }); return; }
     setWiring({ ...operation, status: "creating", error: null });
     let canonicalResult: PhysicalEndpointConnectionCreationDocument;
-    try { canonicalResult = await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection({ source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: 1 }, target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: 1 }, cable_label: operation.naming.cable_label?.trim() || null, cable_label_template_id: operation.naming.cable_label_template_id ?? null, generate_cable_label: operation.naming.generate_cable_label === true }); }
-    catch (reason) { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, error: errorMessage(reason, t("map.connectFailed")) }); return; }
+    try { canonicalResult = await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection({ source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: 1 }, target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: 1 }, cable_label: operation.naming.cable_label?.trim() || null, cable_label_template_id: operation.naming.cable_label_template_id ?? null, generate_cable_label: operation.naming.generate_cable_label === true, confirmed_historical_label: confirmedHistoricalLabel ?? null }); }
+    catch (reason) { if (isHistoricalCableLabelReuseRequired(reason)) { setWiringHistoricalCandidate(reason.candidate); setWiring(operation); } else if (confirmedHistoricalLabel && isHistoricalCableLabelReuseConfirmationStale(reason)) { setWiringHistoricalCandidate(null); setWiring(operation); setTimeout(() => void createWiring(), 0); } else if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, error: errorMessage(reason, t("map.connectFailed")) }); return; }
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
     await saveWiringRoute({ ...operation, canonicalResult });
   };
@@ -1960,6 +1963,7 @@ export function MapPage({
         onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("map.deleteCableFailed")))); }}
       />}
       {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
+      {wiringHistoricalCandidate && <HistoricalCableLabelReuseDialog candidate={wiringHistoricalCandidate} pending={wiring.status === "creating"} onCancel={() => setWiringHistoricalCandidate(null)} onConfirm={() => void createWiring(wiringHistoricalCandidate)} />}
       {error && <p role="alert">{error}</p>}
       {document &&
         params.get("focus") &&

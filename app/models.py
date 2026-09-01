@@ -310,6 +310,25 @@ class CableLabelTemplate(Base):
     start_at: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
 
 
+class CableLabelHistory(Base):
+    """Domain history for mutable Cable labels, not topology identity or audit."""
+
+    __tablename__ = "cable_label_history"
+    __table_args__ = (
+        Index("ix_cable_label_history_label", "label"),
+        Index("ix_cable_label_history_cable_id", "cable_id"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
+    # No foreign key: history must survive the Cable's canonical deletion.
+    cable_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class ConnectionMember(Base):
     __tablename__ = "connection_members"
     __table_args__ = (

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { InfrastructureObjectsPage } from './InfrastructureObjectsPage';
 import type { CatalogInventoryDocument } from '../topology/catalogInventoryTypes';
+import { HistoricalCableLabelReuseRequiredError } from '../topology/historicalCableLabelReuse';
 
 const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT', entity_type, entity_id });
 const document = (): CatalogInventoryDocument => ({ schema_version: '1.0', equipment: [
@@ -44,6 +45,19 @@ describe('InfrastructureObjectsPage inventory catalog', () => {
     expect(await screen.findByText('Имя сохранено, но каталог не удалось обновить. Повторите обновление.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
     await screen.findByText('FC0001'); expect(generateCableLabel).toHaveBeenCalledTimes(1); expect(loadCatalogInventory).toHaveBeenCalledTimes(3);
+  });
+  it('requires explicit confirmation for historical generated Cable reuse and refreshes only after confirmation', async () => {
+    const loadCatalogInventory = vi.fn().mockResolvedValue(document());
+    const generateCableLabel = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('FC0003')).mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('FC0003')).mockResolvedValue(undefined);
+    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel: vi.fn(), generateCableLabel, loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template-1', name: 'FC', pattern: 'FC####', start_at: 1 }] }) } as any} /></MemoryRouter>);
+    await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать C10' })); await userEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template-1'); await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать' }));
+    expect(await screen.findByRole('heading', { name: 'Имя FC0003 использовалось ранее' })).toBeInTheDocument(); await userEvent.click(screen.getAllByRole('button', { name: 'Отмена' }).at(-1)!); expect(generateCableLabel).toHaveBeenCalledTimes(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать' })); await userEvent.click(await screen.findByRole('button', { name: 'Использовать FC0003' })); await waitFor(() => expect(generateCableLabel).toHaveBeenLastCalledWith('cable', 'template-1', 'FC0003')); expect(loadCatalogInventory).toHaveBeenCalledTimes(2);
+  });
+  it('requires explicit confirmation for manual historical Cable reuse', async () => {
+    const setCableLabel = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('OLD-01')).mockResolvedValue(undefined);
+    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory: vi.fn().mockResolvedValue(document()) }} cableLabelDataSource={{ setCableLabel, generateCableLabel: vi.fn(), loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [] }) } as any} /></MemoryRouter>);
+    await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать C10' })); await userEvent.clear(screen.getByLabelText('Имя кабеля')); await userEvent.type(screen.getByLabelText('Имя кабеля'), 'OLD-01'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await userEvent.click(await screen.findByRole('button', { name: 'Использовать OLD-01' })); await waitFor(() => expect(setCableLabel).toHaveBeenLastCalledWith('cable', 'OLD-01', 'OLD-01'));
   });
   it('uses one inventory load and renders occupancy, classes, map and detail links', async () => {
     const source = renderPage(); await screen.findByText('SW17');

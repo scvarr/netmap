@@ -7,6 +7,7 @@ from sqlalchemy.engine import make_url
 from app.database import SessionLocal
 from app.models import (
     Connection,
+    CableLabelHistory,
     ConnectionMember,
     ConnectionPoint,
     BlueprintEndpointSlot,
@@ -137,6 +138,7 @@ def clean_database(request: pytest.FixtureRequest):
         session.execute(delete(InterfacePhysicalBinding))
         session.execute(delete(NetworkInterfacePhysicalOwner))
         session.execute(delete(NetworkInterface))
+        session.execute(delete(CableLabelHistory))
         session.execute(delete(ConnectionMember))
         session.execute(delete(Connection))
         session.execute(delete(ConnectionPoint))

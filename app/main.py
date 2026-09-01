@@ -1209,6 +1209,7 @@ def create_physical_link(
             cable_label=query.cable_label,
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
+            confirmed_historical_label=query.confirmed_historical_label,
         )
 
         def ref(entity_type: str, entity_id: uuid.UUID) -> dict[str, object]:
@@ -1284,6 +1285,7 @@ def create_physical_endpoint_connection(
             cable_label=query.cable_label,
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
+            confirmed_historical_label=query.confirmed_historical_label,
         )
         return PhysicalEndpointConnectionCreationDocument(
             source=materialization(created.source),
@@ -1327,7 +1329,7 @@ def set_cable_label(
     session: Session = Depends(get_session),
 ) -> None:
     with session.begin():
-        CableLabelCatalog(session).set_label(cable_id, query.label)
+        CableLabelCatalog(session).set_label(cable_id, query.label, query.confirmed_historical_label)
 
 
 @app.post(
@@ -1341,7 +1343,7 @@ def generate_cable_label(
     session: Session = Depends(get_session),
 ) -> None:
     with session.begin():
-        CableLabelCatalog(session).generate_label_for_cable(cable_id, query.template_id)
+        CableLabelCatalog(session).generate_label_for_cable(cable_id, query.template_id, query.confirmed_historical_label)
 
 
 @app.get("/v1/cable-label-settings", response_model=CableLabelSettingsDocument)

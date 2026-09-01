@@ -63,6 +63,7 @@ class PhysicalConnectionCatalog:
         cable_label: str | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
+        confirmed_historical_label: str | None = None,
     ) -> CreatedPhysicalConnection:
         if source_interface_id == target_interface_id:
             raise ValidationError(
@@ -75,6 +76,7 @@ class PhysicalConnectionCatalog:
             cable_label=cable_label,
             cable_label_template_id=cable_label_template_id,
             generate_cable_label=generate_cable_label,
+            confirmed_historical_label=confirmed_historical_label,
         )
         assert created.source.binding_id is not None
         assert created.target.binding_id is not None
@@ -95,6 +97,7 @@ class PhysicalConnectionCatalog:
         cable_label: str | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
+        confirmed_historical_label: str | None = None,
     ) -> CreatedEndpointPhysicalConnection:
         if source == target:
             raise ValidationError(
@@ -241,6 +244,7 @@ class PhysicalConnectionCatalog:
             label=cable_label,
             template_id=cable_label_template_id,
             generate=generate_cable_label,
+            confirmed_historical_label=confirmed_historical_label,
         )
 
         return CreatedEndpointPhysicalConnection(
@@ -277,6 +281,11 @@ class PhysicalConnectionCatalog:
                 "Only an external physical Connection can be disconnected",
                 {"connection_id": str(connection_id)},
             )
+        cable = self.session.scalar(
+            select(Cable).where(Cable.connection_id == connection.id).with_for_update()
+        )
+        if cable is not None:
+            CableLabelCatalog(self.session).release_cable_label(cable)
         self.session.delete(connection)
         self.session.flush()
 
@@ -295,6 +304,7 @@ class PhysicalConnectionCatalog:
             raise ValidationError(
                 "Cable refers to a missing Connection", {"cable_id": str(cable_id)}
             )
+        CableLabelCatalog(self.session).release_cable_label(cable)
         self.session.delete(connection)
         self.session.flush()
 

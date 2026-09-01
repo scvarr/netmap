@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MapPage } from './MapPage';
 import { createMapPageHarness } from './MapPage.testHarness';
 import { ApiSavedMapDataSource } from '../topology/apiSavedMapDataSource';
+import { HistoricalCableLabelReuseRequiredError } from '../topology/historicalCableLabelReuse';
 
 vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (p: any) => <div data-testid="canvas"><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'a', connectionPointId: 'a-cp', label: 'A01' })}>blueprint port</button><button onClick={() => p.onPhysicalPortClick?.({ physicalObjectId: 'b', connectionPointId: 'b-cp', label: 'B01' })}>generic port</button><button onClick={() => p.onPaneClick?.({ x: 10, y: 20 })}>pane 1</button><button onClick={() => p.onPaneClick?.({ x: 30, y: 40 })}>pane 2</button><button onClick={() => p.wiringRoute?.onWaypointMove(0, { x: 99, y: 88 })}>drag waypoint</button><span data-states={JSON.stringify(p.physicalPortStates)} data-waypoints={JSON.stringify(p.wiringRoute?.waypoints)} /></div> }));
 const renderMapPage = createMapPageHarness(MapPage);
@@ -44,7 +45,7 @@ describe('MapPage visual wiring', () => {
     expect(screen.getByText('Назначение: Target / B01')).toBeInTheDocument();
     expect(write).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
-    await waitFor(() => expect(write).toHaveBeenCalledWith({ source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: 'b-cp', member_index: 1 }, cable_label: null, cable_label_template_id: null, generate_cable_label: false }));
+    await waitFor(() => expect(write).toHaveBeenCalledWith({ source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: 'b-cp', member_index: 1 }, cable_label: null, cable_label_template_id: null, generate_cable_label: false, confirmed_historical_label: null }));
     expect(write).toHaveBeenCalledTimes(1); expect(loadProjection.mock.calls.length).toBeGreaterThan(1);
   });
 
@@ -61,6 +62,11 @@ describe('MapPage visual wiring', () => {
     fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); expect(screen.getByRole('button', { name: 'Создать кабель' })).not.toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     await waitFor(() => expect(write).toHaveBeenCalledWith(expect.objectContaining({ cable_label: null, cable_label_template_id: 'template-1', generate_cable_label: true })));
+  });
+  it('confirms exact historical generated label reuse without replaying post-write refresh', async () => {
+    const write = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('FC0003')).mockResolvedValue(creation); const { loadProjection } = renderPage(write); await screen.findByTestId('canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); await screen.findByRole('option', { name: /FC · FC####/ }); fireEvent.click(screen.getByLabelText('Сгенерировать')); fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    expect(await screen.findByRole('heading', { name: 'Имя FC0003 использовалось ранее' })).toBeInTheDocument(); expect(write).toHaveBeenCalledTimes(1); fireEvent.click(screen.getByRole('button', { name: 'Использовать FC0003' })); await waitFor(() => expect(write).toHaveBeenLastCalledWith(expect.objectContaining({ confirmed_historical_label: 'FC0003', cable_label_template_id: 'template-1', generate_cable_label: true }))); expect(loadProjection.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('passes a manual Cable label through the map create request without generation', async () => {

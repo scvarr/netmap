@@ -1,11 +1,15 @@
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
-from app.errors import ValidationError
-from app.models import Cable, CableLabelSettings, CableLabelTemplate
+from app.errors import (
+    HistoricalCableLabelReuseConfirmationStaleError,
+    HistoricalCableLabelReuseRequiredError,
+    ValidationError,
+)
+from app.models import Cable, CableLabelHistory, CableLabelSettings, CableLabelTemplate
 
 
 def resolved_cable_label(cable: Cable) -> tuple[str, str | None]:
@@ -96,44 +100,86 @@ class CableLabelCatalog:
         self.session.flush()
         return settings
 
-    def set_label(self, cable_id: uuid.UUID, value: str | None) -> Cable:
+    def set_label(self, cable_id: uuid.UUID, value: str | None, confirmed_historical_label: str | None = None) -> Cable:
         cable = self.session.scalar(select(Cable).where(Cable.id == cable_id).with_for_update())
         if cable is None:
             raise ValidationError("Cable does not exist", {"cable_id": str(cable_id)})
-        self._assign(cable, normalized_cable_label(value))
+        self._assign(cable, normalized_cable_label(value), confirmed_historical_label)
         return cable
 
-    def generate_label_for_cable(self, cable_id: uuid.UUID, template_id: uuid.UUID) -> Cable:
+    def generate_label_for_cable(self, cable_id: uuid.UUID, template_id: uuid.UUID, confirmed_historical_label: str | None = None) -> Cable:
         """Atomically assign the first template value available to this Cable."""
         cable = self.session.scalar(select(Cable).where(Cable.id == cable_id).with_for_update())
         if cable is None:
             raise ValidationError("Cable does not exist", {"cable_id": str(cable_id)})
         self.settings()
-        self._assign(cable, self._generate(template_id, excluding_cable_id=cable.id))
+        candidate = self._generate(template_id, excluding_cable_id=cable.id)
+        if confirmed_historical_label is not None and confirmed_historical_label != candidate:
+            raise HistoricalCableLabelReuseConfirmationStaleError()
+        self._assign(cable, candidate, confirmed_historical_label)
         return cable
 
     def assign_new_cable(
-        self, cable: Cable, *, label: str | None, template_id: uuid.UUID | None, generate: bool
+        self, cable: Cable, *, label: str | None, template_id: uuid.UUID | None, generate: bool,
+        confirmed_historical_label: str | None = None,
     ) -> None:
         if generate:
             if template_id is None:
                 raise ValidationError("Cable label template is required when generation is enabled")
-            self._assign(cable, self._generate(template_id))
+            candidate = self._generate(template_id)
+            if confirmed_historical_label is not None and confirmed_historical_label != candidate:
+                raise HistoricalCableLabelReuseConfirmationStaleError()
+            self._assign(cable, candidate, confirmed_historical_label)
         else:
-            self._assign(cable, normalized_cable_label(label))
+            self._assign(cable, normalized_cable_label(label), confirmed_historical_label)
 
-    def _assign(self, cable: Cable, label: str | None) -> None:
+    def release_cable_label(self, cable: Cable) -> None:
+        """Release a current label before deleting the canonical Cable."""
+        self.settings()
+        if cable.label is not None:
+            self._release(cable.id, cable.label)
+        self.session.flush()
+
+    def _assign(self, cable: Cable, label: str | None, confirmed_historical_label: str | None = None) -> None:
         # Locking the singleton policy record serializes every label writer, including
         # generated create. This makes the check-and-assignment boundary race-safe.
         settings = self.settings()
-        if label is not None and settings.unique_labels:
+        conflict = None
+        if label is not None:
             conflict = self.session.scalar(
                 select(Cable.id).where(Cable.label == label, Cable.id != cable.id).limit(1)
             )
-            if conflict is not None:
-                raise ValidationError("Cable label must be globally unique", {"label": label})
+        if label is not None and settings.unique_labels and conflict is not None:
+            raise ValidationError("Cable label must be globally unique", {"label": label})
+        if label is not None and label != cable.label and conflict is None:
+            historical = self.session.scalar(
+                select(CableLabelHistory.id).where(CableLabelHistory.label == label).limit(1)
+            )
+            if historical is not None and confirmed_historical_label != label:
+                raise HistoricalCableLabelReuseRequiredError(label)
+        if cable.label is not None and cable.label != label:
+            self._release(cable.id, cable.label)
         cable.label = label
+        if label is not None and not self.session.scalar(
+            select(CableLabelHistory.id).where(
+                CableLabelHistory.cable_id == cable.id,
+                CableLabelHistory.label == label,
+                CableLabelHistory.released_at.is_(None),
+            ).limit(1)
+        ):
+            self.session.add(CableLabelHistory(label=label, cable_id=cable.id))
         self.session.flush()
+
+    def _release(self, cable_id: uuid.UUID, label: str) -> None:
+        self.session.execute(
+            update(CableLabelHistory)
+            .where(
+                CableLabelHistory.cable_id == cable_id,
+                CableLabelHistory.label == label,
+                CableLabelHistory.released_at.is_(None),
+            )
+            .values(released_at=func.now())
+        )
 
     def _generate(self, template_id: uuid.UUID, *, excluding_cable_id: uuid.UUID | None = None) -> str:
         template = self.session.get(CableLabelTemplate, template_id)

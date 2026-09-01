@@ -50,3 +50,20 @@ class UniquenessConflictError(NetMapError):
             "Concurrent write conflicts with an existing resource",
             {"reason": reason, "constraint": constraint},
         )
+
+
+class HistoricalCableLabelReuseRequiredError(NetMapError):
+    def __init__(self, candidate: str) -> None:
+        super().__init__(
+            "HISTORICAL_CABLE_LABEL_REUSE_REQUIRED",
+            "Cable label was used previously and requires explicit confirmation",
+            {"candidate": candidate},
+        )
+
+
+class HistoricalCableLabelReuseConfirmationStaleError(NetMapError):
+    def __init__(self) -> None:
+        super().__init__(
+            "HISTORICAL_CABLE_LABEL_REUSE_CONFIRMATION_STALE",
+            "Cable label reuse confirmation is no longer current",
+        )

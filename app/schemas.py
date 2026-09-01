@@ -1033,6 +1033,7 @@ class CreatePhysicalLinkRequest(BaseModel):
     cable_label: str | None = None
     cable_label_template_id: uuid.UUID | None = None
     generate_cable_label: bool = False
+    confirmed_historical_label: str | None = None
 
 
 class PhysicalConnectionCreationDocument(BaseModel):
@@ -1076,18 +1077,21 @@ class CreatePhysicalEndpointConnectionRequest(BaseModel):
     cable_label: str | None = None
     cable_label_template_id: uuid.UUID | None = None
     generate_cable_label: bool = False
+    confirmed_historical_label: str | None = None
 
 
 class SetCableLabelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     label: str | None
+    confirmed_historical_label: str | None = None
 
 
 class GenerateCableLabelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     template_id: uuid.UUID
+    confirmed_historical_label: str | None = None
 
 
 class CableLabelSettingsDocument(BaseModel):
@@ -2596,7 +2600,12 @@ class NATEvaluationArtifact(BaseModel):
 
 
 class ErrorBody(BaseModel):
-    code: Literal["VALIDATION_ERROR", "MODEL_ERROR"]
+    code: Literal[
+        "VALIDATION_ERROR",
+        "MODEL_ERROR",
+        "HISTORICAL_CABLE_LABEL_REUSE_REQUIRED",
+        "HISTORICAL_CABLE_LABEL_REUSE_CONFIRMATION_STALE",
+    ]
     message: str
     details: dict[str, Any]
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type {
   DeviceDetailsDataSource,
   DeviceDetailsDocument,
@@ -7,6 +7,8 @@ import type {
 import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
 import { CableNamingFields } from './CableNamingFields';
 import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
+import { HistoricalCableLabelReuseDialog } from './HistoricalCableLabelReuseDialog';
+import { isHistoricalCableLabelReuseConfirmationStale, isHistoricalCableLabelReuseRequired } from '../topology/historicalCableLabelReuse';
 
 export interface PhysicalLinkTargetDevice {
   physicalObjectId: string;
@@ -44,6 +46,7 @@ export function ConnectPhysicalInterface({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({});
+  const [historicalCandidate, setHistoricalCandidate] = useState<string | null>(null);
 
   useEffect(() => {
     setTargetInterfaceId('');
@@ -76,8 +79,7 @@ export function ConnectPhysicalInterface({
       : []
   ), [sourceInterface.interface_ref.entity_id, targetState]);
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submit = async (confirmedHistoricalLabel?: string) => {
     if (!targetInterfaceId || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
     setSubmitting(true);
     setError(null);
@@ -86,20 +88,23 @@ export function ConnectPhysicalInterface({
         source_interface_id: sourceInterface.interface_ref.entity_id,
         target_interface_id: targetInterfaceId,
         ...cableNaming,
+        confirmed_historical_label: confirmedHistoricalLabel ?? null,
       });
       setOpen(false);
       setTargetDeviceId('');
       setTargetInterfaceId('');
       onConnected();
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
+      if (isHistoricalCableLabelReuseRequired(reason)) setHistoricalCandidate(reason.candidate);
+      else if (confirmedHistoricalLabel && isHistoricalCableLabelReuseConfirmationStale(reason)) { setHistoricalCandidate(null); queueMicrotask(() => void submit()); }
+      else setError(reason instanceof Error ? reason.message : 'Неизвестная ошибка');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="connect-interface">
+    <><div className="connect-interface">
       <button
         type="button"
         className="connect-interface__trigger"
@@ -112,7 +117,7 @@ export function ConnectPhysicalInterface({
         Подключить
       </button>
       {open && (
-        <form className="connect-interface__form" onSubmit={submit} noValidate>
+        <form className="connect-interface__form" onSubmit={(event) => { event.preventDefault(); void submit(); }} noValidate>
           <strong>Физическое подключение</strong>
           <label>
             <span>Куда: устройство</span>
@@ -172,6 +177,6 @@ export function ConnectPhysicalInterface({
           </div>
         </form>
       )}
-    </div>
+    </div>{historicalCandidate && <HistoricalCableLabelReuseDialog candidate={historicalCandidate} pending={submitting} onCancel={() => setHistoricalCandidate(null)} onConfirm={() => void submit(historicalCandidate)} />}</>
   );
 }
