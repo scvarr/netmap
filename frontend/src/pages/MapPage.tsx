@@ -138,6 +138,14 @@ interface CableRouteEditState {
 }
 interface CableRouteResetOperation { mapId: string; variantId: string; cableId: string; status: "pending" | "refresh-failed"; message?: string; }
 interface CableRenameState { cableId: string; fallback: string; userLabel: string | null; }
+interface PresentationVariantCreateOperation {
+  mapId: string;
+  sourceVariantId: string;
+  sourceVariantName: string;
+  name: string;
+  status: "editing" | "creating";
+  error: string | null;
+}
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; variantId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; naming: CableNamingInput; canonicalResult?: PhysicalEndpointConnectionCreationDocument; error: string | null; }
@@ -194,6 +202,7 @@ export function MapPage({
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [presentationVariantCreate, setPresentationVariantCreate] = useState<PresentationVariantCreateOperation | null>(null);
   const [variantDeletion, setVariantDeletion] = useState<{ mapId: string; primaryVariantId: string; status: "refreshing" | "refresh-failed" } | null>(null);
   const [name, setName] = useState("");
   const [insertion, setInsertion] = useState<InsertionState | null>(null);
@@ -237,6 +246,7 @@ export function MapPage({
   const viewportCenter = useRef<(() => XYPosition) | null>(null);
   const consumedAddIntent = useRef<string | null>(null);
   const regionOperationSequence = useRef(0);
+  const presentationVariantSubmitPending = useRef(false);
 
   selectedMapId.current = mapId;
   const legacy = !savedMapDataSource;
@@ -665,6 +675,27 @@ export function MapPage({
       selectMap(created.map_ref.entity_id);
     } catch (reason) {
       setError(errorMessage(reason, t("map.createFailed")));
+    }
+  };
+
+  const createPresentationVariant = async () => {
+    const operation = presentationVariantCreate;
+    if (!operation || operation.status !== "editing" || !savedMapDataSource?.createPresentationVariant || !operation.name.trim() || presentationVariantSubmitPending.current) return;
+    presentationVariantSubmitPending.current = true;
+    setPresentationVariantCreate({ ...operation, status: "creating", error: null });
+    try {
+      const detail = await savedMapDataSource.createPresentationVariant(operation.mapId, operation.name.trim(), operation.sourceVariantId);
+      setMap(detail);
+      setParams((current) => {
+        const next = new URLSearchParams(current);
+        next.set("variant", detail.active_variant_ref.entity_id);
+        return next;
+      });
+      setPresentationVariantCreate(null);
+    } catch {
+      setPresentationVariantCreate({ ...operation, status: "editing", error: "Не удалось создать компоновку карты." });
+    } finally {
+      presentationVariantSubmitPending.current = false;
     }
   };
 
@@ -1753,6 +1784,7 @@ export function MapPage({
             "—"
           ) : (
             <select
+              className="map-page__select"
               aria-label={t("map.maps")}
               value={mapId ?? ""}
               onChange={(event) => selectMap(event.target.value)}
@@ -1773,8 +1805,8 @@ export function MapPage({
         </label>
         {!legacy && activeMap && (
           <label>
-            Компоновка карты:{" "}
-            <select aria-label="Компоновка карты" value={activeMap.active_variant_ref.entity_id} onChange={(event) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", event.target.value); return next; })}>
+            <span>Компоновка карты:</span>
+            <select className="map-page__select" aria-label="Компоновка карты" value={activeMap.active_variant_ref.entity_id} onChange={(event) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", event.target.value); return next; })}>
               {activeMap.variants.map((item) => <option key={item.variant_ref.entity_id} value={item.variant_ref.entity_id}>{item.name}</option>)}
             </select>
           </label>
@@ -1787,9 +1819,8 @@ export function MapPage({
               void savedMapDataSource.createComposite(activeMap.map_ref.entity_id, compositeName.trim(), [...compositeMemberIds], activeMap.active_variant_ref.entity_id).then((detail) => { setMap(detail); setCompositeMemberIds(new Set()); }).catch(() => setError("Не удалось создать composite"));
             }}>Создать composite</button>
             <button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={() => {
-              const variantName = window.prompt("Название новой компоновки");
-              if (!variantName?.trim() || !savedMapDataSource?.createPresentationVariant) return;
-              void savedMapDataSource.createPresentationVariant(activeMap.map_ref.entity_id, variantName.trim(), activeMap.active_variant_ref.entity_id).then((detail) => { setMap(detail); setParams((current) => { const next = new URLSearchParams(current); next.set("variant", detail.active_variant_ref.entity_id); return next; }); }).catch(() => setError("Не удалось создать компоновку карты"));
+              const sourceVariant = activeMap.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
+              setPresentationVariantCreate({ mapId: activeMap.map_ref.entity_id, sourceVariantId: activeMap.active_variant_ref.entity_id, sourceVariantName: sourceVariant?.name ?? "", name: "", status: "editing", error: null });
             }}>Создать копию компоновки…</button>
             <button type="button" disabled={activeMap.variants.find((item) => item.name === "Основной")?.variant_ref.entity_id === activeMap.active_variant_ref.entity_id || !savedMapDataSource?.deletePresentationVariant} onClick={() => void deleteCurrentPresentationVariant()}>Удалить текущую компоновку…</button>
           </>
@@ -1972,6 +2003,23 @@ export function MapPage({
         />
       </>}
 
+      {presentationVariantCreate && (
+        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Создать копию компоновки">
+          <div className="map-dialog__surface">
+            <h2>Создать копию компоновки</h2>
+            <p>Будет создана независимая копия текущей компоновки «{presentationVariantCreate.sourceVariantName}». Положение и размеры объектов, трассы кабелей и состояние составных блоков будут скопированы. Исходная компоновка не изменится.</p>
+            <label>
+              Название новой компоновки
+              <input autoFocus value={presentationVariantCreate.name} disabled={presentationVariantCreate.status === "creating"} onChange={(event) => setPresentationVariantCreate((current) => current ? { ...current, name: event.target.value, error: null } : null)} />
+            </label>
+            {presentationVariantCreate.error && <p role="alert">{presentationVariantCreate.error}</p>}
+            <div className="map-dialog__actions">
+              <button type="button" disabled={presentationVariantCreate.status === "creating"} onClick={() => setPresentationVariantCreate(null)}>Отмена</button>
+              <button type="button" disabled={presentationVariantCreate.status === "creating" || !presentationVariantCreate.name.trim()} onClick={() => void createPresentationVariant()}>Создать</button>
+            </div>
+          </div>
+        </section>
+      )}
       {creating && (
         <section
           className="map-dialog"
