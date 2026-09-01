@@ -194,7 +194,7 @@ export function MapPage({
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-  const [variantDeletion, setVariantDeletion] = useState<{ mapId: string; primaryVariantId: string } | null>(null);
+  const [variantDeletion, setVariantDeletion] = useState<{ mapId: string; primaryVariantId: string; status: "refreshing" | "refresh-failed" } | null>(null);
   const [name, setName] = useState("");
   const [insertion, setInsertion] = useState<InsertionState | null>(null);
   const [contextAnchor, setContextAnchor] = useState<MapContextTarget | null>(null);
@@ -470,7 +470,7 @@ export function MapPage({
   };
 
   const retryPresentationVariantDeletionRefresh = async () => {
-    if (!variantDeletion) return;
+    if (!variantDeletion || variantDeletion.status !== "refresh-failed") return;
     try {
       await refreshDeletedPresentationVariant(variantDeletion);
     } catch {
@@ -490,7 +490,7 @@ export function MapPage({
       return;
     }
     const deletion = { mapId: activeMap.map_ref.entity_id, primaryVariantId: primary.variant_ref.entity_id };
-    setVariantDeletion(deletion);
+    setVariantDeletion({ ...deletion, status: "refreshing" });
     setParams((currentParams) => {
       const next = new URLSearchParams(currentParams);
       next.set("variant", primary.variant_ref.entity_id);
@@ -500,6 +500,7 @@ export function MapPage({
       await refreshDeletedPresentationVariant(deletion);
     } catch {
       // Acknowledged deletion is never retried; only the primary read is retryable.
+      setVariantDeletion({ ...deletion, status: "refresh-failed" });
     }
   };
 
@@ -2056,7 +2057,7 @@ export function MapPage({
         onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("map.deleteCableFailed")))); }}
       />}
       {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
-      {variantDeletion && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
+      {variantDeletion?.status === "refresh-failed" && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
       {error && <p role="alert">{error}</p>}
       {document &&
