@@ -65,10 +65,23 @@ describe('MapPage visual wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     await waitFor(() => expect(write).toHaveBeenCalledWith(expect.objectContaining({ cable_label: null, cable_label_template_id: 'template-1', generate_cable_label: true })));
   });
-  it('confirms exact historical generated label reuse without replaying post-write refresh', async () => {
-    const write = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('FC0003')).mockResolvedValue(creation); const { loadProjection } = renderPage(write); await screen.findByTestId('canvas');
+  it('confirms an exact historical generated label inline and continues the route lifecycle', async () => {
+    const write = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('000001')).mockResolvedValue(creation); const { loadProjection, setCableRoute } = renderPage(write); await screen.findByTestId('canvas');
     fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await screen.findByRole('option', { name: 'FC' }); fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
-    expect(await screen.findByRole('heading', { name: 'Имя FC0003 использовалось ранее' })).toBeInTheDocument(); expect(write).toHaveBeenCalledTimes(1); fireEvent.click(screen.getByRole('button', { name: 'Использовать FC0003' })); await waitFor(() => expect(write).toHaveBeenLastCalledWith(expect.objectContaining({ confirmed_historical_label: 'FC0003', cable_label_template_id: 'template-1', generate_cable_label: true }))); expect(loadProjection.mock.calls.length).toBeGreaterThan(1);
+    expect(await screen.findByText('Имя 000001 использовалось ранее. Использовать повторно?')).toBeInTheDocument(); expect(screen.getAllByRole('dialog')).toHaveLength(1); expect(screen.queryByRole('heading', { name: 'Имя 000001 использовалось ранее' })).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Создать кабель' })).toBeDisabled(); expect(write).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Да' })); await waitFor(() => expect(write).toHaveBeenLastCalledWith(expect.objectContaining({ confirmed_historical_label: '000001', cable_label_template_id: 'template-1', generate_cable_label: true }))); await waitFor(() => expect(setCableRoute).toHaveBeenCalledWith('map-1', 'cable-1', [])); expect(loadProjection.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('keeps the wiring form after declining historical label reuse without another write', async () => {
+    const write = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('000001')); renderPage(write); await screen.findByTestId('canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await screen.findByRole('option', { name: 'FC' }); fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    expect(await screen.findByText('Имя 000001 использовалось ранее. Использовать повторно?')).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Нет' })); expect(screen.queryByText('Имя 000001 использовалось ранее. Использовать повторно?')).not.toBeInTheDocument(); expect(screen.getByLabelText('Шаблон')).toHaveValue('template-1'); expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears the inline historical candidate when the naming intent changes', async () => {
+    const write = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('000001')); renderPage(write); await screen.findByTestId('canvas');
+    fireEvent.click(screen.getByRole('button', { name: 'Соединить порты' })); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await screen.findByRole('option', { name: 'FC' }); fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    expect(await screen.findByText('Имя 000001 использовалось ранее. Использовать повторно?')).toBeInTheDocument(); fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: '' } }); expect(screen.queryByText('Имя 000001 использовалось ранее. Использовать повторно?')).not.toBeInTheDocument(); expect(write).toHaveBeenCalledTimes(1);
   });
 
   it('passes a manual Cable label through the map create request without generation', async () => {
