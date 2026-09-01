@@ -48,10 +48,33 @@ class SavedMapCatalog:
         variant = self._require_variant(map_id, variant_id)
         return SavedMapDetail(saved_map, self._placements(map_id, variant.id), self._cable_routes(map_id, variant.id), self._regions(map_id), self._text_annotations(map_id), variant, self._variants(map_id), self._composites(map_id, variant.id))
 
-    def create_variant(self, map_id: uuid.UUID, name: str) -> MapPresentationVariant:
+    def create_variant(self, map_id: uuid.UUID, name: str, source_variant_id: uuid.UUID) -> MapPresentationVariant:
         self._require_map(map_id)
+        source = self._require_variant(map_id, source_variant_id)
         variant = MapPresentationVariant(map_id=map_id, name=name)
         self.session.add(variant)
+        self._flush()
+        source_positions = self.session.scalars(select(MapViewPosition).join(MapPlacement).where(
+            MapPlacement.map_id == map_id, MapViewPosition.variant_id == source.id
+        ))
+        self.session.add_all(MapViewPosition(
+            placement_id=position.placement_id, variant_id=variant.id, view_key=position.view_key,
+            x=position.x, y=position.y, locked=position.locked, display_width=position.display_width,
+        ) for position in source_positions)
+        source_routes = self.session.scalars(select(MapCableRoute).where(
+            MapCableRoute.map_id == map_id, MapCableRoute.variant_id == source.id
+        ))
+        self.session.add_all(MapCableRoute(
+            map_id=route.map_id, variant_id=variant.id, cable_id=route.cable_id, view_key=route.view_key,
+            waypoints=[{"x": point["x"], "y": point["y"]} for point in route.waypoints],
+        ) for route in source_routes)
+        source_presentations = self.session.scalars(select(MapCompositePresentation).join(MapComposite).where(
+            MapComposite.map_id == map_id, MapCompositePresentation.variant_id == source.id
+        ))
+        self.session.add_all(MapCompositePresentation(
+            composite_id=presentation.composite_id, variant_id=variant.id, collapsed=presentation.collapsed,
+            x=presentation.x, y=presentation.y, width=presentation.width, height=presentation.height,
+        ) for presentation in source_presentations)
         self._flush()
         return variant
 

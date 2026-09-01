@@ -468,7 +468,7 @@ def get_saved_map(map_id: uuid.UUID, variant_id: uuid.UUID | None = None, sessio
 @app.post("/v1/maps/{map_id}/presentation-variants", response_model=SavedMapDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
 def create_map_presentation_variant(map_id: uuid.UUID, query: CreateMapPresentationVariantRequest, session: Session = Depends(get_session)) -> SavedMapDocument:
     with session.begin():
-        catalog = SavedMapCatalog(session); variant = catalog.create_variant(map_id, query.name)
+        catalog = SavedMapCatalog(session); variant = catalog.create_variant(map_id, query.name, query.source_variant_id)
         return _saved_map_document(catalog.detail(map_id, variant.id))
 
 

@@ -61,7 +61,7 @@ import type {
   MapRegion,
   MapTextAnnotation,
 } from "../topology/savedMapTypes";
-import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
+import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { defaultMapRegionStyle, nextMapRegionZOrder } from "../topology/regionPresentation";
 import { deleteRegionDraftVertex, insertRegionDraftVertex, moveRegionDraftVertex, translateRegionDraft, validateRegionDraftPolygon } from '../topology/regionDraftGeometry';
@@ -843,7 +843,7 @@ export function MapPage({
     );
     const blueprint = candidates[0].attributes.blueprint_presentation;
     const displayWidth = blueprint
-      ? clampBlueprintDisplayWidth(96, blueprint)
+      ? minimumBlueprintDisplayWidth(blueprint)
       : undefined;
     const position = nearestFreePosition(
       anchor,
@@ -1722,8 +1722,8 @@ export function MapPage({
         </label>
         {!legacy && activeMap && (
           <label>
-            Вариант:{" "}
-            <select aria-label="Вариант представления" value={activeMap.active_variant_ref.entity_id} onChange={(event) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", event.target.value); return next; })}>
+            Компоновка карты:{" "}
+            <select aria-label="Компоновка карты" value={activeMap.active_variant_ref.entity_id} onChange={(event) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", event.target.value); return next; })}>
               {activeMap.variants.map((item) => <option key={item.variant_ref.entity_id} value={item.variant_ref.entity_id}>{item.name}</option>)}
             </select>
           </label>
@@ -1735,11 +1735,11 @@ export function MapPage({
               if (!compositeName?.trim() || !savedMapDataSource?.createComposite) return;
               void savedMapDataSource.createComposite(activeMap.map_ref.entity_id, compositeName.trim(), [...compositeMemberIds], activeMap.active_variant_ref.entity_id).then((detail) => { setMap(detail); setCompositeMemberIds(new Set()); }).catch(() => setError("Не удалось создать composite"));
             }}>Создать composite</button>
-            <button type="button" disabled={!savedMapDataSource?.createPresentationVariant} onClick={() => {
-              const variantName = window.prompt("Название варианта представления");
+            <button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={() => {
+              const variantName = window.prompt("Название новой компоновки");
               if (!variantName?.trim() || !savedMapDataSource?.createPresentationVariant) return;
-              void savedMapDataSource.createPresentationVariant(activeMap.map_ref.entity_id, variantName.trim()).then((detail) => { setMap(detail); setParams((current) => { const next = new URLSearchParams(current); next.set("variant", detail.active_variant_ref.entity_id); return next; }); }).catch(() => setError("Не удалось создать вариант представления"));
-            }}>Новый вариант</button>
+              void savedMapDataSource.createPresentationVariant(activeMap.map_ref.entity_id, variantName.trim(), activeMap.active_variant_ref.entity_id).then((detail) => { setMap(detail); setParams((current) => { const next = new URLSearchParams(current); next.set("variant", detail.active_variant_ref.entity_id); return next; }); }).catch(() => setError("Не удалось создать компоновку карты"));
+            }}>Создать копию компоновки…</button>
           </>
         )}
         {!legacy && (

@@ -212,6 +212,7 @@ class SetMapCableRouteRequest(BaseModel):
 class CreateMapPresentationVariantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=255)
+    source_variant_id: uuid.UUID
 
 
 class CreateMapCompositeRequest(BaseModel):
