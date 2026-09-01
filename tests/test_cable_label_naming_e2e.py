@@ -158,3 +158,20 @@ def test_stale_generated_confirmation_never_assigns_another_candidate():
     stale = client.post(f"/v1/cables/{second_id}/generated-label", json={"template_id": template_id, "confirmed_historical_label": "1"})
     assert stale.status_code == 409 and stale.json()["error"]["code"] == "HISTORICAL_CABLE_LABEL_REUSE_CONFIRMATION_STALE"
     assert catalog_cable(second_id)["label_source"] == "TECHNICAL_FALLBACK"
+
+
+def test_stale_manual_confirmation_requires_the_historical_candidate_to_remain_free():
+    assert client.put("/v1/cable-label-settings", json={"unique_labels": False}).status_code == 200
+    first, _ = cable_pair("manual-stale-first", cable_label="TAG")
+    first_id = first.json()["cable_ref"]["entity_id"]
+    assert client.put(f"/v1/cables/{first_id}/label", json={"label": None}).status_code == 204
+    second, _ = cable_pair("manual-stale-second")
+    second_id = second.json()["cable_ref"]["entity_id"]
+    reuse_required(client.put(f"/v1/cables/{second_id}/label", json={"label": "TAG"}), "TAG")
+    third, _ = cable_pair("manual-stale-third")
+    third_id = third.json()["cable_ref"]["entity_id"]
+    assert client.put(f"/v1/cables/{third_id}/label", json={"label": "TAG", "confirmed_historical_label": "TAG"}).status_code == 204
+    stale = client.put(f"/v1/cables/{second_id}/label", json={"label": "TAG", "confirmed_historical_label": "TAG"})
+    assert stale.status_code == 409 and stale.json()["error"]["code"] == "HISTORICAL_CABLE_LABEL_REUSE_CONFIRMATION_STALE"
+    assert catalog_cable(second_id)["label_source"] == "TECHNICAL_FALLBACK"
+    assert catalog_cable(third_id)["label"] == "TAG"

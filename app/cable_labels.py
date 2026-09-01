@@ -151,6 +151,8 @@ class CableLabelCatalog:
             )
         if label is not None and settings.unique_labels and conflict is not None:
             raise ValidationError("Cable label must be globally unique", {"label": label})
+        if label is not None and confirmed_historical_label == label and conflict is not None:
+            raise HistoricalCableLabelReuseConfirmationStaleError()
         if label is not None and label != cable.label and conflict is None:
             historical = self.session.scalar(
                 select(CableLabelHistory.id).where(CableLabelHistory.label == label).limit(1)
