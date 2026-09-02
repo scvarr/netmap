@@ -124,6 +124,7 @@ button { font: inherit; }
 .react-flow__controls-button:hover { background: #183034 !important; }
 .react-flow__controls-button svg { fill: currentColor; }
 .react-flow__minimap { border: 1px solid #25383b; border-radius: 8px; background: #0b1719 !important; }
+.topology-canvas__minimap { bottom: 56px !important; z-index: 11 !important; }
 
 .inspector { position: relative; padding: 26px 22px; overflow-y: auto; }
 .inspector h2 { margin: 6px 34px 22px 0; font: 700 20px ui-monospace, "Cascadia Code", monospace; letter-spacing: -.05em; overflow-wrap: anywhere; }

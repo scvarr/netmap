@@ -29,7 +29,7 @@ vi.mock('@xyflow/react', () => ({
   Controls: () => null,
   getStraightPath: () => ['', 0, 0],
   Handle: () => null,
-  MiniMap: () => null,
+  MiniMap: (props: { className?: string; position?: string }) => <div data-testid="minimap" data-class={props.className} data-position={props.position} />,
   Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
   ReactFlow: ({ nodes, edges, onNodeClick, onNodesChange, onNodeDragStart, onNodeDragStop, onPaneClick, onPaneMouseMove, children }: {
@@ -121,6 +121,12 @@ afterEach(() => {
 });
 
 describe('TopologyCanvas async layout boundary', () => {
+  it('docks the minimap above the trace control at the bottom right', async () => {
+    render(<TopologyCanvas document={documentFor('physical-minimap')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} />);
+    expect(await screen.findByTestId('minimap')).toHaveAttribute('data-position', 'bottom-right');
+    expect(screen.getByTestId('minimap')).toHaveAttribute('data-class', 'topology-canvas__minimap');
+  });
+
   it('marks matching Location objects and dims unrelated objects without topology writes', async () => {
     const matched = { ...documentFor('physical-match').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'matched-object' }] };
     const unrelated = { ...documentFor('physical-unrelated').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'unrelated-object' }] };

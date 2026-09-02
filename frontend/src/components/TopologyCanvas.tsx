@@ -719,9 +719,10 @@ export function TopologyCanvas({
           </ViewportPortal>
         )}
         <MiniMap
+          className="topology-canvas__minimap"
           pannable
           zoomable
-          position="top-right"
+          position="bottom-right"
           nodeColor="#183b3b"
           maskColor="rgba(5, 13, 15, 0.72)"
           ariaLabel={t("canvas.minimap")}
