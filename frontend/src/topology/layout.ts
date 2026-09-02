@@ -59,7 +59,7 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   continuation?: L1OffMapContinuation;
 }
 
-export type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
+export type DeviceFlowNode = Node<DeviceNodeData, 'device' | 'composite'>;
 export type LogicalFlowEdge = Edge<LogicalEdgeData>;
 
 export interface FlowProjection {
@@ -68,13 +68,47 @@ export interface FlowProjection {
 }
 
 /** Presentation geometry only; never persisted as a PhysicalObject position. */
-export const COMPOSITE_FRAME_HEADER_HEIGHT = 32;
-export const COMPOSITE_FRAME_PADDING = 16;
+export const COMPOSITE_FRAME_HEADER_HEIGHT = 28;
+export const COMPOSITE_FRAME_PADDING = 10;
+export const COMPOSITE_FRAME_CONTENT_GAP = 6;
+export const COMPOSITE_FRAME_MIN_WIDTH = 200;
+export const COMPOSITE_FRAME_EMPTY_CONTENT_HEIGHT = 20;
 
 const displayedDimensions = (node: DeviceFlowNode) => ({
   width: node.width ?? node.measured?.width ?? LAYOUT_NODE_WIDTH,
   height: node.height ?? node.measured?.height ?? LAYOUT_NODE_HEIGHT,
 });
+
+export interface CompositeFrameGeometry {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** A derived presentation frame: it never changes its members' coordinates. */
+export const compositeFrameGeometry = (
+  rectangles: readonly { x: number; y: number; width: number; height: number }[],
+): CompositeFrameGeometry => {
+  if (!rectangles.length) {
+    return {
+      x: 0,
+      y: 0,
+      width: COMPOSITE_FRAME_MIN_WIDTH,
+      height: COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_CONTENT_GAP + COMPOSITE_FRAME_EMPTY_CONTENT_HEIGHT + COMPOSITE_FRAME_PADDING * 2,
+    };
+  }
+  const left = Math.min(...rectangles.map((item) => item.x));
+  const top = Math.min(...rectangles.map((item) => item.y));
+  const right = Math.max(...rectangles.map((item) => item.x + item.width));
+  const bottom = Math.max(...rectangles.map((item) => item.y + item.height));
+  return {
+    x: left - COMPOSITE_FRAME_PADDING,
+    y: top - COMPOSITE_FRAME_HEADER_HEIGHT - COMPOSITE_FRAME_CONTENT_GAP - COMPOSITE_FRAME_PADDING,
+    width: Math.max(COMPOSITE_FRAME_MIN_WIDTH, right - left + COMPOSITE_FRAME_PADDING * 2),
+    height: bottom - top + COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_CONTENT_GAP + COMPOSITE_FRAME_PADDING * 2,
+  };
+};
 
 /**
  * Turns collapsed composite boundary members into React Flow children. Their
@@ -94,26 +128,31 @@ export const applyCollapsedCompositePresentation = (
       .map((id) => nodesById.get(id))
       .filter((node): node is DeviceFlowNode => Boolean(node))
       .sort((left, right) => left.id.localeCompare(right.id));
-    if (!frame || members.length === 0) continue;
+    if (!frame) continue;
+
+    if (members.length === 0) {
+      const fallback = compositeFrameGeometry([]);
+      frame.width = fallback.width;
+      frame.height = fallback.height;
+      frame.zIndex = 0;
+      frame.data.projection = {
+        ...frame.data.projection,
+        attributes: { ...frame.data.projection.attributes, width: fallback.width, height: fallback.height },
+      };
+      continue;
+    }
 
     const rectangles = members.map((node) => ({ ...node.position, ...displayedDimensions(node) }));
     const left = Math.min(...rectangles.map((item) => item.x));
     const top = Math.min(...rectangles.map((item) => item.y));
     const right = Math.max(...rectangles.map((item) => item.x + item.width));
-    const bottom = Math.max(...rectangles.map((item) => item.y + item.height));
     const groupWidth = right - left;
-    const groupHeight = bottom - top;
-    const persistedWidth = Number(frame.width ?? frame.data.projection.attributes.width);
-    const persistedHeight = Number(frame.height ?? frame.data.projection.attributes.height);
-    const effectiveWidth = Math.max(persistedWidth, groupWidth + COMPOSITE_FRAME_PADDING * 2);
-    const effectiveHeight = Math.max(
-      persistedHeight,
-      groupHeight + COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_PADDING * 2,
-    );
+    const frameGeometry = compositeFrameGeometry(rectangles);
+    const effectiveWidth = frameGeometry.width;
+    const effectiveHeight = frameGeometry.height;
     const contentWidth = effectiveWidth - COMPOSITE_FRAME_PADDING * 2;
-    const contentHeight = effectiveHeight - COMPOSITE_FRAME_HEADER_HEIGHT - COMPOSITE_FRAME_PADDING * 2;
     const offsetX = COMPOSITE_FRAME_PADDING + (contentWidth - groupWidth) / 2;
-    const offsetY = COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_PADDING + (contentHeight - groupHeight) / 2;
+    const offsetY = COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_CONTENT_GAP + COMPOSITE_FRAME_PADDING;
 
     frame.width = effectiveWidth;
     frame.height = effectiveHeight;

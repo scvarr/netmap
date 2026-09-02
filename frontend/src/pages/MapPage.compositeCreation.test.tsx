@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MapPage } from './MapPage';
 import { createMapPageHarness } from './MapPage.testHarness';
 
-vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <div data-testid="canvas" data-members={JSON.stringify([...props.compositeMemberSelection?.selectedPhysicalObjectIds ?? []])}>{props.document.nodes.map((node: any) => <button key={node.id} type="button" onClick={() => props.compositeMemberSelection ? props.compositeMemberSelection.onPhysicalObjectClick(node.source_refs[0].entity_id) : props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}{props.compositeInputs?.filter((item: any) => item.collapsed).map((item: any) => <button key={`drag-${item.id}`} type="button" onClick={() => props.onCompositeDragStop(item.id, { x: 44, y: 55, width: 600, height: 240 })}>drag composite {item.id}</button>)}</div> }));
+vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <div data-testid="canvas" data-members={JSON.stringify([...props.compositeMemberSelection?.selectedPhysicalObjectIds ?? []])}>{props.document.nodes.map((node: any) => <button key={node.id} type="button" onClick={() => props.compositeMemberSelection ? props.compositeMemberSelection.onPhysicalObjectClick(node.source_refs[0].entity_id) : props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}{props.compositeInputs?.filter((item: any) => item.collapsed).map((item: any) => <button key={`drag-${item.id}`} type="button" onClick={() => props.onCompositeDragStop(item.id, { x: 44, y: 55, width: 600, height: 240 })}>drag composite {item.id}</button>)}{props.compositeInputs?.map((item: any) => <button key={`toggle-${item.id}`} type="button" onClick={() => props.onCompositeToggle(item.id, { x: 90, y: 156, width: 720, height: 524 })}>toggle composite {item.id}</button>)}</div> }));
 vi.mock('../components/QuickInspector', () => ({ QuickInspector: (props: any) => props.selection ? <div data-testid="inspector" /> : null }));
 
 const renderMapPage = createMapPageHarness(MapPage);
@@ -48,7 +48,7 @@ describe('MapPage composite creation', () => {
     renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
     await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ }));
     fireEvent.click(within(screen.getByText('Стойка A').parentElement!.parentElement!).getByRole('button', { name: 'Свернуть' }));
-    await waitFor(() => expect(setCompositePresentation).toHaveBeenCalledWith(mapId, compositeId, variantId, { collapsed: true, x: -33.5, y: -18, width: 280, height: 180 }));
+    await waitFor(() => expect(setCompositePresentation).toHaveBeenCalledWith(mapId, compositeId, variantId, { collapsed: true, x: -10, y: -44, width: 233, height: 198 }));
     await waitFor(() => expect(loadMap).toHaveBeenLastCalledWith(mapId, variantId));
   });
 
@@ -77,7 +77,18 @@ describe('MapPage composite creation', () => {
     const setCompositePresentation = vi.fn().mockResolvedValue(undefined); const maps: any = { listMaps: vi.fn().mockResolvedValue([populated]), loadMap: vi.fn().mockResolvedValue(populated), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), setCompositePresentation };
     renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(blueprintDocument) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
     await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ })); fireEvent.click(within(screen.getByText('Стойка A').parentElement!.parentElement!).getByRole('button', { name: 'Свернуть' }));
-    await waitFor(() => expect(setCompositePresentation).toHaveBeenCalledWith(mapId, compositeId, variantId, { collapsed: true, x: 310, y: 385, width: 280, height: 180 }));
+    await waitFor(() => expect(setCompositePresentation).toHaveBeenCalledWith(mapId, compositeId, variantId, { collapsed: true, x: 90, y: 156, width: 720, height: 604 }));
+  });
+
+  it('routes the canvas toggle through the same active-variant presentation lifecycle without moving members', async () => {
+    const compositeId = '00000000-0000-4000-8000-000000000099';
+    const populated: any = { ...savedMap, composites: [{ composite_ref: { entity_type: 'MapComposite', entity_id: compositeId }, name: 'Стойка A', physical_object_refs: savedMap.placements.map((item) => item.physical_object_ref), presentation: { variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, collapsed: false, x: 0, y: 0, width: 280, height: 180 } }] };
+    const setCompositePresentation = vi.fn().mockResolvedValue(undefined); const movePosition = vi.fn();
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([populated]), loadMap: vi.fn().mockResolvedValue(populated), createMap: vi.fn(), addPlacement: vi.fn(), movePosition, removePlacement: vi.fn(), setCompositePresentation };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
+    fireEvent.click(await screen.findByRole('button', { name: `toggle composite ${compositeId}` }));
+    await waitFor(() => expect(setCompositePresentation).toHaveBeenCalledWith(mapId, compositeId, variantId, { collapsed: true, x: 90, y: 156, width: 720, height: 524 }));
+    expect(movePosition).not.toHaveBeenCalled();
   });
 
   it('keeps confirmed state after rejected individual presentation write', async () => {

@@ -620,7 +620,7 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(screen.getByTestId(`draggable-${physical.id}`)).toHaveTextContent('true');
     expect(screen.getByTestId('draggable-map-composite:rack')).toHaveTextContent('true');
     fireEvent.click(screen.getByRole('button', { name: 'drag map-composite:rack' }));
-    expect(onCompositeDragStop).toHaveBeenCalledWith('rack', { x: 42, y: 84, width: 280, height: 180 });
+    expect(onCompositeDragStop).toHaveBeenCalledWith('rack', { x: 42, y: 84, width: 200, height: 74 });
     expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
   });
 
@@ -639,6 +639,17 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: boundary });
     fireEvent.click(screen.getByRole('button', { name: `drag ${boundary.id}` }));
     expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
+  });
+
+  it('derives an expanded composite outline behind ordinary independent member nodes', async () => {
+    const member = { ...documentFor('member').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'member-object' }] };
+    const document = { ...documentFor('physical-member'), nodes: [member] };
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} draggableNodeIds={new Set([member.id])} onPhysicalNodeDragStop={vi.fn()} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [member.id], collapsed: false, x: 10, y: 20, width: 900, height: 900 }]} />);
+    await screen.findByRole('button', { name: member.id });
+    expect(screen.getByTestId('parent-member')).toHaveTextContent('none');
+    expect(screen.getByTestId('draggable-member')).toHaveTextContent('true');
+    expect(screen.getByTestId('position-map-composite:rack')).toHaveTextContent('-10,-44');
+    expect(screen.getByTestId('draggable-map-composite:rack')).toHaveTextContent('false');
   });
 
   it('rejects an overlapping final drop locally and restores the confirmed position', async () => {

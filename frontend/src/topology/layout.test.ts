@@ -3,6 +3,7 @@ import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
   applyCollapsedCompositePresentation,
+  compositeFrameGeometry,
   toFlowProjection,
 } from './layout';
 import { presentationSceneDocument } from './presentationScene';
@@ -77,13 +78,35 @@ describe('ELK topology layout', () => {
     expect(derivedA).toMatchObject({ parentId: frame.id, extent: 'parent' });
     expect(derivedB).toMatchObject({ parentId: frame.id, extent: 'parent' });
     expect(derivedA.position.x).toBeLessThan(derivedB.position.x);
-    expect(derivedFrame.width).toBeGreaterThanOrEqual(212 * 2 + 280 - 212 + 32);
-    expect(derivedFrame.height).toBeGreaterThanOrEqual(144 + 32 + 32);
+    expect(derivedFrame.width).toBe(512);
+    expect(derivedFrame.height).toBe(238);
     expect(derivedA.position.x).toBeGreaterThanOrEqual(0);
-    expect(derivedA.position.y).toBeGreaterThanOrEqual(32);
+    expect(derivedA.position.y).toBe(44);
     expect(derivedB.position.x + 212).toBeLessThanOrEqual(derivedFrame.width!);
     expect(derivedB.position.y + 144).toBeLessThanOrEqual(derivedFrame.height!);
     expect(result.edges[0]).toMatchObject({ source: 'b', target: 'outside' });
+  });
+
+  it('fits collapsed content below the header instead of retaining a stale oversized frame', () => {
+    const frame = { id: 'map-composite:rack', kind: 'MAP_COMPOSITE', label: 'Rack', source_refs: [], attributes: { composite_id: 'rack', width: 280, height: 900 } } as any;
+    const member = { id: 'boundary', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [], attributes: {} } as any;
+    const scene: PresentationSceneDocument = { layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [frame, member], edges: [], composites: [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['boundary'], boundaryNodeIds: ['boundary'], compositionBasis: 'presentation' }] };
+    const result = applyCollapsedCompositePresentation({ nodes: [
+      { id: frame.id, type: 'composite' as const, position: { x: 10, y: 20 }, width: 280, height: 900, data: { projection: frame } },
+      { id: member.id, type: 'device' as const, position: { x: 300, y: 400 }, width: 120, height: 50, data: { projection: member } },
+    ], edges: [] }, scene);
+    const derivedFrame = result.nodes.find((node) => node.id === frame.id)!;
+    const derivedMember = result.nodes.find((node) => node.id === member.id)!;
+    expect(derivedFrame).toMatchObject({ width: 200, height: 104 });
+    expect(derivedMember.position).toEqual({ x: 40, y: 44 });
+  });
+
+  it('derives an expanded outline from all members without touching their positions', () => {
+    const geometry = compositeFrameGeometry([
+      { x: 100, y: 200, width: 120, height: 50 },
+      { x: 500, y: 600, width: 300, height: 70 },
+    ]);
+    expect(geometry).toEqual({ x: 90, y: 156, width: 720, height: 524 });
   });
 
   it('receives already-formed scene edges without inspecting projection endpoint pairs', async () => {

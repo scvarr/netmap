@@ -18,6 +18,7 @@ import "@xyflow/react/dist/style.css";
 import {
   toFlowProjection,
   applyCollapsedCompositePresentation,
+  compositeFrameGeometry,
   type DeviceNodeData,
   type DeviceFlowNode,
   type FlowProjection,
@@ -93,6 +94,7 @@ interface TopologyCanvasProps {
   selectedCompositeId?: string | null;
   onCompositeClick?: (compositeId: string) => void;
   onCompositeDragStop?: (compositeId: string, geometry: XYPosition & { width: number; height: number }) => void;
+  onCompositeToggle?: (compositeId: string, geometry: XYPosition & { width: number; height: number }) => void;
   cableRouteDraft?: { cableId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
@@ -177,6 +179,7 @@ export function TopologyCanvas({
   selectedCompositeId,
   onCompositeClick,
   onCompositeDragStop,
+  onCompositeToggle,
   cableRouteDraft,
   physicalPortStates,
   onPhysicalPortClick,
@@ -437,7 +440,36 @@ export function TopologyCanvas({
     });
   if (!regionMode) latestReferenceOutlines.current = currentReferenceOutlines;
   const referenceOutlines = regionMode ? latestReferenceOutlines.current : currentReferenceOutlines;
-  const nodes = (regionMode ? [] : projection.nodes).map((node) => {
+  const expandedCompositeFrames: DeviceFlowNode[] = !regionMode ? (compositeInputs ?? [])
+    .filter((composite) => !composite.collapsed)
+    .map((composite) => {
+      const members = projection.nodes.filter((node) => composite.memberNodeIds.includes(node.id));
+      const geometry = compositeFrameGeometry(members.map((node) => ({
+        x: node.position.x,
+        y: node.position.y,
+        width: node.measured?.width ?? node.width ?? 212,
+        height: node.measured?.height ?? node.height ?? 144,
+      })));
+      return {
+        id: `map-composite:${composite.id}`,
+        type: 'composite',
+        position: { x: geometry.x, y: geometry.y },
+        width: geometry.width,
+        height: geometry.height,
+        draggable: false,
+        selectable: false,
+        zIndex: -1,
+        data: { projection: {
+          id: `map-composite:${composite.id}`,
+          kind: 'MAP_COMPOSITE',
+          label: composite.displayName,
+          source_refs: [],
+          attributes: { presentation_only: true, composite_id: composite.id, collapsed: false, width: geometry.width, height: geometry.height, on_toggle: () => onCompositeToggle?.(composite.id, geometry) },
+          status: 'CONFIGURED',
+        } as TopologyProjectionNode },
+      };
+    }) : [];
+  const nodes = [...expandedCompositeFrames, ...(regionMode ? [] : projection.nodes)].map((node) => {
     const compositeId = node.data.projection.kind === 'MAP_COMPOSITE' ? String(node.data.projection.attributes.composite_id) : null;
     const objectId = physicalObjectIdForNode(node.data.projection);
     const locationFocus: DeviceNodeData['locationFocus'] = locationFocusObjectIds && objectId
@@ -448,7 +480,7 @@ export function TopologyCanvas({
     draggable: compositeMembershipMode
       ? false
       : node.data.projection.kind === 'MAP_COMPOSITE'
-        ? Boolean(onCompositeDragStop)
+        ? Boolean(onCompositeDragStop) && Boolean(node.data.projection.attributes.collapsed)
         : node.parentId
           ? false
         : draggableNodeIds

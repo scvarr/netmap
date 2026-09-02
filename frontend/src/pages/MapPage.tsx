@@ -64,7 +64,7 @@ import type {
 } from "../topology/savedMapTypes";
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
-import { LAYOUT_NODE_HEIGHT, LAYOUT_NODE_WIDTH } from "../topology/layout";
+import { compositeFrameGeometry, LAYOUT_NODE_HEIGHT, LAYOUT_NODE_WIDTH } from "../topology/layout";
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { defaultMapRegionStyle, nextMapRegionZOrder } from "../topology/regionPresentation";
 import { deleteRegionDraftVertex, insertRegionDraftVertex, moveRegionDraftVertex, translateRegionDraft, validateRegionDraftPolygon } from '../topology/regionDraftGeometry';
@@ -385,10 +385,11 @@ export function MapPage({
         : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT };
       return node && position ? [{ x: position.x, y: position.y, ...dimensions }] : [];
     });
-    if (!memberPositions.length) return { x: composite.presentation.x, y: composite.presentation.y, width: composite.presentation.width, height: composite.presentation.height };
-    const left = Math.min(...memberPositions.map((item) => item.x)); const right = Math.max(...memberPositions.map((item) => item.x + item.width));
-    const top = Math.min(...memberPositions.map((item) => item.y)); const bottom = Math.max(...memberPositions.map((item) => item.y + item.height));
-    return { x: (left + right) / 2 - composite.presentation.width / 2, y: (top + bottom) / 2 - composite.presentation.height / 2, width: composite.presentation.width, height: composite.presentation.height };
+    if (!memberPositions.length) {
+      const fallback = compositeFrameGeometry([]);
+      return { ...fallback, x: composite.presentation.x, y: composite.presentation.y };
+    }
+    return compositeFrameGeometry(memberPositions);
   };
   const saveCompositePresentation = async (compositeId: string, presentation: Omit<MapCompositePresentation, 'variant_ref' | 'geometry_persisted'>) => {
     if (!activeMap || !savedMapDataSource?.setCompositePresentation || compositePresentationOperation) return;
@@ -398,6 +399,14 @@ export function MapPage({
     catch { setCompositePresentationOperation(null); setError('Не удалось изменить состояние составного блока.'); return; }
     try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositePresentationOperation(null); }
     catch { setCompositePresentationOperation({ ...operation, status: 'refresh-failed' }); }
+  };
+  const toggleCompositePresentation = (compositeId: string, expandedGeometry?: { x: number; y: number; width: number; height: number }) => {
+    const composite = activeMap?.composites.find((item) => item.composite_ref.entity_id === compositeId);
+    if (!composite) return;
+    const geometry = composite.presentation.collapsed
+      ? composite.presentation
+      : expandedGeometry ?? initialCompositeGeometry(composite);
+    void saveCompositePresentation(compositeId, { collapsed: !composite.presentation.collapsed, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height });
   };
   const retryCompositePresentationRefresh = async () => {
     const operation = compositePresentationOperation; if (!operation || operation.status !== 'refresh-failed' || !savedMapDataSource) return;
@@ -2096,7 +2105,7 @@ export function MapPage({
                 <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
                 <hr />
                 <strong>Составные блоки</strong>
-                {activeMap.composites.length === 0 ? <p className="map-utility-panel__empty">Составных блоков пока нет.</p> : <div className="map-composite-list">{activeMap.composites.map((composite) => <div className={`map-composite-list__item${selectedCompositeId === composite.composite_ref.entity_id ? ' map-composite-list__item--selected' : ''}`} key={composite.composite_ref.entity_id}><div><strong>{composite.name}</strong><span>{composite.physical_object_refs.length} {composite.physical_object_refs.length === 1 ? "объект" : composite.physical_object_refs.length < 5 ? "объекта" : "объектов"}</span></div><div className="map-utility-panel__actions"><button type="button" disabled={!savedMapDataSource?.setCompositePresentation || Boolean(compositePresentationOperation)} onClick={() => { const geometry = composite.presentation.geometry_persisted ? composite.presentation : initialCompositeGeometry(composite); void saveCompositePresentation(composite.composite_ref.entity_id, { collapsed: !composite.presentation.collapsed, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height }); }}>{composite.presentation.collapsed ? 'Развернуть' : 'Свернуть'}</button><button type="button" disabled={!savedMapDataSource?.deleteComposite} onClick={() => beginCompositeDeletion(composite.composite_ref.entity_id)}>Удалить</button></div></div>)}</div>}
+                {activeMap.composites.length === 0 ? <p className="map-utility-panel__empty">Составных блоков пока нет.</p> : <div className="map-composite-list">{activeMap.composites.map((composite) => <div className={`map-composite-list__item${selectedCompositeId === composite.composite_ref.entity_id ? ' map-composite-list__item--selected' : ''}`} key={composite.composite_ref.entity_id}><div><strong>{composite.name}</strong><span>{composite.physical_object_refs.length} {composite.physical_object_refs.length === 1 ? "объект" : composite.physical_object_refs.length < 5 ? "объекта" : "объектов"}</span></div><div className="map-utility-panel__actions"><button type="button" disabled={!savedMapDataSource?.setCompositePresentation || Boolean(compositePresentationOperation)} onClick={() => toggleCompositePresentation(composite.composite_ref.entity_id)}>{composite.presentation.collapsed ? 'Развернуть' : 'Свернуть'}</button><button type="button" disabled={!savedMapDataSource?.deleteComposite} onClick={() => beginCompositeDeletion(composite.composite_ref.entity_id)}>Удалить</button></div></div>)}</div>}
                 <button type="button" disabled={!savedMapDataSource?.createComposite || physicalRegionMode} onClick={beginCompositeCreate}>Создать составной блок</button>
               </>}
             </div>}
@@ -2484,6 +2493,7 @@ export function MapPage({
                   selectedCompositeId={selectedCompositeId}
                   onCompositeClick={(compositeId) => { setSelection(null); setSelectedCompositeId(compositeId); }}
                   onCompositeDragStop={(compositeId, geometry) => { const composite = activeMap?.composites.find((item) => item.composite_ref.entity_id === compositeId); if (composite?.presentation.collapsed) void saveCompositePresentation(compositeId, { collapsed: true, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height }); }}
+                  onCompositeToggle={toggleCompositePresentation}
                   cableRouteDraft={!physicalRegionMode && cableRouteEdit ? { cableId: cableRouteEdit.cableId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
                   wiringRoute={!physicalRegionMode && wiring.status !== "idle" && wiring.status !== "selecting-source" ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target, waypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex, onWaypointSelect: (index) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}
                   physicalPortStates={physicalRegionMode ? undefined : physicalPortStates}
