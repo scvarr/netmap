@@ -146,6 +146,14 @@ interface PresentationVariantCreateOperation {
   status: "editing" | "creating";
   error: string | null;
 }
+interface PresentationVariantDeletionOperation {
+  mapId: string;
+  variantId: string;
+  variantName: string;
+  primaryVariantId: string;
+  status: "confirming" | "deleting";
+  error: string | null;
+}
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; variantId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; naming: CableNamingInput; canonicalResult?: PhysicalEndpointConnectionCreationDocument; error: string | null; }
@@ -167,6 +175,33 @@ const emptyPhysicalDocument: TopologyProjectionDocument = {
   gaps: [],
   warnings: [],
 };
+
+function MapToolbarDropdown({ label, value, options, onChange }: { label: string; value: string; options: readonly { value: string; label: string }[]; onChange(value: string): void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const selected = options.find((item) => item.value === value);
+  useEffect(() => {
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, []);
+  useEffect(() => {
+    const selectProgrammatically = () => {
+      const nextValue = trigger.current?.value;
+      if (nextValue && options.some((item) => item.value === nextValue)) onChange(nextValue);
+    };
+    const element = trigger.current;
+    element?.addEventListener("change", selectProgrammatically);
+    return () => element?.removeEventListener("change", selectProgrammatically);
+  }, [onChange, options]);
+  return <div className="map-toolbar-dropdown" ref={root} onKeyDown={(event) => { if (event.key === "Escape") { setOpen(false); trigger.current?.focus(); } }}>
+    <button type="button" ref={trigger} value={value} className="map-toolbar-dropdown__trigger map-page__select" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}><span>{selected?.label ?? "—"}</span><span aria-hidden="true">⌄</span></button>
+    {open && <div className="map-toolbar-dropdown__menu" role="listbox" aria-label={label}>{options.map((item) => <button key={item.value} type="button" role="option" aria-selected={item.value === value} onClick={() => { onChange(item.value); setOpen(false); }}>{item.label}</button>)}</div>}
+  </div>;
+}
 
 export function MapPage({
   dataSource,
@@ -203,6 +238,7 @@ export function MapPage({
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [presentationVariantCreate, setPresentationVariantCreate] = useState<PresentationVariantCreateOperation | null>(null);
+  const [presentationVariantDeletion, setPresentationVariantDeletion] = useState<PresentationVariantDeletionOperation | null>(null);
   const [variantDeletion, setVariantDeletion] = useState<{ mapId: string; primaryVariantId: string; status: "refreshing" | "refresh-failed" } | null>(null);
   const [name, setName] = useState("");
   const [insertion, setInsertion] = useState<InsertionState | null>(null);
@@ -247,6 +283,7 @@ export function MapPage({
   const consumedAddIntent = useRef<string | null>(null);
   const regionOperationSequence = useRef(0);
   const presentationVariantSubmitPending = useRef(false);
+  const presentationVariantDeletionPending = useRef(false);
 
   selectedMapId.current = mapId;
   const legacy = !savedMapDataSource;
@@ -488,22 +525,25 @@ export function MapPage({
     }
   };
 
-  const deleteCurrentPresentationVariant = async () => {
-    if (!savedMapDataSource?.deletePresentationVariant || !activeMap) return;
-    const current = activeMap.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
-    const primary = activeMap.variants.find((item) => item.name === "Основной");
-    if (!current || !primary || current.name === "Основной" || !window.confirm(`Удалить компоновку «${current.name}»?`)) return;
+  const confirmPresentationVariantDeletion = async () => {
+    const operation = presentationVariantDeletion;
+    if (!savedMapDataSource?.deletePresentationVariant || !operation || operation.status !== "confirming" || presentationVariantDeletionPending.current) return;
+    presentationVariantDeletionPending.current = true;
+    setPresentationVariantDeletion({ ...operation, status: "deleting", error: null });
     try {
-      await savedMapDataSource.deletePresentationVariant(activeMap.map_ref.entity_id, current.variant_ref.entity_id);
-    } catch (reason) {
-      setError(errorMessage(reason, "Не удалось удалить компоновку карты."));
+      await savedMapDataSource.deletePresentationVariant(operation.mapId, operation.variantId);
+    } catch {
+      setPresentationVariantDeletion({ ...operation, status: "confirming", error: "Не удалось удалить компоновку карты." });
+      presentationVariantDeletionPending.current = false;
       return;
     }
-    const deletion = { mapId: activeMap.map_ref.entity_id, primaryVariantId: primary.variant_ref.entity_id };
+    presentationVariantDeletionPending.current = false;
+    setPresentationVariantDeletion(null);
+    const deletion = { mapId: operation.mapId, primaryVariantId: operation.primaryVariantId };
     setVariantDeletion({ ...deletion, status: "refreshing" });
     setParams((currentParams) => {
       const next = new URLSearchParams(currentParams);
-      next.set("variant", primary.variant_ref.entity_id);
+      next.set("variant", operation.primaryVariantId);
       return next;
     });
     try {
@@ -1779,36 +1819,17 @@ export function MapPage({
     <main className="map-page">
       <div className="map-page__toolbar topology-mode-switch">
         <label>
-          {t("map.maps")}:{" "}
+          <span>{t("map.maps")}:</span>
           {legacy ? (
             "—"
           ) : (
-            <select
-              className="map-page__select"
-              aria-label={t("map.maps")}
-              value={mapId ?? ""}
-              onChange={(event) => selectMap(event.target.value)}
-            >
-              <option value="" disabled>
-                {t("map.choose")}
-              </option>
-              {(maps ?? []).map((item) => (
-                <option
-                  key={item.map_ref.entity_id}
-                  value={item.map_ref.entity_id}
-                >
-                  {item.name}
-                </option>
-              ))}
-            </select>
+            <MapToolbarDropdown label={t("map.maps")} value={mapId ?? ""} options={(maps ?? []).map((item) => ({ value: item.map_ref.entity_id, label: item.name }))} onChange={selectMap} />
           )}
         </label>
         {!legacy && activeMap && (
           <label>
             <span>Компоновка карты:</span>
-            <select className="map-page__select" aria-label="Компоновка карты" value={activeMap.active_variant_ref.entity_id} onChange={(event) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", event.target.value); return next; })}>
-              {activeMap.variants.map((item) => <option key={item.variant_ref.entity_id} value={item.variant_ref.entity_id}>{item.name}</option>)}
-            </select>
+            <MapToolbarDropdown label="Компоновка карты" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); return next; })} />
           </label>
         )}
         {!legacy && activeMap && viewMode === "physical" && (
@@ -1822,7 +1843,12 @@ export function MapPage({
               const sourceVariant = activeMap.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
               setPresentationVariantCreate({ mapId: activeMap.map_ref.entity_id, sourceVariantId: activeMap.active_variant_ref.entity_id, sourceVariantName: sourceVariant?.name ?? "", name: "", status: "editing", error: null });
             }}>Создать копию компоновки…</button>
-            <button type="button" disabled={activeMap.variants.find((item) => item.name === "Основной")?.variant_ref.entity_id === activeMap.active_variant_ref.entity_id || !savedMapDataSource?.deletePresentationVariant} onClick={() => void deleteCurrentPresentationVariant()}>Удалить текущую компоновку…</button>
+            <button type="button" disabled={activeMap.variants.find((item) => item.name === "Основной")?.variant_ref.entity_id === activeMap.active_variant_ref.entity_id || !savedMapDataSource?.deletePresentationVariant} onClick={() => {
+              const current = activeMap.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
+              const primary = activeMap.variants.find((item) => item.name === "Основной");
+              if (!current || !primary || current.name === "Основной") return;
+              setPresentationVariantDeletion({ mapId: activeMap.map_ref.entity_id, variantId: current.variant_ref.entity_id, variantName: current.name, primaryVariantId: primary.variant_ref.entity_id, status: "confirming", error: null });
+            }}>Удалить текущую компоновку…</button>
           </>
         )}
         {!legacy && (
@@ -2003,6 +2029,20 @@ export function MapPage({
         />
       </>}
 
+      {presentationVariantDeletion && (
+        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Удалить компоновку">
+          <div className="map-dialog__surface">
+            <h2>Удалить компоновку</h2>
+            <p>Удалить компоновку «{presentationVariantDeletion.variantName}»?</p>
+            <p>Будут удалены только сохранённые расположение, размеры, трассы и состояние составных блоков этой компоновки. Объекты карты и связи не удаляются.</p>
+            {presentationVariantDeletion.error && <p role="alert">{presentationVariantDeletion.error}</p>}
+            <div className="map-dialog__actions">
+              <button type="button" disabled={presentationVariantDeletion.status === "deleting"} onClick={() => setPresentationVariantDeletion(null)}>Отмена</button>
+              <button type="button" disabled={presentationVariantDeletion.status === "deleting"} onClick={() => void confirmPresentationVariantDeletion()}>Удалить</button>
+            </div>
+          </div>
+        </section>
+      )}
       {presentationVariantCreate && (
         <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Создать копию компоновки">
           <div className="map-dialog__surface">
