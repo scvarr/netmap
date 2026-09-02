@@ -56,6 +56,10 @@ interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
   selection: TopologySelection;
   onSelectionChange: (selection: TopologySelection) => void;
+  compositeMemberSelection?: {
+    selectedPhysicalObjectIds: ReadonlySet<string>;
+    onPhysicalObjectClick: (physicalObjectId: string) => void;
+  };
   layoutEngine?: TopologyLayoutEngine;
   layoutStore?: TopologyLayoutStore;
   traceOverlay?: PhysicalTraceOverlay;
@@ -142,6 +146,7 @@ export function TopologyCanvas({
   document,
   selection,
   onSelectionChange,
+  compositeMemberSelection,
   layoutEngine = toFlowProjection,
   layoutStore,
   traceOverlay,
@@ -432,6 +437,7 @@ export function TopologyCanvas({
         : undefined,
     data: {
       ...node.data,
+      compositeMemberSelected: Boolean(objectId && compositeMemberSelection?.selectedPhysicalObjectIds.has(objectId)),
       locationFocus,
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
       traceHighlightedConnectionMemberIds:
@@ -489,6 +495,11 @@ export function TopologyCanvas({
 
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
     if (regionMode) return;
+    const physicalObjectId = physicalObjectIdForNode(node.data.projection);
+    if (physicalObjectId && compositeMemberSelection) {
+      compositeMemberSelection.onPhysicalObjectClick(physicalObjectId);
+      return;
+    }
     onSelectionChange({ type: "node", item: node.data.projection });
   };
   const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {

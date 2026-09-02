@@ -154,6 +154,11 @@ interface PresentationVariantDeletionOperation {
   status: "confirming" | "deleting";
   error: string | null;
 }
+interface CompositeCreateOperation {
+  status: "selecting" | "confirming" | "creating";
+  name: string;
+  error: string | null;
+}
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; variantId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; naming: CableNamingInput; canonicalResult?: PhysicalEndpointConnectionCreationDocument; error: string | null; }
@@ -234,6 +239,7 @@ export function MapPage({
   const [traceViewNotice, setTraceViewNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
   const [compositeMemberIds, setCompositeMemberIds] = useState<Set<string>>(new Set());
+  const [compositeCreate, setCompositeCreate] = useState<CompositeCreateOperation | null>(null);
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -284,6 +290,7 @@ export function MapPage({
   const regionOperationSequence = useRef(0);
   const presentationVariantSubmitPending = useRef(false);
   const presentationVariantDeletionPending = useRef(false);
+  const compositeCreatePending = useRef(false);
 
   selectedMapId.current = mapId;
   const legacy = !savedMapDataSource;
@@ -370,6 +377,8 @@ export function MapPage({
     setSelectedTextAnnotationId(null);
     setTextAnnotationEdit(null);
     setTextAnnotationDeletion(null);
+    setCompositeMemberIds(new Set());
+    setCompositeCreate(null);
   }, [mapId, viewMode]);
 
   useEffect(() => {
@@ -1814,6 +1823,35 @@ export function MapPage({
     if (selectedMapId.current !== currentMap.map_ref.entity_id || viewMode !== 'physical') throw new Error('Map changed');
     setSceneDocument({ sceneKey: `${currentMap.map_ref.entity_id}/physical`, document: next });
   };
+  const toggleCompositeMember = (physicalObjectId: string) => {
+    setCompositeMemberIds((current) => {
+      const next = new Set(current);
+      if (next.has(physicalObjectId)) next.delete(physicalObjectId);
+      else next.add(physicalObjectId);
+      return next;
+    });
+  };
+  const cancelCompositeCreate = () => {
+    setCompositeMemberIds(new Set());
+    setCompositeCreate(null);
+  };
+  const submitCompositeCreate = async () => {
+    if (!activeMap || !savedMapDataSource?.createComposite || !compositeCreate || compositeCreate.status !== "confirming" || compositeCreatePending.current) return;
+    const trimmedName = compositeCreate.name.trim();
+    if (!trimmedName || compositeMemberIds.size < 2) return;
+    compositeCreatePending.current = true;
+    setCompositeCreate((current) => current?.status === "confirming" ? { ...current, status: "creating", error: null } : current);
+    try {
+      const detail = await savedMapDataSource.createComposite(activeMap.map_ref.entity_id, trimmedName, [...compositeMemberIds], activeMap.active_variant_ref.entity_id);
+      setMap(detail);
+      setCompositeMemberIds(new Set());
+      setCompositeCreate(null);
+    } catch {
+      setCompositeCreate((current) => current?.status === "creating" ? { ...current, status: "confirming", error: "Не удалось создать составной блок." } : current);
+    } finally {
+      compositeCreatePending.current = false;
+    }
+  };
 
   return (
     <main className="map-page">
@@ -1834,11 +1872,11 @@ export function MapPage({
         )}
         {!legacy && activeMap && viewMode === "physical" && (
           <>
-            <button type="button" disabled={compositeMemberIds.size < 2 || !savedMapDataSource?.createComposite} onClick={() => {
-              const compositeName = window.prompt("Название composite");
-              if (!compositeName?.trim() || !savedMapDataSource?.createComposite) return;
-              void savedMapDataSource.createComposite(activeMap.map_ref.entity_id, compositeName.trim(), [...compositeMemberIds], activeMap.active_variant_ref.entity_id).then((detail) => { setMap(detail); setCompositeMemberIds(new Set()); }).catch(() => setError("Не удалось создать composite"));
-            }}>Создать composite</button>
+            {compositeCreate?.status === "selecting" ? <>
+              <output aria-live="polite">Выбрано: {compositeMemberIds.size}</output>
+              <button type="button" onClick={cancelCompositeCreate}>Отмена</button>
+              <button type="button" disabled={compositeMemberIds.size < 2} onClick={() => setCompositeCreate((current) => current?.status === "selecting" ? { status: "confirming", name: "", error: null } : current)}>Продолжить</button>
+            </> : <button type="button" disabled={!savedMapDataSource?.createComposite || physicalRegionMode} onClick={() => { setCompositeMemberIds(new Set()); setCompositeCreate({ status: "selecting", name: "", error: null }); }}>Создать составной блок…</button>}
             <button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={() => {
               const sourceVariant = activeMap.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
               setPresentationVariantCreate({ mapId: activeMap.map_ref.entity_id, sourceVariantId: activeMap.active_variant_ref.entity_id, sourceVariantName: sourceVariant?.name ?? "", name: "", status: "editing", error: null });
@@ -1905,12 +1943,6 @@ export function MapPage({
               ))}
             </div>
           )}
-          <div aria-label="Участники composite">
-            {activeMap.placements.map((placement) => {
-              const id = placement.physical_object_ref.entity_id;
-              return <label key={id}><input type="checkbox" checked={compositeMemberIds.has(id)} onChange={() => setCompositeMemberIds((current) => { const next = new Set(current); next.has(id) ? next.delete(id) : next.add(id); return next; })} />{id.slice(0, 8)}</label>;
-            })}
-          </div>
         </section>
       )}
 
@@ -2029,6 +2061,23 @@ export function MapPage({
         />
       </>}
 
+      {(compositeCreate?.status === "confirming" || compositeCreate?.status === "creating") && (
+        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Создать составной блок">
+          <form className="map-dialog__surface" onSubmit={(event) => { event.preventDefault(); void submitCompositeCreate(); }}>
+            <h2>Создать составной блок</h2>
+            <p>В блок войдут выбранные объекты: {compositeMemberIds.size}.</p>
+            <label>
+              Название составного блока
+              <input autoFocus value={compositeCreate.name} disabled={compositeCreate.status === "creating"} onChange={(event) => setCompositeCreate((current) => current && current.status !== "creating" ? { ...current, name: event.target.value, error: null } : current)} />
+            </label>
+            {compositeCreate.error && <p role="alert">{compositeCreate.error}</p>}
+            <div className="map-dialog__actions">
+              <button type="button" disabled={compositeCreate.status === "creating"} onClick={() => setCompositeCreate((current) => current ? { ...current, status: "selecting", error: null } : current)}>Назад</button>
+              <button type="submit" disabled={compositeCreate.status === "creating" || !compositeCreate.name.trim()}>Создать</button>
+            </div>
+          </form>
+        </section>
+      )}
       {presentationVariantDeletion && (
         <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Удалить компоновку">
           <div className="map-dialog__surface">
@@ -2202,6 +2251,7 @@ export function MapPage({
                       setContinuationAnchor(null);
                     setSelection(nextSelection);
                   }}
+                  compositeMemberSelection={compositeCreate?.status === "selecting" ? { selectedPhysicalObjectIds: compositeMemberIds, onPhysicalObjectClick: toggleCompositeMember } : undefined}
                   sceneKey={presentationSceneKey}
                   positionOverrides={!legacy ? positions : undefined}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}

@@ -30,7 +30,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
         .filter((link) => data.traceHighlightedConnectionMemberIds?.has(link.connection_member_id))
         .flatMap((link) => [link.from_connection_point_id, link.to_connection_point_id]),
     );
-    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}${data.locationFocus === 'match' ? ' blueprint-map-node--location-focus' : ''}${data.locationFocus === 'dim' ? ' blueprint-map-node--location-dim' : ''}`} style={{ width: displayWidth, height: displayHeight + nameplateHeight, gridTemplateRows: `${nameplateHeight}px ${displayHeight}px` }}>
+    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.compositeMemberSelected ? ' blueprint-map-node--composite-member-selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}${data.locationFocus === 'match' ? ' blueprint-map-node--location-focus' : ''}${data.locationFocus === 'dim' ? ' blueprint-map-node--location-dim' : ''}`} style={{ width: displayWidth, height: displayHeight + nameplateHeight, gridTemplateRows: `${nameplateHeight}px ${displayHeight}px` }}>
     <NodeResizer
       isVisible={Boolean(selected && data.blueprintResizeEnabled)}
       minWidth={minimumBlueprintDisplayWidth(blueprint)}
@@ -61,7 +61,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
   }
   const genericPoints = physical ? genericConnectionPoints(projection) : [];
   return (
-    <div className={`device-node${physical ? ` device-node--physical device-node--class-${classPresentation.accent}` : ''}${selected ? ' device-node--selected' : ''}${data.traceHighlighted ? ' device-node--trace-highlighted' : ''}${data.locationFocus === 'match' ? ' device-node--location-focus' : ''}${data.locationFocus === 'dim' ? ' device-node--location-dim' : ''}`}>
+    <div className={`device-node${physical ? ` device-node--physical device-node--class-${classPresentation.accent}` : ''}${selected ? ' device-node--selected' : ''}${data.compositeMemberSelected ? ' device-node--composite-member-selected' : ''}${data.traceHighlighted ? ' device-node--trace-highlighted' : ''}${data.locationFocus === 'match' ? ' device-node--location-focus' : ''}${data.locationFocus === 'dim' ? ' device-node--location-dim' : ''}`}>
       <Handle type="target" position={Position.Top} className="device-node__handle" />
       <span className="device-node__kind">
         {physical ? classPresentation.label : projection.kind}

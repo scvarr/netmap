@@ -25,6 +25,8 @@ const loadElk = (): Promise<ELK> => {
 
 export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
+  /** Temporary MapPage authoring state; deliberately separate from topology selection. */
+  compositeMemberSelected?: boolean;
   traceHighlighted?: boolean;
   locationFocus?: 'match' | 'dim';
   traceHighlightedConnectionMemberIds?: ReadonlySet<string>;
