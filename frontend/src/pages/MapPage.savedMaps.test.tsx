@@ -24,6 +24,9 @@ const regionNameField = () => screen.getAllByLabelText('Название').at(-1
 const inventory = { schema_version: '1.0' as const, equipment: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: SW }, label: 'SW17', class: 'switch', map_memberships: [] }, { physical_object_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: PC }, label: 'Z2', map_memberships: [] }], cables: [{ cable_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Cable', entity_id: 'cable' }, label: 'Cable', resolution: 'UNRESOLVED' as const, gaps: [], warnings: [] }], gaps: [], warnings: [] };
 const renderPage = (source: TopologyDataSource, maps: SavedMapDataSource, entry = `/map?map=${A}&view=physical`, catalog = { loadCatalogInventory: vi.fn().mockResolvedValue(inventory) }) => renderMapPage({ dataSource: source, deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, savedMapDataSource: maps, catalogInventoryDataSource: catalog, physicalObjectDeleteDataSource: { deletePhysicalObject: vi.fn() } }, entry, <Location />);
 const selectToolbarOption = (label: string, option: string) => { fireEvent.click(screen.getByLabelText(label)); fireEvent.click(screen.getByRole('option', { name: option })); };
+const openLayout = () => fireEvent.click(screen.getByRole('button', { name: /^Компоновка/ }));
+const openTools = () => fireEvent.click(screen.getByRole('button', { name: 'Инструменты' }));
+const startRegions = () => { openTools(); fireEvent.click(screen.getByRole('button', { name: 'Области' })); };
 
 describe('MapPage SavedMap scope', () => {
   it('renders toolbar dropdown values, selects entries, and closes on Escape', async () => {
@@ -36,12 +39,14 @@ describe('MapPage SavedMap scope', () => {
     renderPage({ loadProjection: vi.fn(scopedProjection) }, maps);
     await screen.findByText('PP1');
     expect(screen.getByLabelText('Карты')).toHaveTextContent('A');
-    expect(screen.getByLabelText('Компоновка карты')).toHaveTextContent('Основной');
-    fireEvent.click(screen.getByLabelText('Компоновка карты'));
+    expect(screen.getByRole('button', { name: 'Компоновка · Основной' })).toBeInTheDocument();
+    openLayout();
+    expect(screen.getByLabelText('Текущая компоновка')).toHaveTextContent('Основной');
+    fireEvent.click(screen.getByLabelText('Текущая компоновка'));
     expect(screen.getByRole('option', { name: 'Копия' })).toBeInTheDocument();
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Компоновка карты' }), { key: 'Escape' });
-    expect(screen.queryByRole('listbox', { name: 'Компоновка карты' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText('Компоновка карты'));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Текущая компоновка' }), { key: 'Escape' });
+    expect(screen.queryByRole('listbox', { name: 'Текущая компоновка' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Текущая компоновка'));
     fireEvent.click(screen.getByRole('option', { name: 'Копия' }));
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`variant=${copyId}`));
     fireEvent.click(screen.getByLabelText('Карты'));
@@ -58,16 +63,16 @@ describe('MapPage SavedMap scope', () => {
     const maps: any = { listMaps: vi.fn().mockResolvedValue([custom]), loadMap: vi.fn((_: string, variantId?: string) => Promise.resolve(variantId === primaryId ? primary : custom)), createMap: vi.fn(), deletePresentationVariant, addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() };
     renderPage({ loadProjection: vi.fn(scopedProjection) }, maps, `/map?map=${A}&view=physical&variant=${customId}`);
     await screen.findByText('PP1');
-    fireEvent.click(screen.getByRole('button', { name: 'Удалить текущую компоновку…' }));
+    openLayout(); fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Удалить компоновку' })).getByRole('button', { name: 'Отмена' }));
     expect(deletePresentationVariant).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'Удалить текущую компоновку…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
     const confirm = within(screen.getByRole('dialog', { name: 'Удалить компоновку' })).getByRole('button', { name: 'Удалить' });
     fireEvent.click(confirm); fireEvent.click(confirm);
     expect(deletePresentationVariant).toHaveBeenCalledTimes(1);
     await act(async () => { resolveDelete(); });
   });
-  it('creates a named copy through a dialog and selects its returned variant', async () => { const sourceVariantId = `variant-${A}`; const copiedVariantId = 'variant-copy'; const initial = saved(A, [[PP, 100, 200]]); const copied = { ...initial, active_variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: copiedVariantId }, variants: [...initial.variants, { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: copiedVariantId }, name: 'Копия' }] }; const createPresentationVariant = vi.fn().mockResolvedValue(copied); const maps: any = { listMaps: vi.fn().mockResolvedValue([initial]), loadMap: vi.fn().mockResolvedValue(initial), createMap: vi.fn(), createPresentationVariant, addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() }; const prompt = vi.spyOn(window, 'prompt'); renderPage({ loadProjection: vi.fn(scopedProjection) }, maps); await screen.findByText('PP1'); expect(screen.getByLabelText('Компоновка карты')).toHaveClass('map-page__select'); fireEvent.click(screen.getByRole('button', { name: 'Создать копию компоновки…' })); expect(prompt).not.toHaveBeenCalled(); expect(screen.getByRole('dialog', { name: 'Создать копию компоновки' })).toHaveTextContent('текущей компоновки «Основной»'); fireEvent.change(screen.getByLabelText('Название новой компоновки'), { target: { value: '  Копия  ' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать' })); await waitFor(() => expect(createPresentationVariant).toHaveBeenCalledWith(A, 'Копия', sourceVariantId)); await waitFor(() => expect(screen.getByLabelText('Компоновка карты')).toHaveValue(copiedVariantId)); });
+  it('creates a named copy through a dialog and selects its returned variant', async () => { const sourceVariantId = `variant-${A}`; const copiedVariantId = 'variant-copy'; const initial = saved(A, [[PP, 100, 200]]); const copied = { ...initial, active_variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: copiedVariantId }, variants: [...initial.variants, { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: copiedVariantId }, name: 'Копия' }] }; const createPresentationVariant = vi.fn().mockResolvedValue(copied); const maps: any = { listMaps: vi.fn().mockResolvedValue([initial]), loadMap: vi.fn().mockResolvedValue(initial), createMap: vi.fn(), createPresentationVariant, addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() }; const prompt = vi.spyOn(window, 'prompt'); renderPage({ loadProjection: vi.fn(scopedProjection) }, maps); await screen.findByText('PP1'); openLayout(); expect(screen.getByLabelText('Текущая компоновка')).toHaveClass('map-page__select'); fireEvent.click(screen.getByRole('button', { name: 'Создать копию' })); expect(prompt).not.toHaveBeenCalled(); expect(screen.getByRole('dialog', { name: 'Создать копию компоновки' })).toHaveTextContent('текущей компоновки «Основной»'); fireEvent.change(screen.getByLabelText('Название новой компоновки'), { target: { value: '  Копия  ' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать' })); await waitFor(() => expect(createPresentationVariant).toHaveBeenCalledWith(A, 'Копия', sourceVariantId)); await waitFor(() => expect(screen.getByLabelText('Текущая компоновка')).toHaveValue(copiedVariantId)); });
   it('does not submit an empty layout-copy name and cancel does not write', async () => { const initial = saved(A, [[PP, 1, 2]]); const createPresentationVariant = vi.fn(); const maps: any = { listMaps: vi.fn().mockResolvedValue([initial]), loadMap: vi.fn().mockResolvedValue(initial), createMap: vi.fn(), createPresentationVariant, addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() }; renderPage({ loadProjection: vi.fn(scopedProjection) }, maps); await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: 'Создать копию компоновки…' })); expect(screen.getByRole('button', { name: 'Создать' })).toBeDisabled(); fireEvent.change(screen.getByLabelText('Название новой компоновки'), { target: { value: '   ' } }); expect(screen.getByRole('button', { name: 'Создать' })).toBeDisabled(); fireEvent.click(screen.getByRole('button', { name: 'Отмена' })); expect(createPresentationVariant).not.toHaveBeenCalled(); });
   it('keeps the copy dialog available after a rejected write without exposing diagnostics', async () => { const initial = saved(A, [[PP, 1, 2]]); const maps: any = { listMaps: vi.fn().mockResolvedValue([initial]), loadMap: vi.fn().mockResolvedValue(initial), createMap: vi.fn(), createPresentationVariant: vi.fn().mockRejectedValue(new Error('raw failure')), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() }; renderPage({ loadProjection: vi.fn(scopedProjection) }, maps); await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: 'Создать копию компоновки…' })); fireEvent.change(screen.getByLabelText('Название новой компоновки'), { target: { value: 'Копия' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать' })); expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось создать компоновку карты.'); expect(screen.getByLabelText('Название новой компоновки')).toHaveValue('Копия'); expect(screen.queryByText('raw failure')).not.toBeInTheDocument(); });
   it('prevents duplicate pending layout-copy writes', async () => { const initial = saved(A, [[PP, 1, 2]]); let resolveCopy!: (value: any) => void; const createPresentationVariant = vi.fn(() => new Promise((resolve) => { resolveCopy = resolve; })); const maps: any = { listMaps: vi.fn().mockResolvedValue([initial]), loadMap: vi.fn().mockResolvedValue(initial), createMap: vi.fn(), createPresentationVariant, addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() }; renderPage({ loadProjection: vi.fn(scopedProjection) }, maps); await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: 'Создать копию компоновки…' })); fireEvent.change(screen.getByLabelText('Название новой компоновки'), { target: { value: 'Копия' } }); const submit = screen.getByRole('button', { name: 'Создать' }); fireEvent.click(submit); fireEvent.click(submit); expect(createPresentationVariant).toHaveBeenCalledTimes(1); await act(async () => { resolveCopy(initial); }); });
@@ -95,9 +100,9 @@ describe('MapPage SavedMap scope', () => {
     renderPage({ loadProjection: vi.fn(scopedProjection) }, maps);
     await screen.findByText('PP1');
     expect(screen.getByTestId('canvas')).toHaveAttribute('data-regions', expect.stringContaining('region-a'));
-    fireEvent.click(screen.getByRole('button', { name: 'Области' }));
+    startRegions();
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-mode', expect.stringContaining('showReferenceOutlines')));
-    expect(screen.getByRole('button', { name: 'Соединить порты' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Инструменты' })).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(screen.getByRole('button', { name: 'Скрыть объекты' }));
     expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-mode', expect.stringContaining('false'));
     fireEvent.click(screen.getByRole('button', { name: 'Логическая' }));
@@ -105,8 +110,8 @@ describe('MapPage SavedMap scope', () => {
     expect(screen.getByTestId('canvas')).toHaveAttribute('data-regions', '[]');
     expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-mode', 'null');
     fireEvent.click(screen.getByRole('button', { name: 'Физическая' }));
-    await screen.findByRole('button', { name: 'Области' });
-    fireEvent.click(screen.getByRole('button', { name: 'Области' }));
+    await screen.findByRole('button', { name: 'Инструменты' });
+    startRegions();
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-region-mode', expect.stringContaining('showReferenceOutlines')));
     selectToolbarOption('Карты', 'B');
     await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-scene', `${B}/physical`));

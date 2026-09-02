@@ -238,6 +238,7 @@ export function MapPage({
   const [selectedTraceBranchId, setSelectedTraceBranchId] = useState<string | null>(null);
   const [traceViewNotice, setTraceViewNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
+  const [utilitySection, setUtilitySection] = useState<"layout" | "tools" | null>(null);
   const [compositeMemberIds, setCompositeMemberIds] = useState<Set<string>>(new Set());
   const [compositeCreate, setCompositeCreate] = useState<CompositeCreateOperation | null>(null);
   const [objectSearch, setObjectSearch] = useState("");
@@ -1835,6 +1836,22 @@ export function MapPage({
     setCompositeMemberIds(new Set());
     setCompositeCreate(null);
   };
+  const beginCompositeCreate = () => {
+    setCompositeMemberIds(new Set());
+    setCompositeCreate({ status: "selecting", name: "", error: null });
+    setUtilitySection("layout");
+  };
+  const activeVariant = activeMap?.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
+  const openPresentationVariantCreate = () => {
+    if (!activeMap) return;
+    setPresentationVariantCreate({ mapId: activeMap.map_ref.entity_id, sourceVariantId: activeMap.active_variant_ref.entity_id, sourceVariantName: activeVariant?.name ?? "", name: "", status: "editing", error: null });
+  };
+  const beginPresentationVariantDeletion = () => {
+    if (!activeMap) return;
+    const primary = activeMap.variants.find((item) => item.name === "Основной");
+    if (!activeVariant || !primary || activeVariant.name === "Основной") return;
+    setPresentationVariantDeletion({ mapId: activeMap.map_ref.entity_id, variantId: activeVariant.variant_ref.entity_id, variantName: activeVariant.name, primaryVariantId: primary.variant_ref.entity_id, status: "confirming", error: null });
+  };
   const submitCompositeCreate = async () => {
     if (!activeMap || !savedMapDataSource?.createComposite || !compositeCreate || compositeCreate.status !== "confirming" || compositeCreatePending.current) return;
     const trimmedName = compositeCreate.name.trim();
@@ -1855,7 +1872,7 @@ export function MapPage({
 
   return (
     <main className="map-page">
-      <div className="map-page__toolbar topology-mode-switch">
+      <div className="map-page__toolbar topology-mode-switch" aria-label="Основные элементы карты">
         <label>
           <span>{t("map.maps")}:</span>
           {legacy ? (
@@ -1864,31 +1881,6 @@ export function MapPage({
             <MapToolbarDropdown label={t("map.maps")} value={mapId ?? ""} options={(maps ?? []).map((item) => ({ value: item.map_ref.entity_id, label: item.name }))} onChange={selectMap} />
           )}
         </label>
-        {!legacy && activeMap && (
-          <label>
-            <span>Компоновка карты:</span>
-            <MapToolbarDropdown label="Компоновка карты" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); return next; })} />
-          </label>
-        )}
-        {!legacy && activeMap && viewMode === "physical" && (
-          <>
-            {compositeCreate?.status === "selecting" ? <>
-              <output aria-live="polite">Выбрано: {compositeMemberIds.size}</output>
-              <button type="button" onClick={cancelCompositeCreate}>Отмена</button>
-              <button type="button" disabled={compositeMemberIds.size < 2} onClick={() => setCompositeCreate((current) => current?.status === "selecting" ? { status: "confirming", name: "", error: null } : current)}>Продолжить</button>
-            </> : <button type="button" disabled={!savedMapDataSource?.createComposite || physicalRegionMode} onClick={() => { setCompositeMemberIds(new Set()); setCompositeCreate({ status: "selecting", name: "", error: null }); }}>Создать составной блок…</button>}
-            <button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={() => {
-              const sourceVariant = activeMap.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
-              setPresentationVariantCreate({ mapId: activeMap.map_ref.entity_id, sourceVariantId: activeMap.active_variant_ref.entity_id, sourceVariantName: sourceVariant?.name ?? "", name: "", status: "editing", error: null });
-            }}>Создать копию компоновки…</button>
-            <button type="button" disabled={activeMap.variants.find((item) => item.name === "Основной")?.variant_ref.entity_id === activeMap.active_variant_ref.entity_id || !savedMapDataSource?.deletePresentationVariant} onClick={() => {
-              const current = activeMap.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
-              const primary = activeMap.variants.find((item) => item.name === "Основной");
-              if (!current || !primary || current.name === "Основной") return;
-              setPresentationVariantDeletion({ mapId: activeMap.map_ref.entity_id, variantId: current.variant_ref.entity_id, variantName: current.name, primaryVariantId: primary.variant_ref.entity_id, status: "confirming", error: null });
-            }}>Удалить текущую компоновку…</button>
-          </>
-        )}
         {!legacy && (
           <>
             <button type="button" onClick={() => setCreating(true)}>
@@ -1901,7 +1893,6 @@ export function MapPage({
             >
               {t("map.delete")}
             </button>
-            <button type="button" onClick={() => activeMap && setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id })} disabled={!activeMap || viewMode !== "physical" || physicalRegionMode || !document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
           </>
         )}
         <button
@@ -1918,12 +1909,39 @@ export function MapPage({
         >
           {t("map.physical")}
         </button>
-        {!legacy && activeMap && viewMode === "physical" && (
-          <button type="button" aria-pressed={physicalRegionMode} onClick={() => setRegionMode((active) => !active)}>
-            {t("map.regions")}
-          </button>
-        )}
       </div>
+
+      {!legacy && activeMap && viewMode === "physical" && !selection && (
+        <aside className="map-utility-panel" aria-label="Служебные инструменты карты">
+          <section className="map-utility-panel__section">
+            <button type="button" className="map-utility-panel__header" aria-expanded={utilitySection === "layout"} onClick={() => setUtilitySection((current) => current === "layout" && compositeCreate?.status !== "selecting" ? null : "layout")}>
+              <span>{utilitySection === "layout" ? "Компоновка" : `Компоновка · ${activeVariant?.name ?? "—"}`}</span><span aria-hidden="true">{utilitySection === "layout" ? "‹" : "›"}</span>
+            </button>
+            {utilitySection === "layout" && <div className="map-utility-panel__content">
+              {compositeCreate?.status === "selecting" ? <>
+                <strong>Создание составного блока</strong>
+                <output aria-live="polite">Выбрано: {compositeMemberIds.size}</output>
+                <div className="map-utility-panel__actions"><button type="button" onClick={cancelCompositeCreate}>Отмена</button><button type="button" disabled={compositeMemberIds.size < 2} onClick={() => setCompositeCreate((current) => current?.status === "selecting" ? { status: "confirming", name: "", error: null } : current)}>Продолжить</button></div>
+              </> : <>
+                <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); return next; })} />
+                <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
+                <hr />
+                <strong>Составные блоки</strong>
+                <button type="button" disabled={!savedMapDataSource?.createComposite || physicalRegionMode} onClick={beginCompositeCreate}>Создать составной блок</button>
+              </>}
+            </div>}
+          </section>
+          <section className="map-utility-panel__section">
+            <button type="button" className="map-utility-panel__header" aria-expanded={utilitySection === "tools"} onClick={() => setUtilitySection((current) => current === "tools" ? null : "tools")}>
+              <span>Инструменты</span><span aria-hidden="true">{utilitySection === "tools" ? "‹" : "›"}</span>
+            </button>
+            {utilitySection === "tools" && <div className="map-utility-panel__content">
+              <button type="button" onClick={() => setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id })} disabled={physicalRegionMode || !document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
+              <button type="button" aria-pressed={physicalRegionMode} onClick={() => { setRegionMode((active) => !active); setUtilitySection(null); }}>{t("map.regions")}</button>
+            </div>}
+          </section>
+        </aside>
+      )}
 
       {!legacy && activeMap && viewMode === "physical" && !physicalRegionMode && (
         <section className="map-object-search" aria-label={t("map.objectSearch")}>

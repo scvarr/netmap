@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { MapPage } from './MapPage';
 import { createMapPageHarness } from './MapPage.testHarness';
@@ -19,9 +19,27 @@ const renderPage = (createComposite = vi.fn()) => {
   renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
   return { maps, createComposite };
 };
-const begin = async () => { await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: 'Создать составной блок…' })); };
+const begin = async () => { await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ })); fireEvent.click(screen.getByRole('button', { name: 'Создать составной блок' })); };
 
 describe('MapPage composite creation', () => {
+  it('keeps only map CRUD and view switches in the top toolbar, and hides utilities for ordinary inspection', async () => {
+    renderPage(); await screen.findByText('PP1');
+    const toolbar = screen.getByLabelText('Основные элементы карты');
+    expect(within(toolbar).getByRole('button', { name: 'Карты' })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: '+ Новая карта' })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: 'Удалить карту' })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: 'Логическая' })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: 'Физическая' })).toBeInTheDocument();
+    expect(within(toolbar).queryByRole('button', { name: /Компоновка|Соединить порты|Области|составной блок/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Компоновка · Основной' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Инструменты' }));
+    expect(screen.getByRole('button', { name: 'Соединить порты' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Области' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'PP1' }));
+    expect(screen.getByTestId('inspector')).toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Служебные инструменты карты' })).not.toBeInTheDocument();
+  });
+
   it('uses a temporary canvas membership selection instead of topology selection', async () => {
     renderPage(); await begin();
     expect(screen.getByText('Выбрано: 0')).toBeInTheDocument();
@@ -58,7 +76,7 @@ describe('MapPage composite creation', () => {
     expect(createComposite).toHaveBeenCalledWith(mapId, 'Стойка', [firstId, secondId], variantId);
     resolve(savedMap);
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Создать составной блок' })).not.toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Создать составной блок…' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Создать составной блок' })).toBeInTheDocument();
   });
 
   it('keeps the dialog and members after a rejected write without exposing diagnostics', async () => {
