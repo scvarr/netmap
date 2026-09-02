@@ -32,6 +32,8 @@ export interface SavedMapDataSource {
   deletePresentationVariant?(mapId: string, variantId: string): Promise<void>;
   /** Acknowledges composite creation; load SavedMap separately for authoritative state. */
   createComposite?(mapId: string, name: string, physicalObjectIds: string[], variantId?: string): Promise<MapComposite>;
+  /** Acknowledges composite deletion; load SavedMap separately for authoritative state. */
+  deleteComposite?(mapId: string, compositeId: string): Promise<void>;
   addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
   movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
   setPositionLock(mapId: string, physicalObjectId: string, view: SavedMapView, locked: boolean, variantId?: string): Promise<void>;

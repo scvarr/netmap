@@ -159,6 +159,14 @@ interface CompositeCreateOperation {
   name: string;
   error: string | null;
 }
+interface CompositeDeletionOperation {
+  mapId: string;
+  variantId: string;
+  compositeId: string;
+  compositeName: string;
+  status: "confirming" | "deleting";
+  error: string | null;
+}
 interface CreationRefreshOperation { mapId: string; variantId: string; status: "refresh-failed"; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; variantId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
@@ -243,6 +251,8 @@ export function MapPage({
   const [compositeMemberIds, setCompositeMemberIds] = useState<Set<string>>(new Set());
   const [compositeCreate, setCompositeCreate] = useState<CompositeCreateOperation | null>(null);
   const [compositeCreationRefresh, setCompositeCreationRefresh] = useState<CreationRefreshOperation | null>(null);
+  const [compositeDeletion, setCompositeDeletion] = useState<CompositeDeletionOperation | null>(null);
+  const [compositeDeletionRefresh, setCompositeDeletionRefresh] = useState<CreationRefreshOperation | null>(null);
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -295,6 +305,7 @@ export function MapPage({
   const presentationVariantSubmitPending = useRef(false);
   const presentationVariantDeletionPending = useRef(false);
   const compositeCreatePending = useRef(false);
+  const compositeDeletionPending = useRef(false);
 
   selectedMapId.current = mapId;
   const legacy = !savedMapDataSource;
@@ -1846,13 +1857,31 @@ export function MapPage({
     if (selectedMapId.current !== currentMap.map_ref.entity_id || viewMode !== 'physical') throw new Error('Map changed');
     setSceneDocument({ sceneKey: `${currentMap.map_ref.entity_id}/physical`, document: next });
   };
+  const compositeConflict = (physicalObjectIds: Iterable<string>) => {
+    if (!activeMap) return null;
+    const names = new Set<string>();
+    const selectedIds = new Set(physicalObjectIds);
+    for (const composite of activeMap.composites) {
+      if (composite.physical_object_refs.some((member) => selectedIds.has(member.entity_id))) names.add(composite.name);
+    }
+    if (names.size === 0) return null;
+    return names.size === 1
+      ? `Один или несколько выбранных объектов уже входят в составной блок «${[...names][0]}».`
+      : "Некоторые выбранные объекты уже входят в другие составные блоки.";
+  };
   const toggleCompositeMember = (physicalObjectId: string) => {
+    const existing = compositeConflict([physicalObjectId]);
+    if (existing) {
+      setCompositeCreate((current) => current?.status === "selecting" ? { ...current, error: existing } : current);
+      return;
+    }
     setCompositeMemberIds((current) => {
       const next = new Set(current);
       if (next.has(physicalObjectId)) next.delete(physicalObjectId);
       else next.add(physicalObjectId);
       return next;
     });
+    setCompositeCreate((current) => current?.status === "selecting" ? { ...current, error: null } : current);
   };
   const cancelCompositeCreate = () => {
     setCompositeMemberIds(new Set());
@@ -1888,10 +1917,57 @@ export function MapPage({
     if (!activeVariant || !primary || activeVariant.name === "Основной") return;
     setPresentationVariantDeletion({ mapId: activeMap.map_ref.entity_id, variantId: activeVariant.variant_ref.entity_id, variantName: activeVariant.name, primaryVariantId: primary.variant_ref.entity_id, status: "confirming", error: null });
   };
+  const beginCompositeDeletion = (compositeId: string) => {
+    if (!activeMap) return;
+    const composite = activeMap.composites.find((item) => item.composite_ref.entity_id === compositeId);
+    if (!composite) return;
+    setCompositeDeletion({ mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, compositeName: composite.name, status: "confirming", error: null });
+  };
+  const refreshDeletedComposite = async (refresh: CreationRefreshOperation) => {
+    if (!savedMapDataSource) return;
+    const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
+    if (selectedMapId.current === refresh.mapId) setMap(detail);
+    setCompositeDeletionRefresh(null);
+  };
+  const retryCompositeDeletionRefresh = async () => {
+    if (!compositeDeletionRefresh) return;
+    try { await refreshDeletedComposite(compositeDeletionRefresh); } catch { /* Keep the bounded retry visible. */ }
+  };
+  const confirmCompositeDeletion = async () => {
+    const operation = compositeDeletion;
+    if (!savedMapDataSource?.deleteComposite || !operation || operation.status !== "confirming" || compositeDeletionPending.current) return;
+    compositeDeletionPending.current = true;
+    setCompositeDeletion({ ...operation, status: "deleting", error: null });
+    try {
+      await savedMapDataSource.deleteComposite(operation.mapId, operation.compositeId);
+    } catch {
+      setCompositeDeletion({ ...operation, status: "confirming", error: "Не удалось удалить составной блок." });
+      compositeDeletionPending.current = false;
+      return;
+    }
+    compositeDeletionPending.current = false;
+    setCompositeDeletion(null);
+    const refresh = { mapId: operation.mapId, variantId: operation.variantId, status: "refresh-failed" as const };
+    try { await refreshDeletedComposite(refresh); }
+    catch { setCompositeDeletionRefresh(refresh); }
+  };
+  const continueCompositeCreate = () => {
+    const conflict = compositeConflict(compositeMemberIds);
+    if (conflict) {
+      setCompositeCreate((current) => current?.status === "selecting" ? { ...current, error: conflict } : current);
+      return;
+    }
+    setCompositeCreate((current) => current?.status === "selecting" ? { status: "confirming", name: "", error: null } : current);
+  };
   const submitCompositeCreate = async () => {
     if (!activeMap || !savedMapDataSource?.createComposite || !compositeCreate || compositeCreate.status !== "confirming" || compositeCreatePending.current) return;
     const trimmedName = compositeCreate.name.trim();
     if (!trimmedName || compositeMemberIds.size < 2) return;
+    const conflict = compositeConflict(compositeMemberIds);
+    if (conflict) {
+      setCompositeCreate((current) => current?.status === "confirming" ? { ...current, status: "selecting", error: conflict } : current);
+      return;
+    }
     compositeCreatePending.current = true;
     setCompositeCreate((current) => current?.status === "confirming" ? { ...current, status: "creating", error: null } : current);
     try {
@@ -1975,12 +2051,14 @@ export function MapPage({
               {compositeCreate?.status === "selecting" ? <>
                 <strong>Создание составного блока</strong>
                 <output aria-live="polite">Выбрано: {compositeMemberIds.size}</output>
-                <div className="map-utility-panel__actions"><button type="button" onClick={cancelCompositeCreate}>Отмена</button><button type="button" disabled={compositeMemberIds.size < 2} onClick={() => setCompositeCreate((current) => current?.status === "selecting" ? { status: "confirming", name: "", error: null } : current)}>Продолжить</button></div>
+                {compositeCreate.error && <p role="alert">{compositeCreate.error}</p>}
+                <div className="map-utility-panel__actions"><button type="button" onClick={cancelCompositeCreate}>Отмена</button><button type="button" disabled={compositeMemberIds.size < 2} onClick={continueCompositeCreate}>Продолжить</button></div>
               </> : <>
                 <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); return next; })} />
                 <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
                 <hr />
                 <strong>Составные блоки</strong>
+                {activeMap.composites.length === 0 ? <p className="map-utility-panel__empty">Составных блоков пока нет.</p> : <div className="map-composite-list">{activeMap.composites.map((composite) => <div className="map-composite-list__item" key={composite.composite_ref.entity_id}><div><strong>{composite.name}</strong><span>{composite.physical_object_refs.length} {composite.physical_object_refs.length === 1 ? "объект" : composite.physical_object_refs.length < 5 ? "объекта" : "объектов"}</span></div><button type="button" disabled={!savedMapDataSource?.deleteComposite} onClick={() => beginCompositeDeletion(composite.composite_ref.entity_id)}>Удалить</button></div>)}</div>}
                 <button type="button" disabled={!savedMapDataSource?.createComposite || physicalRegionMode} onClick={beginCompositeCreate}>Создать составной блок</button>
               </>}
             </div>}
@@ -2164,6 +2242,20 @@ export function MapPage({
           </div>
         </section>
       )}
+      {compositeDeletion && (
+        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Удалить составной блок">
+          <div className="map-dialog__surface">
+            <h2>Удалить составной блок</h2>
+            <p>Удалить составной блок «{compositeDeletion.compositeName}»?</p>
+            <p>Будет удалена только группировка объектов. Сами объекты карты и их связи останутся без изменений.</p>
+            {compositeDeletion.error && <p role="alert">{compositeDeletion.error}</p>}
+            <div className="map-dialog__actions">
+              <button type="button" disabled={compositeDeletion.status === "deleting"} onClick={() => setCompositeDeletion(null)}>Отмена</button>
+              <button type="button" disabled={compositeDeletion.status === "deleting"} onClick={() => void confirmCompositeDeletion()}>Удалить</button>
+            </div>
+          </div>
+        </section>
+      )}
       {presentationVariantCreate && (
         <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Создать копию компоновки">
           <div className="map-dialog__surface">
@@ -2268,6 +2360,7 @@ export function MapPage({
       {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
       {presentationVariantCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Компоновка создана, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantCreationRefresh()}>Повторить обновление</button></section>}
       {compositeCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Составной блок создан, но карту не удалось обновить.</p><button type="button" onClick={() => void retryCompositeCreationRefresh()}>Повторить обновление</button></section>}
+      {compositeDeletionRefresh?.status === "refresh-failed" && <section role="alert"><p>Составной блок удалён, но карту не удалось обновить.</p><button type="button" onClick={() => void retryCompositeDeletionRefresh()}>Повторить обновление</button></section>}
       {variantDeletion?.status === "refresh-failed" && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
       {error && <p role="alert">{error}</p>}
