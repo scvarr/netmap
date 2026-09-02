@@ -67,6 +67,86 @@ export interface FlowProjection {
   edges: LogicalFlowEdge[];
 }
 
+/** Presentation geometry only; never persisted as a PhysicalObject position. */
+export const COMPOSITE_FRAME_HEADER_HEIGHT = 32;
+export const COMPOSITE_FRAME_PADDING = 16;
+
+const displayedDimensions = (node: DeviceFlowNode) => ({
+  width: node.width ?? node.measured?.width ?? LAYOUT_NODE_WIDTH,
+  height: node.height ?? node.measured?.height ?? LAYOUT_NODE_HEIGHT,
+});
+
+/**
+ * Turns collapsed composite boundary members into React Flow children. Their
+ * relative positions are derived from the authoritative expanded geometry.
+ */
+export const applyCollapsedCompositePresentation = (
+  projection: FlowProjection,
+  scene: PresentationSceneDocument,
+): FlowProjection => {
+  const nodes = projection.nodes.map((node) => ({ ...node, data: { ...node.data } }));
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+
+  for (const composite of scene.composites) {
+    const frameId = `map-composite:${composite.id}`;
+    const frame = nodesById.get(frameId);
+    const members = composite.boundaryNodeIds
+      .map((id) => nodesById.get(id))
+      .filter((node): node is DeviceFlowNode => Boolean(node))
+      .sort((left, right) => left.id.localeCompare(right.id));
+    if (!frame || members.length === 0) continue;
+
+    const rectangles = members.map((node) => ({ ...node.position, ...displayedDimensions(node) }));
+    const left = Math.min(...rectangles.map((item) => item.x));
+    const top = Math.min(...rectangles.map((item) => item.y));
+    const right = Math.max(...rectangles.map((item) => item.x + item.width));
+    const bottom = Math.max(...rectangles.map((item) => item.y + item.height));
+    const groupWidth = right - left;
+    const groupHeight = bottom - top;
+    const persistedWidth = Number(frame.width ?? frame.data.projection.attributes.width);
+    const persistedHeight = Number(frame.height ?? frame.data.projection.attributes.height);
+    const effectiveWidth = Math.max(persistedWidth, groupWidth + COMPOSITE_FRAME_PADDING * 2);
+    const effectiveHeight = Math.max(
+      persistedHeight,
+      groupHeight + COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_PADDING * 2,
+    );
+    const contentWidth = effectiveWidth - COMPOSITE_FRAME_PADDING * 2;
+    const contentHeight = effectiveHeight - COMPOSITE_FRAME_HEADER_HEIGHT - COMPOSITE_FRAME_PADDING * 2;
+    const offsetX = COMPOSITE_FRAME_PADDING + (contentWidth - groupWidth) / 2;
+    const offsetY = COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_PADDING + (contentHeight - groupHeight) / 2;
+
+    frame.width = effectiveWidth;
+    frame.height = effectiveHeight;
+    frame.zIndex = 0;
+    frame.data.projection = {
+      ...frame.data.projection,
+      attributes: {
+        ...frame.data.projection.attributes,
+        width: effectiveWidth,
+        height: effectiveHeight,
+      },
+    };
+
+    for (const member of members) {
+      member.parentId = frameId;
+      member.extent = 'parent';
+      member.expandParent = false;
+      member.zIndex = 1;
+      member.position = {
+        x: offsetX + member.position.x - left,
+        y: offsetY + member.position.y - top,
+      };
+    }
+  }
+
+  const frameIds = new Set(scene.composites.map((composite) => `map-composite:${composite.id}`));
+  return {
+    ...projection,
+    // React Flow requires parent nodes to precede their children in the node array.
+    nodes: [...nodes.filter((node) => frameIds.has(node.id)), ...nodes.filter((node) => !frameIds.has(node.id))],
+  };
+};
+
 export type TopologyLayoutEngine = (
   scene: PresentationSceneDocument,
 ) => Promise<FlowProjection>;

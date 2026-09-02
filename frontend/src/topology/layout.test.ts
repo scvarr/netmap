@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
+  applyCollapsedCompositePresentation,
   toFlowProjection,
 } from './layout';
 import { presentationSceneDocument } from './presentationScene';
@@ -59,6 +60,32 @@ const bounds = async (document: TopologyProjectionDocument, ids: string[]) => {
 };
 
 describe('ELK topology layout', () => {
+  it('derives collapsed boundary children inside an effective presentation frame without changing their authoritative positions', () => {
+    const a = { id: 'a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [], attributes: {} } as any;
+    const b = { id: 'b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [], attributes: {} } as any;
+    const frame = { id: 'map-composite:rack', kind: 'MAP_COMPOSITE', label: 'Rack', source_refs: [], attributes: { composite_id: 'rack', width: 280, height: 180 } } as any;
+    const scene: PresentationSceneDocument = { layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [a, b, frame], edges: [{ id: 'bc', source: 'b', target: 'outside', kind: 'projection' }], composites: [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], boundaryNodeIds: ['a', 'b'], compositionBasis: 'presentation' }] };
+    const result = applyCollapsedCompositePresentation({ nodes: [
+      { id: 'a', type: 'device' as const, position: { x: 100, y: 600 }, width: 212, height: 144, data: { projection: a } },
+      { id: 'b', type: 'device' as const, position: { x: 380, y: 640 }, width: 212, height: 144, data: { projection: b } },
+      { id: frame.id, type: 'device' as const, position: { x: 30, y: 40 }, width: 280, height: 180, data: { projection: frame } },
+    ], edges: [{ id: 'bc', source: 'b', target: 'outside', type: 'floating', data: {} }] }, scene);
+
+    const derivedA = result.nodes.find((node) => node.id === 'a')!;
+    const derivedB = result.nodes.find((node) => node.id === 'b')!;
+    const derivedFrame = result.nodes.find((node) => node.id === frame.id)!;
+    expect(derivedA).toMatchObject({ parentId: frame.id, extent: 'parent' });
+    expect(derivedB).toMatchObject({ parentId: frame.id, extent: 'parent' });
+    expect(derivedA.position.x).toBeLessThan(derivedB.position.x);
+    expect(derivedFrame.width).toBeGreaterThanOrEqual(212 * 2 + 280 - 212 + 32);
+    expect(derivedFrame.height).toBeGreaterThanOrEqual(144 + 32 + 32);
+    expect(derivedA.position.x).toBeGreaterThanOrEqual(0);
+    expect(derivedA.position.y).toBeGreaterThanOrEqual(32);
+    expect(derivedB.position.x + 212).toBeLessThanOrEqual(derivedFrame.width!);
+    expect(derivedB.position.y + 144).toBeLessThanOrEqual(derivedFrame.height!);
+    expect(result.edges[0]).toMatchObject({ source: 'b', target: 'outside' });
+  });
+
   it('receives already-formed scene edges without inspecting projection endpoint pairs', async () => {
     const scene: PresentationSceneDocument = {
       layer: 'L1', detail_level: 'PHYSICAL_OBJECT',

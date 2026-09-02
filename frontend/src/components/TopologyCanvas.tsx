@@ -17,6 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   toFlowProjection,
+  applyCollapsedCompositePresentation,
   type DeviceNodeData,
   type DeviceFlowNode,
   type FlowProjection,
@@ -91,7 +92,7 @@ interface TopologyCanvasProps {
   compositeInputs?: readonly MapCompositeSceneInput[];
   selectedCompositeId?: string | null;
   onCompositeClick?: (compositeId: string) => void;
-  onCompositeDragStop?: (compositeId: string, position: XYPosition) => void;
+  onCompositeDragStop?: (compositeId: string, geometry: XYPosition & { width: number; height: number }) => void;
   cableRouteDraft?: { cableId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
@@ -303,7 +304,7 @@ export function TopologyCanvas({
         if (!current || currentDocument.current !== document) return;
         const storedPositions =
           positionOverrides ?? layoutStore?.load(viewKey) ?? {};
-        const next = {
+        const next = applyCollapsedCompositePresentation({
           ...nextProjection,
           nodes: applyTopologyPositionOverrides(
             nextProjection.nodes,
@@ -315,7 +316,7 @@ export function TopologyCanvas({
               ? { ...node, ...blueprintNodeDisplayDimensions(blueprint, displayWidth) }
               : node;
           }),
-        };
+        }, presentationScene);
         confirmedNodePositions.current = new Map(
           next.nodes.map((node) => [node.id, node.position]),
         );
@@ -365,10 +366,15 @@ export function TopologyCanvas({
     if (!positionOverrides) return;
     setProjection((current) => {
       if (!current) return current;
-      const nodes = applyTopologyPositionOverrides(
-        current.nodes,
-        positionOverrides,
-      );
+      const nodes = applyCollapsedCompositePresentation({
+        ...current,
+        nodes: current.nodes.map((node) => {
+          const position = positionOverrides[node.id];
+          return position
+            ? { ...node, position, parentId: undefined, extent: undefined, expandParent: undefined }
+            : node;
+        }),
+      }, presentationScene).nodes;
       confirmedNodePositions.current = new Map(
         nodes.map((node) => [node.id, node.position]),
       );
@@ -443,6 +449,8 @@ export function TopologyCanvas({
       ? false
       : node.data.projection.kind === 'MAP_COMPOSITE'
         ? Boolean(onCompositeDragStop)
+        : node.parentId
+          ? false
         : draggableNodeIds
           ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id)
           : lockedNodeIds?.has(node.id)
@@ -461,7 +469,7 @@ export function TopologyCanvas({
       onPhysicalPortClick: compositeMembershipMode ? undefined : onPhysicalPortClick,
       onPhysicalPortContextMenu: compositeMembershipMode ? undefined : onPhysicalPortContextMenu,
       onBlueprintDisplayResize: compositeMembershipMode ? undefined : onBlueprintDisplayResize,
-      blueprintResizeEnabled: !compositeMembershipMode && Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
+      blueprintResizeEnabled: !compositeMembershipMode && !node.parentId && Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
     },
     selected: compositeId ? selectedCompositeId === compositeId : selection?.type === "node" && selection.item.id === node.id,
     });
@@ -565,7 +573,14 @@ export function TopologyCanvas({
   };
   const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
     if (regionMode || compositeMembershipMode) return;
-    if (draggedNode.data.projection.kind === 'MAP_COMPOSITE') { onCompositeDragStop?.(String(draggedNode.data.projection.attributes.composite_id), draggedNode.position); return; }
+    if (draggedNode.data.projection.kind === 'MAP_COMPOSITE') {
+      onCompositeDragStop?.(String(draggedNode.data.projection.attributes.composite_id), {
+        ...draggedNode.position,
+        width: draggedNode.width ?? draggedNode.measured?.width ?? Number(draggedNode.data.projection.attributes.width),
+        height: draggedNode.height ?? draggedNode.measured?.height ?? Number(draggedNode.data.projection.attributes.height),
+      });
+      return;
+    }
     const confirmedPosition = confirmedNodePositions.current.get(draggedNode.id);
     const placedNodes = draggableNodeIds
       ? projection.nodes.filter((node) => draggableNodeIds.has(node.id))

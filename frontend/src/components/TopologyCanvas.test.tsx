@@ -56,6 +56,7 @@ vi.mock('@xyflow/react', () => ({
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
           <button onClick={() => onNodeContextMenu?.({ preventDefault: vi.fn() }, node)}>context {node.id}</button>
           <span data-testid={`position-${node.id}`}>{node.position.x},{node.position.y}</span>
+          <span data-testid={`parent-${node.id}`}>{node.parentId ?? 'none'}</span>
           <span data-testid={`highlighted-members-${node.id}`}>{[...(node.data.traceHighlightedConnectionMemberIds ?? [])].join(',')}</span>
           <span data-testid={`location-focus-${node.id}`}>{node.data.locationFocus ?? 'none'}</span>
           <span data-testid={`draggable-${node.id}`}>{String(node.draggable !== false)}</span>
@@ -619,7 +620,24 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(screen.getByTestId(`draggable-${physical.id}`)).toHaveTextContent('true');
     expect(screen.getByTestId('draggable-map-composite:rack')).toHaveTextContent('true');
     fireEvent.click(screen.getByRole('button', { name: 'drag map-composite:rack' }));
-    expect(onCompositeDragStop).toHaveBeenCalledWith('rack', { x: 42, y: 84 });
+    expect(onCompositeDragStop).toHaveBeenCalledWith('rack', { x: 42, y: 84, width: 280, height: 180 });
+    expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
+  });
+
+  it('keeps a collapsed boundary object selectable but makes it a non-draggable frame child', async () => {
+    const boundary = { ...documentFor('boundary').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'boundary-object' }] };
+    const outside = { ...boundary, id: 'outside', label: 'outside', source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'outside-object' }] };
+    const document = { ...documentFor('physical-boundary'), nodes: [boundary, outside], edges: [{ id: 'crossing', from_node_id: boundary.id, to_node_id: outside.id, kind: 'L1_PHYSICAL_LINK' as const, aggregate: false, source_refs: [], attributes: {} }] };
+    const onSelectionChange = vi.fn();
+    const onPhysicalNodeDragStop = vi.fn();
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={async (input) => flowFor(input)} draggableNodeIds={new Set([boundary.id, outside.id])} onPhysicalNodeDragStop={onPhysicalNodeDragStop} onCompositeDragStop={vi.fn()} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [boundary.id], collapsed: true, x: 10, y: 20, width: 280, height: 180 }]} />);
+
+    await screen.findByRole('button', { name: boundary.id });
+    expect(screen.getByTestId(`parent-${boundary.id}`)).toHaveTextContent('map-composite:rack');
+    expect(screen.getByTestId(`draggable-${boundary.id}`)).toHaveTextContent('false');
+    fireEvent.click(screen.getByRole('button', { name: boundary.id }));
+    expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: boundary });
+    fireEvent.click(screen.getByRole('button', { name: `drag ${boundary.id}` }));
     expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
   });
 
