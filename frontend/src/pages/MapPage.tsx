@@ -159,6 +159,7 @@ interface CompositeCreateOperation {
   name: string;
   error: string | null;
 }
+interface CreationRefreshOperation { mapId: string; variantId: string; status: "refresh-failed"; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; variantId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; naming: CableNamingInput; canonicalResult?: PhysicalEndpointConnectionCreationDocument; error: string | null; }
@@ -241,10 +242,12 @@ export function MapPage({
   const [utilitySection, setUtilitySection] = useState<"layout" | "tools" | null>(null);
   const [compositeMemberIds, setCompositeMemberIds] = useState<Set<string>>(new Set());
   const [compositeCreate, setCompositeCreate] = useState<CompositeCreateOperation | null>(null);
+  const [compositeCreationRefresh, setCompositeCreationRefresh] = useState<CreationRefreshOperation | null>(null);
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [presentationVariantCreate, setPresentationVariantCreate] = useState<PresentationVariantCreateOperation | null>(null);
+  const [presentationVariantCreationRefresh, setPresentationVariantCreationRefresh] = useState<CreationRefreshOperation | null>(null);
   const [presentationVariantDeletion, setPresentationVariantDeletion] = useState<PresentationVariantDeletionOperation | null>(null);
   const [variantDeletion, setVariantDeletion] = useState<{ mapId: string; primaryVariantId: string; status: "refreshing" | "refresh-failed" } | null>(null);
   const [name, setName] = useState("");
@@ -734,18 +737,37 @@ export function MapPage({
     presentationVariantSubmitPending.current = true;
     setPresentationVariantCreate({ ...operation, status: "creating", error: null });
     try {
-      const detail = await savedMapDataSource.createPresentationVariant(operation.mapId, operation.name.trim(), operation.sourceVariantId);
-      setMap(detail);
+      const created = await savedMapDataSource.createPresentationVariant(operation.mapId, operation.name.trim(), operation.sourceVariantId);
+      const refresh = { mapId: operation.mapId, variantId: created.variant_ref.entity_id, status: "refresh-failed" as const };
+      setPresentationVariantCreate(null);
+      skipNextMapLoad.current = `${refresh.mapId}/${refresh.variantId}`;
       setParams((current) => {
         const next = new URLSearchParams(current);
-        next.set("variant", detail.active_variant_ref.entity_id);
+        next.set("variant", refresh.variantId);
         return next;
       });
-      setPresentationVariantCreate(null);
+      try {
+        const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
+        if (selectedMapId.current === refresh.mapId) setMap(detail);
+      } catch {
+        setPresentationVariantCreationRefresh(refresh);
+      }
     } catch {
       setPresentationVariantCreate({ ...operation, status: "editing", error: "Не удалось создать компоновку карты." });
     } finally {
       presentationVariantSubmitPending.current = false;
+    }
+  };
+
+  const retryPresentationVariantCreationRefresh = async () => {
+    const refresh = presentationVariantCreationRefresh;
+    if (!refresh || !savedMapDataSource) return;
+    try {
+      const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
+      if (selectedMapId.current === refresh.mapId) setMap(detail);
+      setPresentationVariantCreationRefresh(null);
+    } catch {
+      // The acknowledged create is never retried; keep only the read retry visible.
     }
   };
 
@@ -1859,14 +1881,32 @@ export function MapPage({
     compositeCreatePending.current = true;
     setCompositeCreate((current) => current?.status === "confirming" ? { ...current, status: "creating", error: null } : current);
     try {
-      const detail = await savedMapDataSource.createComposite(activeMap.map_ref.entity_id, trimmedName, [...compositeMemberIds], activeMap.active_variant_ref.entity_id);
-      setMap(detail);
+      const refresh = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, status: "refresh-failed" as const };
+      await savedMapDataSource.createComposite(refresh.mapId, trimmedName, [...compositeMemberIds], refresh.variantId);
       setCompositeMemberIds(new Set());
       setCompositeCreate(null);
+      try {
+        const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
+        if (selectedMapId.current === refresh.mapId) setMap(detail);
+      } catch {
+        setCompositeCreationRefresh(refresh);
+      }
     } catch {
       setCompositeCreate((current) => current?.status === "creating" ? { ...current, status: "confirming", error: "Не удалось создать составной блок." } : current);
     } finally {
       compositeCreatePending.current = false;
+    }
+  };
+
+  const retryCompositeCreationRefresh = async () => {
+    const refresh = compositeCreationRefresh;
+    if (!refresh || !savedMapDataSource) return;
+    try {
+      const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
+      if (selectedMapId.current === refresh.mapId) setMap(detail);
+      setCompositeCreationRefresh(null);
+    } catch {
+      // The acknowledged create is never retried; keep only the read retry visible.
     }
   };
 
@@ -2212,6 +2252,8 @@ export function MapPage({
         onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("map.deleteCableFailed")))); }}
       />}
       {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
+      {presentationVariantCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Компоновка создана, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantCreationRefresh()}>Повторить обновление</button></section>}
+      {compositeCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Составной блок создан, но карту не удалось обновить.</p><button type="button" onClick={() => void retryCompositeCreationRefresh()}>Повторить обновление</button></section>}
       {variantDeletion?.status === "refresh-failed" && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
       {error && <p role="alert">{error}</p>}

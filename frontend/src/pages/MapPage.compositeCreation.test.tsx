@@ -14,8 +14,8 @@ const variantId = '00000000-0000-4000-8000-000000000011';
 const node = (id: string, label: string) => ({ id: `node-${id}`, kind: 'PHYSICAL_OBJECT', label, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} });
 const document = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [node(firstId, 'PP1'), node(secondId, 'SW1')], edges: [], gaps: [], warnings: [] } as const;
 const savedMap = { map_ref: { entity_type: 'SavedMap' as const, entity_id: mapId }, active_variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, name: 'Основной' }], name: 'Карта', created_at: 'x', updated_at: 'x', placements: [firstId, secondId].map((id, index) => ({ physical_object_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: id }, positions: { 'L1/PHYSICAL_OBJECT': { x: index, y: 0 } } })), cable_routes: [], composites: [], regions: [], text_annotations: [] };
-const renderPage = (createComposite = vi.fn()) => {
-  const maps: any = { listMaps: vi.fn().mockResolvedValue([savedMap]), loadMap: vi.fn().mockResolvedValue(savedMap), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), createComposite };
+const renderPage = (createComposite = vi.fn(), loadMap = vi.fn().mockResolvedValue(savedMap)) => {
+  const maps: any = { listMaps: vi.fn().mockResolvedValue([savedMap]), loadMap, createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), createComposite };
   renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
   return { maps, createComposite };
 };
@@ -74,7 +74,7 @@ describe('MapPage composite creation', () => {
     const submit = screen.getByRole('button', { name: 'Создать' }); fireEvent.click(submit); fireEvent.click(submit);
     expect(createComposite).toHaveBeenCalledTimes(1);
     expect(createComposite).toHaveBeenCalledWith(mapId, 'Стойка', [firstId, secondId], variantId);
-    resolve(savedMap);
+    resolve({ composite_ref: { entity_type: 'MapComposite' as const, entity_id: '00000000-0000-4000-8000-000000000012' }, name: 'Стойка', physical_object_refs: [], presentation: { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, collapsed: false, x: 0, y: 0, width: 280, height: 180 } });
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Создать составной блок' })).not.toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Создать составной блок' })).toBeInTheDocument();
   });
@@ -89,5 +89,18 @@ describe('MapPage composite creation', () => {
     expect(screen.queryByText('raw backend error')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Назад' }));
     expect(screen.getByText('Выбрано: 2')).toBeInTheDocument();
+  });
+
+  it('retries only the authoritative read after an acknowledged composite create', async () => {
+    const createComposite = vi.fn().mockResolvedValue({ composite_ref: { entity_type: 'MapComposite' as const, entity_id: '00000000-0000-4000-8000-000000000012' }, name: 'Стойка', physical_object_refs: [], presentation: { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, collapsed: false, x: 0, y: 0, width: 280, height: 180 } });
+    let reads = 0;
+    const loadMap = vi.fn(() => ++reads <= 2 ? Promise.resolve(savedMap) : reads === 3 ? Promise.reject(new Error('refresh')) : Promise.resolve(savedMap));
+    renderPage(createComposite, loadMap); await begin();
+    fireEvent.click(screen.getByRole('button', { name: 'PP1' })); fireEvent.click(screen.getByRole('button', { name: 'SW1' })); fireEvent.click(screen.getByRole('button', { name: 'Продолжить' }));
+    fireEvent.change(screen.getByLabelText('Название составного блока'), { target: { value: 'Стойка' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Составной блок создан, но карту не удалось обновить.');
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
+    await waitFor(() => expect(reads).toBe(4));
+    expect(createComposite).toHaveBeenCalledTimes(1);
   });
 });
