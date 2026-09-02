@@ -4,7 +4,8 @@ import type { LocationRef } from './locationTypes';
 export interface SavedMapRef { entity_type: 'SavedMap'; entity_id: string }
 export interface MapPresentationVariantRef { entity_type: 'MapPresentationVariant'; entity_id: string }
 export interface MapPresentationVariant { variant_ref: MapPresentationVariantRef; name: string }
-export interface MapComposite { composite_ref: { entity_type: 'MapComposite'; entity_id: string }; name: string; physical_object_refs: ProjectionSourceRef[]; presentation: { variant_ref: MapPresentationVariantRef; collapsed: boolean; x: number; y: number; width: number; height: number } }
+export interface MapCompositePresentation { variant_ref: MapPresentationVariantRef; collapsed: boolean; x: number; y: number; width: number; height: number; geometry_persisted: boolean }
+export interface MapComposite { composite_ref: { entity_type: 'MapComposite'; entity_id: string }; name: string; physical_object_refs: ProjectionSourceRef[]; presentation: MapCompositePresentation }
 export type SavedMapView = 'physical' | 'logical';
 export type SavedMapViewKey = 'L1/PHYSICAL_OBJECT' | 'L2/DEVICE';
 export interface MapViewPosition { x: number; y: number; locked: boolean; display_width?: number }
@@ -34,6 +35,8 @@ export interface SavedMapDataSource {
   createComposite?(mapId: string, name: string, physicalObjectIds: string[], variantId?: string): Promise<MapComposite>;
   /** Acknowledges composite deletion; load SavedMap separately for authoritative state. */
   deleteComposite?(mapId: string, compositeId: string): Promise<void>;
+  /** Acknowledges composite presentation persistence; reload SavedMap separately. */
+  setCompositePresentation?(mapId: string, compositeId: string, variantId: string, presentation: Omit<MapCompositePresentation, 'variant_ref' | 'geometry_persisted'>): Promise<void>;
   addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
   movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
   setPositionLock(mapId: string, physicalObjectId: string, view: SavedMapView, locked: boolean, variantId?: string): Promise<void>;

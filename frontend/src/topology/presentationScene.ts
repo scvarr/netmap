@@ -34,6 +34,10 @@ export interface MapCompositeSceneInput {
   displayName: string;
   memberNodeIds: string[];
   collapsed: boolean;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface CableSceneEvidence {
@@ -166,7 +170,7 @@ export const presentationSceneDocument = (
     detail_level: document.detail_level,
     nodes: [
       ...document.nodes.filter((node) => !hiddenNodeIds.has(node.id)),
-      ...collapsed.map((item) => ({ id: `map-composite:${item.id}`, kind: 'MAP_COMPOSITE', label: item.displayName, source_refs: [], attributes: { presentation_only: true }, status: 'CONFIGURED' })),
+      ...collapsed.map((item) => ({ id: `map-composite:${item.id}`, kind: 'MAP_COMPOSITE', label: item.displayName, source_refs: [], attributes: { presentation_only: true, composite_id: item.id, x: item.x, y: item.y, width: item.width, height: item.height }, status: 'CONFIGURED' })),
     ],
     edges: [
       ...visibleEdges,

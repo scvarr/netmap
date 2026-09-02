@@ -38,6 +38,25 @@ describe('MapPage composite creation', () => {
     expect(screen.getByText('Составных блоков пока нет.')).toBeInTheDocument();
   });
 
+  it('writes individual collapse for the active variant and refreshes authoritative state', async () => {
+    const compositeId = '00000000-0000-4000-8000-000000000099';
+    const composite = { composite_ref: { entity_type: 'MapComposite' as const, entity_id: compositeId }, name: 'Стойка A', physical_object_refs: [savedMap.placements[0].physical_object_ref, savedMap.placements[1].physical_object_ref], presentation: { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, collapsed: false, x: 0, y: 0, width: 280, height: 180, geometry_persisted: false } };
+    const populated = { ...savedMap, composites: [composite] };
+    const setCompositePresentation = vi.fn().mockResolvedValue(undefined);
+    const loadMap = vi.fn().mockResolvedValue(populated);
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([populated]), loadMap, createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), setCompositePresentation };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
+    await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ }));
+    fireEvent.click(within(screen.getByText('Стойка A').parentElement!.parentElement!).getByRole('button', { name: 'Свернуть' }));
+    await waitFor(() => expect(setCompositePresentation).toHaveBeenCalledWith(mapId, compositeId, variantId, { collapsed: true, x: -33.5, y: -18, width: 280, height: 180 }));
+    await waitFor(() => expect(loadMap).toHaveBeenLastCalledWith(mapId, variantId));
+  });
+
+  it('keeps confirmed state after rejected individual presentation write', async () => {
+    const compositeId = '00000000-0000-4000-8000-000000000099'; const populated = { ...savedMap, composites: [{ composite_ref: { entity_type: 'MapComposite' as const, entity_id: compositeId }, name: 'Стойка A', physical_object_refs: [savedMap.placements[0].physical_object_ref], presentation: { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, collapsed: false, x: 10, y: 20, width: 280, height: 180, geometry_persisted: true } }] }; const maps: any = { listMaps: vi.fn().mockResolvedValue([populated]), loadMap: vi.fn().mockResolvedValue(populated), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), setCompositePresentation: vi.fn().mockRejectedValue(new Error('fail')) };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`); await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ })); fireEvent.click(within(screen.getByText('Стойка A').parentElement!.parentElement!).getByRole('button', { name: 'Свернуть' })); expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось изменить состояние составного блока.'); expect(screen.getByRole('button', { name: 'Свернуть' })).toBeInTheDocument();
+  });
+
   it('cancels composite deletion without sending DELETE', async () => {
     const compositeId = '00000000-0000-4000-8000-000000000099'; const populated = { ...savedMap, composites: [{ composite_ref: { entity_type: 'MapComposite' as const, entity_id: compositeId }, name: 'Стойка A', physical_object_refs: [savedMap.placements[0].physical_object_ref], presentation: { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, collapsed: false, x: 0, y: 0, width: 280, height: 180 } }] }; const deleteComposite = vi.fn(); const maps: any = { listMaps: vi.fn().mockResolvedValue([populated]), loadMap: vi.fn().mockResolvedValue(populated), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), deleteComposite };
     renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`); await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ })); fireEvent.click(within(screen.getByText('Стойка A').parentElement!.parentElement!).getByRole('button', { name: 'Удалить' })); const dialog = screen.getByRole('dialog', { name: 'Удалить составной блок' }); expect(dialog).toHaveTextContent('Удалить составной блок «Стойка A»?'); fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' })); expect(deleteComposite).not.toHaveBeenCalled();

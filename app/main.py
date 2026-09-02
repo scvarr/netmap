@@ -228,7 +228,8 @@ def _saved_map_document(detail) -> dict[str, object]:
              "presentation": {"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": detail.variant.id},
                  "collapsed": next((item.collapsed for item in composite.presentations if item.variant_id == detail.variant.id), False),
                  "x": next((item.x for item in composite.presentations if item.variant_id == detail.variant.id), 0), "y": next((item.y for item in composite.presentations if item.variant_id == detail.variant.id), 0),
-                 "width": next((item.width for item in composite.presentations if item.variant_id == detail.variant.id), 280), "height": next((item.height for item in composite.presentations if item.variant_id == detail.variant.id), 180)}}
+                "width": next((item.width for item in composite.presentations if item.variant_id == detail.variant.id), 280), "height": next((item.height for item in composite.presentations if item.variant_id == detail.variant.id), 180),
+                "geometry_persisted": any(item.variant_id == detail.variant.id for item in composite.presentations)}}
             for composite in detail.composites
         ],
         "regions": [
@@ -501,6 +502,7 @@ def create_map_composite(map_id: uuid.UUID, query: CreateMapCompositeRequest, va
                 "y": 0,
                 "width": 280,
                 "height": 180,
+                "geometry_persisted": False,
             },
         }
 
@@ -510,11 +512,10 @@ def delete_map_composite(map_id: uuid.UUID, composite_id: uuid.UUID, session: Se
     with session.begin(): SavedMapCatalog(session).delete_composite(map_id, composite_id)
 
 
-@app.put("/v1/maps/{map_id}/composites/{composite_id}/presentation", response_model=SavedMapDocument, responses={422: {"model": ErrorResponse}})
-def set_map_composite_presentation(map_id: uuid.UUID, composite_id: uuid.UUID, query: SetMapCompositePresentationRequest, variant_id: uuid.UUID, session: Session = Depends(get_session)) -> SavedMapDocument:
+@app.put("/v1/maps/{map_id}/composites/{composite_id}/presentation", status_code=204, responses={422: {"model": ErrorResponse}})
+def set_map_composite_presentation(map_id: uuid.UUID, composite_id: uuid.UUID, query: SetMapCompositePresentationRequest, variant_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
     with session.begin():
-        catalog = SavedMapCatalog(session); catalog.set_composite_presentation(map_id, composite_id, variant_id, query.collapsed, query.x, query.y, query.width, query.height)
-        return _saved_map_document(catalog.detail(map_id, variant_id))
+        SavedMapCatalog(session).set_composite_presentation(map_id, composite_id, variant_id, query.collapsed, query.x, query.y, query.width, query.height)
 
 
 @app.delete("/v1/maps/{map_id}", status_code=204, responses={422: {"model": ErrorResponse}})

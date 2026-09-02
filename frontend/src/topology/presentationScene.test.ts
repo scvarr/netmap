@@ -76,9 +76,10 @@ describe('presentationSceneDocument', () => {
     const source = document();
     source.nodes.push({ id: 'c', kind: 'PHYSICAL_OBJECT', label: 'C', source_refs: [ref('PhysicalObject', 'c')], attributes: {}, status: 'CONFIGURED' });
     source.edges.push({ id: 'bc', from_node_id: 'b', to_node_id: 'c', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [] } });
-    const scene = presentationSceneDocument(source, [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], collapsed: true }]);
+    const scene = presentationSceneDocument(source, [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], collapsed: true, x: 1000, y: 500, width: 300, height: 200 }]);
     expect(scene.nodes.map((node) => node.id)).toEqual(['b', 'c', 'map-composite:rack']);
     expect(scene.edges.map((edge) => edge.id)).toEqual(['bc']);
     expect(scene.composites).toMatchObject([{ id: 'rack', boundaryNodeIds: ['b'] }]);
+    expect(scene.nodes.at(-1)).toMatchObject({ kind: 'MAP_COMPOSITE', source_refs: [], attributes: { presentation_only: true, x: 1000, y: 500, width: 300, height: 200 } });
   });
 });

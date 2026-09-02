@@ -164,9 +164,11 @@ export const toFlowProjection: TopologyLayoutEngine = async (scene) => {
       'elk.layered.crossingMinimization.forceNodeModelOrder': 'true',
       'elk.randomSeed': '1',
     },
-    children: orderedNodes.map((node) => ({
+  children: orderedNodes.map((node) => ({
       id: node.id,
-      ...(node.attributes.blueprint_presentation
+      ...(node.kind === 'MAP_COMPOSITE'
+        ? { width: Number(node.attributes.width), height: Number(node.attributes.height) }
+        : node.attributes.blueprint_presentation
         ? blueprintNodeDisplayDimensions(node.attributes.blueprint_presentation, undefined)
         : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT }),
     })),
@@ -182,11 +184,15 @@ export const toFlowProjection: TopologyLayoutEngine = async (scene) => {
   return {
     nodes: orderedNodes.map((projection) => ({
       id: projection.id,
-      type: 'device',
-      ...(projection.attributes.blueprint_presentation
+      type: (projection.kind === 'MAP_COMPOSITE' ? 'composite' : 'device') as DeviceFlowNode['type'],
+      ...(projection.kind === 'MAP_COMPOSITE'
+        ? { width: Number(projection.attributes.width), height: Number(projection.attributes.height) }
+        : projection.attributes.blueprint_presentation
         ? blueprintNodeDisplayDimensions(projection.attributes.blueprint_presentation, undefined)
         : { width: undefined, height: undefined }),
-      position: positions.get(projection.id) ?? { x: 0, y: 0 },
+      position: projection.kind === 'MAP_COMPOSITE'
+        ? { x: Number(projection.attributes.x), y: Number(projection.attributes.y) }
+        : positions.get(projection.id) ?? { x: 0, y: 0 },
       data: { projection },
     })),
     edges: scene.edges.map((edge) => ({

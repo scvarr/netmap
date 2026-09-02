@@ -34,6 +34,7 @@ import {
   type TopologyLayoutStore,
 } from "../topology/layoutStore";
 import { DeviceNode } from "./DeviceNode";
+import { CompositeNode } from "./CompositeNode";
 import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute } from "./FloatingTopologyEdge";
 import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
 import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
@@ -88,6 +89,9 @@ interface TopologyCanvasProps {
   ) => void;
   cableRoutes?: readonly MapCableRoute[];
   compositeInputs?: readonly MapCompositeSceneInput[];
+  selectedCompositeId?: string | null;
+  onCompositeClick?: (compositeId: string) => void;
+  onCompositeDragStop?: (compositeId: string, position: XYPosition) => void;
   cableRouteDraft?: { cableId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
@@ -102,7 +106,7 @@ interface TopologyCanvasProps {
   regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; hiddenRegionId?: string | null; previewRegion?: MapRegion; editableLabelRegionId?: string | null; onMoveLabel?: (position: XYPosition) => void; annotationPlacement?: boolean; previewAnnotation?: MapTextAnnotation; selectedAnnotationId?: string | null; editableAnnotationId?: string | null; onAnnotationPlace?: (position: XYPosition) => void; onAnnotationSelect?: (annotationId: string) => void; onMoveAnnotation?: (annotationId: string, position: XYPosition) => void; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
 }
 
-const nodeTypes = { device: DeviceNode };
+const nodeTypes = { device: DeviceNode, composite: CompositeNode };
 const edgeTypes = {
   floating: FloatingTopologyEdge,
   continuation: OffMapContinuationEdge,
@@ -169,6 +173,9 @@ export function TopologyCanvas({
   onContinuationClickAnchor,
   cableRoutes,
   compositeInputs,
+  selectedCompositeId,
+  onCompositeClick,
+  onCompositeDragStop,
   cableRouteDraft,
   physicalPortStates,
   onPhysicalPortClick,
@@ -425,6 +432,7 @@ export function TopologyCanvas({
   if (!regionMode) latestReferenceOutlines.current = currentReferenceOutlines;
   const referenceOutlines = regionMode ? latestReferenceOutlines.current : currentReferenceOutlines;
   const nodes = (regionMode ? [] : projection.nodes).map((node) => {
+    const compositeId = node.data.projection.kind === 'MAP_COMPOSITE' ? String(node.data.projection.attributes.composite_id) : null;
     const objectId = physicalObjectIdForNode(node.data.projection);
     const locationFocus: DeviceNodeData['locationFocus'] = locationFocusObjectIds && objectId
       ? (locationFocusObjectIds.has(objectId) ? 'match' : 'dim')
@@ -453,7 +461,7 @@ export function TopologyCanvas({
       onBlueprintDisplayResize: compositeMembershipMode ? undefined : onBlueprintDisplayResize,
       blueprintResizeEnabled: !compositeMembershipMode && Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
     },
-    selected: selection?.type === "node" && selection.item.id === node.id,
+    selected: compositeId ? selectedCompositeId === compositeId : selection?.type === "node" && selection.item.id === node.id,
     });
   });
   const edges = (regionMode ? [] : projection.edges).map((edge) => {
@@ -498,6 +506,7 @@ export function TopologyCanvas({
 
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
     if (regionMode) return;
+    if (node.data.projection.kind === 'MAP_COMPOSITE') { onCompositeClick?.(String(node.data.projection.attributes.composite_id)); return; }
     const physicalObjectId = physicalObjectIdForNode(node.data.projection);
     if (compositeMembershipMode) {
       if (physicalObjectId) compositeMemberSelection?.onPhysicalObjectClick(physicalObjectId);
@@ -554,6 +563,7 @@ export function TopologyCanvas({
   };
   const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
     if (regionMode || compositeMembershipMode) return;
+    if (draggedNode.data.projection.kind === 'MAP_COMPOSITE') { onCompositeDragStop?.(String(draggedNode.data.projection.attributes.composite_id), draggedNode.position); return; }
     const confirmedPosition = confirmedNodePositions.current.get(draggedNode.id);
     const placedNodes = draggableNodeIds
       ? projection.nodes.filter((node) => draggableNodeIds.has(node.id))
@@ -685,6 +695,7 @@ export function TopologyCanvas({
         maxZoom={document.layer === "L1" ? 4 : 1.8}
         nodesDraggable={!regionMode && !compositeMembershipMode && (
           Boolean(onPhysicalNodeDragStop) ||
+          Boolean(onCompositeDragStop) ||
           (!disableAutoLayout && document.layer === "L1")
         )}
         nodesConnectable={false}

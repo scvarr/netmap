@@ -252,6 +252,7 @@ class MapCompositePresentationDocument(BaseModel):
     y: FiniteFloat
     width: FiniteFloat
     height: FiniteFloat
+    geometry_persisted: bool
 
 
 class MapCompositeDocument(BaseModel):
