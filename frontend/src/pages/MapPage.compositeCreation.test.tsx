@@ -65,6 +65,16 @@ describe('MapPage composite creation', () => {
     expect(screen.queryByText('Выбрано: 2')).not.toBeInTheDocument();
   });
 
+  it('cancels membership selection with Escape and restores ordinary node selection', async () => {
+    renderPage(); await begin();
+    fireEvent.click(screen.getByRole('button', { name: 'PP1' }));
+    expect(screen.getByText('Выбрано: 1')).toBeInTheDocument();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByText(/Выбрано:/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'PP1' }));
+    expect(screen.getByTestId('inspector')).toBeInTheDocument();
+  });
+
   it('submits trimmed members once and clears the temporary mode on success', async () => {
     let resolve!: (value: any) => void;
     const createComposite = vi.fn(() => new Promise((done) => { resolve = done; }));

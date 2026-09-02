@@ -1859,10 +1859,24 @@ export function MapPage({
     setCompositeCreate(null);
   };
   const beginCompositeCreate = () => {
+    setSelection(null);
+    setContextAnchor(null);
+    setContinuationAnchor(null);
+    setCableRouteEdit(null);
     setCompositeMemberIds(new Set());
     setCompositeCreate({ status: "selecting", name: "", error: null });
     setUtilitySection("layout");
   };
+  useEffect(() => {
+    if (compositeCreate?.status !== "selecting") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      cancelCompositeCreate();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [compositeCreate?.status]);
   const activeVariant = activeMap?.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
   const openPresentationVariantCreate = () => {
     if (!activeMap) return;

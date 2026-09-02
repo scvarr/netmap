@@ -32,10 +32,13 @@ vi.mock('@xyflow/react', () => ({
   MiniMap: (props: { className?: string; position?: string }) => <div data-testid="minimap" data-class={props.className} data-position={props.position} />,
   Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
-  ReactFlow: ({ nodes, edges, onNodeClick, onNodesChange, onNodeDragStart, onNodeDragStop, onPaneClick, onPaneMouseMove, children }: {
+  ReactFlow: ({ nodes, edges, onNodeClick, onEdgeClick, onNodeContextMenu, onPaneContextMenu, onNodesChange, onNodeDragStart, onNodeDragStop, onPaneClick, onPaneMouseMove, children }: {
     nodes: FlowProjection['nodes'];
     edges: FlowProjection['edges'];
     onNodeClick: (event: unknown, node: FlowProjection['nodes'][number]) => void;
+    onEdgeClick?: (event: unknown, edge: FlowProjection['edges'][number]) => void;
+    onNodeContextMenu?: (event: { preventDefault(): void }, node: FlowProjection['nodes'][number]) => void;
+    onPaneContextMenu?: (event: { preventDefault(): void; clientX: number; clientY: number }) => void;
     onNodesChange: (changes: unknown[]) => void;
     onNodeDragStart: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     onNodeDragStop: (event: unknown, node: FlowProjection['nodes'][number]) => void;
@@ -45,11 +48,13 @@ vi.mock('@xyflow/react', () => ({
   }) => (
     <div data-testid="flow">
       <svg>{edges.map((edge) => <path key={edge.id} data-testid={`svg-path-${edge.id}`} d="M0,0L1,1" />)}</svg>
+      {edges.map((edge) => <button key={`edge-${edge.id}`} onClick={() => onEdgeClick?.({}, edge)}>edge {edge.id}</button>)}
       {edges.map((edge) => <output key={`route-${edge.id}`} data-testid={`route-${edge.id}`}>{edge.data?.cableRoute ? JSON.stringify(edge.data.cableRoute.waypoints) : 'no-route'}</output>)}
       {edges.map((edge) => <output key={`traced-${edge.id}`} data-testid={`traced-${edge.id}`}>{String(Boolean(edge.animated))}</output>)}
       {nodes.map((node) => (
         <div key={node.id}>
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
+          <button onClick={() => onNodeContextMenu?.({ preventDefault: vi.fn() }, node)}>context {node.id}</button>
           <span data-testid={`position-${node.id}`}>{node.position.x},{node.position.y}</span>
           <span data-testid={`highlighted-members-${node.id}`}>{[...(node.data.traceHighlightedConnectionMemberIds ?? [])].join(',')}</span>
           <span data-testid={`location-focus-${node.id}`}>{node.data.locationFocus ?? 'none'}</span>
@@ -67,6 +72,7 @@ vi.mock('@xyflow/react', () => ({
       ))}
       <button onClick={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey })} onMouseMove={(event) => onPaneMouseMove?.({ clientX: event.clientX || 30, clientY: event.clientY || 40, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey })}>move pane</button>
       <button onClick={(event) => onPaneClick?.({ clientX: event.clientX || 10, clientY: event.clientY || 20, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey })}>click pane</button>
+      <button onClick={() => onPaneContextMenu?.({ preventDefault: vi.fn(), clientX: 10, clientY: 20 })}>context pane</button>
       {children}
     </div>
   ),
@@ -233,6 +239,29 @@ describe('TopologyCanvas async layout boundary', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'logical-A' }));
     expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: document.nodes[0] });
+  });
+
+  it('routes composite membership mode only to eligible objects while blocking selection and movement', async () => {
+    const object = { ...documentFor('physical-member').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'object-id' }] };
+    const edge = { id: 'edge-id', from_node_id: object.id, to_node_id: object.id, kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} };
+    const document = { ...documentFor('physical-member'), nodes: [object], edges: [edge] };
+    const layoutEngine: TopologyLayoutEngine = async () => ({ nodes: [{ id: object.id, type: 'device', position: { x: 0, y: 0 }, data: { projection: object } }], edges: [{ id: edge.id, source: object.id, target: object.id, type: 'floating', data: { projection: edge } }] });
+    const onSelectionChange = vi.fn(); const onPhysicalObjectClick = vi.fn(); const onPhysicalNodeDragStop = vi.fn(); const onPhysicalNodeContextMenu = vi.fn(); const onPhysicalPaneContextMenu = vi.fn();
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={layoutEngine} draggableNodeIds={new Set([object.id])} onPhysicalNodeDragStop={onPhysicalNodeDragStop} onPhysicalNodeContextMenu={onPhysicalNodeContextMenu} onPhysicalPaneContextMenu={onPhysicalPaneContextMenu} compositeMemberSelection={{ selectedPhysicalObjectIds: new Set(), onPhysicalObjectClick }} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: object.id }));
+    fireEvent.click(screen.getByRole('button', { name: `edge ${edge.id}` }));
+    fireEvent.click(screen.getByRole('button', { name: `drag ${object.id}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }));
+    fireEvent.click(screen.getByRole('button', { name: `context ${object.id}` }));
+    fireEvent.click(screen.getByRole('button', { name: 'context pane' }));
+
+    expect(onPhysicalObjectClick).toHaveBeenCalledWith('object-id');
+    expect(onSelectionChange).not.toHaveBeenCalled();
+    expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
+    expect(onPhysicalNodeContextMenu).not.toHaveBeenCalled();
+    expect(onPhysicalPaneContextMenu).not.toHaveBeenCalled();
+    expect(screen.getByTestId(`draggable-${object.id}`)).toHaveTextContent('false');
   });
 
   it('renders persisted Regions without intercepting normal topology selection', async () => {

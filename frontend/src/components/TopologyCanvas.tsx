@@ -182,6 +182,7 @@ export function TopologyCanvas({
   regionMode,
 }: TopologyCanvasProps) {
   const { t } = useI18n();
+  const compositeMembershipMode = Boolean(compositeMemberSelection);
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
@@ -430,7 +431,9 @@ export function TopologyCanvas({
       : undefined;
     return ({
     ...node,
-    draggable: draggableNodeIds
+    draggable: compositeMembershipMode
+      ? false
+      : draggableNodeIds
       ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id)
       : lockedNodeIds?.has(node.id)
         ? false
@@ -445,10 +448,10 @@ export function TopologyCanvas({
       wiringHighlightedConnectionMemberIds,
       wiringContinuationConnectionPointIds,
       physicalPortStates,
-      onPhysicalPortClick,
-      onPhysicalPortContextMenu,
-      onBlueprintDisplayResize,
-      blueprintResizeEnabled: Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
+      onPhysicalPortClick: compositeMembershipMode ? undefined : onPhysicalPortClick,
+      onPhysicalPortContextMenu: compositeMembershipMode ? undefined : onPhysicalPortContextMenu,
+      onBlueprintDisplayResize: compositeMembershipMode ? undefined : onBlueprintDisplayResize,
+      blueprintResizeEnabled: !compositeMembershipMode && Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
     });
@@ -496,14 +499,14 @@ export function TopologyCanvas({
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
     if (regionMode) return;
     const physicalObjectId = physicalObjectIdForNode(node.data.projection);
-    if (physicalObjectId && compositeMemberSelection) {
-      compositeMemberSelection.onPhysicalObjectClick(physicalObjectId);
+    if (compositeMembershipMode) {
+      if (physicalObjectId) compositeMemberSelection?.onPhysicalObjectClick(physicalObjectId);
       return;
     }
     onSelectionChange({ type: "node", item: node.data.projection });
   };
   const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
-    if (regionMode) return;
+    if (regionMode || compositeMembershipMode) return;
     const item = edge.data?.projection;
     if (edge.data?.continuation) {
       onContinuationClickAnchor?.(
@@ -516,20 +519,26 @@ export function TopologyCanvas({
     else if (item) onSelectionChange({ type: "edge", item });
   };
   const onNodeContextMenu: NodeMouseHandler<DeviceFlowNode> = (event, node) => {
-    if (regionMode) return;
+    if (regionMode || compositeMembershipMode) {
+      event.preventDefault();
+      return;
+    }
     event.preventDefault();
     const projectionNode = node.data.projection;
     if (cableIdForNode(projectionNode)) onPhysicalCableContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
     else onPhysicalNodeContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
   };
   const onEdgeContextMenu: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
-    if (regionMode) return;
+    if (regionMode || compositeMembershipMode) {
+      event.preventDefault();
+      return;
+    }
     if (!edge.data?.cableNode) return;
     event.preventDefault();
     onPhysicalCableContextMenu?.(edge.data.cableNode, { x: event.clientX, y: event.clientY });
   };
   const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
-    if (regionMode) return;
+    if (regionMode || compositeMembershipMode) return;
     setProjection((current) =>
       current
         ? {
@@ -540,11 +549,11 @@ export function TopologyCanvas({
     );
   };
   const onNodeDragStart: OnNodeDrag<DeviceFlowNode> = (_, node) => {
-    if (regionMode) return;
+    if (regionMode || compositeMembershipMode) return;
     confirmedNodePositions.current.set(node.id, node.position);
   };
   const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
-    if (regionMode) return;
+    if (regionMode || compositeMembershipMode) return;
     const confirmedPosition = confirmedNodePositions.current.get(draggedNode.id);
     const placedNodes = draggableNodeIds
       ? projection.nodes.filter((node) => draggableNodeIds.has(node.id))
@@ -611,6 +620,7 @@ export function TopologyCanvas({
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={(event) => {
+          if (compositeMembershipMode) return;
           if (regionMode) {
             if (regionMode.annotationPlacement) {
               regionMode.onAnnotationPlace?.(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
@@ -656,7 +666,10 @@ export function TopologyCanvas({
           }
         }}
         onPaneContextMenu={(event) => {
-          if (regionMode || !onPhysicalPaneContextMenu) return;
+          if (regionMode || compositeMembershipMode || !onPhysicalPaneContextMenu) {
+            if (compositeMembershipMode) event.preventDefault();
+            return;
+          }
           event.preventDefault();
           onPhysicalPaneContextMenu(
             screenToFlowPosition({ x: event.clientX, y: event.clientY }),
@@ -670,12 +683,12 @@ export function TopologyCanvas({
         }}
         minZoom={0.35}
         maxZoom={document.layer === "L1" ? 4 : 1.8}
-        nodesDraggable={!regionMode && (
+        nodesDraggable={!regionMode && !compositeMembershipMode && (
           Boolean(onPhysicalNodeDragStop) ||
           (!disableAutoLayout && document.layer === "L1")
         )}
         nodesConnectable={false}
-        elementsSelectable={!regionMode}
+        elementsSelectable={!regionMode && !compositeMembershipMode}
         panOnDrag={!regionMode?.editableDraft && !regionMode?.editableLabelRegionId}
         proOptions={{ hideAttribution: true }}
       >
