@@ -8,7 +8,7 @@ type CompositeFlowNode = Node<DeviceNodeData, 'composite'>;
 export function CompositeNode({ data, selected }: NodeProps<CompositeFlowNode>) {
   const collapsed = Boolean(data.projection.attributes.collapsed);
   const name = data.projection.label;
-  const onToggle = data.projection.attributes.on_toggle as undefined | (() => void);
+  const onToggle = data.onCompositeToggle;
   const stop = (event: MouseEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();

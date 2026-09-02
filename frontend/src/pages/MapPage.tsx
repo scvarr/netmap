@@ -391,6 +391,27 @@ export function MapPage({
     }
     return compositeFrameGeometry(memberPositions);
   };
+  const compactCollapsedGeometry = (composite: SavedMap['composites'][number]) => {
+    const memberNodeIds = new Set(composite.physical_object_refs
+      .map((reference) => nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id)?.id)
+      .filter((id): id is string => Boolean(id)));
+    const boundaryNodeIds = new Set<string>();
+    for (const edge of document?.edges ?? []) {
+      const sourceMember = memberNodeIds.has(edge.from_node_id);
+      const targetMember = memberNodeIds.has(edge.to_node_id);
+      if (sourceMember !== targetMember) boundaryNodeIds.add(sourceMember ? edge.from_node_id : edge.to_node_id);
+    }
+    const positions = composite.physical_object_refs.flatMap((reference) => {
+      const node = nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id);
+      const nodeId = node?.id;
+      const position = activeMap?.placements.find((item) => item.physical_object_ref.entity_id === reference.entity_id)?.positions['L1/PHYSICAL_OBJECT'];
+      const dimensions = node?.attributes.blueprint_presentation
+        ? blueprintNodeDisplayDimensions(node.attributes.blueprint_presentation, position?.display_width)
+        : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT };
+      return node && nodeId && boundaryNodeIds.has(nodeId) && position ? [{ x: position.x, y: position.y, ...dimensions }] : [];
+    });
+    return compositeFrameGeometry(positions);
+  };
   const saveCompositePresentation = async (compositeId: string, presentation: Omit<MapCompositePresentation, 'variant_ref' | 'geometry_persisted'>) => {
     if (!activeMap || !savedMapDataSource?.setCompositePresentation || compositePresentationOperation) return;
     const operation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, presentation, status: 'saving' as const };
@@ -405,7 +426,9 @@ export function MapPage({
     if (!composite) return;
     const geometry = composite.presentation.collapsed
       ? composite.presentation
-      : expandedGeometry ?? initialCompositeGeometry(composite);
+      : composite.presentation.geometry_persisted
+        ? { ...compactCollapsedGeometry(composite), x: composite.presentation.x, y: composite.presentation.y }
+        : expandedGeometry ?? initialCompositeGeometry(composite);
     void saveCompositePresentation(compositeId, { collapsed: !composite.presentation.collapsed, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height });
   };
   const retryCompositePresentationRefresh = async () => {

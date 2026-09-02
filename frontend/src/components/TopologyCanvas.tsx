@@ -464,7 +464,7 @@ export function TopologyCanvas({
           kind: 'MAP_COMPOSITE',
           label: composite.displayName,
           source_refs: [],
-          attributes: { presentation_only: true, composite_id: composite.id, collapsed: false, width: geometry.width, height: geometry.height, on_toggle: () => onCompositeToggle?.(composite.id, geometry) },
+          attributes: { presentation_only: true, composite_id: composite.id, collapsed: false, width: geometry.width, height: geometry.height },
           status: 'CONFIGURED',
         } as TopologyProjectionNode },
       };
@@ -490,6 +490,13 @@ export function TopologyCanvas({
             : undefined,
     data: {
       ...node.data,
+      onCompositeToggle: node.data.projection.kind === 'MAP_COMPOSITE'
+        ? () => onCompositeToggle?.(String(node.data.projection.attributes.composite_id), {
+          ...node.position,
+          width: node.width ?? node.measured?.width ?? Number(node.data.projection.attributes.width),
+          height: node.height ?? node.measured?.height ?? Number(node.data.projection.attributes.height),
+        })
+        : undefined,
       compositeMemberSelected: Boolean(objectId && compositeMemberSelection?.selectedPhysicalObjectIds.has(objectId)),
       locationFocus,
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,

@@ -91,6 +91,27 @@ describe('MapPage composite creation', () => {
     expect(movePosition).not.toHaveBeenCalled();
   });
 
+  it('preserves dragged collapsed coordinates through expand and a later collapse', async () => {
+    const compositeId = '00000000-0000-4000-8000-000000000099';
+    const collapsed = { variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, collapsed: true, x: 44, y: 55, width: 600, height: 240, geometry_persisted: true };
+    const expanded = { ...collapsed, collapsed: false };
+    const collapsedMap: any = { ...savedMap, composites: [{ composite_ref: { entity_type: 'MapComposite', entity_id: compositeId }, name: 'Стойка A', physical_object_refs: [savedMap.placements[0].physical_object_ref], presentation: collapsed }] };
+    const expandedMap: any = { ...collapsedMap, composites: [{ ...collapsedMap.composites[0], presentation: expanded }] };
+    const setCompositePresentation = vi.fn().mockResolvedValue(undefined); const movePosition = vi.fn();
+    const loadMap = vi.fn().mockResolvedValue(collapsedMap);
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([collapsedMap]), loadMap, createMap: vi.fn(), addPlacement: vi.fn(), movePosition, removePlacement: vi.fn(), setCompositePresentation };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
+    await screen.findByRole('button', { name: `toggle composite ${compositeId}` });
+    loadMap.mockResolvedValue(expandedMap);
+    fireEvent.click(screen.getByRole('button', { name: `toggle composite ${compositeId}` }));
+    await waitFor(() => expect(setCompositePresentation).toHaveBeenLastCalledWith(mapId, compositeId, variantId, { collapsed: false, x: 44, y: 55, width: 600, height: 240 }));
+    await waitFor(() => expect(screen.getByRole('button', { name: `toggle composite ${compositeId}` })).toBeInTheDocument());
+    loadMap.mockResolvedValue(collapsedMap);
+    fireEvent.click(screen.getByRole('button', { name: `toggle composite ${compositeId}` }));
+    await waitFor(() => expect(setCompositePresentation).toHaveBeenLastCalledWith(mapId, compositeId, variantId, { collapsed: true, x: 44, y: 55, width: 200, height: 74 }));
+    expect(movePosition).not.toHaveBeenCalled();
+  });
+
   it('keeps confirmed state after rejected individual presentation write', async () => {
     const compositeId = '00000000-0000-4000-8000-000000000099'; const populated = { ...savedMap, composites: [{ composite_ref: { entity_type: 'MapComposite' as const, entity_id: compositeId }, name: 'Стойка A', physical_object_refs: [savedMap.placements[0].physical_object_ref], presentation: { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, collapsed: false, x: 10, y: 20, width: 280, height: 180, geometry_persisted: true } }] }; const maps: any = { listMaps: vi.fn().mockResolvedValue([populated]), loadMap: vi.fn().mockResolvedValue(populated), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), setCompositePresentation: vi.fn().mockRejectedValue(new Error('fail')) };
     renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`); await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ })); fireEvent.click(within(screen.getByText('Стойка A').parentElement!.parentElement!).getByRole('button', { name: 'Свернуть' })); expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось изменить состояние составного блока.'); expect(screen.getByRole('button', { name: 'Свернуть' })).toBeInTheDocument();

@@ -60,6 +60,7 @@ vi.mock('@xyflow/react', () => ({
           <span data-testid={`highlighted-members-${node.id}`}>{[...(node.data.traceHighlightedConnectionMemberIds ?? [])].join(',')}</span>
           <span data-testid={`location-focus-${node.id}`}>{node.data.locationFocus ?? 'none'}</span>
           <span data-testid={`draggable-${node.id}`}>{String(node.draggable !== false)}</span>
+          <button onClick={() => node.data.onCompositeToggle?.()}>toggle {node.id}</button>
           <button onClick={() => {
             if (node.draggable === false) return;
             onNodeDragStart({}, node);
@@ -100,8 +101,11 @@ const documentFor = (id: string): TopologyProjectionDocument => ({
 const flowFor = (scene: PresentationSceneDocument): FlowProjection => ({
   nodes: scene.nodes.map((projection) => ({
     id: projection.id,
-    type: 'device',
-    position: { x: 0, y: 0 },
+    type: projection.kind === 'MAP_COMPOSITE' ? 'composite' : 'device',
+    position: projection.kind === 'MAP_COMPOSITE'
+      ? { x: Number(projection.attributes.x), y: Number(projection.attributes.y) }
+      : { x: 0, y: 0 },
+    ...(projection.kind === 'MAP_COMPOSITE' ? { width: Number(projection.attributes.width), height: Number(projection.attributes.height) } : {}),
     data: { projection },
   })),
   edges: [],
@@ -622,6 +626,23 @@ describe('TopologyCanvas async layout boundary', () => {
     fireEvent.click(screen.getByRole('button', { name: 'drag map-composite:rack' }));
     expect(onCompositeDragStop).toHaveBeenCalledWith('rack', { x: 42, y: 84, width: 200, height: 74 });
     expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
+  });
+
+  it('routes both collapsed and expanded canvas controls without selecting or dragging a frame', async () => {
+    const physical = { ...documentFor('physical-node').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'object-a' }] };
+    const document = { ...documentFor('physical-node'), nodes: [physical] };
+    const onSelectionChange = vi.fn(); const onCompositeToggle = vi.fn();
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={async (input) => flowFor(input)} onCompositeToggle={onCompositeToggle} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [], collapsed: true, x: 10, y: 20, width: 900, height: 900 }]} />);
+    await screen.findByRole('button', { name: 'toggle map-composite:rack' });
+    fireEvent.click(screen.getByRole('button', { name: 'toggle map-composite:rack' }));
+    expect(onCompositeToggle).toHaveBeenLastCalledWith('rack', { x: 10, y: 20, width: 200, height: 74 });
+    expect(onSelectionChange).not.toHaveBeenCalled();
+
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={async (input) => flowFor(input)} onCompositeToggle={onCompositeToggle} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [physical.id], collapsed: false, x: 10, y: 20, width: 900, height: 900 }]} />);
+    await screen.findByRole('button', { name: 'toggle map-composite:rack' });
+    fireEvent.click(screen.getByRole('button', { name: 'toggle map-composite:rack' }));
+    expect(onCompositeToggle).toHaveBeenLastCalledWith('rack', { x: -10, y: -44, width: 232, height: 198 });
+    expect(onSelectionChange).not.toHaveBeenCalled();
   });
 
   it('keeps a collapsed boundary object selectable but makes it a non-draggable frame child', async () => {

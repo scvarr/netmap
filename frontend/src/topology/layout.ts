@@ -37,6 +37,8 @@ export interface DeviceNodeData extends Record<string, unknown> {
   onPhysicalPortContextMenu?: (port: { physicalObjectId: string; connectionPointId: string; label: string }, screen: { x: number; y: number }) => void;
   onBlueprintDisplayResize?: (physicalObjectId: string, displayWidth: number) => void;
   blueprintResizeEnabled?: boolean;
+  /** Bounded presentation control; never topology or persisted node data. */
+  onCompositeToggle?: () => void;
 }
 
 export interface LogicalEdgeData extends Record<string, unknown> {
