@@ -441,11 +441,13 @@ export function TopologyCanvas({
     ...node,
     draggable: compositeMembershipMode
       ? false
-      : draggableNodeIds
-      ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id)
-      : lockedNodeIds?.has(node.id)
-        ? false
-        : undefined,
+      : node.data.projection.kind === 'MAP_COMPOSITE'
+        ? Boolean(onCompositeDragStop)
+        : draggableNodeIds
+          ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id)
+          : lockedNodeIds?.has(node.id)
+            ? false
+            : undefined,
     data: {
       ...node.data,
       compositeMemberSelected: Boolean(objectId && compositeMemberSelection?.selectedPhysicalObjectIds.has(objectId)),

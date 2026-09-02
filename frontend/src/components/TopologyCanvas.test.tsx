@@ -610,6 +610,19 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(layoutEngine).toHaveBeenCalledTimes(1);
   });
 
+  it('routes drag eligibility and stop callbacks separately for synthetic composites', async () => {
+    const physical = { ...documentFor('physical-node').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'object-a' }] };
+    const document = { ...documentFor('physical-node'), nodes: [physical] };
+    const onPhysicalNodeDragStop = vi.fn(); const onCompositeDragStop = vi.fn();
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} draggableNodeIds={new Set([physical.id])} onPhysicalNodeDragStop={onPhysicalNodeDragStop} onCompositeDragStop={onCompositeDragStop} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [], collapsed: true, x: 10, y: 20, width: 280, height: 180 }]} />);
+    await screen.findByRole('button', { name: physical.id });
+    expect(screen.getByTestId(`draggable-${physical.id}`)).toHaveTextContent('true');
+    expect(screen.getByTestId('draggable-map-composite:rack')).toHaveTextContent('true');
+    fireEvent.click(screen.getByRole('button', { name: 'drag map-composite:rack' }));
+    expect(onCompositeDragStop).toHaveBeenCalledWith('rack', { x: 42, y: 84 });
+    expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
+  });
+
   it('rejects an overlapping final drop locally and restores the confirmed position', async () => {
     fitViewMock.mockClear();
     const source = { ...documentFor('physical-A').nodes[0], id: 'collision-source', source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'source-object' }] };

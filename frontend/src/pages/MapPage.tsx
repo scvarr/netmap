@@ -63,6 +63,8 @@ import type {
   MapTextAnnotation,
 } from "../topology/savedMapTypes";
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
+import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
+import { LAYOUT_NODE_HEIGHT, LAYOUT_NODE_WIDTH } from "../topology/layout";
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { defaultMapRegionStyle, nextMapRegionZOrder } from "../topology/regionPresentation";
 import { deleteRegionDraftVertex, insertRegionDraftVertex, moveRegionDraftVertex, translateRegionDraft, validateRegionDraftPolygon } from '../topology/regionDraftGeometry';
@@ -378,7 +380,10 @@ export function MapPage({
     const memberPositions = composite.physical_object_refs.flatMap((reference) => {
       const node = nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id);
       const position = activeMap?.placements.find((item) => item.physical_object_ref.entity_id === reference.entity_id)?.positions['L1/PHYSICAL_OBJECT'];
-      return node && position ? [{ x: position.x, y: position.y, width: 212, height: 144 }] : [];
+      const dimensions = node?.attributes.blueprint_presentation
+        ? blueprintNodeDisplayDimensions(node.attributes.blueprint_presentation, position?.display_width)
+        : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT };
+      return node && position ? [{ x: position.x, y: position.y, ...dimensions }] : [];
     });
     if (!memberPositions.length) return { x: composite.presentation.x, y: composite.presentation.y, width: composite.presentation.width, height: composite.presentation.height };
     const left = Math.min(...memberPositions.map((item) => item.x)); const right = Math.max(...memberPositions.map((item) => item.x + item.width));

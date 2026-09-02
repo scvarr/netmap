@@ -52,6 +52,21 @@ describe('MapPage composite creation', () => {
     await waitFor(() => expect(loadMap).toHaveBeenLastCalledWith(mapId, variantId));
   });
 
+  it('centres first collapse on actual Blueprint member rectangles with their saved display widths', async () => {
+    const compositeId = '00000000-0000-4000-8000-000000000099';
+    const blueprint = (width: number) => ({ blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint', entity_id: `bp-${width}` }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion', entity_id: `version-${width}` }, body: { kind: 'RECTANGLE' as const, width: 100, height: 50 }, slots: [{ slot_key: 'port', display_name: 'Port', kind: 'CONNECTION_POINT' as const, connection_point_id: `port-${width}`, rendered_position: { x: .5, y: .5 }, external_attachment: { x: .5, y: 0, side: 'TOP' as const } }] });
+    const blueprintDocument: any = { ...document, nodes: [{ ...document.nodes[0], attributes: { blueprint_presentation: blueprint(120) } }, { ...document.nodes[1], attributes: { blueprint_presentation: blueprint(300) } }] };
+    const placements = [
+      { ...savedMap.placements[0], positions: { 'L1/PHYSICAL_OBJECT': { x: 100, y: 200, display_width: 120 } } },
+      { ...savedMap.placements[1], positions: { 'L1/PHYSICAL_OBJECT': { x: 500, y: 600, display_width: 300 } } },
+    ];
+    const populated: any = { ...savedMap, placements, composites: [{ composite_ref: { entity_type: 'MapComposite', entity_id: compositeId }, name: 'Стойка A', physical_object_refs: placements.map((item: any) => item.physical_object_ref), presentation: { variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, collapsed: false, x: 0, y: 0, width: 280, height: 180, geometry_persisted: false } }] };
+    const setCompositePresentation = vi.fn().mockResolvedValue(undefined); const maps: any = { listMaps: vi.fn().mockResolvedValue([populated]), loadMap: vi.fn().mockResolvedValue(populated), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), setCompositePresentation };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(blueprintDocument) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
+    await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ })); fireEvent.click(within(screen.getByText('Стойка A').parentElement!.parentElement!).getByRole('button', { name: 'Свернуть' }));
+    await waitFor(() => expect(setCompositePresentation).toHaveBeenCalledWith(mapId, compositeId, variantId, { collapsed: true, x: 310, y: 385, width: 280, height: 180 }));
+  });
+
   it('keeps confirmed state after rejected individual presentation write', async () => {
     const compositeId = '00000000-0000-4000-8000-000000000099'; const populated = { ...savedMap, composites: [{ composite_ref: { entity_type: 'MapComposite' as const, entity_id: compositeId }, name: 'Стойка A', physical_object_refs: [savedMap.placements[0].physical_object_ref], presentation: { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, collapsed: false, x: 10, y: 20, width: 280, height: 180, geometry_persisted: true } }] }; const maps: any = { listMaps: vi.fn().mockResolvedValue([populated]), loadMap: vi.fn().mockResolvedValue(populated), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), setCompositePresentation: vi.fn().mockRejectedValue(new Error('fail')) };
     renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`); await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ })); fireEvent.click(within(screen.getByText('Стойка A').parentElement!.parentElement!).getByRole('button', { name: 'Свернуть' })); expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось изменить состояние составного блока.'); expect(screen.getByRole('button', { name: 'Свернуть' })).toBeInTheDocument();
