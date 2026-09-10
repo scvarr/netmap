@@ -88,14 +88,27 @@ Region, Connection endpoint или canonical containment. Один placement в�
 не более чем в один composite; overlap и nesting не поддерживаются. Удаление
 composite не удаляет placement, PhysicalObject, Cable или Connection.
 
-В collapsed variant внутренние non-boundary members и связи между ними могут
-быть скрыты. Связь member с object вне composite остаётся реальной связью между
-реальными PhysicalObject, а member остаётся boundary node. Это derived scene
-context до layout, а не topology fact или layout heuristic.
+Membership composite общее для всех `MapPresentationVariant`. В collapsed state
+real PhysicalObject автоматически видим, если его реальная отображаемая связь
+пересекает границу composite. Explicit rule `Показывать при сворачивании`
+сохраняется для конкретного composite и также общее для variants; effective
+visibility = boundary OR explicit. Explicit-visible object не становится boundary
+object. При его связи с hidden member hidden member и внутреннее edge скрываются,
+а при exact endpoint evidence соответствующий реальный ConnectionPoint получает
+presentation-only indication продолжения внутрь composite. Без exact evidence
+ничего не угадывается; это не off-map continuation и не topology relation.
+
+Видимые objects остаются real topology nodes, frame — только presentation
+container. Drag frame меняет только composite geometry; member MapViewPosition не
+переписываются, а expand возвращает authoritative member coordinates. Coordinates,
+collapsed state, frame geometry и Cable routes принадлежат variant; create-copy
+клонирует этот variant-specific presentation state.
 
 ### MapReference
 
-MapReference composition между SavedMap не реализуется в B.3. Если
+MapReference composition между SavedMap не реализуется в B.3. SavedMap —
+самостоятельная карта, а MapReference остаётся future optional navigation между
+независимыми SavedMaps. Если
 MapReference когда-либо понадобится, это может быть отдельная будущая
 навигационная ссылка между независимыми картами; её schema, API и interaction
 не проектируются этим contract.
@@ -134,13 +147,13 @@ PhysicalObject остаются двумя отдельными writes, а autho
 refresh-only retry semantics сохраняются. `Location.type` остается optional
 arbitrary user value, без fixed taxonomy.
 
-MapReference является bounded consumer общего hierarchical/composite
-presentation mechanism, а не standalone parallel composition architecture.
 Pipeline: canonical/derived facts -> Projection -> hierarchical/composite scene
 -> layout/presentation -> canvas. Universal parent не вводится; Location и
 другие domain relations независимы. Region остается отдельной manual
 SavedMap-owned presentation geometry. MapReference schema/API и exact boundary
-algorithm остаются OPEN до bounded milestone.
+algorithm остаются OPEN. Если в будущем потребуется nested composite tree,
+правило explicit visibility логически scoped к каждому уровню и не наследуется
+автоматически наружу; schema/API/migration/UI tree этим contract не проектируются.
 
 Rack layout может быть specialized presentation policy, но `Location.type` не
 становится backend-interpreted Rack taxonomy и rack occupancy semantics не

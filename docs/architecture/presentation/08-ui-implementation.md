@@ -977,6 +977,36 @@ This is not generic continuation: no off-map normal node, L2/L3 continuation,
 multi-hop expansion, MapReference, regions, cable waypoints or map wiring is
 materialized.
 
+The continuation remains presentation behavior for an explicitly incomplete
+bounded SavedMap membership. It is not SavedMap composition and is not part of
+MapComposite collapse semantics; B.3 does not extend it.
+
+## MAPS.2c — MapComposite and presentation variants
+
+**B.3 — IMPLEMENTED**
+
+`SavedMap` has a primary/current presentation variant. Variants are named, not
+`detailed`/`overview` enums; creating one is an explicit copy of the current or
+selected source variant. Non-primary variants can be deleted; the primary
+variant cannot. Positions, Cable routes, and composite presentation (including
+frame geometry and collapsed state) are variant-specific, while composite
+membership and explicit collapsed visibility are shared by all variants.
+
+MapComposite creation starts from a temporary canvas selection of
+`PhysicalObject`; topology selection is not used as a canonical operation.
+Existing composites are listed under `Компоновка`; deletion is supported.
+Individual and bulk collapse/expand are supported, and bulk writes are atomic.
+After an acknowledged write the client performs an authoritative SavedMap read;
+refresh retry never repeats an already acknowledged write.
+
+The visibility dialog lists direct members by display name. Its checkbox means
+only explicit visibility; a current boundary member is marked `Показывается
+автоматически`. Automatic boundary visibility is derived and is not persisted as
+a separate fact.
+
+After successful expand or expand-all plus authoritative refresh, the viewport
+performs one fit view. Collapse and composite drag do not fit the view.
+
 ## Canvas interaction and multi-selection
 
 **FUTURE / OPEN; это отдельное общее направление редактора карты, не часть

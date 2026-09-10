@@ -1408,17 +1408,33 @@ future UI-polish task and is not implied by Region completion.
 
 ### MapComposite и presentation variants
 
-**B.3 contract**
+**B.3 — IMPLEMENTED**
 
-SavedMap остаётся полной картой. `MapComposite` groups only existing placements
-of that map and never becomes a topology node or Cable/Connection endpoint. A
-placement belongs to at most one composite; no overlap or nesting. Collapsed
-scenes hide internal non-boundary nodes/edges before layout while retaining real
-boundary devices and their real crossing edges. `MapPresentationVariant` is a
-user-named SavedMap presentation, not a detailed/overview enum: positions,
-composite state/geometry and Cable routes are variant-owned. MapReference
-composition between SavedMaps is not implemented by B.3; a future independent
-navigation link is outside this contract.
+SavedMap — самостоятельная сохранённая карта. `MapComposite` принадлежит
+SavedMap, содержит только существующие `MapPlacement`, допускает не более одного
+composite на placement, запрещает overlap/nesting и при удалении не меняет
+canonical topology. Он не является `PhysicalObject`, `Connection` или Cable
+endpoint. Membership composite общий для всех variants; `MapPresentationVariant`
+— именованное представление той же SavedMap, не enum detailed/overview.
+
+При сворачивании real `PhysicalObject` автоматически остаётся видимым, если его
+реальная отображаемая физическая связь пересекает границу composite. Пользователь
+может отдельно отметить `Показывать при сворачивании`; это persisted rule,
+scoped к конкретному `MapComposite`, общий для variants. Explicit visibility не
+делает object boundary object: effective visibility = boundary OR explicit.
+Если explicit-visible object соединён с hidden member, hidden member и внутреннее
+edge скрываются; при exact endpoint evidence на реальном `ConnectionPoint` видимого
+объекта показывается presentation-only indication продолжения к скрытому объекту.
+Без exact evidence ничего не угадывается; это не off-map continuation и не новая
+topology relation.
+
+Видимые real objects остаются topology nodes, а collapsed frame — только
+presentation container. Drag frame сохраняет только geometry composite; member
+`MapViewPosition` не переписываются, expand восстанавливает authoritative
+координаты. Coordinates, collapsed state, frame geometry и Cable routes
+variant-specific; create-copy клонирует variant-specific presentation state.
+MapReference composition между SavedMaps в B.3 не входит; это future optional
+navigation между независимыми SavedMaps.
 
 Подробности и relationship matrix: [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract]].
 

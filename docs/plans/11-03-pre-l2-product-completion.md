@@ -43,7 +43,7 @@ compact Port Block table и RU terminology «Группа портов / Гру�
   подключения» and «Сетевые порты» columns, and counts for the current
   immutable PortBlockVersion without one version-details load per row.
 
-Current execution position: **Phase B.3 — MapComposite and presentation variants (in progress).**
+Current execution position: **Phase B.3 — MapComposite and presentation variants — IMPLEMENTED.**
 
 ### Phase B — Remaining bounded L1 capability families
 
@@ -64,8 +64,7 @@ Current execution position: **Phase B.3 — MapComposite and presentation varian
    выполняется до layout. Cable-backed endpoint pairs и off-map continuations
    формируются на уровне сцены, layout отвечает за геометрию, а точная
    Cable/ConnectionMember evidence сохраняется. Зафиксирован минимальный
-   scene-only контракт будущего composite: composite не является физическим
-   endpoint. B.3 MapReference остаётся следующим отдельным milestone.
+   scene-only контракт composite: composite не является физическим endpoint.
    Reconcile composite/hierarchical presentation через
    `canonical/derived facts -> Projection -> hierarchical/composite scene ->
    layout/presentation -> canvas`; no universal `Object.parent`. Свёрнутый
@@ -75,15 +74,18 @@ Current execution position: **Phase B.3 — MapComposite and presentation varian
    устройства и связи, не пересекающие границу, могут быть скрыты. Связь двух
    свёрнутых блоков по-прежнему идёт между реальными устройствами внутри них.
    Это не добавляет canonical `Object.parent` или новых topology facts; точный
-   `MapReference` contract остаётся отдельным B.3. Полный generic scene engine
+   `MapReference` contract остаётся будущим отдельным направлением. Полный generic scene engine
    не становится обязательным pre-L2 milestone.
-3. **B.3 — MapComposite и presentation variants.** Одна SavedMap остаётся
-   полной картой; уже размещённые PhysicalObject могут быть объединены в
-   presentation-only MapComposite внутри этой же карты. Composite не является
-   endpoint, не меняет topology и не допускает overlap/nesting. Пользовательские
-   варианты представления той же SavedMap хранят независимые координаты,
-   collapsed-composite geometry и маршруты Cable. MapReference composition между
-   SavedMap в B.3 не реализуется.
+3. **B.3 — MapComposite и presentation variants — IMPLEMENTED.** Одна SavedMap
+    является самостоятельной сохранённой картой; MapPresentationVariant — её
+    именованное представление. MapComposite группирует только уже размещённые
+    PhysicalObject и остаётся presentation-only: это не PhysicalObject,
+    Connection или Cable endpoint; overlap/nesting запрещены, membership и
+    explicit collapsed visibility общие для всех variants. Coordinates,
+    collapsed state, frame geometry и Cable routes variant-specific; create-copy
+    варианта клонирует это presentation state. Реализованы individual и bulk
+    collapse/expand, а expand делает fit view после authoritative refresh.
+    MapReference composition между SavedMap в B.3 не входит.
 4. Закрыть MapCableRoute usability: overlap-safe exact trace presentation,
    compact edit handles, straight preview, initial angular snapping/feedback и
    justified presentation-only magnets. Режим редактирования продолжается до
