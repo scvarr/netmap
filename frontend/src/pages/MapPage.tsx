@@ -170,7 +170,7 @@ interface CompositeDeletionOperation {
   status: "confirming" | "deleting";
   error: string | null;
 }
-interface CompositePresentationOperation { mapId: string; variantId: string; bulk?: boolean; status: 'saving' | 'refresh-failed'; }
+interface CompositePresentationOperation { mapId: string; variantId: string; bulk?: boolean; fitAfterRefresh?: boolean; status: 'saving' | 'refresh-failed'; }
 interface CreationRefreshOperation { mapId: string; variantId: string; status: "refresh-failed"; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; variantId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
@@ -259,6 +259,7 @@ export function MapPage({
   const [compositeDeletionRefresh, setCompositeDeletionRefresh] = useState<CreationRefreshOperation | null>(null);
   const [compositePresentationOperation, setCompositePresentationOperation] = useState<CompositePresentationOperation | null>(null);
   const compositePresentationPending = useRef(false);
+  const [viewportFitRevision, setViewportFitRevision] = useState(0);
   const [selectedCompositeId, setSelectedCompositeId] = useState<string | null>(null);
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -416,11 +417,11 @@ export function MapPage({
   const saveCompositePresentation = async (compositeId: string, presentation: Omit<MapCompositePresentation, 'variant_ref' | 'geometry_persisted'>) => {
     if (!activeMap || !savedMapDataSource?.setCompositePresentation || compositePresentationOperation || compositePresentationPending.current) return;
     compositePresentationPending.current = true;
-    const operation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, presentation, status: 'saving' as const };
+    const operation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, presentation, fitAfterRefresh: !presentation.collapsed, status: 'saving' as const };
     setCompositePresentationOperation(operation);
     try { await savedMapDataSource.setCompositePresentation(operation.mapId, operation.compositeId, operation.variantId, operation.presentation); }
     catch { compositePresentationPending.current = false; setCompositePresentationOperation(null); setError('Не удалось изменить состояние составного блока.'); return; }
-    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositePresentationOperation(null); compositePresentationPending.current = false; }
+    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) { setMap(detail); if (operation.fitAfterRefresh) setViewportFitRevision((revision) => revision + 1); } setCompositePresentationOperation(null); compositePresentationPending.current = false; }
     catch { setCompositePresentationOperation({ ...operation, status: 'refresh-failed' }); }
   };
   const toggledCompositePresentation = (composite: SavedMap['composites'][number], expandedGeometry?: { x: number; y: number; width: number; height: number }) => {
@@ -440,7 +441,7 @@ export function MapPage({
     const updates = activeMap.composites.filter((composite) => composite.presentation.collapsed !== collapsed)
       .map((composite) => ({ composite_id: composite.composite_ref.entity_id, ...toggledCompositePresentation(composite) }));
     if (!updates.length) return;
-    const operation: CompositePresentationOperation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, bulk: true, status: 'saving' };
+    const operation: CompositePresentationOperation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, bulk: true, fitAfterRefresh: !collapsed, status: 'saving' };
     compositePresentationPending.current = true;
     setCompositePresentationOperation(operation);
     try { await savedMapDataSource.setCompositePresentations(operation.mapId, operation.variantId, updates); }
@@ -452,7 +453,7 @@ export function MapPage({
     }
     try {
       const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId);
-      if (selectedMapId.current === operation.mapId) setMap(detail);
+      if (selectedMapId.current === operation.mapId) { setMap(detail); if (operation.fitAfterRefresh) setViewportFitRevision((revision) => revision + 1); }
       compositePresentationPending.current = false;
       setCompositePresentationOperation(null);
     } catch { setCompositePresentationOperation({ ...operation, status: 'refresh-failed' }); }
@@ -460,7 +461,7 @@ export function MapPage({
   const retryCompositePresentationRefresh = async () => {
     const operation = compositePresentationOperation; if (!operation || operation.status !== 'refresh-failed' || !savedMapDataSource) return;
     setCompositePresentationOperation({ ...operation, status: 'saving' });
-    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositePresentationOperation(null); compositePresentationPending.current = false; } catch { setCompositePresentationOperation(operation); }
+    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) { setMap(detail); if (operation.fitAfterRefresh) setViewportFitRevision((revision) => revision + 1); } setCompositePresentationOperation(null); compositePresentationPending.current = false; } catch { setCompositePresentationOperation(operation); }
   };
 
   const selectedCableId = selection?.type === "node" ? cableIdForNode(selection.item) : null;
@@ -2547,6 +2548,7 @@ export function MapPage({
                   selectedCompositeId={selectedCompositeId}
                   onCompositeClick={(compositeId) => { setSelection(null); setSelectedCompositeId(compositeId); }}
                   onCompositeDragStop={(compositeId, geometry) => { const composite = activeMap?.composites.find((item) => item.composite_ref.entity_id === compositeId); if (composite?.presentation.collapsed) void saveCompositePresentation(compositeId, { collapsed: true, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height }); }}
+                  viewportFitRevision={viewportFitRevision}
                   onCompositeToggle={toggleCompositePresentation}
                   cableRouteDraft={!physicalRegionMode && cableRouteEdit ? { cableId: cableRouteEdit.cableId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
                   wiringRoute={!physicalRegionMode && wiring.status !== "idle" && wiring.status !== "selecting-source" ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target, waypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex, onWaypointSelect: (index) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}

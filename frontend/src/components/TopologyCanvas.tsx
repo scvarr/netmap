@@ -67,6 +67,8 @@ interface TopologyCanvasProps {
   layoutStore?: TopologyLayoutStore;
   traceOverlay?: PhysicalTraceOverlay;
   sceneKey?: string;
+  /** Request one fit after a fresh layout has been applied. */
+  viewportFitRevision?: number;
   positionOverrides?: Record<string, XYPosition>;
   displayWidthOverrides?: Record<string, number>;
   draggableNodeIds?: ReadonlySet<string>;
@@ -158,6 +160,7 @@ export function TopologyCanvas({
   layoutStore,
   traceOverlay,
   sceneKey,
+  viewportFitRevision = 0,
   positionOverrides,
   displayWidthOverrides,
   draggableNodeIds,
@@ -203,6 +206,7 @@ export function TopologyCanvas({
   const [regionDraftClosingTarget, setRegionDraftClosingTarget] = useState(false);
   const regionDraftDrag = useRef<{ kind: 'vertex'; index: number } | { kind: 'polygon'; last: XYPosition } | { kind: 'label' } | { kind: 'annotation'; id: string } | null>(null);
   const fitAfterLayout = useRef(false);
+  const appliedViewportFitRevision = useRef(0);
   const fittedSceneKey = useRef<string | null>(null);
   const appliedAuthoritativePositionRevision = useRef(
     authoritativePositionRevision,
@@ -323,6 +327,10 @@ export function TopologyCanvas({
         confirmedNodePositions.current = new Map(
           next.nodes.map((node) => [node.id, node.position]),
         );
+        if (appliedViewportFitRevision.current !== viewportFitRevision) {
+          appliedViewportFitRevision.current = viewportFitRevision;
+          fitAfterLayout.current = true;
+        }
         setProjection(next);
         perfMark("layout-end");
         perfMeasure("layout-duration", "layout-start", "layout-end");
@@ -339,7 +347,7 @@ export function TopologyCanvas({
     return () => {
       current = false;
     };
-  }, [document, layoutEngine, layoutRevision, layoutStore, presentationScene, t, viewKey]);
+  }, [document, layoutEngine, layoutRevision, layoutStore, presentationScene, t, viewKey, viewportFitRevision]);
 
   useEffect(() => {
     if (!displayWidthOverrides) return;

@@ -713,6 +713,53 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(onPhysicalNodeDragStop).toHaveBeenCalledWith('source-object', { x: 100, y: 0 });
   });
 
+  it('fits a viewport request only after the next current layout, once with the existing options', async () => {
+    fitViewMock.mockClear();
+    const document = documentFor('physical-A');
+    const next = deferred<FlowProjection>();
+    const layoutEngine = vi.fn<TopologyLayoutEngine>().mockImplementation(async (scene) => flowFor(scene));
+    const props = { document, selection: null, onSelectionChange: vi.fn(), layoutEngine, sceneKey: 'same-map' };
+    const view = render(<TopologyCanvas {...props} viewportFitRevision={0} />);
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
+    fitViewMock.mockClear();
+    layoutEngine.mockReturnValueOnce(next.promise);
+    view.rerender(<TopologyCanvas {...props} viewportFitRevision={1} />);
+    expect(layoutEngine).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'physical-A' })).toBeInTheDocument();
+    expect(fitViewMock).not.toHaveBeenCalled();
+    const projection = flowFor(layoutEngine.mock.calls[1][0]);
+    await act(async () => next.resolve(projection));
+    expect(fitViewMock).toHaveBeenCalledExactlyOnceWith({ duration: 300, maxZoom: 1.1, padding: 0.2 });
+    view.rerender(<TopologyCanvas {...props} viewportFitRevision={1} />);
+    fireEvent.click(screen.getByRole('button', { name: 'measure physical-A' }));
+    expect(fitViewMock).toHaveBeenCalledTimes(1);
+    // An ordinary refresh with the same token must not consume the request again.
+    view.rerender(<TopologyCanvas {...props} document={{ ...document }} viewportFitRevision={1} />);
+    await waitFor(() => expect(layoutEngine).toHaveBeenCalledTimes(3));
+    expect(fitViewMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not fit an obsolete in-flight layout when expand requests a fresh projection', async () => {
+    fitViewMock.mockClear();
+    const original = documentFor('physical-A');
+    const stale = deferred<FlowProjection>();
+    const fresh = deferred<FlowProjection>();
+    const layoutEngine = vi.fn<TopologyLayoutEngine>().mockImplementation(async (scene) => flowFor(scene));
+    const props = { selection: null, onSelectionChange: vi.fn(), layoutEngine, sceneKey: 'same-map' };
+    const view = render(<TopologyCanvas {...props} document={original} viewportFitRevision={0} />);
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
+    fitViewMock.mockClear();
+    layoutEngine.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise);
+    view.rerender(<TopologyCanvas {...props} document={{ ...original }} viewportFitRevision={0} />);
+    const expanded = documentFor('physical-expanded');
+    view.rerender(<TopologyCanvas {...props} document={expanded} viewportFitRevision={1} />);
+    await act(async () => stale.resolve(flowFor(layoutEngine.mock.calls[1][0])));
+    expect(fitViewMock).not.toHaveBeenCalled();
+    await act(async () => fresh.resolve(flowFor(layoutEngine.mock.calls[2][0])));
+    expect(screen.getByRole('button', { name: 'physical-expanded' })).toBeInTheDocument();
+    expect(fitViewMock).toHaveBeenCalledExactlyOnceWith({ duration: 300, maxZoom: 1.1, padding: 0.2 });
+  });
+
   it('fits each new scene once and applies an explicit authoritative rollback without ELK', async () => {
     fitViewMock.mockClear();
     const document = documentFor('physical-A');

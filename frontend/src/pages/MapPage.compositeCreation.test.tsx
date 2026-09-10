@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MapPage } from './MapPage';
 import { createMapPageHarness } from './MapPage.testHarness';
 
-vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <div data-testid="canvas" data-members={JSON.stringify([...props.compositeMemberSelection?.selectedPhysicalObjectIds ?? []])}>{props.document.nodes.map((node: any) => <button key={node.id} type="button" onClick={() => props.compositeMemberSelection ? props.compositeMemberSelection.onPhysicalObjectClick(node.source_refs[0].entity_id) : props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}{props.compositeInputs?.filter((item: any) => item.collapsed).map((item: any) => <button key={`drag-${item.id}`} type="button" onClick={() => props.onCompositeDragStop(item.id, { x: 44, y: 55, width: 600, height: 240 })}>drag composite {item.id}</button>)}{props.compositeInputs?.map((item: any) => <button key={`toggle-${item.id}`} type="button" onClick={() => props.onCompositeToggle(item.id, { x: 90, y: 156, width: 720, height: 524 })}>toggle composite {item.id}</button>)}</div> }));
+vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <div data-testid="canvas" data-fit-revision={props.viewportFitRevision} data-members={JSON.stringify([...props.compositeMemberSelection?.selectedPhysicalObjectIds ?? []])}>{props.document.nodes.map((node: any) => <button key={node.id} type="button" onClick={() => props.compositeMemberSelection ? props.compositeMemberSelection.onPhysicalObjectClick(node.source_refs[0].entity_id) : props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}{props.compositeInputs?.filter((item: any) => item.collapsed).map((item: any) => <button key={`drag-${item.id}`} type="button" onClick={() => props.onCompositeDragStop(item.id, { x: 44, y: 55, width: 600, height: 240 })}>drag composite {item.id}</button>)}{props.compositeInputs?.map((item: any) => <button key={`toggle-${item.id}`} type="button" onClick={() => props.onCompositeToggle(item.id, { x: 90, y: 156, width: 720, height: 524 })}>toggle composite {item.id}</button>)}</div> }));
 vi.mock('../components/QuickInspector', () => ({ QuickInspector: (props: any) => props.selection ? <div data-testid="inspector" /> : null }));
 
 const renderMapPage = createMapPageHarness(MapPage);
@@ -36,6 +36,41 @@ describe('MapPage composite creation', () => {
     maps.loadMap.mockClear();
     return { maps, populated };
   };
+
+  it.each(['canvas', 'panel', 'bulk'] as const)('requests one viewport fit after acknowledged %s expand and authoritative refresh', async (action) => {
+    const { maps, populated } = await renderBulk([bulkComposite('a', true, true), bulkComposite('b', true, true)]);
+    let resolve!: (value: unknown) => void;
+    maps.loadMap.mockImplementation(() => new Promise((done) => { resolve = done; }));
+    fireEvent.click(action === 'canvas' ? screen.getByRole('button', { name: 'toggle composite a' }) : action === 'bulk' ? screen.getByRole('button', { name: 'Развернуть все' }) : screen.getAllByRole('button', { name: 'Развернуть' })[0]);
+    await waitFor(() => expect(maps.loadMap).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-fit-revision', '0');
+    resolve({ ...populated, composites: populated.composites.map((item) => ({ ...item, presentation: { ...item.presentation, collapsed: false } })) });
+    await waitFor(() => expect(screen.getByTestId('canvas')).toHaveAttribute('data-fit-revision', '1'));
+    expect(action === 'bulk' ? maps.setCompositePresentations : maps.setCompositePresentation).toHaveBeenCalledTimes(1);
+    expect(maps.loadMap).toHaveBeenCalledExactlyOnceWith(mapId, variantId);
+  });
+
+  it.each(['individual', 'bulk', 'drag'] as const)('does not request viewport fit after %s collapse or drag', async (action) => {
+    const { maps } = await renderBulk([bulkComposite('a', action === 'drag', true)]);
+    fireEvent.click(screen.getByRole('button', { name: action === 'drag' ? 'drag composite a' : action === 'bulk' ? 'Свернуть все' : 'Свернуть' }));
+    await waitFor(() => expect(maps.loadMap).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: action === 'drag' ? 'Развернуть' : 'Свернуть' })).toBeEnabled());
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-fit-revision', '0');
+  });
+
+  it.each([['individual', true], ['bulk', true], ['individual', false], ['bulk', false]] as const)('preserves %s expand=%s fit intent through refresh-only retry', async (action, expanding) => {
+    const { maps, populated } = await renderBulk([bulkComposite('a', expanding, true)]);
+    maps.loadMap.mockRejectedValue(new Error('refresh'));
+    fireEvent.click(screen.getByRole('button', { name: `${expanding ? 'Развернуть' : 'Свернуть'}${action === 'bulk' ? ' все' : ''}` }));
+    await screen.findByRole('button', { name: 'Повторить обновление' });
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-fit-revision', '0');
+    maps.loadMap.mockResolvedValue({ ...populated, composites: [bulkComposite('a', !expanding, true)] });
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Повторить обновление' })).not.toBeInTheDocument());
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-fit-revision', expanding ? '1' : '0');
+    expect(action === 'bulk' ? maps.setCompositePresentations : maps.setCompositePresentation).toHaveBeenCalledTimes(1);
+    expect(maps.loadMap).toHaveBeenCalledTimes(2);
+  });
 
   it.each([['empty', [], true, true], ['collapsed', [bulkComposite('a', true)], true, false], ['expanded', [bulkComposite('a')], false, true]] as const)(
     'disables bulk actions for %s state', async (_, composites, collapseDisabled, expandDisabled) => {
