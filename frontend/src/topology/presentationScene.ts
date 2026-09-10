@@ -17,6 +17,8 @@ export interface PresentationSceneDocument {
   nodes: TopologyProjectionNode[];
   edges: PresentationSceneEdge[];
   composites: PresentationSceneComposite[];
+  /** Exact visible-side ConnectionPoints whose peer is hidden in a collapsed composite. */
+  hiddenCompositeConnectionPointIds?: string[];
 }
 
 /** Scene-only future composition boundary; it never replaces topology nodes. */
@@ -100,6 +102,7 @@ export const presentationSceneDocument = (
       nodes: [...document.nodes],
       edges: document.edges.map(projectionSceneEdge),
       composites: [],
+      hiddenCompositeConnectionPointIds: [],
     };
   }
 
@@ -169,6 +172,22 @@ export const presentationSceneDocument = (
     for (const member of members) if (!visible.has(member)) hiddenNodeIds.add(member);
     return { id: item.id, displayName: item.displayName, memberNodeIds: [...members], boundaryNodeIds: [...boundary], explicitVisibleNodeIds: [...explicitVisible], visibleNodeIds: [...visible], compositionBasis: "MapComposite placement membership" };
   });
+  const hiddenCompositeConnectionPointIds = new Set<string>();
+  for (const composite of composites) {
+    const members = new Set(composite.memberNodeIds);
+    const visible = new Set(composite.visibleNodeIds ?? []);
+    for (const edge of edges) {
+      const evidence = edge.cableEvidence ?? (edge.endpointPair && edge.projectionEdge ? [{ endpointPair: edge.endpointPair, projectionEdge: edge.projectionEdge }] : []);
+      for (const item of evidence) {
+        const sourceVisible = members.has(item.projectionEdge.from_node_id) && visible.has(item.projectionEdge.from_node_id);
+        const targetVisible = members.has(item.projectionEdge.to_node_id) && visible.has(item.projectionEdge.to_node_id);
+        const sourceHidden = members.has(item.projectionEdge.from_node_id) && hiddenNodeIds.has(item.projectionEdge.from_node_id);
+        const targetHidden = members.has(item.projectionEdge.to_node_id) && hiddenNodeIds.has(item.projectionEdge.to_node_id);
+        if (sourceVisible && targetHidden) hiddenCompositeConnectionPointIds.add(item.endpointPair.from_connection_point_id);
+        if (targetVisible && sourceHidden) hiddenCompositeConnectionPointIds.add(item.endpointPair.to_connection_point_id);
+      }
+    }
+  }
   const visibleEdges = edges.filter((edge) => !hiddenNodeIds.has(edge.source) && !hiddenNodeIds.has(edge.target));
   return {
     layer: document.layer,
@@ -188,5 +207,6 @@ export const presentationSceneDocument = (
     })),
     ],
     composites,
+    hiddenCompositeConnectionPointIds: [...hiddenCompositeConnectionPointIds],
   };
 };

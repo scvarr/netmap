@@ -32,6 +32,7 @@ export interface DeviceNodeData extends Record<string, unknown> {
   traceHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
+  hiddenCompositeConnectionPointIds?: ReadonlySet<string>;
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
   onPhysicalPortContextMenu?: (port: { physicalObjectId: string; connectionPointId: string; label: string }, screen: { x: number; y: number }) => void;
@@ -113,7 +114,7 @@ export const compositeFrameGeometry = (
 };
 
 /**
- * Turns collapsed composite boundary members into React Flow children. Their
+ * Turns all collapsed composite visible members into React Flow children. Their
  * relative positions are derived from the authoritative expanded geometry.
  */
 export const applyCollapsedCompositePresentation = (
@@ -126,7 +127,7 @@ export const applyCollapsedCompositePresentation = (
   for (const composite of scene.composites) {
     const frameId = `map-composite:${composite.id}`;
     const frame = nodesById.get(frameId);
-    const members = composite.boundaryNodeIds
+    const members = (composite.visibleNodeIds ?? [...composite.boundaryNodeIds, ...(composite.explicitVisibleNodeIds ?? [])])
       .map((id) => nodesById.get(id))
       .filter((node): node is DeviceFlowNode => Boolean(node))
       .sort((left, right) => left.id.localeCompare(right.id));

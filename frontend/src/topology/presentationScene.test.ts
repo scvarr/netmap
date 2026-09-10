@@ -92,4 +92,11 @@ describe('presentationSceneDocument', () => {
     expect(scene.composites[0]).toMatchObject({ boundaryNodeIds: ['b'], explicitVisibleNodeIds: ['a'], visibleNodeIds: expect.arrayContaining(['a', 'b']) });
     expect(scene.edges.map((edge) => edge.id)).toEqual(['ab', 'bc']);
   });
+
+  it('marks only an evidenced visible-side ConnectionPoint when its composite peer is hidden', () => {
+    const pair = { from_connection_point_id: 'pc1-port', from_member_index: 1, to_connection_point_id: 'o1-port', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member' };
+    const scene = presentationSceneDocument(document([pair]), [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], explicitVisibleNodeIds: ['a'], collapsed: true, x: 0, y: 0, width: 300, height: 200 }]);
+    expect(scene.edges).toEqual([]);
+    expect(scene.hiddenCompositeConnectionPointIds).toEqual(['pc1-port']);
+  });
 });

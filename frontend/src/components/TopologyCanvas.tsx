@@ -512,6 +512,7 @@ export function TopologyCanvas({
         traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
       wiringHighlightedConnectionMemberIds,
       wiringContinuationConnectionPointIds,
+      hiddenCompositeConnectionPointIds: new Set(presentationScene.hiddenCompositeConnectionPointIds ?? []),
       physicalPortStates,
       onPhysicalPortClick: compositeMembershipMode ? undefined : onPhysicalPortClick,
       onPhysicalPortContextMenu: compositeMembershipMode ? undefined : onPhysicalPortContextMenu,

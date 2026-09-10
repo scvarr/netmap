@@ -101,6 +101,15 @@ describe('ELK topology layout', () => {
     expect(derivedMember.position).toEqual({ x: 40, y: 44 });
   });
 
+  it('parents an explicit-only visible member and includes it in collapsed frame fit', () => {
+    const frame = { id: 'map-composite:rack', kind: 'MAP_COMPOSITE', label: 'Rack', source_refs: [], attributes: { composite_id: 'rack' } } as any;
+    const explicit = { id: 'explicit', kind: 'PHYSICAL_OBJECT', label: 'PC1', source_refs: [], attributes: {} } as any;
+    const scene: PresentationSceneDocument = { layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [frame, explicit], edges: [], composites: [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['explicit'], boundaryNodeIds: [], explicitVisibleNodeIds: ['explicit'], visibleNodeIds: ['explicit'], compositionBasis: 'presentation' }] };
+    const result = applyCollapsedCompositePresentation({ nodes: [{ id: frame.id, type: 'composite' as const, position: { x: 0, y: 0 }, data: { projection: frame } }, { id: explicit.id, type: 'device' as const, position: { x: 300, y: 400 }, width: 120, height: 50, data: { projection: explicit } }], edges: [] }, scene);
+    expect(result.nodes.find((node) => node.id === explicit.id)).toMatchObject({ parentId: frame.id, extent: 'parent' });
+    expect(result.nodes.find((node) => node.id === frame.id)).toMatchObject({ width: 200, height: 104 });
+  });
+
   it('derives an expanded outline from all members without touching their positions', () => {
     const geometry = compositeFrameGeometry([
       { x: 100, y: 200, width: 120, height: 50 },

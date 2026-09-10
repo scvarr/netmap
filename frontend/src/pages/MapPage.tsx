@@ -418,6 +418,19 @@ export function MapPage({
     });
     return compositeFrameGeometry(positions);
   };
+  const compositeBoundaryObjectIds = (composite: SavedMap['composites'][number]) => {
+    const members = new Set(composite.physical_object_refs.map((reference) => nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id)?.id).filter((id): id is string => Boolean(id)));
+    const boundary = new Set<string>();
+    for (const edge of document?.edges ?? []) {
+      const sourceMember = members.has(edge.from_node_id);
+      const targetMember = members.has(edge.to_node_id);
+      if (sourceMember !== targetMember) boundary.add(sourceMember ? edge.from_node_id : edge.to_node_id);
+    }
+    return new Set(composite.physical_object_refs.filter((reference) => {
+      const node = nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id);
+      return Boolean(node && boundary.has(node.id));
+    }).map((reference) => reference.entity_id));
+  };
   const saveCompositePresentation = async (compositeId: string, presentation: Omit<MapCompositePresentation, 'variant_ref' | 'geometry_persisted'>) => {
     if (!activeMap || !savedMapDataSource?.setCompositePresentation || compositePresentationOperation || compositePresentationPending.current) return;
     compositePresentationPending.current = true;
@@ -2388,10 +2401,10 @@ export function MapPage({
           <div className="map-dialog__surface">
             <h2>Видимость при сворачивании</h2>
             <p>Выберите объекты, которые должны оставаться видимыми при сворачивании составного блока «{compositeVisibility.compositeName}». Объекты с физическими связями за пределы блока показываются автоматически.</p>
-            <div>{composite?.physical_object_refs.map((reference) => {
-              const node = nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id);
+            <div className="composite-visibility-dialog__members">{[...(composite?.physical_object_refs ?? [])].map((reference) => ({ reference, node: nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id) })).sort((left, right) => natural(left.node ? displayNodeLabel(left.node) : 'Объект', right.node ? displayNodeLabel(right.node) : 'Объект')).map(({ reference, node }) => {
               const label = node ? displayNodeLabel(node) : 'Объект';
-              return <label key={reference.entity_id}><input type="checkbox" disabled={compositeVisibility.status !== 'editing'} checked={compositeVisibility.draft.has(reference.entity_id)} onChange={() => setCompositeVisibility((current) => { if (!current || current.status !== 'editing') return current; const draft = new Set(current.draft); if (draft.has(reference.entity_id)) draft.delete(reference.entity_id); else draft.add(reference.entity_id); return { ...current, draft, error: null }; })} />{label}</label>;
+              const automatic = composite ? compositeBoundaryObjectIds(composite).has(reference.entity_id) : false;
+              return <label className="composite-visibility-dialog__member" key={reference.entity_id}><input type="checkbox" disabled={compositeVisibility.status !== 'editing'} checked={compositeVisibility.draft.has(reference.entity_id)} onChange={() => setCompositeVisibility((current) => { if (!current || current.status !== 'editing') return current; const draft = new Set(current.draft); if (draft.has(reference.entity_id)) draft.delete(reference.entity_id); else draft.add(reference.entity_id); return { ...current, draft, error: null }; })} /><span>{label}</span>{automatic && <small>Показывается автоматически</small>}</label>;
             })}</div>
             {compositeVisibility.error && <p role="alert">{compositeVisibility.error}</p>}
             {compositeVisibility.status === 'refresh-failed' && <p role="alert">Видимость составного блока сохранена, но карту не удалось обновить.</p>}
