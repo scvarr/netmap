@@ -9,6 +9,7 @@ import {
   type EdgeProps,
   type InternalNode,
 } from '@xyflow/react';
+import { useState, type PointerEvent } from 'react';
 import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
@@ -18,6 +19,7 @@ import {
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 import { blueprintDisplayDimensions, blueprintMapNameplateHeight, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
+import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } from '../topology/geometryAssist';
 
 export interface NodeRectangle {
   x: number;
@@ -223,7 +225,8 @@ export function FloatingTopologyEdge({
 }
 
 function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, flowToScreenPosition } = useReactFlow();
+  const [feedback, setFeedback] = useState<{ start: MapCableRouteWaypoint; end: MapCableRouteWaypoint; assist: SegmentAssistResult } | null>(null);
   const sourceNode = useInternalNode<DeviceFlowNode>(edge.source);
   const targetNode = useInternalNode<DeviceFlowNode>(edge.target);
   const data = edge.data;
@@ -241,16 +244,42 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
   const emphasis = draft ? 'editing' : edge.selected ? 'selected' : 'normal';
   const style = draft ? { stroke: '#8d7aff', strokeWidth: 5, opacity: 1 } : edge.style;
   const segmentPoints = [endpoints.source, ...(waypoints ?? []), endpoints.target];
+  const assistFrom = (anchor: MapCableRouteWaypoint, event: PointerEvent<SVGElement>) =>
+    assistSegment({
+      anchor,
+      pointerScreen: { x: event.clientX, y: event.clientY },
+      shiftKey: event.shiftKey,
+      ctrlKey: event.ctrlKey,
+      screenToFlowPosition,
+      flowToScreenPosition,
+    });
+  const moveWaypoint = (index: number, event: PointerEvent<SVGElement>) => {
+    if (!draft) return;
+    const anchors = [segmentPoints[index], segmentPoints[index + 2]];
+    const assists = anchors.map((anchor) => ({ anchor, assist: assistFrom(anchor, event) }));
+    const chosen = assists.reduce((best, candidate) => {
+      const bestPoint = flowToScreenPosition(best.assist.point);
+      const candidatePoint = flowToScreenPosition(candidate.assist.point);
+      const pointerDistance = (point: { x: number; y: number }) => Math.hypot(point.x - event.clientX, point.y - event.clientY);
+      return pointerDistance(candidatePoint) < pointerDistance(bestPoint) ? candidate : best;
+    });
+    draft.onWaypointMove(index, chosen.assist.point);
+    setFeedback({ start: chosen.anchor, end: chosen.assist.point, assist: chosen.assist });
+  };
 
   return <g data-testid={`foreground-cable-${edge.id}`} data-emphasis={emphasis}>
     <path className={`cable-route-foreground cable-route-foreground--${emphasis}`} d={path} fill="none" style={{ ...style, pointerEvents: 'none' }} />
     {draft && segmentPoints.slice(0, -1).map((point, index) => {
       const next = segmentPoints[index + 1];
-      return <line key={`${edge.id}:foreground-segment:${index}`} className="cable-route-segment-hit" x1={point.x} y1={point.y} x2={next.x} y2={next.y} stroke="transparent" strokeWidth={22} pointerEvents="stroke" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); draft.onWaypointInsert(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }} />;
+      return <line key={`${edge.id}:foreground-segment:${index}`} className="cable-route-segment-hit" x1={point.x} y1={point.y} x2={next.x} y2={next.y} stroke="transparent" strokeWidth={22} pointerEvents="stroke" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); const assist = assistFrom(point, event); draft.onWaypointInsert(index, assist.point); setFeedback({ start: point, end: assist.point, assist }); }} />;
     })}
     {draft?.waypoints.map((waypoint, index) => (
-      <circle key={`${edge.id}:foreground-waypoint:${index}`} className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={6} pointerEvents="all" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); draft.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }} onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} />
+      <g key={`${edge.id}:foreground-waypoint:${index}`}>
+        <circle className="cable-route-waypoint-hit" cx={waypoint.x} cy={waypoint.y} r={18} fill="transparent" pointerEvents="all" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); moveWaypoint(index, event); }} onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setFeedback(null); }} />
+        <circle className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={6} pointerEvents="none" />
+      </g>
     ))}
+    {feedback && <text className="cable-route-geometry-feedback" x={(feedback.start.x + feedback.end.x) / 2} y={(feedback.start.y + feedback.end.y) / 2 - 10} textAnchor="middle">{`${Math.round(segmentAngle(feedback.start, feedback.end))}° · ${Math.round(segmentLength(feedback.start, feedback.end))}`}</text>}
   </g>;
 }
 

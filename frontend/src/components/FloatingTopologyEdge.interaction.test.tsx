@@ -13,7 +13,7 @@ vi.mock('@xyflow/react', () => ({
   getStraightPath: () => ['straight'],
   useInternalNode: (id: string) => activeNodes[id],
   useNodes: () => Object.values(activeNodes).map((node: any) => ({ id: node.data.projection.id, data: node.data })),
-  useReactFlow: () => ({ screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x: x + 1000, y: y + 2000 }) }),
+  useReactFlow: () => ({ screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x: x + 1000, y: y + 2000 }), flowToScreenPosition: ({ x, y }: { x: number; y: number }) => ({ x: x - 1000, y: y - 2000 }) }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -76,6 +76,31 @@ describe('direct cable route edge interaction', () => {
     expect(draft.onWaypointMove).toHaveBeenCalledWith(0, { x: 1007, y: 2008 });
     expect(draft.onWaypointInsert).not.toHaveBeenCalled();
     expect(onCanvasPointerDown).not.toHaveBeenCalled();
+  });
+
+  it('uses the shared magnetic segment assist for route insertion and waypoint moves', () => {
+    const draft = editor([{ x: 100, y: 50 }]);
+    const edge = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'cable-node' } } };
+    const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
+    const segment = container.querySelector('.cable-route-segment-hit')!;
+    fireEvent(segment, new MouseEvent('pointerdown', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true }));
+    expect(draft.onWaypointInsert).toHaveBeenCalledWith(0, { x: 200, y: 50 });
+    const handle = container.querySelector('.cable-route-waypoint-hit') as SVGCircleElement;
+    Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
+    fireEvent.pointerDown(handle, { pointerId: 1 });
+    fireEvent(handle, new MouseEvent('pointermove', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true }));
+    expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 200, y: 50 });
+    expect(container.querySelector('.cable-route-geometry-feedback')).toHaveTextContent('0° · 100');
+    fireEvent(handle, new MouseEvent('pointermove', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true, ctrlKey: true }));
+    expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 203, y: 50 });
+  });
+
+  it('keeps the visible waypoint compact while its independent hit target is substantially larger', () => {
+    const draft = editor([{ x: 100, y: 50 }]);
+    const edge = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'cable-node' } } };
+    const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
+    expect(container.querySelector('.cable-route-waypoint')).toHaveAttribute('r', '6');
+    expect(container.querySelector('.cable-route-waypoint-hit')).toHaveAttribute('r', '18');
   });
 
   it('keeps normal cables visual-only in the foreground and puts edit controls above object bodies', () => {

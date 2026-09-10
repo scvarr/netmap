@@ -185,6 +185,8 @@ const savedMapViewKey = (value: SavedMapView): SavedMapViewKey =>
 const natural = (left: string, right: string) =>
   left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
 const errorMessage = (_reason: unknown, fallback: string) => fallback;
+const isRouteEditorKeyboardTarget = (target: EventTarget | null) =>
+  target instanceof Element && Boolean(target.closest('input, textarea, select, button, [contenteditable="true"], [role="textbox"], [role="combobox"], [role="listbox"], [role="menu"], [role="menuitem"], [role="dialog"]'));
 const emptyPhysicalDocument: TopologyProjectionDocument = {
   schema_version: "1.0",
   layer: "L1",
@@ -491,9 +493,9 @@ export function MapPage({
 
   useEffect(() => {
     if (!cableRouteEdit) return;
-    if (viewMode !== "physical" || mapId !== cableRouteEdit.mapId || selectedCableId !== cableRouteEdit.cableId)
+    if (viewMode !== "physical" || mapId !== cableRouteEdit.mapId)
       setCableRouteEdit(null);
-  }, [cableRouteEdit, mapId, selectedCableId, viewMode]);
+  }, [cableRouteEdit, mapId, viewMode]);
 
   useEffect(() => {
     regionOperationSequence.current += 1;
@@ -1502,6 +1504,21 @@ export function MapPage({
       if (selectedMapId.current === operation.mapId) setCableRouteEdit({ ...operation, status: "refresh-failed", error: t("map.routeSavedRefreshFailed") });
     }
   };
+  useEffect(() => {
+    if (!cableRouteEdit || cableRouteEdit.status !== "editing") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || isRouteEditorKeyboardTarget(event.target)) return;
+      if (event.key === "Enter") {
+        event.preventDefault();
+        void saveCableRoute();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        setCableRouteEdit(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [cableRouteEdit, saveCableRoute]);
   const resetCableRoute = async (requestedCableId = selectedCableId) => {
     if (!savedMapDataSource || !activeMap || !requestedCableId || !(activeMap.cable_routes ?? []).some((route) => route.cable_ref.entity_id === requestedCableId)) return;
     const operation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, cableId: requestedCableId, status: "pending" as const };

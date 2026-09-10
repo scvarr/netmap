@@ -86,15 +86,15 @@ Current execution position: **Phase B — MapCableRoute usability, following imp
     варианта клонирует это presentation state. Реализованы individual и bulk
     collapse/expand, а expand делает fit view после authoritative refresh.
     MapReference composition между SavedMap в B.3 не входит.
-4. Закрыть MapCableRoute usability: overlap-safe exact trace presentation,
-   compact edit handles, straight preview, initial angular snapping/feedback и
-   justified presentation-only magnets. Режим редактирования продолжается до
-   явного Сохранить/Отмена; selection и клик по полотну его не отменяют,
-   Enter может сохранить, Esc — отменить. Опорные точки визуально лишь немного
-   толще линии, при существенно большей области захвата. Применяются общие
-   геометрические правила редактора Region (прямые сегменты, углы, длины,
-   angular snapping/feedback, добавление и перемещение точек). NetMap не
-   превращается в CAD.
+4. **B.4 — MapCableRoute usability — IMPLEMENTED.** Overlap-safe exact trace
+   presentation keeps `MapCableRoute` as SavedMap presentation state. Route
+   editing continues until explicit Save/Cancel; ordinary selection and canvas
+   clicks do not discard its local draft, while map/view exit does without a
+   write. Enter saves and Escape cancels outside editable, control, and dialog
+   contexts. Compact visual waypoints have a larger independent pointer target;
+   straight segments retain exact-index insertion and use the shared Region
+   geometry assistance (angles, lengths, Shift H/V, Ctrl bypass) with transient
+   feedback. NetMap does not become a CAD editor.
 
 Отдельные OPEN product directions, не входящие в B.2: физическое соединение
 можно будет создавать выбором устройства через поиск по всему оборудованию с
