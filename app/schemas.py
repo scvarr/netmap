@@ -234,6 +234,17 @@ class SetMapCompositePresentationUpdate(SetMapCompositePresentationRequest):
     composite_id: uuid.UUID
 
 
+class SetMapCompositeVisibleMembersRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    physical_object_ids: list[uuid.UUID]
+
+    @model_validator(mode="after")
+    def physical_object_ids_are_distinct(self) -> "SetMapCompositeVisibleMembersRequest":
+        if len(self.physical_object_ids) != len(set(self.physical_object_ids)):
+            raise ValueError("physical_object_ids must be distinct")
+        return self
+
+
 class MapCableRouteDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -264,6 +275,7 @@ class MapCompositeDocument(BaseModel):
     composite_ref: MapCompositeRef
     name: str
     physical_object_refs: list[ProjectionSourceRef]
+    visible_when_collapsed_refs: list[ProjectionSourceRef]
     presentation: MapCompositePresentationDocument
 
 

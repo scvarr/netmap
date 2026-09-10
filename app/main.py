@@ -52,7 +52,7 @@ from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
     CreateConnectionPointRequest,
-    CreateMapPlacementRequest, CreateMapPresentationVariantRequest, CreateMapCompositeRequest, SetMapCompositePresentationRequest, SetMapCompositePresentationUpdate,
+    CreateMapPlacementRequest, CreateMapPresentationVariantRequest, CreateMapCompositeRequest, SetMapCompositePresentationRequest, SetMapCompositePresentationUpdate, SetMapCompositeVisibleMembersRequest,
     CreateObjectBlueprintRequest,
     CreateObjectBlueprintVersionRequest,
     CreateDeviceInterfaceRequest,
@@ -225,6 +225,7 @@ def _saved_map_document(detail) -> dict[str, object]:
         "composites": [
             {"composite_ref": {"entity_type": "MapComposite", "entity_id": composite.id}, "name": composite.name,
              "physical_object_refs": [{"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": member.placement.physical_object_id} for member in composite.members],
+             "visible_when_collapsed_refs": [{"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": rule.placement.physical_object_id} for rule in composite.visible_placements],
              "presentation": {"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": detail.variant.id},
                  "collapsed": next((item.collapsed for item in composite.presentations if item.variant_id == detail.variant.id), False),
                  "x": next((item.x for item in composite.presentations if item.variant_id == detail.variant.id), 0), "y": next((item.y for item in composite.presentations if item.variant_id == detail.variant.id), 0),
@@ -495,6 +496,7 @@ def create_map_composite(map_id: uuid.UUID, query: CreateMapCompositeRequest, va
                 {"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": physical_object_id}
                 for physical_object_id in query.physical_object_ids
             ],
+            "visible_when_collapsed_refs": [],
             "presentation": {
                 "variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id},
                 "collapsed": False,
@@ -516,6 +518,12 @@ def delete_map_composite(map_id: uuid.UUID, composite_id: uuid.UUID, session: Se
 def set_map_composite_presentation(map_id: uuid.UUID, composite_id: uuid.UUID, query: SetMapCompositePresentationRequest, variant_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
     with session.begin():
         SavedMapCatalog(session).set_composite_presentation(map_id, composite_id, variant_id, query.collapsed, query.x, query.y, query.width, query.height)
+
+
+@app.put("/v1/maps/{map_id}/composites/{composite_id}/visible-members", status_code=204, responses={422: {"model": ErrorResponse}})
+def set_map_composite_visible_members(map_id: uuid.UUID, composite_id: uuid.UUID, query: SetMapCompositeVisibleMembersRequest, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        SavedMapCatalog(session).set_composite_visible_members(map_id, composite_id, query.physical_object_ids)
 
 
 @app.put("/v1/maps/{map_id}/composites/presentation", status_code=204, responses={422: {"model": ErrorResponse}})

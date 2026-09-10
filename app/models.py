@@ -114,6 +114,9 @@ class MapPlacement(Base):
     view_positions: Mapped[list["MapViewPosition"]] = relationship(
         back_populates="placement", cascade="all, delete-orphan", passive_deletes=True
     )
+    composite_visibility_rules: Mapped[list["MapCompositeVisiblePlacement"]] = relationship(
+        back_populates="placement", passive_deletes=True
+    )
     saved_map: Mapped[SavedMap] = relationship(back_populates="placements")
     physical_object: Mapped[PhysicalObject] = relationship(back_populates="map_placements")
 
@@ -141,6 +144,7 @@ class MapComposite(Base):
     saved_map: Mapped[SavedMap] = relationship(back_populates="composites")
     members: Mapped[list["MapCompositeMember"]] = relationship(back_populates="composite", cascade="all, delete-orphan", passive_deletes=True)
     presentations: Mapped[list["MapCompositePresentation"]] = relationship(back_populates="composite", cascade="all, delete-orphan", passive_deletes=True)
+    visible_placements: Mapped[list["MapCompositeVisiblePlacement"]] = relationship(back_populates="composite", cascade="all, delete-orphan", passive_deletes=True)
 
 
 class MapCompositeMember(Base):
@@ -150,6 +154,15 @@ class MapCompositeMember(Base):
     placement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_placements.id", ondelete="CASCADE"), primary_key=True)
     composite: Mapped[MapComposite] = relationship(back_populates="members")
     placement: Mapped[MapPlacement] = relationship()
+
+
+class MapCompositeVisiblePlacement(Base):
+    """Explicit collapsed visibility, scoped to one SavedMap composite."""
+    __tablename__ = "map_composite_visible_placements"
+    composite_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_composites.id", ondelete="CASCADE"), primary_key=True)
+    placement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_placements.id", ondelete="CASCADE"), primary_key=True)
+    composite: Mapped[MapComposite] = relationship(back_populates="visible_placements")
+    placement: Mapped[MapPlacement] = relationship(back_populates="composite_visibility_rules")
 
 
 class MapCompositePresentation(Base):

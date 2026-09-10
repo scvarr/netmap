@@ -25,6 +25,8 @@ export interface PresentationSceneComposite {
   displayName: string;
   memberNodeIds: string[];
   boundaryNodeIds: string[];
+  explicitVisibleNodeIds?: string[];
+  visibleNodeIds?: string[];
   compositionBasis: string;
 }
 
@@ -33,6 +35,7 @@ export interface MapCompositeSceneInput {
   id: string;
   displayName: string;
   memberNodeIds: string[];
+  explicitVisibleNodeIds?: string[];
   collapsed: boolean;
   x: number;
   y: number;
@@ -161,8 +164,10 @@ export const presentationSceneDocument = (
         if (targetMember) boundary.add(edge.target);
       }
     }
-    for (const member of members) if (!boundary.has(member)) hiddenNodeIds.add(member);
-    return { id: item.id, displayName: item.displayName, memberNodeIds: [...members], boundaryNodeIds: [...boundary], compositionBasis: "MapComposite placement membership" };
+    const explicitVisible = new Set((item.explicitVisibleNodeIds ?? []).filter((id) => members.has(id)));
+    const visible = new Set([...boundary, ...explicitVisible]);
+    for (const member of members) if (!visible.has(member)) hiddenNodeIds.add(member);
+    return { id: item.id, displayName: item.displayName, memberNodeIds: [...members], boundaryNodeIds: [...boundary], explicitVisibleNodeIds: [...explicitVisible], visibleNodeIds: [...visible], compositionBasis: "MapComposite placement membership" };
   });
   const visibleEdges = edges.filter((edge) => !hiddenNodeIds.has(edge.source) && !hiddenNodeIds.has(edge.target));
   return {

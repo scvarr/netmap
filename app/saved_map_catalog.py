@@ -3,13 +3,13 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.map_region_geometry import MapRegionSpatialRelation, classify_map_region_polygons
-from app.models import Cable, Location, MapCableRoute, MapComposite, MapCompositeMember, MapCompositePresentation, MapPlacement, MapPresentationVariant, MapRegion, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import Cable, Location, MapCableRoute, MapComposite, MapCompositeMember, MapCompositePresentation, MapCompositeVisiblePlacement, MapPlacement, MapPresentationVariant, MapRegion, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -112,6 +112,30 @@ class SavedMapCatalog:
             presentation = MapCompositePresentation(composite_id=composite_id, variant_id=variant_id, collapsed=collapsed, x=x, y=y, width=width, height=height); self.session.add(presentation)
         else: presentation.collapsed, presentation.x, presentation.y, presentation.width, presentation.height = collapsed, x, y, width, height
         self._flush(); return presentation
+
+    def set_composite_visible_members(self, map_id: uuid.UUID, composite_id: uuid.UUID, physical_object_ids: list[uuid.UUID]) -> None:
+        self._require_map(map_id)
+        composite = self.session.scalar(select(MapComposite).where(
+            MapComposite.map_id == map_id, MapComposite.id == composite_id
+        ).with_for_update())
+        if composite is None:
+            raise ValidationError("MapComposite does not exist", {"composite_id": str(composite_id)})
+        placements = list(self.session.scalars(select(MapPlacement).where(
+            MapPlacement.map_id == map_id, MapPlacement.physical_object_id.in_(physical_object_ids)
+        ).with_for_update()))
+        if len(placements) != len(physical_object_ids):
+            raise ValidationError("Visible members must be placements of this SavedMap", {"reason": "MAP_COMPOSITE_VISIBLE_MEMBER_NOT_PLACED"})
+        placement_ids = {placement.id for placement in placements}
+        member_ids = set(self.session.scalars(select(MapCompositeMember.placement_id).where(
+            MapCompositeMember.composite_id == composite_id
+        )))
+        if not placement_ids.issubset(member_ids):
+            raise ValidationError("Visible members must be direct MapComposite members", {"reason": "MAP_COMPOSITE_VISIBLE_MEMBER_NOT_MEMBER"})
+        self.session.execute(delete(MapCompositeVisiblePlacement).where(
+            MapCompositeVisiblePlacement.composite_id == composite_id
+        ))
+        self.session.add_all(MapCompositeVisiblePlacement(composite_id=composite_id, placement_id=placement.id) for placement in placements)
+        self._flush()
 
     def delete(self, map_id: uuid.UUID) -> None:
         self.session.delete(self._require_map(map_id))
@@ -356,7 +380,7 @@ class SavedMapCatalog:
         return variant
 
     def _composites(self, map_id: uuid.UUID, variant_id: uuid.UUID) -> tuple[MapComposite, ...]:
-        return tuple(self.session.scalars(select(MapComposite).options(selectinload(MapComposite.members).selectinload(MapCompositeMember.placement), selectinload(MapComposite.presentations)).where(MapComposite.map_id == map_id).order_by(MapComposite.name, MapComposite.id)))
+        return tuple(self.session.scalars(select(MapComposite).options(selectinload(MapComposite.members).selectinload(MapCompositeMember.placement), selectinload(MapComposite.visible_placements).selectinload(MapCompositeVisiblePlacement.placement), selectinload(MapComposite.presentations)).where(MapComposite.map_id == map_id).order_by(MapComposite.name, MapComposite.id)))
 
     def _validate_region_spatial_relation(
         self, map_id: uuid.UUID, points: list[dict[str, float]], excluded_region_id: uuid.UUID | None = None,

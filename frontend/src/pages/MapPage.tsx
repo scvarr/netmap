@@ -171,6 +171,7 @@ interface CompositeDeletionOperation {
   error: string | null;
 }
 interface CompositePresentationOperation { mapId: string; variantId: string; bulk?: boolean; fitAfterRefresh?: boolean; status: 'saving' | 'refresh-failed'; }
+interface CompositeVisibilityOperation { mapId: string; variantId: string; compositeId: string; compositeName: string; draft: Set<string>; status: 'editing' | 'saving' | 'refresh-failed'; error: string | null; }
 interface CreationRefreshOperation { mapId: string; variantId: string; status: "refresh-failed"; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; variantId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
@@ -258,6 +259,7 @@ export function MapPage({
   const [compositeDeletion, setCompositeDeletion] = useState<CompositeDeletionOperation | null>(null);
   const [compositeDeletionRefresh, setCompositeDeletionRefresh] = useState<CreationRefreshOperation | null>(null);
   const [compositePresentationOperation, setCompositePresentationOperation] = useState<CompositePresentationOperation | null>(null);
+  const [compositeVisibility, setCompositeVisibility] = useState<CompositeVisibilityOperation | null>(null);
   const compositePresentationPending = useRef(false);
   const [viewportFitRevision, setViewportFitRevision] = useState(0);
   const [selectedCompositeId, setSelectedCompositeId] = useState<string | null>(null);
@@ -376,6 +378,7 @@ export function MapPage({
     width: composite.presentation.width,
     height: composite.presentation.height,
     memberNodeIds: composite.physical_object_refs.map((reference) => nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id)?.id).filter((id): id is string => Boolean(id)),
+    explicitVisibleNodeIds: (composite.visible_when_collapsed_refs ?? []).map((reference) => nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id)?.id).filter((id): id is string => Boolean(id)),
   })), [activeMap, document]);
 
   const initialCompositeGeometry = (composite: SavedMap['composites'][number]) => {
@@ -403,6 +406,7 @@ export function MapPage({
       const targetMember = memberNodeIds.has(edge.to_node_id);
       if (sourceMember !== targetMember) boundaryNodeIds.add(sourceMember ? edge.from_node_id : edge.to_node_id);
     }
+    const explicitObjectIds = new Set((composite.visible_when_collapsed_refs ?? []).map((reference) => reference.entity_id));
     const positions = composite.physical_object_refs.flatMap((reference) => {
       const node = nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id);
       const nodeId = node?.id;
@@ -410,7 +414,7 @@ export function MapPage({
       const dimensions = node?.attributes.blueprint_presentation
         ? blueprintNodeDisplayDimensions(node.attributes.blueprint_presentation, position?.display_width)
         : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT };
-      return node && nodeId && boundaryNodeIds.has(nodeId) && position ? [{ x: position.x, y: position.y, ...dimensions }] : [];
+      return node && nodeId && (boundaryNodeIds.has(nodeId) || explicitObjectIds.has(reference.entity_id)) && position ? [{ x: position.x, y: position.y, ...dimensions }] : [];
     });
     return compositeFrameGeometry(positions);
   };
@@ -2021,6 +2025,26 @@ export function MapPage({
     if (!composite) return;
     setCompositeDeletion({ mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, compositeName: composite.name, status: "confirming", error: null });
   };
+  const beginCompositeVisibility = (compositeId: string) => {
+    if (!activeMap) return;
+    const composite = activeMap.composites.find((item) => item.composite_ref.entity_id === compositeId);
+    if (!composite) return;
+    setCompositeVisibility({ mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, compositeName: composite.name, draft: new Set((composite.visible_when_collapsed_refs ?? []).map((reference) => reference.entity_id)), status: 'editing', error: null });
+  };
+  const saveCompositeVisibility = async () => {
+    const operation = compositeVisibility;
+    if (!operation || operation.status !== 'editing' || !savedMapDataSource?.setCompositeVisibleMembers) return;
+    setCompositeVisibility({ ...operation, status: 'saving', error: null });
+    try { await savedMapDataSource.setCompositeVisibleMembers(operation.mapId, operation.compositeId, [...operation.draft]); }
+    catch { setCompositeVisibility({ ...operation, status: 'editing', error: 'Не удалось сохранить видимость составного блока.' }); return; }
+    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositeVisibility(null); }
+    catch { setCompositeVisibility({ ...operation, status: 'refresh-failed', error: null }); }
+  };
+  const retryCompositeVisibilityRefresh = async () => {
+    const operation = compositeVisibility;
+    if (!operation || operation.status !== 'refresh-failed' || !savedMapDataSource) return;
+    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositeVisibility(null); } catch { /* Keep the refresh-only retry. */ }
+  };
   const refreshDeletedComposite = async (refresh: CreationRefreshOperation) => {
     if (!savedMapDataSource) return;
     const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
@@ -2156,7 +2180,7 @@ export function MapPage({
                 <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
                 <hr />
                 <strong>Составные блоки</strong>
-                {activeMap.composites.length === 0 ? <p className="map-utility-panel__empty">Составных блоков пока нет.</p> : <div className="map-composite-list">{activeMap.composites.map((composite) => <div className={`map-composite-list__item${selectedCompositeId === composite.composite_ref.entity_id ? ' map-composite-list__item--selected' : ''}`} key={composite.composite_ref.entity_id}><div><strong>{composite.name}</strong><span>{composite.physical_object_refs.length} {composite.physical_object_refs.length === 1 ? "объект" : composite.physical_object_refs.length < 5 ? "объекта" : "объектов"}</span></div><div className="map-utility-panel__actions"><button type="button" disabled={!savedMapDataSource?.setCompositePresentation || Boolean(compositePresentationOperation)} onClick={() => toggleCompositePresentation(composite.composite_ref.entity_id)}>{composite.presentation.collapsed ? 'Развернуть' : 'Свернуть'}</button><button type="button" disabled={!savedMapDataSource?.deleteComposite} onClick={() => beginCompositeDeletion(composite.composite_ref.entity_id)}>Удалить</button></div></div>)}</div>}
+                {activeMap.composites.length === 0 ? <p className="map-utility-panel__empty">Составных блоков пока нет.</p> : <div className="map-composite-list">{activeMap.composites.map((composite) => <div className={`map-composite-list__item${selectedCompositeId === composite.composite_ref.entity_id ? ' map-composite-list__item--selected' : ''}`} key={composite.composite_ref.entity_id}><div><strong>{composite.name}</strong><span>{composite.physical_object_refs.length} {composite.physical_object_refs.length === 1 ? "объект" : composite.physical_object_refs.length < 5 ? "объекта" : "объектов"}</span></div><div className="map-utility-panel__actions"><button type="button" disabled={!savedMapDataSource?.setCompositePresentation || Boolean(compositePresentationOperation)} onClick={() => toggleCompositePresentation(composite.composite_ref.entity_id)}>{composite.presentation.collapsed ? 'Развернуть' : 'Свернуть'}</button><button type="button" disabled={!savedMapDataSource?.setCompositeVisibleMembers} onClick={() => beginCompositeVisibility(composite.composite_ref.entity_id)}>Настроить видимость</button><button type="button" disabled={!savedMapDataSource?.deleteComposite} onClick={() => beginCompositeDeletion(composite.composite_ref.entity_id)}>Удалить</button></div></div>)}</div>}
                 <div className="map-utility-panel__actions">
                   <button type="button" disabled={!savedMapDataSource?.setCompositePresentations || Boolean(compositePresentationOperation) || !activeMap.composites.some((composite) => !composite.presentation.collapsed)} onClick={() => void setAllCompositesCollapsed(true)}>Свернуть все</button>
                   <button type="button" disabled={!savedMapDataSource?.setCompositePresentations || Boolean(compositePresentationOperation) || !activeMap.composites.some((composite) => composite.presentation.collapsed)} onClick={() => void setAllCompositesCollapsed(false)}>Развернуть все</button>
@@ -2358,6 +2382,26 @@ export function MapPage({
           </div>
         </section>
       )}
+      {compositeVisibility && (() => {
+        const composite = activeMap?.composites.find((item) => item.composite_ref.entity_id === compositeVisibility.compositeId);
+        return <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Видимость при сворачивании">
+          <div className="map-dialog__surface">
+            <h2>Видимость при сворачивании</h2>
+            <p>Выберите объекты, которые должны оставаться видимыми при сворачивании составного блока «{compositeVisibility.compositeName}». Объекты с физическими связями за пределы блока показываются автоматически.</p>
+            <div>{composite?.physical_object_refs.map((reference) => {
+              const node = nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id);
+              const label = node ? displayNodeLabel(node) : 'Объект';
+              return <label key={reference.entity_id}><input type="checkbox" disabled={compositeVisibility.status !== 'editing'} checked={compositeVisibility.draft.has(reference.entity_id)} onChange={() => setCompositeVisibility((current) => { if (!current || current.status !== 'editing') return current; const draft = new Set(current.draft); if (draft.has(reference.entity_id)) draft.delete(reference.entity_id); else draft.add(reference.entity_id); return { ...current, draft, error: null }; })} />{label}</label>;
+            })}</div>
+            {compositeVisibility.error && <p role="alert">{compositeVisibility.error}</p>}
+            {compositeVisibility.status === 'refresh-failed' && <p role="alert">Видимость составного блока сохранена, но карту не удалось обновить.</p>}
+            <div className="map-dialog__actions">
+              <button type="button" disabled={compositeVisibility.status === 'saving'} onClick={() => setCompositeVisibility(null)}>Отмена</button>
+              {compositeVisibility.status === 'refresh-failed' ? <button type="button" onClick={() => void retryCompositeVisibilityRefresh()}>Повторить обновление</button> : <button type="button" disabled={compositeVisibility.status !== 'editing'} onClick={() => void saveCompositeVisibility()}>Сохранить</button>}
+            </div>
+          </div>
+        </section>;
+      })()}
       {presentationVariantCreate && (
         <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Создать копию компоновки">
           <div className="map-dialog__surface">
