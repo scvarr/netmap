@@ -1,4 +1,4 @@
-import type { MapCableRoute, MapCableRouteWaypoint, MapComposite, MapCompositePresentation, MapPlacement, MapPresentationVariant, MapPresentationVariantRef, MapRegion, MapRegionPoint, MapRegionRef, MapRegionStyle, MapRegionWrite, MapTextAnnotation, MapTextAnnotationRef, MapTextAnnotationWrite, MapViewPosition, SavedMap, SavedMapDataSource, SavedMapRef, SavedMapSummary, SavedMapView, SavedMapViewKey } from './savedMapTypes';
+import type { MapCableRoute, MapCableRouteWaypoint, MapComposite, MapCompositePresentation, MapCompositePresentationUpdate, MapPlacement, MapPresentationVariant, MapPresentationVariantRef, MapRegion, MapRegionPoint, MapRegionRef, MapRegionStyle, MapRegionWrite, MapTextAnnotation, MapTextAnnotationRef, MapTextAnnotationWrite, MapViewPosition, SavedMap, SavedMapDataSource, SavedMapRef, SavedMapSummary, SavedMapView, SavedMapViewKey } from './savedMapTypes';
 import type { ProjectionSourceRef } from './types';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -32,6 +32,15 @@ const error = async (response: Response): Promise<Error> => { try { const body =
 
 export class ApiSavedMapDataSource implements SavedMapDataSource {
   constructor(private readonly endpoint = '/api/v1/maps') {}
+  async setCompositePresentations(mapId: string, variantId: string, updates: MapCompositePresentationUpdate[]): Promise<void> {
+    uuid(mapId, 'mapId');
+    uuid(variantId, 'variantId');
+    updates.forEach((update) => uuid(update.composite_id, 'compositeId'));
+    const response = await fetch(`${this.endpoint}/${encodeURIComponent(mapId)}/composites/presentation?variant_id=${encodeURIComponent(variantId)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates),
+    });
+    if (!response.ok) throw await error(response);
+  }
   async listMaps(): Promise<SavedMapSummary[]> { const response = await fetch(this.endpoint); if (!response.ok) throw await error(response); const body = object(await response.json(), 'list'); if (!Array.isArray(body.maps)) malformed('list.maps must be an array.'); return (body.maps as unknown[]).map((item, index) => summary(item, `list.maps[${index}]`)); }
   async createMap(name: string): Promise<SavedMap> { const response = await fetch(this.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) }); if (!response.ok) throw await error(response); return parseMap(await response.json()); }
   async deleteMap(mapId: string): Promise<void> { uuid(mapId, 'mapId'); const response = await fetch(`${this.endpoint}/${encodeURIComponent(mapId)}`, { method: 'DELETE' }); if (!response.ok) throw await error(response); }

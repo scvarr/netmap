@@ -52,7 +52,7 @@ from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
     CreateConnectionPointRequest,
-    CreateMapPlacementRequest, CreateMapPresentationVariantRequest, CreateMapCompositeRequest, SetMapCompositePresentationRequest,
+    CreateMapPlacementRequest, CreateMapPresentationVariantRequest, CreateMapCompositeRequest, SetMapCompositePresentationRequest, SetMapCompositePresentationUpdate,
     CreateObjectBlueprintRequest,
     CreateObjectBlueprintVersionRequest,
     CreateDeviceInterfaceRequest,
@@ -516,6 +516,16 @@ def delete_map_composite(map_id: uuid.UUID, composite_id: uuid.UUID, session: Se
 def set_map_composite_presentation(map_id: uuid.UUID, composite_id: uuid.UUID, query: SetMapCompositePresentationRequest, variant_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
     with session.begin():
         SavedMapCatalog(session).set_composite_presentation(map_id, composite_id, variant_id, query.collapsed, query.x, query.y, query.width, query.height)
+
+
+@app.put("/v1/maps/{map_id}/composites/presentation", status_code=204, responses={422: {"model": ErrorResponse}})
+def set_map_composite_presentations(map_id: uuid.UUID, query: list[SetMapCompositePresentationUpdate], variant_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog._require_map(map_id)
+        catalog._require_variant(map_id, variant_id)
+        for update in query:
+            catalog.set_composite_presentation(map_id, update.composite_id, variant_id, update.collapsed, update.x, update.y, update.width, update.height)
 
 
 @app.delete("/v1/maps/{map_id}", status_code=204, responses={422: {"model": ErrorResponse}})

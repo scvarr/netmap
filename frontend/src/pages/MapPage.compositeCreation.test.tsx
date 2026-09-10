@@ -22,6 +22,103 @@ const renderPage = (createComposite = vi.fn(), loadMap = vi.fn().mockResolvedVal
 const begin = async () => { await screen.findByText('PP1'); fireEvent.click(screen.getByRole('button', { name: /Компоновка/ })); fireEvent.click(screen.getByRole('button', { name: 'Создать составной блок' })); };
 
 describe('MapPage composite creation', () => {
+  const bulkComposite = (id: string, collapsed = false, persisted = false) => ({
+    composite_ref: { entity_type: 'MapComposite' as const, entity_id: id }, name: `Блок ${id}`,
+    physical_object_refs: savedMap.placements.map((item) => item.physical_object_ref),
+    presentation: { variant_ref: savedMap.active_variant_ref, collapsed, geometry_persisted: persisted, x: 44, y: 55, width: 600, height: 240 },
+  });
+  const renderBulk = async (composites: ReturnType<typeof bulkComposite>[], activeVariant = variantId) => {
+    const populated = { ...savedMap, active_variant_ref: { ...savedMap.active_variant_ref, entity_id: activeVariant }, composites };
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([populated]), loadMap: vi.fn().mockResolvedValue(populated), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn(), setCompositePresentation: vi.fn().mockResolvedValue(undefined), setCompositePresentations: vi.fn().mockResolvedValue(undefined) };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical&variant=${activeVariant}`);
+    await screen.findByText('PP1');
+    fireEvent.click(screen.getByRole('button', { name: /Компоновка/ }));
+    maps.loadMap.mockClear();
+    return { maps, populated };
+  };
+
+  it.each([['empty', [], true, true], ['collapsed', [bulkComposite('a', true)], true, false], ['expanded', [bulkComposite('a')], false, true]] as const)(
+    'disables bulk actions for %s state', async (_, composites, collapseDisabled, expandDisabled) => {
+      await renderBulk([...composites]);
+      expect(screen.getByRole('button', { name: 'Свернуть все' }).hasAttribute('disabled')).toBe(collapseDisabled);
+      expect(screen.getByRole('button', { name: 'Развернуть все' }).hasAttribute('disabled')).toBe(expandDisabled);
+    },
+  );
+
+  it('collapses only expanded composites once using shared first geometry and saved dragged coordinates in the active variant', async () => {
+    const otherVariant = '00000000-0000-4000-8000-000000000088';
+    const { maps, populated } = await renderBulk([bulkComposite('first'), bulkComposite('dragged', false, true), bulkComposite('already', true, true)], otherVariant);
+    const confirmed = { ...populated, composites: populated.composites.map((item) => ({ ...item, presentation: { ...item.presentation, collapsed: true } })) };
+    maps.loadMap.mockResolvedValue(confirmed);
+    fireEvent.click(screen.getByRole('button', { name: 'Свернуть все' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Развернуть все' })).toBeEnabled());
+    expect(maps.setCompositePresentations).toHaveBeenCalledExactlyOnceWith(mapId, otherVariant, [
+      { composite_id: 'first', collapsed: true, x: -10, y: -44, width: 233, height: 198 },
+      { composite_id: 'dragged', collapsed: true, x: 44, y: 55, width: 200, height: 74 },
+    ]);
+    expect(maps.loadMap).toHaveBeenCalledExactlyOnceWith(mapId, otherVariant);
+    expect(screen.getByRole('button', { name: 'Свернуть все' })).toBeDisabled();
+    expect(maps.setCompositePresentation).not.toHaveBeenCalled();
+    expect(maps.movePosition).not.toHaveBeenCalled();
+  });
+
+  it('expands only collapsed composites preserving geometry, then allows individual toggle and drag', async () => {
+    const { maps, populated } = await renderBulk([bulkComposite('dragged', true, true), bulkComposite('expanded')]);
+    maps.loadMap.mockResolvedValue({ ...populated, composites: populated.composites.map((item) => ({ ...item, presentation: { ...item.presentation, collapsed: false } })) });
+    fireEvent.click(screen.getByRole('button', { name: 'Развернуть все' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Свернуть все' })).toBeEnabled());
+    expect(maps.setCompositePresentations).toHaveBeenCalledExactlyOnceWith(mapId, variantId, [{ composite_id: 'dragged', collapsed: false, x: 44, y: 55, width: 600, height: 240 }]);
+    expect(maps.loadMap).toHaveBeenCalledExactlyOnceWith(mapId, variantId);
+    maps.loadMap.mockResolvedValue(populated);
+    fireEvent.click(screen.getByRole('button', { name: 'toggle composite dragged' }));
+    await screen.findByRole('button', { name: 'drag composite dragged' });
+    expect(maps.setCompositePresentation).toHaveBeenLastCalledWith(mapId, 'dragged', variantId, { collapsed: true, x: 44, y: 55, width: 200, height: 74 });
+    fireEvent.click(screen.getByRole('button', { name: 'drag composite dragged' }));
+    await waitFor(() => expect(maps.setCompositePresentation).toHaveBeenCalledTimes(2));
+    expect(maps.movePosition).not.toHaveBeenCalled();
+  });
+
+  it('blocks bulk and individual writes while bulk is pending and keeps confirmed state on rejection', async () => {
+    const { maps } = await renderBulk([bulkComposite('expanded'), bulkComposite('collapsed', true, true)]);
+    let reject!: (reason: Error) => void;
+    maps.setCompositePresentations.mockImplementation(() => new Promise((_, fail) => { reject = fail; }));
+    fireEvent.click(screen.getByRole('button', { name: 'Свернуть все' }));
+    expect(screen.getByRole('button', { name: 'Свернуть все' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Развернуть все' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Свернуть' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'toggle composite expanded' }));
+    fireEvent.click(screen.getByRole('button', { name: 'drag composite collapsed' }));
+    reject(new Error('raw diagnostics'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось изменить состояние составных блоков.');
+    expect(screen.queryByText('raw diagnostics')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Свернуть' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Развернуть' })).toBeEnabled();
+    expect(maps.setCompositePresentations).toHaveBeenCalledTimes(1);
+    expect(maps.setCompositePresentation).not.toHaveBeenCalled();
+    expect(maps.loadMap).not.toHaveBeenCalled();
+    expect(maps.movePosition).not.toHaveBeenCalled();
+  });
+
+  it('retries only GET after acknowledged bulk write and failed authoritative refresh', async () => {
+    const { maps, populated } = await renderBulk([bulkComposite('expanded')]);
+    maps.loadMap.mockRejectedValue(new Error('raw refresh'));
+    fireEvent.click(screen.getByRole('button', { name: 'Свернуть все' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Состояние составных блоков сохранено, но карту не удалось обновить.');
+    expect(screen.queryByText('raw refresh')).not.toBeInTheDocument();
+    expect(maps.loadMap).toHaveBeenCalledExactlyOnceWith(mapId, variantId);
+    expect(screen.getByRole('button', { name: 'Свернуть все' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'toggle composite expanded' }));
+    maps.loadMap.mockResolvedValue({ ...populated, composites: [bulkComposite('expanded', true, true)] });
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(maps.loadMap).toHaveBeenCalledTimes(2);
+    expect(maps.loadMap).toHaveBeenLastCalledWith(mapId, variantId);
+    expect(maps.setCompositePresentations).toHaveBeenCalledTimes(1);
+    expect(maps.setCompositePresentation).not.toHaveBeenCalled();
+    expect(maps.movePosition).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Развернуть все' })).toBeEnabled();
+  });
+
   it('shows existing composites by name and member count without exposing their UUIDs', async () => {
     const compositeId = '00000000-0000-4000-8000-000000000099';
     const populated = { ...savedMap, composites: [{ composite_ref: { entity_type: 'MapComposite' as const, entity_id: compositeId }, name: 'Стойка A', physical_object_refs: [savedMap.placements[0].physical_object_ref, savedMap.placements[1].physical_object_ref], presentation: { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: variantId }, collapsed: false, x: 0, y: 0, width: 280, height: 180 } }] };

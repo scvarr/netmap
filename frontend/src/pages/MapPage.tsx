@@ -170,7 +170,7 @@ interface CompositeDeletionOperation {
   status: "confirming" | "deleting";
   error: string | null;
 }
-interface CompositePresentationOperation { mapId: string; variantId: string; compositeId: string; presentation: Omit<MapCompositePresentation, 'variant_ref' | 'geometry_persisted'>; status: 'saving' | 'refresh-failed'; }
+interface CompositePresentationOperation { mapId: string; variantId: string; bulk?: boolean; status: 'saving' | 'refresh-failed'; }
 interface CreationRefreshOperation { mapId: string; variantId: string; status: "refresh-failed"; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; variantId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
@@ -258,6 +258,7 @@ export function MapPage({
   const [compositeDeletion, setCompositeDeletion] = useState<CompositeDeletionOperation | null>(null);
   const [compositeDeletionRefresh, setCompositeDeletionRefresh] = useState<CreationRefreshOperation | null>(null);
   const [compositePresentationOperation, setCompositePresentationOperation] = useState<CompositePresentationOperation | null>(null);
+  const compositePresentationPending = useRef(false);
   const [selectedCompositeId, setSelectedCompositeId] = useState<string | null>(null);
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -413,27 +414,53 @@ export function MapPage({
     return compositeFrameGeometry(positions);
   };
   const saveCompositePresentation = async (compositeId: string, presentation: Omit<MapCompositePresentation, 'variant_ref' | 'geometry_persisted'>) => {
-    if (!activeMap || !savedMapDataSource?.setCompositePresentation || compositePresentationOperation) return;
+    if (!activeMap || !savedMapDataSource?.setCompositePresentation || compositePresentationOperation || compositePresentationPending.current) return;
+    compositePresentationPending.current = true;
     const operation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, presentation, status: 'saving' as const };
     setCompositePresentationOperation(operation);
     try { await savedMapDataSource.setCompositePresentation(operation.mapId, operation.compositeId, operation.variantId, operation.presentation); }
-    catch { setCompositePresentationOperation(null); setError('Не удалось изменить состояние составного блока.'); return; }
-    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositePresentationOperation(null); }
+    catch { compositePresentationPending.current = false; setCompositePresentationOperation(null); setError('Не удалось изменить состояние составного блока.'); return; }
+    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositePresentationOperation(null); compositePresentationPending.current = false; }
     catch { setCompositePresentationOperation({ ...operation, status: 'refresh-failed' }); }
   };
-  const toggleCompositePresentation = (compositeId: string, expandedGeometry?: { x: number; y: number; width: number; height: number }) => {
-    const composite = activeMap?.composites.find((item) => item.composite_ref.entity_id === compositeId);
-    if (!composite) return;
+  const toggledCompositePresentation = (composite: SavedMap['composites'][number], expandedGeometry?: { x: number; y: number; width: number; height: number }) => {
     const geometry = composite.presentation.collapsed
       ? composite.presentation
       : composite.presentation.geometry_persisted
         ? { ...compactCollapsedGeometry(composite), x: composite.presentation.x, y: composite.presentation.y }
         : expandedGeometry ?? initialCompositeGeometry(composite);
-    void saveCompositePresentation(compositeId, { collapsed: !composite.presentation.collapsed, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height });
+    return { collapsed: !composite.presentation.collapsed, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height };
+  };
+  const toggleCompositePresentation = (compositeId: string, expandedGeometry?: { x: number; y: number; width: number; height: number }) => {
+    const composite = activeMap?.composites.find((item) => item.composite_ref.entity_id === compositeId);
+    if (composite) void saveCompositePresentation(compositeId, toggledCompositePresentation(composite, expandedGeometry));
+  };
+  const setAllCompositesCollapsed = async (collapsed: boolean) => {
+    if (!activeMap || !savedMapDataSource?.setCompositePresentations || compositePresentationOperation || compositePresentationPending.current) return;
+    const updates = activeMap.composites.filter((composite) => composite.presentation.collapsed !== collapsed)
+      .map((composite) => ({ composite_id: composite.composite_ref.entity_id, ...toggledCompositePresentation(composite) }));
+    if (!updates.length) return;
+    const operation: CompositePresentationOperation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, bulk: true, status: 'saving' };
+    compositePresentationPending.current = true;
+    setCompositePresentationOperation(operation);
+    try { await savedMapDataSource.setCompositePresentations(operation.mapId, operation.variantId, updates); }
+    catch {
+      compositePresentationPending.current = false;
+      setCompositePresentationOperation(null);
+      setError('Не удалось изменить состояние составных блоков.');
+      return;
+    }
+    try {
+      const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId);
+      if (selectedMapId.current === operation.mapId) setMap(detail);
+      compositePresentationPending.current = false;
+      setCompositePresentationOperation(null);
+    } catch { setCompositePresentationOperation({ ...operation, status: 'refresh-failed' }); }
   };
   const retryCompositePresentationRefresh = async () => {
     const operation = compositePresentationOperation; if (!operation || operation.status !== 'refresh-failed' || !savedMapDataSource) return;
-    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositePresentationOperation(null); } catch { /* refresh-only retry remains available */ }
+    setCompositePresentationOperation({ ...operation, status: 'saving' });
+    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositePresentationOperation(null); compositePresentationPending.current = false; } catch { setCompositePresentationOperation(operation); }
   };
 
   const selectedCableId = selection?.type === "node" ? cableIdForNode(selection.item) : null;
@@ -2129,6 +2156,10 @@ export function MapPage({
                 <hr />
                 <strong>Составные блоки</strong>
                 {activeMap.composites.length === 0 ? <p className="map-utility-panel__empty">Составных блоков пока нет.</p> : <div className="map-composite-list">{activeMap.composites.map((composite) => <div className={`map-composite-list__item${selectedCompositeId === composite.composite_ref.entity_id ? ' map-composite-list__item--selected' : ''}`} key={composite.composite_ref.entity_id}><div><strong>{composite.name}</strong><span>{composite.physical_object_refs.length} {composite.physical_object_refs.length === 1 ? "объект" : composite.physical_object_refs.length < 5 ? "объекта" : "объектов"}</span></div><div className="map-utility-panel__actions"><button type="button" disabled={!savedMapDataSource?.setCompositePresentation || Boolean(compositePresentationOperation)} onClick={() => toggleCompositePresentation(composite.composite_ref.entity_id)}>{composite.presentation.collapsed ? 'Развернуть' : 'Свернуть'}</button><button type="button" disabled={!savedMapDataSource?.deleteComposite} onClick={() => beginCompositeDeletion(composite.composite_ref.entity_id)}>Удалить</button></div></div>)}</div>}
+                <div className="map-utility-panel__actions">
+                  <button type="button" disabled={!savedMapDataSource?.setCompositePresentations || Boolean(compositePresentationOperation) || !activeMap.composites.some((composite) => !composite.presentation.collapsed)} onClick={() => void setAllCompositesCollapsed(true)}>Свернуть все</button>
+                  <button type="button" disabled={!savedMapDataSource?.setCompositePresentations || Boolean(compositePresentationOperation) || !activeMap.composites.some((composite) => composite.presentation.collapsed)} onClick={() => void setAllCompositesCollapsed(false)}>Развернуть все</button>
+                </div>
                 <button type="button" disabled={!savedMapDataSource?.createComposite || physicalRegionMode} onClick={beginCompositeCreate}>Создать составной блок</button>
               </>}
             </div>}
@@ -2431,7 +2462,7 @@ export function MapPage({
       {presentationVariantCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Компоновка создана, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantCreationRefresh()}>Повторить обновление</button></section>}
       {compositeCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Составной блок создан, но карту не удалось обновить.</p><button type="button" onClick={() => void retryCompositeCreationRefresh()}>Повторить обновление</button></section>}
       {compositeDeletionRefresh?.status === "refresh-failed" && <section role="alert"><p>Составной блок удалён, но карту не удалось обновить.</p><button type="button" onClick={() => void retryCompositeDeletionRefresh()}>Повторить обновление</button></section>}
-      {compositePresentationOperation?.status === 'refresh-failed' && <section role="alert"><p>Состояние составного блока сохранено, но карту не удалось обновить.</p><button type="button" onClick={() => void retryCompositePresentationRefresh()}>Повторить обновление</button></section>}
+      {compositePresentationOperation?.status === 'refresh-failed' && <section role="alert"><p>{compositePresentationOperation.bulk ? 'Состояние составных блоков сохранено, но карту не удалось обновить.' : 'Состояние составного блока сохранено, но карту не удалось обновить.'}</p><button type="button" onClick={() => void retryCompositePresentationRefresh()}>Повторить обновление</button></section>}
       {variantDeletion?.status === "refresh-failed" && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
       {error && <p role="alert">{error}</p>}

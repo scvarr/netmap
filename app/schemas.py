@@ -230,6 +230,10 @@ class SetMapCompositePresentationRequest(BaseModel):
     height: FiniteFloat = Field(gt=0)
 
 
+class SetMapCompositePresentationUpdate(SetMapCompositePresentationRequest):
+    composite_id: uuid.UUID
+
+
 class MapCableRouteDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

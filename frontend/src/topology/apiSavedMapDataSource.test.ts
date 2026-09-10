@@ -14,6 +14,23 @@ const response = (value: unknown, status = 200) => new Response(JSON.stringify(v
 describe('ApiSavedMapDataSource', () => {
   const fetchMock = vi.fn();
   beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); }); afterEach(() => vi.unstubAllGlobals());
+  it('sends one acknowledgement-only bulk PUT and validates every UUID before fetch', async () => {
+    const source = new ApiSavedMapDataSource();
+    const updates = [objectId, region.region_ref.entity_id].map((composite_id) => ({ composite_id, collapsed: true, x: 44, y: 55, width: 200, height: 74 }));
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(source.setCompositePresentations(mapId, variantId, updates)).resolves.toBeUndefined();
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(`/api/v1/maps/${mapId}/composites/presentation?variant_id=${variantId}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates),
+    });
+    fetchMock.mockClear();
+    await expect(source.setCompositePresentations('invalid', variantId, updates)).rejects.toThrow('mapId must be a UUID');
+    await expect(source.setCompositePresentations(mapId, 'invalid', updates)).rejects.toThrow('variantId must be a UUID');
+    await expect(source.setCompositePresentations(mapId, variantId, [updates[0], { ...updates[1], composite_id: 'invalid' }])).rejects.toThrow('compositeId must be a UUID');
+    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockResolvedValue(response({ error: { code: 'INVALID', message: 'Rejected' } }, 422));
+    await expect(source.setCompositePresentations(mapId, variantId, updates)).rejects.toThrow('INVALID: Rejected');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
   it('parses list, create and detail responses strictly', async () => { fetchMock.mockResolvedValueOnce(response({ maps: [body] })).mockResolvedValueOnce(response(body)).mockResolvedValueOnce(response(body)); const source = new ApiSavedMapDataSource(); await expect(source.listMaps()).resolves.toHaveLength(1); await expect(source.createMap('First')).resolves.toMatchObject({ name: 'First' }); await expect(source.loadMap(mapId)).resolves.toMatchObject({ placements: [{ positions: { 'L1/PHYSICAL_OBJECT': { x: 12, y: 34, locked: false } } }] }); });
   it('deletes an exact canonical SavedMap UUID', async () => { fetchMock.mockResolvedValue(response({})); await new ApiSavedMapDataSource().deleteMap(mapId); expect(fetchMock).toHaveBeenCalledWith(`/api/v1/maps/${mapId}`, { method: 'DELETE' }); await expect(new ApiSavedMapDataSource().deleteMap('not-a-uuid')).rejects.toThrow('mapId must be a UUID'); });
   it('deletes an exact presentation variant UUID on its SavedMap', async () => { fetchMock.mockResolvedValue(response({})); const source = new ApiSavedMapDataSource(); await source.deletePresentationVariant(mapId, variantId); expect(fetchMock).toHaveBeenCalledWith(`/api/v1/maps/${mapId}/presentation-variants/${variantId}`, { method: 'DELETE' }); await expect(source.deletePresentationVariant('not-a-uuid', variantId)).rejects.toThrow('mapId must be a UUID'); await expect(source.deletePresentationVariant(mapId, 'not-a-uuid')).rejects.toThrow('variantId must be a UUID'); });
