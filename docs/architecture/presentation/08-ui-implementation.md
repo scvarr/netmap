@@ -4,8 +4,8 @@
 
 Рабочий implementation contract frontend NetMap. Документ не меняет network
 semantics. Он фиксирует одновременно архитектурные boundaries и фактически
-materialized subset на `main` после MAPS.2b; текст о будущих controls не следует
-читать как описание уже существующего product surface.
+реализованный frontend contract через завершённый B.3 / MAPS.2c; текст о будущих
+controls не следует читать как описание уже существующего product surface.
 
 ### Фактический срез реализации
 
@@ -1010,7 +1010,7 @@ performs one fit view. Collapse and composite drag do not fit the view.
 ## Canvas interaction and multi-selection
 
 **FUTURE / OPEN; это отдельное общее направление редактора карты, не часть
-завершённого B.2.**
+реализованного B.3 / MAPS.2c.**
 
 ### Базовое управление
 

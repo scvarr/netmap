@@ -43,7 +43,7 @@ compact Port Block table и RU terminology «Группа портов / Гру�
   подключения» and «Сетевые порты» columns, and counts for the current
   immutable PortBlockVersion without one version-details load per row.
 
-Current execution position: **Phase B.3 — MapComposite and presentation variants — IMPLEMENTED.**
+Current execution position: **Phase B — MapCableRoute usability, following implemented B.3.**
 
 ### Phase B — Remaining bounded L1 capability families
 
