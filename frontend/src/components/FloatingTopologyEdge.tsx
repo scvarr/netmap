@@ -22,6 +22,14 @@ import { blueprintDisplayDimensions, blueprintMapNameplateHeight, visibleBluepri
 import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } from '../topology/geometryAssist';
 
 const CABLE_ANGLE_FAMILIES = [{ step: 45, capturePx: 12 }, { step: 15, capturePx: 5 }];
+const rayIntersection = (left: MapCableRouteWaypoint, leftAngle: number, right: MapCableRouteWaypoint, rightAngle: number): MapCableRouteWaypoint | null => {
+  const a = leftAngle * Math.PI / 180; const b = rightAngle * Math.PI / 180;
+  const dx = Math.cos(a), dy = Math.sin(a), ex = Math.cos(b), ey = Math.sin(b);
+  const cross = dx * ey - dy * ex;
+  if (Math.abs(cross) < 1e-6) return null;
+  const t = ((right.x - left.x) * ey - (right.y - left.y) * ex) / cross;
+  return { x: left.x + t * dx, y: left.y + t * dy };
+};
 
 export interface NodeRectangle {
   x: number;
@@ -259,6 +267,24 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
   const moveWaypoint = (index: number, event: PointerEvent<SVGElement>) => {
     if (!draft) return;
     const anchors = [segmentPoints[index], segmentPoints[index + 2]];
+    if (event.ctrlKey) {
+      const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      draft.onWaypointMove(index, point); setFeedback(anchors.map((anchor) => ({ start: anchor, end: point, assist: assistFrom(anchor, event) }))); return;
+    }
+    if (event.shiftKey) {
+      const point = assistFrom(anchors[0], event).point;
+      draft.onWaypointMove(index, point); setFeedback(anchors.map((anchor) => ({ start: anchor, end: point, assist: assistFrom(anchor, event) }))); return;
+    }
+    const pointer = { x: event.clientX, y: event.clientY };
+    const dual = (step: number, capturePx: number) => {
+      const candidates: MapCableRouteWaypoint[] = [];
+      for (let left = 0; left < 360; left += step) for (let right = 0; right < 360; right += step) {
+        const point = rayIntersection(anchors[0], left, anchors[1], right);
+        if (point && Math.hypot(flowToScreenPosition(point).x - pointer.x, flowToScreenPosition(point).y - pointer.y) <= capturePx) candidates.push(point);
+      }
+      return candidates.sort((a, b) => Math.hypot(flowToScreenPosition(a).x - pointer.x, flowToScreenPosition(a).y - pointer.y) - Math.hypot(flowToScreenPosition(b).x - pointer.x, flowToScreenPosition(b).y - pointer.y))[0];
+    };
+    const dualPoint = dual(45, 12) ?? dual(15, 5);
     const assists = anchors.map((anchor) => ({ anchor, assist: assistFrom(anchor, event) }));
     const chosen = assists.reduce((best, candidate) => {
       const bestPoint = flowToScreenPosition(best.assist.point);
@@ -266,8 +292,9 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
       const pointerDistance = (point: { x: number; y: number }) => Math.hypot(point.x - event.clientX, point.y - event.clientY);
       return pointerDistance(candidatePoint) < pointerDistance(bestPoint) ? candidate : best;
     });
-    draft.onWaypointMove(index, chosen.assist.point);
-    setFeedback(anchors.map((anchor) => ({ start: anchor, end: chosen.assist.point, assist: assistFrom(anchor, event) })));
+    const point = dualPoint ?? chosen.assist.point;
+    draft.onWaypointMove(index, point);
+    setFeedback(anchors.map((anchor) => ({ start: anchor, end: point, assist: assistFrom(anchor, event) })));
   };
 
   return <g data-testid={`foreground-cable-${edge.id}`} data-emphasis={emphasis}>

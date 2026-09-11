@@ -2697,9 +2697,9 @@ export function MapPage({
       {cableRouteEdit && viewMode === "physical" && (
         <section className="map-route-edit-affordance" aria-label="Редактирование трассы">
           <strong>Редактирование трассы</strong>
-          <span>{document?.nodes.find((node) => cableIdForNode(node) === cableRouteEdit.cableId)?.label ?? cableRouteEdit.cableId}</span>
-          <button type="button" disabled={cableRouteEdit.status === "saving"} onClick={() => void saveCableRoute()}>Сохранить</button>
-          <button type="button" disabled={cableRouteEdit.status === "saving"} onClick={() => setCableRouteEdit(null)}>Отменить</button>
+          <span className="map-route-edit-affordance__label" title={document?.nodes.find((node) => cableIdForNode(node) === cableRouteEdit.cableId)?.label ?? cableRouteEdit.cableId}>{document?.nodes.find((node) => cableIdForNode(node) === cableRouteEdit.cableId)?.label ?? cableRouteEdit.cableId}</span>
+          <button type="button" className="primary-action" disabled={cableRouteEdit.status === "saving"} onClick={() => void saveCableRoute()}>Сохранить</button>
+          <button type="button" className="secondary-action" disabled={cableRouteEdit.status === "saving"} onClick={() => setCableRouteEdit(null)}>Отменить</button>
           <small>Enter · Esc</small>
         </section>
       )}
