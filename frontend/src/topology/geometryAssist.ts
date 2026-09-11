@@ -41,6 +41,7 @@ export const assistSegment = ({
   screenToFlowPosition,
   flowToScreenPosition,
   capturePx = GEOMETRY_ASSIST_CAPTURE_PX,
+  angleFamilies = [{ step: ANGLE_STEP_DEGREES, capturePx }],
 }: {
   anchor: XYPosition;
   pointerScreen: ScreenPosition;
@@ -49,6 +50,7 @@ export const assistSegment = ({
   screenToFlowPosition: (point: ScreenPosition) => XYPosition;
   flowToScreenPosition: (point: XYPosition) => ScreenPosition;
   capturePx?: number;
+  angleFamilies?: readonly { step: number; capturePx: number }[];
 }): SegmentAssistResult => {
   const anchorScreen = flowToScreenPosition(anchor);
   const constrainedScreen = shiftKey
@@ -61,16 +63,24 @@ export const assistSegment = ({
   const rawLength = segmentLength(anchor, rawPoint);
   if (ctrlKey || rawLength === 0) return { point: rawPoint, angle: rawAngle, length: rawLength, snappedAngle: false, snappedLength: false };
 
-  const targetAngle = Math.round(rawAngle / ANGLE_STEP_DEGREES) * ANGLE_STEP_DEGREES % 360;
   const targetLength = Math.max(LENGTH_STEP, Math.round(rawLength / LENGTH_STEP) * LENGTH_STEP);
-  const anglePoint = pointAt(anchor, targetAngle, rawLength);
   const lengthPoint = pointAt(anchor, rawAngle, targetLength);
-  const combinedPoint = pointAt(anchor, targetAngle, targetLength);
-  const anglePlausible = !shiftKey && screenDistance(constrainedScreen, flowToScreenPosition(anglePoint)) <= capturePx;
+  const angularCandidate = !shiftKey
+    ? angleFamilies
+      .map((family) => {
+        const angle = Math.round(rawAngle / family.step) * family.step % 360;
+        const point = pointAt(anchor, angle, rawLength);
+        return { point, distance: screenDistance(constrainedScreen, flowToScreenPosition(point)), capturePx: family.capturePx };
+      })
+      .find((candidate) => candidate.distance <= candidate.capturePx)
+    : undefined;
+  const anglePoint = angularCandidate?.point;
+  const combinedPoint = anglePoint && pointAt(anchor, segmentAngle(anchor, anglePoint), targetLength);
+  const anglePlausible = Boolean(anglePoint);
   const lengthPlausible = screenDistance(constrainedScreen, flowToScreenPosition(lengthPoint)) <= capturePx;
-  const combinedPlausible = anglePlausible && lengthPlausible && screenDistance(constrainedScreen, flowToScreenPosition(combinedPoint)) <= capturePx;
+  const combinedPlausible = Boolean(combinedPoint) && anglePlausible && lengthPlausible && screenDistance(constrainedScreen, flowToScreenPosition(combinedPoint!)) <= capturePx;
 
-  const point = combinedPlausible ? combinedPoint : anglePlausible ? anglePoint : lengthPlausible ? lengthPoint : rawPoint;
+  const point = combinedPlausible ? combinedPoint! : anglePlausible ? anglePoint! : lengthPlausible ? lengthPoint : rawPoint;
   const snappedAngle = combinedPlausible || anglePlausible;
   const snappedLength = combinedPlausible || (!anglePlausible && lengthPlausible);
   return { point, angle: segmentAngle(anchor, point), length: segmentLength(anchor, point), snappedAngle, snappedLength };

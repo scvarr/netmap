@@ -2694,6 +2694,15 @@ export function MapPage({
           </section>
         </>
       )}
+      {cableRouteEdit && viewMode === "physical" && (
+        <section className="map-route-edit-affordance" aria-label="Редактирование трассы">
+          <strong>Редактирование трассы</strong>
+          <span>{document?.nodes.find((node) => cableIdForNode(node) === cableRouteEdit.cableId)?.label ?? cableRouteEdit.cableId}</span>
+          <button type="button" disabled={cableRouteEdit.status === "saving"} onClick={() => void saveCableRoute()}>Сохранить</button>
+          <button type="button" disabled={cableRouteEdit.status === "saving"} onClick={() => setCableRouteEdit(null)}>Отменить</button>
+          <small>Enter · Esc</small>
+        </section>
+      )}
       <QuickInspector
         document={document}
         selection={physicalRegionMode ? null : selection}
