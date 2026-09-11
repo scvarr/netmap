@@ -137,41 +137,39 @@ roadmap дальше этого не расширяется. `FPP-811` и `FPP-8
 
 ## Suggested fixture topology
 
-Схема synthetic fixture не утверждает соответствие production:
+Ниже приведена схема synthetic fixture; она не утверждает соответствие
+production:
 
 ```text
-PC1
- |
- O1
- |
-PP-CU-24
- |
-SW-ACCESS
- |
- | optical uplink
- |
-FPP-811
- |
-DIST-811
- |
- | inter-cabinet optical path
- |
-+-------------------+
-|                   |
-FANOUT-1x24       FPP-833
-|                   |
-+------+------+     |
-|             |     |
-CORE-A     CORE-B   |
-| StackWise  |      |
-|            |      |
-+-- SRV1-NIC1       |
-     +-- SRV1-NIC2  |
-                    |
-                   RTR1
-                    |
-                ISP / OFFMAP
+MAIN SYNTHETIC L1 FIXTURE
+
+PC1 -> O1 -> PP-CU-24 -> SW-ACCESS
+SW-ACCESS -> FPP-811 -> DIST-811
+DIST-811 -> synthetic optical distribution in rack 833
+
+RACK 833 CORE SIDE
+
+synthetic optical distribution -> CORE-A
+synthetic optical distribution -> CORE-B
+CORE-A <-> StackWise relationship <-> CORE-B
+SRV1-NIC1 -> CORE-A
+SRV1-NIC2 -> CORE-B
+CORE-A -> RTR1 -> ISP/OFFMAP
+
+SEPARATE COVERAGE BRANCHES (not required inline in the main path)
+
+DIST-811 --> FPP-833      ordinary 1:1 passive optical case
+DIST-811 --> FANOUT-1x24 deliberate 1 -> 24 stress case
+
+SEPARATE PASSIVE MAPPING BRANCH
+
+XCONN-4: A1 <-> B2, A2 <-> B1
 ```
+
+Схема synthetic fixture не утверждает соответствие production. `FPP-833`
+остаётся отдельным ordinary 1:1 passive coverage case, а `FANOUT-1x24` —
+отдельным deliberate stress case; ни один из них не объявляется обязательным
+inline production path.
 
 `XCONN-4` может быть отдельной небольшой веткой рядом с floor/distribution и не
 обязан входить в основной forwarding narrative. `GENERIC1` может быть просто
@@ -198,8 +196,8 @@ capability axes, а не закрытый список device classes.
 | 12 | dual-homed server | SRV1 |
 | 13 | FRONT/REAR presentation | PP-CU-24, FPP-811, SRV1 |
 | 14 | несколько Port Blocks в одном Blueprint | SW-ACCESS |
-| 15 | ConnectionPoint-only endpoint group | O1 / PP-CU-24 |
-| 16 | NETWORK_PORT endpoint group | PC1 / SW-ACCESS, если поддерживается |
+| 15 | ConnectionPoint port kind | O1 / PP-CU-24 |
+| 16 | `NETWORK_PORT` port kind | PC1 / SW-ACCESS, если поддерживается |
 | 17 | pair-by-index continuity | PP-CU-24, FPP-811 |
 | 18 | arbitrary individual mapping | XCONN-4 |
 | 19 | cross-face internal continuity | PP-CU-24, FPP-811, SRV1 |
