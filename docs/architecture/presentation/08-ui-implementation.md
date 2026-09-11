@@ -4,8 +4,9 @@
 
 Рабочий implementation contract frontend NetMap. Документ не меняет network
 semantics. Он фиксирует одновременно архитектурные boundaries и фактически
-реализованный frontend contract через завершённый B.3 / MAPS.2c; текст о будущих
-controls не следует читать как описание уже существующего product surface.
+реализованный frontend contract через завершённые B.3 / MAPS.2c и B.4 /
+MapCableRoute usability; текст о будущих controls не следует читать как описание
+уже существующего product surface.
 
 ### Фактический срез реализации
 
@@ -38,11 +39,20 @@ cable with the exact canonical cable identity renders that current route after
 topology layout: its known endpoint anchors (or existing truthful floating
 fallback) are joined through the stored waypoints in order. Rendering does not
 write or infer geometry. The selected drawable cable exposes a bounded route
-editor: add point then click the canvas appends before the target, drag moves a
-draft point, delete removes the selected draft point, and Save issues one full
-route PUT. Cancel leaves the authoritative map untouched; an empty saved draft
+editor: add point then click the canvas inserts at the exact target segment,
+drag moves a draft point, delete removes the selected draft point, and Save
+issues one full route PUT. The local draft survives ordinary selection and pane
+clicks; only explicit Save or Cancel ends editing. Enter saves and Escape
+cancels, except when focus is in an editable/control context guarded by the
+editor. Leaving the map or view closes an unsaved draft without a write. A
+compact waypoint has a separate larger invisible hit target. Shared geometry
+assistance provides the 45° primary / 15° secondary angular policy, transient
+dual adjacent-segment angle/length feedback, Shift H/V constraints, and Ctrl
+bypass. The persistent compact route-edit control remains available while
+editing. Cancel leaves the authoritative map untouched; an empty saved draft
 is an explicit straight route. Reset deletes only the route record, with a
-refresh-only retry after a successful DELETE.
+refresh-only retry after a successful DELETE. `MapCableRoute` remains
+SavedMap-owned, presentation-only state and never becomes canonical topology.
 
 Связанные документы: [[architecture/presentation/05-presentation|05. Представление]], [[architecture/graph/02-04-projections-aggregation|02.4 Projections]], [[architecture/workspaces/07-workspaces|07. Workspace]], [[reviews/09-ui-ux-review|09. Рабочий L1 UI/UX review]], [[plans/09-01-l1-spatial-foundation-plan|09.1 План завершения L1 spatial foundation]].
 

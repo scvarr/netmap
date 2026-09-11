@@ -43,7 +43,7 @@ compact Port Block table и RU terminology «Группа портов / Гру�
   подключения» and «Сетевые порты» columns, and counts for the current
   immutable PortBlockVersion without one version-details load per row.
 
-Current execution position: **Phase B — MapCableRoute usability, following implemented B.3.**
+Current execution position: **Phase C — Representative real-world L1 semantic acceptance.**
 
 ### Phase B — Remaining bounded L1 capability families
 
@@ -117,6 +117,12 @@ OPEN presentation direction: canonical Cable отдельны, общий мар
 routes, internal continuity и L1 trace. Task-based workflow: найти, создать,
 разместить, назначить Location, соединить, исправить presentation, выполнить
 trace и понять результат без знания internal entities.
+
+Живой acceptance testbed и порядок его использования зафиксированы в
+[[plans/11-04-phase-c-representative-l1-testbed|11.4 Phase C representative L1
+testbed]]. Этот документ задаёт representative scenario и границу между
+подтверждёнными и неизвестными facts; он не является inventory source или
+architecture spec.
 
 Findings классифицируются как correctness, UX, visual/style,
 performance/readiness или missing domain/authoring capability. Только конкретный

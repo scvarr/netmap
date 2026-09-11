@@ -172,7 +172,7 @@ ELK-layout в saved-map пути, объём полей в projection DTO. Эт�
   быть русскими); EN-локаль рендерит эти поверхности словарными строками;
   vitest паритетности ru/en ключей; после завершения вернуть полный
   IMPLEMENTED-claim в docs/plans/09-01-l1-spatial-foundation-plan.
-- Статус: TODO
+- Статус: DONE — 2026-08-29, 26b478b (Complete active L1 localization sweep)
 
 ## Maintainability
 
