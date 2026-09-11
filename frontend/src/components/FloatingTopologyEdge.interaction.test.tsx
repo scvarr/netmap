@@ -13,7 +13,7 @@ vi.mock('@xyflow/react', () => ({
   getStraightPath: () => ['straight'],
   useInternalNode: (id: string) => activeNodes[id],
   useNodes: () => Object.values(activeNodes).map((node: any) => ({ id: node.data.projection.id, data: node.data })),
-  useReactFlow: () => ({ screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x: x + 1000, y: y + 2000 }), flowToScreenPosition: ({ x, y }: { x: number; y: number }) => ({ x: x - 1000, y: y - 2000 }) }),
+  useReactFlow: () => ({ screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x: x + 1000, y: y + 2000 }), flowToScreenPosition: ({ x, y }: { x: number; y: number }) => ({ x: x - 1000, y: y - 2000 }), getViewport: () => ({ zoom: 1 }) }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -92,7 +92,7 @@ describe('direct cable route edge interaction', () => {
     expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 200, y: 50 });
     expect(container.querySelector('.cable-route-geometry-feedback')).toHaveTextContent('0° · 100');
     fireEvent(handle, new MouseEvent('pointermove', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true, ctrlKey: true }));
-    expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 203, y: 50 });
+    expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 203, y: 68 });
   });
 
   it('keeps the visible waypoint compact while its independent hit target is substantially larger', () => {
