@@ -460,6 +460,45 @@ Finding categories:
 - Это finding о terminology/UX clarity, а не предложение изменить canonical
   topology или `FRONT`/`REAR` enum/internal architecture.
 
+### C-UX-04 — Existing PhysicalObject rename workflow
+
+**Категория:** UX / authoring lifecycle
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Имя PhysicalObject задаётся при создании.
+- В доступном UI существующего объекта не обнаружено явного действия для
+  переименования.
+- Это проявилось на реальном acceptance workflow: уже корректно созданному
+  semantic/topology object потребовалось уточнить user-facing name.
+- Delete + recreate не является приемлемым штатным rename workflow, особенно
+  после появления connections, SavedMap placement, Location assignment и
+  другой связанной state.
+
+**Desired future correction:**
+
+- Пользователь должен иметь явную возможность изменить display name
+  существующего PhysicalObject.
+- Rename должен сохранять canonical object identity и не пересоздавать
+  PhysicalObject, его ConnectionPoints, NetworkInterfaces, Connections,
+  Cables, Blueprint provenance, Location assignment или SavedMap membership.
+- Topology и presentation references должны продолжать ссылаться на тот же
+  canonical object.
+- После успешного rename UI должен показывать новое имя во всех обычных
+  presentation surfaces после authoritative refresh.
+
+**Scope/status:**
+
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Текущий `PP-301` можно оставить под существующим именем; delete/recreate не
+  требуется и не принимается как штатный workaround.
+- Backend/API rename capability этой docs-задачей не утверждается; отдельный
+  implementation milestone должен определить, является ли gap frontend-only
+  или требует bounded backend contract change.
+- Не расширять finding на общий metadata editor или arbitrary property
+  editing.
+
 ## Scope discipline
 
 Не реализовывать fan-out сейчас, не проектировать новый canonical Stack, не
