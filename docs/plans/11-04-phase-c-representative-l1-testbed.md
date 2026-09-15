@@ -48,6 +48,27 @@ fan-out, 24-port panel или другим конкретным типом бе�
 позднее оказаться multi-member trunk/breakout или другой конструкцией.
 Unknown real-world facts не являются canonical facts.
 
+## Synthetic fixture versus production network boundary
+
+Текущий `FLOOR-3` fixture — намеренно упрощённый synthetic best-practice
+representative example, а не reconstruction production topology. В нём
+`SW-301-ACCESS` сознательно выступает как pure-access representative switch,
+чтобы покрыть current Phase C archetype.
+
+В реальной сети этажные switches в общем случае могут иметь uplink/trunk
+connections, а VLAN assignment выполняется по individual switch ports. Trunk /
+access role и VLAN membership относятся к будущей L2 semantic coverage, а не к
+текущим canonical L1 facts. В Phase C switch ports остаются `NETWORK_PORT`
+endpoints, а physical connections/cables — ordinary physical connections;
+fake canonical trunk entity и VLAN facts не добавляются.
+
+Production-like additional floor branch можно будет добавить отдельно, когда
+появятся подтверждённые physical facts: отдельный floor switch и его
+physical uplink(s) к distribution side. Номер этажа, exact patch-panel count,
+media, trunk ports и VLAN IDs сейчас не фиксируются. Точная physical path через
+patch panels между real floor switch и rack 811 неизвестна и не подменяется
+fake topology.
+
 ## SYNTHETIC REPRESENTATIVE FIXTURE
 
 Ниже зафиксирован TEST FIXTURE, а не production inventory. Generic labels
@@ -116,10 +137,10 @@ Intended fixture placement:
   capacity к 48 access ports switch, но Phase C не требует создавать 48 wall
   outlets или 48 workstation objects: `O1` остаётся representative wall-drop
   path.
-- `SW-301-ACCESS` — access switch с 48 ordinary network access ports и
-  отдельными uplink ports. Для его reusable Port Blocks используются
-  role-neutral structural names; topology role не встраивается в naming
-  convention. Protocol semantics не добавляются.
+- `SW-301-ACCESS` — intentionally simplified pure-access representative
+  switch с 48 ordinary network access ports и отдельными uplink ports. Для его
+  reusable Port Blocks используются role-neutral structural names; topology
+  role не встраивается в naming convention. Protocol semantics не добавляются.
 - `FPP-301` — отдельный synthetic passive optical patch/ODF boundary для
   uplink(s) `SW-301-ACCESS` в сторону rack 811; exact fiber count и
   connector/media/transceiver details не утверждаются.
@@ -198,8 +219,8 @@ roadmap дальше этого не расширяется. `FPP-811` и `FPP-8
 
 ## Suggested fixture topology
 
-Ниже приведена схема synthetic fixture; она не утверждает соответствие
-production:
+Ниже приведена намеренно упрощённая synthetic best-practice схема; она не
+утверждает соответствие production:
 
 ```text
 MAIN SYNTHETIC L1 FIXTURE
@@ -238,6 +259,13 @@ XCONN-4: A1 <-> B2, A2 <-> B1
 остаётся отдельным ordinary 1:1 passive coverage case, а `FANOUT-1x24` —
 отдельным deliberate stress case; ни один из них не объявляется обязательным
 inline production path.
+
+Этот `FLOOR-3` path — representative synthetic best-practice path. Он не
+утверждает, что production floor switch является pure access switch, что
+production имеет ровно такие patch panels или что его physical path до rack
+811 известен. Дополнительная production-like floor branch с L2 trunk/VLAN
+semantics остаётся отдельным будущим acceptance scope; exact physical facts
+для неё должны быть подтверждены до authoring.
 
 `XCONN-4` может быть отдельной небольшой веткой рядом с floor/distribution и не
 обязан входить в основной forwarding narrative; его Location не фиксируется.
