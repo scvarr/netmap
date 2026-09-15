@@ -80,7 +80,7 @@ SYNTH-L1-LAB [site]
 
 Intended fixture placement:
 
-- `CAB-301`: `PC1`, `O1`, `GENERIC1`;
+- `CAB-301`: `PC1`, `O1`;
 - `COMM-ROOM`: `PP-CU-24`, `SW-ACCESS`;
 - `RACK-811`: `FPP-811`, `DIST-811`; `FANOUT-1x24` может находиться здесь
   только как отдельный deliberate stress probe, не как production equipment;
@@ -93,8 +93,6 @@ Intended fixture placement:
 
 - `PC1` — workstation; simple endpoint; Blueprint-backed простой объект с
   одним обычным network endpoint.
-- `GENERIC1` — manually-created PhysicalObject без Blueprint, только для
-  проверки non-Blueprint/advanced path.
 - `O1` — wall/network outlet; маленький passive 1:1 объект с двумя
   ConnectionPoints и явной internal continuity.
 
@@ -221,8 +219,6 @@ inline production path.
 
 `XCONN-4` может быть отдельной небольшой веткой рядом с floor/distribution и не
 обязан входить в основной forwarding narrative; его Location не фиксируется.
-`GENERIC1` размещается в `FLOOR-3 / CAB-301` и может быть соединён одним
-обычным physical link.
 
 ## Coverage matrix
 
@@ -232,38 +228,37 @@ capability axes, а не закрытый список device classes.
 | # | Coverage axis | Fixture representative |
 |---:|---|---|
 | 1 | simple endpoint | PC1 |
-| 2 | manual PhysicalObject без Blueprint | GENERIC1 |
-| 3 | Blueprint-backed PhysicalObject | PC1 |
-| 4 | маленький passive 1:1 объект | O1 |
-| 5 | dense copper passive panel | PP-CU-24 |
-| 6 | dense optical passive panel | FPP-811 / FPP-833 |
-| 7 | active access switch | SW-ACCESS |
-| 8 | active distribution switch | DIST-811 |
-| 9 | core switch | CORE-A / CORE-B |
-| 10 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
-| 11 | router | RTR1 |
-| 12 | dual-homed server | SRV1 |
-| 13 | FRONT/REAR presentation | PP-CU-24, FPP-811, SRV1 |
-| 14 | несколько Port Blocks в одном Blueprint | SW-ACCESS |
-| 15 | ConnectionPoint port kind | O1 / PP-CU-24 |
-| 16 | `NETWORK_PORT` port kind | PC1 / SW-ACCESS, если поддерживается |
-| 17 | pair-by-index continuity | PP-CU-24, FPP-811 |
-| 18 | arbitrary individual mapping | XCONN-4 |
-| 19 | cross-face internal continuity | PP-CU-24, FPP-811, SRV1 |
-| 20 | ordinary Cable-backed physical connection | fixture links |
-| 21 | off-map/provider continuation | RTR1 -> ISP/OFFMAP |
-| 22 | zero-waypoint MapCableRoute | любой выбранный cable на SavedMap |
-| 23 | multi-waypoint MapCableRoute | другой cable на SavedMap |
-| 24 | MapComposite use | representative placed objects |
-| 25 | presentation variants | минимум два варианта SavedMap |
-| 26 | deliberate member/cardinality/fan-out stress `1 -> 24` | FANOUT-1x24 |
+| 2 | Blueprint-backed PhysicalObject | PC1 |
+| 3 | маленький passive 1:1 объект | O1 |
+| 4 | dense copper passive panel | PP-CU-24 |
+| 5 | dense optical passive panel | FPP-811 / FPP-833 |
+| 6 | active access switch | SW-ACCESS |
+| 7 | active distribution switch | DIST-811 |
+| 8 | core switch | CORE-A / CORE-B |
+| 9 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
+| 10 | router | RTR1 |
+| 11 | dual-homed server | SRV1 |
+| 12 | FRONT/REAR presentation | PP-CU-24, FPP-811, SRV1 |
+| 13 | несколько Port Blocks в одном Blueprint | SW-ACCESS |
+| 14 | ConnectionPoint port kind | O1 / PP-CU-24 |
+| 15 | `NETWORK_PORT` port kind | PC1 / SW-ACCESS, если поддерживается |
+| 16 | pair-by-index continuity | PP-CU-24, FPP-811 |
+| 17 | arbitrary individual mapping | XCONN-4 |
+| 18 | cross-face internal continuity | PP-CU-24, FPP-811, SRV1 |
+| 19 | ordinary Cable-backed physical connection | fixture links |
+| 20 | off-map/provider continuation | RTR1 -> ISP/OFFMAP |
+| 21 | zero-waypoint MapCableRoute | любой выбранный cable на SavedMap |
+| 22 | multi-waypoint MapCableRoute | другой cable на SavedMap |
+| 23 | MapComposite use | representative placed objects |
+| 24 | presentation variants | минимум два варианта SavedMap |
+| 25 | deliberate member/cardinality/fan-out stress `1 -> 24` | FANOUT-1x24 |
 
-Rows 5, 6, 15–19 и 26 должны быть проверены без подмены одного mapping
+Rows 4, 5, 14–18 и 25 должны быть проверены без подмены одного mapping
 archetype другим. Особенно `FANOUT-1x24` не заменяется ordinary 1:1 model.
 
-Rows 1–25 — current-capability exercise set: они проверяют существующие или
+Rows 1–24 — current-capability exercise set: они проверяют существующие или
 bounded authoring/presentation paths и не являются заранее заявлением, что
-каждая комбинация уже успешно поддерживается. Row 26 — отдельный deliberate
+каждая комбинация уже успешно поддерживается. Row 25 — отдельный deliberate
 promotion probe; его ожидаемый результат может быть documented
 `missing domain/authoring capability`.
 
@@ -374,6 +369,39 @@ Finding categories:
 - Сейчас НЕ реализовывать; Phase C не блокируется.
 - Это concrete evidence для последующего bounded correction; finding не отмечать как IMPLEMENTED.
 - Не проектировать сейчас конкретный React component/API/schema и не расширять finding в общий UI redesign.
+
+### C-UX-02 — Manual non-Blueprint PhysicalObject authoring
+
+**Категория:** UX
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Manual PhysicalObject flow создаёт canonical object без Blueprint.
+- На Saved Map такой object попадает в generic/fallback presentation path;
+  его visual footprint заметно отличается и крупнее, чем у
+  structured Blueprint-backed `PC1`, без той же полноценной Blueprint
+  geometry/presentation semantics.
+- Наличие двух user-facing creation paths — structured Blueprint-backed и
+  упрощённого manual PhysicalObject — увеличивает вариативность UX и
+  acceptance surface без доказанной product necessity.
+
+**Agreed product direction / desired correction:**
+
+- Primary user-facing PhysicalObject creation должен быть Blueprint-backed.
+- Manual PhysicalObject creation следует убрать из normal create-object UI.
+- Уникальное equipment допустимо описывать одноразовым Blueprint.
+- Canonical PhysicalObject model остаётся независимой от Blueprint provenance;
+  existing/imported/API-created non-Blueprint objects остаются supported.
+- Backend/API capability не удалять в рамках этого finding.
+- Manual NetworkDevice path в этот finding не входит.
+
+**Scope/status:**
+
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Не превращать finding в implementation contract конкретных React
+  components/routes/API deletion и не расширять его в общий redesign Create
+  Object screen.
 
 ## Scope discipline
 
