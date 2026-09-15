@@ -499,6 +499,48 @@ Finding categories:
 - Не расширять finding на общий metadata editor или arbitrary property
   editing.
 
+### C-UX-05 — Map alignment and equal-spacing guides
+
+**Категория:** UX / SavedMap authoring
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Точное визуальное выравнивание нескольких объектов на Saved Map сейчас
+  выполняется вручную.
+- При drag нет направляющих относительно геометрии соседних visible object
+  footprints, и пользователь не получает явного указания, что границы или
+  центры объектов совпали.
+- При размещении третьего и последующих объектов нет подсказки, что расстояние
+  между объектами совпадает с уже существующим интервалом.
+- На topology map с patch panels, switches и rack equipment это быстро
+  ухудшает аккуратность схемы.
+
+**Desired future behavior:**
+
+- Во время перемещения PhysicalObject на Saved Map предоставлять transient
+  smart/alignment guides относительно других visible object footprints для
+  left edge, right edge, horizontal center, top edge, bottom edge и vertical
+  center.
+- Предоставлять equal-spacing guidance: если два существующих объекта задают
+  визуальный интервал и пользователь размещает третий объект в подходящей
+  последовательности, UI должен показывать совпадение нового gap с уже
+  существующим gap. Аналогичная семантика допустима по горизонтали.
+- Guides появляются только когда relevant во время drag и исчезают после
+  завершения interaction. Лёгкое snapping к найденному target может быть
+  рассмотрено отдельным implementation contract.
+
+**Scope/status:**
+
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Finding не требует выбора конкретного pixel snap threshold, не проектирует
+  конкретную React Flow implementation и не вводит новые canonical entities.
+- Не менять `MapViewPosition` semantics: persisted position после drop остаётся
+  обычным presentation state.
+- Это не automatic layout engine, не обязательное grid snapping и не
+  multi-selection / bulk distribute capability.
+- Canonical topology, Blueprint и Location не затрагиваются.
+
 ## Scope discipline
 
 Не реализовывать fan-out сейчас, не проектировать новый canonical Stack, не
