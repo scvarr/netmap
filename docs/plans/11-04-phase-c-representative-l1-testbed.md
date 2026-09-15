@@ -666,23 +666,48 @@ grouping/collapse/presentation, а Phase C выявил дополнительн
 
 **Observed:**
 
-- При двух одновременно существующих expanded composites объекты внутри
-  composite `811` остаются selectable.
-- Объекты внутри ранее созданного composite `COMM-3` при ordinary click больше
-  не позволяют выбрать себя.
+- При двух одновременно существующих expanded composites доступность ordinary
+  member interaction зависит от состояния и не привязана к конкретному
+  composite.
+- В одном наблюдаемом состоянии members внутри `811` выбирались ordinary
+  click, а members внутри ранее созданного `COMM-3` — нет.
+- После полного reload страницы ситуация изменилась: members внутри `COMM-3`
+  начали нормально выбираться, а members внутри `811` перестали.
+- PhysicalObject, которые вообще не состоят в MapComposite, продолжают
+  нормально выбираться независимо от этого состояния.
 - Все объекты при этом остаются визуально видимыми.
-- Таким образом, expanded composite в конкретном состоянии может блокировать
-  обычное взаимодействие со своими visible members.
+- Таким образом, при нескольких одновременно expanded MapComposite обычное
+  interaction с visible members может работать только в одном composite, а
+  после full reload конкретный composite с доступными members может измениться.
+- Есть наблюдаемое впечатление, что выбор member внутри доступного composite
+  может влиять на interaction/focus между composites, но это пока только
+  гипотеза и не установленный root cause.
 
 **Expected invariant:**
 
 - Expanded MapComposite является presentation frame/grouping aid и не должен
   маскировать ordinary hit-testing visible PhysicalObject members.
-- Видимый member object должен оставаться selectable тем же способом, что и вне
-  composite; port interaction, object click, context menu и прочие normal
-  member interactions не должны перехватываться рамкой/background composite.
+- Все visible PhysicalObject members всех одновременно expanded composites
+  должны оставаться independently selectable тем же способом, что и вне
+  composite.
+- Selection одного member не должна лишать members другого expanded composite
+  возможности ordinary click/selection; reload не должен менять availability
+  member interaction.
+- Port interaction, object click, context menu и прочие normal member
+  interactions не должны перехватываться рамкой/background composite.
 - Только явно interactive areas самого composite, например header/toggle,
   могут получать composite-specific interaction.
+
+**Minimal reproduction scenario:**
+
+1. Иметь два expanded MapComposite одновременно; каждый содержит минимум один
+   visible PhysicalObject member.
+2. Проверить ordinary click member первого composite.
+3. Проверить ordinary click member второго composite.
+4. Выполнить full page reload.
+5. Повторить оба click и сравнить availability member interaction до и после
+   reload.
+6. Проверить control object вне composites.
 
 **Scope/status:**
 
