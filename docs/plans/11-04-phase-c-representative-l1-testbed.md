@@ -569,6 +569,57 @@ Finding categories:
   multi-selection / bulk distribute capability.
 - Canonical topology, Blueprint и Location не затрагиваются.
 
+### C-UX-06 — Independent SavedMap object width and height
+
+**Категория:** UX / presentation capability
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Canvas resize Blueprint-backed object сохраняет Blueprint aspect ratio:
+  drag за resize handle масштабирует object одновременно по X и Y.
+- Inspector предоставляет только Width; runtime height выводится из intrinsic
+  Blueprint body aspect ratio.
+- Независимого per-placement X/Y sizing для конкретного Saved Map нет.
+- На acceptance layout это ограничивает композицию patch panels, switches,
+  optical panels и других объектов, которым иногда нужна независимая ширина и
+  высота.
+
+**Desired product capability:**
+
+- Для Blueprint-backed PhysicalObject placement пользователь должен иметь
+  возможность независимо задавать presentation width и height на конкретной
+  Saved Map.
+- Resize handles должны позволять изменять X и Y независимо, а Inspector —
+  предоставлять явные Width и Height.
+- Изменение через canvas и Inspector должно использовать один и тот же
+  authoritative presentation contract.
+- Aspect-ratio-locked resize может остаться доступной convenience
+  operation/modifier, но не должен быть единственным способом sizing.
+
+**Critical architecture boundary:**
+
+- Это не изменение intrinsic Object Blueprint body geometry и не свободная
+  деформация Blueprint template; речь только о Saved Map presentation instance.
+- Это не изменение canonical PhysicalObject. ConnectionPoint identity,
+  NetworkInterface identity, topology и Blueprint provenance не меняются.
+- Изменение размеров должно только трансформировать rendered body/ports,
+  internal continuity и external cable attachment geometry в пределах
+  конкретного Saved Map placement. Размер остаётся map-local presentation
+  state.
+
+**Scope/status:**
+
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Текущий contract является width-only; correction не объявляется
+  frontend-only. Будущий bounded milestone должен отдельно согласовать
+  изменение presentation contract, например необходимость второго persisted
+  presentation dimension, до начала implementation.
+- Не фиксировать сейчас имя нового DTO/database field, migration strategy,
+  exact min/max dimensions, resize handle implementation или backward
+  compatibility mechanics.
+- Historical NULL/default sizing semantics в этот finding не входят.
+
 ## Scope discipline
 
 Не реализовывать fan-out сейчас, не проектировать новый canonical Stack, не
