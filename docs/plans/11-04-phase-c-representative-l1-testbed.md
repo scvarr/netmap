@@ -98,9 +98,12 @@ Intended fixture placement:
 
 ### FLOOR-3 / COMM-ROOM
 
-- `PP-CU-24` — synthetic 24-port copper patch panel: FRONT + REAR, 24 front и
-  24 rear ConnectionPoints, pair-by-index 1:1 internal continuity и dense
-  PortBlock authoring.
+- `PP-CU-24` (acceptance instance `PP-301`) — synthetic 24-port copper patch
+  panel с одной reusable group `1 row × 24 ConnectionPoints`. Та же exact
+  Port Block version добавляется в Blueprint дважды: один instance на FRONT и
+  один на REAR; corresponding ports связываются pair-by-index internal
+  continuity. Две дублирующиеся Port Block definitions только ради faces не
+  создаются.
 - `SW-ACCESS` — access switch; отдельный Port Block для copper access ports и
   отдельный Port Block для optical/SFP uplinks, если это поддерживается
   текущим authoring contract. Protocol semantics не добавляются.
@@ -402,6 +405,40 @@ Finding categories:
 - Не превращать finding в implementation contract конкретных React
   components/routes/API deletion и не расширять его в общий redesign Create
   Object screen.
+
+### C-UX-03 — Physical face terminology clarity
+
+**Категория:** UX
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- User-facing terminology `FRONT`/`REAR` может восприниматься как направление
+  прохождения линии или как роль endpoint в topology.
+- Runtime отображает две faces как две stacked surfaces, что усиливает
+  возможность прочитать их как «верхняя/нижняя» или «вход/выход».
+- Для passive объектов вроде wall outlet / patch panel физический смысл может
+  быть `room-facing / cable-side` либо `front / rear`, но эти термины не должны
+  задавать topology direction.
+- Для других объектов буквальное `FRONT`/`REAR` может быть менее естественным;
+  текущая терминология требует отдельной UX проверки.
+
+**Desired future correction / question:**
+
+- Сохранить canonical/internal `FRONT`/`REAR` semantics как physical face,
+  если дальнейший review не выявит архитектурной причины менять модель.
+- Отдельно определить наиболее понятные user-facing labels; рассмотреть
+  варианты «Лицевая / тыльная сторона», «Сторона A / Сторона B» либо другой
+  нейтральный wording, не принимая один вариант в рамках этого finding.
+- UI должен явно исключать трактовку face как input/output или
+  upstream/downstream.
+- Не вводить topology direction semantics в Blueprint face.
+
+**Scope/status:**
+
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Это finding о terminology/UX clarity, а не предложение изменить canonical
+  topology или `FRONT`/`REAR` enum/internal architecture.
 
 ## Scope discipline
 
