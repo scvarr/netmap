@@ -54,6 +54,16 @@ Unknown real-world facts не являются canonical facts.
 выбраны для покрытия capability axes; vendor/model не выдумываются, кроме
 известной роли Cisco core switch.
 
+### Phase C Port Block naming convention
+
+Port Block — reusable library-owned layout/template primitive. В этом fixture
+его имя описывает reusable structure, а не topology role конкретного объекта:
+предпочтительны role-neutral names вроде `PB-24-CP-1R`, `PB-48-NET-2R` и
+`PB-2-NET-1R`. Если media/connector действительно известен в synthetic
+fixture, допустимо физическое описание вроде RJ45/SFP в user-facing name, но
+production facts не выдумываются. Это только Phase C authoring convention, а
+не canonical contract или enum naming scheme.
+
 ### Spatial hierarchy and intended placement
 
 Synthetic fixture использует следующую canonical Location hierarchy. Значения
@@ -81,7 +91,7 @@ SYNTH-L1-LAB [site]
 Intended fixture placement:
 
 - `CAB-301`: `PC1`, `O1`;
-- `COMM-ROOM`: `PP-CU-24`, `SW-ACCESS`;
+- `COMM-ROOM`: `PP-301-A`, `PP-301-B`, `SW-301-ACCESS`, `FPP-301`;
 - `RACK-811`: `FPP-811`, `DIST-811`; `FANOUT-1x24` может находиться здесь
   только как отдельный deliberate stress probe, не как production equipment;
 - `RACK-833`: `FPP-833`, `CORE-A`, `CORE-B`, `SRV1`, `RTR1`;
@@ -98,15 +108,21 @@ Intended fixture placement:
 
 ### FLOOR-3 / COMM-ROOM
 
-- `PP-CU-24` (acceptance instance `PP-301`) — synthetic 24-port copper patch
-  panel с одной reusable group `1 row × 24 ConnectionPoints`. Та же exact
-  Port Block version добавляется в Blueprint дважды: один instance на FRONT и
-  один на REAR; corresponding ports связываются pair-by-index internal
-  continuity. Две дублирующиеся Port Block definitions только ради faces не
-  создаются.
-- `SW-ACCESS` — access switch; отдельный Port Block для copper access ports и
-  отдельный Port Block для optical/SFP uplinks, если это поддерживается
-  текущим authoring contract. Protocol semantics не добавляются.
+- `PP-301-A` и `PP-301-B` — два synthetic 24-port copper passive patch
+  panels. Оба используют один и тот же reusable 24-port Port Block и один
+  и тот же Blueprint pattern; разные library templates без необходимости не
+  создаются. Каждая панель имеет FRONT + REAR и pair-by-index internal
+  continuity. Вместе они представляют обычную 48-drop floor distribution
+  capacity к 48 access ports switch, но Phase C не требует создавать 48 wall
+  outlets или 48 workstation objects: `O1` остаётся representative wall-drop
+  path.
+- `SW-301-ACCESS` — access switch с 48 ordinary network access ports и
+  отдельными uplink ports. Для его reusable Port Blocks используются
+  role-neutral structural names; topology role не встраивается в naming
+  convention. Protocol semantics не добавляются.
+- `FPP-301` — отдельный synthetic passive optical patch/ODF boundary для
+  uplink(s) `SW-301-ACCESS` в сторону rack 811; exact fiber count и
+  connector/media/transceiver details не утверждаются.
 
 ### FLOOR-8 / SERVER-ROOM-808 / RACK-811
 
@@ -192,10 +208,13 @@ FLOOR-3 / CAB-301
 PC1 -> O1
 
 FLOOR-3 / COMM-ROOM
-O1 -> PP-CU-24 -> SW-ACCESS
+O1 -> PP-301-A -> SW-301-ACCESS
+
+ADDITIONAL FLOOR CAPACITY
+PP-301-B -> другие access ports SW-301-ACCESS
 
 FLOOR-8 / SERVER-ROOM-808 / RACK-811
-SW-ACCESS -> optical distribution / FPP-811 -> DIST-811
+SW-301-ACCESS -> FPP-301 -> inter-floor optical link -> FPP-811 -> DIST-811
 
 RACK-833
 DIST-811 -> rack-833 optical/core side
@@ -233,21 +252,21 @@ capability axes, а не закрытый список device classes.
 | 1 | simple endpoint | PC1 |
 | 2 | Blueprint-backed PhysicalObject | PC1 |
 | 3 | маленький passive 1:1 объект | O1 |
-| 4 | dense copper passive panel | PP-CU-24 |
-| 5 | dense optical passive panel | FPP-811 / FPP-833 |
-| 6 | active access switch | SW-ACCESS |
+| 4 | dense copper passive panel | PP-301-A / PP-301-B |
+| 5 | optical passive boundary/panel | FPP-301 / FPP-811 / FPP-833 |
+| 6 | active access switch | SW-301-ACCESS |
 | 7 | active distribution switch | DIST-811 |
 | 8 | core switch | CORE-A / CORE-B |
 | 9 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
 | 10 | router | RTR1 |
 | 11 | dual-homed server | SRV1 |
-| 12 | FRONT/REAR presentation | PP-CU-24, FPP-811, SRV1 |
-| 13 | несколько Port Blocks в одном Blueprint | SW-ACCESS |
-| 14 | ConnectionPoint port kind | O1 / PP-CU-24 |
-| 15 | `NETWORK_PORT` port kind | PC1 / SW-ACCESS, если поддерживается |
-| 16 | pair-by-index continuity | PP-CU-24, FPP-811 |
+| 12 | FRONT/REAR presentation | PP-301-A, FPP-811, SRV1 |
+| 13 | несколько Port Blocks в одном Blueprint | SW-301-ACCESS |
+| 14 | ConnectionPoint port kind | O1 / PP-301-A |
+| 15 | `NETWORK_PORT` port kind | PC1 / SW-301-ACCESS, если поддерживается |
+| 16 | pair-by-index continuity | PP-301-A / PP-301-B, FPP-811 |
 | 17 | arbitrary individual mapping | XCONN-4 |
-| 18 | cross-face internal continuity | PP-CU-24, FPP-811, SRV1 |
+| 18 | cross-face internal continuity | PP-301-A, FPP-811, SRV1 |
 | 19 | ordinary Cable-backed physical connection | fixture links |
 | 20 | off-map/provider continuation | RTR1 -> ISP/OFFMAP |
 | 21 | zero-waypoint MapCableRoute | любой выбранный cable на SavedMap |
@@ -296,8 +315,9 @@ physical circuit и начинает другой. L1 acceptance проверя�
 circuits, например:
 
 ```text
-PC1 -> O1 -> PP-CU-24 -> SW-ACCESS access port
-SW-ACCESS optical uplink -> distribution-side endpoint
+PC1 -> O1 -> PP-301-A -> SW-301-ACCESS access port
+SW-301-ACCESS optical uplink -> FPP-301 -> inter-floor optical link ->
+FPP-811 -> DIST-811
 DIST-811 uplink -> core-side endpoint
 CORE -> SRV1 physical interface
 CORE -> RTR1
