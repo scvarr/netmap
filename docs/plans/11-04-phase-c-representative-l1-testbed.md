@@ -718,6 +718,49 @@ grouping/collapse/presentation, а Phase C выявил дополнительн
 - Не расширять finding в redesign MapComposite и не смешивать его с
   `C-UX-07`.
 
+### C-UX-08 — Edit existing MapComposite membership
+
+**Категория:** UX / SavedMap presentation authoring lifecycle
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Membership MapComposite задаётся при создании; после создания не обнаружено
+  очевидного user-facing действия для добавления или удаления members.
+- Даже простое добавление одного нового PhysicalObject требует delete +
+  recreate всего composite.
+- Это проявилось на реальном Phase C workflow при добавлении `RTR1` в
+  существующий composite `833`.
+- Delete + recreate не является приемлемым штатным lifecycle workflow.
+
+**Desired future capability:**
+
+- Пользователь должен иметь возможность редактировать membership существующего
+  MapComposite без его удаления и пересоздания.
+- Должно быть возможно добавить один или несколько уже размещённых на этой
+  SavedMap PhysicalObject в существующий composite и удалить один или несколько
+  PhysicalObject из membership.
+- Edit должен сохранять identity и name самого MapComposite; исключение member
+  из composite не должно удалять PhysicalObject со SavedMap.
+- Canonical PhysicalObject, Location, Blueprint, Connection, Cable и topology
+  semantics не меняются; операция остаётся presentation-only authoring.
+
+**Existing invariants and scope:**
+
+- Member должен быть уже размещён на той же SavedMap; overlap/nesting
+  restrictions существующей модели не обходятся.
+- Один edit membership не должен молча создавать противоречащую existing
+  membership структуру.
+- Membership является общей semantic/presentation grouping
+  характеристикой самого composite. Отдельные presentation states, включая
+  collapsed/expanded и variant-specific geometry, не должны теряться только
+  потому, что membership был отредактирован.
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Не проектировать dialog/panel/button, REST endpoint/DTO, PATCH vs replace,
+  multi-select UX, transactional implementation, automatic geometry
+  recalculation, точное variant-specific frame behavior после add/remove или
+  interaction с explicit Cable routes.
+
 ## Scope discipline
 
 Не реализовывать fan-out сейчас, не проектировать новый canonical Stack, не
