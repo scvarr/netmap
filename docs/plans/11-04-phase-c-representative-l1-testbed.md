@@ -761,6 +761,46 @@ grouping/collapse/presentation, а Phase C выявил дополнительн
   recalculation, точное variant-specific frame behavior после add/remove или
   interaction с explicit Cable routes.
 
+### C-UX-09 — Compact Blueprint picker for PhysicalObject creation
+
+**Категория:** UX / authoring
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Текущий Blueprint picker на экране `Инфраструктура -> Объекты -> Создать`
+  использует крупные отдельные tile/card elements.
+- Карточки содержат Blueprint name, version, object class, port count,
+  internal connection count и действие «Выбрать шаблон», но имеют низкую
+  density и занимают много пространства.
+- По мере роста Blueprint library одновременно видно мало вариантов,
+  сравнение metadata между Blueprint неудобно, а большая площадь карточки не
+  даёт пропорционально больше полезной информации.
+- При выборе отсутствует компактный visual preview того, как Blueprint
+  фактически выглядит.
+
+**Desired future direction:**
+
+- Основной Blueprint picker именно при создании PhysicalObject должен перейти
+  от large cards к более плотному list/table-oriented представлению.
+- Минимально useful row может показывать небольшую thumbnail/schematic preview,
+  Blueprint name, version, object class, endpoint/port count, internal
+  continuity/link count и явное действие выбора.
+- Thumbnail должна быть derived presentation существующего Blueprint и отражать
+  его geometry настолько, насколько это разумно для компактного row. Она нужна
+  для визуального различения шаблонов вроде switch, patch panel, server и
+  small endpoint, а не для photorealistic/device artwork.
+
+**Scope/status:**
+
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Не вводить отдельную canonical thumbnail entity, manually maintained image
+  asset, обязательные vendor icons/images или отдельный thumbnail contract.
+- Не превращать finding в общий redesign catalog/library и не фиксировать
+  exact table columns/widths, caching/rendering implementation, search/filter
+  или sort scope.
+- Canonical Blueprint и PhysicalObject semantics не меняются.
+
 ## Scope discipline
 
 Не реализовывать fan-out сейчас, не проектировать новый canonical Stack, не
