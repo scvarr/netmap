@@ -620,6 +620,79 @@ Finding categories:
   compatibility mechanics.
 - Historical NULL/default sizing semantics в этот finding не входят.
 
+### C-UX-07 — Move expanded composite as a group
+
+**Категория:** UX / SavedMap presentation
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Expanded MapComposite визуально представляет группу объектов рамкой, но
+  пользователь не может взять такой expanded composite и переместить весь блок
+  как одну группу.
+- Existing member objects приходится перемещать отдельно.
+- Для representation вроде rack / communication room это делает composite
+  существенно менее удобным как authoring primitive.
+
+Это не correctness bug: текущий B.3 contract реализует MapComposite
+grouping/collapse/presentation, а Phase C выявил дополнительную product need
+для group translation.
+
+**Desired future behavior:**
+
+- У expanded composite должен быть явный drag affordance, предпочтительно на
+  header/frame, не конфликтующий с взаимодействием с member objects.
+- Drag expanded composite должен перемещать все его member PhysicalObject
+  placements на текущей SavedMap/variant на одинаковый delta.
+- Relative layout членов внутри группы должен сохраняться, membership при этом
+  не меняется.
+- Canonical PhysicalObject, Location, topology, Cable и Blueprint semantics не
+  меняются; операция остаётся presentation-only.
+
+**Scope/status:**
+
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Не фиксировать сейчас persistence/atomicity strategy для нескольких member
+  position writes, rollback/error lifecycle, поведение explicit MapCableRoute
+  waypoints при group move, exact collision policy или конкретную React Flow
+  implementation.
+- Не моделировать composite как canonical parent/container и не смешивать
+  finding с `C-COR-01`.
+
+### C-COR-01 — Expanded composite blocks member interaction
+
+**Категория:** correctness / interaction
+**Статус:** OPEN Phase C finding
+
+**Observed:**
+
+- При двух одновременно существующих expanded composites объекты внутри
+  composite `811` остаются selectable.
+- Объекты внутри ранее созданного composite `COMM-3` при ordinary click больше
+  не позволяют выбрать себя.
+- Все объекты при этом остаются визуально видимыми.
+- Таким образом, expanded composite в конкретном состоянии может блокировать
+  обычное взаимодействие со своими visible members.
+
+**Expected invariant:**
+
+- Expanded MapComposite является presentation frame/grouping aid и не должен
+  маскировать ordinary hit-testing visible PhysicalObject members.
+- Видимый member object должен оставаться selectable тем же способом, что и вне
+  composite; port interaction, object click, context menu и прочие normal
+  member interactions не должны перехватываться рамкой/background composite.
+- Только явно interactive areas самого composite, например header/toggle,
+  могут получать composite-specific interaction.
+
+**Scope/status:**
+
+- Сейчас НЕ исправлять; Phase C object creation может продолжаться.
+- Не утверждать root cause. Z-index, pointer-events, React Flow node ordering,
+  stale state и hit area остаются возможными направлениями будущей диагностики,
+  но не являются установленным объяснением в этом finding.
+- Не расширять finding в redesign MapComposite и не смешивать его с
+  `C-UX-07`.
+
 ## Scope discipline
 
 Не реализовывать fan-out сейчас, не проектировать новый canonical Stack, не
