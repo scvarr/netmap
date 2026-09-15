@@ -297,6 +297,33 @@ Finding categories:
 - performance/readiness;
 - documentation/data uncertainty.
 
+## Phase C observed findings
+
+### C-UX-01 — Location hierarchy navigation
+
+**Категория:** UX
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Canonical Location hierarchy существует, но основной UI «Местоположения» визуально показывает её как плоский список; родительские и дочерние отношения не считываются по структуре списка.
+- Parent selector в форме создания/изменения Location также плоский и показывает hierarchy главным образом через concatenated full paths вроде `SYNTH-L1-LAB / FLOOR-1 / CAB-811`.
+- Уже на synthetic hierarchy это снижает читаемость; при 10–15 уровнях и большом количестве siblings navigation станет существенно неудобной.
+
+**Desired future correction:**
+
+- Основной Locations browser должен визуально отображать дерево с явными отступами дочерних уровней.
+- Ветви должны поддерживать collapse/expand.
+- Parent picker должен предоставлять иерархическую навигацию с визуальными уровнями и collapse/expand либо эквивалентный tree-oriented interaction.
+- Arbitrary hierarchy depth должна оставаться поддержанной.
+- Correction не должна менять canonical Location semantics и не должна превращать `Location.type` в фиксированную taxonomy.
+
+**Scope/status:**
+
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Это concrete evidence для последующего bounded correction; finding не отмечать как IMPLEMENTED.
+- Не проектировать сейчас конкретный React component/API/schema и не расширять finding в общий UI redesign.
+
 ## Scope discipline
 
 Не реализовывать fan-out сейчас, не проектировать новый canonical Stack, не
