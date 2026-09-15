@@ -54,7 +54,42 @@ Unknown real-world facts не являются canonical facts.
 выбраны для покрытия capability axes; vendor/model не выдумываются, кроме
 известной роли Cisco core switch.
 
-### Floor
+### Spatial hierarchy and intended placement
+
+Synthetic fixture использует следующую canonical Location hierarchy. Значения
+`site`, `floor`, `room` и `rack` — только открытые пользовательские `Location.type`
+для этого fixture; fixed Location taxonomy не вводится.
+
+```text
+SYNTH-L1-LAB [site]
+├── FLOOR-3 [floor]
+│   ├── CAB-301 [room]
+│   └── COMM-ROOM [room]
+└── FLOOR-8 [floor]
+    └── SERVER-ROOM-808 [room]
+        ├── RACK-811 [rack]
+        └── RACK-833 [rack]
+```
+
+`CAB-301` — обычный кабинет/room на `FLOOR-3`; `COMM-ROOM` —
+коммуникационная комната `FLOOR-3` с этажным access switch.
+`SERVER-ROOM-808` — серверная на `FLOOR-8`. `RACK-811` —
+коммуникационная стойка/шкаф внутри `SERVER-ROOM-808`; это не кабинет с
+номером 811. `RACK-833` — стойка внутри `SERVER-ROOM-808` с core side и
+`SRV1`.
+
+Intended fixture placement:
+
+- `CAB-301`: `PC1`, `O1`, `GENERIC1`;
+- `COMM-ROOM`: `PP-CU-24`, `SW-ACCESS`;
+- `RACK-811`: `FPP-811`, `DIST-811`; `FANOUT-1x24` может находиться здесь
+  только как отдельный deliberate stress probe, не как production equipment;
+- `RACK-833`: `FPP-833`, `CORE-A`, `CORE-B`, `SRV1`, `RTR1`;
+- `ISP/OFFMAP`: внешний/provider endpoint или off-map continuation, без
+  искусственно назначенной local Location;
+- `XCONN-4`: отдельная coverage branch, Location пока жёстко не фиксируется.
+
+### FLOOR-3 / CAB-301
 
 - `PC1` — workstation; simple endpoint; Blueprint-backed простой объект с
   одним обычным network endpoint.
@@ -62,6 +97,9 @@ Unknown real-world facts не являются canonical facts.
   проверки non-Blueprint/advanced path.
 - `O1` — wall/network outlet; маленький passive 1:1 объект с двумя
   ConnectionPoints и явной internal continuity.
+
+### FLOOR-3 / COMM-ROOM
+
 - `PP-CU-24` — synthetic 24-port copper patch panel: FRONT + REAR, 24 front и
   24 rear ConnectionPoints, pair-by-index 1:1 internal continuity и dense
   PortBlock authoring.
@@ -69,14 +107,17 @@ Unknown real-world facts не являются canonical facts.
   отдельный Port Block для optical/SFP uplinks, если это поддерживается
   текущим authoring contract. Protocol semantics не добавляются.
 
-### Distribution cabinet 811
+### FLOOR-8 / SERVER-ROOM-808 / RACK-811
 
 - `FPP-811` — ordinary synthetic optical patch/ODF representation, FRONT +
   REAR, dense optical 1:1 continuity; обычный optical passive case.
 - `DIST-811` — active aggregation/distribution switch; copper/management и
   optical uplink groups только если это удобно существующим capabilities.
 
-### Rack 833
+`FANOUT-1x24`, если включён в fixture, остаётся отдельным deliberate stress
+probe и не объявляется production equipment.
+
+### FLOOR-8 / SERVER-ROOM-808 / RACK-833
 
 - `FPP-833` — ещё один ordinary synthetic optical 1:1 patch/ODF boundary.
 - `CORE-A`, `CORE-B` — два отдельных PhysicalObject, Cisco core switches,
@@ -88,6 +129,9 @@ Unknown real-world facts не являются canonical facts.
   выводит bonding/LACP/teaming.
 - `RTR1` — synthetic edge router: LAN side к core, WAN side к external/provider
   handoff; текущий fixture проверяет только physical L1 foundation.
+
+### External/off-map continuation
+
 - `ISP/OFFMAP` — внешний/provider endpoint или off-map continuation.
 
 ### Дополнительный passive mapping archetype
@@ -143,18 +187,22 @@ production:
 ```text
 MAIN SYNTHETIC L1 FIXTURE
 
-PC1 -> O1 -> PP-CU-24 -> SW-ACCESS
-SW-ACCESS -> FPP-811 -> DIST-811
-DIST-811 -> synthetic optical distribution in rack 833
+FLOOR-3 / CAB-301
+PC1 -> O1
 
-RACK 833 CORE SIDE
+FLOOR-3 / COMM-ROOM
+O1 -> PP-CU-24 -> SW-ACCESS
 
-synthetic optical distribution -> CORE-A
-synthetic optical distribution -> CORE-B
-CORE-A <-> StackWise relationship <-> CORE-B
+FLOOR-8 / SERVER-ROOM-808 / RACK-811
+SW-ACCESS -> optical distribution / FPP-811 -> DIST-811
+
+RACK-833
+DIST-811 -> rack-833 optical/core side
+CORE-A / CORE-B
 SRV1-NIC1 -> CORE-A
 SRV1-NIC2 -> CORE-B
 CORE-A -> RTR1 -> ISP/OFFMAP
+CORE-A <-> StackWise relationship <-> CORE-B
 
 SEPARATE COVERAGE BRANCHES (not required inline in the main path)
 
@@ -172,8 +220,9 @@ XCONN-4: A1 <-> B2, A2 <-> B1
 inline production path.
 
 `XCONN-4` может быть отдельной небольшой веткой рядом с floor/distribution и не
-обязан входить в основной forwarding narrative. `GENERIC1` может быть просто
-размещён на карте и соединён одним обычным physical link.
+обязан входить в основной forwarding narrative; его Location не фиксируется.
+`GENERIC1` размещается в `FLOOR-3 / CAB-301` и может быть соединён одним
+обычным physical link.
 
 ## Coverage matrix
 
@@ -223,8 +272,10 @@ promotion probe; его ожидаемый результат может быт�
 Phase C проверяет не только canonical objects, но и presentation:
 
 - одна SavedMap с representative topology;
-- Locations по возможности: building/site -> floor/server room -> cabinet/rack;
-- Regions для floor, cabinet 811 и rack 833;
+- Locations по возможности: `SYNTH-L1-LAB` -> `FLOOR-3` / `FLOOR-8` ->
+  `CAB-301` / `COMM-ROOM` / `SERVER-ROOM-808` -> `RACK-811` / `RACK-833`;
+- Regions для relevant floor, room и rack presentation, включая
+  `COMM-ROOM`, `SERVER-ROOM-808`, `RACK-811` и `RACK-833`;
 - хотя бы один zero-waypoint cable route;
 - хотя бы один cable route с несколькими waypoints;
 - хотя бы один MapComposite;
