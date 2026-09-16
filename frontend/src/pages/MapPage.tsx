@@ -1,6 +1,6 @@
 import { ReactFlowProvider, type XYPosition } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   MapInsertionPicker,
   mapCandidateChoices,
@@ -243,6 +243,8 @@ export function MapPage({
   const addIntent = mapId ? params.get("add") : null;
   const viewMode = view(params.get("view"));
   const [maps, setMaps] = useState<SavedMapSummary[] | null>(null);
+  const [catalogInventory, setCatalogInventory] =
+    useState<CatalogInventoryDocument | null>(null);
   const [map, setMap] = useState<SavedMap | null>(null);
   const [sceneDocument, setSceneDocument] = useState<LoadedSceneDocument | null>(
     null,
@@ -348,6 +350,16 @@ export function MapPage({
     void locationDataSource.loadLocations().then((items) => { if (active) setLocations(items); }).catch(() => { if (active) setLocations([]); });
     return () => { active = false; };
   }, [locationDataSource]);
+  useEffect(() => {
+    let active = true;
+    setCatalogInventory(null);
+    if (!catalogInventoryDataSource || !maps?.length) return () => { active = false; };
+    void catalogInventoryDataSource.loadCatalogInventory().then(
+      (inventory) => { if (active) setCatalogInventory(inventory); },
+      () => { /* Do not infer an empty inventory from a failed request. */ },
+    );
+    return () => { active = false; };
+  }, [catalogInventoryDataSource, maps?.length]);
   const locationChoices = useMemo(() => locations.map((location) => ({
     id: location.location_ref.entity_id,
     path: locationPath([...locations], location.location_ref.entity_id) ?? location.name,
@@ -2552,6 +2564,13 @@ export function MapPage({
         <section className="map-page__empty-state">
           <h2>{t("map.empty.title")}</h2>
           <button type="button" className="primary-action" onClick={() => setCreating(true)}>{t("map.create")}</button>
+        </section>
+      )}
+      {!legacy && maps?.length && catalogInventory?.equipment.length === 0 && (
+        <section className="map-page__first-run-assistance">
+          <h2>{t("map.firstRun.title")}</h2>
+          <p>{t("map.firstRun.body")}</p>
+          <Link className="primary-action" to="/infrastructure/objects/new">{t("map.firstRun.cta")}</Link>
         </section>
       )}
       {(legacy || activeMap) && (
