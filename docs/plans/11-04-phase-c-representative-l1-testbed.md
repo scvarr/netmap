@@ -856,6 +856,87 @@ grouping/collapse/presentation, а Phase C выявил дополнительн
   syntax members, compatibility strategy или конкретный implementation
   milestone.
 
+### C-UX-10 — Guided cable routing / cable channels and automatic comb layout
+
+**Категория:** UX / SavedMap cable presentation
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Каждый Cable сейчас маршрутизируется отдельно через `MapCableRoute`.
+- Для десятков соседних ports ручная маршрутизация каждого Cable не
+  масштабируется.
+- Patch-panel -> switch и похожие dense connections требуют общего visual
+  routing discipline.
+- Для читаемой схемы пользователю нужен аккуратный «гребёнчатый» маршрут:
+  короткие individual leads от ports, затем общий routing corridor и после
+  него individual leads к destination ports.
+
+**Desired conceptual direction:**
+
+1. **Presentation-only routing guide / cable channel.**
+
+   SavedMap должен в будущем допускать presentation-only geometry для
+   routing corridor / cable channel. Рабочее название пока OPEN: возможны
+   `Cable Guide`, `Routing Corridor`, `Cable Channel` или другой нейтральный
+   термин.
+
+   Такой guide не является PhysicalObject, Cable endpoint,
+   Connection/ConnectionMember или canonical topology fact; он не участвует в
+   L1 trace evidence как физическая сущность и существует только как
+   SavedMap presentation/authoring primitive.
+
+2. **Cable route association.**
+
+   Individual canonical Cable остаются отдельными. Конкретный Cable может
+   быть назначен на routing guide для presentation, после чего его map route
+   следует через guide. Exact persistence contract остаётся OPEN: это может
+   быть derived route constraint, explicit reference либо иной SavedMap
+   presentation state.
+
+3. **Entry / exit routing rules.**
+
+   Guide или локальная routing policy должна обеспечивать predictable geometry
+   около equipment. Для horizontal row ports желательна последовательность:
+   Cable выходит из endpoint вертикально вниз, проходит configurable/default
+   offset за границу object footprint, затем поворачивает на 90° в corridor;
+   на destination side он аналогично выходит из corridor и подходит к
+   endpoint. Допустимы left/right channel, channel с обеих сторон,
+   horizontal/vertical orientation и 90-degree ingress/egress rule. Exact
+   angle model, offsets и UI controls сейчас не фиксируются.
+
+4. **Automatic comb / bundle presentation.**
+
+   Если несколько Cable от соседних ports используют один routing corridor,
+   UI может автоматически формировать «гребёнку» с individual leads и общим
+   corridor. Общий визуальный segment может агрегировать параллельные линии,
+   но при нескольких объединённых линиях должен явно показывать их количество.
+   Trace одного Cable обязан выделять только evidence этого Cable; общий
+   visual segment не должен превращать остальные Cable в его trace evidence.
+
+5. **Relationship to grouping.**
+
+   Routing guide можно будет удобно размещать рядом с presentation group или
+   связывать с `MapComposite` как presentation convenience. Это не вводит
+   canonical Rack/Cabinet dependency и не делает MapComposite topology
+   containment.
+
+**Critical boundaries / scope:**
+
+- Canonical Cable endpoints, Cable identity и trace evidence не меняются;
+  guide не становится pseudo-PhysicalObject, а corridor не становится
+  Connection endpoint.
+- Location semantics не затрагиваются; красивая SavedMap geometry не является
+  доказательством exact physical cable path в реальном мире и не требует
+  rack-aware canonical model.
+- Сейчас НЕ проектировать DB schema, API/DTO, React components, exact
+  snapping algorithm, automatic lane allocation, collision avoidance, bundle
+  persistence model, exact offset/angle settings или editing UI.
+- Finding является concrete Phase C evidence, уточняющим существующее OPEN
+  направление 11-03 про Cable bundles / общий presentation route и
+  автоматическую «гребёнку», а не новым параллельным roadmap направлением.
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+
 ## Scope discipline
 
 Не реализовывать fan-out сейчас, не проектировать новый canonical Stack, не
