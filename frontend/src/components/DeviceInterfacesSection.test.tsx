@@ -113,7 +113,7 @@ describe('DeviceInterfacesSection', () => {
     expect(within(technical).getByText('interface-source-ref')).toBeInTheDocument();
     expect(within(technical).getByText('ipv4-ref')).toBeInTheDocument();
     expect(within(technical).getByText('physical-binding-ref')).toBeInTheDocument();
-    expect(within(technical).getByText('realization_up_count').parentElement).toHaveTextContent('2');
+    expect(within(technical).getByText('Число вышестоящих связей').parentElement).toHaveTextContent('2');
   });
 
   it('does not request details without exactly one PhysicalObject source ref', () => {

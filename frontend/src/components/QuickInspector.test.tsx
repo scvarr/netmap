@@ -15,6 +15,16 @@ const document = (layer: 'L1' | 'L2', item = node()): TopologyProjectionDocument
 });
 
 describe('QuickInspector selection detail', () => {
+  it('uses Russian labels for internal technical details', async () => {
+    render(<BrowserRouter><QuickInspector document={document('L1')} selection={{ type: 'node', item: node() }} onClose={vi.fn()} onSelectNode={vi.fn()} /></BrowserRouter>);
+    await userEvent.click(screen.getByText('Технические сведения'));
+    expect(screen.getByText('Объект')).toBeInTheDocument();
+    expect(screen.getByText('Идентификатор элемента схемы')).toBeInTheDocument();
+    expect(screen.getByText('Тип')).toBeInTheDocument();
+    expect(screen.queryByText('PhysicalObject')).not.toBeInTheDocument();
+    expect(screen.queryByText('Projection ID')).not.toBeInTheDocument();
+  });
+
   it('does not expose ordinary destructive actions', () => {
     render(<BrowserRouter><QuickInspector document={document('L1')} selection={{ type: 'node', item: node() }} onClose={vi.fn()} onSelectNode={vi.fn()} /></BrowserRouter>);
     expect(screen.queryByRole('button', { name: 'Удалить объект из NetMap' })).not.toBeInTheDocument();

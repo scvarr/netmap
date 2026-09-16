@@ -190,16 +190,16 @@ export function QuickInspector(props: QuickInspectorProps) {
           <>
             {id && (
               <div>
-                <dt>PhysicalObject</dt>
+                <dt>{t("inspector.technicalObject")}</dt>
                 <dd>{id}</dd>
               </div>
             )}
             <div>
-              <dt>Projection ID</dt>
+              <dt>{t("inspector.technicalViewId")}</dt>
               <dd>{node.id}</dd>
             </div>
             <div>
-              <dt>Kind</dt>
+              <dt>{t("inspector.technicalType")}</dt>
               <dd>{node.kind}</dd>
             </div>
           </>
@@ -291,27 +291,27 @@ export function QuickInspector(props: QuickInspectorProps) {
           <summary>{t("inspector.technical")}</summary>
           <dl>
             <div>
-              <dt>Continuation</dt>
+              <dt>{t("inspector.technicalContinuation")}</dt>
               <dd>{c.id}</dd>
             </div>
             <div>
-              <dt>Local PhysicalObject</dt>
+              <dt>{t("inspector.technicalLocalObject")}</dt>
               <dd>{c.local_physical_object_ref.entity_id}</dd>
             </div>
             <div>
-              <dt>Local ConnectionPoint</dt>
+              <dt>{t("inspector.technicalLocalPoint")}</dt>
               <dd>{c.local_connection_point_ref.entity_id}</dd>
             </div>
             <div>
-              <dt>Cable</dt>
+              <dt>{t("inspector.technicalCable")}</dt>
               <dd>{c.cable_ref.entity_id}</dd>
             </div>
             <div>
-              <dt>Remote PhysicalObject</dt>
+              <dt>{t("inspector.technicalRemoteObject")}</dt>
               <dd>{c.remote_physical_object_ref.entity_id}</dd>
             </div>
             <div>
-              <dt>Remote ConnectionPoint</dt>
+              <dt>{t("inspector.technicalRemotePoint")}</dt>
               <dd>{c.remote_connection_point_ref.entity_id}</dd>
             </div>
           </dl>
@@ -502,18 +502,18 @@ export function QuickInspector(props: QuickInspectorProps) {
         <summary>{t("inspector.technical")}</summary>
         <dl>
           <div>
-            <dt>Projection ID</dt>
+            <dt>{t("inspector.technicalViewId")}</dt>
             <dd>{edge.id}</dd>
           </div>
           <div>
-            <dt>Kind</dt>
+            <dt>{t("inspector.technicalType")}</dt>
             <dd>{edge.kind}</dd>
           </div>
           {edge.source_refs.map((ref) => (
             <div key={`${ref.entity_type}/${ref.entity_id}`}>
-              <dt>Source ref</dt>
+              <dt>{t("inspector.technicalSource")}</dt>
               <dd>
-                {ref.entity_type}: {ref.entity_id}
+                {ref.entity_id}
               </dd>
             </div>
           ))}

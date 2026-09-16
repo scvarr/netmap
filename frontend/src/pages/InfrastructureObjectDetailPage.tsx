@@ -108,7 +108,7 @@ export function InfrastructureObjectDetailPage({
   const node = useMemo(() => ({
     id: `catalog-physical-object-${physicalObjectId}`,
     kind: 'PHYSICAL_OBJECT',
-    label: details?.physical_object.label ?? `PhysicalObject ${physicalObjectId}`,
+    label: details?.physical_object.label ?? `Объект ${physicalObjectId}`,
     source_refs: [{
       ref_type: 'CANONICAL_FACT',
       entity_type: 'PhysicalObject',
@@ -228,7 +228,7 @@ export function InfrastructureObjectDetailPage({
           key={physicalObjectId}
           node={node}
           dataSource={physicalObjectDetailsDataSource ?? {
-            loadPhysicalObjectDetails: () => Promise.reject(new Error('Источник PhysicalObject Details не настроен.')),
+            loadPhysicalObjectDetails: () => Promise.reject(new Error('Не удалось загрузить сведения об объекте.')),
           }}
           topologyNodes={projection?.nodes ?? []}
           deviceDetailsDataSource={deviceDetailsDataSource}

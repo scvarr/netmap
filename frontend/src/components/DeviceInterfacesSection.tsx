@@ -16,7 +16,6 @@ import {
   ConnectPhysicalInterface,
   type PhysicalLinkTargetDevice,
 } from './ConnectPhysicalInterface';
-
 interface DeviceInterfacesSectionProps {
   node: TopologyProjectionNode;
   dataSource: DeviceDetailsDataSource;
@@ -47,9 +46,9 @@ const SourceRefs = ({ refs }: { refs: ProjectionSourceRef[] }) => (
   <ul className="source-refs">
     {refs.map((ref) => (
       <li key={`${ref.ref_type}-${ref.entity_type}-${ref.entity_id}`}>
-        <span>{ref.entity_type}</span>
+        <span>Источник данных</span>
         <code>{ref.entity_id}</code>
-        <small>{ref.ref_type}</small>
+
       </li>
     ))}
   </ul>
@@ -59,11 +58,11 @@ const InterfaceTechnicalDetails = ({ item }: { item: DeviceInterfaceDetails }) =
   <details className="interface-technical-details">
     <summary>Технические данные</summary>
     <dl className="attribute-list">
-      <div><dt>interface_ref</dt><dd>{item.interface_ref.entity_id}</dd></div>
-      <div><dt>realization_down_count</dt><dd>{item.realization_down_count}</dd></div>
-      <div><dt>realization_up_count</dt><dd>{item.realization_up_count}</dd></div>
+      <div><dt>Идентификатор интерфейса</dt><dd>{item.interface_ref.entity_id}</dd></div>
+      <div><dt>Число нижестоящих связей</dt><dd>{item.realization_down_count}</dd></div>
+      <div><dt>Число вышестоящих связей</dt><dd>{item.realization_up_count}</dd></div>
     </dl>
-    <h4>Interface ref и source refs</h4>
+    <h4>Интерфейс и источники данных</h4>
     <SourceRefs refs={[item.interface_ref, ...item.source_refs]} />
     {item.addresses.map((address) => (
       <section key={`${address.address}/${address.prefix_length}`}>
@@ -73,7 +72,7 @@ const InterfaceTechnicalDetails = ({ item }: { item: DeviceInterfaceDetails }) =
     ))}
     {item.direct_physical_bindings.map((binding) => (
       <section key={`${binding.connection_point_ref.entity_id}-${binding.member_index}`}>
-        <h4>ConnectionPoint {binding.connection_point_ref.entity_id} · member {binding.member_index}</h4>
+        <h4>Точка подключения {binding.connection_point_ref.entity_id} · элемент {binding.member_index}</h4>
         <SourceRefs refs={[binding.connection_point_ref, ...binding.source_refs]} />
       </section>
     ))}
@@ -169,7 +168,7 @@ export function DeviceInterfacesSection({
   const [state, setState] = useState<DetailsState>(() => (
     physicalObjectId
       ? { kind: 'loading' }
-      : { kind: 'unavailable', message: 'Детали интерфейсов недоступны: нет однозначной ссылки на PhysicalObject.' }
+      : { kind: 'unavailable', message: 'Не удалось однозначно определить сетевой объект для показа интерфейсов.' }
   ));
   const targetDevices = topologyNodes.flatMap((candidate) => {
     const candidateId = physicalObjectIdentity(candidate);
