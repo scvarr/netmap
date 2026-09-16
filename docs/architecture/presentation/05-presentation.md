@@ -1335,6 +1335,14 @@ endpoints UI ничего не выдумывает.
 
 ### Regions / areas
 
+**Target contract update:** manual SavedMap Regions/MapRegions are not a target
+product capability. Their role is replaced by dynamically derived Location
+frames as defined in
+[[architecture/presentation/09-spatial-location-mapreference-contract|the spatial contract]].
+The implementation described below is factual current-state/history only;
+Region code and records still exist pending separate removal milestones. This
+section does not make Region authoring a future acceptance requirement.
+
 **FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
 and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c/d
@@ -1355,8 +1363,9 @@ geometry only and is never persisted: the immediate parent is the strictly conta
 Region with the smallest absolute polygon area. `z_order`, label, and UUID do not affect it.
 Geometry and this derived hierarchy never create membership, containment, `Location`,
 connectivity, topology, or any other canonical fact; objects do not move with Regions.
-In a future bounded capability a Region may optionally be associated with a
-canonical `Location` for presentation assistance. That association remains
+The former optional Region association with a canonical `Location` was a
+presentation-assistance behavior of the current implementation and is superseded
+as a target capability by derived Location frames. Its association remains
 presentation-only: canonical members are objects whose Location equals that Location
 or is its descendant, not objects inside the polygon. Moving an object on the map or
 outside the polygon never changes or clears its Location without an explicit domain

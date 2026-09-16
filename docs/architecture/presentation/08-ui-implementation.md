@@ -1056,8 +1056,10 @@ performs one fit view. Collapse and composite drag do not fit the view.
 ### Будущие операции над выделением
 
 Возможные, но не реализованные автоматически операции: перемещение выбранных
-объектов; создание Region; создание SavedMap из выбранных объектов; назначение
-Location; операции с composite/MapReference; другие массовые операции.
+объектов; создание SavedMap из выбранных объектов; назначение Location;
+операции с composite/MapReference; другие массовые операции. Derived Location
+frames вычисляются из canonical Location и текущего presentation state, а не
+создаются командой над выделением.
 
 Визуально расположенная рядом группа оборудования не является основанием
 автоматически создавать канонический `PhysicalObject`, например стойку.
@@ -1071,6 +1073,13 @@ Location; операции с composite/MapReference; другие массов�
 `MapCableRoute`.
 
 ## MAPS.3 — Saved Map Regions
+
+**Target contract update:** manual Region/MapRegion authoring is not a target
+product capability. Derived Location frames replace its product role under
+[[architecture/presentation/09-spatial-location-mapreference-contract|the spatial contract]].
+The implementation details below document the current code and its history;
+Region code remains until a separate removal milestone. This section does not
+define future Region acceptance requirements.
 
 **L1S.7a model/persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,

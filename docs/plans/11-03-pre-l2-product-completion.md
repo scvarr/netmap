@@ -122,8 +122,10 @@ OPEN presentation direction: canonical Cable отдельны, общий мар
 
 Обязательный gate, не feature milestone. Representative dataset наращивается
 постепенно (rack -> room/server room -> floor -> building/site при необходимости)
-с реальными equipment, ports, Locations, wiring, Cable, SavedMaps, Regions,
-routes, internal continuity и L1 trace. Task-based workflow: найти, создать,
+с реальными equipment, ports, Locations, wiring, Cable, SavedMaps,
+derived Location frames, routes, internal continuity и L1 trace. Derived frames
+отражают canonical Location subtree на карте; их implementation остаётся pending.
+Task-based workflow: найти, создать,
 разместить, назначить Location, соединить, исправить presentation, выполнить
 trace и понять результат без знания internal entities.
 

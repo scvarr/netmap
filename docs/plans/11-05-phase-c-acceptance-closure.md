@@ -19,9 +19,9 @@ bounded milestone.
 - `Blueprint` и `Port Block` — библиотечные сущности для создания
   `PhysicalObject` и задания их структуры; они не являются канонической
   топологией.
-- `SavedMap`, `MapComposite`, `MapCableRoute`, области, подписи и будущие
-  кабельные направляющие — состояние представления. Оно не является
-  источником канонической истины и не доказывает физические факты.
+- `SavedMap`, `MapComposite`, `MapCableRoute`, derived Location frames,
+  подписи и будущие кабельные направляющие — состояние представления. Оно не
+  является источником канонической истины и не доказывает физические факты.
 - Идентичность `PhysicalObject`, endpoint, `Connection`, `ConnectionMember`,
   `Cable` и `Blueprint` не зависит от подписей, координат, порядка или
   представления. Существующие неизменяемые версии остаются неизменяемыми.
@@ -431,7 +431,7 @@ cardinality/member count входного endpoint и связь канала N 
    способом.
 10. К концу прохода через интерфейс заново создаётся полный проверочный стенд
     со всеми `Locations`, `Port Blocks`, `Blueprint`, `PhysicalObject`,
-    `Cable`, `SavedMap`, `MapComposite`, маршрутами, областями и другими
+    `Cable`, `SavedMap`, `MapComposite`, маршрутами, derived Location frames и другими
     данными сценария, включая `FANOUT-1x24` с одним многоканальным входным
     `Cable`/`Connection` и несколькими `ConnectionMember`.
 11. На построенном стенде выполняются все относящиеся к нему проверки этого

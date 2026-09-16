@@ -20,7 +20,7 @@ archetype, который уже поддерживается или намер�
 
 Стенд проверяет truthful L1 modeling, Blueprint/PortBlock authoring,
 PhysicalObject/ConnectionPoint/Cable workflows, Locations и racks, SavedMap
-presentation, Regions/routes, L1 trace и понятность UI без знания внутренних
+presentation, derived Location frames/routes, L1 trace и понятность UI без знания внутренних
 entity IDs. Если схема или capability не может быть выражена честно, это Phase C
 finding, а не повод подменять факт фиктивной topology.
 
@@ -350,15 +350,20 @@ Phase C проверяет не только canonical objects, но и presenta
 - одна SavedMap с representative topology;
 - Locations по возможности: `SYNTH-L1-LAB` -> `FLOOR-3` / `FLOOR-8` ->
   `CAB-301` / `COMM-ROOM` / `SERVER-ROOM-808` -> `RACK-811` / `RACK-833`;
-- Regions для relevant floor, room и rack presentation, включая
-  `COMM-ROOM`, `SERVER-ROOM-808`, `RACK-811` и `RACK-833`;
+- derived Location frames для relevant floor, room и rack, включая
+  `COMM-ROOM`, `SERVER-ROOM-808`, `RACK-811` и `RACK-833`; проверить рекурсивное
+  включение canonical descendants и реакцию на перемещение, добавление и
+  удаление размещений. Проверить internal Cable inclusion, исключение
+  cross-location Cable из frame дочернего Location и его inclusion во frame
+  общего parent Location. Эти проверки относятся к согласованному target
+  contract; implementation pending;
 - хотя бы один zero-waypoint cable route;
 - хотя бы один cable route с несколькими waypoints;
 - хотя бы один MapComposite;
 - хотя бы два presentation variants с различным placement/collapse/route state,
   но без изменения canonical topology.
 
-SavedMap placement, routes, Regions, collapse state и variants не используются
+SavedMap placement, routes, collapse state и variants не используются
 как canonical truth.
 
 ## Critical L1 semantic boundary
@@ -406,7 +411,8 @@ Acceptance выполняется вокруг coverage matrix:
 3. Проверить endpoints и internal continuity.
 4. Создать physical connections и Cables.
 5. Разместить объекты и связи на SavedMap.
-6. Проверить relevant presentation: FRONT/REAR, Regions, routes, composite и
+6. Проверить relevant presentation: FRONT/REAR, derived Location frames,
+   routes, composite и
    variants.
 7. Выполнить L1 trace там, где он семантически применим — по отдельным
    circuits, не через active-switch forwarding.

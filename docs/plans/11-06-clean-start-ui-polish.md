@@ -35,8 +35,7 @@ Logical/Physical, состояние уже существующей пусто�
 
 ### P-UX-02 — лишнее сообщение на пустой созданной карте
 
-**Статус: IMPLEMENTED.** Ручная перепроверка ожидает пользователя после
-merge.
+**Статус: IMPLEMENTED.** Ручная перепроверка — **ПРОЙДЕНА**.
 
 **Замечание.** После создания `SavedMap` без объектов canvas уже
 самодостаточно показывает пустое рабочее пространство; отдельное сообщение
@@ -44,3 +43,18 @@ merge.
 
 **Согласованный контракт.** Сообщение полностью убрать без замены; остальной
 интерфейс и поведение пустой созданной карты не менять.
+
+### P-UX-03 — связь spatial workflow с canonical Locations
+
+**Статус: CONTRACT AGREED / IMPLEMENTATION PENDING.**
+
+**Замечание.** После создания первой карты spatial workflow недостаточно
+связан с canonical Locations.
+
+**Согласованное product/architecture решение.** Отказаться от manual Regions
+как целевой capability и отображать canonical Location hierarchy на карте
+через derived dynamic Location frames. Membership и направление зависимости
+определяются spatial contract:
+[[architecture/presentation/09-spatial-location-mapreference-contract|derived Location frames]].
+Canonical Location остаётся source of truth; текущая Region реализация ещё
+существует до отдельного removal milestone.

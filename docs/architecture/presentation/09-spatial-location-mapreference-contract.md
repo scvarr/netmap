@@ -1,160 +1,118 @@
-# Spatial presentation contract: Location, Region, SavedMap, MapComposite и MapReference
+# Spatial presentation contract: Location, derived frames, SavedMap, MapComposite и MapReference
 
 ## Статус
 
-Действующий архитектурный contract для пространственной семантики NetMap.
-Документ фиксирует границы понятий; конкретные DB columns, API endpoints,
-DTO и algorithm details здесь намеренно не определяются.
+Действующий целевой архитектурный contract для пространственной семантики NetMap.
+Derived Location frames — **CONTRACT AGREED / IMPLEMENTATION PENDING**. Текущая
+реализация manual SavedMap Region / MapRegion пока существует; её удаление из
+кода, API и БД относится к отдельным implementation milestones. Этот contract
+не описывает миграцию и не объявляет удаление выполненным.
 
-Location.1 implemented the minimal canonical foundation: stable Location
-identity, arbitrary-depth explicit parent hierarchy, arbitrary user-defined
-optional type and explicit optional `PhysicalObject -> Location` assignment.
-Location.2 implements the Location management tree and PhysicalObject assignment
-UX over that API, with authoritative reload after each acknowledged write. It
-does not implement MapReference or any fixed Location taxonomy.
+## Location
 
-Location.3 implements the optional `MapRegion -> Location` presentation
-association and bounded current-map focus assistance. The Region reference is
-not containment: polygon geometry, Region movement and object placement never
-derive or mutate canonical Location. SavedMap reads carry only live derived
-canonical Location context beside each placed object, not MapPlacement-owned
-Location state. A Region association uses `SET NULL` semantics on Location
-deletion, while canonical PhysicalObject assignments retain their Location.1
-deletion blocker semantics. MapReference remains a separate OPEN family.
+`Location` — canonical физическое место, независимое от SavedMap и canvas.
+Location образуют иерархию произвольной глубины с явными parent relations.
+`Location.type` остаётся optional arbitrary user-defined string: нет fixed
+taxonomy и backend interpretation типов вроде site, floor, room или rack.
+`PhysicalObject -> Location` — явное canonical назначение. Canonical Location
+и эти назначения являются source of truth; выводить их из карты запрещено.
 
-## Четыре разных понятия
+## Derived Location frame
 
-### Location
+Derived Location frame — вычисляемое для конкретной SavedMap представление
+canonical Location subtree. Это не canonical entity, не SavedMap-owned
+persisted entity и не replacement record для MapRegion. У frame нет собственной
+сохраняемой polygon geometry; его нельзя создавать или редактировать вручную.
 
-`Location` — отдельное canonical понятие физического местоположения. Оно
-отвечает на вопрос: «где физически находится объект?». Location существует
-независимо от SavedMap и canvas/presentation coordinates.
+Membership определяется только canonical Location facts. Для Location L в
+frame входят размещённые на текущей SavedMap PhysicalObject, назначенные
+непосредственно L или любому canonical descendant L на любой глубине. Поэтому
+объект в RACK-811 участвует во frames RACK-811, SERVER-ROOM-808, FLOOR-8 и
+SYNTH-L1-LAB. PhysicalObject без Location не входит ни в один frame. Если в
+subtree нет relevant размещённых объектов этой SavedMap, frame не показывается.
 
-Location образуют произвольную физическую иерархию любой глубины, ltree-like
-по смыслу. Конкретная технология хранения (например, `ltree`, adjacency list
-или другая) пока не фиксируется. `Location.type` — optional arbitrary
-user-defined string. Никакого enum, fixed taxonomy или backend-interpreted
-classification нет: «город», «этаж», «стойка», `Room`, `Rack` и `RackUnit` —
-лишь пользовательские строковые значения, а не фундаментальные backend-типы.
+Geometry вычисляется из текущей отображаемой геометрии соответствующих
+MapPlacements с presentation padding. Значение padding и visual styling этим
+contract не фиксируются. Presentation geometry меняется при перемещении,
+добавлении или удалении объекта на карте, изменении отображаемого размера
+объекта и изменении relevant cable route; frame динамически пересчитывается,
+не меняя canonical Location. Изменение canonical assignment отражается во
+frames после authoritative refresh.
 
-`PhysicalObject` имеет явную optional canonical association с Location. Эта
-association и сама иерархия Location являются canonical facts;
-они не выводятся из карты. Положение объекта на SavedMap никогда не создаёт и
-не изменяет Location. Region geometry также никогда не создаёт и не изменяет
-Location.
+Cable учитывается относительно конкретного Location subtree. Если оба
+физических endpoint принадлежат объектам внутри subtree L, Cable internal
+относительно L и участвует в frame geometry. Если только один endpoint внутри,
+Cable boundary/external и frame L не расширяет. Поэтому Cable между ROOM-A и
+ROOM-B не расширяет frame каждой комнаты, но может участвовать в frame общего
+FLOOR. Используется отображаемая геометрия текущей SavedMap: сохранённый
+MapCableRoute, если он есть, иначе обычная отображаемая геометрия Cable. Если
+endpoint или его Location нельзя определить точно, такой Cable не используется
+для расширения frame.
 
-### Region
+## SavedMap
 
-`Region` — только SavedMap-owned presentation geometry для одной Physical/L1
-карты: polygon, label, style и label position. Hierarchy Regions derives only
-from geometry; она не является canonical physical hierarchy.
+`SavedMap` — сохранённая presentation scope canonical topology. Она содержит
+размещения canonical topology objects и presentation state, включая
+MapPlacement, MapPresentationVariant, MapCableRoute, MapComposite и text
+annotations. Одна topology может отображаться в разных SavedMaps.
+MapPresentationVariant может иметь независимую placement/presentation geometry,
+но не дублирует topology или Location membership. Размещение на карте не
+меняет canonical topology, Location или PhysicalObject -> Location. Location
+frame вычисляется динамически для конкретной SavedMap и текущего variant; frame
+не становится persisted entity.
 
-Region не имеет canonical containment/member semantics: объект внутри polygon
-не становится member Location или Region. Движение Region не двигает canonical
-objects и не меняет их Location. Region имеет optional explicit association с
-Location для presentation assistance, но это не превращает
-polygon в источник canonical truth. It may optionally reference one canonical
-Location solely to focus current-map objects at that Location or explicit
-canonical descendants; unrelated objects may be dimmed, never hidden.
+## MapComposite
 
-Фактически реализованный Region family включает persistence/API, rendering,
-isolated mode, draft creation, geometry editor, assisted geometry, laminar
-hierarchy, existing Region edit, properties/style/label drag/delete,
-произвольные текстовые annotations и consolidated presentation authoring panel.
-Это не означает, что глобальный UI polish завершён: cross-app visual
-unification остаётся отдельной будущей задачей.
-
-### SavedMap
-
-`SavedMap` — одна полная сохранённая presentation scope. Она содержит размещения
-canonical topology objects и реализованные presentation records текущего
-contract, включая Regions и text annotations. SavedMap не является canonical
-physical hierarchy и не является topology container.
-
-Варианты presentation одной и той же SavedMap могут иметь независимую geometry,
-но не дублируют topology или membership. B.3 не использует одну SavedMap как
-вложенную стойку, комнату или контейнер другой карты.
-
-Membership объекта в SavedMap — это membership представления, а не membership
-в Location. Одна и та же canonical topology может представляться несколькими
-разными SavedMaps; изменения размещения на карте не изменяют canonical topology
-или Location.
-
-### MapComposite
-
-`MapComposite` принадлежит одной SavedMap и содержит только её уже существующие
-MapPlacement. Это presentation-only grouping: не PhysicalObject, Location,
-Region, Connection endpoint или canonical containment. Один placement входит
-не более чем в один composite; overlap и nesting не поддерживаются. Удаление
-composite не удаляет placement, PhysicalObject, Cable или Connection.
+`MapComposite` принадлежит одной SavedMap и группирует только её существующие
+MapPlacement. Это presentation-only arbitrary grouping; он не является
+PhysicalObject, Location, Connection endpoint или canonical containment и не
+заменяется Location frame. Один placement входит не более чем в один composite;
+overlap и nesting не поддерживаются. Удаление composite не удаляет placement,
+PhysicalObject, Cable или Connection.
 
 Membership composite общее для всех `MapPresentationVariant`. В collapsed state
 real PhysicalObject автоматически видим, если его реальная отображаемая связь
 пересекает границу composite. Explicit rule `Показывать при сворачивании`
 сохраняется для конкретного composite и также общее для variants; effective
-visibility = boundary OR explicit. Explicit-visible object не становится boundary
-object. При его связи с hidden member hidden member и внутреннее edge скрываются,
-а при exact endpoint evidence соответствующий реальный ConnectionPoint получает
-presentation-only indication продолжения внутрь composite. Без exact evidence
-ничего не угадывается; это не off-map continuation и не topology relation.
+visibility = boundary OR explicit. Explicit-visible object не становится
+boundary object. Без exact endpoint evidence продолжение связи не угадывается.
+Видимые objects остаются реальными topology nodes; composite frame — только
+presentation container. Его перемещение не переписывает member MapViewPosition.
+Coordinates, collapsed state, frame geometry и Cable routes принадлежат
+variant; create-copy клонирует этот variant-specific presentation state.
 
-Видимые objects остаются real topology nodes, frame — только presentation
-container. Drag frame меняет только composite geometry; member MapViewPosition не
-переписываются, а expand возвращает authoritative member coordinates. Coordinates,
-collapsed state, frame geometry и Cable routes принадлежат variant; create-copy
-клонирует этот variant-specific presentation state.
+## MapReference
 
-### MapReference
-
-MapReference composition между SavedMap не реализуется в B.3. SavedMap —
-самостоятельная карта, а MapReference остаётся future optional navigation между
-независимыми SavedMaps. Если
-MapReference когда-либо понадобится, это может быть отдельная будущая
-навигационная ссылка между независимыми картами; её schema, API и interaction
-не проектируются этим contract.
-
-MapReference не является Location, не доказывает physical containment, не
-является Region и не является отдельным canonical topology aggregate.
+MapReference composition между SavedMap не реализуется в B.3 и остаётся future
+optional navigation между независимыми картами. Его schema, API и interaction
+здесь не проектируются. MapReference не является Location, не доказывает
+physical containment и не является canonical topology aggregate.
 
 ## Relationship matrix
 
 | Понятие | Роль | Граница семантики |
 | --- | --- | --- |
-| `Location` | canonical physical place | независим от карт; отвечает, где физически находится объект |
-| `Region` | presentation | geometry одной SavedMap; не создаёт canonical containment |
-| `SavedMap` | presentation scope | выбранное представление canonical topology; не physical hierarchy и не topology container |
-| `MapComposite` | presentation grouping | collapsed representation placement в одной SavedMap; boundary остаётся реальными PhysicalObject |
-| `MapReference` | future navigation | не является B.3 composition contract |
+| `Location` | canonical physical place | произвольная явная иерархия; источник canonical physical facts |
+| Derived Location frame | вычисляемое presentation | рекурсивная геометрия размещённых объектов subtree для одной SavedMap |
+| `SavedMap` | presentation scope | представление canonical topology; не physical hierarchy |
+| `MapComposite` | presentation grouping | произвольная группировка placements; не Location frame |
+| `MapReference` | future navigation | ссылка между независимыми SavedMaps |
+| `Region` / `MapRegion` | существующая реализация, удаление pending | не является целевой product capability |
 
 ## Инварианты границ
 
-- Canvas placement, Region geometry и MapReference composition не создают и не
-  изменяют canonical Location.
-- Ни Region, ни SavedMap, ни MapReference не являются доказательством
-  physical containment.
-- Presentation records могут помогать навигации и чтению topology, но
-  canonical topology остаётся source of truth.
-- Location foundation и MapReference/composed SavedMaps — разные будущие
-  capability families; они не объединяются в одну иерархию.
+- Направление зависимости: canonical Location hierarchy -> canonical
+  PhysicalObject -> Location assignment -> current SavedMap placement and
+  presentation geometry -> derived Location frame. Никогда наоборот.
+- Canvas placement, cable geometry и frame geometry не создают и не изменяют
+  canonical Location или assignment.
+- Ни SavedMap, MapComposite, MapReference, ни derived frame не являются
+  доказательством physical containment.
+- Universal parent и новая canonical сущность не вводятся. Location и другие
+  domain relations независимы.
+- Text annotations семантически отдельны от Region и остаются в целевой модели.
 
-## Normalized review boundaries
-
-Location.2 canonical/API foundation and assignment UX remain implemented:
-collapsible arbitrary-depth tree with current-path expansion, search by Location
-name/full path, ancestor context, and inline root/direct-child creation.
-Canonical Location/API semantics не меняются; create Location и assign
-PhysicalObject остаются двумя отдельными writes, а authoritative reload и
-refresh-only retry semantics сохраняются. `Location.type` остается optional
-arbitrary user value, без fixed taxonomy.
-
-Pipeline: canonical/derived facts -> Projection -> hierarchical/composite scene
--> layout/presentation -> canvas. Universal parent не вводится; Location и
-другие domain relations независимы. Region остается отдельной manual
-SavedMap-owned presentation geometry. MapReference schema/API и exact boundary
-algorithm остаются OPEN. Если в будущем потребуется nested composite tree,
-правило explicit visibility логически scoped к каждому уровню и не наследуется
-автоматически наружу; schema/API/migration/UI tree этим contract не проектируются.
-
-Rack layout может быть specialized presentation policy, но `Location.type` не
-становится backend-interpreted Rack taxonomy и rack occupancy semantics не
-фиксируются этим contract.
+Pipeline: canonical Location/topology facts -> projection -> presentation scene
+and derived Location frames -> layout/presentation -> canvas. Схемы/API
+implementation, frame rendering details beyond this contract, padding и styling
+этим документом не фиксируются.
