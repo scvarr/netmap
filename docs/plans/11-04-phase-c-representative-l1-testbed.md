@@ -189,6 +189,14 @@ A2 <-> B1
 Это отдельная проверка explicit arbitrary individual internal mappings, не
 pair-by-index continuity.
 
+**Phase C acceptance: PASSED / VERIFIED.** Вручную создан Blueprint XCONN-4
+с двумя группами по 2 ConnectionPoint; reverse pairing / «Связать в обратном
+порядке» в Blueprint editor сформировал после materialization intended
+cross-mapping `A1 <-> B2`, `A2 <-> B1`. Existing explicit internal
+connectivity capability достаточна для этого проверенного case; более широкая
+capability этим результатом не утверждается, и нового Phase C finding по
+этому archetype нет.
+
 ### Обязательный FANOUT-1x24 stress object
 
 `FANOUT-1x24` — deliberate Phase C promotion probe, а не ordinary 1:1 patch
@@ -293,7 +301,7 @@ capability axes, а не закрытый список device classes.
 | 14 | ConnectionPoint port kind | O1 / PP-301-A |
 | 15 | `NETWORK_PORT` port kind | PC1 / SW-301-ACCESS, если поддерживается |
 | 16 | pair-by-index continuity | PP-301-A / PP-301-B, FPP-811 |
-| 17 | arbitrary individual mapping | XCONN-4 |
+| 17 | arbitrary individual mapping | XCONN-4 — PASSED / VERIFIED |
 | 18 | cross-face internal continuity | PP-301-A, FPP-811, SRV1 |
 | 19 | ordinary Cable-backed physical connection | fixture links |
 | 20 | off-map/provider continuation | RTR1 -> ISP/OFFMAP |
