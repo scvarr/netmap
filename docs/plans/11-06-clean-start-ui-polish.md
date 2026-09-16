@@ -58,3 +58,19 @@ Logical/Physical, состояние уже существующей пусто�
 [[architecture/presentation/09-spatial-location-mapreference-contract|derived Location frames]].
 Canonical Location остаётся source of truth; текущая Region реализация ещё
 существует до отдельного removal milestone.
+
+### P-UX-04 — sidebar автоматически сворачивается на карте
+
+**Статус: IMPLEMENTED.** Ручная перепроверка ожидается после merge.
+
+**Замечание.** На основном рабочем экране `/map` навигация принудительно
+превращается в набор иконок; для нового пользователя их назначение неочевидно.
+
+**Согласованный контракт.**
+
+- expanded по умолчанию;
+- никакого route-driven auto-collapse;
+- ручное collapse/expand;
+- локальное сохранение предпочтения;
+- labels скрываются только по явному выбору пользователя;
+- collapsed icons имеют tooltip/accessibility labels.

@@ -295,12 +295,16 @@ button { font: inherit; }
 a { color: inherit; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .application-shell { min-height: 100%; display: grid; grid-template-columns: 248px minmax(0, 1fr); background: radial-gradient(circle at 10% 0, rgba(31, 106, 93, .12), transparent 34rem), #071012; }
-.application-shell--map { height: 100%; grid-template-columns: 72px minmax(0, 1fr); overflow: hidden; }
+.application-shell--map { height: 100%; overflow: hidden; }
+.application-shell--sidebar-collapsed { grid-template-columns: 72px minmax(0, 1fr); }
 .route-content { min-width: 0; min-height: 100vh; }
 .application-shell--map .route-content { min-height: 0; height: 100vh; }
 .sidebar { position: sticky; top: 0; z-index: 30; height: 100vh; display: flex; flex-direction: column; padding: 20px 14px; border-right: 1px solid #1c2a2d; background: rgba(7, 16, 18, .96); }
+.sidebar__header { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px; }
 .sidebar__brand { display: flex; align-items: center; gap: 11px; padding: 0 8px 22px; color: #eaf5f1; text-decoration: none; font-size: 19px; }
 .sidebar__brand-mark { flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; color: #06120f; background: #55e5b5; font: 700 18px ui-monospace, "Cascadia Code", monospace; box-shadow: 0 0 22px rgba(85, 229, 181, .18); }
+.sidebar__collapse-toggle { display: grid; flex: 0 0 auto; place-items: center; width: 30px; height: 30px; padding: 0; border: 1px solid transparent; border-radius: 7px; color: #8fa3a4; background: transparent; cursor: pointer; font: 700 18px/1 ui-monospace, "Cascadia Code", monospace; }
+.sidebar__collapse-toggle:hover, .sidebar__collapse-toggle:focus-visible { border-color: #2b4548; color: #d8e8e4; outline: none; background: #0d1d20; }
 .shell-nav { display: flex; flex-direction: column; gap: 16px; }
 .shell-nav__group { display: flex; flex-direction: column; gap: 6px; }
 .shell-nav__group-label { padding: 0 11px; color: #64797b; font: 700 9px ui-monospace, "Cascadia Code", monospace; letter-spacing: .11em; text-transform: uppercase; }
@@ -315,10 +319,14 @@ a { color: inherit; }
 .shell-locale__option:focus-visible { outline: 1px solid #55e5b5; outline-offset: 3px; color: #dff7ef; }
 .shell-locale__option--active { color: #55e5b5; }
 .shell-locale__divider { color: #385254; }
-.application-shell--map .sidebar { padding-inline: 9px; }
-.application-shell--map .sidebar__brand { padding-inline: 10px; }
-.application-shell--map .sidebar__brand strong, .application-shell--map .shell-nav__label, .application-shell--map .shell-nav__group-label, .application-shell--map .sidebar__health .health { width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
-.application-shell--map .shell-nav__link { justify-content: center; padding-inline: 8px; }
+.application-shell--sidebar-collapsed .sidebar { padding-inline: 9px; }
+.application-shell--sidebar-collapsed .sidebar__header { display: contents; }
+.application-shell--sidebar-collapsed .sidebar__brand { padding-inline: 10px; }
+.application-shell--sidebar-collapsed .sidebar__brand strong, .application-shell--sidebar-collapsed .shell-nav__label, .application-shell--sidebar-collapsed .shell-nav__group-label, .application-shell--sidebar-collapsed .sidebar__health .health { width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.application-shell--sidebar-collapsed .shell-nav__link { justify-content: center; padding-inline: 8px; }
+.application-shell--sidebar-collapsed .sidebar__collapse-toggle { align-self: center; margin-bottom: 12px; }
+.application-shell--sidebar-collapsed .shell-nav__link { position: relative; }
+.application-shell--sidebar-collapsed .shell-nav__link:hover::after, .application-shell--sidebar-collapsed .shell-nav__link:focus-visible::after { position: absolute; z-index: 40; left: calc(100% + 10px); top: 50%; transform: translateY(-50%); padding: 6px 8px; border: 1px solid #2b4548; border-radius: 6px; color: #d8e8e4; background: #0d1d20; box-shadow: 0 6px 18px rgba(0, 0, 0, .28); content: attr(data-tooltip); font-size: 12px; font-weight: 650; white-space: nowrap; pointer-events: none; }
 
 /* Map workspace */
 .map-page { position: relative; width: 100%; height: 100%; min-height: 520px; overflow: hidden; background: #071012; }
