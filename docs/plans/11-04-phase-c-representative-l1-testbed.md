@@ -212,13 +212,17 @@ incoming multi-member endpoint/trunk имеет отдельные members, пр
 24 отдельных outgoing endpoint/member positions, с точным L1 evidence/trace.
 Цель не в том, чтобы нарисовать 25 отдельных кружков.
 
-Сначала нужно попытаться выразить `FANOUT-1x24` текущими user-facing
-Blueprint/PortBlock capabilities. Если текущий authoring/materialization не
-может честно выразить member/cardinality/fan-out semantics, acceptance всё
-равно успешен с зафиксированным Phase C finding:
-`missing domain/authoring capability`. Это кандидат на следующий bounded Phase D
-milestone, а не claim о реализованной capability. Нельзя моделировать 24 fake
-independent input ports ради обхода ограничения.
+FANOUT-1x24 stress probe EXECUTED через текущий user-facing
+Blueprint/PortBlock authoring UI. Truthful modeling FAILED: для одного
+ConnectionPoint нельзя задать cardinality/member count, distinct members или
+member-aware internal connectivity вида `one endpoint member N -> distinct
+output endpoint N`. Acceptance result считается успешным обнаружением
+intended gap и candidate для следующего bounded Phase D milestone, а не
+неудачей Phase C и не claim о реализованной capability.
+
+Нельзя создавать 24 fake independent input ConnectionPoints, ordinary 1:1
+patch-panel model, один ConnectionPoint с прямыми связями к 24 outputs без
+member identity или другую presentation-only имитацию.
 
 Этот probe связан с observation в 11-03 о возможном
 `Blueprint endpoint cardinality + member-aware internal connectivity/fan-out`;
@@ -309,7 +313,7 @@ capability axes, а не закрытый список device classes.
 | 22 | multi-waypoint MapCableRoute | другой cable на SavedMap |
 | 23 | MapComposite use | representative placed objects |
 | 24 | presentation variants | минимум два варианта SavedMap |
-| 25 | deliberate member/cardinality/fan-out stress `1 -> 24` | FANOUT-1x24 |
+| 25 | deliberate member/cardinality/fan-out stress `1 -> 24` | FANOUT-1x24 — EXECUTED; truthful modeling FAILED; C-CAP-01 |
 
 Rows 4, 5, 14–18 и 25 должны быть проверены без подмены одного mapping
 archetype другим. Особенно `FANOUT-1x24` не заменяется ordinary 1:1 model.
@@ -808,6 +812,49 @@ grouping/collapse/presentation, а Phase C выявил дополнительн
   exact table columns/widths, caching/rendering implementation, search/filter
   или sort scope.
 - Canonical Blueprint и PhysicalObject semantics не меняются.
+
+### C-CAP-01 — Blueprint endpoint cardinality and member-aware internal connectivity
+
+**Категория:** missing domain/authoring capability
+**Статус:** CONFIRMED Phase C finding / candidate for Phase D promotion
+
+**Observed capability gap:**
+
+1. Port Block / Blueprint authoring не позволяет определить cardinality > 1
+   для одного ConnectionPoint.
+2. Authoring не позволяет выразить distinct members одного physical endpoint.
+3. Нельзя задать internal connectivity вида `one endpoint member N -> distinct
+   output endpoint N`.
+4. Поэтому desired `FANOUT-1x24` semantics нельзя truthfully materialize
+   текущим user-facing Blueprint workflow.
+
+**Architecture boundary:**
+
+- Finding относится к доказанной текущим UI acceptance
+  authoring/materialization capability gap; не утверждается, что canonical L1
+  model обязательно отсутствует целиком.
+- Exact backend/domain gap должен быть подтверждён отдельно перед
+  implementation. Новый canonical Fanout/Splitter entity не вводится этим
+  finding.
+- Physical members не превращаются в 24 fake ports и не заменяются
+  presentation-only имитацией.
+
+**Desired future capability:**
+
+- Reusable authoring model должен позволять задавать endpoint
+  cardinality/member count.
+- Materialization должна создавать distinct member identities и поддерживать
+  member-aware internal connectivity и exact L1 evidence/trace через конкретный
+  member.
+- Должно сохраняться различие: physical endpoint != individual physical
+  member.
+
+**Scope/status:**
+
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+- Не проектировать exact schema, DTO/API, DB migration, UI control, numbering
+  syntax members, compatibility strategy или конкретный implementation
+  milestone.
 
 ## Scope discipline
 

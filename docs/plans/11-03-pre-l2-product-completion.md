@@ -129,11 +129,12 @@ performance/readiness или missing domain/authoring capability. Только �
 доказанный gap может быть явно promoted.
 
 Optical patch panel — concrete evidence, не purely speculative; его
-canonical member-aware L1 foundation уже существует, а Blueprint/PortBlock
-authoring/materialization пока cardinality=1 / 1:1. Capability не обязательна
-автоматически; если representative equipment нельзя truthfully моделировать,
-ее можно promote как bounded `Blueprint endpoint cardinality + member-aware
-internal connectivity/fan-out`.
+canonical member-aware L1 foundation уже существует, а Phase C acceptance
+FANOUT-1x24 подтвердила, что текущие Blueprint/PortBlock
+authoring/materialization не выражают cardinality/member-aware internal
+connectivity beyond ordinary cardinality=1 / 1:1. Это зафиксировано как
+confirmed `C-CAP-01`, candidate для bounded Phase D promotion. Phase D этим
+roadmap не объявляется IMPLEMENTED и дальше не расширяется.
 
 ### Phase D — Close promoted L1 gaps
 
