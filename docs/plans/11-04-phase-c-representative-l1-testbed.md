@@ -116,10 +116,10 @@ Intended fixture placement:
 - `RACK-811`: `FPP-811`, `DIST-811`; `FANOUT-1x24` может находиться здесь
   только как отдельный deliberate stress probe, не как production equipment;
 - `RACK-833`: `FPP-833`, `CORE-A`, `CORE-B`, `SRV1`, `RTR1`;
-- `ISP-STUB`: ordinary synthetic external/provider handoff placeholder с
-  минимальным physical endpoint, размещённый на этой же SavedMap. Это не
-  special canonical entity и не утверждение о конкретном provider router;
-  user-defined class вроде `external_handoff` остаётся открытой строкой.
+- `ISP-RTR`: ordinary PhysicalObject, представляющий provider router с
+  relevant physical endpoint на этой же SavedMap. Точная model/vendor/port
+  inventory не утверждается; user-defined class вроде `provider_router`
+  остаётся открытой строкой, без special provider semantics.
 - `XCONN-4`: отдельная coverage branch, Location пока жёстко не фиксируется.
 
 ### FLOOR-3 / CAB-301
@@ -172,12 +172,13 @@ probe и не объявляется production equipment.
 - `RTR1` — synthetic edge router: LAN side к core, WAN side к external/provider
   handoff; текущий fixture проверяет только physical L1 foundation.
 
-### Synthetic provider handoff stub
+### Provider router handoff
 
-- `ISP-STUB` — ordinary PhysicalObject с минимальным physical endpoint для
-  известной boundary текущего synthetic fixture. `RTR1` WAN может быть
-  физически соединён с ним; отдельная capability off-map continuation не
-  входит в Phase C.
+- `ISP-RTR` — ordinary PhysicalObject, представляющий физически
+  подтверждённый provider router. Текущий L1 contract ограничен связью
+  `RTR1 WAN -> physical Cable -> relevant physical endpoint ISP-RTR`.
+  Внутренняя структура provider services и точная port inventory не
+  моделируются.
 
 ### Дополнительный passive mapping archetype
 
@@ -261,7 +262,7 @@ DIST-811 -> rack-833 optical/core side
 CORE-A / CORE-B
 SRV1-NIC1 -> CORE-A
 SRV1-NIC2 -> CORE-B
-CORE-A -> RTR1 -> ISP-STUB
+CORE-A -> RTR1 -> ISP-RTR
 CORE-A <-> StackWise relationship <-> CORE-B
 
 SEPARATE COVERAGE BRANCHES (not required inline in the main path)
@@ -289,13 +290,13 @@ semantics остаётся отдельным будущим acceptance scope; e
 `XCONN-4` может быть отдельной небольшой веткой рядом с floor/distribution и не
 обязан входить в основной forwarding narrative; его Location не фиксируется.
 
-В этой fixture boundary `ISP-STUB` является обычным объектом на текущей
-SavedMap, поэтому Phase C не проверяет отдельную capability off-map
-continuation. Future L3 Internet/VPN semantics этим correction не
-проектируются. `MapReference` остаётся future optional navigation mechanism и
-не используется как continuation физического Cable; presentation variants и
-`MapComposite` остаются средствами presentation и не создают dangling
-topology endpoints.
+В этой fixture boundary `ISP-RTR` является обычным объектом на текущей
+SavedMap. Phase C не моделирует public IP pools, адреса на RTR/core/firewall,
+routing, NAT, BGP/static routes, VLAN/VRF, provider services, распределение
+волокон или Internet/VPN semantics; это future L2/L3 scope. `MapReference`
+остаётся future optional navigation mechanism и не используется как
+continuation физического Cable; presentation variants и `MapComposite`
+остаются средствами presentation и не создают dangling topology endpoints.
 
 ## Coverage matrix
 
@@ -323,7 +324,7 @@ capability axes, а не закрытый список device classes.
 | 17 | arbitrary individual mapping | XCONN-4 — PASSED / VERIFIED |
 | 18 | cross-face internal continuity | PP-301-A, FPP-811, SRV1 |
 | 19 | ordinary Cable-backed physical connection | fixture links |
-| 20 | same-SavedMap provider handoff stub | RTR1 -> ISP-STUB |
+| 20 | same-SavedMap provider router handoff | RTR1 -> ISP-RTR |
 | 21 | zero-waypoint MapCableRoute | любой выбранный cable на SavedMap |
 | 22 | multi-waypoint MapCableRoute | другой cable на SavedMap |
 | 23 | MapComposite use | representative placed objects |
@@ -376,7 +377,7 @@ FPP-811 -> DIST-811
 DIST-811 uplink -> core-side endpoint
 CORE -> SRV1 physical interface
 CORE -> RTR1
-RTR1 -> ISP-STUB provider handoff
+RTR1 -> ISP-RTR provider handoff
 ```
 
 Нельзя добавлять internal continuity через active switches ради сквозного
@@ -420,6 +421,42 @@ Finding categories:
 - visual/style;
 - performance/readiness;
 - documentation/data uncertainty.
+
+## Phase C manual acceptance result
+
+**Representative L1 trace acceptance: PASSED / SUFFICIENT.**
+
+В рамках manual run выполнены representative checks на нескольких физических
+archetypes:
+
+- `PC1 -> O1 -> PP-301-A -> SW-301-ACCESS`;
+- `SW-301-ACCESS -> FPP-301 -> FPP-811 -> DIST-811`;
+- `DIST-811 -> passive rack boundaries -> CORE-A`;
+- `SRV1 interface 1 -> CORE-A`;
+- `SRV1 interface 2 -> CORE-B`;
+- `CORE-A -> RTR1`.
+
+Проверено, что passive explicit internal continuity продолжается через trace,
+active equipment корректно терминирует отдельный L1 circuit, а trace не
+создаёт fake continuity через switches. Два physical interfaces `SRV1`
+остаются независимыми L1 circuits; routed Cable presentation не меняет
+canonical trace semantics. `XCONN-4` уже имеет статус PASSED / VERIFIED, а
+`FANOUT-1x24` дал confirmed `C-CAP-01` без fake-port workaround.
+
+Это не утверждение, что вручную трассирован каждый Cable: exhaustive
+per-cable trace не является Phase C acceptance requirement.
+
+**Current manual run status:**
+
+- representative fixture authoring/modeling выполнен;
+- physical wiring representative fixture выполнен;
+- representative L1 trace checks выполнены и достаточны для Phase C;
+- Phase C выявил набор OPEN findings;
+- следующий шаг — consolidation/review findings и решение, какие конкретные
+  gaps будут promoted в Phase D.
+
+Phase D не объявляется implemented, L1 PRODUCT COMPLETE не объявляется, и все
+Phase C findings не считаются закрытыми.
 
 ## Phase C observed findings
 
