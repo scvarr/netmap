@@ -164,7 +164,9 @@ probe и не объявляется production equipment.
 - `SRV1` — server с двумя независимыми optical physical interfaces;
   `optical-1 -> CORE-A`, `optical-2 -> CORE-B`. По возможности management /
   ordinary port размещается на одном face, optical ports — на другом. L1 не
-  выводит bonding/LACP/teaming.
+  выводит bonding/LACP/teaming. Representative dual-homed case проверен:
+  `SRV1 port 1 -> CORE-A port 2` и `SRV1 port 2 -> CORE-B port 2` —
+  PASSED / VERIFIED как две независимые L1 трассы.
 - `RTR1` — synthetic edge router: LAN side к core, WAN side к external/provider
   handoff; текущий fixture проверяет только physical L1 foundation.
 
@@ -299,7 +301,7 @@ capability axes, а не закрытый список device classes.
 | 8 | core switch | CORE-A / CORE-B |
 | 9 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
 | 10 | router | RTR1 |
-| 11 | dual-homed server | SRV1 |
+| 11 | dual-homed server | SRV1 — PASSED / VERIFIED: independent traces to CORE-A / CORE-B |
 | 12 | FRONT/REAR presentation | PP-301-A, FPP-811, SRV1 |
 | 13 | несколько Port Blocks в одном Blueprint | SW-301-ACCESS |
 | 14 | ConnectionPoint port kind | O1 / PP-301-A |
@@ -988,6 +990,43 @@ anchors и recomputation через будущий `Cable Guide` / `Routing Corr
 - Сейчас НЕ проектировать exact persistence/schema migration или выбирать
   между перечисленными route strategies. Не объявлять observation correctness
   bug без отдельного contract review.
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+
+### C-VIS-01 — Trace highlight must render above ordinary cable presentation
+
+**Категория:** visual/style / trace readability
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- Semantic L1 trace result остаётся корректным, и exact highlighted
+  Cable/segments присутствуют.
+- При совпадении или пересечении geometry ordinary non-traced Cable может
+  визуально перекрывать часть highlighted path.
+- На небольшом числе Cable trace ещё различим, но при dense wiring/bundles
+  layering ухудшает читаемость exact evidence path.
+
+**Expected invariant:**
+
+- При активном L1 trace все highlighted Cable и exact-evidence route segments
+  должны оставаться визуально различимыми поверх ordinary non-traced Cable
+  presentation.
+- Пересечение или совпадение geometry не должно скрывать active trace;
+  пользователь должен иметь возможность визуально проследить весь evidence
+  path на dense map.
+
+**Future design space / boundary:**
+
+- Возможны dedicated trace overlay/render pass, elevated rendering order,
+  outline/halo вокруг highlighted segments или dimming non-traced Cable во
+  время trace. Ни один вариант не выбирается этим finding; z-index, отдельный
+  SVG/React Flow layer, halo/outline/glow и exact colors/widths не фиксируются
+  как implementation contract.
+- Presentation layering не меняет canonical trace evidence. Ordinary Cable
+  не становится частью trace только потому, что geometry пересекается; exact
+  evidence identity сохраняется.
+- Finding не смешивается с `C-UX-10` guided cable routing,
+  `C-UX-11` waypoint lifecycle или `C-COR-01` interaction/selection failure.
 - Сейчас НЕ реализовывать; Phase C не блокируется.
 
 ## Scope discipline
