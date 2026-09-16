@@ -116,8 +116,10 @@ Intended fixture placement:
 - `RACK-811`: `FPP-811`, `DIST-811`; `FANOUT-1x24` может находиться здесь
   только как отдельный deliberate stress probe, не как production equipment;
 - `RACK-833`: `FPP-833`, `CORE-A`, `CORE-B`, `SRV1`, `RTR1`;
-- `ISP/OFFMAP`: внешний/provider endpoint или off-map continuation, без
-  искусственно назначенной local Location;
+- `ISP-STUB`: ordinary synthetic external/provider handoff placeholder с
+  минимальным physical endpoint, размещённый на этой же SavedMap. Это не
+  special canonical entity и не утверждение о конкретном provider router;
+  user-defined class вроде `external_handoff` остаётся открытой строкой.
 - `XCONN-4`: отдельная coverage branch, Location пока жёстко не фиксируется.
 
 ### FLOOR-3 / CAB-301
@@ -170,9 +172,12 @@ probe и не объявляется production equipment.
 - `RTR1` — synthetic edge router: LAN side к core, WAN side к external/provider
   handoff; текущий fixture проверяет только physical L1 foundation.
 
-### External/off-map continuation
+### Synthetic provider handoff stub
 
-- `ISP/OFFMAP` — внешний/provider endpoint или off-map continuation.
+- `ISP-STUB` — ordinary PhysicalObject с минимальным physical endpoint для
+  известной boundary текущего synthetic fixture. `RTR1` WAN может быть
+  физически соединён с ним; отдельная capability off-map continuation не
+  входит в Phase C.
 
 ### Дополнительный passive mapping archetype
 
@@ -256,7 +261,7 @@ DIST-811 -> rack-833 optical/core side
 CORE-A / CORE-B
 SRV1-NIC1 -> CORE-A
 SRV1-NIC2 -> CORE-B
-CORE-A -> RTR1 -> ISP/OFFMAP
+CORE-A -> RTR1 -> ISP-STUB
 CORE-A <-> StackWise relationship <-> CORE-B
 
 SEPARATE COVERAGE BRANCHES (not required inline in the main path)
@@ -284,6 +289,14 @@ semantics остаётся отдельным будущим acceptance scope; e
 `XCONN-4` может быть отдельной небольшой веткой рядом с floor/distribution и не
 обязан входить в основной forwarding narrative; его Location не фиксируется.
 
+В этой fixture boundary `ISP-STUB` является обычным объектом на текущей
+SavedMap, поэтому Phase C не проверяет отдельную capability off-map
+continuation. Future L3 Internet/VPN semantics этим correction не
+проектируются. `MapReference` остаётся future optional navigation mechanism и
+не используется как continuation физического Cable; presentation variants и
+`MapComposite` остаются средствами presentation и не создают dangling
+topology endpoints.
+
 ## Coverage matrix
 
 Один fixture object может покрывать несколько строк. Matrix перечисляет
@@ -310,7 +323,7 @@ capability axes, а не закрытый список device classes.
 | 17 | arbitrary individual mapping | XCONN-4 — PASSED / VERIFIED |
 | 18 | cross-face internal continuity | PP-301-A, FPP-811, SRV1 |
 | 19 | ordinary Cable-backed physical connection | fixture links |
-| 20 | off-map/provider continuation | RTR1 -> ISP/OFFMAP |
+| 20 | same-SavedMap provider handoff stub | RTR1 -> ISP-STUB |
 | 21 | zero-waypoint MapCableRoute | любой выбранный cable на SavedMap |
 | 22 | multi-waypoint MapCableRoute | другой cable на SavedMap |
 | 23 | MapComposite use | representative placed objects |
@@ -363,7 +376,7 @@ FPP-811 -> DIST-811
 DIST-811 uplink -> core-side endpoint
 CORE -> SRV1 physical interface
 CORE -> RTR1
-RTR1 -> provider handoff
+RTR1 -> ISP-STUB provider handoff
 ```
 
 Нельзя добавлять internal continuity через active switches ради сквозного
