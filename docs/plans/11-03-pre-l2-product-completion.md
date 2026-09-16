@@ -45,6 +45,15 @@ compact Port Block table и RU terminology «Группа портов / Гру�
 
 Current execution position: **Phase C — Representative real-world L1 semantic acceptance.**
 
+Первая representative Phase C приёмка завершена: representative fixture,
+physical wiring и достаточные L1 trace checks выполнены, а все обнаруженные
+замечания сохранены как обязательный список открытых пунктов. Дальнейшее
+закрытие каждого замечания и его ручная проверка ведутся через
+[[plans/11-05-phase-c-acceptance-closure|11.5 Phase C acceptance closure]].
+Phase D закрывает только promoted L1 gaps, но замечания категорий UX и visual
+style не становятся необязательными и должны быть закрыты до итоговой чистой
+повторной Phase C приёмки.
+
 ### Phase B — Remaining bounded L1 capability families
 
 1. `Cable.3`: optional mutable Cable label, deterministic fallback, clear,

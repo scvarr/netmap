@@ -1,5 +1,8 @@
 # 11.4 Phase C representative L1 testbed
 
+Актуальный реестр решений по замечаниям, порядок их закрытия, ручные проверки
+и правила чистой повторной приёмки находятся в [[plans/11-05-phase-c-acceptance-closure|11.5 Phase C acceptance closure]].
+
 ## Назначение и граница
 
 Этот документ — living acceptance-scenario document для Phase C из
