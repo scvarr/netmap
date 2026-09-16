@@ -694,6 +694,16 @@ grouping/collapse/presentation, а Phase C выявил дополнительн
 - Есть наблюдаемое впечатление, что выбор member внутри доступного composite
   может влиять на interaction/focus между composites, но это пока только
   гипотеза и не установленный root cause.
+- Во время более длительной работы с той же SavedMap, включая несколько
+  expanded MapComposite, перемещение presentation elements и создание либо
+  редактирование Cable routes, симптом повторялся: в некотором accumulated UI
+  state отдельные visible objects переставали нормально выделяться/click-select.
+- После полного browser page reload interaction снова начинал работать; такие
+  повторные failures наблюдались несколько раз в процессе wiring/layout
+  работы.
+- Cable routing или object movement не считаются установленными причинами
+  этого симптома, и наличие одного root cause с первоначальным
+  multi-composite case пока не доказано.
 
 **Expected invariant:**
 
@@ -727,6 +737,10 @@ grouping/collapse/presentation, а Phase C выявил дополнительн
 - Не утверждать root cause. Z-index, pointer-events, React Flow node ordering,
   stale state и hit area остаются возможными направлениями будущей диагностики,
   но не являются установленным объяснением в этом finding.
+- Initial reproduction с двумя expanded composites остаётся наиболее
+  конкретным known case; повторяемость во время более длинной editing session
+  показывает вероятную state/lifecycle зависимость. Перед implementation
+  нужен targeted investigation/reproduction pass.
 - Не расширять finding в redesign MapComposite и не смешивать его с
   `C-UX-07`.
 
@@ -935,6 +949,45 @@ grouping/collapse/presentation, а Phase C выявил дополнительн
 - Finding является concrete Phase C evidence, уточняющим существующее OPEN
   направление 11-03 про Cable bundles / общий presentation route и
   автоматическую «гребёнку», а не новым параллельным roadmap направлением.
+- Сейчас НЕ реализовывать; Phase C не блокируется.
+
+### C-UX-11 — Cable route waypoints do not adapt to endpoint movement
+
+**Категория:** UX / SavedMap route lifecycle
+**Статус:** OPEN / non-blocking Phase C finding
+
+**Observed:**
+
+- После ручного создания `MapCableRoute` с waypoints перемещение объектов или
+  составных блоков не перемещает ранее созданные intermediate waypoints.
+- Cable endpoints визуально следуют за перемещённым PhysicalObject, а старые
+  waypoint positions остаются прежними координатами canvas.
+- После rearrange карты это создаёт длинные, сильно вытянутые и
+  пересекающиеся segments; полноценное восстановление читаемого layout
+  требует вручную заново редактировать routes.
+
+**Desired product need:**
+
+После перемещения equipment или presentation grouping уже сохранённый cable
+route не должен автоматически становиться практически непригодным. Точная
+будущая семантика остаётся OPEN; возможное design space включает absolute
+canvas waypoints, endpoint-relative lead segments, partially anchored route
+sections, translation части route вместе с moved endpoint/group, explicit route
+anchors и recomputation через будущий `Cable Guide` / `Routing Corridor`.
+Эти варианты перечислены как направления для review, а не как выбранное
+решение.
+
+**Boundary / distinction:**
+
+- `C-UX-10` относится к guided/bundled automatic routing, а `C-UX-11` — к
+  lifecycle уже сохранённого individual `MapCableRoute` при перемещении
+  endpoint/object/group; findings не объединяются.
+- `MapCableRoute` остаётся SavedMap presentation state. Canonical Cable,
+  Connection, endpoints и L1 trace semantics не меняются; красивый route не
+  становится physical-world truth.
+- Сейчас НЕ проектировать exact persistence/schema migration или выбирать
+  между перечисленными route strategies. Не объявлять observation correctness
+  bug без отдельного contract review.
 - Сейчас НЕ реализовывать; Phase C не блокируется.
 
 ## Scope discipline
