@@ -112,7 +112,7 @@ SYNTH-L1-LAB [site]
 Intended fixture placement:
 
 - `CAB-301`: `PC1`, `O1`;
-- `COMM-ROOM`: `PP-301-A`, `PP-301-B`, `SW-301-ACCESS`, `FPP-301`;
+- `COMM-ROOM`: `PP-301`, `PP-301-B`, `SW-301-ACCESS`, `FPP-301`;
 - `RACK-811`: `FPP-811`, `DIST-811`; `FANOUT-1x24` может находиться здесь
   только как отдельный deliberate stress probe, не как production equipment;
 - `RACK-833`: `FPP-833`, `CORE-A`, `CORE-B`, `SRV1`, `RTR1`;
@@ -131,7 +131,7 @@ Intended fixture placement:
 
 ### FLOOR-3 / COMM-ROOM
 
-- `PP-301-A` и `PP-301-B` — два synthetic 24-port copper passive patch
+- `PP-301` и `PP-301-B` — два synthetic 24-port copper passive patch
   panels. Оба используют один и тот же reusable 24-port Port Block и один
   и тот же Blueprint pattern; разные library templates без необходимости не
   создаются. Каждая панель имеет FRONT + REAR и pair-by-index internal
@@ -249,7 +249,7 @@ FLOOR-3 / CAB-301
 PC1 -> O1
 
 FLOOR-3 / COMM-ROOM
-O1 -> PP-301-A -> SW-301-ACCESS
+O1 -> PP-301 -> SW-301-ACCESS
 
 ADDITIONAL FLOOR CAPACITY
 PP-301-B -> другие access ports SW-301-ACCESS
@@ -308,7 +308,7 @@ capability axes, а не закрытый список device classes.
 | 1 | simple endpoint | PC1 |
 | 2 | Blueprint-backed PhysicalObject | PC1 |
 | 3 | маленький passive 1:1 объект | O1 |
-| 4 | dense copper passive panel | PP-301-A / PP-301-B |
+| 4 | dense copper passive panel | PP-301 / PP-301-B |
 | 5 | optical passive boundary/panel | FPP-301 / FPP-811 / FPP-833 |
 | 6 | active access switch | SW-301-ACCESS |
 | 7 | active distribution switch | DIST-811 |
@@ -316,13 +316,13 @@ capability axes, а не закрытый список device classes.
 | 9 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
 | 10 | router | RTR1 |
 | 11 | dual-homed server | SRV1 — PASSED / VERIFIED: independent traces to CORE-A / CORE-B |
-| 12 | FRONT/REAR presentation | PP-301-A, FPP-811, SRV1 |
+| 12 | FRONT/REAR presentation | PP-301, FPP-811, SRV1 |
 | 13 | несколько Port Blocks в одном Blueprint | SW-301-ACCESS |
-| 14 | ConnectionPoint port kind | O1 / PP-301-A |
+| 14 | ConnectionPoint port kind | O1 / PP-301 |
 | 15 | `NETWORK_PORT` port kind | PC1 / SW-301-ACCESS, если поддерживается |
-| 16 | pair-by-index continuity | PP-301-A / PP-301-B, FPP-811 |
+| 16 | pair-by-index continuity | PP-301 / PP-301-B, FPP-811 |
 | 17 | arbitrary individual mapping | XCONN-4 — PASSED / VERIFIED |
-| 18 | cross-face internal continuity | PP-301-A, FPP-811, SRV1 |
+| 18 | cross-face internal continuity | PP-301, FPP-811, SRV1 |
 | 19 | ordinary Cable-backed physical connection | fixture links |
 | 20 | same-SavedMap provider router handoff | RTR1 -> ISP-RTR |
 | 21 | zero-waypoint MapCableRoute | любой выбранный cable на SavedMap |
@@ -371,7 +371,7 @@ physical circuit и начинает другой. L1 acceptance проверя�
 circuits, например:
 
 ```text
-PC1 -> O1 -> PP-301-A -> SW-301-ACCESS access port
+PC1 -> O1 -> PP-301 -> SW-301-ACCESS access port
 SW-301-ACCESS optical uplink -> FPP-301 -> inter-floor optical link ->
 FPP-811 -> DIST-811
 DIST-811 uplink -> core-side endpoint
@@ -429,7 +429,7 @@ Finding categories:
 В рамках manual run выполнены representative checks на нескольких физических
 archetypes:
 
-- `PC1 -> O1 -> PP-301-A -> SW-301-ACCESS`;
+- `PC1 -> O1 -> PP-301 -> SW-301-ACCESS`;
 - `SW-301-ACCESS -> FPP-301 -> FPP-811 -> DIST-811`;
 - `DIST-811 -> passive rack boundaries -> CORE-A`;
 - `SRV1 interface 1 -> CORE-A`;
