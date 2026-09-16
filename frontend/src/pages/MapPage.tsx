@@ -2554,11 +2554,6 @@ export function MapPage({
           <button type="button" className="primary-action" onClick={() => setCreating(true)}>{t("map.create")}</button>
         </section>
       )}
-      {!legacy && activeMap && ids.length === 0 && (
-        <section>
-          <h2>{t("map.empty.active", { name: activeMap.name })}</h2>
-        </section>
-      )}
       {(legacy || activeMap) && (
         <>
           {!physicalRegionMode && <TraceCommandBar
