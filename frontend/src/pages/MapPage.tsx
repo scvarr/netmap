@@ -2549,9 +2549,9 @@ export function MapPage({
           </p>
         )}
       {!legacy && maps?.length === 0 && (
-        <section>
+        <section className="map-page__empty-state">
           <h2>{t("map.empty.title")}</h2>
-          <button onClick={() => setCreating(true)}>{t("map.create")}</button>
+          <button type="button" className="primary-action" onClick={() => setCreating(true)}>{t("map.create")}</button>
         </section>
       )}
       {!legacy && activeMap && ids.length === 0 && (
