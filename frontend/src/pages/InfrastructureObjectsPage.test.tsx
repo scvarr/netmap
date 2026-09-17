@@ -1,81 +1,747 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
-import { InfrastructureObjectsPage } from './InfrastructureObjectsPage';
-import type { CatalogInventoryDocument } from '../topology/catalogInventoryTypes';
-import { HistoricalCableLabelReuseRequiredError } from '../topology/historicalCableLabelReuse';
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
+import { InfrastructureObjectsPage } from "./InfrastructureObjectsPage";
+import type { CatalogInventoryDocument } from "../topology/catalogInventoryTypes";
+import { HistoricalCableLabelReuseRequiredError } from "../topology/historicalCableLabelReuse";
 
-const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT', entity_type, entity_id });
-const document = (): CatalogInventoryDocument => ({ schema_version: '1.0', equipment: [
-  { physical_object_ref: ref('PhysicalObject', 'sw17'), label: 'SW17', class: 'switch', occupancy: { total_ports: 52, connected_ports: 17, free_ports: 35 }, map_memberships: [{ map_ref: { entity_type: 'SavedMap', entity_id: 'map-a' }, name: 'Альфа' }] },
-  { physical_object_ref: ref('PhysicalObject', 'unknown'), label: 'Аппарат', class: 'firewall_x', map_memberships: [] },
-  { physical_object_ref: ref('PhysicalObject', 'untyped'), label: 'Безымянный', map_memberships: [{ map_ref: { entity_type: 'SavedMap', entity_id: 'map-b' }, name: 'Бета' }] },
-  { physical_object_ref: ref('PhysicalObject', 'type-map-only'), label: 'Type + Map', class: 'switch', occupancy: { total_ports: 2, connected_ports: 0, free_ports: 2 }, map_memberships: [{ map_ref: { entity_type: 'SavedMap', entity_id: 'map-a' }, name: 'Альфа' }] },
-  { physical_object_ref: ref('PhysicalObject', 'type-port-only'), label: 'Type + Port', class: 'switch', occupancy: { total_ports: 2, connected_ports: 1, free_ports: 1 }, map_memberships: [{ map_ref: { entity_type: 'SavedMap', entity_id: 'map-b' }, name: 'Бета' }] },
-  { physical_object_ref: ref('PhysicalObject', 'map-port-only'), label: 'Map + Port', class: 'outlet', occupancy: { total_ports: 2, connected_ports: 1, free_ports: 1 }, map_memberships: [{ map_ref: { entity_type: 'SavedMap', entity_id: 'map-a' }, name: 'Альфа' }] },
-  { physical_object_ref: ref('PhysicalObject', 'busy'), label: 'Z2', class: 'outlet', occupancy: { total_ports: 2, connected_ports: 2, free_ports: 0 }, map_memberships: [] },
-  { physical_object_ref: ref('PhysicalObject', 'natural'), label: 'Z10', class: 'outlet', occupancy: { total_ports: 2, connected_ports: 0, free_ports: 2 }, map_memberships: [] },
-], cables: [
-  { cable_ref: ref('Cable', 'cable'), connection_ref: ref('Connection', 'connection'), label: 'C10', resolution: 'RESOLVED', endpoint_a: { remote_physical_object_ref: ref('PhysicalObject', 'sw17'), remote_physical_object_label: 'SW17', remote_connection_point_ref: ref('ConnectionPoint', 'a17'), remote_connection_point_label: 'A17', evidence_refs: [] }, endpoint_b: { remote_physical_object_ref: ref('PhysicalObject', 'pp'), remote_physical_object_label: 'PP1', remote_connection_point_ref: ref('ConnectionPoint', 'b17'), remote_connection_point_label: 'B17', evidence_refs: [] }, gaps: [], warnings: [] },
-  { cable_ref: ref('Cable', 'cable-2'), connection_ref: ref('Connection', 'connection-2'), label: 'C2', resolution: 'RESOLVED', endpoint_a: { remote_physical_object_ref: ref('PhysicalObject', 'sw17'), remote_physical_object_label: 'SW17', remote_connection_point_ref: ref('ConnectionPoint', 'a17'), remote_connection_point_label: 'A17', evidence_refs: [] }, endpoint_b: { remote_physical_object_ref: ref('PhysicalObject', 'pp'), remote_physical_object_label: 'PP1', remote_connection_point_ref: ref('ConnectionPoint', 'b17'), remote_connection_point_label: 'B17', evidence_refs: [] }, gaps: [], warnings: [] },
-], gaps: [], warnings: [] });
-const renderPage = (source = { loadCatalogInventory: vi.fn().mockResolvedValue(document()) }, deletion?: (id: string) => Promise<void>, rename?: (id: string, value: string) => Promise<unknown>) => { render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={source} physicalObjectDeleteDataSource={deletion ? { deletePhysicalObject: deletion } : undefined} physicalObjectDisplayNameWriteDataSource={rename ? { renamePhysicalObject: rename as any } : undefined} /></MemoryRouter>); return source; };
+const ref = (entity_type: string, entity_id: string) => ({
+  ref_type: "CANONICAL_FACT",
+  entity_type,
+  entity_id,
+});
+const document = (): CatalogInventoryDocument => ({
+  schema_version: "1.0",
+  equipment: [
+    {
+      physical_object_ref: ref("PhysicalObject", "sw17"),
+      label: "SW17",
+      class: "switch",
+      occupancy: { total_ports: 52, connected_ports: 17, free_ports: 35 },
+      map_memberships: [
+        {
+          map_ref: { entity_type: "SavedMap", entity_id: "map-a" },
+          name: "Альфа",
+        },
+      ],
+    },
+    {
+      physical_object_ref: ref("PhysicalObject", "unknown"),
+      label: "Аппарат",
+      class: "firewall_x",
+      map_memberships: [],
+    },
+    {
+      physical_object_ref: ref("PhysicalObject", "untyped"),
+      label: "Безымянный",
+      map_memberships: [
+        {
+          map_ref: { entity_type: "SavedMap", entity_id: "map-b" },
+          name: "Бета",
+        },
+      ],
+    },
+    {
+      physical_object_ref: ref("PhysicalObject", "type-map-only"),
+      label: "Type + Map",
+      class: "switch",
+      occupancy: { total_ports: 2, connected_ports: 0, free_ports: 2 },
+      map_memberships: [
+        {
+          map_ref: { entity_type: "SavedMap", entity_id: "map-a" },
+          name: "Альфа",
+        },
+      ],
+    },
+    {
+      physical_object_ref: ref("PhysicalObject", "type-port-only"),
+      label: "Type + Port",
+      class: "switch",
+      occupancy: { total_ports: 2, connected_ports: 1, free_ports: 1 },
+      map_memberships: [
+        {
+          map_ref: { entity_type: "SavedMap", entity_id: "map-b" },
+          name: "Бета",
+        },
+      ],
+    },
+    {
+      physical_object_ref: ref("PhysicalObject", "map-port-only"),
+      label: "Map + Port",
+      class: "outlet",
+      occupancy: { total_ports: 2, connected_ports: 1, free_ports: 1 },
+      map_memberships: [
+        {
+          map_ref: { entity_type: "SavedMap", entity_id: "map-a" },
+          name: "Альфа",
+        },
+      ],
+    },
+    {
+      physical_object_ref: ref("PhysicalObject", "busy"),
+      label: "Z2",
+      class: "outlet",
+      occupancy: { total_ports: 2, connected_ports: 2, free_ports: 0 },
+      map_memberships: [],
+    },
+    {
+      physical_object_ref: ref("PhysicalObject", "natural"),
+      label: "Z10",
+      class: "outlet",
+      occupancy: { total_ports: 2, connected_ports: 0, free_ports: 2 },
+      map_memberships: [],
+    },
+  ],
+  cables: [
+    {
+      cable_ref: ref("Cable", "cable"),
+      connection_ref: ref("Connection", "connection"),
+      label: "C10",
+      resolution: "RESOLVED",
+      endpoint_a: {
+        remote_physical_object_ref: ref("PhysicalObject", "sw17"),
+        remote_physical_object_label: "SW17",
+        remote_connection_point_ref: ref("ConnectionPoint", "a17"),
+        remote_connection_point_label: "A17",
+        evidence_refs: [],
+      },
+      endpoint_b: {
+        remote_physical_object_ref: ref("PhysicalObject", "pp"),
+        remote_physical_object_label: "PP1",
+        remote_connection_point_ref: ref("ConnectionPoint", "b17"),
+        remote_connection_point_label: "B17",
+        evidence_refs: [],
+      },
+      gaps: [],
+      warnings: [],
+    },
+    {
+      cable_ref: ref("Cable", "cable-2"),
+      connection_ref: ref("Connection", "connection-2"),
+      label: "C2",
+      resolution: "RESOLVED",
+      endpoint_a: {
+        remote_physical_object_ref: ref("PhysicalObject", "sw17"),
+        remote_physical_object_label: "SW17",
+        remote_connection_point_ref: ref("ConnectionPoint", "a17"),
+        remote_connection_point_label: "A17",
+        evidence_refs: [],
+      },
+      endpoint_b: {
+        remote_physical_object_ref: ref("PhysicalObject", "pp"),
+        remote_physical_object_label: "PP1",
+        remote_connection_point_ref: ref("ConnectionPoint", "b17"),
+        remote_connection_point_label: "B17",
+        evidence_refs: [],
+      },
+      gaps: [],
+      warnings: [],
+    },
+  ],
+  gaps: [],
+  warnings: [],
+});
+const renderPage = (
+  source = { loadCatalogInventory: vi.fn().mockResolvedValue(document()) },
+  deletion?: (id: string) => Promise<void>,
+  rename?: (id: string, value: string) => Promise<unknown>,
+) => {
+  render(
+    <MemoryRouter>
+      <InfrastructureObjectsPage
+        catalogInventoryDataSource={source}
+        physicalObjectDeleteDataSource={
+          deletion ? { deletePhysicalObject: deletion } : undefined
+        }
+        physicalObjectDisplayNameWriteDataSource={
+          rename ? { renamePhysicalObject: rename as any } : undefined
+        }
+      />
+    </MemoryRouter>,
+  );
+  return source;
+};
 
-describe('InfrastructureObjectsPage inventory catalog', () => {
-  it('does not prefill a Cable technical fallback and clears through null', async () => {
-    const initial = document(); initial.cables[0] = { ...initial.cables[0], label: 'Cable deadbeef', label_source: 'TECHNICAL_FALLBACK' };
-    const loadCatalogInventory = vi.fn().mockResolvedValueOnce(initial).mockResolvedValueOnce(initial);
-    const setCableLabel = vi.fn().mockResolvedValue(undefined);
-    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel, generateCableLabel: vi.fn(), loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [] }) } as any} /></MemoryRouter>);
-    await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать Cable deadbeef' }));
-    expect(screen.getByRole('radio', { name: 'Ввести вручную' })).toBeChecked(); expect(screen.getByLabelText('Имя кабеля')).toHaveValue(''); expect(screen.queryByLabelText('Шаблон')).not.toBeInTheDocument(); expect(screen.queryByText(/# — цифра/)).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(setCableLabel).toHaveBeenCalledWith('cable', null));
+describe("InfrastructureObjectsPage inventory catalog", () => {
+  it("does not render decorative breadcrumbs on the top-level catalog destination", async () => {
+    renderPage();
+    await screen.findByRole("heading", { name: "Каталог" });
+    expect(window.document.querySelector(".page-breadcrumbs")).toBeNull();
   });
-  it('generates an existing Cable label through the authoritative write and retries only catalog reload', async () => {
-    const loadCatalogInventory = vi.fn().mockResolvedValueOnce(document()).mockRejectedValueOnce(new Error('reload')).mockResolvedValueOnce({ ...document(), cables: document().cables.map((item) => item.cable_ref.entity_id === 'cable' ? { ...item, label: 'FC0001' } : item) });
+  it("does not prefill a Cable technical fallback and clears through null", async () => {
+    const initial = document();
+    initial.cables[0] = {
+      ...initial.cables[0],
+      label: "Cable deadbeef",
+      label_source: "TECHNICAL_FALLBACK",
+    };
+    const loadCatalogInventory = vi
+      .fn()
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce(initial);
+    const setCableLabel = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <InfrastructureObjectsPage
+          catalogInventoryDataSource={{ loadCatalogInventory }}
+          cableLabelDataSource={
+            {
+              setCableLabel,
+              generateCableLabel: vi.fn(),
+              loadCableLabelTemplates: vi
+                .fn()
+                .mockResolvedValue({ schema_version: "1.0", templates: [] }),
+            } as any
+          }
+        />
+      </MemoryRouter>,
+    );
+    await userEvent.click(await screen.findByRole("tab", { name: /Кабели/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Переименовать Cable deadbeef" }),
+    );
+    expect(screen.getByRole("radio", { name: "Ввести вручную" })).toBeChecked();
+    expect(screen.getByLabelText("Имя кабеля")).toHaveValue("");
+    expect(screen.queryByLabelText("Шаблон")).not.toBeInTheDocument();
+    expect(screen.queryByText(/# — цифра/)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() =>
+      expect(setCableLabel).toHaveBeenCalledWith("cable", null),
+    );
+  });
+  it("generates an existing Cable label through the authoritative write and retries only catalog reload", async () => {
+    const loadCatalogInventory = vi
+      .fn()
+      .mockResolvedValueOnce(document())
+      .mockRejectedValueOnce(new Error("reload"))
+      .mockResolvedValueOnce({
+        ...document(),
+        cables: document().cables.map((item) =>
+          item.cable_ref.entity_id === "cable"
+            ? { ...item, label: "FC0001" }
+            : item,
+        ),
+      });
     const generateCableLabel = vi.fn().mockResolvedValue(undefined);
     const setCableLabel = vi.fn().mockResolvedValue(undefined);
-    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel, generateCableLabel, loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template-1', name: 'FC', description: 'Оптический магистральный кабель', pattern: 'FC####', start_at: 1 }] }) } as any} /></MemoryRouter>);
-    await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать C10' }));
-    expect(generateCableLabel).not.toHaveBeenCalled(); await userEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); expect(generateCableLabel).not.toHaveBeenCalled(); expect(setCableLabel).not.toHaveBeenCalled(); expect(screen.queryByLabelText('Имя кабеля')).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Сгенерировать' })).toBeDisabled();
-    await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template-1'); expect(screen.getByText('Оптический магистральный кабель')).toBeInTheDocument(); expect(screen.getByText('FC####')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать' }));
-    await waitFor(() => expect(generateCableLabel).toHaveBeenCalledWith('cable', 'template-1'));
-    expect(await screen.findByText('Имя сохранено, но каталог не удалось обновить. Повторите обновление.')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
-    await screen.findByText('FC0001'); expect(generateCableLabel).toHaveBeenCalledTimes(1); expect(loadCatalogInventory).toHaveBeenCalledTimes(3);
+    render(
+      <MemoryRouter>
+        <InfrastructureObjectsPage
+          catalogInventoryDataSource={{ loadCatalogInventory }}
+          cableLabelDataSource={
+            {
+              setCableLabel,
+              generateCableLabel,
+              loadCableLabelTemplates: vi
+                .fn()
+                .mockResolvedValue({
+                  schema_version: "1.0",
+                  templates: [
+                    {
+                      id: "template-1",
+                      name: "FC",
+                      description: "Оптический магистральный кабель",
+                      pattern: "FC####",
+                      start_at: 1,
+                    },
+                  ],
+                }),
+            } as any
+          }
+        />
+      </MemoryRouter>,
+    );
+    await userEvent.click(await screen.findByRole("tab", { name: /Кабели/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Переименовать C10" }),
+    );
+    expect(generateCableLabel).not.toHaveBeenCalled();
+    await userEvent.click(
+      screen.getByRole("radio", { name: "Сгенерировать по шаблону" }),
+    );
+    expect(generateCableLabel).not.toHaveBeenCalled();
+    expect(setCableLabel).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Имя кабеля")).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Сгенерировать" }),
+    ).toBeDisabled();
+    await userEvent.selectOptions(
+      screen.getByLabelText("Шаблон"),
+      "template-1",
+    );
+    expect(
+      screen.getByText("Оптический магистральный кабель"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("FC####")).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сгенерировать" }),
+    );
+    await waitFor(() =>
+      expect(generateCableLabel).toHaveBeenCalledWith("cable", "template-1"),
+    );
+    expect(
+      await screen.findByText(
+        "Имя сохранено, но каталог не удалось обновить. Повторите обновление.",
+      ),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Повторить обновление" }),
+    );
+    await screen.findByText("FC0001");
+    expect(generateCableLabel).toHaveBeenCalledTimes(1);
+    expect(loadCatalogInventory).toHaveBeenCalledTimes(3);
   });
-  it('requires explicit confirmation for historical generated Cable reuse and refreshes only after confirmation', async () => {
+  it("requires explicit confirmation for historical generated Cable reuse and refreshes only after confirmation", async () => {
     const loadCatalogInventory = vi.fn().mockResolvedValue(document());
-    const generateCableLabel = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('FC0003')).mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('FC0003')).mockResolvedValue(undefined);
-    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory }} cableLabelDataSource={{ setCableLabel: vi.fn(), generateCableLabel, loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template-1', name: 'FC', pattern: 'FC####', start_at: 1 }] }) } as any} /></MemoryRouter>);
-    await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать C10' })); await userEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template-1'); await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать' }));
-    expect(await screen.findByRole('heading', { name: 'Имя FC0003 использовалось ранее' })).toBeInTheDocument(); await userEvent.click(screen.getAllByRole('button', { name: 'Отмена' }).at(-1)!); expect(generateCableLabel).toHaveBeenCalledTimes(1);
-    await userEvent.click(screen.getByRole('button', { name: 'Сгенерировать' })); await userEvent.click(await screen.findByRole('button', { name: 'Использовать FC0003' })); await waitFor(() => expect(generateCableLabel).toHaveBeenLastCalledWith('cable', 'template-1', 'FC0003')); expect(loadCatalogInventory).toHaveBeenCalledTimes(2);
+    const generateCableLabel = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new HistoricalCableLabelReuseRequiredError("FC0003"),
+      )
+      .mockRejectedValueOnce(
+        new HistoricalCableLabelReuseRequiredError("FC0003"),
+      )
+      .mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <InfrastructureObjectsPage
+          catalogInventoryDataSource={{ loadCatalogInventory }}
+          cableLabelDataSource={
+            {
+              setCableLabel: vi.fn(),
+              generateCableLabel,
+              loadCableLabelTemplates: vi
+                .fn()
+                .mockResolvedValue({
+                  schema_version: "1.0",
+                  templates: [
+                    {
+                      id: "template-1",
+                      name: "FC",
+                      pattern: "FC####",
+                      start_at: 1,
+                    },
+                  ],
+                }),
+            } as any
+          }
+        />
+      </MemoryRouter>,
+    );
+    await userEvent.click(await screen.findByRole("tab", { name: /Кабели/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Переименовать C10" }),
+    );
+    await userEvent.click(
+      screen.getByRole("radio", { name: "Сгенерировать по шаблону" }),
+    );
+    await userEvent.selectOptions(
+      screen.getByLabelText("Шаблон"),
+      "template-1",
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сгенерировать" }),
+    );
+    expect(
+      await screen.findByRole("heading", {
+        name: "Имя FC0003 использовалось ранее",
+      }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Отмена" }).at(-1)!,
+    );
+    expect(generateCableLabel).toHaveBeenCalledTimes(1);
+    await userEvent.click(
+      screen.getByRole("button", { name: "Сгенерировать" }),
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Использовать FC0003" }),
+    );
+    await waitFor(() =>
+      expect(generateCableLabel).toHaveBeenLastCalledWith(
+        "cable",
+        "template-1",
+        "FC0003",
+      ),
+    );
+    expect(loadCatalogInventory).toHaveBeenCalledTimes(2);
   });
-  it('requires explicit confirmation for manual historical Cable reuse', async () => {
-    const setCableLabel = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('OLD-01')).mockResolvedValue(undefined);
-    render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={{ loadCatalogInventory: vi.fn().mockResolvedValue(document()) }} cableLabelDataSource={{ setCableLabel, generateCableLabel: vi.fn(), loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [] }) } as any} /></MemoryRouter>);
-    await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.click(screen.getByRole('button', { name: 'Переименовать C10' })); await userEvent.clear(screen.getByLabelText('Имя кабеля')); await userEvent.type(screen.getByLabelText('Имя кабеля'), 'OLD-01'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await userEvent.click(await screen.findByRole('button', { name: 'Использовать OLD-01' })); await waitFor(() => expect(setCableLabel).toHaveBeenLastCalledWith('cable', 'OLD-01', 'OLD-01'));
+  it("requires explicit confirmation for manual historical Cable reuse", async () => {
+    const setCableLabel = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new HistoricalCableLabelReuseRequiredError("OLD-01"),
+      )
+      .mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <InfrastructureObjectsPage
+          catalogInventoryDataSource={{
+            loadCatalogInventory: vi.fn().mockResolvedValue(document()),
+          }}
+          cableLabelDataSource={
+            {
+              setCableLabel,
+              generateCableLabel: vi.fn(),
+              loadCableLabelTemplates: vi
+                .fn()
+                .mockResolvedValue({ schema_version: "1.0", templates: [] }),
+            } as any
+          }
+        />
+      </MemoryRouter>,
+    );
+    await userEvent.click(await screen.findByRole("tab", { name: /Кабели/ }));
+    await userEvent.click(
+      screen.getByRole("button", { name: "Переименовать C10" }),
+    );
+    await userEvent.clear(screen.getByLabelText("Имя кабеля"));
+    await userEvent.type(screen.getByLabelText("Имя кабеля"), "OLD-01");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Использовать OLD-01" }),
+    );
+    await waitFor(() =>
+      expect(setCableLabel).toHaveBeenLastCalledWith(
+        "cable",
+        "OLD-01",
+        "OLD-01",
+      ),
+    );
   });
-  it('uses one inventory load and renders occupancy, classes, map and detail links', async () => {
-    const source = renderPage(); await screen.findByText('SW17');
-    expect(source.loadCatalogInventory).toHaveBeenCalledTimes(1); expect(screen.getByText('17 / 52')).toBeInTheDocument(); expect(screen.getAllByText('Состояние не определено')).toHaveLength(2); expect(screen.getAllByText('firewall_x')).toHaveLength(2); expect(screen.getAllByText('Без типа')).toHaveLength(2);
-    expect(screen.getByRole('link', { name: 'Открыть объект SW17' })).toHaveAttribute('href', '/infrastructure/objects/sw17'); expect(screen.getAllByRole('link', { name: 'Альфа' }).find((link) => link.getAttribute('href')?.includes('focus=sw17'))).toHaveAttribute('href', '/map?map=map-a&view=physical&focus=sw17');
+  it("uses one inventory load and renders occupancy, classes, map and detail links", async () => {
+    const source = renderPage();
+    await screen.findByText("SW17");
+    expect(source.loadCatalogInventory).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("17 / 52")).toBeInTheDocument();
+    expect(screen.getAllByText("Состояние не определено")).toHaveLength(2);
+    expect(screen.getAllByText("firewall_x")).toHaveLength(2);
+    expect(screen.getAllByText("Без типа")).toHaveLength(2);
+    expect(
+      screen.getByRole("link", { name: "Открыть объект SW17" }),
+    ).toHaveAttribute("href", "/infrastructure/objects/sw17");
+    expect(
+      screen
+        .getAllByRole("link", { name: "Альфа" })
+        .find((link) => link.getAttribute("href")?.includes("focus=sw17")),
+    ).toHaveAttribute("href", "/map?map=map-a&view=physical&focus=sw17");
   });
-  it('separates canonical cables, preserves endpoint object links, and does not link cable names', async () => { renderPage(); await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); const cableName = screen.getByText('C10'); const cableRow = cableName.closest('tr')!; expect(cableName.tagName).toBe('TD'); expect(cableRow).toHaveTextContent('SW17 / A17'); expect(cableRow.querySelector('a[href="/infrastructure/objects/sw17"]')).toHaveTextContent('SW17'); expect(cableRow.querySelector('a[href="/infrastructure/objects/pp"]')).toHaveTextContent('PP1'); expect(cableRow.querySelector('a[href="/infrastructure/objects/cable"]')).toBeNull(); expect(screen.getAllByText('Разрешён').length).toBeGreaterThanOrEqual(2); });
-  it('searches the current tab and combines type, map, and port filters with AND', async () => { renderPage(); await screen.findByText('SW17'); await userEvent.selectOptions(screen.getByLabelText('Тип'), 'switch'); await userEvent.selectOptions(screen.getByLabelText('Карта'), 'map-a'); await userEvent.selectOptions(screen.getByLabelText('Порты'), 'connected'); expect(screen.getAllByRole('row')).toHaveLength(2); expect(screen.getByText('SW17')).toBeInTheDocument(); expect(screen.queryByText('Type + Map')).not.toBeInTheDocument(); expect(screen.queryByText('Type + Port')).not.toBeInTheDocument(); expect(screen.queryByText('Map + Port')).not.toBeInTheDocument(); await userEvent.type(screen.getByLabelText('Поиск'), 'альфа'); expect(screen.getByText('SW17')).toBeInTheDocument(); });
-  it('searches cable endpoints and filters canonical cable resolution', async () => { renderPage(); await userEvent.click(await screen.findByRole('tab', { name: /Кабели/ })); await userEvent.type(screen.getByLabelText('Поиск'), 'pp1'); expect(screen.getByText('C10')).toBeInTheDocument(); expect(screen.queryByText('C2')).not.toBeInTheDocument(); await userEvent.clear(screen.getByLabelText('Поиск')); await userEvent.selectOptions(screen.getByLabelText('Состояние кабеля'), 'RESOLVED'); expect(screen.getByText('C2')).toBeInTheDocument(); expect(screen.getByText('C10')).toBeInTheDocument(); });
-  it('renames equipment through an authoritative inventory refresh, including cable endpoint labels', async () => { const renamed = { ...document(), equipment: document().equipment.map((item) => item.label === 'SW17' ? { ...item, label: 'NEW SW17' } : item), cables: document().cables.map((item) => item.label === 'C10' ? { ...item, endpoint_a: { ...item.endpoint_a!, remote_physical_object_label: 'NEW SW17' } } : item) }; const loadCatalogInventory = vi.fn().mockResolvedValueOnce(document()).mockResolvedValueOnce(renamed); const rename = vi.fn().mockResolvedValue({}); renderPage({ loadCatalogInventory }, undefined, rename); await userEvent.click(await screen.findByRole('button', { name: 'Переименовать SW17' })); expect(screen.getByRole('heading', { name: 'Переименовать объект' })).toBeInTheDocument(); const input = screen.getByLabelText('Название'); expect(input).toHaveValue('SW17'); await userEvent.clear(input); await userEvent.type(input, '  NEW SW17  '); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(rename).toHaveBeenCalledWith('sw17', 'NEW SW17')); await screen.findByRole('link', { name: 'Открыть объект NEW SW17' }); expect(screen.getByRole('link', { name: 'Открыть объект NEW SW17' })).toHaveAttribute('href', '/infrastructure/objects/sw17'); expect(screen.getAllByRole('link', { name: 'Альфа' }).find((link) => link.getAttribute('href')?.includes('focus=sw17'))).toHaveAttribute('href', '/map?map=map-a&view=physical&focus=sw17'); expect(loadCatalogInventory).toHaveBeenCalledTimes(2); await userEvent.click(screen.getByRole('tab', { name: /Кабели/ })); expect(screen.getByText('C10').closest('tr')).toHaveTextContent('NEW SW17 / A17'); });
-  it('does not present a rename as refreshed when its inventory reload fails', async () => { const loadCatalogInventory = vi.fn().mockResolvedValueOnce(document()).mockRejectedValueOnce(new Error('inventory unavailable')).mockResolvedValueOnce({ ...document(), equipment: document().equipment.map((item) => item.label === 'SW17' ? { ...item, label: 'NEW' } : item) }); const rename = vi.fn().mockResolvedValue({}); renderPage({ loadCatalogInventory }, undefined, rename); await userEvent.click(await screen.findByRole('button', { name: 'Переименовать SW17' })); await userEvent.clear(screen.getByLabelText('Название')); await userEvent.type(screen.getByLabelText('Название'), 'NEW'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); expect(await screen.findByText('Не удалось обновить каталог: inventory unavailable')).toBeInTheDocument(); expect(screen.getByRole('dialog')).toBeInTheDocument(); expect(screen.getByRole('link', { name: 'Открыть объект SW17' })).toBeInTheDocument(); await userEvent.click(screen.getByRole('button', { name: 'Повторить обновление' })); await screen.findByRole('link', { name: 'Открыть объект NEW' }); });
-  it('guards blank, unchanged and cancelled equipment rename writes', async () => { const pendingRename = vi.fn(); renderPage(undefined, undefined, pendingRename); await userEvent.click(await screen.findByRole('button', { name: 'Переименовать SW17' })); const input = screen.getByLabelText('Название'); expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled(); await userEvent.clear(input); expect(screen.getByRole('button', { name: 'Сохранить' })).toBeDisabled(); await userEvent.type(input, 'New'); await userEvent.click(screen.getByRole('button', { name: 'Отмена' })); expect(pendingRename).not.toHaveBeenCalled(); });
-  it('keeps the dialog and old inventory label on rename backend failure', async () => { const rename = vi.fn().mockRejectedValue(new Error('rename blocked')); renderPage(undefined, undefined, rename); await userEvent.click(await screen.findByRole('button', { name: 'Переименовать SW17' })); await userEvent.clear(screen.getByLabelText('Название')); await userEvent.type(screen.getByLabelText('Название'), 'NEW'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); expect(await screen.findByText('rename blocked')).toBeInTheDocument(); expect(screen.getByRole('dialog')).toBeInTheDocument(); expect(screen.getByRole('link', { name: 'Открыть объект SW17' })).toBeInTheDocument(); });
-  it('removes an equipment row only after authoritative reload', async () => { const afterDelete = { ...document(), equipment: document().equipment.filter((item) => item.label !== 'SW17') }; const loadCatalogInventory = vi.fn().mockResolvedValueOnce(document()).mockResolvedValueOnce(afterDelete); const deleted = vi.fn().mockResolvedValue(undefined); vi.spyOn(window, 'confirm').mockReturnValue(true); renderPage({ loadCatalogInventory }, deleted); await userEvent.click(await screen.findByRole('button', { name: 'Удалить SW17' })); await waitFor(() => expect(loadCatalogInventory).toHaveBeenCalledTimes(2)); expect(deleted).toHaveBeenCalledWith('sw17'); expect(afterDelete.equipment.some((item) => item.label === 'SW17')).toBe(false); await waitFor(() => expect(screen.queryByRole('link', { name: 'Открыть объект SW17' })).not.toBeInTheDocument()); });
-  it('keeps the last authoritative document visible when post-delete reload fails and retries it', async () => { const afterDelete = { ...document(), equipment: document().equipment.filter((item) => item.label !== 'SW17') }; const loadCatalogInventory = vi.fn().mockResolvedValueOnce(document()).mockRejectedValueOnce(new Error('reload failed')).mockResolvedValueOnce(afterDelete); const deleted = vi.fn().mockResolvedValue(undefined); vi.spyOn(window, 'confirm').mockReturnValue(true); renderPage({ loadCatalogInventory }, deleted); await userEvent.click(await screen.findByRole('button', { name: 'Удалить SW17' })); expect(await screen.findByText('Не удалось обновить каталог: reload failed')).toBeInTheDocument(); expect(screen.getByRole('link', { name: 'Открыть объект SW17' })).toBeInTheDocument(); await userEvent.click(screen.getByRole('button', { name: 'Повторить' })); await waitFor(() => expect(loadCatalogInventory).toHaveBeenCalledTimes(3)); await waitFor(() => expect(screen.queryByRole('link', { name: 'Открыть объект SW17' })).not.toBeInTheDocument()); });
-  it('shows inventory warnings and gaps from the document', async () => { renderPage({ loadCatalogInventory: vi.fn().mockResolvedValue({ ...document(), warnings: ['Предупреждение каталога'], gaps: ['Пробел каталога'] }) }); expect(await screen.findByText('Предупреждение каталога')).toBeInTheDocument(); expect(screen.getByText('Пробел каталога')).toBeInTheDocument(); });
-  it('uses catalog-specific loading/error wording and retries failed loads', async () => { const loadCatalogInventory = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(document()); const pending = { loadCatalogInventory: vi.fn(() => new Promise<CatalogInventoryDocument>(() => undefined)) }; const loadingView = render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={pending} /></MemoryRouter>); expect(screen.getByText('Загружаем каталог')).toBeInTheDocument(); expect(screen.queryByText(/topology projection/i)).not.toBeInTheDocument(); loadingView.unmount(); renderPage({ loadCatalogInventory }); expect(await screen.findByText('Не удалось загрузить каталог')).toBeInTheDocument(); expect(screen.getByText('offline')).toBeInTheDocument(); expect(screen.queryByText(/Не удалось загрузить схему/)).not.toBeInTheDocument(); await userEvent.click(screen.getByRole('button', { name: 'Повторить' })); expect(await screen.findByText('SW17')).toBeInTheDocument(); expect(loadCatalogInventory).toHaveBeenCalledTimes(2); });
-  it('leaves a row visible when deletion fails', async () => { const failedDelete = vi.fn().mockRejectedValue(new Error('blocked')); vi.spyOn(window, 'confirm').mockReturnValue(true); renderPage(undefined, failedDelete); await userEvent.click(await screen.findByRole('button', { name: 'Удалить SW17' })); expect(await screen.findByText('blocked')).toBeInTheDocument(); expect(screen.getAllByText('SW17').length).toBeGreaterThan(0); });
-  it('shows structured canonical deletion blockers in Russian', async () => { const failedDelete = vi.fn().mockRejectedValue(new Error('Удаление невозможно: привязки L2 (1).')); vi.spyOn(window, 'confirm').mockReturnValue(true); renderPage(undefined, failedDelete); await userEvent.click(await screen.findByRole('button', { name: 'Удалить SW17' })); expect(await screen.findByText('Удаление невозможно: привязки L2 (1).')).toBeInTheDocument(); });
-  it('shows loading and ignores a stale response after a newer datasource load', async () => { let resolveFirst!: (value: CatalogInventoryDocument) => void; const first = { loadCatalogInventory: vi.fn(() => new Promise<CatalogInventoryDocument>((resolve) => { resolveFirst = resolve; })) }; const second = { loadCatalogInventory: vi.fn().mockResolvedValue({ ...document(), equipment: [] }) }; const view = render(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={first} /></MemoryRouter>); expect(screen.getByText('Загружаем каталог')).toBeInTheDocument(); view.rerender(<MemoryRouter><InfrastructureObjectsPage catalogInventoryDataSource={second} /></MemoryRouter>); await screen.findByText('Оборудование пока не создано.'); resolveFirst(document()); await waitFor(() => expect(screen.queryByText('SW17')).not.toBeInTheDocument()); });
+  it("separates canonical cables, preserves endpoint object links, and does not link cable names", async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole("tab", { name: /Кабели/ }));
+    const cableName = screen.getByText("C10");
+    const cableRow = cableName.closest("tr")!;
+    expect(cableName.tagName).toBe("TD");
+    expect(cableRow).toHaveTextContent("SW17 / A17");
+    expect(
+      cableRow.querySelector('a[href="/infrastructure/objects/sw17"]'),
+    ).toHaveTextContent("SW17");
+    expect(
+      cableRow.querySelector('a[href="/infrastructure/objects/pp"]'),
+    ).toHaveTextContent("PP1");
+    expect(
+      cableRow.querySelector('a[href="/infrastructure/objects/cable"]'),
+    ).toBeNull();
+    expect(screen.getAllByText("Разрешён").length).toBeGreaterThanOrEqual(2);
+  });
+  it("searches the current tab and combines type, map, and port filters with AND", async () => {
+    renderPage();
+    await screen.findByText("SW17");
+    await userEvent.selectOptions(screen.getByLabelText("Тип"), "switch");
+    await userEvent.selectOptions(screen.getByLabelText("Карта"), "map-a");
+    await userEvent.selectOptions(screen.getByLabelText("Порты"), "connected");
+    expect(screen.getAllByRole("row")).toHaveLength(2);
+    expect(screen.getByText("SW17")).toBeInTheDocument();
+    expect(screen.queryByText("Type + Map")).not.toBeInTheDocument();
+    expect(screen.queryByText("Type + Port")).not.toBeInTheDocument();
+    expect(screen.queryByText("Map + Port")).not.toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Поиск"), "альфа");
+    expect(screen.getByText("SW17")).toBeInTheDocument();
+  });
+  it("searches cable endpoints and filters canonical cable resolution", async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole("tab", { name: /Кабели/ }));
+    await userEvent.type(screen.getByLabelText("Поиск"), "pp1");
+    expect(screen.getByText("C10")).toBeInTheDocument();
+    expect(screen.queryByText("C2")).not.toBeInTheDocument();
+    await userEvent.clear(screen.getByLabelText("Поиск"));
+    await userEvent.selectOptions(
+      screen.getByLabelText("Состояние кабеля"),
+      "RESOLVED",
+    );
+    expect(screen.getByText("C2")).toBeInTheDocument();
+    expect(screen.getByText("C10")).toBeInTheDocument();
+  });
+  it("renames equipment through an authoritative inventory refresh, including cable endpoint labels", async () => {
+    const renamed = {
+      ...document(),
+      equipment: document().equipment.map((item) =>
+        item.label === "SW17" ? { ...item, label: "NEW SW17" } : item,
+      ),
+      cables: document().cables.map((item) =>
+        item.label === "C10"
+          ? {
+              ...item,
+              endpoint_a: {
+                ...item.endpoint_a!,
+                remote_physical_object_label: "NEW SW17",
+              },
+            }
+          : item,
+      ),
+    };
+    const loadCatalogInventory = vi
+      .fn()
+      .mockResolvedValueOnce(document())
+      .mockResolvedValueOnce(renamed);
+    const rename = vi.fn().mockResolvedValue({});
+    renderPage({ loadCatalogInventory }, undefined, rename);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Переименовать SW17" }),
+    );
+    expect(
+      screen.getByRole("heading", { name: "Переименовать объект" }),
+    ).toBeInTheDocument();
+    const input = screen.getByLabelText("Название");
+    expect(input).toHaveValue("SW17");
+    await userEvent.clear(input);
+    await userEvent.type(input, "  NEW SW17  ");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    await waitFor(() =>
+      expect(rename).toHaveBeenCalledWith("sw17", "NEW SW17"),
+    );
+    await screen.findByRole("link", { name: "Открыть объект NEW SW17" });
+    expect(
+      screen.getByRole("link", { name: "Открыть объект NEW SW17" }),
+    ).toHaveAttribute("href", "/infrastructure/objects/sw17");
+    expect(
+      screen
+        .getAllByRole("link", { name: "Альфа" })
+        .find((link) => link.getAttribute("href")?.includes("focus=sw17")),
+    ).toHaveAttribute("href", "/map?map=map-a&view=physical&focus=sw17");
+    expect(loadCatalogInventory).toHaveBeenCalledTimes(2);
+    await userEvent.click(screen.getByRole("tab", { name: /Кабели/ }));
+    expect(screen.getByText("C10").closest("tr")).toHaveTextContent(
+      "NEW SW17 / A17",
+    );
+  });
+  it("does not present a rename as refreshed when its inventory reload fails", async () => {
+    const loadCatalogInventory = vi
+      .fn()
+      .mockResolvedValueOnce(document())
+      .mockRejectedValueOnce(new Error("inventory unavailable"))
+      .mockResolvedValueOnce({
+        ...document(),
+        equipment: document().equipment.map((item) =>
+          item.label === "SW17" ? { ...item, label: "NEW" } : item,
+        ),
+      });
+    const rename = vi.fn().mockResolvedValue({});
+    renderPage({ loadCatalogInventory }, undefined, rename);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Переименовать SW17" }),
+    );
+    await userEvent.clear(screen.getByLabelText("Название"));
+    await userEvent.type(screen.getByLabelText("Название"), "NEW");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(
+      await screen.findByText(
+        "Не удалось обновить каталог: inventory unavailable",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Открыть объект SW17" }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: "Повторить обновление" }),
+    );
+    await screen.findByRole("link", { name: "Открыть объект NEW" });
+  });
+  it("guards blank, unchanged and cancelled equipment rename writes", async () => {
+    const pendingRename = vi.fn();
+    renderPage(undefined, undefined, pendingRename);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Переименовать SW17" }),
+    );
+    const input = screen.getByLabelText("Название");
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeDisabled();
+    await userEvent.clear(input);
+    expect(screen.getByRole("button", { name: "Сохранить" })).toBeDisabled();
+    await userEvent.type(input, "New");
+    await userEvent.click(screen.getByRole("button", { name: "Отмена" }));
+    expect(pendingRename).not.toHaveBeenCalled();
+  });
+  it("keeps the dialog and old inventory label on rename backend failure", async () => {
+    const rename = vi.fn().mockRejectedValue(new Error("rename blocked"));
+    renderPage(undefined, undefined, rename);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Переименовать SW17" }),
+    );
+    await userEvent.clear(screen.getByLabelText("Название"));
+    await userEvent.type(screen.getByLabelText("Название"), "NEW");
+    await userEvent.click(screen.getByRole("button", { name: "Сохранить" }));
+    expect(await screen.findByText("rename blocked")).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Открыть объект SW17" }),
+    ).toBeInTheDocument();
+  });
+  it("removes an equipment row only after authoritative reload", async () => {
+    const afterDelete = {
+      ...document(),
+      equipment: document().equipment.filter((item) => item.label !== "SW17"),
+    };
+    const loadCatalogInventory = vi
+      .fn()
+      .mockResolvedValueOnce(document())
+      .mockResolvedValueOnce(afterDelete);
+    const deleted = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderPage({ loadCatalogInventory }, deleted);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Удалить SW17" }),
+    );
+    await waitFor(() => expect(loadCatalogInventory).toHaveBeenCalledTimes(2));
+    expect(deleted).toHaveBeenCalledWith("sw17");
+    expect(afterDelete.equipment.some((item) => item.label === "SW17")).toBe(
+      false,
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("link", { name: "Открыть объект SW17" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+  it("keeps the last authoritative document visible when post-delete reload fails and retries it", async () => {
+    const afterDelete = {
+      ...document(),
+      equipment: document().equipment.filter((item) => item.label !== "SW17"),
+    };
+    const loadCatalogInventory = vi
+      .fn()
+      .mockResolvedValueOnce(document())
+      .mockRejectedValueOnce(new Error("reload failed"))
+      .mockResolvedValueOnce(afterDelete);
+    const deleted = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderPage({ loadCatalogInventory }, deleted);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Удалить SW17" }),
+    );
+    expect(
+      await screen.findByText("Не удалось обновить каталог: reload failed"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Открыть объект SW17" }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Повторить" }));
+    await waitFor(() => expect(loadCatalogInventory).toHaveBeenCalledTimes(3));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("link", { name: "Открыть объект SW17" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+  it("shows inventory warnings and gaps from the document", async () => {
+    renderPage({
+      loadCatalogInventory: vi
+        .fn()
+        .mockResolvedValue({
+          ...document(),
+          warnings: ["Предупреждение каталога"],
+          gaps: ["Пробел каталога"],
+        }),
+    });
+    expect(
+      await screen.findByText("Предупреждение каталога"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Пробел каталога")).toBeInTheDocument();
+  });
+  it("uses catalog-specific loading/error wording and retries failed loads", async () => {
+    const loadCatalogInventory = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce(document());
+    const pending = {
+      loadCatalogInventory: vi.fn(
+        () => new Promise<CatalogInventoryDocument>(() => undefined),
+      ),
+    };
+    const loadingView = render(
+      <MemoryRouter>
+        <InfrastructureObjectsPage catalogInventoryDataSource={pending} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("Загружаем каталог")).toBeInTheDocument();
+    expect(screen.queryByText(/topology projection/i)).not.toBeInTheDocument();
+    loadingView.unmount();
+    renderPage({ loadCatalogInventory });
+    expect(
+      await screen.findByText("Не удалось загрузить каталог"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("offline")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Не удалось загрузить схему/),
+    ).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Повторить" }));
+    expect(await screen.findByText("SW17")).toBeInTheDocument();
+    expect(loadCatalogInventory).toHaveBeenCalledTimes(2);
+  });
+  it("leaves a row visible when deletion fails", async () => {
+    const failedDelete = vi.fn().mockRejectedValue(new Error("blocked"));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderPage(undefined, failedDelete);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Удалить SW17" }),
+    );
+    expect(await screen.findByText("blocked")).toBeInTheDocument();
+    expect(screen.getAllByText("SW17").length).toBeGreaterThan(0);
+  });
+  it("shows structured canonical deletion blockers in Russian", async () => {
+    const failedDelete = vi
+      .fn()
+      .mockRejectedValue(new Error("Удаление невозможно: привязки L2 (1)."));
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    renderPage(undefined, failedDelete);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Удалить SW17" }),
+    );
+    expect(
+      await screen.findByText("Удаление невозможно: привязки L2 (1)."),
+    ).toBeInTheDocument();
+  });
+  it("shows loading and ignores a stale response after a newer datasource load", async () => {
+    let resolveFirst!: (value: CatalogInventoryDocument) => void;
+    const first = {
+      loadCatalogInventory: vi.fn(
+        () =>
+          new Promise<CatalogInventoryDocument>((resolve) => {
+            resolveFirst = resolve;
+          }),
+      ),
+    };
+    const second = {
+      loadCatalogInventory: vi
+        .fn()
+        .mockResolvedValue({ ...document(), equipment: [] }),
+    };
+    const view = render(
+      <MemoryRouter>
+        <InfrastructureObjectsPage catalogInventoryDataSource={first} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("Загружаем каталог")).toBeInTheDocument();
+    view.rerender(
+      <MemoryRouter>
+        <InfrastructureObjectsPage catalogInventoryDataSource={second} />
+      </MemoryRouter>,
+    );
+    await screen.findByText("Оборудование пока не создано.");
+    resolveFirst(document());
+    await waitFor(() =>
+      expect(screen.queryByText("SW17")).not.toBeInTheDocument(),
+    );
+  });
 });
