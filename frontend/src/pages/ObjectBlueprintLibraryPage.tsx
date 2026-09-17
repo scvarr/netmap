@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ViewState } from "../components/ViewState";
 import { useI18n } from "../i18n";
-import { PageHeader, PageShell } from "../components/PageChrome";
+import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
 import type {
   ObjectBlueprintDataSource,
   ObjectBlueprintListDocument,
@@ -83,6 +83,7 @@ export function ObjectBlueprintLibraryPage({
   }, [dataSource, retryKey, t]);
   return (
     <PageShell className="catalog-page blueprint-library-page">
+      <Breadcrumbs label={t("blueprint.breadcrumbs")} items={[{ label: t("blueprint.library.section") }, { label: t("blueprint.library.title") }]} />
       <PageHeader
         eyebrow={t("blueprint.library.section")}
         title={t("blueprint.library.title")}

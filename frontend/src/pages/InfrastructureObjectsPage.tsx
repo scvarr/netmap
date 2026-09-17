@@ -15,7 +15,7 @@ import type { CableNamingInput } from "../topology/cableLabelTypes";
 import { CableNamingFields } from "../components/CableNamingFields";
 import { CableRenameDialog } from "../components/CableRenameDialog";
 import { useI18n } from "../i18n";
-import { PageHeader, PageShell } from "../components/PageChrome";
+import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
 
 interface Props {
   catalogInventoryDataSource: CatalogInventoryDataSource;
@@ -330,6 +330,7 @@ export function InfrastructureObjectsPage({
 
   return (
     <PageShell className="catalog-page">
+      <Breadcrumbs label={t("catalog.infrastructure")} items={[{ label: t("catalog.infrastructure") }, { label: t("nav.objects") }]} />
       <PageHeader
         eyebrow={t("catalog.infrastructure")}
         title={t("catalog.title")}

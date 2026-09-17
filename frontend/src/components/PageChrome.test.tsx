@@ -51,4 +51,11 @@ describe("PageChrome", () => {
       "page",
     );
   });
+
+  it("does not mark an intermediate non-link section label as the current page", () => {
+    render(<MemoryRouter><Breadcrumbs label="Path" items={[{ label: "Infrastructure" }, { label: "Objects", to: "/infrastructure/objects" }, { label: "Create object" }]} /></MemoryRouter>);
+    expect(screen.getByText("Infrastructure")).not.toHaveAttribute("aria-current");
+    expect(screen.getByText("Create object")).toHaveAttribute("aria-current", "page");
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+  });
 });

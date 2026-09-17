@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useI18n } from "../i18n";
-import { PageHeader, PageShell } from "../components/PageChrome";
+import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
 import type {
   LocationDataSource,
   LocationDocument,
@@ -217,6 +217,7 @@ export function LocationsPage({
       : new Set<string>();
   return (
     <PageShell className="catalog-page locations-page">
+      <Breadcrumbs label={t("location.breadcrumbs")} items={[{ label: t("nav.infrastructure") }, { label: t("nav.locations") }]} />
       <PageHeader
         eyebrow={t("nav.infrastructure")}
         title={t("location.title")}

@@ -114,9 +114,11 @@ backend/API/DB; first-map CTA при `maps.length === 0` остаётся без
 вертикальным ритмом и responsive-поведением. Shared header размещает eyebrow,
 `h1`, description и optional notice в одной текстовой колонке, а optional
 actions — рядом с ней и ниже на узких экранах. Description ограничено
-читаемой шириной. Shared breadcrumbs используются только на вложенных
-страницах: полезный parent — ссылка, current leaf — не ссылка, одинаковые URL
-не дублируются. Верхнеуровневые destinations sidebar breadcrumbs не получают.
-Eyebrow имеет page-level роль и не использует sidebar typography. Create/edit
-Object Blueprint используют общий header в editor component; Port Block editor
-использует тот же shared header.
+читаемой шириной, а shared `h1` использует компактный application-scale
+`clamp(22px, 2vw, 24px)`. Shared breadcrumbs присутствуют на всех ordinary
+non-map pages: hierarchy отражает section / parent / current page; only current
+leaf получает `aria-current`, полезный parent — ссылка, одинаковые URL не
+дублируются. Section label без landing route остаётся non-link intermediate
+element. Eyebrow имеет page-level роль и не использует sidebar typography.
+Create/edit Object Blueprint используют общий header в editor component; Port
+Block editor использует тот же shared header.

@@ -199,6 +199,7 @@ export function InfrastructureObjectDetailPage({
       <Breadcrumbs
         label={t("object.breadcrumbs")}
         items={[
+          { label: t("catalog.infrastructure") },
           { label: t("nav.objects"), to: "/infrastructure/objects" },
           { label: details?.physical_object.label ?? t("object.loading") },
         ]}

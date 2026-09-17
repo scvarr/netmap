@@ -82,6 +82,7 @@ export function NewInfrastructureObjectPage({
       <Breadcrumbs
         label={t("object.breadcrumbs")}
         items={[
+          { label: t("catalog.infrastructure") },
           { label: t("nav.objects"), to: "/infrastructure/objects" },
           { label: t("create.create") },
         ]}

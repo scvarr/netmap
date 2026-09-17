@@ -68,6 +68,7 @@ export function CableLabelTemplatesPage({
       <Breadcrumbs
         label={t("catalog.infrastructure")}
         items={[
+          { label: t("catalog.infrastructure") },
           { label: t("nav.objects"), to: "/infrastructure/objects" },
           { label: t("cableTemplates.title") },
         ]}

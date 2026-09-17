@@ -7,6 +7,15 @@ const blueprintRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'Object
 const versionRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'version-1' };
 
 describe('ObjectBlueprintLibraryPage', () => {
+  it('renders the shared breadcrumb row on the top-level library destination', async () => {
+    const dataSource = { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprints: [] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() };
+    render(<MemoryRouter><ObjectBlueprintLibraryPage dataSource={dataSource} /></MemoryRouter>);
+    await screen.findByRole('heading', { name: 'Шаблоны объектов' });
+    const breadcrumbs = screen.getByRole('navigation', { name: 'Хлебные крошки' });
+    expect(breadcrumbs.querySelector('.page-breadcrumbs__item span')).not.toHaveAttribute('aria-current');
+    expect(breadcrumbs.querySelector('[aria-current="page"]')).toHaveTextContent('Шаблоны объектов');
+  });
+
   it('renders compact numeric port columns and labelled icon actions', async () => {
     const dataSource = {
       loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprints: [{ blueprint_ref: blueprintRef, version_ref: versionRef, name: 'Panel', version_number: 3, version_count: 3, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, slot_count: 5, internal_link_count: 2 }] }),

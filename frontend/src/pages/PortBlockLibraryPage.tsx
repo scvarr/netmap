@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ViewState } from "../components/ViewState";
 import { useI18n } from "../i18n";
 import { PortBlockDeletionConflictError } from "../topology/apiPortBlockDataSource";
-import { PageHeader, PageShell } from "../components/PageChrome";
+import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
 import type {
   PortBlockDataSource,
   PortBlockListDocument,
@@ -68,6 +68,7 @@ export function PortBlockLibraryPage({
 
   return (
     <PageShell className="catalog-page">
+      <Breadcrumbs label={t("portBlock.breadcrumb.library")} items={[{ label: t("portBlock.library.section") }, { label: t("portBlock.library.title") }]} />
       <PageHeader
         eyebrow={t("portBlock.library.section")}
         title={t("portBlock.library.title")}

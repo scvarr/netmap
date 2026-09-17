@@ -30,7 +30,7 @@ export function Breadcrumbs({
           {item.to ? (
             <Link to={item.to}>{item.label}</Link>
           ) : (
-            <span aria-current="page">{item.label}</span>
+            <span aria-current={index === items.length - 1 ? "page" : undefined}>{item.label}</span>
           )}
           {index < items.length - 1 && <span aria-hidden="true">/</span>}
         </span>

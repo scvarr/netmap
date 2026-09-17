@@ -23,6 +23,7 @@ export function NewObjectBlueprintPage({
       <Breadcrumbs
         label={t("blueprint.breadcrumbs")}
         items={[
+          { label: t("blueprint.library.section") },
           {
             label: t("blueprint.breadcrumb.library"),
             to: "/library/object-blueprints",

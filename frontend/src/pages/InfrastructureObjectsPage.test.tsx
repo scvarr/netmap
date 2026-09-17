@@ -164,10 +164,12 @@ const renderPage = (
 };
 
 describe("InfrastructureObjectsPage inventory catalog", () => {
-  it("does not render decorative breadcrumbs on the top-level catalog destination", async () => {
+  it("renders the shared breadcrumb row on the top-level catalog destination", async () => {
     renderPage();
     await screen.findByRole("heading", { name: "Каталог" });
-    expect(window.document.querySelector(".page-breadcrumbs")).toBeNull();
+    const breadcrumbs = screen.getByRole("navigation", { name: "Инфраструктура" });
+    expect(breadcrumbs.querySelector(".page-breadcrumbs__item span")).not.toHaveAttribute("aria-current");
+    expect(breadcrumbs.querySelector('[aria-current="page"]')).toHaveTextContent("Объекты");
   });
   it("does not prefill a Cable technical fallback and clears through null", async () => {
     const initial = document();

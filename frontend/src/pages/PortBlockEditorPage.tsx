@@ -76,6 +76,7 @@ export function PortBlockEditorPage({
     <Breadcrumbs
       label={t("portBlock.breadcrumb.library")}
       items={[
+        { label: t("portBlock.library.section") },
         {
           label: t("portBlock.breadcrumb.library"),
           to: "/library/port-blocks",
