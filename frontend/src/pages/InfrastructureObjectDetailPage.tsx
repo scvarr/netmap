@@ -108,7 +108,7 @@ export function InfrastructureObjectDetailPage({
   const node = useMemo(() => ({
     id: `catalog-physical-object-${physicalObjectId}`,
     kind: 'PHYSICAL_OBJECT',
-    label: details?.physical_object.label ?? `Объект ${physicalObjectId}`,
+    label: details?.physical_object.label ?? t('object.fallbackLabel', { id: physicalObjectId }),
     source_refs: [{
       ref_type: 'CANONICAL_FACT',
       entity_type: 'PhysicalObject',
@@ -121,7 +121,7 @@ export function InfrastructureObjectDetailPage({
         owned_interface_count: details.owned_interface_count,
       } : {}),
     },
-  }), [details, physicalObjectId]);
+  }), [details, physicalObjectId, t]);
   const cable = details?.physical_object.class === 'cable';
   const inventoryItem = inventory?.equipment.find(
     (item) => item.physical_object_ref.entity_id === physicalObjectId,
@@ -228,7 +228,7 @@ export function InfrastructureObjectDetailPage({
           key={physicalObjectId}
           node={node}
           dataSource={physicalObjectDetailsDataSource ?? {
-            loadPhysicalObjectDetails: () => Promise.reject(new Error('Не удалось загрузить сведения об объекте.')),
+            loadPhysicalObjectDetails: () => Promise.reject(new Error(t('inspector.objectDetailsLoadFailed'))),
           }}
           topologyNodes={projection?.nodes ?? []}
           deviceDetailsDataSource={deviceDetailsDataSource}

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { QuickInspector } from './QuickInspector';
-import type { L1OffMapContinuation, TopologyProjectionDocument, TopologyProjectionNode } from '../topology/types';
+import type { L1OffMapContinuation, TopologyProjectionDocument, TopologyProjectionEdge, TopologyProjectionNode } from '../topology/types';
 
 const node = (className?: string): TopologyProjectionNode => ({
   id: 'node', kind: 'PHYSICAL_OBJECT', label: className === 'cable' ? 'cable-01' : 'PC1',
@@ -23,6 +23,17 @@ describe('QuickInspector selection detail', () => {
     expect(screen.getByText('Тип')).toBeInTheDocument();
     expect(screen.queryByText('PhysicalObject')).not.toBeInTheDocument();
     expect(screen.queryByText('Projection ID')).not.toBeInTheDocument();
+  });
+
+  it('keeps entity type beside the ID in source reference details', async () => {
+    const edge: TopologyProjectionEdge = {
+      id: 'edge-1', from_node_id: 'node', to_node_id: 'node-2', kind: 'PHYSICAL_CONNECTION', aggregate: false,
+      attributes: {}, status: 'CONFIGURED',
+      source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Connection', entity_id: 'connection-1' }],
+    };
+    render(<BrowserRouter><QuickInspector document={{ ...document('L1'), edges: [edge] }} selection={{ type: 'edge', item: edge }} onClose={vi.fn()} onSelectNode={vi.fn()} /></BrowserRouter>);
+    await userEvent.click(screen.getByText('Технические сведения'));
+    expect(screen.getByText('Connection: connection-1')).toBeInTheDocument();
   });
 
   it('does not expose ordinary destructive actions', () => {

@@ -16,6 +16,7 @@ import {
   ConnectPhysicalInterface,
   type PhysicalLinkTargetDevice,
 } from './ConnectPhysicalInterface';
+import { useI18n } from '../i18n';
 interface DeviceInterfacesSectionProps {
   node: TopologyProjectionNode;
   dataSource: DeviceDetailsDataSource;
@@ -42,42 +43,49 @@ const displayInterfaceLabel = (item: DeviceInterfaceDetails): string => {
   return `Интерфейс ${shortId(technical?.[1] ?? item.interface_ref.entity_id)}`;
 };
 
-const SourceRefs = ({ refs }: { refs: ProjectionSourceRef[] }) => (
-  <ul className="source-refs">
-    {refs.map((ref) => (
-      <li key={`${ref.ref_type}-${ref.entity_type}-${ref.entity_id}`}>
-        <span>Источник данных</span>
-        <code>{ref.entity_id}</code>
+const SourceRefs = ({ refs }: { refs: ProjectionSourceRef[] }) => {
+  const { t } = useI18n();
+  return (
+    <ul className="source-refs">
+      {refs.map((ref) => (
+        <li key={`${ref.ref_type}-${ref.entity_type}-${ref.entity_id}`}>
+          <span>{t('physical.sourceReference')}</span>
+          <code>{ref.entity_id}</code>
+          <small>{ref.ref_type}</small>
+          <span>{ref.entity_type}</span>
+        </li>
+      ))}
+    </ul>
+  );
+};
 
-      </li>
-    ))}
-  </ul>
-);
-
-const InterfaceTechnicalDetails = ({ item }: { item: DeviceInterfaceDetails }) => (
-  <details className="interface-technical-details">
-    <summary>Технические данные</summary>
-    <dl className="attribute-list">
-      <div><dt>Идентификатор интерфейса</dt><dd>{item.interface_ref.entity_id}</dd></div>
-      <div><dt>Число нижестоящих связей</dt><dd>{item.realization_down_count}</dd></div>
-      <div><dt>Число вышестоящих связей</dt><dd>{item.realization_up_count}</dd></div>
-    </dl>
-    <h4>Интерфейс и источники данных</h4>
-    <SourceRefs refs={[item.interface_ref, ...item.source_refs]} />
-    {item.addresses.map((address) => (
-      <section key={`${address.address}/${address.prefix_length}`}>
-        <h4>{address.address}/{address.prefix_length}</h4>
-        <SourceRefs refs={address.source_refs} />
-      </section>
-    ))}
-    {item.direct_physical_bindings.map((binding) => (
-      <section key={`${binding.connection_point_ref.entity_id}-${binding.member_index}`}>
-        <h4>Точка подключения {binding.connection_point_ref.entity_id} · элемент {binding.member_index}</h4>
-        <SourceRefs refs={[binding.connection_point_ref, ...binding.source_refs]} />
-      </section>
-    ))}
-  </details>
-);
+const InterfaceTechnicalDetails = ({ item }: { item: DeviceInterfaceDetails }) => {
+  const { t } = useI18n();
+  return (
+    <details className="interface-technical-details">
+      <summary>{t('physical.technical')}</summary>
+      <dl className="attribute-list">
+        <div><dt>{t('physical.interfaceId')}</dt><dd>{item.interface_ref.entity_id}</dd></div>
+        <div><dt>{t('physical.downstreamLinks')}</dt><dd>{item.realization_down_count}</dd></div>
+        <div><dt>{t('physical.upstreamLinks')}</dt><dd>{item.realization_up_count}</dd></div>
+      </dl>
+      <h4>{t('physical.interfaceSources')}</h4>
+      <SourceRefs refs={[item.interface_ref, ...item.source_refs]} />
+      {item.addresses.map((address) => (
+        <section key={`${address.address}/${address.prefix_length}`}>
+          <h4>{address.address}/{address.prefix_length}</h4>
+          <SourceRefs refs={address.source_refs} />
+        </section>
+      ))}
+      {item.direct_physical_bindings.map((binding) => (
+        <section key={`${binding.connection_point_ref.entity_id}-${binding.member_index}`}>
+          <h4>{t('physical.bindingMember', { id: binding.connection_point_ref.entity_id, member: binding.member_index })}</h4>
+          <SourceRefs refs={[binding.connection_point_ref, ...binding.source_refs]} />
+        </section>
+      ))}
+    </details>
+  );
+};
 
 const InterfaceCard = ({
   item,
@@ -163,12 +171,13 @@ export function DeviceInterfacesSection({
   l2ForwardingContextWriteDataSource,
   cableLabelDataSource,
 }: DeviceInterfacesSectionProps) {
+  const { t } = useI18n();
   const physicalObjectId = physicalObjectIdentity(node);
   const [retryKey, setRetryKey] = useState(0);
   const [state, setState] = useState<DetailsState>(() => (
     physicalObjectId
       ? { kind: 'loading' }
-      : { kind: 'unavailable', message: 'Не удалось однозначно определить сетевой объект для показа интерфейсов.' }
+      : { kind: 'unavailable', message: t('physical.interfacesUnavailable') }
   ));
   const targetDevices = topologyNodes.flatMap((candidate) => {
     const candidateId = physicalObjectIdentity(candidate);
@@ -181,7 +190,7 @@ export function DeviceInterfacesSection({
     if (!physicalObjectId) {
       setState({
         kind: 'unavailable',
-        message: 'Детали интерфейсов недоступны: нет однозначной ссылки на PhysicalObject.',
+        message: t('physical.interfacesUnavailable'),
       });
       return undefined;
     }
@@ -200,7 +209,7 @@ export function DeviceInterfacesSection({
       },
     );
     return () => { current = false; };
-  }, [dataSource, physicalObjectId, retryKey]);
+  }, [dataSource, physicalObjectId, retryKey, t]);
 
   return (
     <section className="device-interfaces" aria-labelledby="device-interfaces-heading">

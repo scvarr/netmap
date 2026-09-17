@@ -513,7 +513,7 @@ export function QuickInspector(props: QuickInspectorProps) {
             <div key={`${ref.entity_type}/${ref.entity_id}`}>
               <dt>{t("inspector.technicalSource")}</dt>
               <dd>
-                {ref.entity_id}
+                {ref.entity_type}: {ref.entity_id}
               </dd>
             </div>
           ))}

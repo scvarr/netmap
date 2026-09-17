@@ -1,6 +1,7 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { I18nProvider, localeStorageKey } from '../i18n';
 import type {
   DeviceDetailsDataSource,
   DeviceDetailsDocument,
@@ -77,6 +78,8 @@ const deferred = <T,>() => {
 };
 
 describe('DeviceInterfacesSection', () => {
+  afterEach(() => window.localStorage.clear());
+
   it('shows a local loading state without blocking its parent UI', () => {
     const pending: DeviceDetailsDataSource = {
       loadDeviceDetails: vi.fn(() => new Promise<DeviceDetailsDocument>(() => undefined)),
@@ -111,9 +114,39 @@ describe('DeviceInterfacesSection', () => {
     await userEvent.click(within(technical).getByText('Технические данные'));
 
     expect(within(technical).getByText('interface-source-ref')).toBeInTheDocument();
+    expect(within(technical).getAllByText('NetworkInterface').length).toBeGreaterThan(0);
+    expect(within(technical).getAllByText('CANONICAL_FACT').length).toBeGreaterThan(0);
     expect(within(technical).getByText('ipv4-ref')).toBeInTheDocument();
     expect(within(technical).getByText('physical-binding-ref')).toBeInTheDocument();
+    expect(within(technical).getAllByText('Источник данных').length).toBeGreaterThan(0);
     expect(within(technical).getByText('Число вышестоящих связей').parentElement).toHaveTextContent('2');
+  });
+
+  it('localizes P-UX-07 interface details in English without changing diagnostic values', async () => {
+    window.localStorage.setItem(localeStorageKey, 'en');
+    const englishDetails = details();
+    englishDetails.interfaces[0].label = 'uplink';
+    englishDetails.interfaces[0].label_source = undefined;
+    render(<I18nProvider><>
+      <DeviceInterfacesSection node={node('device-a')} dataSource={sourceFor(englishDetails)} />
+      <DeviceInterfacesSection node={node('ambiguous', [
+        { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'object-a' },
+        { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'object-b' },
+      ])} dataSource={sourceFor(englishDetails)} />
+    </></I18nProvider>);
+
+    const card = (await screen.findByRole('heading', { name: 'uplink' })).closest('article')!;
+    const technical = within(card).getByText('Technical details').closest('details')!;
+    await userEvent.click(within(technical).getByText('Technical details'));
+
+    expect(within(technical).getByText('Interface ID')).toBeInTheDocument();
+    expect(within(technical).getAllByText('NetworkInterface').length).toBeGreaterThan(0);
+    expect(within(technical).getAllByText('CANONICAL_FACT').length).toBeGreaterThan(0);
+    expect(within(technical).getByText('interface-source-ref')).toBeInTheDocument();
+    expect(within(technical).getAllByText('Data source').length).toBeGreaterThan(0);
+    expect(within(technical).queryByText('Идентификатор интерфейса')).not.toBeInTheDocument();
+    expect(await screen.findByText('Could not uniquely identify the network object to show its interfaces.')).toBeInTheDocument();
+    expect(screen.queryByText('Детали интерфейсов недоступны: нет однозначной ссылки на PhysicalObject.')).not.toBeInTheDocument();
   });
 
   it('does not request details without exactly one PhysicalObject source ref', () => {
@@ -123,7 +156,7 @@ describe('DeviceInterfacesSection', () => {
       { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'b' },
     ])} dataSource={dataSource} />);
 
-    expect(screen.getByText(/нет однозначной ссылки на PhysicalObject/)).toBeInTheDocument();
+    expect(screen.getByText('Не удалось однозначно определить сетевой объект для показа интерфейсов.')).toBeInTheDocument();
     expect(dataSource.loadDeviceDetails).not.toHaveBeenCalled();
   });
 
