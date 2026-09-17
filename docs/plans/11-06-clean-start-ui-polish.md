@@ -122,3 +122,13 @@ leaf получает `aria-current`, полезный parent — ссылка, 
 element. Eyebrow имеет page-level роль и не использует sidebar typography.
 Create/edit Object Blueprint используют общий header в editor component; Port
 Block editor использует тот же shared header.
+
+### P-UX-09 — стабильная левая ось ordinary non-map pages
+
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
+
+**Согласованный контракт.** Shared page shell left-anchored относительно
+правой границы sidebar. Page-specific `max-width` ограничивает только правую
+границу и не центрирует содержимое. Breadcrumbs, header и основной content
+сохраняют одинаковый left origin на всех ordinary non-map pages; `/map`
+исключён.

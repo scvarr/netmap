@@ -407,7 +407,7 @@ a { color: inherit; }
 .map-context-menu__danger { color: #f1b1a9 !important; }
 
 /* Catalog */
-.page-shell { width: min(1180px, 100%); min-height: 100vh; margin: 0 auto; padding: 44px clamp(24px, 5vw, 68px) 72px; }
+.page-shell { width: min(1180px, 100%); min-height: 100vh; margin: 0; padding: 44px clamp(24px, 5vw, 68px) 72px; }
 .page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; }
 .page-header__text { min-width: 0; }
 .page-header h1 { margin: 6px 0 0; font-size: clamp(22px, 2vw, 24px); letter-spacing: -.035em; }
