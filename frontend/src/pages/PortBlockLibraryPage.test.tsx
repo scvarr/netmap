@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +9,49 @@ import { I18nProvider, localeStorageKey } from '../i18n';
 afterEach(() => { vi.restoreAllMocks(); localStorage.clear(); });
 
 describe('PortBlockLibraryPage', () => {
+  it('keeps page chrome mounted while the initial load resolves into an empty library', async () => {
+    let resolveLoad: (document: { schema_version: string; port_blocks: never[] }) => void;
+    const loadPortBlocks = vi.fn().mockImplementation(
+      () => new Promise<{ schema_version: string; port_blocks: never[] }>((resolve) => {
+        resolveLoad = resolve;
+      }),
+    );
+    const dataSource = { loadPortBlocks, loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
+    render(<MemoryRouter><PortBlockLibraryPage dataSource={dataSource} /></MemoryRouter>);
+
+    const heading = screen.getByRole('heading', { name: 'Группы портов' });
+    const breadcrumbs = screen.getByRole('navigation', { name: 'Группы портов' });
+    expect(screen.getByRole('button', { name: 'Создать группу портов' })).toBeVisible();
+    const content = document.querySelector<HTMLElement>('.port-block-library__content');
+    expect(content).not.toBeNull();
+    expect(within(content!).getByRole('status')).toHaveClass('view-state--loading');
+
+    resolveLoad!({ schema_version: '1.0', port_blocks: [] });
+
+    await waitFor(() => {
+      expect(within(content!).getByRole('status')).toHaveClass('view-state--empty');
+    });
+    expect(content!.querySelector('.view-state--loading')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Группы портов' })).toBe(heading);
+    expect(screen.getByRole('navigation', { name: 'Группы портов' })).toBe(breadcrumbs);
+  });
+
+  it('keeps page chrome mounted when the initial load fails', async () => {
+    const loadPortBlocks = vi.fn().mockRejectedValue(new Error('Load failed'));
+    const dataSource = { loadPortBlocks, loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
+    render(<MemoryRouter><PortBlockLibraryPage dataSource={dataSource} /></MemoryRouter>);
+
+    const heading = screen.getByRole('heading', { name: 'Группы портов' });
+    const breadcrumbs = screen.getByRole('navigation', { name: 'Группы портов' });
+    const content = document.querySelector<HTMLElement>('.port-block-library__content');
+    expect(content).not.toBeNull();
+
+    expect(await within(content!).findByRole('alert')).toHaveTextContent('Load failed');
+    expect(screen.getByRole('button', { name: 'Создать группу портов' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Группы портов' })).toBe(heading);
+    expect(screen.getByRole('navigation', { name: 'Группы портов' })).toBe(breadcrumbs);
+  });
+
   it('renders Port Block records in a compact table and preserves the new-version route', async () => {
     const dataSource = { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0', port_blocks: [{ port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'pb-1' }, name: 'Panel', version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v-3' }, version_number: 3, port_count: 48, connection_point_count: 12, network_port_count: 36, version_count: 5 }] }), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
     render(

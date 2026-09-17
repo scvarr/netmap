@@ -53,19 +53,6 @@ export function PortBlockLibraryPage({
     void refresh();
   }, [dataSource]);
 
-  if (error)
-    return (
-      <PageShell className="catalog-page">
-        <ViewState kind="error" message={error} />
-      </PageShell>
-    );
-  if (!document)
-    return (
-      <PageShell className="catalog-page">
-        <ViewState kind="loading" />
-      </PageShell>
-    );
-
   return (
     <PageShell className="catalog-page">
       <Breadcrumbs label={t("portBlock.breadcrumb.library")} items={[{ label: t("portBlock.library.section") }, { label: t("portBlock.library.title") }]} />
@@ -89,7 +76,11 @@ export function PortBlockLibraryPage({
             {actionError}
           </p>
         )}
-        {document.port_blocks.length === 0 ? (
+        {error ? (
+          <ViewState kind="error" message={error} />
+        ) : !document ? (
+          <ViewState kind="loading" />
+        ) : document.port_blocks.length === 0 ? (
           <ViewState kind="empty" message={t("portBlock.library.empty")} />
         ) : (
           <div className="port-block-library-table-wrap">

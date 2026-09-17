@@ -125,10 +125,21 @@ Block editor использует тот же shared header.
 
 ### P-UX-09 — стабильная левая ось ordinary non-map pages
 
-**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — **ПРОЙДЕНА**.
 
 **Согласованный контракт.** Shared page shell left-anchored относительно
 правой границы sidebar. Page-specific `max-width` ограничивает только правую
 границу и не центрирует содержимое. Breadcrumbs, header и основной content
 сохраняют одинаковый left origin на всех ordinary non-map pages; `/map`
 исключён.
+
+### P-UX-10 — стабильный page chrome при async loading библиотеки групп портов
+
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
+
+**Согласованный контракт.**
+
+- PageShell/Breadcrumbs/PageHeader существуют во всех loading/error/empty/ready states;
+- async state меняет только content area;
+- никакой full-page replacement во время `loadPortBlocks()`;
+- datasource/navigation semantics не меняются.
