@@ -334,7 +334,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
     const blueprint = { schema_version: '1.0' as const, blueprints: [{ blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp-switch' }, name: 'Switch 24', version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v-switch' }, version_number: 3, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, slot_count: 24, internal_link_count: 0, version_count: 3 }] };
     const instantiateObjectBlueprint = vi.fn().mockResolvedValue({ schema_version: '1.0' as const, blueprint_ref: blueprint.blueprints[0].blueprint_ref, version_ref: blueprint.blueprints[0].version_ref, physical_object_ref: physicalRef(createdId), slots: [] });
     renderApp('/infrastructure/objects/new', { objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue(blueprint), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn(), instantiateObjectBlueprint } });
-    expect(await screen.findByRole('heading', { name: 'Switch 24' })).toBeInTheDocument();
+    expect(await screen.findByRole('rowheader', { name: 'Switch 24' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Сетевое устройство/ })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Выбрать шаблон' }));
     await userEvent.type(screen.getByLabelText('Имя экземпляра'), ' SW1 ');

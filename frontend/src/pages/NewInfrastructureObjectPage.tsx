@@ -1,261 +1,39 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import {
-  BlueprintInstantiationDialog,
-  type BlueprintInstantiationTarget,
-} from "../components/BlueprintInstantiationDialog";
 import { CreateNetworkDevice } from "../components/CreateNetworkDevice";
 import { CreatePhysicalObject } from "../components/CreatePhysicalObject";
-import type { DeviceWriteDataSource } from "../topology/deviceWriteTypes";
-import type {
-  ObjectBlueprintDataSource,
-  ObjectBlueprintListDocument,
-} from "../topology/objectBlueprintTypes";
-import type { PhysicalObjectWriteDataSource } from "../topology/physicalObjectWriteTypes";
-import { useI18n } from "../i18n";
 import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
+import { useI18n } from "../i18n";
+import type { DeviceWriteDataSource } from "../topology/deviceWriteTypes";
+import { locationPath } from "../topology/locationPresentation";
+import type { LocationDataSource, LocationDocument } from "../topology/locationTypes";
+import type { ObjectBlueprintDataSource, ObjectBlueprintListDocument, ObjectBlueprintListItem } from "../topology/objectBlueprintTypes";
+import type { PhysicalObjectWriteDataSource } from "../topology/physicalObjectWriteTypes";
 
-interface NewInfrastructureObjectPageProps {
-  deviceWriteDataSource?: DeviceWriteDataSource;
-  physicalObjectWriteDataSource?: PhysicalObjectWriteDataSource;
-  objectBlueprintDataSource?: ObjectBlueprintDataSource;
-}
-
+interface NewInfrastructureObjectPageProps { deviceWriteDataSource?: DeviceWriteDataSource; physicalObjectWriteDataSource?: PhysicalObjectWriteDataSource; objectBlueprintDataSource?: ObjectBlueprintDataSource; locationDataSource?: LocationDataSource; }
 type CreationIntent = "device" | "physical";
 
-export function NewInfrastructureObjectPage({
-  deviceWriteDataSource,
-  physicalObjectWriteDataSource,
-  objectBlueprintDataSource,
-}: NewInfrastructureObjectPageProps) {
-  const { t } = useI18n();
-  const navigate = useNavigate();
-  const [params] = useSearchParams();
-  const [intent, setIntent] = useState<CreationIntent>("device");
-  const [blueprints, setBlueprints] =
-    useState<ObjectBlueprintListDocument | null>(null);
-  const [blueprintError, setBlueprintError] = useState<string | null>(null);
-  const [retryKey, setRetryKey] = useState(0);
-  const [target, setTarget] = useState<BlueprintInstantiationTarget | null>(
-    null,
-  );
-  const [manualOpen, setManualOpen] = useState(false);
+function ancestors(items: LocationDocument[], id: string | null): Set<string> {
+  const byId = new Map(items.map((item) => [item.location_ref.entity_id, item])); const result = new Set<string>(); const seen = new Set<string>(); let current = id ? byId.get(id) : undefined;
+  while (current?.parent_location_ref && !seen.has(current.location_ref.entity_id)) { seen.add(current.location_ref.entity_id); const parentId = current.parent_location_ref.entity_id; result.add(parentId); current = byId.get(parentId); }
+  return result;
+}
 
-  useEffect(() => {
-    if (!objectBlueprintDataSource) {
-      setBlueprints(null);
-      return;
-    }
-    let active = true;
-    setBlueprints(null);
-    setBlueprintError(null);
-    void objectBlueprintDataSource.loadObjectBlueprints().then(
-      (next) => {
-        if (active) setBlueprints(next);
-      },
-      () => {
-        if (active) setBlueprintError(t("create.blueprintsLoadFailed"));
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [objectBlueprintDataSource, retryKey, t]);
-  useEffect(() => {
-    if (!blueprints || target || !params.get("blueprint")) return;
-    const item = blueprints.blueprints.find(
-      (blueprint) =>
-        blueprint.blueprint_ref.entity_id === params.get("blueprint") &&
-        blueprint.version_ref.entity_id === params.get("version"),
-    );
-    if (item)
-      setTarget({
-        id: item.blueprint_ref.entity_id,
-        versionId: item.version_ref.entity_id,
-        name: item.name,
-        versionNumber: item.version_number,
-      });
-  }, [blueprints, params, target]);
+function CreateLocationPicker({ items, selected, onSelect }: { items: LocationDocument[]; selected: string; onSelect: (id: string) => void }) {
+  const { t } = useI18n(); const [query, setQuery] = useState(""); const [expanded, setExpanded] = useState<Set<string>>(() => ancestors(items, selected || null)); const normalized = query.trim().toLocaleLowerCase();
+  const byParent = useMemo(() => { const result = new Map<string | null, LocationDocument[]>(); items.forEach((item) => { const parent = item.parent_location_ref?.entity_id ?? null; result.set(parent, [...(result.get(parent) ?? []), item]); }); result.forEach((children) => children.sort((a, b) => a.name.localeCompare(b.name))); return result; }, [items]);
+  const visible = useMemo(() => { if (!normalized) return null; const result = new Set<string>(); items.forEach((item) => { const id = item.location_ref.entity_id; if (item.name.toLocaleLowerCase().includes(normalized) || (locationPath(items, id) ?? "").toLocaleLowerCase().includes(normalized)) { result.add(id); ancestors(items, id).forEach((ancestor) => result.add(ancestor)); } }); return result; }, [items, normalized]);
+  const render = (parent: string | null): ReactNode => { const children = (byParent.get(parent) ?? []).filter((item) => !visible || visible.has(item.location_ref.entity_id)); if (!children.length) return null; return <ul className="object-location-picker-tree" role={parent === null ? "radiogroup" : "group"}>{children.map((item) => { const id = item.location_ref.entity_id; const hasChildren = (byParent.get(id) ?? []).some((child) => !visible || visible.has(child.location_ref.entity_id)); const isExpanded = expanded.has(id) || (!!visible?.has(id) && hasChildren); return <li key={id}><div className="object-location-picker-tree__row"><span className="object-location-picker-tree__toggle">{hasChildren ? <button type="button" aria-label={isExpanded ? t("location.pickerCollapse", { name: item.name }) : t("location.pickerExpand", { name: item.name })} onClick={() => setExpanded((previous) => { const next = new Set(previous); next.has(id) ? next.delete(id) : next.add(id); return next; })}>{isExpanded ? "−" : "+"}</button> : <span aria-hidden="true" />}</span><button type="button" role="radio" aria-checked={selected === id} className="object-location-picker-tree__choice" onClick={() => onSelect(id)}><strong>{item.name}</strong>{item.type && <small>{item.type}</small>}</button></div>{hasChildren && isExpanded && render(id)}</li>; })}</ul>; };
+  return <div className="create-location-picker"><label><span>{t("catalog.search")}</span><input value={query} onChange={(event) => setQuery(event.target.value)} /></label><div className="object-location-picker__toolbar"><button type="button" role="radio" aria-checked={!selected} onClick={() => onSelect("")}>{t("object.locationEmptyOption")}</button></div>{render(null)}{visible && !visible.size && <p className="catalog-note">{t("location.pickerNoResults")}</p>}</div>;
+}
 
-  return (
-    <PageShell className="catalog-page create-object-page">
-      <Breadcrumbs
-        label={t("object.breadcrumbs")}
-        items={[
-          { label: t("catalog.infrastructure") },
-          { label: t("nav.objects"), to: "/infrastructure/objects" },
-          { label: t("create.create") },
-        ]}
-      />
-      <PageHeader
-        eyebrow={t("catalog.infrastructure")}
-        title={t("catalog.createObject")}
-        description={t("create.physicalObject")}
-      />
-      <section
-        className="creation-form-surface"
-        aria-label={t("create.blueprints")}
-      >
-        {!objectBlueprintDataSource && (
-          <p className="catalog-note catalog-note--gap">
-            {t("create.blueprintsUnavailable")}
-          </p>
-        )}
-        {objectBlueprintDataSource && !blueprints && !blueprintError && (
-          <p>{t("create.blueprintsLoading")}</p>
-        )}
-        {blueprintError && (
-          <p role="alert" className="catalog-note catalog-note--gap">
-            {blueprintError}{" "}
-            <button
-              type="button"
-              onClick={() => setRetryKey((value) => value + 1)}
-            >
-              {t("action.retry")}
-            </button>
-          </p>
-        )}
-        {blueprints?.blueprints.length === 0 && (
-          <div className="catalog-note">
-            <h2>{t("create.blueprintsEmptyTitle")}</h2>
-            <p>{t("create.blueprintsEmptyBody")}</p>
-            <Link
-              className="primary-action"
-              to="/library/object-blueprints/new"
-            >
-              {t("create.blueprintsCreateFirst")}
-            </Link>
-          </div>
-        )}
-        {blueprints && blueprints.blueprints.length > 0 && (
-          <div className="create-blueprint-table-wrap">
-            <table className="create-blueprint-table">
-              <thead>
-                <tr>
-                  <th scope="col">{t("blueprint.library.name")}</th>
-                  <th scope="col">{t("blueprint.library.objectType")}</th>
-                  <th scope="col">{t("blueprint.library.version")}</th>
-                  <th scope="col">{t("physical.ports")}</th>
-                  <th scope="col">{t("blueprint.library.internalLinks")}</th>
-                  <th scope="col">{t("blueprint.library.actions")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {blueprints.blueprints.map((blueprint) => (
-                  <tr key={blueprint.blueprint_ref.entity_id}>
-                    <th scope="row">{blueprint.name}</th>
-                    <td>
-                      {blueprint.default_physical_object_class ??
-                        t("blueprint.library.notSpecified")}
-                    </td>
-                    <td className="create-blueprint-table__numeric">
-                      v{blueprint.version_number}
-                    </td>
-                    <td className="create-blueprint-table__numeric">
-                      {blueprint.slot_count}
-                    </td>
-                    <td className="create-blueprint-table__numeric">
-                      {blueprint.internal_link_count}
-                    </td>
-                    <td className="create-blueprint-table__actions">
-                      <button
-                        type="button"
-                        className="primary-action"
-                        onClick={() =>
-                          setTarget({
-                            id: blueprint.blueprint_ref.entity_id,
-                            versionId: blueprint.version_ref.entity_id,
-                            name: blueprint.name,
-                            versionNumber: blueprint.version_number,
-                          })
-                        }
-                      >
-                        {t("create.blueprintSelect")}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-      <section
-        className="creation-form-surface"
-        aria-label={t("create.manual")}
-      >
-        {!manualOpen && (
-          <button
-            type="button"
-            className="secondary-action"
-            onClick={() => setManualOpen(true)}
-          >
-            {t("create.manual")}
-          </button>
-        )}
-        {manualOpen && (
-          <>
-            <h2>{t("create.manual")}</h2>
-            <p className="catalog-note">{t("create.manualHint")}</p>
-            <section
-              className="creation-intents"
-              aria-label={t("create.manualType")}
-            >
-              <button
-                type="button"
-                aria-pressed={intent === "device"}
-                onClick={() => setIntent("device")}
-              >
-                <strong>{t("create.networkDevice")}</strong>
-                <span>{t("create.deviceIntent")}</span>
-              </button>
-              <button
-                type="button"
-                aria-pressed={intent === "physical"}
-                onClick={() => setIntent("physical")}
-              >
-                <strong>{t("create.physicalObject")}</strong>
-                <span>{t("create.physicalIntent")}</span>
-              </button>
-            </section>
-            {intent === "device" && deviceWriteDataSource && (
-              <CreateNetworkDevice
-                variant="page"
-                dataSource={deviceWriteDataSource}
-                onCreated={(document) =>
-                  navigate(
-                    `/infrastructure/objects/${encodeURIComponent(document.device.source_ref.entity_id)}`,
-                  )
-                }
-              />
-            )}
-            {intent === "physical" && physicalObjectWriteDataSource && (
-              <CreatePhysicalObject
-                variant="page"
-                dataSource={physicalObjectWriteDataSource}
-                onCreated={(document) =>
-                  navigate(
-                    `/infrastructure/objects/${encodeURIComponent(document.physical_object.source_ref.entity_id)}`,
-                  )
-                }
-              />
-            )}
-            {((intent === "device" && !deviceWriteDataSource) ||
-              (intent === "physical" && !physicalObjectWriteDataSource)) && (
-              <p className="catalog-note catalog-note--gap">
-                {t("create.datasourceUnavailable")}
-              </p>
-            )}
-          </>
-        )}
-      </section>
-      {target && objectBlueprintDataSource && (
-        <BlueprintInstantiationDialog
-          dataSource={objectBlueprintDataSource}
-          target={target}
-          onClose={() => setTarget(null)}
-        />
-      )}
-    </PageShell>
-  );
+export function NewInfrastructureObjectPage({ deviceWriteDataSource, physicalObjectWriteDataSource, objectBlueprintDataSource, locationDataSource }: NewInfrastructureObjectPageProps) {
+  const { t } = useI18n(); const navigate = useNavigate(); const [params] = useSearchParams(); const [intent, setIntent] = useState<CreationIntent>("device"); const [blueprints, setBlueprints] = useState<ObjectBlueprintListDocument | null>(null); const [blueprintError, setBlueprintError] = useState<string | null>(null); const [retryKey, setRetryKey] = useState(0); const [selectedBlueprint, setSelectedBlueprint] = useState<ObjectBlueprintListItem | null>(null); const [locations, setLocations] = useState<LocationDocument[] | null>(null); const [locationError, setLocationError] = useState<string | null>(null); const [name, setName] = useState(""); const [locationId, setLocationId] = useState(""); const [creating, setCreating] = useState(false); const [createError, setCreateError] = useState<string | null>(null); const [manualOpen, setManualOpen] = useState(false);
+  useEffect(() => { if (!objectBlueprintDataSource) { setBlueprints(null); return; } let active = true; setBlueprints(null); setBlueprintError(null); void objectBlueprintDataSource.loadObjectBlueprints().then((next) => { if (active) setBlueprints(next); }, () => { if (active) setBlueprintError(t("create.blueprintsLoadFailed")); }); return () => { active = false; }; }, [objectBlueprintDataSource, retryKey, t]);
+  useEffect(() => { if (!locationDataSource) { setLocations(null); return; } let active = true; setLocations(null); setLocationError(null); void locationDataSource.loadLocations().then((next) => { if (active) setLocations(next); }, (reason) => { if (active) setLocationError(reason instanceof Error ? reason.message : String(reason)); }); return () => { active = false; }; }, [locationDataSource]);
+  useEffect(() => { if (!blueprints || selectedBlueprint || !params.get("blueprint")) return; const item = blueprints.blueprints.find((blueprint) => blueprint.blueprint_ref.entity_id === params.get("blueprint") && blueprint.version_ref.entity_id === params.get("version")); if (item) setSelectedBlueprint(item); }, [blueprints, params, selectedBlueprint]);
+  const instantiate = async () => { if (!name.trim()) { setCreateError(t("blueprint.instantiate.nameRequired")); return; } if (!selectedBlueprint || !objectBlueprintDataSource?.instantiateObjectBlueprint) { setCreateError(t("blueprint.instantiate.unsupported")); return; } setCreateError(null); setCreating(true); try { const created = await objectBlueprintDataSource.instantiateObjectBlueprint(selectedBlueprint.blueprint_ref.entity_id, selectedBlueprint.version_ref.entity_id, { display_name: name.trim(), ...(locationId ? { location_id: locationId } : {}) }); navigate(`/infrastructure/objects/${created.physical_object_ref.entity_id}`); } catch { setCreateError(t("blueprint.instantiate.failed")); } finally { setCreating(false); } };
+  const selectedLocationPath = locations ? locationPath(locations, locationId) : null;
+  const manual = <section className="creation-form-surface" aria-label={t("create.manual")}>{!manualOpen && <button type="button" className="secondary-action" onClick={() => setManualOpen(true)}>{t("create.manual")}</button>}{manualOpen && <><h2>{t("create.manual")}</h2><p className="catalog-note">{t("create.manualHint")}</p><section className="creation-intents" aria-label={t("create.manualType")}><button type="button" aria-pressed={intent === "device"} onClick={() => setIntent("device")}><strong>{t("create.networkDevice")}</strong><span>{t("create.deviceIntent")}</span></button><button type="button" aria-pressed={intent === "physical"} onClick={() => setIntent("physical")}><strong>{t("create.physicalObject")}</strong><span>{t("create.physicalIntent")}</span></button></section>{intent === "device" && deviceWriteDataSource && <CreateNetworkDevice variant="page" dataSource={deviceWriteDataSource} onCreated={(document) => navigate(`/infrastructure/objects/${encodeURIComponent(document.device.source_ref.entity_id)}`)} />}{intent === "physical" && physicalObjectWriteDataSource && <CreatePhysicalObject variant="page" dataSource={physicalObjectWriteDataSource} onCreated={(document) => navigate(`/infrastructure/objects/${encodeURIComponent(document.physical_object.source_ref.entity_id)}`)} />}{((intent === "device" && !deviceWriteDataSource) || (intent === "physical" && !physicalObjectWriteDataSource)) && <p className="catalog-note catalog-note--gap">{t("create.datasourceUnavailable")}</p>}</>}</section>;
+  return <PageShell className="catalog-page create-object-page"><Breadcrumbs label={t("object.breadcrumbs")} items={[{ label: t("catalog.infrastructure") }, { label: t("nav.objects"), to: "/infrastructure/objects" }, { label: t("create.create") }]} /><PageHeader eyebrow={t("catalog.infrastructure")} title={t("catalog.createObject")} description={t("create.physicalObject")} /><section className="creation-form-surface" aria-label={t("create.blueprints")}>{!objectBlueprintDataSource && <p className="catalog-note catalog-note--gap">{t("create.blueprintsUnavailable")}</p>}{objectBlueprintDataSource && !blueprints && !blueprintError && <p>{t("create.blueprintsLoading")}</p>}{blueprintError && <p role="alert" className="catalog-note catalog-note--gap">{blueprintError} <button type="button" onClick={() => setRetryKey((value) => value + 1)}>{t("action.retry")}</button></p>}{blueprints?.blueprints.length === 0 && <div className="catalog-note"><h2>{t("create.blueprintsEmptyTitle")}</h2><p>{t("create.blueprintsEmptyBody")}</p><Link className="primary-action" to="/library/object-blueprints/new">{t("create.blueprintsCreateFirst")}</Link></div>}{selectedBlueprint ? <section className="blueprint-create-form" aria-label={t("blueprint.instantiate.title")}><div className="blueprint-create-form__heading"><div><h2>{t("blueprint.instantiate.from", { name: selectedBlueprint.name })}</h2><p>{t("blueprint.instantiate.version", { version: selectedBlueprint.version_number })}</p></div><button type="button" className="secondary-action" disabled={creating} onClick={() => { setSelectedBlueprint(null); setCreateError(null); }}>{t("create.backToBlueprints")}</button></div><dl className="detail-fields"><div><dt>{t("blueprint.library.objectType")}</dt><dd>{selectedBlueprint.default_physical_object_class ?? t("blueprint.library.notSpecified")}</dd></div><div><dt>{t("physical.ports")}</dt><dd>{selectedBlueprint.slot_count}</dd></div><div><dt>{t("blueprint.library.internalLinks")}</dt><dd>{selectedBlueprint.internal_link_count}</dd></div></dl><label><span>{t("blueprint.instantiate.name")}</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></label><section className="blueprint-create-form__location" aria-label={t("object.locationPicker")}><h3>{t("object.locationPicker")}</h3>{locationError && <p role="alert" className="catalog-note catalog-note--gap">{t("location.loadFailed", { error: locationError })}</p>}{locationDataSource && !locations && !locationError && <p>{t("location.loading")}</p>}{locations && <><CreateLocationPicker items={locations} selected={locationId} onSelect={setLocationId} />{selectedLocationPath && <p className="object-location-path">{selectedLocationPath}</p>}</>}</section>{createError && <p role="alert" className="blueprint-editor__error">{createError}</p>}<button type="button" className="primary-action" disabled={creating || !name.trim()} onClick={() => void instantiate()}>{creating ? t("blueprint.instantiate.creating") : t("create.create")}</button></section> : blueprints && blueprints.blueprints.length > 0 && <div className="create-blueprint-table-wrap"><table className="create-blueprint-table"><thead><tr><th scope="col">{t("blueprint.library.name")}</th><th scope="col">{t("blueprint.library.objectType")}</th><th scope="col">{t("blueprint.library.version")}</th><th scope="col">{t("physical.ports")}</th><th scope="col">{t("blueprint.library.internalLinks")}</th><th scope="col">{t("blueprint.library.actions")}</th></tr></thead><tbody>{blueprints.blueprints.map((blueprint) => <tr key={blueprint.blueprint_ref.entity_id}><th scope="row">{blueprint.name}</th><td>{blueprint.default_physical_object_class ?? t("blueprint.library.notSpecified")}</td><td className="create-blueprint-table__numeric">v{blueprint.version_number}</td><td className="create-blueprint-table__numeric">{blueprint.slot_count}</td><td className="create-blueprint-table__numeric">{blueprint.internal_link_count}</td><td className="create-blueprint-table__actions"><button type="button" className="primary-action" onClick={() => setSelectedBlueprint(blueprint)}>{t("create.blueprintSelect")}</button></td></tr>)}</tbody></table></div>}</section>{manual}</PageShell>;
 }

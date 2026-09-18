@@ -1135,6 +1135,10 @@ def instantiate_object_blueprint(
 ) -> ObjectBlueprintInstantiationDocument:
     with session.begin():
         created = ObjectBlueprintCatalog(session).instantiate(blueprint_id, version_id, query.display_name)
+        if query.location_id is not None:
+            LocationCatalog(session).set_physical_object_location(
+                created.physical_object_id, query.location_id
+            )
         return {
             "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
             "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},

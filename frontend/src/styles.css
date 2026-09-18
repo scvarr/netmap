@@ -506,6 +506,7 @@ a { color: inherit; }
 .create-device__form--page { position: static; width: 100%; max-width: 560px; padding: 0; border: 0; background: transparent; box-shadow: none; }
 .create-device__form--page .create-device__heading { margin-bottom: 20px; }
 .create-device__form--page .create-device__heading h2 { font-size: 21px; }
+.blueprint-create-form { max-width: 620px; }.blueprint-create-form__heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }.blueprint-create-form__heading h2 { margin: 0; font-size: 20px; }.blueprint-create-form__heading p { margin: 6px 0 14px; color: #91a5a5; }.blueprint-create-form > label, .create-location-picker > label { display: block; margin-top: 18px; color: #91a5a5; font-size: 11px; }.blueprint-create-form input, .create-location-picker input { box-sizing: border-box; width: 100%; margin-top: 6px; padding: 9px; border: 1px solid #2a4448; border-radius: 6px; color: #e7f4f1; background: #081315; }.blueprint-create-form__location { margin-top: 20px; padding-top: 16px; border-top: 1px solid #22383a; }.blueprint-create-form__location h3 { margin: 0; font-size: 14px; }
 
 @media (max-width: 760px) {
   .shell-locale { top: 16px; right: 16px; }

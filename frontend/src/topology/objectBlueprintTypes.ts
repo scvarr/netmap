@@ -100,5 +100,5 @@ export interface ObjectBlueprintDataSource {
   createObjectBlueprint(request: CreateObjectBlueprintRequest): Promise<ObjectBlueprintCreationDocument>;
   createObjectBlueprintVersion?(blueprintId: string, request: CreateObjectBlueprintVersionRequest): Promise<ObjectBlueprintCreationDocument>;
   deleteObjectBlueprint?(blueprintId: string): Promise<void>;
-  instantiateObjectBlueprint?(blueprintId: string, versionId: string, request: { display_name: string }): Promise<ObjectBlueprintInstantiationDocument>;
+  instantiateObjectBlueprint?(blueprintId: string, versionId: string, request: { display_name: string; location_id?: string }): Promise<ObjectBlueprintInstantiationDocument>;
 }

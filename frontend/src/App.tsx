@@ -101,6 +101,7 @@ export function App(props: AppProps) {
               deviceWriteDataSource={props.deviceWriteDataSource}
               physicalObjectWriteDataSource={props.physicalObjectWriteDataSource}
               objectBlueprintDataSource={props.objectBlueprintDataSource}
+              locationDataSource={props.locationDataSource}
             />
           )}
         />

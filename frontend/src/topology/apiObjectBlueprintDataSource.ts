@@ -120,7 +120,7 @@ export class ApiObjectBlueprintDataSource implements ObjectBlueprintDataSource {
   async deleteObjectBlueprint(blueprintId: string): Promise<void> {
     const response = await fetch(`${this.endpoint}/${encodeURIComponent(blueprintId)}`, { method: 'DELETE' }); if (!response.ok) throw await backendError(response);
   }
-  async instantiateObjectBlueprint(blueprintId: string, versionId: string, request: { display_name: string }): Promise<ObjectBlueprintInstantiationDocument> {
+  async instantiateObjectBlueprint(blueprintId: string, versionId: string, request: { display_name: string; location_id?: string }): Promise<ObjectBlueprintInstantiationDocument> {
     const response = await fetch(`${this.endpoint}/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}/instantiate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) }); if (!response.ok) throw await backendError(response);
     let body: unknown; try { body = await response.json(); } catch { return malformed('response body must be valid JSON.'); }
     return parseObjectBlueprintInstantiationDocument(body);

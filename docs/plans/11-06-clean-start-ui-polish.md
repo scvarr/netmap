@@ -191,7 +191,7 @@ sort и pagination не входят в этот milestone. Instantiation semant
 
 ### P-UX-14 — Location при создании Blueprint-backed object
 
-**Статус: CONTRACT AGREED / IMPLEMENTATION PENDING.**
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
 
 **Замечание.** Текущий create-from-Blueprint workflow запрашивает только имя
 экземпляра. Canonical `Location` можно назначить лишь после создания объекта

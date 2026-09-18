@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from app.blueprint_catalog import ObjectBlueprintCatalog
 from app.database import SessionLocal
 from app.main import app
-from app.models import BlueprintEndpointSlot, BlueprintInstance, ConnectionPoint, InterfacePhysicalBinding, NetworkInterface, ObjectBlueprint, ObjectBlueprintVersion
+from app.models import BlueprintEndpointSlot, BlueprintInstance, ConnectionPoint, InterfacePhysicalBinding, NetworkInterface, ObjectBlueprint, ObjectBlueprintVersion, PhysicalObject
 
 
 client = TestClient(app)
@@ -139,6 +139,50 @@ def test_composed_materialization_creates_expected_canonical_rows_and_delete_pre
     assert client.delete(f"/v1/library/object-blueprints/{disposable_id}").status_code == 204
     assert client.get(f"/v1/library/port-blocks/{block_id}/versions/{block_version_id}").status_code == 200
     assert client.get(f"/v1/library/object-blueprints/{disposable_id}/versions/{disposable_version}").status_code == 422
+
+
+def test_instantiation_assigns_optional_initial_location_in_the_same_transaction():
+    blueprint_id, version_id = create_blueprint([slot("cp"), slot("ni", "NETWORK_PORT")], name="Located")
+    location = client.post("/v1/locations", json={"name": "Rack 4"})
+    assert location.status_code == 201
+    location_id = location.json()["location_ref"]["entity_id"]
+
+    created = client.post(
+        f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}/instantiate",
+        json={"display_name": "Located object", "location_id": location_id},
+    )
+    assert created.status_code == 201, created.text
+    object_id = created.json()["physical_object_ref"]["entity_id"]
+    assert client.get(f"/v1/topology/physical-objects/{object_id}/location").json()["location_ref"] == location.json()["location_ref"]
+    with SessionLocal() as session:
+        assert session.get(PhysicalObject, uuid.UUID(object_id)).location_id == uuid.UUID(location_id)
+        assert session.scalar(select(func.count()).select_from(ConnectionPoint).where(ConnectionPoint.physical_object_id == uuid.UUID(object_id))) == 2
+        assert session.scalar(select(func.count()).select_from(NetworkInterface)) >= 1
+
+
+def test_invalid_initial_location_rolls_back_object_and_materialization():
+    blueprint_id, version_id = create_blueprint([slot("cp"), slot("ni", "NETWORK_PORT")], name="Rollback")
+    with SessionLocal() as session:
+        before = {
+            "objects": session.scalar(select(func.count()).select_from(PhysicalObject)),
+            "instances": session.scalar(select(func.count()).select_from(BlueprintInstance)),
+            "points": session.scalar(select(func.count()).select_from(ConnectionPoint)),
+            "interfaces": session.scalar(select(func.count()).select_from(NetworkInterface)),
+            "bindings": session.scalar(select(func.count()).select_from(InterfacePhysicalBinding)),
+        }
+    response = client.post(
+        f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}/instantiate",
+        json={"display_name": "Must not persist", "location_id": "00000000-0000-0000-0000-000000000001"},
+    )
+    assert response.status_code == 422
+    with SessionLocal() as session:
+        assert before == {
+            "objects": session.scalar(select(func.count()).select_from(PhysicalObject)),
+            "instances": session.scalar(select(func.count()).select_from(BlueprintInstance)),
+            "points": session.scalar(select(func.count()).select_from(ConnectionPoint)),
+            "interfaces": session.scalar(select(func.count()).select_from(NetworkInterface)),
+            "bindings": session.scalar(select(func.count()).select_from(InterfacePhysicalBinding)),
+        }
 
 
 def test_historical_snapshot_without_composition_remains_readable_and_instantiable():
