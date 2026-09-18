@@ -128,41 +128,45 @@ export function NewInfrastructureObjectPage({
           </div>
         )}
         {blueprints && blueprints.blueprints.length > 0 && (
-          <div className="blueprint-library-grid">
+          <div className="create-blueprint-picker">
             {blueprints.blueprints.map((blueprint) => (
               <article
-                className="blueprint-card"
+                className="create-blueprint-picker__item"
                 key={blueprint.blueprint_ref.entity_id}
               >
-                <h2>{blueprint.name}</h2>
-                <p>
-                  {t("create.blueprintVersion", {
-                    version: blueprint.version_number,
-                    objectClass: blueprint.default_physical_object_class
-                      ? ` · ${blueprint.default_physical_object_class}`
-                      : "",
-                  })}
-                </p>
-                <p>
-                  {t("create.blueprintPorts", {
-                    ports: blueprint.slot_count,
-                    links: blueprint.internal_link_count,
-                  })}
-                </p>
-                <button
-                  type="button"
-                  className="primary-action"
-                  onClick={() =>
-                    setTarget({
-                      id: blueprint.blueprint_ref.entity_id,
-                      versionId: blueprint.version_ref.entity_id,
-                      name: blueprint.name,
-                      versionNumber: blueprint.version_number,
-                    })
-                  }
-                >
-                  {t("create.blueprintSelect")}
-                </button>
+                <div className="create-blueprint-picker__identity">
+                  <h2>{blueprint.name}</h2>
+                  <p className="create-blueprint-picker__meta">
+                    {t("create.blueprintVersion", {
+                      version: blueprint.version_number,
+                      objectClass: blueprint.default_physical_object_class
+                        ? ` · ${blueprint.default_physical_object_class}`
+                        : "",
+                    })}
+                  </p>
+                  <p className="create-blueprint-picker__meta">
+                    {t("create.blueprintPorts", {
+                      ports: blueprint.slot_count,
+                      links: blueprint.internal_link_count,
+                    })}
+                  </p>
+                </div>
+                <div className="create-blueprint-picker__action">
+                  <button
+                    type="button"
+                    className="primary-action"
+                    onClick={() =>
+                      setTarget({
+                        id: blueprint.blueprint_ref.entity_id,
+                        versionId: blueprint.version_ref.entity_id,
+                        name: blueprint.name,
+                        versionNumber: blueprint.version_number,
+                      })
+                    }
+                  >
+                    {t("create.blueprintSelect")}
+                  </button>
+                </div>
               </article>
             ))}
           </div>

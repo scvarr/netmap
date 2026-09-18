@@ -485,6 +485,13 @@ a { color: inherit; }
 .detail-section--operations .connection-point-list, .detail-section--operations .interface-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
 .detail-section--operations .physical-object-details > h3, .detail-section--operations .device-interfaces__heading > h3 { font-size: 12px; }
 .create-object-page { max-width: 900px; }
+.create-blueprint-picker { display: grid; gap: 10px; }
+.create-blueprint-picker__item { display: flex; align-items: center; justify-content: space-between; gap: 18px; min-width: 0; padding: 14px 16px; border: 1px solid #294145; border-radius: 10px; background: #0b191b; }
+.create-blueprint-picker__identity { min-width: 0; }
+.create-blueprint-picker__identity h2 { margin: 0; color: #e0eeeb; font-size: 14px; }
+.create-blueprint-picker__meta { margin: 4px 0 0; color: #8ba3a1; font-size: 10px; line-height: 1.4; }
+.create-blueprint-picker__action { flex: 0 0 auto; }
+.create-blueprint-picker__action .primary-action { margin: 0; padding: 7px 10px; white-space: nowrap; }
 .creation-intents { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 28px 0 16px; }
 .creation-intents button { padding: 17px; border: 1px solid #294145; border-radius: 11px; color: #95aaa8; background: #0b191b; cursor: pointer; text-align: left; }
 .creation-intents button[aria-pressed="true"] { border-color: #4b8d7b; color: #e1f2ed; background: #102c26; box-shadow: 0 0 0 2px rgba(85, 229, 181, .07); }
@@ -508,6 +515,7 @@ a { color: inherit; }
   .catalog-controls > label:first-child { min-width: 0; }
   .page-header { align-items: flex-start; flex-direction: column; }
   .page-header__actions { width: 100%; }
+  .create-blueprint-picker__item { align-items: flex-start; flex-direction: column; gap: 12px; }
   .creation-intents { grid-template-columns: 1fr; }
   .blueprint-editor-layout, .blueprint-composer__workspace { grid-template-columns: 1fr; }.blueprint-editor-preview { position: static; }
   .blueprint-composer__chooser, .blueprint-composer__instance, .blueprint-composer__link, .blueprint-composer__selected { grid-template-columns: 1fr; }.blueprint-composer__instance p { grid-column: auto; }

@@ -164,7 +164,7 @@ drag/resize/alignment не меняются; viewport больше не раст
 
 ### P-UX-12 — desktop workspace layout Object Blueprint editor
 
-**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — **ПРОЙДЕНА**.
 
 **Согласованный контракт.** Desktop editor использует левую authoring rail и
 правую composition workspace, используя доступную ширину PageShell вместо
@@ -174,3 +174,14 @@ controls, bounded canvas и compact controls выбранного instance. Бо
 `PortBlockStructurePreview` внутри selected-instance editor UI отсутствует.
 На узком viewport layout сворачивается в одну колонку. Authoring semantics и
 persistence не меняются.
+
+### P-UX-13 — компактный выбор Object Blueprint при создании объекта
+
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
+
+**Согласованный контракт.** Create-object workflow использует отдельный
+компактный Blueprint picker; library `.blueprint-card` для него не
+переиспользуется. Picker показывает name, version, object class при наличии,
+количество ports и internal links, а действие выбора имеет обычный компактный
+размер. `BlueprintInstantiationDialog` и semantics instantiation не меняются;
+ручное создание остаётся отдельным fallback ниже picker.
