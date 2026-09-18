@@ -27,7 +27,7 @@ describe('NewInfrastructureObjectPage', () => {
     expect(screen.queryByText('Шаблоны объектов')).not.toBeInTheDocument();
   });
 
-  it('renders a dedicated compact picker and opens the dialog for the selected blueprint', async () => {
+  it('renders a compact blueprint table and opens the dialog for the selected blueprint', async () => {
     const blueprintRef = (entity_id: string) => ({ ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id });
     const versionRef = (entity_id: string) => ({ ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id });
     render(
@@ -40,16 +40,20 @@ describe('NewInfrastructureObjectPage', () => {
       }))} /></MemoryRouter></I18nProvider>,
     );
 
-    const picker = await screen.findByLabelText('Шаблоны объектов');
-    const items = picker.querySelectorAll('.create-blueprint-picker__item');
-    expect(items).toHaveLength(2);
-    expect(picker.querySelectorAll('.blueprint-card')).toHaveLength(0);
-    expect(items[0]).toHaveTextContent('PC-1-ETH');
-    expect(items[0]).toHaveTextContent('Версия: v1 · workstation');
-    expect(items[0]).toHaveTextContent('Портов: 1 · внутренних связей: 0');
-    expect(items[1]).toHaveTextContent('Switch-24');
-    expect(items[1]).toHaveTextContent('Версия: v4 · switch');
-    expect(items[1]).toHaveTextContent('Портов: 24 · внутренних связей: 12');
+    const table = await screen.findByRole('table');
+    expect(screen.getByRole('columnheader', { name: 'Название' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Тип объекта' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Текущая версия' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Порты' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Внутренние связи' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Действия' })).toBeInTheDocument();
+    expect(table.querySelectorAll('tbody tr')).toHaveLength(2);
+    expect(document.querySelector('.create-blueprint-picker')).not.toBeInTheDocument();
+    expect(document.querySelector('.create-blueprint-picker__item')).not.toBeInTheDocument();
+    expect(table.querySelectorAll('.blueprint-card')).toHaveLength(0);
+    const rows = table.querySelectorAll('tbody tr');
+    expect([...rows[0].querySelectorAll('th, td')].slice(0, 5).map((cell) => cell.textContent)).toEqual(['PC-1-ETH', 'workstation', 'v1', '1', '0']);
+    expect([...rows[1].querySelectorAll('th, td')].slice(0, 5).map((cell) => cell.textContent)).toEqual(['Switch-24', 'switch', 'v4', '24', '12']);
 
     const selectActions = screen.getAllByRole('button', { name: 'Выбрать шаблон' });
     expect(selectActions).toHaveLength(2);

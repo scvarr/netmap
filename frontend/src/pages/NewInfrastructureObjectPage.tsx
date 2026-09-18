@@ -128,47 +128,55 @@ export function NewInfrastructureObjectPage({
           </div>
         )}
         {blueprints && blueprints.blueprints.length > 0 && (
-          <div className="create-blueprint-picker">
-            {blueprints.blueprints.map((blueprint) => (
-              <article
-                className="create-blueprint-picker__item"
-                key={blueprint.blueprint_ref.entity_id}
-              >
-                <div className="create-blueprint-picker__identity">
-                  <h2>{blueprint.name}</h2>
-                  <p className="create-blueprint-picker__meta">
-                    {t("create.blueprintVersion", {
-                      version: blueprint.version_number,
-                      objectClass: blueprint.default_physical_object_class
-                        ? ` · ${blueprint.default_physical_object_class}`
-                        : "",
-                    })}
-                  </p>
-                  <p className="create-blueprint-picker__meta">
-                    {t("create.blueprintPorts", {
-                      ports: blueprint.slot_count,
-                      links: blueprint.internal_link_count,
-                    })}
-                  </p>
-                </div>
-                <div className="create-blueprint-picker__action">
-                  <button
-                    type="button"
-                    className="primary-action"
-                    onClick={() =>
-                      setTarget({
-                        id: blueprint.blueprint_ref.entity_id,
-                        versionId: blueprint.version_ref.entity_id,
-                        name: blueprint.name,
-                        versionNumber: blueprint.version_number,
-                      })
-                    }
-                  >
-                    {t("create.blueprintSelect")}
-                  </button>
-                </div>
-              </article>
-            ))}
+          <div className="create-blueprint-table-wrap">
+            <table className="create-blueprint-table">
+              <thead>
+                <tr>
+                  <th scope="col">{t("blueprint.library.name")}</th>
+                  <th scope="col">{t("blueprint.library.objectType")}</th>
+                  <th scope="col">{t("blueprint.library.version")}</th>
+                  <th scope="col">{t("physical.ports")}</th>
+                  <th scope="col">{t("blueprint.library.internalLinks")}</th>
+                  <th scope="col">{t("blueprint.library.actions")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {blueprints.blueprints.map((blueprint) => (
+                  <tr key={blueprint.blueprint_ref.entity_id}>
+                    <th scope="row">{blueprint.name}</th>
+                    <td>
+                      {blueprint.default_physical_object_class ??
+                        t("blueprint.library.notSpecified")}
+                    </td>
+                    <td className="create-blueprint-table__numeric">
+                      v{blueprint.version_number}
+                    </td>
+                    <td className="create-blueprint-table__numeric">
+                      {blueprint.slot_count}
+                    </td>
+                    <td className="create-blueprint-table__numeric">
+                      {blueprint.internal_link_count}
+                    </td>
+                    <td className="create-blueprint-table__actions">
+                      <button
+                        type="button"
+                        className="primary-action"
+                        onClick={() =>
+                          setTarget({
+                            id: blueprint.blueprint_ref.entity_id,
+                            versionId: blueprint.version_ref.entity_id,
+                            name: blueprint.name,
+                            versionNumber: blueprint.version_number,
+                          })
+                        }
+                      >
+                        {t("create.blueprintSelect")}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>

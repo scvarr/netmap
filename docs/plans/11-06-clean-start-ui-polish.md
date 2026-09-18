@@ -179,9 +179,12 @@ persistence не меняются.
 
 **Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
 
-**Согласованный контракт.** Create-object workflow использует отдельный
-компактный Blueprint picker; library `.blueprint-card` для него не
-переиспользуется. Picker показывает name, version, object class при наличии,
-количество ports и internal links, а действие выбора имеет обычный компактный
-размер. `BlueprintInstantiationDialog` и semantics instantiation не меняются;
-ручное создание остаётся отдельным fallback ниже picker.
+**Согласованный контракт.** Create-object Blueprint picker представлен
+semantic compact table: одна строка — один Blueprint. Library
+`.blueprint-card` для него не переиспользуется. Table использует только данные
+`ObjectBlueprintListDocument`, без дополнительных version/detail loads, и
+содержит колонки name, object type, version, ports, internal links и action.
+Компактное action открывает существующий `BlueprintInstantiationDialog`. На
+узком viewport table сохраняется внутри horizontal wrapper. Search, filter,
+sort и pagination не входят в этот milestone. Instantiation semantics не
+меняются; ручное создание остаётся отдельным fallback ниже picker.
