@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "../i18n";
 import { PageHeader } from "../components/PageChrome";
 import { BlueprintCompositionCanvas } from "../components/BlueprintCompositionCanvas";
-import { PortBlockStructurePreview } from "../components/PortBlockStructurePreview";
 import {
   addBulkInternalLinks,
   clampPlacement,
@@ -370,6 +369,130 @@ export function ObjectBlueprintEditor({
                 }
               />
             </label>
+            <section className="blueprint-composer__section blueprint-composer__links">
+              <h2>{t("blueprint.composition.links")}</h2>
+              <div className="blueprint-composer__bulk-links">
+                <label>
+                  {t("blueprint.composition.bulkFirst")}
+                  <select
+                    aria-label={t("blueprint.composition.bulkFirst")}
+                    value={bulkFirst}
+                    onChange={(event) => setBulkFirst(event.target.value)}
+                  >
+                    <option value="">{t("blueprint.composition.choose")}</option>
+                    {editor.instances.map((item) => (
+                      <option key={item.instanceKey} value={item.instanceKey}>
+                        {instanceLabel(item)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  {t("blueprint.composition.bulkSecond")}
+                  <select
+                    aria-label={t("blueprint.composition.bulkSecond")}
+                    value={bulkSecond}
+                    onChange={(event) => setBulkSecond(event.target.value)}
+                  >
+                    <option value="">{t("blueprint.composition.choose")}</option>
+                    {editor.instances.map((item) => (
+                      <option key={item.instanceKey} value={item.instanceKey}>
+                        {instanceLabel(item)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  className="secondary-action"
+                  type="button"
+                  disabled={bulkDisabled}
+                  onClick={() =>
+                    setEditor((old) => ({
+                      ...old,
+                      individualLinks: addBulkInternalLinks(
+                        old.individualLinks,
+                        bulkFirstItem,
+                        bulkSecondItem,
+                        "SEQUENTIAL",
+                      ),
+                    }))
+                  }
+                >
+                  {t("blueprint.composition.bulkSequential")}
+                </button>
+                <button
+                  className="secondary-action"
+                  type="button"
+                  disabled={bulkDisabled}
+                  onClick={() =>
+                    setEditor((old) => ({
+                      ...old,
+                      individualLinks: addBulkInternalLinks(
+                        old.individualLinks,
+                        bulkFirstItem,
+                        bulkSecondItem,
+                        "REVERSE",
+                      ),
+                    }))
+                  }
+                >
+                  {t("blueprint.composition.bulkReverse")}
+                </button>
+                <button
+                  className="text-action"
+                  type="button"
+                  disabled={bulkDisabled}
+                  onClick={() =>
+                    setEditor((old) => ({
+                      ...old,
+                      individualLinks: removeInternalLinksBetweenInstances(
+                        old.individualLinks,
+                        bulkFirstItem,
+                        bulkSecondItem,
+                      ),
+                    }))
+                  }
+                >
+                  {t("blueprint.composition.bulkRemove")}
+                </button>
+              </div>
+              {linkGroups.map((group) => (
+                <details className="blueprint-composer__link-group" key={group.key}>
+                  <summary>
+                    {group.first && group.second
+                      ? t("blueprint.composition.linkGroupSummary", {
+                          first: instanceLabel(group.first),
+                          second: instanceLabel(group.second),
+                          count: group.indexes.length,
+                        })
+                      : t("blueprint.composition.individualLinkSummary", {
+                          count: group.indexes.length,
+                        })}
+                  </summary>
+                  {group.indexes.map(renderLink)}
+                </details>
+              ))}
+              <button
+                className="secondary-action"
+                type="button"
+                disabled={slots.length < 2}
+                onClick={addLink}
+              >
+                {t("blueprint.composition.addLink")}
+              </button>
+            </section>
+            {error && (
+              <p role="alert" className="blueprint-editor__error">
+                {t(validationKey[error])}
+              </p>
+            )}
+            <button
+              className="primary-action"
+              type="button"
+              onClick={() => void save()}
+            >
+              {saveLabel}
+            </button>
           </section>
           <section className="blueprint-composer__composition blueprint-composer__surface">
           <div className="blueprint-composer__chooser">
@@ -432,8 +555,14 @@ export function ObjectBlueprintEditor({
           />
           {selectedItem && (
             <aside className="blueprint-composer__selected">
-              <strong>{selectedItem.portBlockName}</strong>
-              <PortBlockStructurePreview item={selectedItem} />
+              <div className="blueprint-composer__selected-identity">
+                <strong>{selectedItem.portBlockName}</strong>
+                <span>
+                  {t("blueprint.composition.version", {
+                    version: selectedItem.versionNumber,
+                  })}
+                </span>
+              </div>
               <label>
                 {t("blueprint.composition.face")}
                 <select
@@ -461,130 +590,6 @@ export function ObjectBlueprintEditor({
           )}
           </section>
         </div>
-        <section className="blueprint-composer__section">
-          <h2>{t("blueprint.composition.links")}</h2>
-          <div className="blueprint-composer__bulk-links">
-            <label>
-              {t("blueprint.composition.bulkFirst")}
-              <select
-                aria-label={t("blueprint.composition.bulkFirst")}
-                value={bulkFirst}
-                onChange={(event) => setBulkFirst(event.target.value)}
-              >
-                <option value="">{t("blueprint.composition.choose")}</option>
-                {editor.instances.map((item) => (
-                  <option key={item.instanceKey} value={item.instanceKey}>
-                    {instanceLabel(item)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("blueprint.composition.bulkSecond")}
-              <select
-                aria-label={t("blueprint.composition.bulkSecond")}
-                value={bulkSecond}
-                onChange={(event) => setBulkSecond(event.target.value)}
-              >
-                <option value="">{t("blueprint.composition.choose")}</option>
-                {editor.instances.map((item) => (
-                  <option key={item.instanceKey} value={item.instanceKey}>
-                    {instanceLabel(item)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="secondary-action"
-              type="button"
-              disabled={bulkDisabled}
-              onClick={() =>
-                setEditor((old) => ({
-                  ...old,
-                  individualLinks: addBulkInternalLinks(
-                    old.individualLinks,
-                    bulkFirstItem,
-                    bulkSecondItem,
-                    "SEQUENTIAL",
-                  ),
-                }))
-              }
-            >
-              {t("blueprint.composition.bulkSequential")}
-            </button>
-            <button
-              className="secondary-action"
-              type="button"
-              disabled={bulkDisabled}
-              onClick={() =>
-                setEditor((old) => ({
-                  ...old,
-                  individualLinks: addBulkInternalLinks(
-                    old.individualLinks,
-                    bulkFirstItem,
-                    bulkSecondItem,
-                    "REVERSE",
-                  ),
-                }))
-              }
-            >
-              {t("blueprint.composition.bulkReverse")}
-            </button>
-            <button
-              className="text-action"
-              type="button"
-              disabled={bulkDisabled}
-              onClick={() =>
-                setEditor((old) => ({
-                  ...old,
-                  individualLinks: removeInternalLinksBetweenInstances(
-                    old.individualLinks,
-                    bulkFirstItem,
-                    bulkSecondItem,
-                  ),
-                }))
-              }
-            >
-              {t("blueprint.composition.bulkRemove")}
-            </button>
-          </div>
-          {linkGroups.map((group) => (
-            <details className="blueprint-composer__link-group" key={group.key}>
-              <summary>
-                {group.first && group.second
-                  ? t("blueprint.composition.linkGroupSummary", {
-                      first: instanceLabel(group.first),
-                      second: instanceLabel(group.second),
-                      count: group.indexes.length,
-                    })
-                  : t("blueprint.composition.individualLinkSummary", {
-                      count: group.indexes.length,
-                    })}
-              </summary>
-              {group.indexes.map(renderLink)}
-            </details>
-          ))}
-          <button
-            className="secondary-action"
-            type="button"
-            disabled={slots.length < 2}
-            onClick={addLink}
-          >
-            {t("blueprint.composition.addLink")}
-          </button>
-        </section>
-        {error && (
-          <p role="alert" className="blueprint-editor__error">
-            {t(validationKey[error])}
-          </p>
-        )}
-        <button
-          className="primary-action"
-          type="button"
-          onClick={() => void save()}
-        >
-          {saveLabel}
-        </button>
       </div>
     </>
   );

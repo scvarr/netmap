@@ -166,9 +166,11 @@ drag/resize/alignment не меняются; viewport больше не раст
 
 **Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
 
-**Согласованный контракт.** Верхняя часть desktop editor использует компактную
-левую control rail для свойств Blueprint и правую composition workspace. Editor
-использует доступную ширину PageShell вместо глобального ограничения в 760px.
-Internal links, validation и Save остаются ниже workspace на полной ширине
-editor. На узком viewport layout сворачивается в одну колонку. Authoring
-semantics и persistence не меняются.
+**Согласованный контракт.** Desktop editor использует левую authoring rail и
+правую composition workspace, используя доступную ширину PageShell вместо
+глобального ограничения в 760px. Левая rail содержит свойства Blueprint,
+internal links, validation и Save. Правая workspace содержит chooser, face
+controls, bounded canvas и compact controls выбранного instance. Большой
+`PortBlockStructurePreview` внутри selected-instance editor UI отсутствует.
+На узком viewport layout сворачивается в одну колонку. Authoring semantics и
+persistence не меняются.

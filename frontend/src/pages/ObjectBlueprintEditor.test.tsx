@@ -195,9 +195,10 @@ describe("ObjectBlueprintEditor composition", () => {
         }}
       />,
     );
+    expect(screen.queryByTestId("port-block-structure-preview")).toBeNull();
     expect(
-      screen.getByTestId("port-block-structure-preview"),
-    ).toHaveTextContent("P1");
+      document.querySelector(".blueprint-composer__selected"),
+    ).toHaveTextContent("Версия v1");
     expect(screen.queryByLabelText("Изменить версию")).toBeNull();
     await userEvent.click(
       screen.getByRole("button", { name: "Удалить экземпляр группы портов" }),
