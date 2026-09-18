@@ -92,7 +92,7 @@ backend/API/DB; first-map CTA при `maps.length === 0` остаётся без
 
 ### P-UX-06 — progressive discovery при отсутствии групп портов
 
-**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — **ПРОЙДЕНА**.
 
 **Согласованный контракт.** При создании нового Object Blueprint успешная
 пустая библиотека Port Blocks показывает prerequisite state вместо обычного
@@ -151,3 +151,13 @@ Block editor использует тот же shared header.
 - async state меняет только content area;
 - никакой full-page replacement во время `loadPortBlocks()`;
 - datasource/navigation semantics не меняются.
+
+### P-UX-11 — компактная рабочая область Object Blueprint composition editor
+
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
+
+**Согласованный контракт.** Visual viewport composition editor имеет bounded
+height. Aspect ratio Blueprint body сохраняется, а body целиком вписывается
+через meet/contain semantics. Normalized placement, persistence и semantics
+drag/resize/alignment не меняются; viewport больше не растягивает страницу
+вслед за aspect ratio body.
