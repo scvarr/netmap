@@ -161,3 +161,14 @@ height. Aspect ratio Blueprint body сохраняется, а body целико
 через meet/contain semantics. Normalized placement, persistence и semantics
 drag/resize/alignment не меняются; viewport больше не растягивает страницу
 вслед за aspect ratio body.
+
+### P-UX-12 — desktop workspace layout Object Blueprint editor
+
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
+
+**Согласованный контракт.** Верхняя часть desktop editor использует компактную
+левую control rail для свойств Blueprint и правую composition workspace. Editor
+использует доступную ширину PageShell вместо глобального ограничения в 760px.
+Internal links, validation и Save остаются ниже workspace на полной ширине
+editor. На узком viewport layout сворачивается в одну колонку. Authoring
+semantics и persistence не меняются.

@@ -313,64 +313,65 @@ export function ObjectBlueprintEditor({
     <>
       <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
       <div className="blueprint-composer">
-        <section className="blueprint-editor-controls">
-          <div className="blueprint-editor-controls__row">
+        <div className="blueprint-composer__workspace">
+          <section className="blueprint-editor-controls blueprint-composer__properties">
+            <div className="blueprint-editor-controls__row">
+              <label>
+                {t("blueprint.editor.name")}
+                <input
+                  value={editor.name}
+                  onChange={(event) =>
+                    setEditor({ ...editor, name: event.target.value })
+                  }
+                />
+              </label>
+              <label>
+                {t("blueprint.editor.class")}
+                <input
+                  value={editor.defaultClass}
+                  onChange={(event) =>
+                    setEditor({ ...editor, defaultClass: event.target.value })
+                  }
+                />
+              </label>
+            </div>
+            <div className="blueprint-editor-controls__row">
+              <label>
+                {t("blueprint.editor.width")}
+                <input
+                  type="number"
+                  min="1"
+                  value={editor.width}
+                  onChange={(event) =>
+                    setEditor({ ...editor, width: Number(event.target.value) })
+                  }
+                />
+              </label>
+              <label>
+                {t("blueprint.editor.height")}
+                <input
+                  type="number"
+                  min="1"
+                  value={editor.height}
+                  onChange={(event) =>
+                    setEditor({ ...editor, height: Number(event.target.value) })
+                  }
+                />
+              </label>
+            </div>
             <label>
-              {t("blueprint.editor.name")}
+              {t("blueprint.editor.color")}
               <input
-                value={editor.name}
+                aria-label={t("blueprint.editor.color")}
+                type="color"
+                value={editor.fillColor}
                 onChange={(event) =>
-                  setEditor({ ...editor, name: event.target.value })
+                  setEditor({ ...editor, fillColor: event.target.value })
                 }
               />
             </label>
-            <label>
-              {t("blueprint.editor.class")}
-              <input
-                value={editor.defaultClass}
-                onChange={(event) =>
-                  setEditor({ ...editor, defaultClass: event.target.value })
-                }
-              />
-            </label>
-          </div>
-          <div className="blueprint-editor-controls__row">
-            <label>
-              {t("blueprint.editor.width")}
-              <input
-                type="number"
-                min="1"
-                value={editor.width}
-                onChange={(event) =>
-                  setEditor({ ...editor, width: Number(event.target.value) })
-                }
-              />
-            </label>
-            <label>
-              {t("blueprint.editor.height")}
-              <input
-                type="number"
-                min="1"
-                value={editor.height}
-                onChange={(event) =>
-                  setEditor({ ...editor, height: Number(event.target.value) })
-                }
-              />
-            </label>
-          </div>
-          <label>
-            {t("blueprint.editor.color")}
-            <input
-              aria-label={t("blueprint.editor.color")}
-              type="color"
-              value={editor.fillColor}
-              onChange={(event) =>
-                setEditor({ ...editor, fillColor: event.target.value })
-              }
-            />
-          </label>
-        </section>
-        <section className="blueprint-composer__section blueprint-composer__surface">
+          </section>
+          <section className="blueprint-composer__composition blueprint-composer__surface">
           <div className="blueprint-composer__chooser">
             <label>
               {t("blueprint.composition.logical")}
@@ -458,7 +459,8 @@ export function ObjectBlueprintEditor({
               </button>
             </aside>
           )}
-        </section>
+          </section>
+        </div>
         <section className="blueprint-composer__section">
           <h2>{t("blueprint.composition.links")}</h2>
           <div className="blueprint-composer__bulk-links">
