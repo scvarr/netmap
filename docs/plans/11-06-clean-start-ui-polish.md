@@ -188,3 +188,102 @@ semantic compact table: одна строка — один Blueprint. Library
 узком viewport table сохраняется внутри horizontal wrapper. Search, filter,
 sort и pagination не входят в этот milestone. Instantiation semantics не
 меняются; ручное создание остаётся отдельным fallback ниже picker.
+
+### P-UX-14 — Location при создании Blueprint-backed object
+
+**Статус: CONTRACT AGREED / IMPLEMENTATION PENDING.**
+
+**Замечание.** Текущий create-from-Blueprint workflow запрашивает только имя
+экземпляра. Canonical `Location` можно назначить лишь после создания объекта
+через отдельную карточку.
+
+**Согласованный product contract.** После выбора Object Blueprint пользователь
+попадает в полноценное состояние создания `PhysicalObject`. Форма показывает
+выбранный `Blueprint` и его выбранную версию, read-only summary текущего
+`Blueprint` (user-facing представление типа/класса, количество портов и
+внутренних связей), обязательное имя экземпляра и optional canonical
+`Location`. Неизвестное местоположение допустимо и не блокирует создание.
+Для выбора `Location` переиспользуется существующий hierarchical Location UX,
+поиск и canonical Location model; фиксированная таксономия `Location.type` не
+вводится.
+
+`Location` — canonical факт физического места, а `SavedMap`, размещение на
+карте, координаты и другая presentation state не входят в create-object
+contract и не смешиваются с ним. Object instantiation и optional initial
+`Location` должны восприниматься пользователем как одна create operation.
+Frontend sequence не должен допускать успешное создание `PhysicalObject` с
+последующей отдельной ошибкой Location write, при которой повтор create может
+создать duplicate object. Предпочтительная семантическая граница —
+Blueprint instantiation с optional initial `Location` либо эквивалентная
+transactional application command. Точный backend/API механизм определяется
+implementation milestone после проверки текущего write path.
+
+**Границы.** P-UX-14 не закрывает и не дублирует отдельный `C-UX-02` о штатном
+создании `PhysicalObject` через `Blueprint` и не меняет его требования к
+отсутствию штатного ручного создания. В него также не входят map placement,
+interface/port editing, IP/L2/L3 data, generic onboarding или unrelated
+create-object redesign.
+
+**Ручная проверка после implementation.** Выбрать `PC-1ETH`, в одном create
+workflow указать имя `PC1` и существующий `Location`, создать объект и перейти
+в его карточку. Убедиться, что объект создан один раз, `Location` уже назначен,
+а повторная загрузка сохраняет association.
+
+### P-UX-15 — информационная архитектура карточки PhysicalObject
+
+**Статус: CONTRACT AGREED / IMPLEMENTATION PENDING.**
+
+**Замечание.** Текущая карточка `InfrastructureObject` складывает identity и
+basic data, `SavedMap` membership/actions, `Location`, Blueprint provenance и
+upgrade state, `ConnectionPoints` и физические подключения,
+`NetworkInterfaces` и interface-level operations в одну длинную страницу.
+
+**Согласованный product contract.** Карточка `PhysicalObject` становится
+object shell с устойчивым header и отдельными semantic tabs/routes. Начальный
+набор: `Обзор`, `Физика`, `Интерфейсы`. Header кратко показывает display name,
+понятное user-facing представление типа/класса, краткий Blueprint provenance
+и Location context при наличии; полный detail dump в header не размещается.
+
+**Обзор** содержит object-level информацию и lifecycle/navigation actions:
+display name, user-facing type/class presentation, canonical `Location`;
+имя Blueprint, instantiated version и current/update state, если он уже
+поддерживается существующим backend; действие открыть Blueprint и доступный
+для объекта существующий Blueprint upgrade workflow; `SavedMap` memberships,
+открытие существующего размещения и существующее действие добавления объекта
+на карту; summary с количеством ports, connected/free и interfaces. Полные
+списки ports и interfaces здесь не дублируются.
+
+Будущее переименование `PhysicalObject` из `C-UX-04` естественно относится к
+object-level Overview/lifecycle surface, но P-UX-15 не реализует и не закрывает
+`C-UX-04` автоматически.
+
+**Физика** — L1 physical workspace объекта: `ConnectionPoints`, их status и
+free/connected state, external physical attachments, Cable/Connection
+presentation, direct `InterfacePhysicalBinding` presentation, internal
+physical continuity для passive objects, connect/disconnect и другие уже
+существующие L1 physical actions.
+
+**Интерфейсы** содержит `NetworkInterfaces`, physical realization/bindings,
+существующие interface actions и поддерживаемые interface hierarchy/realization.
+L2/L3 facts не переносятся сюда произвольно только из-за их связи с
+интерфейсом. `NetworkInterface` и `ConnectionPoint` остаются разными canonical
+concepts: passive objects могут иметь `ConnectionPoints` без
+`NetworkInterfaces`.
+
+Object detail navigation должна допускать будущие отдельные semantic
+L2/L3 sections/tabs/routes без нового redesign. В P-UX-15 пустые L2/L3 tabs не
+создаются, новые L2/L3 semantics и изменения domain model не вводятся.
+
+**Routing/navigation.** Overview является default object route, а semantic
+tabs имеют addressable route/deep-link semantics, не только transient React
+state. Концептуальные пути: `/infrastructure/objects/<id>` для Overview,
+`/infrastructure/objects/<id>/physical` для `Физика` и
+`/infrastructure/objects/<id>/interfaces` для `Интерфейсы`. Точная реализация
+определяется implementation milestone после проверки текущей routing
+structure. Generic tabs framework для всего приложения не вводится.
+
+**Границы.** `SavedMap` membership и размещение остаются presentation state,
+тогда как canonical `Location` остаётся фактом физического места.
+`ConnectionPoint` и `NetworkInterface` не объединяются. P-UX-15 задаёт место
+для будущего rename action из отдельного `C-UX-04`, не закрывая его; он также
+не меняет domain model или semantics ради будущих L2/L3 tabs.
