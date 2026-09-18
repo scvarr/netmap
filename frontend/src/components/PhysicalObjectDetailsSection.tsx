@@ -33,6 +33,7 @@ interface PhysicalObjectDetailsSectionProps {
   blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
   objectBlueprintDataSource?: ObjectBlueprintDataSource;
   cableLabelDataSource?: CableLabelDataSource;
+  mode?: 'overview' | 'physical';
 }
 
 type DetailsState =
@@ -106,6 +107,7 @@ const PhysicalObjectClassEditor = ({
   onUpdated,
 }: PhysicalObjectClassEditorProps) => {
   const { t } = useI18n();
+  const [editing, setEditing] = useState(false);
   const initialPreset = currentClass && KNOWN_CLASSES.has(currentClass) ? currentClass : '__custom__';
   const [preset, setPreset] = useState(initialPreset);
   const [customValue, setCustomValue] = useState(
@@ -115,6 +117,12 @@ const PhysicalObjectClassEditor = ({
   const [error, setError] = useState<string | null>(null);
   const value = preset === '__custom__' ? customValue.trim() : preset;
   const unchanged = value === (currentClass ?? '');
+  const cancel = () => {
+    setPreset(initialPreset);
+    setCustomValue(currentClass && !KNOWN_CLASSES.has(currentClass) ? currentClass : '');
+    setError(null);
+    setEditing(false);
+  };
 
   const submit = async () => {
     if (!value || pending || unchanged) return;
@@ -122,6 +130,7 @@ const PhysicalObjectClassEditor = ({
     setError(null);
     try {
       onUpdated(await dataSource.setPhysicalObjectClass(physicalObjectId, value));
+      setEditing(false);
     } catch {
       setError(t('physical.classSaveFailed'));
     } finally {
@@ -131,12 +140,15 @@ const PhysicalObjectClassEditor = ({
 
   return (
     <section className="physical-class-editor" aria-label={t('physical.classEditor')}>
-      <h3>{t('physical.classEditor')}</h3>
-      <p className="physical-class-editor__current">
+      <div className="physical-class-editor__read">
+        <span>{t('physical.classEditor')}</span>
+        <strong className="physical-class-editor__current">
         {physicalClassPresentation(currentClass).label}
         {currentClass && !KNOWN_CLASSES.has(currentClass) ? ` · ${currentClass}` : ''}
-      </p>
-      <label>
+        </strong>
+        {!editing && <button type="button" className="port-icon-action" aria-label="Изменить тип объекта" title="Изменить тип объекта" onClick={() => setEditing(true)}>✎</button>}
+      </div>
+      {editing && <><label>
         <span>{t('physical.classification')}</span>
         <select
           value={preset}
@@ -158,9 +170,9 @@ const PhysicalObjectClassEditor = ({
         </label>
       )}
       {error && <p className="physical-class-editor__error" role="alert">{error}</p>}
-      <button type="button" onClick={() => void submit()} disabled={!value || pending || unchanged}>
+      <div className="physical-class-editor__actions"><button type="button" onClick={cancel} disabled={pending}>{t('action.cancel')}</button><button type="button" onClick={() => void submit()} disabled={!value || pending || unchanged}>
         {pending ? t('physical.saving') : t('physical.saveClass')}
-      </button>
+      </button></div></>}
     </section>
   );
 };
@@ -311,6 +323,7 @@ export function PhysicalObjectDetailsSection({
   blueprintUpgradeDataSource,
   objectBlueprintDataSource,
   cableLabelDataSource,
+  mode = 'physical',
 }: PhysicalObjectDetailsSectionProps) {
   const { t } = useI18n();
   const physicalObjectId = physicalObjectIdentity(node);
@@ -372,7 +385,7 @@ export function PhysicalObjectDetailsSection({
             })()}
             <span>{t('physical.interfaceCount', { count: state.document.owned_interface_count })}</span>
           </div>
-          {classWriteDataSource && physicalObjectId && (
+          {mode === 'overview' && classWriteDataSource && physicalObjectId && (
             <PhysicalObjectClassEditor
               key={state.document.physical_object.class ?? 'unclassified'}
               physicalObjectId={physicalObjectId}
@@ -388,7 +401,7 @@ export function PhysicalObjectDetailsSection({
           {state.document.blueprint_provenance && (
             <><p className="blueprint-provenance">{t('physical.fromBlueprint', { version: state.document.blueprint_provenance.version_number })} <Link to={`/library/object-blueprints/${state.document.blueprint_provenance.blueprint_ref.entity_id}/versions/${state.document.blueprint_provenance.version_ref.entity_id}/edit`}>{t('physical.openBlueprint')}</Link></p>{physicalObjectId && <BlueprintUpgrade physicalObjectId={physicalObjectId} provenance={state.document.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={async () => { const document = await dataSource.loadPhysicalObjectDetails(physicalObjectId); setState({ kind: 'loaded', document }); onDocumentChange(document); }} />}</>
           )}
-          <h3 id="connection-points-heading">{t('physical.ports')} <span>{state.document.connection_points.length}</span></h3>
+          {mode === 'physical' && <><h3 id="connection-points-heading">{t('physical.ports')} <span>{state.document.connection_points.length}</span></h3>
           {!state.document.blueprint_provenance && connectionPointWriteDataSource && physicalObjectId && (
             <div className="manual-point-action"><strong>{t('physical.manualStructure')}</strong><CreateConnectionPoint physicalObjectId={physicalObjectId} dataSource={connectionPointWriteDataSource} onCreated={(document) => { setState({ kind: 'loaded', document }); onDocumentChange(document); onConnectionPointCreated(); }} /></div>
           )}
@@ -400,7 +413,7 @@ export function PhysicalObjectDetailsSection({
           <details className="technical-details physical-object-details__technical">
             <summary>{t('physical.objectTechnical')}</summary>
             <SourceRefs refs={[state.document.physical_object.source_ref]} />
-          </details>
+          </details></>}
         </>
       )}
     </section>

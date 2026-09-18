@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import { DeviceInterfacesSection } from "../components/DeviceInterfacesSection";
 import { PhysicalObjectDetailsSection } from "../components/PhysicalObjectDetailsSection";
 import { physicalClassPresentationForLocale } from "../topology/presentation";
@@ -76,7 +76,8 @@ export function InfrastructureObjectDetailPage({
   cableLabelDataSource,
 }: InfrastructureObjectDetailPageProps) {
   const { collator, locale, t } = useI18n();
-  const { physicalObjectId = "" } = useParams();
+  const { physicalObjectId = "", section } = useParams();
+  const activeSection = section ?? "overview";
   const [details, setDetails] = useState<PhysicalObjectDetailsDocument | null>(
     null,
   );
@@ -193,6 +194,7 @@ export function InfrastructureObjectDetailPage({
       </PageShell>
     );
   }
+  if (activeSection !== "overview" && activeSection !== "physical" && activeSection !== "interfaces") return <Navigate replace to={`/infrastructure/objects/${physicalObjectId}`} />;
 
   return (
     <PageShell className="catalog-page object-detail-page">
@@ -213,6 +215,11 @@ export function InfrastructureObjectDetailPage({
         }
         title={details?.physical_object.label ?? t("object.loadingTitle")}
       />
+      <nav className="object-detail-nav" aria-label="Разделы объекта">
+        <Link to={`/infrastructure/objects/${physicalObjectId}`} aria-current={activeSection === "overview" ? "page" : undefined}>Обзор</Link>
+        <Link to={`/infrastructure/objects/${physicalObjectId}/physical`} aria-current={activeSection === "physical" ? "page" : undefined}>Физика</Link>
+        <Link to={`/infrastructure/objects/${physicalObjectId}/interfaces`} aria-current={activeSection === "interfaces" ? "page" : undefined}>Интерфейсы</Link>
+      </nav>
       {details?.warnings.map((warning, index) => (
         <p className="catalog-note" key={`warning-${index}-${warning}`}>
           {warning}
@@ -226,7 +233,8 @@ export function InfrastructureObjectDetailPage({
           {gap}
         </p>
       ))}
-      {details && (
+      {activeSection === "overview" && <section className="overview-surface" aria-label={t("object.main")}>
+      {activeSection === "overview" && details && (
         <section
           className="detail-section"
           aria-labelledby="object-main-heading"
@@ -246,7 +254,7 @@ export function InfrastructureObjectDetailPage({
           </dl>
         </section>
       )}
-      {details && (
+      {activeSection === "overview" && details && (
         <section
           className="detail-section"
           aria-labelledby="object-maps-heading"
@@ -301,7 +309,7 @@ export function InfrastructureObjectDetailPage({
           )}
         </section>
       )}
-      {mapChooser && (
+      {activeSection === "overview" && mapChooser && (
         <section
           className="map-dialog"
           role="dialog"
@@ -360,11 +368,12 @@ export function InfrastructureObjectDetailPage({
           </div>
         </section>
       )}
-      <PhysicalObjectLocationSection
+      {activeSection === "overview" && <PhysicalObjectLocationSection
         physicalObjectId={physicalObjectId}
         dataSource={locationDataSource}
-      />
-      <section className="detail-section detail-section--operations">
+      />}
+      </section>}
+      {(activeSection === "overview" || activeSection === "physical") && <section className="detail-section detail-section--operations">
         <PhysicalObjectDetailsSection
           key={physicalObjectId}
           node={node}
@@ -388,9 +397,10 @@ export function InfrastructureObjectDetailPage({
           blueprintUpgradeDataSource={blueprintUpgradeDataSource}
           objectBlueprintDataSource={objectBlueprintDataSource}
           cableLabelDataSource={cableLabelDataSource}
+          mode={activeSection === "overview" ? "overview" : "physical"}
         />
-      </section>
-      {details && details.owned_interface_count > 0 && (
+      </section>}
+      {activeSection === "interfaces" && (
         <section className="detail-section detail-section--operations">
           <DeviceInterfacesSection
             key={`${physicalObjectId}-interfaces`}

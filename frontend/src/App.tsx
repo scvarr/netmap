@@ -127,6 +127,28 @@ export function App(props: AppProps) {
             />
           )}
         />
+        <Route
+          path="infrastructure/objects/:physicalObjectId/:section"
+          element={(
+            <InfrastructureObjectDetailPage
+              dataSource={props.dataSource}
+              deviceDetailsDataSource={props.deviceDetailsDataSource}
+              physicalObjectDetailsDataSource={props.physicalObjectDetailsDataSource}
+              deviceInterfaceWriteDataSource={props.deviceInterfaceWriteDataSource}
+              physicalLinkWriteDataSource={props.physicalLinkWriteDataSource}
+              physicalEndpointConnectionWriteDataSource={props.physicalEndpointConnectionWriteDataSource}
+              physicalObjectClassWriteDataSource={props.physicalObjectClassWriteDataSource}
+              connectionPointWriteDataSource={props.connectionPointWriteDataSource}
+              l2ForwardingContextWriteDataSource={props.l2ForwardingContextWriteDataSource}
+              catalogInventoryDataSource={props.catalogInventoryDataSource}
+              savedMapDataSource={props.savedMapDataSource}
+              blueprintUpgradeDataSource={props.blueprintUpgradeDataSource}
+              objectBlueprintDataSource={props.objectBlueprintDataSource}
+              locationDataSource={props.locationDataSource}
+              cableLabelDataSource={props.cableLabelDataSource}
+            />
+          )}
+        />
         <Route path="*" element={<Navigate replace to="/map" />} />
       </Route>
     </Routes>

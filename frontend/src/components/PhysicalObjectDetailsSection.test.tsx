@@ -165,15 +165,17 @@ describe('PhysicalObjectDetailsSection ports', () => {
     rerender(<MemoryRouter><PhysicalObjectDetailsSection node={node('two')} dataSource={{ loadPhysicalObjectDetails: delayed }} /></MemoryRouter>);
     second.resolve(document([point('Two')])); expect(await screen.findByRole('rowheader', { name: 'Two' })).toBeInTheDocument(); first.resolve(document([point('One')])); await Promise.resolve(); expect(screen.queryByRole('rowheader', { name: 'One' })).not.toBeInTheDocument();
     const noLoad = vi.fn(); rerender(<MemoryRouter><PhysicalObjectDetailsSection node={{ ...node(), source_refs: [ref('PhysicalObject', 'a'), ref('PhysicalObject', 'b')] }} dataSource={{ loadPhysicalObjectDetails: noLoad }} /></MemoryRouter>);
-    expect(screen.getByText(/нет однозначной ссылки/)).toBeInTheDocument(); expect(noLoad).not.toHaveBeenCalled();
+    expect(screen.getByText(/однозначно определить объект/)).toBeInTheDocument(); expect(noLoad).not.toHaveBeenCalled();
   });
 
   it('uses authoritative class and manual point responses with callbacks', async () => {
     const initial = document(); const updated = { ...initial, physical_object: { ...initial.physical_object, class: 'switch' } }; const afterPoint = document([point('A01'), point('A02')]);
     const setPhysicalObjectClass = vi.fn().mockResolvedValue(updated); const createConnectionPoint = vi.fn().mockResolvedValue(afterPoint); const onClassUpdated = vi.fn(); const onConnectionPointCreated = vi.fn();
-    renderDetails(initial, { classWriteDataSource: { setPhysicalObjectClass }, connectionPointWriteDataSource: { createConnectionPoint }, onClassUpdated, onConnectionPointCreated });
-    await screen.findByText('ФИЗИЧЕСКИЙ ОБЪЕКТ'); await userEvent.selectOptions(screen.getByLabelText('Классификация'), 'switch'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить тип' }));
+    render(<MemoryRouter><PhysicalObjectDetailsSection mode="overview" node={node()} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(initial) }} classWriteDataSource={{ setPhysicalObjectClass }} onClassUpdated={onClassUpdated} /></MemoryRouter>);
+    expect(await screen.findByText('ФИЗИЧЕСКИЙ ОБЪЕКТ')).toBeInTheDocument(); expect(screen.queryByLabelText('Классификация')).not.toBeInTheDocument(); await userEvent.click(screen.getByRole('button', { name: 'Изменить тип объекта' })); await userEvent.selectOptions(screen.getByLabelText('Классификация'), 'switch'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить тип' }));
     expect(await screen.findByText('КОММУТАТОР')).toBeInTheDocument(); expect(onClassUpdated).toHaveBeenCalledTimes(1);
+    renderDetails(initial, { connectionPointWriteDataSource: { createConnectionPoint }, onConnectionPointCreated });
+    await screen.findByRole('rowheader', { name: 'A01' });
     await userEvent.click(screen.getByRole('button', { name: '+ Добавить точку' })); await userEvent.type(screen.getByLabelText('Название'), 'A02'); await userEvent.click(screen.getByRole('button', { name: 'Создать' }));
     expect(await screen.findByRole('rowheader', { name: 'A02' })).toBeInTheDocument(); expect(createConnectionPoint).toHaveBeenCalledWith('object', { display_name: 'A02' }); expect(onConnectionPointCreated).toHaveBeenCalledTimes(1);
   });

@@ -16,9 +16,9 @@ const inventory = (memberships: CatalogInventoryDocument['equipment'][number]['m
   schema_version: '1.0', equipment: [{ physical_object_ref: ref, label: 'SW1', class: 'switch', map_memberships: memberships }], cables: [], gaps: [], warnings: [],
 });
 
-const renderPage = (objectDetails = details(), catalog = { loadCatalogInventory: vi.fn().mockResolvedValue(inventory()) }, savedMapDataSource?: any) => {
+const renderPage = (objectDetails = details(), catalog = { loadCatalogInventory: vi.fn().mockResolvedValue(inventory()) }, savedMapDataSource?: any, path = `/infrastructure/objects/${objectId}`) => {
   render(
-    <MemoryRouter initialEntries={[`/infrastructure/objects/${objectId}`]}>
+    <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="infrastructure/objects/:physicalObjectId" element={<InfrastructureObjectDetailPage
           dataSource={{ loadProjection: vi.fn().mockResolvedValue({ schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] }) }}
@@ -27,6 +27,12 @@ const renderPage = (objectDetails = details(), catalog = { loadCatalogInventory:
           catalogInventoryDataSource={catalog}
           savedMapDataSource={savedMapDataSource}
         />} />
+        <Route path="infrastructure/objects/:physicalObjectId/:section" element={<InfrastructureObjectDetailPage
+          dataSource={{ loadProjection: vi.fn().mockResolvedValue({ schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] }) }}
+          deviceDetailsDataSource={{ loadDeviceDetails: vi.fn().mockResolvedValue({ schema_version: '1.0', device: { source_ref: ref, label: 'SW1' }, interfaces: [], gaps: [], warnings: [] }) }}
+          physicalObjectDetailsDataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(objectDetails) }}
+          catalogInventoryDataSource={catalog}
+        />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -34,6 +40,11 @@ const renderPage = (objectDetails = details(), catalog = { loadCatalogInventory:
 };
 
 describe('InfrastructureObjectDetailPage Saved Map membership', () => {
+  it('uses an addressable physical section', async () => {
+    renderPage(details(), undefined, undefined, `/infrastructure/objects/${objectId}/physical`);
+    expect(await screen.findByRole('link', { name: 'Физика' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByText('Порты')).toBeInTheDocument();
+  });
   it('shows authoritative equipment memberships with exact SavedMap links', async () => {
     renderPage(details(), { loadCatalogInventory: vi.fn().mockResolvedValue(inventory([
       { map_ref: { entity_type: 'SavedMap', entity_id: 'map-2' }, name: 'Карта 10' },

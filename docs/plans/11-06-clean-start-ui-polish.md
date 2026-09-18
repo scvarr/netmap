@@ -231,7 +231,7 @@ workflow указать имя `PC1` и существующий `Location`, с�
 
 ### P-UX-15 — информационная архитектура карточки PhysicalObject
 
-**Статус: CONTRACT AGREED / IMPLEMENTATION PENDING.**
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge остаётся ожидаемой.
 
 **Замечание.** Текущая карточка `InfrastructureObject` складывает identity и
 basic data, `SavedMap` membership/actions, `Location`, Blueprint provenance и
