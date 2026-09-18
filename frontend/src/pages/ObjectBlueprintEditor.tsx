@@ -26,6 +26,9 @@ interface Props {
   onSave: (state: BlueprintEditorState) => Promise<void>;
   initialState: BlueprintEditorState;
   portBlockDataSource: PortBlockDataSource;
+  initialPortBlocks?: Awaited<
+    ReturnType<PortBlockDataSource["loadPortBlocks"]>
+  >["port_blocks"];
   versionNotice?: string;
 }
 type EditorError =
@@ -75,13 +78,14 @@ export function ObjectBlueprintEditor({
   onSave,
   initialState,
   portBlockDataSource,
+  initialPortBlocks,
   versionNotice,
 }: Props) {
   const { t } = useI18n();
   const [editor, setEditor] = useState(initialState);
   const [blocks, setBlocks] = useState<
     Awaited<ReturnType<PortBlockDataSource["loadPortBlocks"]>>["port_blocks"]
-  >([]);
+  >(initialPortBlocks ?? []);
   const [logical, setLogical] = useState("");
   const [face, setFace] = useState<BlueprintFace>("FRONT");
   const [selected, setSelected] = useState<string | undefined>(
@@ -142,11 +146,12 @@ export function ObjectBlueprintEditor({
     return [...groups.values()];
   }, [editor.individualLinks, editor.instances]);
   useEffect(() => {
+    if (initialPortBlocks) return;
     void portBlockDataSource
       .loadPortBlocks()
       .then((data) => setBlocks(data.port_blocks))
       .catch(() => setError("compositionLoadFailed"));
-  }, [portBlockDataSource]);
+  }, [initialPortBlocks, portBlockDataSource]);
   const update = (key: string, patch: Partial<BlueprintBlockInstance>) =>
     setEditor((old) => ({
       ...old,

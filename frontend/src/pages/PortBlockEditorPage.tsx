@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createPortBlockRequest,
   ensureLocalIds,
@@ -13,6 +13,8 @@ import { useI18n } from "../i18n";
 import type { PortBlockDataSource } from "../topology/portBlockTypes";
 import { ViewState } from "../components/ViewState";
 import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
+
+const objectBlueprintCreationPath = "/library/object-blueprints/new";
 
 const errorKeys: Record<
   PortBlockValidationError,
@@ -43,6 +45,7 @@ export function PortBlockEditorPage({
 }) {
   const { t } = useI18n();
   const navigate = useNavigate();
+  const location = useLocation();
   const { portBlockId, versionId } = useParams();
   const [state, setState] = useState<PortBlockEditorState>(() =>
     newPortBlockEditorState(),
@@ -158,7 +161,12 @@ export function PortBlockEditorPage({
           ports: result.request.ports,
         });
       await dataSource.loadPortBlocks();
-      navigate("/library/port-blocks");
+      navigate(
+        mode === "new" &&
+          location.state?.returnTo === objectBlueprintCreationPath
+          ? objectBlueprintCreationPath
+          : "/library/port-blocks",
+      );
     } catch (reason) {
       setError(
         reason instanceof Error

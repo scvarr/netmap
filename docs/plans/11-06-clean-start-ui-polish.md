@@ -92,7 +92,15 @@ backend/API/DB; first-map CTA при `maps.length === 0` остаётся без
 
 ### P-UX-06 — progressive discovery при отсутствии групп портов
 
-**Статус: OPEN.**
+**Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
+
+**Согласованный контракт.** При создании нового Object Blueprint успешная
+пустая библиотека Port Blocks показывает prerequisite state вместо обычного
+editor. Loading и ошибка загрузки не считаются пустой библиотекой. CTA открывает
+существующий Port Block editor; после успешного создания первой группы портов он
+возвращает пользователя на `/library/object-blueprints/new`, где библиотека
+перечитывается authoritative datasource. Глобальная валидность Object Blueprint
+без Port Block не меняется; backend/API/DB не меняются.
 
 ### P-UX-07 — очистка русскоязычного UI от внутренней терминологии
 
