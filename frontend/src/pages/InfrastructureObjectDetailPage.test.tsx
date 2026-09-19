@@ -16,21 +16,21 @@ const inventory = (memberships: CatalogInventoryDocument['equipment'][number]['m
   schema_version: '1.0', equipment: [{ physical_object_ref: ref, label: 'SW1', class: 'switch', map_memberships: memberships }], cables: [], gaps: [], warnings: [],
 });
 
-const renderPage = (objectDetails = details(), catalog = { loadCatalogInventory: vi.fn().mockResolvedValue(inventory()) }, savedMapDataSource?: any, path = `/infrastructure/objects/${objectId}`) => {
+const renderPage = (objectDetails = details(), catalog = { loadCatalogInventory: vi.fn().mockResolvedValue(inventory()) }, savedMapDataSource?: any, path = `/infrastructure/objects/${objectId}`, physicalObjectDetailsDataSource = { loadPhysicalObjectDetails: vi.fn().mockResolvedValue(objectDetails) }) => {
   render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="infrastructure/objects/:physicalObjectId" element={<InfrastructureObjectDetailPage
           dataSource={{ loadProjection: vi.fn().mockResolvedValue({ schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] }) }}
           deviceDetailsDataSource={{ loadDeviceDetails: vi.fn() }}
-          physicalObjectDetailsDataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(objectDetails) }}
+          physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
           catalogInventoryDataSource={catalog}
           savedMapDataSource={savedMapDataSource}
         />} />
         <Route path="infrastructure/objects/:physicalObjectId/:section" element={<InfrastructureObjectDetailPage
           dataSource={{ loadProjection: vi.fn().mockResolvedValue({ schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] }) }}
           deviceDetailsDataSource={{ loadDeviceDetails: vi.fn().mockResolvedValue({ schema_version: '1.0', device: { source_ref: ref, label: 'SW1' }, interfaces: [], gaps: [], warnings: [] }) }}
-          physicalObjectDetailsDataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(objectDetails) }}
+          physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
           catalogInventoryDataSource={catalog}
         />} />
       </Routes>
@@ -49,6 +49,24 @@ describe('InfrastructureObjectDetailPage Saved Map membership', () => {
     renderPage(details(), undefined, undefined, `/infrastructure/objects/${objectId}/interfaces`);
     expect(await screen.findByRole('heading', { name: 'SW1' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Интерфейсы' })).toHaveAttribute('aria-current', 'page');
+  });
+  it('retries a failed shell load for a direct physical route', async () => {
+    const loadPhysicalObjectDetails = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(details());
+    renderPage(details(), undefined, undefined, `/infrastructure/objects/${objectId}/physical`, { loadPhysicalObjectDetails });
+
+    expect(await screen.findByText('Не удалось загрузить физический объект.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+    expect(await screen.findByText('Порты')).toBeInTheDocument();
+    expect(loadPhysicalObjectDetails).toHaveBeenCalledTimes(2);
+  });
+  it('retries a failed shell load for a direct interfaces route', async () => {
+    const loadPhysicalObjectDetails = vi.fn().mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(details());
+    renderPage(details(), undefined, undefined, `/infrastructure/objects/${objectId}/interfaces`, { loadPhysicalObjectDetails });
+
+    expect(await screen.findByText('Не удалось загрузить физический объект.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+    expect(await screen.findByRole('heading', { name: 'SW1' })).toBeInTheDocument();
+    expect(loadPhysicalObjectDetails).toHaveBeenCalledTimes(2);
   });
   it('shows authoritative equipment memberships with exact SavedMap links', async () => {
     renderPage(details(), { loadCatalogInventory: vi.fn().mockResolvedValue(inventory([

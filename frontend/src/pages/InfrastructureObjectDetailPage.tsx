@@ -297,7 +297,7 @@ export function InfrastructureObjectDetailPage({
           )}
         </dd></div>
       )}
-      </dl> : <p className="device-details-state">{detailsFailed ? t("physical.loadFailed") : t("physical.loading")}</p>}
+      </dl> : detailsFailed ? <div className="device-details-state device-details-state--error"><p>{t("physical.loadFailed")}</p><button type="button" onClick={() => void refreshDetails()}>{t("action.retry")}</button></div> : <p className="device-details-state">{t("physical.loading")}</p>}
       </section>
       {activeSection === "overview" && mapChooser && (
         <section
@@ -384,12 +384,14 @@ export function InfrastructureObjectDetailPage({
           objectBlueprintDataSource={objectBlueprintDataSource}
           cableLabelDataSource={cableLabelDataSource}
           document={details}
+          loadFailed={detailsFailed}
+          onRetry={() => void refreshDetails()}
           mode="physical"
         />
       </section>}
       {activeSection === "interfaces" && (
         <section className="detail-section detail-section--operations">
-          <DeviceInterfacesSection
+          {detailsFailed ? <div className="device-details-state device-details-state--error"><p>{t("physical.loadFailed")}</p><button type="button" onClick={() => void refreshDetails()}>{t("action.retry")}</button></div> : <DeviceInterfacesSection
             key={`${physicalObjectId}-interfaces`}
             node={node}
             dataSource={deviceDetailsDataSource}
@@ -402,7 +404,7 @@ export function InfrastructureObjectDetailPage({
               l2ForwardingContextWriteDataSource
             }
             cableLabelDataSource={cableLabelDataSource}
-          />
+          />}
         </section>
       )}
     </PageShell>

@@ -93,6 +93,8 @@ describe('PhysicalObjectDetailsSection ports', () => {
     const analyzeBlueprintUpgrade = vi.fn().mockResolvedValue({ schema_version: '1.0', status: 'OUTDATED', current_version_number: 1, target_version_number: 2, compatible_changes: [{ code: 'SLOT_ADDED', slot_key: 'C' }], blockers: [{ code: 'SLOT_REMOVED', slot_key: 'B' }] });
     renderDetails(blueprint, { blueprintUpgradeDataSource: { analyzeBlueprintUpgrade }, objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: { ...blueprint.blueprint_provenance.version_ref, entity_id: 'v2' }, version_number: 2, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 2 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() } });
     expect(await screen.findByText(/Доступна версия 2/)).toBeInTheDocument(); expect(screen.queryByText('Добавлен порт C')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Обновить…' }));
+    expect(screen.getByRole('dialog', { name: 'Обновление шаблона' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Проверить совместимость' }));
     expect(await screen.findByText(/Доступна версия 2/)).toBeInTheDocument(); expect(screen.getByText('Добавлен порт C')).toBeInTheDocument(); expect(screen.getByText('Удалён порт B')).toBeInTheDocument(); expect(analyzeBlueprintUpgrade).toHaveBeenCalledWith('object');
   });
@@ -103,12 +105,22 @@ describe('PhysicalObjectDetailsSection ports', () => {
     expect(await screen.findByText('Объект использует актуальную версию шаблона.')).toBeInTheDocument(); expect(screen.queryByRole('button', { name: 'Проверить совместимость' })).not.toBeInTheDocument();
   });
 
+  it('keeps blueprint provenance readable when upgrade operations are unavailable', async () => {
+    const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
+    renderDetails(blueprint, { objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: blueprint.blueprint_provenance.version_ref, version_number: 1, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 1 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() } });
+    expect(await screen.findByText('BP')).toBeInTheDocument();
+    expect(screen.getByText('v1')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Открыть' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Обновить…' })).not.toBeInTheDocument();
+  });
+
   it('applies only the reviewed target and retries only the refresh after a successful write', async () => {
     const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
     const load = vi.fn().mockResolvedValueOnce(blueprint).mockRejectedValueOnce(new Error('refresh')).mockResolvedValueOnce(blueprint);
     const applyBlueprintUpgrade = vi.fn().mockResolvedValue({});
     renderDetails(blueprint, { dataSource: { loadPhysicalObjectDetails: load }, blueprintUpgradeDataSource: { analyzeBlueprintUpgrade: vi.fn().mockResolvedValue({ schema_version: '1.0', status: 'OUTDATED', target_version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v2' }, target_version_number: 2, compatible_changes: [], blockers: [] }), applyBlueprintUpgrade }, objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: { ...blueprint.blueprint_provenance.version_ref, entity_id: 'v2' }, version_number: 2, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 2 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() } });
-    await userEvent.click(await screen.findByRole('button', { name: 'Проверить совместимость' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Обновить…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Проверить совместимость' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Обновить до версии 2' }));
     expect(applyBlueprintUpgrade).toHaveBeenCalledWith('object', 'v2');
     expect(await screen.findByText(/обновление применено/i)).toBeInTheDocument();
@@ -119,7 +131,8 @@ describe('PhysicalObjectDetailsSection ports', () => {
   it('shows an alert when blueprint analysis rejects a malformed response', async () => {
     const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
     renderDetails(blueprint, { blueprintUpgradeDataSource: { analyzeBlueprintUpgrade: vi.fn().mockRejectedValue(new Error('Malformed Blueprint upgrade analysis response: status is unsupported.')) }, objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: { ...blueprint.blueprint_provenance.version_ref, entity_id: 'v2' }, version_number: 2, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 2 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() } });
-    await userEvent.click(await screen.findByRole('button', { name: 'Проверить совместимость' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Обновить…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Проверить совместимость' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось проверить совместимость');
     expect(screen.queryByText(/Malformed Blueprint upgrade analysis response/)).not.toBeInTheDocument();
   });
@@ -131,7 +144,8 @@ describe('PhysicalObjectDetailsSection ports', () => {
   ])('%s', async (_label, failure, expected) => {
     const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
     renderDetails(blueprint, { blueprintUpgradeDataSource: { analyzeBlueprintUpgrade: vi.fn().mockResolvedValue({ schema_version: '1.0', status: 'OUTDATED', target_version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v2' }, target_version_number: 2, compatible_changes: [], blockers: [] }), applyBlueprintUpgrade: vi.fn().mockRejectedValue(failure) }, objectBlueprintDataSource: { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: { ...blueprint.blueprint_provenance.version_ref, entity_id: 'v2' }, version_number: 2, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 2 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() } });
-    await userEvent.click(await screen.findByRole('button', { name: 'Проверить совместимость' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Обновить…' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Проверить совместимость' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Обновить до версии 2' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(expected);
   });
@@ -141,7 +155,7 @@ describe('PhysicalObjectDetailsSection ports', () => {
     const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 1 } };
     const list = { loadObjectBlueprints: vi.fn().mockResolvedValue({ schema_version: '1.0', blueprints: [{ blueprint_ref: blueprint.blueprint_provenance.blueprint_ref, version_ref: { ...blueprint.blueprint_provenance.version_ref, entity_id: 'v2' }, version_number: 2, name: 'BP', body: { kind: 'RECTANGLE', width: 1, height: 1 }, slot_count: 0, internal_link_count: 0, version_count: 2 }] }), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint: vi.fn() };
     render(<I18nProvider><MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(blueprint) }} blueprintUpgradeDataSource={{ analyzeBlueprintUpgrade: vi.fn().mockResolvedValue({ schema_version: '1.0', status: 'OUTDATED', compatible_changes: [], blockers: [] }) }} objectBlueprintDataSource={list} /></MemoryRouter></I18nProvider>);
-    expect(await screen.findByText(/Version 2 is available/)).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Check compatibility' })).toBeInTheDocument();
+    expect(await screen.findByText(/Version 2 is available/)).toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Upgrade…' })).toBeInTheDocument();
     window.localStorage.removeItem('netmap.locale');
   });
 

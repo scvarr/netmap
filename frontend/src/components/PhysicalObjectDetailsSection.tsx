@@ -35,6 +35,8 @@ interface PhysicalObjectDetailsSectionProps {
   cableLabelDataSource?: CableLabelDataSource;
   mode?: 'physical' | 'legacy';
   document?: PhysicalObjectDetailsDocument | null;
+  loadFailed?: boolean;
+  onRetry?: () => void;
 }
 
 type DetailsState =
@@ -287,12 +289,11 @@ const changeText = (change: { code: string; slot_key?: string; slot_keys?: strin
 };
 
 export const PhysicalObjectBlueprintOverview = ({ physicalObjectId, provenance, dataSource, objectBlueprintDataSource, refresh }: { physicalObjectId: string; provenance: NonNullable<PhysicalObjectDetailsDocument['blueprint_provenance']>; dataSource?: BlueprintUpgradeDataSource; objectBlueprintDataSource?: ObjectBlueprintDataSource; refresh: () => Promise<void> }) => {
-  const { t } = useI18n(); const [analysis, setAnalysis] = useState<BlueprintUpgradeAnalysisDocument | null>(null); const [availability, setAvailability] = useState<'loading' | 'outdated' | 'up-to-date' | 'unavailable'>('loading'); const [targetVersion, setTargetVersion] = useState<number | null>(null); const [blueprintName, setBlueprintName] = useState<string | null>(null); const [loading, setLoading] = useState(false); const [applying, setApplying] = useState(false); const [error, setError] = useState<string | null>(null); const [refreshFailed, setRefreshFailed] = useState(false); const [succeeded, setSucceeded] = useState(false);
+  const { t } = useI18n(); const [analysis, setAnalysis] = useState<BlueprintUpgradeAnalysisDocument | null>(null); const [availability, setAvailability] = useState<'loading' | 'outdated' | 'up-to-date' | 'unavailable'>('loading'); const [targetVersion, setTargetVersion] = useState<number | null>(null); const [blueprintName, setBlueprintName] = useState<string | null>(null); const [loading, setLoading] = useState(false); const [applying, setApplying] = useState(false); const [error, setError] = useState<string | null>(null); const [refreshFailed, setRefreshFailed] = useState(false); const [succeeded, setSucceeded] = useState(false); const [upgradeOpen, setUpgradeOpen] = useState(false);
   useEffect(() => { let current = true; if (!objectBlueprintDataSource) { setAvailability('unavailable'); return undefined; } void objectBlueprintDataSource.loadObjectBlueprints().then((document) => { const item = document.blueprints.find((entry) => entry.blueprint_ref.entity_id === provenance.blueprint_ref.entity_id); if (!current) return; if (!item) setAvailability('unavailable'); else { setBlueprintName(item.name); setTargetVersion(item.version_number); setAvailability(item.version_ref.entity_id === provenance.version_ref.entity_id ? 'up-to-date' : 'outdated'); } }, () => current && setAvailability('unavailable')); return () => { current = false; }; }, [objectBlueprintDataSource, provenance.blueprint_ref.entity_id, provenance.version_ref.entity_id]);
-  if (!dataSource) return null;
-  const run = async () => { setLoading(true); setError(null); try { setAnalysis(await dataSource.analyzeBlueprintUpgrade(physicalObjectId)); } catch { setError(t('upgrade.failed')); } finally { setLoading(false); } };
+  const run = async () => { if (!dataSource) return; setLoading(true); setError(null); try { setAnalysis(await dataSource.analyzeBlueprintUpgrade(physicalObjectId)); } catch { setError(t('upgrade.failed')); } finally { setLoading(false); } };
   const apply = async () => {
-    if (!analysis?.target_version_ref?.entity_id || applying) return;
+    if (!dataSource || !analysis?.target_version_ref?.entity_id || applying) return;
     setApplying(true); setError(null); setRefreshFailed(false);
     try { await dataSource.applyBlueprintUpgrade?.(physicalObjectId, analysis.target_version_ref.entity_id); setSucceeded(true); try { await refresh(); } catch { setRefreshFailed(true); } }
     catch (reason) { setError(reason instanceof BlueprintUpgradeApiError && reason.status === 409 && reason.code === 'MODEL_ERROR' ? t('upgrade.conflict') : t('upgrade.applyFailed')); setAnalysis(null); }
@@ -301,14 +302,19 @@ export const PhysicalObjectBlueprintOverview = ({ physicalObjectId, provenance, 
   return <section className="blueprint-upgrade" aria-label={t('upgrade.title')}>
     <h3>Шаблон</h3><dl className="detail-fields"><div><dt>Шаблон</dt><dd>{blueprintName ?? '—'}</dd></div><div><dt>Версия</dt><dd>v{provenance.version_number}</dd></div><div><dt>Состояние</dt><dd>{availability === 'up-to-date' ? t('upgrade.upToDate') : availability === 'outdated' ? t('upgrade.outdated', { current: provenance.version_number, target: targetVersion ?? '?' }) : '—'}</dd></div></dl>
     <Link className="blueprint-upgrade__open" to={`/library/object-blueprints/${provenance.blueprint_ref.entity_id}/versions/${provenance.version_ref.entity_id}/edit`}>Открыть</Link>
-    {analysis?.status === 'MODEL_INCONSISTENT' && <p role="alert">{t('upgrade.inconsistent')}</p>}
-    {availability === 'outdated' && dataSource && <button type="button" onClick={() => void run()} disabled={loading}>{loading ? t('upgrade.analyzing') : t('upgrade.dryRun')}</button>}
-    {error && <p role="alert">{error}</p>}
-    {analysis && analysis.compatible_changes.length > 0 && <><h4>{t('upgrade.compatible')}</h4><ul>{analysis.compatible_changes.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
-    {analysis && analysis.blockers.length > 0 && <><h4>{t('upgrade.blockers')}</h4><ul>{analysis.blockers.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
-    {analysis?.status === 'OUTDATED' && analysis.blockers.length === 0 && analysis.target_version_ref && dataSource.applyBlueprintUpgrade && !succeeded && <button type="button" onClick={() => void apply()} disabled={applying}>{applying ? t('upgrade.applying') : t('upgrade.apply', { target: analysis.target_version_number ?? '?' })}</button>}
-    {succeeded && <p>{t('upgrade.success')}</p>}
-    {refreshFailed && <p role="alert">{t('upgrade.refreshFailed')} <button type="button" onClick={() => void refresh().then(() => setRefreshFailed(false), () => setRefreshFailed(true))}>{t('upgrade.retryRefresh')}</button></p>}
+    {availability === 'outdated' && dataSource && <button type="button" className="secondary-action" onClick={() => setUpgradeOpen(true)}>{t('upgrade.open')}</button>}
+    {upgradeOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-label={t('upgrade.title')}><div className="catalog-dialog__surface">
+      <h2>{t('upgrade.title')}</h2>
+      {analysis?.status === 'MODEL_INCONSISTENT' && <p role="alert">{t('upgrade.inconsistent')}</p>}
+      {!analysis && <button type="button" onClick={() => void run()} disabled={loading}>{loading ? t('upgrade.analyzing') : t('upgrade.dryRun')}</button>}
+      {error && <p role="alert">{error}</p>}
+      {analysis && analysis.compatible_changes.length > 0 && <><h3>{t('upgrade.compatible')}</h3><ul>{analysis.compatible_changes.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
+      {analysis && analysis.blockers.length > 0 && <><h3>{t('upgrade.blockers')}</h3><ul>{analysis.blockers.map((change, index) => <li key={`${change.code}-${change.slot_key ?? index}`}>{changeText(change, t)}</li>)}</ul></>}
+      {analysis?.status === 'OUTDATED' && analysis.blockers.length === 0 && analysis.target_version_ref && dataSource?.applyBlueprintUpgrade && !succeeded && <button type="button" onClick={() => void apply()} disabled={applying}>{applying ? t('upgrade.applying') : t('upgrade.apply', { target: analysis.target_version_number ?? '?' })}</button>}
+      {succeeded && <p>{t('upgrade.success')}</p>}
+      {refreshFailed && <p role="alert">{t('upgrade.refreshFailed')} <button type="button" onClick={() => void refresh().then(() => setRefreshFailed(false), () => setRefreshFailed(true))}>{t('upgrade.retryRefresh')}</button></p>}
+      <div className="catalog-dialog__actions"><button type="button" onClick={() => setUpgradeOpen(false)}>{t('action.close')}</button></div>
+    </div></section>}
   </section>;
 };
 
@@ -327,7 +333,7 @@ export function PhysicalObjectDetailsSection({
   blueprintUpgradeDataSource,
   objectBlueprintDataSource,
   cableLabelDataSource,
-  mode = 'legacy', document,
+  mode = 'legacy', document, loadFailed = false, onRetry,
 }: PhysicalObjectDetailsSectionProps) {
   const { t } = useI18n();
   const physicalObjectId = physicalObjectIdentity(node);
@@ -342,7 +348,9 @@ export function PhysicalObjectDetailsSection({
 
   useEffect(() => {
     if (document !== undefined) {
-      if (document) setState({ kind: 'loaded', document });
+      setState(document ? { kind: 'loaded', document } : loadFailed
+        ? { kind: 'error', message: t('physical.loadFailed') }
+        : { kind: 'loading' });
       return undefined;
     }
     if (!physicalObjectId) {
@@ -371,7 +379,7 @@ export function PhysicalObjectDetailsSection({
       },
     );
     return () => { current = false; };
-  }, [dataSource, document, physicalObjectId, retryKey, t]);
+  }, [dataSource, document, loadFailed, physicalObjectId, retryKey, t]);
 
   return (
     <section className="physical-object-details" aria-labelledby="connection-points-heading">
@@ -380,7 +388,7 @@ export function PhysicalObjectDetailsSection({
       {state.kind === 'error' && (
         <div className="device-details-state device-details-state--error">
           <p>{state.message}</p>
-          <button onClick={() => setRetryKey((key) => key + 1)}>{t('action.retry')}</button>
+          <button onClick={() => document !== undefined ? onRetry?.() : setRetryKey((key) => key + 1)}>{t('action.retry')}</button>
         </div>
       )}
       {state.kind === 'loaded' && (

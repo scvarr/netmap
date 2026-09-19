@@ -231,27 +231,29 @@ workflow указать имя `PC1` и существующий `Location`, с�
 
 ### P-UX-15 — информационная архитектура карточки PhysicalObject
 
-**Статус: IMPLEMENTATION IN PROGRESS.**
+**Статус: IMPLEMENTED.** Реализация готова к отдельной проверке и acceptance;
+статус не означает merge в `main`.
 
 **Замечание.** Текущая карточка `InfrastructureObject` складывает identity и
 basic data, `SavedMap` membership/actions, `Location`, Blueprint provenance и
 upgrade state, `ConnectionPoints` и физические подключения,
 `NetworkInterfaces` и interface-level operations в одну длинную страницу.
 
-**Согласованный product contract.** Карточка `PhysicalObject` становится
-object shell с устойчивым header и отдельными semantic tabs/routes. Начальный
-набор: `Обзор`, `Физика`, `Интерфейсы`. Header кратко показывает display name,
-понятное user-facing представление типа/класса, краткий Blueprint provenance
-и Location context при наличии; полный detail dump в header не размещается.
+**Согласованный product contract.** Карточка `PhysicalObject` — object shell
+со стабильным header: `Физический объект` и display name. Semantic tabs/routes
+`Обзор`, `Физика` и `Интерфейсы` остаются addressable и поддерживают direct
+deep links.
 
-**Обзор** содержит object-level информацию и lifecycle/navigation actions:
-display name, user-facing type/class presentation, canonical `Location`;
-имя Blueprint, instantiated version и current/update state, если он уже
-поддерживается существующим backend; действие открыть Blueprint и доступный
-для объекта существующий Blueprint upgrade workflow; `SavedMap` memberships,
-открытие существующего размещения и существующее действие добавления объекта
-на карту; summary с количеством ports, connected/free и interfaces. Полные
-списки ports и interfaces здесь не дублируются.
+**Обзор** — одна compact record surface, а не dashboard. Его строки содержат
+user-facing тип объекта, canonical `Location`, Blueprint provenance (имя,
+version, current/update state и переход к шаблону при наличии provenance) и
+`SavedMap` presentation/memberships. Редкие object-level mutations открывают
+bounded dialogs. Port/interface summaries и полные workspaces принадлежат
+соответственно `Физике` и `Интерфейсам`, поэтому Overview их не дублирует.
+
+`Location` остаётся canonical фактом физического места, а `SavedMap` и map
+placement — presentation state. Blueprint upgrade при доступности использует
+существующий analyze/apply flow в отдельном task/dialog interaction.
 
 Будущее переименование `PhysicalObject` из `C-UX-04` естественно относится к
 object-level Overview/lifecycle surface, но P-UX-15 не реализует и не закрывает
@@ -282,8 +284,6 @@ state. Концептуальные пути: `/infrastructure/objects/<id>` д�
 определяется implementation milestone после проверки текущей routing
 structure. Generic tabs framework для всего приложения не вводится.
 
-**Границы.** `SavedMap` membership и размещение остаются presentation state,
-тогда как canonical `Location` остаётся фактом физического места.
-`ConnectionPoint` и `NetworkInterface` не объединяются. P-UX-15 задаёт место
-для будущего rename action из отдельного `C-UX-04`, не закрывая его; он также
-не меняет domain model или semantics ради будущих L2/L3 tabs.
+**Границы.** `ConnectionPoint` и `NetworkInterface` не объединяются. P-UX-15
+не реализует `C-UX-04` rename и не вводит L2/L3 semantics/tabs, domain changes
+или новые canonical entities.
