@@ -33,7 +33,8 @@ interface PhysicalObjectDetailsSectionProps {
   blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
   objectBlueprintDataSource?: ObjectBlueprintDataSource;
   cableLabelDataSource?: CableLabelDataSource;
-  mode?: 'overview' | 'physical' | 'legacy';
+  mode?: 'physical' | 'legacy';
+  document?: PhysicalObjectDetailsDocument | null;
 }
 
 type DetailsState =
@@ -281,7 +282,7 @@ const changeText = (change: { code: string; slot_key?: string; slot_keys?: strin
   return t(key, { slot });
 };
 
-const BlueprintUpgrade = ({ physicalObjectId, provenance, dataSource, objectBlueprintDataSource, refresh }: { physicalObjectId: string; provenance: NonNullable<PhysicalObjectDetailsDocument['blueprint_provenance']>; dataSource?: BlueprintUpgradeDataSource; objectBlueprintDataSource?: ObjectBlueprintDataSource; refresh: () => Promise<void> }) => {
+export const PhysicalObjectBlueprintOverview = ({ physicalObjectId, provenance, dataSource, objectBlueprintDataSource, refresh }: { physicalObjectId: string; provenance: NonNullable<PhysicalObjectDetailsDocument['blueprint_provenance']>; dataSource?: BlueprintUpgradeDataSource; objectBlueprintDataSource?: ObjectBlueprintDataSource; refresh: () => Promise<void> }) => {
   const { t } = useI18n(); const [analysis, setAnalysis] = useState<BlueprintUpgradeAnalysisDocument | null>(null); const [availability, setAvailability] = useState<'loading' | 'outdated' | 'up-to-date' | 'unavailable'>('loading'); const [targetVersion, setTargetVersion] = useState<number | null>(null); const [blueprintName, setBlueprintName] = useState<string | null>(null); const [loading, setLoading] = useState(false); const [applying, setApplying] = useState(false); const [error, setError] = useState<string | null>(null); const [refreshFailed, setRefreshFailed] = useState(false); const [succeeded, setSucceeded] = useState(false);
   useEffect(() => { let current = true; if (!objectBlueprintDataSource) { setAvailability('unavailable'); return undefined; } void objectBlueprintDataSource.loadObjectBlueprints().then((document) => { const item = document.blueprints.find((entry) => entry.blueprint_ref.entity_id === provenance.blueprint_ref.entity_id); if (!current) return; if (!item) setAvailability('unavailable'); else { setBlueprintName(item.name); setTargetVersion(item.version_number); setAvailability(item.version_ref.entity_id === provenance.version_ref.entity_id ? 'up-to-date' : 'outdated'); } }, () => current && setAvailability('unavailable')); return () => { current = false; }; }, [objectBlueprintDataSource, provenance.blueprint_ref.entity_id, provenance.version_ref.entity_id]);
   if (!dataSource) return null;
@@ -322,7 +323,7 @@ export function PhysicalObjectDetailsSection({
   blueprintUpgradeDataSource,
   objectBlueprintDataSource,
   cableLabelDataSource,
-  mode = 'legacy',
+  mode = 'legacy', document,
 }: PhysicalObjectDetailsSectionProps) {
   const { t } = useI18n();
   const physicalObjectId = physicalObjectIdentity(node);
@@ -336,6 +337,10 @@ export function PhysicalObjectDetailsSection({
   onDocumentChangeRef.current = onDocumentChange;
 
   useEffect(() => {
+    if (document !== undefined) {
+      if (document) setState({ kind: 'loaded', document });
+      return undefined;
+    }
     if (!physicalObjectId) {
       setState({
         kind: 'unavailable',
@@ -362,7 +367,7 @@ export function PhysicalObjectDetailsSection({
       },
     );
     return () => { current = false; };
-  }, [dataSource, physicalObjectId, retryKey, t]);
+  }, [dataSource, document, physicalObjectId, retryKey, t]);
 
   return (
     <section className="physical-object-details" aria-labelledby="connection-points-heading">
@@ -392,9 +397,9 @@ export function PhysicalObjectDetailsSection({
             onUpdated={(document) => { setState({ kind: 'loaded', document }); onDocumentChange(document); onClassUpdated(); }}
           />}
           {state.document.blueprint_provenance && (
-            <>{mode !== 'physical' && physicalObjectId && <BlueprintUpgrade physicalObjectId={physicalObjectId} provenance={state.document.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={async () => { const document = await dataSource.loadPhysicalObjectDetails(physicalObjectId); setState({ kind: 'loaded', document }); onDocumentChange(document); }} />}</>
+            <>{mode !== 'physical' && physicalObjectId && <PhysicalObjectBlueprintOverview physicalObjectId={physicalObjectId} provenance={state.document.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={async () => { const document = await dataSource.loadPhysicalObjectDetails(physicalObjectId); setState({ kind: 'loaded', document }); onDocumentChange(document); }} />}</>
           )}
-          {mode !== 'overview' && <><h3 id="connection-points-heading">{t('physical.ports')} <span>{state.document.connection_points.length}</span></h3>
+          <><h3 id="connection-points-heading">{t('physical.ports')} <span>{state.document.connection_points.length}</span></h3>
           {!state.document.blueprint_provenance && connectionPointWriteDataSource && physicalObjectId && (
             <div className="manual-point-action"><strong>{t('physical.manualStructure')}</strong><CreateConnectionPoint physicalObjectId={physicalObjectId} dataSource={connectionPointWriteDataSource} onCreated={(document) => { setState({ kind: 'loaded', document }); onDocumentChange(document); onConnectionPointCreated(); }} /></div>
           )}
@@ -406,7 +411,7 @@ export function PhysicalObjectDetailsSection({
           <details className="technical-details physical-object-details__technical">
             <summary>{t('physical.objectTechnical')}</summary>
             <SourceRefs refs={[state.document.physical_object.source_ref]} />
-          </details></>}
+          </details></>
         </>
       )}
     </section>

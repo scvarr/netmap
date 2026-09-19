@@ -43,7 +43,12 @@ describe('InfrastructureObjectDetailPage Saved Map membership', () => {
   it('uses an addressable physical section', async () => {
     renderPage(details(), undefined, undefined, `/infrastructure/objects/${objectId}/physical`);
     expect(await screen.findByRole('link', { name: 'Физика' })).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByText('Порты')).toBeInTheDocument();
+    expect(await screen.findByText('Порты')).toBeInTheDocument();
+  });
+  it('loads the shell document for a direct interfaces route', async () => {
+    renderPage(details(), undefined, undefined, `/infrastructure/objects/${objectId}/interfaces`);
+    expect(await screen.findByRole('heading', { name: 'SW1' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Интерфейсы' })).toHaveAttribute('aria-current', 'page');
   });
   it('shows authoritative equipment memberships with exact SavedMap links', async () => {
     renderPage(details(), { loadCatalogInventory: vi.fn().mockResolvedValue(inventory([

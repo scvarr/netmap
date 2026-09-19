@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { DeviceInterfacesSection } from "../components/DeviceInterfacesSection";
-import { PhysicalObjectClassEditor, PhysicalObjectDetailsSection } from "../components/PhysicalObjectDetailsSection";
+import { PhysicalObjectBlueprintOverview, PhysicalObjectClassEditor, PhysicalObjectDetailsSection } from "../components/PhysicalObjectDetailsSection";
 import { physicalClassPresentationForLocale } from "../topology/presentation";
 import { PHYSICAL_PROJECTION_REQUEST } from "../topology/projection";
 import type { ConnectionPointWriteDataSource } from "../topology/connectionPointWriteTypes";
@@ -81,6 +81,7 @@ export function InfrastructureObjectDetailPage({
   const [details, setDetails] = useState<PhysicalObjectDetailsDocument | null>(
     null,
   );
+  const [detailsFailed, setDetailsFailed] = useState(false);
   const [projection, setProjection] =
     useState<TopologyProjectionDocument | null>(null);
   const [projectionRevision, setProjectionRevision] = useState(0);
@@ -94,6 +95,15 @@ export function InfrastructureObjectDetailPage({
     maps: SavedMapSummary[];
     error: string | null;
   } | null>(null);
+
+  const refreshDetails = useCallback(async () => {
+    if (!physicalObjectDetailsDataSource || !physicalObjectId) return;
+    setDetailsFailed(false);
+    try { setDetails(await physicalObjectDetailsDataSource.loadPhysicalObjectDetails(physicalObjectId)); }
+    catch { setDetailsFailed(true); }
+  }, [physicalObjectDetailsDataSource, physicalObjectId]);
+
+  useEffect(() => { void refreshDetails(); }, [refreshDetails]);
 
   useEffect(() => {
     let current = true;
@@ -233,10 +243,10 @@ export function InfrastructureObjectDetailPage({
           {gap}
         </p>
       ))}
-      {activeSection === "overview" && <section className="overview-surface" aria-label={t("object.main")}>
+      {activeSection === "overview" && <><section className="overview-surface" aria-label="Обзор">
       {activeSection === "overview" && details && (
         <section
-          className="detail-section"
+          className="detail-section overview-area overview-area--main"
           aria-labelledby="object-main-heading"
         >
           <h2 id="object-main-heading">{t("object.main")}</h2>
@@ -246,7 +256,7 @@ export function InfrastructureObjectDetailPage({
               <dd>{details.physical_object.label}</dd>
             </div>
             <div>
-              <dt>{t("physical.classEditor")}</dt>
+              <dt>Тип объекта</dt>
               <dd>
                 {physicalObjectClassWriteDataSource ? <PhysicalObjectClassEditor
                   key={details.physical_object.class ?? "unclassified"}
@@ -257,12 +267,13 @@ export function InfrastructureObjectDetailPage({
                 /> : physicalClassPresentationForLocale(details.physical_object.class, locale).label}
               </dd>
             </div>
+            <div className="detail-fields__location"><dt>{t("object.location")}</dt><dd><PhysicalObjectLocationSection physicalObjectId={physicalObjectId} dataSource={locationDataSource} compact /></dd></div>
           </dl>
         </section>
       )}
       {activeSection === "overview" && details && (
         <section
-          className="detail-section"
+          className="detail-section overview-area overview-area--maps"
           aria-labelledby="object-maps-heading"
         >
           <h2 id="object-maps-heading">{t("object.maps")}</h2>
@@ -309,12 +320,15 @@ export function InfrastructureObjectDetailPage({
             </>
           )}
           {!cable && inventoryItem && savedMapDataSource && (
-            <button type="button" onClick={openMapChooser}>
+            <button type="button" className="secondary-action" onClick={openMapChooser}>
               {t("object.addToMap")}
             </button>
           )}
         </section>
       )}
+      {activeSection === "overview" && details?.blueprint_provenance && <section className="detail-section overview-area overview-area--blueprint" aria-label="Шаблон"><PhysicalObjectBlueprintOverview physicalObjectId={physicalObjectId} provenance={details.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={refreshDetails} /></section>}
+      {activeSection === "overview" && details && <section className="detail-section overview-area overview-area--summary" aria-label="Сводка"><h2>Сводка</h2><dl className="detail-fields"><div><dt>Порты</dt><dd>{details.connection_points.length}</dd></div>{details.connection_points.length > 0 && details.connection_points.every((point) => point.cardinality === 1 && Array.isArray(point.external_physical_attachments)) && <><div><dt>Подключено</dt><dd>{details.connection_points.filter((point) => point.external_physical_attachments!.length > 0).length}</dd></div><div><dt>Свободно</dt><dd>{details.connection_points.filter((point) => point.external_physical_attachments!.length === 0).length}</dd></div></>}<div><dt>Интерфейсы</dt><dd>{details.owned_interface_count}</dd></div></dl></section>}
+      </section>
       {activeSection === "overview" && mapChooser && (
         <section
           className="map-dialog"
@@ -374,22 +388,7 @@ export function InfrastructureObjectDetailPage({
           </div>
         </section>
       )}
-      {activeSection === "overview" && <PhysicalObjectLocationSection
-        physicalObjectId={physicalObjectId}
-        dataSource={locationDataSource}
-        compact
-      />}
-      {activeSection === "overview" && <section className="overview-summary"><PhysicalObjectDetailsSection
-        key={physicalObjectId}
-        node={node}
-        dataSource={physicalObjectDetailsDataSource ?? { loadPhysicalObjectDetails: () => Promise.reject(new Error(t("inspector.objectDetailsLoadFailed"))) }}
-        deviceDetailsDataSource={deviceDetailsDataSource}
-        blueprintUpgradeDataSource={blueprintUpgradeDataSource}
-        objectBlueprintDataSource={objectBlueprintDataSource}
-        onDocumentChange={setDetails}
-        mode="overview"
-      /></section>}
-      </section>}
+      </>}
       {activeSection === "physical" && <section className="detail-section detail-section--operations">
         <PhysicalObjectDetailsSection
           key={physicalObjectId}
@@ -408,12 +407,13 @@ export function InfrastructureObjectDetailPage({
           classWriteDataSource={physicalObjectClassWriteDataSource}
           connectionPointWriteDataSource={connectionPointWriteDataSource}
           onDocumentChange={setDetails}
-          onConnected={refreshProjection}
-          onClassUpdated={refreshProjection}
-          onConnectionPointCreated={refreshProjection}
+          onConnected={() => { refreshProjection(); void refreshDetails(); }}
+          onClassUpdated={() => { refreshProjection(); void refreshDetails(); }}
+          onConnectionPointCreated={() => { refreshProjection(); void refreshDetails(); }}
           blueprintUpgradeDataSource={blueprintUpgradeDataSource}
           objectBlueprintDataSource={objectBlueprintDataSource}
           cableLabelDataSource={cableLabelDataSource}
+          document={details}
           mode="physical"
         />
       </section>}

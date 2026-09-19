@@ -491,15 +491,14 @@ a { color: inherit; }
 .physical-class-editor__read > span { color: #91a5a5; font-size: 11px; }
 .physical-class-editor__current { color: #e0eeeb; }
 .physical-class-editor__actions { display: flex; gap: 8px; margin-top: 12px; }
-.overview-surface { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; margin-top: 16px; padding: 18px 20px; border: 1px solid #203438; border-radius: 13px; background: #0a1719; }
+.overview-surface { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "main blueprint" "maps summary"; gap: 14px 24px; margin-top: 16px; padding: 18px 20px; border: 1px solid #203438; border-radius: 13px; background: #0a1719; }
 .overview-surface .detail-section { min-width: 0; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .overview-surface .detail-section > h2 { margin-bottom: 10px; font-size: 13px; }
 .overview-surface .detail-fields { display: grid; gap: 7px; }
 .overview-surface .detail-fields > div { display: grid; grid-template-columns: minmax(95px, auto) 1fr; gap: 10px; align-items: center; }
 .overview-surface .detail-fields dt { font-size: 11px; color: #91a5a5; }
 .overview-surface .detail-fields dd { margin: 0; }
-.overview-surface .physical-object-details { margin: 0; padding: 0; border: 0; }
-.overview-surface .physical-object-details__summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 14px; margin: 0 0 12px; }
+.overview-area--main { grid-area: main; }.overview-area--blueprint { grid-area: blueprint; }.overview-area--maps { grid-area: maps; }.overview-area--summary { grid-area: summary; }
 .overview-surface .blueprint-provenance { margin: 8px 0; font-size: 12px; }
 .overview-surface .physical-class-editor { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .overview-surface .physical-class-editor__current { margin: 0; }
@@ -512,7 +511,7 @@ a { color: inherit; }
 .overview-summary .blueprint-upgrade h3 { margin: 0 0 10px; font-size: 13px; }
 .overview-summary .detail-fields > div { padding: 0; border: 0; }
 .overview-surface .map-dialog { grid-column: 1 / -1; }
-@media (max-width: 700px) { .overview-surface { grid-template-columns: 1fr; padding: 16px; gap: 16px; } }
+@media (max-width: 700px) { .overview-surface { grid-template-columns: 1fr; grid-template-areas: "main" "blueprint" "maps" "summary"; padding: 16px; gap: 16px; } }
 .overview-surface:has(+ .detail-section--operations) { margin-bottom: 0; border-bottom: 0; border-radius: 13px 13px 0 0; }
 .overview-surface + .detail-section--operations { margin-top: 0; padding: 0 20px 18px; border-top: 0; border-radius: 0 0 13px 13px; background: #0a1719; }
 .overview-surface + .detail-section--operations .physical-object-details__summary { margin-top: 0; }
