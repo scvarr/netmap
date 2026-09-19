@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import type { PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import type { TopologyProjectionNode } from '../topology/types';
-import { PhysicalObjectDetailsSection } from './PhysicalObjectDetailsSection';
+import { PhysicalObjectClassEditor, PhysicalObjectDetailsSection } from './PhysicalObjectDetailsSection';
 import { I18nProvider } from '../i18n';
 import { BlueprintUpgradeApiError } from '../topology/blueprintUpgradeTypes';
 
@@ -82,8 +82,6 @@ describe('PhysicalObjectDetailsSection ports', () => {
   it('hides structural add-point for blueprint instances and keeps it explicit for manual objects', async () => {
     const blueprint = { ...document(), blueprint_provenance: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' }, version_number: 3 } };
     const { rerender } = renderDetails(blueprint, { connectionPointWriteDataSource: { createConnectionPoint: vi.fn() } });
-    expect(await screen.findByText(/версия 3/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Открыть шаблон' })).toHaveAttribute('href', '/library/object-blueprints/bp/versions/v1/edit');
     expect(screen.queryByRole('button', { name: '+ Добавить точку' })).not.toBeInTheDocument();
     rerender(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document()) }} connectionPointWriteDataSource={{ createConnectionPoint: vi.fn() }} /></MemoryRouter>);
     expect(await screen.findByText('Ручная структура')).toBeInTheDocument();
@@ -171,9 +169,9 @@ describe('PhysicalObjectDetailsSection ports', () => {
   it('uses authoritative class and manual point responses with callbacks', async () => {
     const initial = document(); const updated = { ...initial, physical_object: { ...initial.physical_object, class: 'switch' } }; const afterPoint = document([point('A01'), point('A02')]);
     const setPhysicalObjectClass = vi.fn().mockResolvedValue(updated); const createConnectionPoint = vi.fn().mockResolvedValue(afterPoint); const onClassUpdated = vi.fn(); const onConnectionPointCreated = vi.fn();
-    render(<MemoryRouter><PhysicalObjectDetailsSection mode="overview" node={node()} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(initial) }} classWriteDataSource={{ setPhysicalObjectClass }} onClassUpdated={onClassUpdated} /></MemoryRouter>);
+    render(<MemoryRouter><PhysicalObjectClassEditor physicalObjectId="object" currentClass={initial.physical_object.class} dataSource={{ setPhysicalObjectClass }} onUpdated={onClassUpdated} /></MemoryRouter>);
     expect(await screen.findByText('ФИЗИЧЕСКИЙ ОБЪЕКТ')).toBeInTheDocument(); expect(screen.queryByLabelText('Классификация')).not.toBeInTheDocument(); await userEvent.click(screen.getByRole('button', { name: 'Изменить тип объекта' })); await userEvent.selectOptions(screen.getByLabelText('Классификация'), 'switch'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить тип' }));
-    expect(await screen.findByText('КОММУТАТОР')).toBeInTheDocument(); expect(onClassUpdated).toHaveBeenCalledTimes(1);
+    expect(setPhysicalObjectClass).toHaveBeenCalledWith('object', 'switch'); expect(onClassUpdated).toHaveBeenCalledTimes(1);
     renderDetails(initial, { connectionPointWriteDataSource: { createConnectionPoint }, onConnectionPointCreated });
     await screen.findByRole('rowheader', { name: 'A01' });
     await userEvent.click(screen.getByRole('button', { name: '+ Добавить точку' })); await userEvent.type(screen.getByLabelText('Название'), 'A02'); await userEvent.click(screen.getByRole('button', { name: 'Создать' }));

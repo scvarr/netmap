@@ -501,7 +501,16 @@ a { color: inherit; }
 .overview-surface .physical-object-details { margin: 0; padding: 0; border: 0; }
 .overview-surface .physical-object-details__summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px 14px; margin: 0 0 12px; }
 .overview-surface .blueprint-provenance { margin: 8px 0; font-size: 12px; }
-.overview-surface .physical-class-editor { margin: 10px 0; }
+.overview-surface .physical-class-editor { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.overview-surface .physical-class-editor__current { margin: 0; }
+.overview-surface .detail-section--compact-location { display: flex; align-items: center; gap: 10px; }
+.overview-surface .detail-section--compact-location p { margin: 0; }
+.overview-surface .detail-section--compact-location .object-location-actions { display: flex; gap: 6px; }
+.overview-summary { min-width: 0; }
+.overview-summary .physical-object-details { margin: 0; padding: 0; border: 0; }
+.overview-summary .blueprint-upgrade { margin: 0; }
+.overview-summary .blueprint-upgrade h3 { margin: 0 0 10px; font-size: 13px; }
+.overview-summary .detail-fields > div { padding: 0; border: 0; }
 .overview-surface .map-dialog { grid-column: 1 / -1; }
 @media (max-width: 700px) { .overview-surface { grid-template-columns: 1fr; padding: 16px; gap: 16px; } }
 .overview-surface:has(+ .detail-section--operations) { margin-bottom: 0; border-bottom: 0; border-radius: 13px 13px 0 0; }

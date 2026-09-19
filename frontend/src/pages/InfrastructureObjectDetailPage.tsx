@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { DeviceInterfacesSection } from "../components/DeviceInterfacesSection";
-import { PhysicalObjectDetailsSection } from "../components/PhysicalObjectDetailsSection";
+import { PhysicalObjectClassEditor, PhysicalObjectDetailsSection } from "../components/PhysicalObjectDetailsSection";
 import { physicalClassPresentationForLocale } from "../topology/presentation";
 import { PHYSICAL_PROJECTION_REQUEST } from "../topology/projection";
 import type { ConnectionPointWriteDataSource } from "../topology/connectionPointWriteTypes";
@@ -246,9 +246,15 @@ export function InfrastructureObjectDetailPage({
               <dd>{details.physical_object.label}</dd>
             </div>
             <div>
-              <dt>{t("object.class")}</dt>
+              <dt>{t("physical.classEditor")}</dt>
               <dd>
-                {details.physical_object.class ?? t("object.notSpecified")}
+                {physicalObjectClassWriteDataSource ? <PhysicalObjectClassEditor
+                  key={details.physical_object.class ?? "unclassified"}
+                  physicalObjectId={physicalObjectId}
+                  currentClass={details.physical_object.class}
+                  dataSource={physicalObjectClassWriteDataSource}
+                  onUpdated={(document) => { setDetails(document); refreshProjection(); }}
+                /> : physicalClassPresentationForLocale(details.physical_object.class, locale).label}
               </dd>
             </div>
           </dl>
@@ -371,9 +377,20 @@ export function InfrastructureObjectDetailPage({
       {activeSection === "overview" && <PhysicalObjectLocationSection
         physicalObjectId={physicalObjectId}
         dataSource={locationDataSource}
+        compact
       />}
+      {activeSection === "overview" && <section className="overview-summary"><PhysicalObjectDetailsSection
+        key={physicalObjectId}
+        node={node}
+        dataSource={physicalObjectDetailsDataSource ?? { loadPhysicalObjectDetails: () => Promise.reject(new Error(t("inspector.objectDetailsLoadFailed"))) }}
+        deviceDetailsDataSource={deviceDetailsDataSource}
+        blueprintUpgradeDataSource={blueprintUpgradeDataSource}
+        objectBlueprintDataSource={objectBlueprintDataSource}
+        onDocumentChange={setDetails}
+        mode="overview"
+      /></section>}
       </section>}
-      {(activeSection === "overview" || activeSection === "physical") && <section className="detail-section detail-section--operations">
+      {activeSection === "physical" && <section className="detail-section detail-section--operations">
         <PhysicalObjectDetailsSection
           key={physicalObjectId}
           node={node}
@@ -397,7 +414,7 @@ export function InfrastructureObjectDetailPage({
           blueprintUpgradeDataSource={blueprintUpgradeDataSource}
           objectBlueprintDataSource={objectBlueprintDataSource}
           cableLabelDataSource={cableLabelDataSource}
-          mode={activeSection === "overview" ? "overview" : "physical"}
+          mode="physical"
         />
       </section>}
       {activeSection === "interfaces" && (
