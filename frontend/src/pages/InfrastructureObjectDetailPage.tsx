@@ -263,6 +263,7 @@ export function InfrastructureObjectDetailPage({
                   physicalObjectId={physicalObjectId}
                   currentClass={details.physical_object.class}
                   dataSource={physicalObjectClassWriteDataSource}
+                  dialog
                   onUpdated={(document) => { setDetails(document); refreshProjection(); }}
                 /> : physicalClassPresentationForLocale(details.physical_object.class, locale).label}
               </dd>
@@ -273,7 +274,7 @@ export function InfrastructureObjectDetailPage({
       )}
       {activeSection === "overview" && details && (
         <section
-          className="detail-section overview-area overview-area--maps"
+          className="detail-section overview-area overview-area--maps object-detail-record__presentation"
           aria-labelledby="object-maps-heading"
         >
           <h2 id="object-maps-heading">{t("object.maps")}</h2>
@@ -327,7 +328,7 @@ export function InfrastructureObjectDetailPage({
         </section>
       )}
       {activeSection === "overview" && details?.blueprint_provenance && <section className="detail-section overview-area overview-area--blueprint" aria-label="Шаблон"><PhysicalObjectBlueprintOverview physicalObjectId={physicalObjectId} provenance={details.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={refreshDetails} /></section>}
-      {activeSection === "overview" && details && <section className="detail-section overview-area overview-area--summary" aria-label="Сводка"><h2>Сводка</h2><dl className="detail-fields"><div><dt>Порты</dt><dd>{details.connection_points.length}</dd></div>{details.connection_points.length > 0 && details.connection_points.every((point) => point.cardinality === 1 && Array.isArray(point.external_physical_attachments)) && <><div><dt>Подключено</dt><dd>{details.connection_points.filter((point) => point.external_physical_attachments!.length > 0).length}</dd></div><div><dt>Свободно</dt><dd>{details.connection_points.filter((point) => point.external_physical_attachments!.length === 0).length}</dd></div></>}<div><dt>Интерфейсы</dt><dd>{details.owned_interface_count}</dd></div></dl></section>}
+      {activeSection === "overview" && details && <div className="overview-summary-strip" aria-label="Сводка">Порты {details.connection_points.length}{details.connection_points.length > 0 && details.connection_points.every((point) => point.cardinality === 1 && Array.isArray(point.external_physical_attachments)) && <> · Подключено {details.connection_points.filter((point) => point.external_physical_attachments!.length > 0).length} · Свободно {details.connection_points.filter((point) => point.external_physical_attachments!.length === 0).length}</>} · Интерфейсы {details.owned_interface_count}</div>}
       </section>
       {activeSection === "overview" && mapChooser && (
         <section

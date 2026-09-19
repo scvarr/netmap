@@ -99,6 +99,7 @@ interface PhysicalObjectClassEditorProps {
   currentClass?: string;
   dataSource: PhysicalObjectClassWriteDataSource;
   onUpdated: (document: PhysicalObjectDetailsDocument) => void;
+  dialog?: boolean;
 }
 
 export const PhysicalObjectClassEditor = ({
@@ -106,6 +107,7 @@ export const PhysicalObjectClassEditor = ({
   currentClass,
   dataSource,
   onUpdated,
+  dialog = false,
 }: PhysicalObjectClassEditorProps) => {
   const { t } = useI18n();
   const [editing, setEditing] = useState(false);
@@ -148,7 +150,7 @@ export const PhysicalObjectClassEditor = ({
         </strong>
         {!editing && <button type="button" className="port-icon-action" aria-label="Изменить тип объекта" title="Изменить тип объекта" onClick={() => setEditing(true)}>✎</button>}
       </div>
-      {editing && <><label>
+      {editing && (dialog ? <section className="catalog-dialog" role="dialog" aria-modal="true" aria-label="Изменить тип объекта"><div className="catalog-dialog__surface physical-class-editor__dialog"><h2>Изменить тип объекта</h2><label>
         <span>{t('physical.classification')}</span>
         <select
           value={preset}
@@ -170,9 +172,11 @@ export const PhysicalObjectClassEditor = ({
         </label>
       )}
       {error && <p className="physical-class-editor__error" role="alert">{error}</p>}
-      <div className="physical-class-editor__actions"><button type="button" onClick={cancel} disabled={pending}>{t('action.cancel')}</button><button type="button" onClick={() => void submit()} disabled={!value || pending || unchanged}>
+      <div className="physical-class-editor__actions"><button type="button" onClick={cancel} disabled={pending}>{t('action.cancel')}</button><button type="button" className="primary-action" onClick={() => void submit()} disabled={!value || pending || unchanged}>
         {pending ? t('physical.saving') : t('physical.saveClass')}
-      </button></div></>}
+      </button></div></div></section> : <><label>
+        <span>{t('physical.classification')}</span><select value={preset} onChange={(event) => setPreset(event.target.value)} disabled={pending}><option value="workstation">{t('physical.class.workstation')}</option><option value="switch">{t('physical.class.switch')}</option><option value="cable">{t('physical.class.cable')}</option><option value="outlet">{t('physical.class.outlet')}</option><option value="patch_panel">{t('physical.class.patchPanel')}</option><option value="__custom__">{t('physical.other')}</option></select>
+      </label><div className="physical-class-editor__actions"><button type="button" onClick={cancel} disabled={pending}>{t('action.cancel')}</button><button type="button" onClick={() => void submit()} disabled={!value || pending || unchanged}>{pending ? t('physical.saving') : t('physical.saveClass')}</button></div></>)}
     </div>
   );
 };
