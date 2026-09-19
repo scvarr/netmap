@@ -106,6 +106,7 @@ export function InfrastructureObjectDetailPage({
   useEffect(() => { void refreshDetails(); }, [refreshDetails]);
 
   useEffect(() => {
+    if (activeSection !== "physical" && activeSection !== "interfaces") return;
     let current = true;
     void dataSource.loadProjection(PHYSICAL_PROJECTION_REQUEST).then(
       (nextProjection) => {
@@ -118,13 +119,14 @@ export function InfrastructureObjectDetailPage({
     return () => {
       current = false;
     };
-  }, [dataSource, projectionRevision]);
+  }, [activeSection, dataSource, projectionRevision]);
 
   const refreshProjection = useCallback(() => {
     setProjectionRevision((revision) => revision + 1);
   }, []);
 
   useEffect(() => {
+    if (activeSection !== "overview") return;
     let current = true;
     setInventoryError(null);
     void catalogInventoryDataSource.loadCatalogInventory().then(
@@ -144,7 +146,7 @@ export function InfrastructureObjectDetailPage({
     return () => {
       current = false;
     };
-  }, [catalogInventoryDataSource, inventoryRevision, physicalObjectId, t]);
+  }, [activeSection, catalogInventoryDataSource, inventoryRevision, physicalObjectId, t]);
 
   const node = useMemo(
     () => ({
@@ -217,12 +219,7 @@ export function InfrastructureObjectDetailPage({
         ]}
       />
       <PageHeader
-        eyebrow={
-          physicalClassPresentationForLocale(
-            details?.physical_object.class,
-            locale,
-          ).label
-        }
+        eyebrow="Физический объект"
         title={details?.physical_object.label ?? t("object.loadingTitle")}
       />
       <nav className="object-detail-nav" aria-label="Разделы объекта">
@@ -244,40 +241,13 @@ export function InfrastructureObjectDetailPage({
         </p>
       ))}
       {activeSection === "overview" && <><section className="overview-surface" aria-label="Обзор">
+      {details ? <dl className="object-detail-record">
+            <div><dt>Тип объекта</dt><dd>{physicalObjectClassWriteDataSource ? <PhysicalObjectClassEditor key={details.physical_object.class ?? "unclassified"} physicalObjectId={physicalObjectId} currentClass={details.physical_object.class} dataSource={physicalObjectClassWriteDataSource} dialog onUpdated={(document) => { setDetails(document); refreshProjection(); }} /> : physicalClassPresentationForLocale(details.physical_object.class, locale).label}</dd></div>
+            <div><dt>Расположение</dt><dd><PhysicalObjectLocationSection physicalObjectId={physicalObjectId} dataSource={locationDataSource} compact /></dd></div>
+            {details.blueprint_provenance && <div><dt>Шаблон</dt><dd><PhysicalObjectBlueprintOverview physicalObjectId={physicalObjectId} provenance={details.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={refreshDetails} /></dd></div>}
       {activeSection === "overview" && details && (
-        <section
-          className="detail-section overview-area overview-area--main"
-          aria-labelledby="object-main-heading"
-        >
-          <h2 id="object-main-heading">{t("object.main")}</h2>
-          <dl className="detail-fields">
-            <div>
-              <dt>{t("catalog.name")}</dt>
-              <dd>{details.physical_object.label}</dd>
-            </div>
-            <div>
-              <dt>Тип объекта</dt>
-              <dd>
-                {physicalObjectClassWriteDataSource ? <PhysicalObjectClassEditor
-                  key={details.physical_object.class ?? "unclassified"}
-                  physicalObjectId={physicalObjectId}
-                  currentClass={details.physical_object.class}
-                  dataSource={physicalObjectClassWriteDataSource}
-                  dialog
-                  onUpdated={(document) => { setDetails(document); refreshProjection(); }}
-                /> : physicalClassPresentationForLocale(details.physical_object.class, locale).label}
-              </dd>
-            </div>
-            <div className="detail-fields__location"><dt>{t("object.location")}</dt><dd><PhysicalObjectLocationSection physicalObjectId={physicalObjectId} dataSource={locationDataSource} compact /></dd></div>
-          </dl>
-        </section>
-      )}
-      {activeSection === "overview" && details && (
-        <section
-          className="detail-section overview-area overview-area--maps object-detail-record__presentation"
-          aria-labelledby="object-maps-heading"
-        >
-          <h2 id="object-maps-heading">{t("object.maps")}</h2>
+        <div>
+          <dt>На картах</dt><dd>
           {cable ? (
             <p>{t("object.cableMapsHint")}</p>
           ) : inventoryError ? (
@@ -325,10 +295,9 @@ export function InfrastructureObjectDetailPage({
               {t("object.addToMap")}
             </button>
           )}
-        </section>
+        </dd></div>
       )}
-      {activeSection === "overview" && details?.blueprint_provenance && <section className="detail-section overview-area overview-area--blueprint" aria-label="Шаблон"><PhysicalObjectBlueprintOverview physicalObjectId={physicalObjectId} provenance={details.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={refreshDetails} /></section>}
-      {activeSection === "overview" && details && <div className="overview-summary-strip" aria-label="Сводка">Порты {details.connection_points.length}{details.connection_points.length > 0 && details.connection_points.every((point) => point.cardinality === 1 && Array.isArray(point.external_physical_attachments)) && <> · Подключено {details.connection_points.filter((point) => point.external_physical_attachments!.length > 0).length} · Свободно {details.connection_points.filter((point) => point.external_physical_attachments!.length === 0).length}</>} · Интерфейсы {details.owned_interface_count}</div>}
+      </dl> : <p className="device-details-state">{detailsFailed ? t("physical.loadFailed") : t("physical.loading")}</p>}
       </section>
       {activeSection === "overview" && mapChooser && (
         <section
