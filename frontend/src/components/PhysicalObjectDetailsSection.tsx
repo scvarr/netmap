@@ -300,7 +300,7 @@ export const PhysicalObjectBlueprintOverview = ({ physicalObjectId, provenance, 
   };
   return <section className="blueprint-upgrade" aria-label={t('upgrade.title')}>
     <h3>Шаблон</h3><dl className="detail-fields"><div><dt>Шаблон</dt><dd>{blueprintName ?? '—'}</dd></div><div><dt>Версия</dt><dd>v{provenance.version_number}</dd></div><div><dt>Состояние</dt><dd>{availability === 'up-to-date' ? t('upgrade.upToDate') : availability === 'outdated' ? t('upgrade.outdated', { current: provenance.version_number, target: targetVersion ?? '?' }) : '—'}</dd></div></dl>
-    <Link to={`/library/object-blueprints/${provenance.blueprint_ref.entity_id}/versions/${provenance.version_ref.entity_id}/edit`}>{t('physical.openBlueprint')}</Link>
+    <Link className="blueprint-upgrade__open" to={`/library/object-blueprints/${provenance.blueprint_ref.entity_id}/versions/${provenance.version_ref.entity_id}/edit`}>Открыть</Link>
     {analysis?.status === 'MODEL_INCONSISTENT' && <p role="alert">{t('upgrade.inconsistent')}</p>}
     {availability === 'outdated' && dataSource && <button type="button" onClick={() => void run()} disabled={loading}>{loading ? t('upgrade.analyzing') : t('upgrade.dryRun')}</button>}
     {error && <p role="alert">{error}</p>}

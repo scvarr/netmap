@@ -498,9 +498,16 @@ a { color: inherit; }
 .object-detail-record dt { color: #91a5a5; font-size: 11px; }.object-detail-record dd { min-width: 0; margin: 0; color: #dbe9e6; }
 .overview-surface .physical-class-editor { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .overview-surface .physical-class-editor__current { margin: 0; }
-.overview-surface .detail-section--compact-location { display: flex; align-items: center; gap: 10px; }
+.overview-surface .detail-section--compact-location { display: flex; align-items: center; gap: 10px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .overview-surface .detail-section--compact-location p { margin: 0; }
 .overview-surface .detail-section--compact-location .object-location-actions { display: flex; gap: 6px; }
+.overview-surface .blueprint-upgrade { margin: 0; padding: 0; border: 0; background: transparent; }
+.overview-surface .blueprint-upgrade h3 { display: none; }
+.overview-surface .blueprint-upgrade .detail-fields { display: inline; }
+.overview-surface .blueprint-upgrade .detail-fields > div { display: inline; padding: 0; border: 0; }
+.overview-surface .blueprint-upgrade .detail-fields dt { display: none; }
+.overview-surface .blueprint-upgrade .detail-fields dd { display: inline; margin-right: 6px; }
+.overview-surface .blueprint-upgrade__open { display: inline-flex; margin-left: 4px; padding: 4px 7px; border: 1px solid #35575b; border-radius: 5px; color: #cfe1de; background: #102326; font-size: 10px; font-weight: 700; text-decoration: none; }
 @media (max-width: 700px) { .overview-surface { padding: 16px; } .object-detail-record > div { grid-template-columns: 1fr; gap: 4px; padding: 8px 0; } }
 .create-object-page { max-width: 900px; }
 .create-blueprint-table-wrap { overflow-x: auto; border: 1px solid #294145; border-radius: 10px; background: #0b191b; }
