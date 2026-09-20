@@ -287,3 +287,28 @@ structure. Generic tabs framework для всего приложения не в
 **Границы.** `ConnectionPoint` и `NetworkInterface` не объединяются. P-UX-15
 не реализует `C-UX-04` rename и не вводит L2/L3 semantics/tabs, domain changes
 или новые canonical entities.
+
+### P-UX-16 — обнаруживаемое добавление объекта на SavedMap
+
+**Статус: IMPLEMENTED.**
+
+**Замечание.** Добавленный из карточки `PhysicalObject` объект мог оказаться
+за пределами видимой области карты, поэтому после успешного добавления его
+требовалось искать вручную.
+
+**Согласованный контракт.** Add-intent
+`/map?map=<mapId>&view=physical&add=<physicalObjectId>` сохраняется. Центр
+видимого viewport используется как центр footprint добавляемого объекта;
+сохранённая top-left позиция вычисляется через существующие размеры footprint
+и existing bounded nearest-free collision avoidance. Обычная вставка с карты
+по click/context anchor не меняет свою семантику.
+
+После успешной записи и authoritative refresh объект выбирается и получает
+одноразовый targeted viewport reveal с небольшим padding, без fit всей карты.
+`focus=<physicalObjectId>` означает selection плюс тот же reveal; already
+placed add-intent преобразуется в `focus` без duplicate placement. Повторные
+обычные rerender не возвращают камеру к object.
+
+**Границы.** Это только presentation/UI behavior: canonical `PhysicalObject`,
+`ConnectionPoint`, Cable/Connection, `Location`, Blueprint и topology
+projection semantics не меняются.

@@ -13,6 +13,15 @@ export interface NodeFootprintDimensions {
   height: number;
 }
 
+/** Converts a visual centre point into React Flow's top-left node position. */
+export const centeredPositionForFootprint = (
+  center: XYPosition,
+  footprint: NodeFootprintDimensions,
+): XYPosition => ({
+  x: center.x - footprint.width / 2,
+  y: center.y - footprint.height / 2,
+});
+
 // A small, shared flow-coordinate grid keeps nearest-free placement bounded
 // without creating a second collision model beside final-drag validation.
 export const PLACEMENT_SEARCH_STEP = 24;

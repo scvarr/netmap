@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { LAYOUT_NODE_HEIGHT, LAYOUT_NODE_WIDTH, type DeviceFlowNode } from './layout';
 import {
   footprintDimensionsForProjectionNode,
+  centeredPositionForFootprint,
   nearestFreePosition,
   nodeFootprint,
   projectionNodeFootprint,
@@ -50,6 +51,20 @@ describe('node footprint presentation geometry', () => {
 
 describe('nearest-free Saved Map placement', () => {
   const candidate = { width: 40, height: 20 };
+
+  it('converts a viewport centre to the footprint top-left position', () => {
+    expect(centeredPositionForFootprint({ x: 400, y: 300 }, { width: 240, height: 60 }))
+      .toEqual({ x: 280, y: 270 });
+  });
+
+  it('keeps collision avoidance anchored at the centered position', () => {
+    const footprint = { width: 240, height: 60 };
+    const centered = centeredPositionForFootprint({ x: 400, y: 300 }, footprint);
+    const result = nearestFreePosition(centered, footprint, [{ ...centered, ...footprint }]);
+    expect(result).not.toEqual(centered);
+    expect(result).not.toBeNull();
+    expect(rectanglesOverlap({ ...result!, ...footprint }, { ...centered, ...footprint })).toBe(false);
+  });
 
   it('keeps a free requested anchor unchanged', () => {
     expect(nearestFreePosition({ x: 10, y: 20 }, candidate, [])).toEqual({ x: 10, y: 20 });

@@ -7,8 +7,9 @@ import type { PresentationSceneDocument } from '../topology/presentationScene';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import type { MapRegion } from '../topology/savedMapTypes';
 
-const { fitViewMock, screenTransform } = vi.hoisted(() => ({
+const { fitViewMock, getZoomMock, screenTransform } = vi.hoisted(() => ({
   fitViewMock: vi.fn(),
+  getZoomMock: vi.fn(() => 1),
   screenTransform: { scale: 1, offsetX: 0, offsetY: 0 },
 }));
 
@@ -82,6 +83,7 @@ vi.mock('@xyflow/react', () => ({
   useNodes: () => [],
   useReactFlow: () => ({
     fitView: fitViewMock,
+    getZoom: getZoomMock,
     screenToFlowPosition: (position: { x: number; y: number }) => ({ x: (position.x - screenTransform.offsetX) / screenTransform.scale, y: (position.y - screenTransform.offsetY) / screenTransform.scale }),
     flowToScreenPosition: (position: { x: number; y: number }) => ({ x: position.x * screenTransform.scale + screenTransform.offsetX, y: position.y * screenTransform.scale + screenTransform.offsetY }),
   }),
@@ -126,12 +128,30 @@ const deferred = <T,>() => {
 };
 
 afterEach(() => {
+  fitViewMock.mockClear();
+  getZoomMock.mockClear();
   screenTransform.scale = 1;
   screenTransform.offsetX = 0;
   screenTransform.offsetY = 0;
 });
 
 describe('TopologyCanvas async layout boundary', () => {
+  it('reveals a requested physical object once without refitting unrelated rerenders', async () => {
+    const object = {
+      ...documentFor('physical-focus').nodes[0],
+      source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'object-id' }],
+    };
+    const document = { ...documentFor('physical-focus'), nodes: [object] };
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} />);
+    await screen.findByRole('button', { name: 'physical-focus' });
+    fitViewMock.mockClear();
+
+    view.rerender(<TopologyCanvas document={document} selection={{ type: 'node', item: object }} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} focusPhysicalObjectId="object-id" />);
+    await waitFor(() => expect(fitViewMock).toHaveBeenCalledWith(expect.objectContaining({ nodes: [expect.objectContaining({ id: 'physical-focus' })], padding: .15, maxZoom: 1 })));
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} focusPhysicalObjectId="object-id" />);
+    expect(fitViewMock.mock.calls.filter(([options]) => options.nodes?.[0]?.id === 'physical-focus')).toHaveLength(1);
+  });
+
   it('docks the minimap above the trace control at the bottom right', async () => {
     render(<TopologyCanvas document={documentFor('physical-minimap')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} />);
     expect(await screen.findByTestId('minimap')).toHaveAttribute('data-position', 'bottom-right');

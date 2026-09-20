@@ -26,6 +26,7 @@ import { ViewState } from "../components/ViewState";
 import { physicalTraceOverlayFor } from "../topology/interfacePhysicalTraceOverlay";
 import {
   footprintDimensionsForProjectionNode,
+  centeredPositionForFootprint,
   nearestFreePosition,
   projectionNodeFootprint,
   type FlowRectangle,
@@ -114,6 +115,7 @@ interface InsertionState {
   status: "loading" | "ready" | "resolving" | "saving" | "saved-refresh-failed";
   error: string | null;
   requestedObjectId?: string;
+  anchorIsObjectCenter?: boolean;
 }
 interface MapOperation {
   kind: "remove" | "add" | "delete";
@@ -949,7 +951,7 @@ export function MapPage({
   };
 
   const openInsertion = useCallback(
-    (anchor: XYPosition, requestedObjectId?: string) => {
+    (anchor: XYPosition, requestedObjectId?: string, anchorIsObjectCenter = false) => {
       if (!catalogInventoryDataSource || !mapId || !activeMap) return;
       const request = ++insertionSequence.current;
       setContextAnchor(null);
@@ -961,6 +963,7 @@ export function MapPage({
         status: "loading",
         error: null,
         ...(requestedObjectId ? { requestedObjectId } : {}),
+        ...(anchorIsObjectCenter ? { anchorIsObjectCenter } : {}),
       });
       void catalogInventoryDataSource.loadCatalogInventory().then(
         (inventory) => {
@@ -1019,7 +1022,7 @@ export function MapPage({
       if (ids.includes(addIntent)) next.set("focus", addIntent);
       return next;
     }, { replace: true });
-    if (!ids.includes(addIntent)) openInsertion(viewportCenter.current(), addIntent);
+    if (!ids.includes(addIntent)) openInsertion(viewportCenter.current(), addIntent, true);
   }, [activeMap, addIntent, coordinateBridgeRevision, document, ids, mapId, openInsertion, setParams, viewMode]);
 
   const setViewMode = (nextView: TopologyViewMode) => {
@@ -1110,6 +1113,7 @@ export function MapPage({
   const resolveInsertionPosition = async (
     id: string,
     anchor: XYPosition,
+    anchorIsObjectCenter = false,
   ): Promise<{ position: XYPosition; displayWidth?: number } | null> => {
     const candidateDocument = await dataSource.loadProjection(
       projectionRequestFor("physical", [id]),
@@ -1139,9 +1143,10 @@ export function MapPage({
     const displayWidth = blueprint
       ? minimumBlueprintDisplayWidth(blueprint)
       : undefined;
+    const footprint = footprintDimensionsForProjectionNode(candidates[0], displayWidth);
     const position = nearestFreePosition(
-      anchor,
-      footprintDimensionsForProjectionNode(candidates[0], displayWidth),
+      anchorIsObjectCenter ? centeredPositionForFootprint(anchor, footprint) : anchor,
+      footprint,
       occupied,
     );
     return position && {
@@ -1163,7 +1168,7 @@ export function MapPage({
     let placement: { position: XYPosition; displayWidth?: number } | null;
     let preflightComplete = false;
     try {
-      placement = await resolveInsertionPosition(id, operation.anchor);
+      placement = await resolveInsertionPosition(id, operation.anchor, operation.anchorIsObjectCenter);
       preflightComplete = true;
       if (
         request !== insertionSequence.current ||
@@ -1221,7 +1226,14 @@ export function MapPage({
         selectedMapId.current !== targetMapId
       )
         return;
-      if (refreshed) setInsertion(null);
+      if (refreshed) {
+        setInsertion(null);
+        setParams((current) => {
+          const next = new URLSearchParams(current);
+          next.set("focus", id);
+          return next;
+        }, { replace: true });
+      }
       else
         setInsertion((current) =>
           current?.mapId === targetMapId
@@ -1263,8 +1275,14 @@ export function MapPage({
     );
     try {
       const refreshed = await reloadMap(targetMapId);
-      if (selectedMapId.current === targetMapId && refreshed)
+      if (selectedMapId.current === targetMapId && refreshed) {
         setInsertion(null);
+        setParams((current) => {
+          const next = new URLSearchParams(current);
+          if (insertion.requestedObjectId) next.set("focus", insertion.requestedObjectId);
+          return next;
+        }, { replace: true });
+      }
     } catch (reason) {
       if (selectedMapId.current === targetMapId) {
         setInsertion((current) =>
@@ -2602,6 +2620,7 @@ export function MapPage({
               <ReactFlowProvider>
                 <TopologyCanvas
                   document={document}
+                  focusPhysicalObjectId={params.get("focus")}
                   selection={physicalRegionMode ? null : selection}
                   onSelectionChange={(nextSelection) => {
                     setContextAnchor(null);

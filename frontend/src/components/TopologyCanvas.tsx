@@ -69,6 +69,8 @@ interface TopologyCanvasProps {
   sceneKey?: string;
   /** Request one fit after a fresh layout has been applied. */
   viewportFitRevision?: number;
+  /** A one-shot presentation request to reveal a physical object. */
+  focusPhysicalObjectId?: string | null;
   positionOverrides?: Record<string, XYPosition>;
   displayWidthOverrides?: Record<string, number>;
   draggableNodeIds?: ReadonlySet<string>;
@@ -161,6 +163,7 @@ export function TopologyCanvas({
   traceOverlay,
   sceneKey,
   viewportFitRevision = 0,
+  focusPhysicalObjectId,
   positionOverrides,
   displayWidthOverrides,
   draggableNodeIds,
@@ -216,7 +219,8 @@ export function TopologyCanvas({
   const confirmedNodePositions = useRef(new Map<string, XYPosition>());
   const latestReferenceOutlines = useRef<MapReferenceOutline[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
-  const { fitView, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
+  const focusedObjectKey = useRef<string | null>(null);
+  const { fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
   const presentationScene = useMemo(() => presentationSceneDocument(document, compositeInputs), [document, compositeInputs]);
@@ -406,6 +410,20 @@ export function TopologyCanvas({
       perfMeasure("time-to-map", "document-received", "map-interactive");
     });
   }, [fitView, presentationSceneKey, projection]);
+
+  useEffect(() => {
+    if (!projection || !focusPhysicalObjectId) return;
+    const requestKey = `${presentationSceneKey}/${focusPhysicalObjectId}`;
+    if (focusedObjectKey.current === requestKey) return;
+    const node = projection.nodes.find(
+      (candidate) => physicalObjectIdForNode(candidate.data.projection) === focusPhysicalObjectId,
+    );
+    if (!node) return;
+    focusedObjectKey.current = requestKey;
+    // Targeted fit keeps the object wholly visible without fitting the map.
+    // maxZoom preserves the user's current zoom unless the object needs zooming out.
+    void fitView({ nodes: [node], duration: 300, padding: 0.15, maxZoom: getZoom() });
+  }, [fitView, focusPhysicalObjectId, getZoom, presentationSceneKey, projection]);
 
   useEffect(() => {
     if (!onViewportCenterReady) return undefined;
