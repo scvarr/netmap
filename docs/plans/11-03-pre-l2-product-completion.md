@@ -45,14 +45,21 @@ compact Port Block table и RU terminology «Группа портов / Гру�
 
 Current execution position: **Phase C — Representative real-world L1 semantic acceptance.**
 
-Первая representative Phase C приёмка завершена: representative fixture,
-physical wiring и достаточные L1 trace checks выполнены, а все обнаруженные
-замечания сохранены как обязательный список открытых пунктов. Дальнейшее
-закрытие каждого замечания и его ручная проверка ведутся через
-[[plans/11-05-phase-c-acceptance-closure|11.5 Phase C acceptance closure]].
-Phase D закрывает только promoted L1 gaps, но замечания категорий UX и visual
-style не становятся необязательными и должны быть закрыты до итоговой чистой
-повторной Phase C приёмки.
+Первоначальная representative Phase C discovery уже выполнена: `C-*` findings
+зафиксированы и остаются обязательным списком для контроля. Сейчас идёт
+clean-start повторный пользовательский проход: ручной шаг → первое
+существенное замечание → bounded fix → merge → продолжение того же стенда.
+`P-UX-01` ... `P-UX-17` — findings этого прохода; их реализация и ручная
+проверка ведутся в [[plans/11-06-clean-start-ui-polish|11.6 Clean-start UI
+polish]], а статус `C-*` — в [[plans/11-05-phase-c-acceptance-closure|11.5
+Phase C acceptance closure]].
+
+Promoted semantic gaps, включая `C-CAP-01`, закрываются через Phase D. Это не
+означает, что Phase D целиком уже началась или завершена. Финальный clean
+Phase C acceptance выполняется после необходимых обязательных fixes; только
+после него Phase C считается закрытой. Ближайшая spatial family —
+`canonical Location -> derived Location frames` по действующему spatial
+contract. Общий порядок Phase E–I не меняется.
 
 ### Phase B — Remaining bounded L1 capability families
 

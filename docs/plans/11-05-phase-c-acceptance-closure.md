@@ -9,6 +9,35 @@
 только потому, что его исправление относится к Phase D или более позднему
 bounded milestone.
 
+## Status/index layer
+
+Краткий индекс ниже добавляет только текущий статус отслеживания; исходные
+`C-*` contracts и manual acceptance criteria в реестре ниже не переписываются
+и не ослабляются. `IMPLEMENTED / RECHECK PENDING` означает, что связанный
+bounded fix уже реализован, но ручная проверка именно `C-*` ещё не завершена.
+`VERIFIED` используется только при явном repository/manual evidence.
+
+| Finding | Текущий статус | Связанный clean-start fix / граница |
+| --- | --- | --- |
+| `C-UX-01` | `OPEN` | — |
+| `C-UX-02` | `OPEN` | `P-UX-13` не устраняет штатное manual `PhysicalObject` creation; `P-UX-14` это требование не закрывает |
+| `C-UX-03` | `OPEN` | — |
+| `C-UX-04` | `OPEN` | `P-UX-15` не реализует rename |
+| `C-UX-05` | `OPEN` | — |
+| `C-UX-06` | `OPEN` | `P-UX-17` явно оставляет independent Height вне scope |
+| `C-UX-07` | `OPEN` | — |
+| `C-COR-01` | `OPEN` | — |
+| `C-UX-08` | `OPEN` | — |
+| `C-UX-09` | `IMPLEMENTED / RECHECK PENDING` | `P-UX-13` реализовал compact Blueprint picker, но не закрывает finding автоматически |
+| `C-CAP-01` | `OPEN` | Promoted semantic gap; bounded Phase D fix ещё не принят |
+| `C-UX-10` | `OPEN` | — |
+| `C-UX-11` | `OPEN` | — |
+| `C-VIS-01` | `OPEN` | — |
+
+Lifecycle остаётся явным: **Phase C discovery → promoted gaps → bounded Phase D
+fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
+остаётся `OPEN`; ни один `P-UX-*` не закрывает его автоматически.
+
 Проверки ниже выполняются через обычный пользовательский интерфейс. Нельзя
 обходить сценарий прямыми записями в БД или API, а также принимать удаление и
 повторное создание объекта вместо требуемого действия жизненного цикла.

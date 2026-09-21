@@ -2,6 +2,8 @@
 
 Актуальный реестр решений по замечаниям, порядок их закрытия, ручные проверки
 и правила чистой повторной приёмки находятся в [[plans/11-05-phase-c-acceptance-closure|11.5 Phase C acceptance closure]].
+Текущая позиция clean-start прохода и журнал P-UX находятся в
+[[plans/11-06-clean-start-ui-polish|11.6 Clean-start UI polish]].
 
 ## Назначение и граница
 
@@ -124,6 +126,19 @@ Intended fixture placement:
   inventory не утверждается; user-defined class вроде `provider_router`
   остаётся открытой строкой, без special provider semantics.
 - `XCONN-4`: отдельная coverage branch, Location пока жёстко не фиксируется.
+
+### Clean-start progress marker
+
+Стенд заново строится через обычный пользовательский интерфейс. Текущий
+ручной проход уже дошёл примерно до representative objects `PC1`, `O1`,
+`PP1`/`PP-301` role и `SW-301-ACCESS`. Это только operational progress marker
+текущего прохода: он не создаёт новый canonical fixture state, не меняет
+target naming/topology и не заменяет зафиксированный synthetic fixture выше.
+
+Следующий spatial workflow проверяется относительно действующего target
+contract: canonical Location hierarchy → object Location assignments →
+derived Location frames on SavedMap. Manual Region/MapRegion не развиваются
+как целевая capability; derived frames пока не объявляются IMPLEMENTED.
 
 ### FLOOR-3 / CAB-301
 
@@ -455,14 +470,14 @@ canonical trace semantics. `XCONN-4` уже имеет статус PASSED / VER
 Это не утверждение, что вручную трассирован каждый Cable: exhaustive
 per-cable trace не является Phase C acceptance requirement.
 
-**Current manual run status:**
+**Initial representative discovery status:**
 
 - representative fixture authoring/modeling выполнен;
 - physical wiring representative fixture выполнен;
 - representative L1 trace checks выполнены и достаточны для Phase C;
 - Phase C выявил набор OPEN findings;
-- следующий шаг — consolidation/review findings и решение, какие конкретные
-  gaps будут promoted в Phase D.
+- этот результат зафиксировал `C-*` findings; дальнейший clean-start проход
+  ведётся по правилу из `11-05`, начиная с уже достигнутого участка стенда.
 
 Phase D не объявляется implemented, L1 PRODUCT COMPLETE не объявляется, и все
 Phase C findings не считаются закрытыми.

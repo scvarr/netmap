@@ -14,6 +14,11 @@ representative L1 стенда.
 заменяются этим документом. Новые замечания этого прохода получают
 идентификаторы `P-UX-*`.
 
+Текущая точка clean-start прохода описана также в
+[[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]], а
+сценарий стенда — в [[plans/11-04-phase-c-representative-l1-testbed|11.4
+Phase C representative L1 testbed]].
+
 ## Реестр
 
 ### P-UX-01 — первое пустое состояние карты
@@ -231,8 +236,7 @@ workflow указать имя `PC1` и существующий `Location`, с�
 
 ### P-UX-15 — информационная архитектура карточки PhysicalObject
 
-**Статус: IMPLEMENTED.** Реализация готова к отдельной проверке и acceptance;
-статус не означает merge в `main`.
+**Статус: IMPLEMENTED.** Реализация принята и merged в `main`.
 
 **Замечание.** Текущая карточка `InfrastructureObject` складывает identity и
 basic data, `SavedMap` membership/actions, `Location`, Blueprint provenance и
@@ -290,7 +294,7 @@ structure. Generic tabs framework для всего приложения не в
 
 ### P-UX-16 — обнаруживаемое добавление объекта на SavedMap
 
-**Статус: IMPLEMENTED.**
+**Статус: IMPLEMENTED.** Реализация принята и merged в `main`.
 
 **Замечание.** Добавленный из карточки `PhysicalObject` объект мог оказаться
 за пределами видимой области карты, поэтому после успешного добавления его
@@ -315,7 +319,7 @@ projection semantics не меняются.
 
 ### P-UX-17 — компактный Map QuickInspector
 
-**Статус: IMPLEMENTED.**
+**Статус: IMPLEMENTED.** Реализация принята и merged в `main`.
 
 **Замечание.** QuickInspector одновременно служил кратким read-context,
 списком физических подключений, редактором display size Blueprint и местом
@@ -343,3 +347,15 @@ placement получает bounded dialog «Размер на карте» с е
 скопированной ширины и existing operation «ко всем объектам шаблона». Clipboard
 не persisted и не является canonical state. C-UX-06 и independent Height
 остаются вне scope.
+
+## Текущая точка clean-start прохода
+
+`P-UX-17` завершён и merged в `main`. Текущий synthetic stand уже содержит
+первые representative L1 objects: `PC1`, `O1`, `PP1`/`PP-301` role и
+`SW-301-ACCESS`. Следующий участок прохода — spatial workflow: Locations и
+derived Location frames по действующему spatial contract. `P-UX-03` остаётся
+`CONTRACT AGREED / IMPLEMENTATION PENDING`, пока код derived Location frames
+не реализован.
+
+Правило прохода сохраняется: первый существенный defect → stop → bounded
+milestone → review → merge → продолжение того же стенда.
