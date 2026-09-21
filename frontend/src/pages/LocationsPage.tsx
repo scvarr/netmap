@@ -6,7 +6,6 @@ import type {
   LocationDataSource,
   LocationDocument,
 } from "../topology/locationTypes";
-import { locationPath } from "../topology/locationPresentation";
 
 type Form = {
   mode: "create" | "edit" | "reparent";
@@ -43,6 +42,8 @@ const descendants = (items: LocationDocument[], id: string) => {
 function LocationTree({
   items,
   parentId,
+  collapsed,
+  onToggle,
   onEdit,
   onChild,
   onMove,
@@ -50,6 +51,8 @@ function LocationTree({
 }: {
   items: LocationDocument[];
   parentId: string | null;
+  collapsed: Set<string>;
+  onToggle: (id: string) => void;
   onEdit: (item: LocationDocument) => void;
   onChild: (item: LocationDocument) => void;
   onMove: (item: LocationDocument) => void;
@@ -62,13 +65,26 @@ function LocationTree({
   if (!children.length) return null;
   return (
     <ul className="location-tree">
-      {children.map((item) => (
-        <li key={item.location_ref.entity_id}>
+      {children.map((item) => {
+        const id = item.location_ref.entity_id;
+        const hasChildren = items.some(
+          (child) => child.parent_location_ref?.entity_id === id,
+        );
+        const isExpanded = !collapsed.has(id);
+        return (
+        <li key={id}>
           <div className="location-tree__item">
-            <span>
-              <strong>{item.name}</strong>
-              {item.type && <small>{item.type}</small>}
-            </span>
+            <div className="location-tree__identity">
+              {hasChildren ? (
+                <button type="button" className="location-tree__toggle" aria-label={isExpanded ? t("location.pickerCollapse", { name: item.name }) : t("location.pickerExpand", { name: item.name })} onClick={() => onToggle(id)}>
+                  {isExpanded ? "−" : "+"}
+                </button>
+              ) : <span className="location-tree__toggle-placeholder" aria-hidden="true" />}
+              <span>
+                <strong>{item.name}</strong>
+                {item.type && <small>{item.type}</small>}
+              </span>
+            </div>
             <div>
               <button type="button" onClick={() => onChild(item)}>
                 {t("location.createChild")}
@@ -88,18 +104,43 @@ function LocationTree({
               </button>
             </div>
           </div>
-          <LocationTree
+          {hasChildren && isExpanded && <LocationTree
             items={items}
-            parentId={item.location_ref.entity_id}
+            parentId={id}
+            collapsed={collapsed}
+            onToggle={onToggle}
             onEdit={onEdit}
             onChild={onChild}
             onMove={onMove}
             onDelete={onDelete}
-          />
+          />}
         </li>
-      ))}
+        );
+      })}
     </ul>
   );
+}
+
+function LocationParentPicker({ items, selected, forbidden, onSelect }: {
+  items: LocationDocument[];
+  selected: string | null;
+  forbidden: Set<string>;
+  onSelect: (id: string | null) => void;
+}) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(items.filter((item) => items.some((child) => child.parent_location_ref?.entity_id === item.location_ref.entity_id)).map((item) => item.location_ref.entity_id)));
+  const children = (parentId: string | null) => items.filter((item) => (item.parent_location_ref?.entity_id ?? null) === parentId && !forbidden.has(item.location_ref.entity_id));
+  const render = (parentId: string | null): React.ReactNode => {
+    const nodes = children(parentId);
+    if (!nodes.length) return null;
+    return <ul className="object-location-picker-tree" role={parentId === null ? "radiogroup" : "group"}>{nodes.map((item) => {
+      const id = item.location_ref.entity_id;
+      const hasChildren = children(id).length > 0;
+      const isExpanded = expanded.has(id);
+      return <li key={id}><div className="object-location-picker-tree__row"><span className="object-location-picker-tree__toggle">{hasChildren ? <button type="button" aria-label={isExpanded ? t("location.pickerCollapse", { name: item.name }) : t("location.pickerExpand", { name: item.name })} onClick={() => setExpanded((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; })}>{isExpanded ? "−" : "+"}</button> : <span aria-hidden="true" />}</span><button type="button" role="radio" aria-checked={selected === id} className="object-location-picker-tree__choice" onClick={() => onSelect(id)}><strong>{item.name}</strong>{item.type && <small>{item.type}</small>}</button></div>{hasChildren && isExpanded && render(id)}</li>;
+    })}</ul>;
+  };
+  return <fieldset className="location-parent-picker"><legend>{t("location.parent")}</legend><div className="object-location-picker__toolbar"><button type="button" role="radio" aria-checked={selected === null} onClick={() => onSelect(null)}>{t("location.root")}</button></div>{render(null)}</fieldset>;
 }
 
 export function LocationsPage({
@@ -112,6 +153,9 @@ export function LocationsPage({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [form, setForm] = useState<Form | null>(null);
+  const [collapsedLocations, setCollapsedLocations] = useState<Set<string>>(
+    new Set(),
+  );
   const [deleting, setDeleting] = useState<LocationDocument | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -259,6 +303,15 @@ export function LocationsPage({
         <LocationTree
           items={sorted}
           parentId={null}
+          collapsed={collapsedLocations}
+          onToggle={(id) =>
+            setCollapsedLocations((previous) => {
+              const next = new Set(previous);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            })
+          }
           onEdit={openEdit}
           onChild={(item) => openCreate(item.location_ref.entity_id)}
           onMove={openMove}
@@ -316,30 +369,12 @@ export function LocationsPage({
               </>
             )}{" "}
             {form.mode !== "edit" && (
-              <label>
-                <span>{t("location.parent")}</span>
-                <select
-                  value={form.parentId ?? ""}
-                  onChange={(event) =>
-                    setForm({ ...form, parentId: event.target.value || null })
-                  }
-                >
-                  <option value="">{t("location.root")}</option>
-                  {sorted
-                    .filter(
-                      (item) =>
-                        !forbiddenParents.has(item.location_ref.entity_id),
-                    )
-                    .map((item) => (
-                      <option
-                        key={item.location_ref.entity_id}
-                        value={item.location_ref.entity_id}
-                      >
-                        {locationPath(sorted, item.location_ref.entity_id)}
-                      </option>
-                    ))}
-                </select>
-              </label>
+              <LocationParentPicker
+                items={sorted}
+                selected={form.parentId}
+                forbidden={forbiddenParents}
+                onSelect={(parentId) => setForm({ ...form, parentId })}
+              />
             )}
             {form.error && (
               <p className="catalog-dialog__error" role="alert">

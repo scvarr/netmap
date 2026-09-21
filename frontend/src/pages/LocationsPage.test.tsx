@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -13,19 +13,33 @@ const source = (overrides: Record<string, unknown> = {}) => ({ loadLocations: vi
 const renderPage = (dataSource: any) => render(<MemoryRouter><I18nProvider><LocationsPage dataSource={dataSource} /></I18nProvider></MemoryRouter>);
 
 describe('LocationsPage', () => {
-  it('renders an arbitrary-depth tree and preserves arbitrary user type through root and child creation', async () => {
+  it('renders an arbitrary-depth tree, collapses branches, and preserves arbitrary user type through root creation', async () => {
     const dataSource = source(); renderPage(dataSource);
     expect(await screen.findByText('Стойка 01')).toBeInTheDocument();
     expect(screen.getByText('my arbitrary type')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Свернуть Москва' }));
+    expect(screen.queryByText('ЦОД-1')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть Москва' }));
+    expect(await screen.findByText('Стойка 01')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Создать местоположение' }));
     await userEvent.type(screen.getByLabelText('Название'), '  Независимое  ');
     await userEvent.type(screen.getByLabelText('Тип'), 'своя категория');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(dataSource.createLocation).toHaveBeenCalledWith({ name: 'Независимое', type: 'своя категория', parent_location_id: null }));
+  });
+
+  it('creates a child through the hierarchy picker, preselects its parent, and allows changing it before save', async () => {
+    const dataSource = source(); renderPage(dataSource); await screen.findByText('Москва');
     await userEvent.click(screen.getAllByRole('button', { name: 'Добавить дочернее' })[0]);
+    expect(screen.getByRole('radio', { name: /Москва/ })).toHaveAttribute('aria-checked', 'true');
+    expect(within(screen.getByRole('dialog')).getByText('my arbitrary type')).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Свернуть Москва' }));
+    expect(screen.queryByRole('radio', { name: /ЦОД-1/ })).not.toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Развернуть Москва' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Санкт-Петербург' }));
     await userEvent.type(screen.getByLabelText('Название'), 'Этаж 1');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
-    await waitFor(() => expect(dataSource.createLocation).toHaveBeenLastCalledWith({ name: 'Этаж 1', type: null, parent_location_id: 'moscow' }));
+    await waitFor(() => expect(dataSource.createLocation).toHaveBeenCalledWith({ name: 'Этаж 1', type: null, parent_location_id: 'piter' }));
   });
 
   it('edits and clears type, reparents and detaches only through explicit calls', async () => {
@@ -34,10 +48,13 @@ describe('LocationsPage', () => {
     await userEvent.clear(screen.getByLabelText('Тип')); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(dataSource.updateLocation).toHaveBeenCalledWith('dc', { name: 'ЦОД-1', type: null }));
     await userEvent.click(screen.getAllByRole('button', { name: 'Изменить родителя' })[1]);
-    await userEvent.selectOptions(screen.getByLabelText('Родительское местоположение'), 'piter'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(screen.getByRole('radio', { name: 'Санкт-Петербург' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /ЦОД-1/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Стойка 01' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: 'Санкт-Петербург' })); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(dataSource.reparentLocation).toHaveBeenCalledWith('dc', 'piter'));
     await userEvent.click(screen.getAllByRole('button', { name: 'Изменить родителя' })[1]);
-    await userEvent.selectOptions(screen.getByLabelText('Родительское местоположение'), ''); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'Корневое местоположение' })); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(dataSource.reparentLocation).toHaveBeenLastCalledWith('dc', null));
   });
 
