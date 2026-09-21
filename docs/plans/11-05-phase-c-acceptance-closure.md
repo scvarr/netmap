@@ -28,7 +28,7 @@ bounded fix уже реализован, но ручная проверка им
 | `C-UX-07` | `OPEN` | — |
 | `C-COR-01` | `OPEN` | — |
 | `C-UX-08` | `OPEN` | — |
-| `C-UX-09` | `IMPLEMENTED / RECHECK PENDING` | `P-UX-13` реализовал compact Blueprint picker, но не закрывает finding автоматически |
+| `C-UX-09` | `OPEN` | `P-UX-13` частично покрывает finding компактным Blueprint picker/table; derived preview для различения основных вариантов геометрии Blueprint остаётся незакрытым |
 | `C-CAP-01` | `OPEN` | Promoted semantic gap; bounded Phase D fix ещё не принят |
 | `C-UX-10` | `OPEN` | — |
 | `C-UX-11` | `OPEN` | — |
