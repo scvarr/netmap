@@ -348,14 +348,28 @@ placement получает bounded dialog «Размер на карте» с е
 не persisted и не является canonical state. C-UX-06 и independent Height
 остаются вне scope.
 
+### P-UX-18 — иерархическая навигация Locations
+
+**Статус: IMPLEMENTED.** Реализация принята и merged в `main`.
+
+**Согласованный contract.** Canonical Locations отображаются деревом
+произвольной глубины; branches имеют expand/collapse, а hierarchy визуально
+различима через nested indentation. Create/reparent используют hierarchical
+parent picker. `Создать дочернее` предварительно выбирает parent, который
+можно изменить; root/no-parent остаётся явным вариантом. При reparent текущий
+Location и его descendants исключены из выбора. `Location.type` остаётся
+optional arbitrary user-defined string. Collapse state только session-local
+UI. Canonical Location semantics/API/DB не менялись.
+
 ## Текущая точка clean-start прохода
 
-`P-UX-17` завершён и merged в `main`. Текущий synthetic stand уже содержит
-первые representative L1 objects: `PC1`, `O1`, `PP1`/`PP-301` role и
-`SW-301-ACCESS`. Следующий участок прохода — spatial workflow: Locations и
-derived Location frames по действующему spatial contract. `P-UX-03` остаётся
-`CONTRACT AGREED / IMPLEMENTATION PENDING`, пока код derived Location frames
-не реализован.
+`P-UX-18` завершён и merged в `main`; Locations hierarchy workflow теперь
+реализован. Текущий synthetic representative stand продолжает использовать
+существующие Locations/objects: `PC1`, `O1`, `PP1`/`PP-301` role и
+`SW-301-ACCESS`. Следующий spatial участок — `P-UX-03` derived Location
+frames. `P-UX-03` остаётся `CONTRACT AGREED / IMPLEMENTATION PENDING`, пока
+код derived Location frames не реализован. Manual Region implementation всё
+ещё существует до отдельных removal milestones.
 
 Правило прохода сохраняется: первый существенный defect → stop → bounded
 milestone → review → merge → продолжение того же стенда.

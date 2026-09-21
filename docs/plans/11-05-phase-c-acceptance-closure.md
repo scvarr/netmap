@@ -19,7 +19,7 @@ bounded fix уже реализован, но ручная проверка им
 
 | Finding | Текущий статус | Связанный clean-start fix / граница |
 | --- | --- | --- |
-| `C-UX-01` | `OPEN` | — |
+| `C-UX-01` | `IMPLEMENTED / RECHECK PENDING` | `P-UX-18` |
 | `C-UX-02` | `OPEN` | `P-UX-13` не устраняет штатное manual `PhysicalObject` creation; `P-UX-14` это требование не закрывает |
 | `C-UX-03` | `OPEN` | — |
 | `C-UX-04` | `OPEN` | `P-UX-15` не реализует rename |
@@ -33,6 +33,10 @@ bounded fix уже реализован, но ручная проверка им
 | `C-UX-10` | `OPEN` | — |
 | `C-UX-11` | `OPEN` | — |
 | `C-VIS-01` | `OPEN` | — |
+
+`C-UX-01` остаётся `RECHECK PENDING`: реализация `P-UX-18` принята и merged
+в `main`, но отдельная полная clean-repeat фиксация именно этого finding ещё
+не завершена.
 
 Lifecycle остаётся явным: **Phase C discovery → promoted gaps → bounded Phase D
 fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
