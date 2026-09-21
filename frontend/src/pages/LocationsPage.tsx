@@ -64,7 +64,7 @@ function LocationTree({
   );
   if (!children.length) return null;
   return (
-    <ul className="location-tree">
+    <ul className={`location-tree${parentId === null ? " location-tree--root" : ""}`}>
       {children.map((item) => {
         const id = item.location_ref.entity_id;
         const hasChildren = items.some(

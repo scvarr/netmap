@@ -17,6 +17,8 @@ describe('LocationsPage', () => {
     const dataSource = source(); renderPage(dataSource);
     expect(await screen.findByText('Стойка 01')).toBeInTheDocument();
     expect(screen.getByText('my arbitrary type')).toBeInTheDocument();
+    expect(document.querySelectorAll('.location-tree--root')).toHaveLength(1);
+    expect(document.querySelectorAll('.location-tree:not(.location-tree--root)')).toHaveLength(2);
     await userEvent.click(screen.getByRole('button', { name: 'Свернуть Москва' }));
     expect(screen.queryByText('ЦОД-1')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Развернуть Москва' }));
