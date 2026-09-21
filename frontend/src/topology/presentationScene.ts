@@ -82,6 +82,35 @@ const isPhysicalProjection = (document: TopologyProjectionDocument): boolean => 
   document.layer === 'L1' && document.detail_level === 'PHYSICAL_OBJECT'
 );
 
+/**
+ * Presentation-only direct attachment lookup.  A Cable is included only when
+ * an exact projected endpoint pair terminates on the selected PhysicalObject;
+ * this deliberately does not follow internal continuity or an L1 trace.
+ */
+export const directlyAttachedCableIds = (
+  document: TopologyProjectionDocument | null,
+  physicalObjectId: string | null,
+): ReadonlySet<string> => {
+  if (!document || !physicalObjectId || !isPhysicalProjection(document)) return new Set();
+  const nodeIds = new Set(document.nodes.flatMap((node) =>
+    node.source_refs.some((ref) => ref.entity_type === 'PhysicalObject' && ref.entity_id === physicalObjectId)
+      ? [node.id]
+      : [],
+  ));
+  if (!nodeIds.size) return new Set();
+  const cableIds = new Set<string>();
+  for (const edge of document.edges) {
+    if (!nodeIds.has(edge.from_node_id) && !nodeIds.has(edge.to_node_id)) continue;
+    for (const pair of edge.attributes.endpoint_pairs ?? []) {
+      const cable = pair.cable_ref;
+      if (cable?.ref_type === 'CANONICAL_FACT' && cable.entity_type === 'Cable') {
+        cableIds.add(cable.entity_id);
+      }
+    }
+  }
+  return cableIds;
+};
+
 const projectionSceneEdge = (edge: TopologyProjectionEdge): PresentationSceneEdge => ({
   id: edge.id,
   source: edge.from_node_id,

@@ -251,7 +251,7 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
   const draft = data.cableRouteDraft;
   const waypoints = draft?.waypoints ?? data.cableRoute?.waypoints;
   const path = routedCablePath(endpoints.source, endpoints.target, waypoints ?? []);
-  const emphasis = draft ? 'editing' : edge.selected ? 'selected' : 'normal';
+  const emphasis = draft ? 'editing' : edge.data?.cablePresentationEmphasis ?? (edge.selected ? 'selected' : 'normal');
   const style = draft ? { stroke: '#8d7aff', strokeWidth: 5, opacity: 1 } : edge.style;
   const segmentPoints = [endpoints.source, ...(waypoints ?? []), endpoints.target];
   const assistFrom = (anchor: MapCableRouteWaypoint, event: PointerEvent<SVGElement>) =>

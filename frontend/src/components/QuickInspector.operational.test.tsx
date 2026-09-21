@@ -13,12 +13,15 @@ const details = (id = 'sw', points = 52): PhysicalObjectDetailsDocument => ({ sc
 const view = (props: Partial<React.ComponentProps<typeof QuickInspector>> = {}) => render(<BrowserRouter><QuickInspector document={document()} selection={{ type: 'node', item: node() }} onClose={vi.fn()} onSelectNode={vi.fn()} {...props} /></BrowserRouter>);
 
 describe('QuickInspector operational reads', () => {
-  it('loads canonical details and renders authoritative occupancy, preview and notices', async () => {
+  it('loads canonical details as compact aggregate facts, without connection rows, and keeps notices', async () => {
     const loadPhysicalObjectDetails = vi.fn().mockResolvedValue(details());
     view({ physicalObjectDetailsDataSource: { loadPhysicalObjectDetails } });
-    await screen.findByText('52 портов · 17 подключено · 35 свободно');
+    await screen.findByText('Порты');
     expect(loadPhysicalObjectDetails).toHaveBeenCalledWith('sw');
-    expect(screen.getByText('Ещё 11 подключений')).toBeInTheDocument();
+    expect(screen.getByText('52')).toBeInTheDocument();
+    expect(screen.getByText('17')).toBeInTheDocument();
+    expect(screen.getByText('35')).toBeInTheDocument();
+    expect(screen.queryByText('PP1 / B1')).not.toBeInTheDocument();
     expect(screen.getByText('warning')).toBeInTheDocument();
     expect(screen.getByText('gap')).toBeInTheDocument();
   });
@@ -29,7 +32,7 @@ describe('QuickInspector operational reads', () => {
     const loadPhysicalObjectDetails = vi.fn((id: string) => id === 'sw' ? pendingA : Promise.resolve(details('pp', 0)));
     const rendered = view({ physicalObjectDetailsDataSource: { loadPhysicalObjectDetails } });
     rendered.rerender(<BrowserRouter><QuickInspector document={document([node('pp', 'PP1')])} selection={{ type: 'node', item: node('pp', 'PP1') }} onClose={vi.fn()} onSelectNode={vi.fn()} physicalObjectDetailsDataSource={{ loadPhysicalObjectDetails }} /></BrowserRouter>);
-    await screen.findByText('Портов нет');
+    await screen.findByText('0');
     resolveA(details());
     await waitFor(() => expect(screen.getByRole('heading', { name: 'PP1' })).toBeInTheDocument());
   });
@@ -38,7 +41,7 @@ describe('QuickInspector operational reads', () => {
     const loadPhysicalObjectDetails = vi.fn().mockResolvedValue(details());
     const physicalObjectDetailsDataSource = { loadPhysicalObjectDetails };
     const rendered = view({ physicalObjectDetailsDataSource });
-    await screen.findByText(/52 портов/);
+    await screen.findByText('Порты');
     rendered.rerender(<BrowserRouter><QuickInspector document={document([node('sw', 'SW1 refreshed')])} selection={{ type: 'node', item: node('sw', 'SW1 refreshed') }} onClose={vi.fn()} onSelectNode={vi.fn()} physicalObjectDetailsDataSource={physicalObjectDetailsDataSource} /></BrowserRouter>);
     expect(loadPhysicalObjectDetails).toHaveBeenCalledTimes(1);
   });
@@ -46,9 +49,9 @@ describe('QuickInspector operational reads', () => {
   it('retries a failed details read', async () => {
     const loadPhysicalObjectDetails = vi.fn().mockRejectedValueOnce(new Error('details failed')).mockResolvedValueOnce(details());
     view({ physicalObjectDetailsDataSource: { loadPhysicalObjectDetails } });
-    expect(await screen.findByRole('alert')).toHaveTextContent('details failed');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось загрузить сведения об объекте.');
     await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
-    await screen.findByText(/52 портов/);
+    await screen.findByText('Порты');
     expect(loadPhysicalObjectDetails).toHaveBeenCalledTimes(2);
   });
 });

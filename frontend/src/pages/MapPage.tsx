@@ -66,7 +66,7 @@ import type {
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { compositeFrameGeometry, LAYOUT_NODE_HEIGHT, LAYOUT_NODE_WIDTH } from "../topology/layout";
-import { presentationSceneDocument } from "../topology/presentationScene";
+import { directlyAttachedCableIds, presentationSceneDocument } from "../topology/presentationScene";
 import { defaultMapRegionStyle, nextMapRegionZOrder } from "../topology/regionPresentation";
 import { deleteRegionDraftVertex, insertRegionDraftVertex, moveRegionDraftVertex, translateRegionDraft, validateRegionDraftPolygon } from '../topology/regionDraftGeometry';
 import type {
@@ -308,6 +308,9 @@ export function MapPage({
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
   const [copiedBlueprintDisplayWidth, setCopiedBlueprintDisplayWidth] = useState<number>();
+  const [blueprintSizeDialog, setBlueprintSizeDialog] = useState<{ id: string; draft: string } | null>(null);
+  const [blueprintSizePending, setBlueprintSizePending] = useState(false);
+  const [blueprintSizeError, setBlueprintSizeError] = useState<string | null>(null);
   const selectedMapId = useRef<string | null>(mapId);
   const deletedMapIds = useRef(new Set<string>());
   const mapListRequest = useRef(0);
@@ -1928,29 +1931,30 @@ export function MapPage({
         .filter((id): id is string => Boolean(id)),
     );
   }, [activeMap, document, viewMode]);
-  const selectedPlacementPosition = useMemo(() => {
-    const id = physicalObjectIdForSelection(selection);
-    return activeMap?.placements.find((item) => item.physical_object_ref.entity_id === id)
-      ?.positions[savedMapViewKey(viewMode)];
-  }, [activeMap, selection, viewMode]);
-  const selectedBlueprint = useMemo(() => {
-    const id = physicalObjectIdForSelection(selection);
-    return id ? nodeForPhysicalObject(document?.nodes ?? [], id)?.attributes.blueprint_presentation : undefined;
-  }, [document, selection]);
-  const selectedBlueprintSize = !legacy && viewMode === "physical" && selectedPlacementPosition && selectedBlueprint
-    ? { displayWidth: selectedPlacementPosition.display_width ?? DEFAULT_BLUEPRINT_DISPLAY_WIDTH, copiedDisplayWidth: copiedBlueprintDisplayWidth }
-    : undefined;
-  const applySizeToSameBlueprint = async () => {
-    if (!selectedBlueprint || !activeMap || !document) return;
-    const blueprintId = selectedBlueprint.blueprint_ref.entity_id;
-    const selectedWidth = selectedPlacementPosition?.display_width ?? DEFAULT_BLUEPRINT_DISPLAY_WIDTH;
-    const ids = activeMap.placements.flatMap((placement) => {
-      const id = placement.physical_object_ref.entity_id;
-      const presentation = nodeForPhysicalObject(document.nodes, id)?.attributes.blueprint_presentation;
-      return presentation?.blueprint_ref.entity_id === blueprintId && placement.positions["L1/PHYSICAL_OBJECT"] ? [id] : [];
-    });
-    await persistBlueprintDisplayWidths(ids.map((id) => ({ id, displayWidth: selectedWidth })));
+  const blueprintSizeForObject = (id: string) => {
+    const position = activeMap?.placements.find((item) => item.physical_object_ref.entity_id === id)
+      ?.positions["L1/PHYSICAL_OBJECT"];
+    const blueprint = nodeForPhysicalObject(document?.nodes ?? [], id)?.attributes.blueprint_presentation;
+    return !legacy && viewMode === "physical" && position && blueprint
+      ? { displayWidth: position.display_width ?? DEFAULT_BLUEPRINT_DISPLAY_WIDTH, copiedDisplayWidth: copiedBlueprintDisplayWidth }
+      : undefined;
   };
+  const applySizeToSameBlueprint = async (id: string) => {
+    const size = blueprintSizeForObject(id);
+    const blueprint = nodeForPhysicalObject(document?.nodes ?? [], id)?.attributes.blueprint_presentation;
+    if (!size || !blueprint || !activeMap || !document) return;
+    const blueprintId = blueprint.blueprint_ref.entity_id;
+    const ids = activeMap.placements.flatMap((placement) => {
+      const placementId = placement.physical_object_ref.entity_id;
+      const presentation = nodeForPhysicalObject(document.nodes, placementId)?.attributes.blueprint_presentation;
+      return presentation?.blueprint_ref.entity_id === blueprintId && placement.positions["L1/PHYSICAL_OBJECT"] ? [placementId] : [];
+    });
+    await persistBlueprintDisplayWidths(ids.map((placementId) => ({ id: placementId, displayWidth: size.displayWidth })));
+  };
+  const directlyAttachedCables = useMemo(
+    () => directlyAttachedCableIds(document, physicalObjectIdForSelection(selection)),
+    [document, selection],
+  );
   const receiveViewportCenter = useCallback(
     (getter: (() => XYPosition) | null) => {
       viewportCenter.current = getter;
@@ -2555,6 +2559,16 @@ export function MapPage({
         onAdd={(anchor) => openInsertion(anchor)}
         onSetLock={(id, locked) => void setPlacementLock(id, locked).catch((reason) => setError(errorMessage(reason, t("map.lockFailed"))))}
         onRemove={(id) => void remove(id).catch((reason) => setError(errorMessage(reason, t("map.removeFailed"))))}
+        blueprintSize={contextAnchor.kind === "object" ? blueprintSizeForObject(contextAnchor.id) : undefined}
+        onEditBlueprintSize={(id) => {
+          const size = blueprintSizeForObject(id);
+          if (!size) return;
+          setBlueprintSizeError(null);
+          setBlueprintSizeDialog({ id, draft: String(size.displayWidth) });
+        }}
+        onCopyBlueprintSize={(width) => setCopiedBlueprintDisplayWidth(width)}
+        onApplyCopiedBlueprintSize={(id, width) => void resizeBlueprint(id, width).catch((reason) => setError(errorMessage(reason, t("map.sizeFailed"))))}
+        onApplyBlueprintSizeToSameBlueprint={(id) => void applySizeToSameBlueprint(id).catch((reason) => setError(errorMessage(reason, t("map.sizeFailed"))))}
         onRenameCable={catalogInventoryDataSource && cableLabelDataSource ? (id, label) => void beginCableRename(id, label) : undefined}
         onEditRoute={(id) => beginCableRouteEdit(id)}
         onResetRoute={(id) => void resetCableRoute(id)}
@@ -2563,6 +2577,17 @@ export function MapPage({
         onDeleteObject={(id, label) => { if (window.confirm(t("map.context.deleteObjectConfirm", { name: label }))) void deletePhysicalObject(id).catch((reason) => setError(errorMessage(reason, t("map.deleteObjectFailed")))); }}
         onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("map.deleteCableFailed")))); }}
       />}
+      {blueprintSizeDialog && <section className="map-dialog" role="dialog" aria-modal="true" aria-label={t("map.size.title")}><div className="map-dialog__surface">
+        <h2>{t("map.size.title")}</h2>
+        <label>{t("map.size.width")}<input autoFocus type="number" min="1" step="1" value={blueprintSizeDialog.draft} onChange={(event) => { setBlueprintSizeError(null); setBlueprintSizeDialog((current) => current ? { ...current, draft: event.target.value } : null); }} /></label>
+        {blueprintSizeError && <p role="alert">{blueprintSizeError}</p>}
+        <div className="map-dialog__actions"><button type="button" disabled={blueprintSizePending} onClick={() => setBlueprintSizeDialog(null)}>{t("map.size.cancel")}</button><button type="button" disabled={blueprintSizePending || !Number.isFinite(Number(blueprintSizeDialog.draft)) || Number(blueprintSizeDialog.draft) <= 0} onClick={() => void (async () => {
+          setBlueprintSizePending(true); setBlueprintSizeError(null);
+          try { await resizeBlueprint(blueprintSizeDialog.id, Number(blueprintSizeDialog.draft)); setBlueprintSizeDialog(null); }
+          catch { setBlueprintSizeError(t("map.size.failed")); }
+          finally { setBlueprintSizePending(false); }
+        })()}>{t("map.size.apply")}</button></div>
+      </div></section>}
       {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
       {presentationVariantCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Компоновка создана, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantCreationRefresh()}>Повторить обновление</button></section>}
       {compositeCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Составной блок создан, но карту не удалось обновить.</p><button type="button" onClick={() => void retryCompositeCreationRefresh()}>Повторить обновление</button></section>}
@@ -2632,6 +2657,7 @@ export function MapPage({
                   sceneKey={presentationSceneKey}
                   positionOverrides={!legacy ? positions : undefined}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}
+                  directlyAttachedCableIds={directlyAttachedCables}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}
                   lockedNodeIds={!legacy ? lockedNodeIds : undefined}
                   authoritativePositionRevision={authoritativePositionRevision}
@@ -2755,11 +2781,6 @@ export function MapPage({
         }
         physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
         catalogInventoryDataSource={catalogInventoryDataSource}
-        blueprintSize={selectedBlueprintSize}
-        onApplyBlueprintSize={selectedBlueprintSize && physicalObjectIdForSelection(selection) ? (displayWidth) => resizeBlueprint(physicalObjectIdForSelection(selection)!, displayWidth) : undefined}
-        onCopyBlueprintSize={selectedBlueprintSize ? () => setCopiedBlueprintDisplayWidth(selectedBlueprintSize.displayWidth) : undefined}
-        onApplyCopiedBlueprintSize={selectedBlueprintSize && copiedBlueprintDisplayWidth !== undefined && physicalObjectIdForSelection(selection) ? () => resizeBlueprint(physicalObjectIdForSelection(selection)!, copiedBlueprintDisplayWidth) : undefined}
-        onApplyBlueprintSizeToSameBlueprint={selectedBlueprintSize ? applySizeToSameBlueprint : undefined}
         mapOperation={mapOperation?.mapId === mapId ? mapOperation : null}
         onRetryMapRefresh={retryMapRefresh}
       />

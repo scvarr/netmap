@@ -52,6 +52,7 @@ vi.mock('@xyflow/react', () => ({
       {edges.map((edge) => <button key={`edge-${edge.id}`} onClick={() => onEdgeClick?.({}, edge)}>edge {edge.id}</button>)}
       {edges.map((edge) => <output key={`route-${edge.id}`} data-testid={`route-${edge.id}`}>{edge.data?.cableRoute ? JSON.stringify(edge.data.cableRoute.waypoints) : 'no-route'}</output>)}
       {edges.map((edge) => <output key={`traced-${edge.id}`} data-testid={`traced-${edge.id}`}>{String(Boolean(edge.animated))}</output>)}
+      {edges.map((edge) => <output key={`emphasis-${edge.id}`} data-testid={`emphasis-${edge.id}`}>{edge.data?.cablePresentationEmphasis ?? 'none'}</output>)}
       {nodes.map((node) => (
         <div key={node.id}>
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
@@ -588,6 +589,27 @@ describe('TopologyCanvas async layout boundary', () => {
     await screen.findByTestId('flow');
     expect(screen.getByTestId('traced-collapsed-cable:cable:cable-one')).toHaveTextContent('true');
     expect(screen.getByTestId('traced-collapsed-cable:cable:cable-two')).toHaveTextContent('false');
+  });
+
+  it('emphasizes only directly attached Cables while explicit selection and trace retain priority', async () => {
+    const document: TopologyProjectionDocument = {
+      schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', gaps: [], warnings: [],
+      nodes: [{ id: 'a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [], attributes: {} }, { id: 'b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [], attributes: {} }], edges: [],
+    };
+    const cable = (id: string) => ({ id: `cable:${id}`, kind: 'CABLE', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'Cable', entity_id: id }], attributes: {} });
+    const layoutEngine: TopologyLayoutEngine = vi.fn(async () => ({
+      nodes: flowFor((await import('../topology/presentationScene')).presentationSceneDocument(document)).nodes,
+      edges: ['attached', 'unrelated', 'traced'].map((id) => ({ id, source: 'a', target: 'b', type: 'floating' as const, data: { cableNode: cable(id) } })),
+    }));
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} directlyAttachedCableIds={new Set(['attached', 'traced'])} traceOverlay={{ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(), highlightedCableIds: new Set(['traced']) }} />);
+    await screen.findByTestId('flow');
+    expect(screen.getByTestId('emphasis-attached')).toHaveTextContent('attached');
+    expect(screen.getByTestId('emphasis-unrelated')).toHaveTextContent('normal');
+    expect(screen.getByTestId('emphasis-traced')).toHaveTextContent('traced');
+    view.rerender(<TopologyCanvas document={document} selection={{ type: 'node', item: cable('attached') }} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} directlyAttachedCableIds={new Set(['attached'])} />);
+    expect(screen.getByTestId('emphasis-attached')).toHaveTextContent('selected');
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} directlyAttachedCableIds={new Set()} />);
+    expect(screen.getByTestId('emphasis-attached')).toHaveTextContent('normal');
   });
 
   it('keeps a locked node selectable but prevents its drag without rebuilding the scene', async () => {

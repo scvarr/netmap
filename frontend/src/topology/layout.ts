@@ -60,6 +60,8 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   /** Route editing controls are rendered by the foreground cable overlay. */
   renderRouteEditorInForeground?: boolean;
   continuation?: L1OffMapContinuation;
+  /** Presentation priority for Cable rendering; it never changes topology evidence. */
+  cablePresentationEmphasis?: 'normal' | 'attached' | 'selected' | 'traced' | 'editing';
 }
 
 export type DeviceFlowNode = Node<DeviceNodeData, 'device' | 'composite'>;

@@ -312,3 +312,34 @@ placed add-intent преобразуется в `focus` без duplicate placeme
 **Границы.** Это только presentation/UI behavior: canonical `PhysicalObject`,
 `ConnectionPoint`, Cable/Connection, `Location`, Blueprint и topology
 projection semantics не меняются.
+
+### P-UX-17 — компактный Map QuickInspector
+
+**Статус: IMPLEMENTED.**
+
+**Замечание.** QuickInspector одновременно служил кратким read-context,
+списком физических подключений, редактором display size Blueprint и местом
+для technical/debug data. Из-за этого object inspector был слишком высоким и
+переставал быть быстрым map-context view.
+
+**Согласованный контракт.** Для обычного `PhysicalObject` inspector —
+компактная floating surface с user-facing physical class, display name,
+aggregate facts (ports, connected, free, interfaces), переходом к полной
+карточке и свёрнутыми техническими сведениями. Детальные textual rows
+подключённых endpoint/Cable из него удалены; полная физическая информация
+остаётся на `/physical`.
+
+На Physical SavedMap selection объекта presentation-only подчёркивает только
+непосредственно attached внешние Cable. IDs выводятся из уже загруженных
+authoritative endpoint pairs projection scene: Cable подчёркивается только
+когда pair оканчивается на `ConnectionPoint` выбранного объекта. Это не L1
+trace, не passive internal continuity и не обход downstream/upstream; explicit
+cable selection, trace и route editing сохраняют приоритет. Новых topology
+queries, canonical relations или backend semantics нет.
+
+Blueprint display-width mutations перенесены в object context menu. Applicable
+placement получает bounded dialog «Размер на карте» с единственной шириной,
+копирование текущей ширины в session-local presentation clipboard, применение
+скопированной ширины и existing operation «ко всем объектам шаблона». Clipboard
+не persisted и не является canonical state. C-UX-06 и independent Height
+остаются вне scope.

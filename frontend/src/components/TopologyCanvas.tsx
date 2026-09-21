@@ -66,6 +66,8 @@ interface TopologyCanvasProps {
   layoutEngine?: TopologyLayoutEngine;
   layoutStore?: TopologyLayoutStore;
   traceOverlay?: PhysicalTraceOverlay;
+  /** Exact Cable ids directly attached to the selected PhysicalObject. */
+  directlyAttachedCableIds?: ReadonlySet<string>;
   sceneKey?: string;
   /** Request one fit after a fresh layout has been applied. */
   viewportFitRevision?: number;
@@ -161,6 +163,7 @@ export function TopologyCanvas({
   layoutEngine = toFlowProjection,
   layoutStore,
   traceOverlay,
+  directlyAttachedCableIds,
   sceneKey,
   viewportFitRevision = 0,
   focusPhysicalObjectId,
@@ -567,14 +570,25 @@ export function TopologyCanvas({
             edge.data.endpointPair.connection_member_id,
           ) ?? false)
         : (traceOverlay?.highlightedEdgeIds.has(edge.id) ?? false);
+    const isDirectlyAttached = tracedCableId !== null &&
+      (directlyAttachedCableIds?.has(tracedCableId) ?? false);
+    const cablePresentationEmphasis: NonNullable<LogicalFlowEdge['data']>['cablePresentationEmphasis'] = matchingDraft
+      ? 'editing'
+      : isSelected
+        ? 'selected'
+        : isTraced
+          ? 'traced'
+          : isDirectlyAttached
+            ? 'attached'
+            : 'normal';
     return {
       ...edge,
-      data: edge.data ? { ...edge.data, ...(cableRoute ? { cableRoute } : {}), ...(matchingDraft ? { cableRouteDraft: matchingDraft, renderRouteEditorInForeground: true } : {}) } : edge.data,
+      data: edge.data ? { ...edge.data, cablePresentationEmphasis, ...(cableRoute ? { cableRoute } : {}), ...(matchingDraft ? { cableRouteDraft: matchingDraft, renderRouteEditorInForeground: true } : {}) } : edge.data,
       selected: isSelected,
-      animated: isSelected || isTraced,
+      animated: isSelected || isTraced || isDirectlyAttached,
       style: {
-        stroke: isSelected ? "#54e3b4" : isTraced ? "#f0bd66" : "#52676b",
-        strokeWidth: isSelected ? 3 : isTraced ? 4 : 2,
+        stroke: isSelected ? "#54e3b4" : isTraced ? "#f0bd66" : isDirectlyAttached ? "#35c99c" : "#52676b",
+        strokeWidth: isSelected ? 3 : isTraced ? 4 : isDirectlyAttached ? 3 : 2,
         opacity: 1,
       },
     };

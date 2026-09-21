@@ -1,102 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { presentationSceneDocument } from './presentationScene';
+import { directlyAttachedCableIds, presentationSceneDocument } from './presentationScene';
 import type { TopologyProjectionDocument } from './types';
 
 const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
-const document = (pairs: TopologyProjectionDocument['edges'][number]['attributes']['endpoint_pairs'] = []): TopologyProjectionDocument => ({
-  schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', gaps: [], warnings: [],
-  nodes: [{ id: 'a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [], attributes: {} }, { id: 'b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [], attributes: {} }],
-  edges: [{ id: 'ab', from_node_id: 'a', to_node_id: 'b', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [ref('Connection', 'connection')], attributes: { endpoint_pairs: pairs } }],
-});
+const document = (pairs: TopologyProjectionDocument['edges'][number]['attributes']['endpoint_pairs'] = []): TopologyProjectionDocument => ({ schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', gaps: [], warnings: [], nodes: [{ id: 'a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [], attributes: {} }, { id: 'b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [], attributes: {} }], edges: [{ id: 'ab', from_node_id: 'a', to_node_id: 'b', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [ref('Connection', 'connection')], attributes: { endpoint_pairs: pairs } }] });
 
 describe('presentationSceneDocument', () => {
-  it('turns a cable-backed endpoint pair into a separate Cable scene edge with exact evidence', () => {
-    const pair = { from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member', cable_ref: ref('Cable', 'cable'), cable_display_name: 'C-1' };
-    const source = document([pair]);
-    const scene = presentationSceneDocument(source);
+  it('turns a cable-backed endpoint pair into a separate Cable scene edge with exact evidence', () => { const pair = { from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member', cable_ref: ref('Cable', 'cable'), cable_display_name: 'C-1' }; const source = document([pair]); expect(presentationSceneDocument(source).edges).toMatchObject([{ id: 'collapsed-cable:cable', kind: 'cable', cableNode: { source_refs: [ref('Cable', 'cable')] }, endpointPair: { connection_member_id: 'member' }, projectionEdge: source.edges[0] }]); });
+  it('keeps an ordinary endpoint pair as an ordinary scene edge', () => { expect(presentationSceneDocument(document([{ from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member' }])).edges).toMatchObject([{ id: 'ab::member::member', kind: 'projection', endpointPair: { connection_member_id: 'member' } }]); });
+  it('keeps parallel Cables separate and preserves each Cable and ConnectionMember', () => { const scene = presentationSceneDocument(document([{ from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection-one', connection_member_id: 'member-one', cable_ref: ref('Cable', 'cable-one') }, { from_connection_point_id: 'a-2', from_member_index: 1, to_connection_point_id: 'b-2', to_member_index: 1, connection_id: 'connection-two', connection_member_id: 'member-two', cable_ref: ref('Cable', 'cable-two') }])); expect(scene.edges).toMatchObject([{ id: 'collapsed-cable:cable-one', cableNode: { source_refs: [ref('Cable', 'cable-one')] }, endpointPair: { connection_member_id: 'member-one' } }, { id: 'collapsed-cable:cable-two', cableNode: { source_refs: [ref('Cable', 'cable-two')] }, endpointPair: { connection_member_id: 'member-two' } }]); });
+  it('merges multiple endpoint pairs for one Cable while retaining every member evidence', () => { const source = document([{ from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member-one', cable_ref: ref('Cable', 'cable') }, { from_connection_point_id: 'a-2', from_member_index: 2, to_connection_point_id: 'b-2', to_member_index: 2, connection_id: 'connection', connection_member_id: 'member-two', cable_ref: ref('Cable', 'cable') }]); const scene = presentationSceneDocument(source); const edges = scene.edges.filter((edge) => edge.kind === 'cable'); expect(edges).toHaveLength(1); expect(new Set(scene.edges.map((edge) => edge.id)).size).toBe(scene.edges.length); expect(edges[0]).toMatchObject({ id: 'collapsed-cable:cable', endpointPair: { connection_member_id: 'member-one' }, supportingProjectionEdgeIds: ['ab'], cableEvidence: [{ endpointPair: { connection_member_id: 'member-one' }, projectionEdge: source.edges[0] }, { endpointPair: { connection_member_id: 'member-two' }, projectionEdge: source.edges[0] }] }); });
+  it('leaves L2 projection edges one-to-one even with artificial endpoint pairs', () => { const source: TopologyProjectionDocument = { ...document([{ from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member', cable_ref: ref('Cable', 'cable') }]), layer: 'L2', detail_level: 'DEVICE' }; const scene = presentationSceneDocument(source); expect(scene.edges).toEqual([{ id: 'ab', source: 'a', target: 'b', kind: 'projection', projectionEdge: source.edges[0] }]); expect(scene.composites).toEqual([]); });
+  it('keeps an off-map continuation as an evidence-backed presentation edge', () => { const source = document(); source.l1_off_map_continuations = [{ id: 'continuation', local_node_id: 'a', local_physical_object_ref: ref('PhysicalObject', 'a'), local_connection_point_ref: ref('ConnectionPoint', 'a-1'), local_connection_point_display_name: 'A1', cable_ref: ref('Cable', 'cable'), cable_display_name: 'C-1', remote_physical_object_ref: ref('PhysicalObject', 'remote'), remote_display_name: 'Remote', remote_connection_point_ref: ref('ConnectionPoint', 'remote-1'), remote_connection_point_display_name: 'R1', source_refs: [ref('ConnectionMember', 'member')] }]; expect(presentationSceneDocument(source).edges.at(-1)).toMatchObject({ id: 'off-map-continuation:continuation', kind: 'off-map-continuation', source: 'a', target: 'a', continuation: source.l1_off_map_continuations[0] }); });
+  it('hides only internal non-boundary members of a collapsed MapComposite before layout', () => { const source = document(); source.nodes.push({ id: 'c', kind: 'PHYSICAL_OBJECT', label: 'C', source_refs: [ref('PhysicalObject', 'c')], attributes: {}, status: 'CONFIGURED' }); source.edges.push({ id: 'bc', from_node_id: 'b', to_node_id: 'c', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [] } }); const scene = presentationSceneDocument(source, [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], explicitVisibleNodeIds: [], collapsed: true, x: 1000, y: 500, width: 300, height: 200 }]); expect(scene.nodes.map((node) => node.id)).toEqual(['b', 'c', 'map-composite:rack']); expect(scene.edges.map((edge) => edge.id)).toEqual(['bc']); expect(scene.composites).toMatchObject([{ id: 'rack', boundaryNodeIds: ['b'] }]); });
+  it('keeps explicit members visible without making them boundary nodes', () => { const source = document(); source.nodes.push({ id: 'c', kind: 'PHYSICAL_OBJECT', label: 'C', source_refs: [ref('PhysicalObject', 'c')], attributes: {}, status: 'CONFIGURED' }); source.edges.push({ id: 'bc', from_node_id: 'b', to_node_id: 'c', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [] } }); const scene = presentationSceneDocument(source, [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], explicitVisibleNodeIds: ['a'], collapsed: true, x: 0, y: 0, width: 300, height: 200 }]); expect(scene.nodes.map((node) => node.id)).toEqual(['a', 'b', 'c', 'map-composite:rack']); expect(scene.composites[0]).toMatchObject({ boundaryNodeIds: ['b'], explicitVisibleNodeIds: ['a'] }); expect(scene.edges.map((edge) => edge.id)).toEqual(['ab', 'bc']); });
+  it('marks only an evidenced visible-side ConnectionPoint when its composite peer is hidden', () => { const pair = { from_connection_point_id: 'pc1-port', from_member_index: 1, to_connection_point_id: 'o1-port', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member' }; const scene = presentationSceneDocument(document([pair]), [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], explicitVisibleNodeIds: ['a'], collapsed: true, x: 0, y: 0, width: 300, height: 200 }]); expect(scene.edges).toEqual([]); expect(scene.hiddenCompositeConnectionPointIds).toEqual(['pc1-port']); });
+});
 
-    expect(scene.edges).toMatchObject([{ id: 'collapsed-cable:cable', kind: 'cable', cableNode: { source_refs: [ref('Cable', 'cable')] }, endpointPair: { connection_member_id: 'member' }, projectionEdge: source.edges[0] }]);
-  });
-
-  it('keeps an ordinary endpoint pair as an ordinary scene edge', () => {
-    const scene = presentationSceneDocument(document([{ from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member' }]));
-    expect(scene.edges).toMatchObject([{ id: 'ab::member::member', kind: 'projection', endpointPair: { connection_member_id: 'member' } }]);
-  });
-
-  it('keeps parallel Cables separate and preserves each Cable and ConnectionMember', () => {
-    const scene = presentationSceneDocument(document([
-      { from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection-one', connection_member_id: 'member-one', cable_ref: ref('Cable', 'cable-one') },
-      { from_connection_point_id: 'a-2', from_member_index: 1, to_connection_point_id: 'b-2', to_member_index: 1, connection_id: 'connection-two', connection_member_id: 'member-two', cable_ref: ref('Cable', 'cable-two') },
-    ]));
-    expect(scene.edges).toMatchObject([
-      { id: 'collapsed-cable:cable-one', cableNode: { source_refs: [ref('Cable', 'cable-one')] }, endpointPair: { connection_member_id: 'member-one' } },
-      { id: 'collapsed-cable:cable-two', cableNode: { source_refs: [ref('Cable', 'cable-two')] }, endpointPair: { connection_member_id: 'member-two' } },
-    ]);
-  });
-
-  it('merges multiple endpoint pairs for one Cable while retaining every member evidence', () => {
-    const source = document([
-      { from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member-one', cable_ref: ref('Cable', 'cable') },
-      { from_connection_point_id: 'a-2', from_member_index: 2, to_connection_point_id: 'b-2', to_member_index: 2, connection_id: 'connection', connection_member_id: 'member-two', cable_ref: ref('Cable', 'cable') },
-    ]);
-    const scene = presentationSceneDocument(source);
-    const cableEdges = scene.edges.filter((edge) => edge.kind === 'cable');
-
-    expect(cableEdges).toHaveLength(1);
-    expect(new Set(scene.edges.map((edge) => edge.id)).size).toBe(scene.edges.length);
-    expect(cableEdges[0]).toMatchObject({
-      id: 'collapsed-cable:cable',
-      endpointPair: { connection_member_id: 'member-one' },
-      supportingProjectionEdgeIds: ['ab'],
-      cableEvidence: [
-        { endpointPair: { connection_member_id: 'member-one' }, projectionEdge: source.edges[0] },
-        { endpointPair: { connection_member_id: 'member-two' }, projectionEdge: source.edges[0] },
-      ],
-    });
-  });
-
-  it('leaves L2 projection edges one-to-one even when they contain artificial endpoint pairs', () => {
-    const source: TopologyProjectionDocument = {
-      ...document([{ from_connection_point_id: 'a-1', from_member_index: 1, to_connection_point_id: 'b-1', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member', cable_ref: ref('Cable', 'cable') }]),
-      layer: 'L2', detail_level: 'DEVICE',
-    };
-    const scene = presentationSceneDocument(source);
-
-    expect(scene.edges).toEqual([{ id: 'ab', source: 'a', target: 'b', kind: 'projection', projectionEdge: source.edges[0] }]);
-    expect(scene.composites).toEqual([]);
-  });
-
-  it('keeps an off-map continuation as an evidence-backed presentation edge', () => {
-    const source = document();
-    source.l1_off_map_continuations = [{ id: 'continuation', local_node_id: 'a', local_physical_object_ref: ref('PhysicalObject', 'a'), local_connection_point_ref: ref('ConnectionPoint', 'a-1'), local_connection_point_display_name: 'A1', cable_ref: ref('Cable', 'cable'), cable_display_name: 'C-1', remote_physical_object_ref: ref('PhysicalObject', 'remote'), remote_display_name: 'Remote', remote_connection_point_ref: ref('ConnectionPoint', 'remote-1'), remote_connection_point_display_name: 'R1', source_refs: [ref('ConnectionMember', 'member')] }];
-    expect(presentationSceneDocument(source).edges.at(-1)).toMatchObject({ id: 'off-map-continuation:continuation', kind: 'off-map-continuation', source: 'a', target: 'a', continuation: source.l1_off_map_continuations[0] });
-  });
-
-  it('hides only internal non-boundary members of a collapsed MapComposite before layout', () => {
-    const source = document();
-    source.nodes.push({ id: 'c', kind: 'PHYSICAL_OBJECT', label: 'C', source_refs: [ref('PhysicalObject', 'c')], attributes: {}, status: 'CONFIGURED' });
-    source.edges.push({ id: 'bc', from_node_id: 'b', to_node_id: 'c', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [] } });
-    const scene = presentationSceneDocument(source, [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], explicitVisibleNodeIds: [], collapsed: true, x: 1000, y: 500, width: 300, height: 200 }]);
-    expect(scene.nodes.map((node) => node.id)).toEqual(['b', 'c', 'map-composite:rack']);
-    expect(scene.edges.map((edge) => edge.id)).toEqual(['bc']);
-    expect(scene.composites).toMatchObject([{ id: 'rack', boundaryNodeIds: ['b'] }]);
-    expect(scene.nodes.at(-1)).toMatchObject({ kind: 'MAP_COMPOSITE', source_refs: [], attributes: { presentation_only: true, x: 1000, y: 500, width: 300, height: 200 } });
-  });
-
-  it('keeps explicit members visible without making them boundary nodes and hides edges to hidden members', () => {
-    const source = document();
-    source.nodes.push({ id: 'c', kind: 'PHYSICAL_OBJECT', label: 'C', source_refs: [ref('PhysicalObject', 'c')], attributes: {}, status: 'CONFIGURED' });
-    source.edges.push({ id: 'bc', from_node_id: 'b', to_node_id: 'c', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [] } });
-    const scene = presentationSceneDocument(source, [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], explicitVisibleNodeIds: ['a'], collapsed: true, x: 0, y: 0, width: 300, height: 200 }]);
-    expect(scene.nodes.map((node) => node.id)).toEqual(['a', 'b', 'c', 'map-composite:rack']);
-    expect(scene.composites[0]).toMatchObject({ boundaryNodeIds: ['b'], explicitVisibleNodeIds: ['a'], visibleNodeIds: expect.arrayContaining(['a', 'b']) });
-    expect(scene.edges.map((edge) => edge.id)).toEqual(['ab', 'bc']);
-  });
-
-  it('marks only an evidenced visible-side ConnectionPoint when its composite peer is hidden', () => {
-    const pair = { from_connection_point_id: 'pc1-port', from_member_index: 1, to_connection_point_id: 'o1-port', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member' };
-    const scene = presentationSceneDocument(document([pair]), [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], explicitVisibleNodeIds: ['a'], collapsed: true, x: 0, y: 0, width: 300, height: 200 }]);
-    expect(scene.edges).toEqual([]);
-    expect(scene.hiddenCompositeConnectionPointIds).toEqual(['pc1-port']);
-  });
+describe('directlyAttachedCableIds', () => {
+  it('returns only exact external Cable endpoints for the selected PhysicalObject', () => { const source = document([{ from_connection_point_id: 'a-1', from_member_index: 0, to_connection_point_id: 'b-1', to_member_index: 0, connection_id: 'connection-a-b', connection_member_id: 'member-a-b', cable_ref: ref('Cable', 'cable-a-b') }]); source.nodes[0].source_refs = [ref('PhysicalObject', 'object-a')]; source.nodes[1].source_refs = [ref('PhysicalObject', 'object-b')]; source.nodes.push({ id: 'c', kind: 'PHYSICAL_OBJECT', label: 'C', source_refs: [ref('PhysicalObject', 'object-c')], attributes: {} }); source.edges.push({ id: 'bc', from_node_id: 'b', to_node_id: 'c', kind: 'L1_PHYSICAL_LINK', aggregate: false, source_refs: [], attributes: { endpoint_pairs: [{ from_connection_point_id: 'b-2', from_member_index: 0, to_connection_point_id: 'c-1', to_member_index: 0, connection_id: 'connection-b-c', connection_member_id: 'member-b-c', cable_ref: ref('Cable', 'cable-b-c') }] } }); expect(directlyAttachedCableIds(source, 'object-a')).toEqual(new Set(['cable-a-b'])); expect(directlyAttachedCableIds(source, 'object-b')).toEqual(new Set(['cable-a-b', 'cable-b-c'])); expect(directlyAttachedCableIds(source, 'object-c')).toEqual(new Set(['cable-b-c'])); });
+  it('clears emphasis when selection has no PhysicalObject and ignores non-physical views', () => { expect(directlyAttachedCableIds(document(), null)).toEqual(new Set()); expect(directlyAttachedCableIds({ ...document(), layer: 'L2' }, 'a')).toEqual(new Set()); });
 });
