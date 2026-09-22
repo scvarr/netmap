@@ -49,20 +49,37 @@ Logical/Physical, состояние уже существующей пусто�
 **Согласованный контракт.** Сообщение полностью убрать без замены; остальной
 интерфейс и поведение пустой созданной карты не менять.
 
-### P-UX-03 — связь spatial workflow с canonical Locations
+### P-UX-03 — hierarchical Location presentation
 
 **Статус: CONTRACT AGREED / IMPLEMENTATION PENDING.**
 
-**Замечание.** После создания первой карты spatial workflow недостаточно
-связан с canonical Locations.
+**Замечание.** После создания первой карты spatial workflow должен показывать
+canonical Location hierarchy как управляемую иерархическую сцену, а не только
+декоративную derived frame.
 
-**Согласованное product/architecture решение.** Отказаться от manual Regions
-как целевой capability и отображать canonical Location hierarchy на карте
-через derived dynamic Location frames. Membership и направление зависимости
-определяются spatial contract:
-[[architecture/presentation/09-spatial-location-mapreference-contract|derived Location frames]].
-Canonical Location остаётся source of truth; текущая Region реализация ещё
-существует до отдельного removal milestone.
+**Согласованное product/architecture решение.** Отказаться от manual Regions и
+MapComposite как целевых capabilities. `SavedMap` сохраняет одну карту,
+`MapPresentationVariant` — её компоновку, а canonical Location hierarchy
+представляется через recursive direct-element collapse, derived dynamic frames
+и group move. Membership, exact evidence и направление зависимости определяются
+[[architecture/presentation/09-spatial-location-mapreference-contract|spatial contract]].
+Canonical Location остаётся source of truth; старые Region/MapComposite
+реализации существуют до отдельных destructive removal milestones.
+
+P-UX-03 реализуется последовательно как P-UX-03A–P-UX-03E в
+[[plans/11-07-hierarchical-location-presentation|11.7 plan]] и не считается
+выполненным до implementation и manual acceptance.
+
+### P-UX-19 — массовое создание дочерних Locations
+
+**Статус: IMPLEMENTATION PENDING.**
+
+Отдельная ближайшая capability создаёт атомарную серию canonical дочерних
+Locations по pattern/range/step с preview, проверкой ширины и конфликтов,
+optional `Location.type` и без автоматического SavedMap или presentation state.
+Полный contract и место в последовательности implementation зафиксированы в
+[[architecture/presentation/09-spatial-location-mapreference-contract|spatial contract]]
+и [[plans/11-07-hierarchical-location-presentation|11.7 plan]].
 
 ### P-UX-04 — sidebar автоматически сворачивается на карте
 
@@ -366,10 +383,11 @@ UI. Canonical Location semantics/API/DB не менялись.
 `P-UX-18` завершён и merged в `main`; Locations hierarchy workflow теперь
 реализован. Текущий synthetic representative stand продолжает использовать
 существующие Locations/objects: `PC1`, `O1`, `PP1`/`PP-301` role и
-`SW-301-ACCESS`. Следующий spatial участок — `P-UX-03` derived Location
-frames. `P-UX-03` остаётся `CONTRACT AGREED / IMPLEMENTATION PENDING`, пока
-код derived Location frames не реализован. Manual Region implementation всё
-ещё существует до отдельных removal milestones.
+`SW-301-ACCESS`. Следующий spatial участок — `P-UX-03` hierarchical Location
+presentation и `P-UX-19` Location series creation. Оба остаются
+`IMPLEMENTATION PENDING`; derived frames, group move и Location series ещё не
+реализованы. Manual Region и MapComposite implementations всё ещё существуют
+до отдельных removal milestones.
 
 Правило прохода сохраняется: первый существенный defect → stop → bounded
 milestone → review → merge → продолжение того же стенда.

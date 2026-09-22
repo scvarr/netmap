@@ -1335,15 +1335,15 @@ endpoints UI ничего не выдумывает.
 
 ### Regions / areas
 
-**Target contract update:** manual SavedMap Regions/MapRegions are not a target
-product capability. Their role is replaced by dynamically derived Location
-frames as defined in
+**HISTORICAL CURRENT IMPLEMENTATION; SUPERSEDED TARGET.** Manual SavedMap
+Regions/MapRegions are not a target product capability. Their role is replaced
+by the hierarchical Location presentation contract in
 [[architecture/presentation/09-spatial-location-mapreference-contract|the spatial contract]].
 The implementation described below is factual current-state/history only;
-Region code and records still exist pending separate removal milestones. This
-section does not make Region authoring a future acceptance requirement.
+Region code and records still exist pending destructive removal. This section
+does not make Region authoring a future acceptance requirement.
 
-**FIXED; L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
+**CURRENT IMPLEMENTATION HISTORY; REMOVAL PENDING.** L1S.7a persistence/API, L1S.7b.1 rendering/isolated mode, L1S.7b.2 session-local
 polygon draft drawing, L1S.7b.3a Shift screen-axis constraint, L1S.7b.3b create/persistence,
 and L1S.7b.4a/b laminar contract, derived tree and selection, and L1S.7b.4c/d
 new-Region draft geometry editing and transient assisted geometry, existing geometry editing, Region properties/presentation, and L1S.7b.4g Map text annotations implemented**
@@ -1417,35 +1417,24 @@ future UI-polish task and is not implied by Region completion.
 
 ### MapComposite и presentation variants
 
-**B.3 — IMPLEMENTED**
+**B.3 historical implementation: SUPERSEDED; removal pending**
 
-SavedMap — самостоятельная сохранённая карта. `MapComposite` принадлежит
-SavedMap, содержит только существующие `MapPlacement`, допускает не более одного
-composite на placement, запрещает overlap/nesting и при удалении не меняет
-canonical topology. Он не является `PhysicalObject`, `Connection` или Cable
-endpoint. Membership composite общий для всех variants; `MapPresentationVariant`
-— именованное представление той же SavedMap, не enum detailed/overview.
+`MapComposite` code currently exists as a development-stage presentation
+implementation, but its model is superseded by the Location-driven
+hierarchical presentation contract. Further capability work must not extend
+MapComposite. Its membership, API, schema and UI will be removed in a separate
+destructive milestone; no compatibility or conversion layer is planned.
 
-При сворачивании real `PhysicalObject` автоматически остаётся видимым, если его
-реальная отображаемая физическая связь пересекает границу composite. Пользователь
-может отдельно отметить `Показывать при сворачивании`; это persisted rule,
-scoped к конкретному `MapComposite`, общий для variants. Explicit visibility не
-делает object boundary object: effective visibility = boundary OR explicit.
-Если explicit-visible object соединён с hidden member, hidden member и внутреннее
-edge скрываются; при exact endpoint evidence на реальном `ConnectionPoint` видимого
-объекта показывается presentation-only indication продолжения к скрытому объекту.
-Без exact evidence ничего не угадывается; это не off-map continuation и не новая
-topology relation.
+`SavedMap` remains the target saved map, and `MapPresentationVariant` remains
+the target named layout of that map. One SavedMap has one set of placed
+objects; variants may differ in collapse/expand presentation, coordinates and
+Cable routes without changing canonical topology or Location hierarchy. The
+target direct-element collapse, derived frames, recursive child state and group
+move semantics are defined only in
+[[architecture/presentation/09-spatial-location-mapreference-contract|the spatial contract]].
 
-Видимые real objects остаются topology nodes, а collapsed frame — только
-presentation container. Drag frame сохраняет только geometry composite; member
-`MapViewPosition` не переписываются, expand восстанавливает authoritative
-координаты. Coordinates, collapsed state, frame geometry и Cable routes
-variant-specific; create-copy клонирует variant-specific presentation state.
-MapReference composition между SavedMaps в B.3 не входит; это future optional
-navigation между независимыми SavedMaps.
-
-Подробности и relationship matrix: [[architecture/presentation/09-spatial-location-mapreference-contract|Spatial contract]].
+Existing MapComposite behavior below this boundary is historical context only,
+not a target acceptance requirement.
 
 ## Future media, capacity и transport views
 

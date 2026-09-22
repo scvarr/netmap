@@ -49,7 +49,7 @@ Current execution position: **Phase C — Representative real-world L1 semantic 
 зафиксированы и остаются обязательным списком для контроля. Сейчас идёт
 clean-start повторный пользовательский проход: ручной шаг → первое
 существенное замечание → bounded fix → merge → продолжение того же стенда.
-`P-UX-01` ... `P-UX-17` — findings этого прохода; их реализация и ручная
+`P-UX-01` ... `P-UX-19` — findings этого прохода; их реализация и ручная
 проверка ведутся в [[plans/11-06-clean-start-ui-polish|11.6 Clean-start UI
 polish]], а статус `C-*` — в [[plans/11-05-phase-c-acceptance-closure|11.5
 Phase C acceptance closure]].
@@ -58,15 +58,20 @@ Promoted semantic gaps, включая `C-CAP-01`, закрываются чер
 означает, что Phase D целиком уже началась или завершена. Финальный clean
 Phase C acceptance выполняется после необходимых обязательных fixes; только
 после него Phase C считается закрытой. Ближайшая spatial family —
-`canonical Location -> derived Location frames` по действующему spatial
-contract. Общий порядок Phase E–I не меняется.
+hierarchical Location presentation cutover по действующему spatial contract,
+сначала Location series creation, затем последовательные removal и
+presentation milestones. Общий порядок Phase E–I не меняется.
 
 ### Phase B — Remaining bounded L1 capability families
 
 1. `Cable.3`: optional mutable Cable label, deterministic fallback, clear,
    Cable-specific write boundary; label не меняет Cable identity, Connection,
    endpoints, routes или trace. Cable Details не создается только ради label.
-2. **B.2 — hierarchical/composite presentation reconciliation — IMPLEMENTED.**
+2. **B.2 — hierarchical/composite presentation reconciliation — historical
+   implementation superseded; target cutover pending.** Текущий composite code
+   существует, но дальнейшее развитие этой модели прекращено. Target contract
+   находится в [[architecture/presentation/09-spatial-location-mapreference-contract|09
+   spatial document]] и строится вокруг canonical Location hierarchy.
    Фактически реализованная граница:
 
    ```text
@@ -92,16 +97,12 @@ contract. Общий порядок Phase E–I не меняется.
    Это не добавляет canonical `Object.parent` или новых topology facts; точный
    `MapReference` contract остаётся будущим отдельным направлением. Полный generic scene engine
    не становится обязательным pre-L2 milestone.
-3. **B.3 — MapComposite и presentation variants — IMPLEMENTED.** Одна SavedMap
-    является самостоятельной сохранённой картой; MapPresentationVariant — её
-    именованное представление. MapComposite группирует только уже размещённые
-    PhysicalObject и остаётся presentation-only: это не PhysicalObject,
-    Connection или Cable endpoint; overlap/nesting запрещены, membership и
-    explicit collapsed visibility общие для всех variants. Coordinates,
-    collapsed state, frame geometry и Cable routes variant-specific; create-copy
-    варианта клонирует это presentation state. Реализованы individual и bulk
-    collapse/expand, а expand делает fit view после authoritative refresh.
-    MapReference composition между SavedMap в B.3 не входит.
+3. **B.3 — MapComposite historical implementation superseded; removal pending.**
+   MapComposite не является target capability, не расширяется и будет удалён
+   отдельным destructive milestone. `SavedMap` сохраняется как карта, а
+   `MapPresentationVariant` — как её целевая именованная компоновка; варианты
+   показывают одну карту по-разному без изменения topology или Location
+   hierarchy. MapReference composition остаётся отдельным future direction.
 4. **B.4 — MapCableRoute usability — IMPLEMENTED.** Overlap-safe exact trace
    presentation keeps `MapCableRoute` as SavedMap presentation state. Route
    editing continues until explicit Save/Cancel; ordinary selection and canvas
@@ -130,8 +131,9 @@ OPEN presentation direction: canonical Cable отдельны, общий мар
 Обязательный gate, не feature milestone. Representative dataset наращивается
 постепенно (rack -> room/server room -> floor -> building/site при необходимости)
 с реальными equipment, ports, Locations, wiring, Cable, SavedMaps,
-derived Location frames, routes, internal continuity и L1 trace. Derived frames
-отражают canonical Location subtree на карте; их implementation остаётся pending.
+hierarchical Location presentation, routes, internal continuity и L1 trace.
+Derived frames отражают текущую presentation scene; их implementation остаётся
+pending.
 Task-based workflow: найти, создать,
 разместить, назначить Location, соединить, исправить presentation, выполнить
 trace и понять результат без знания internal entities.
