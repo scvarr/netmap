@@ -11,11 +11,13 @@ bounded milestone.
 
 ## Status/index layer
 
-Краткий индекс ниже добавляет только текущий статус отслеживания; исходные
-`C-*` contracts и manual acceptance criteria в реестре ниже не переписываются
-и не ослабляются. `IMPLEMENTED / RECHECK PENDING` означает, что связанный
-bounded fix уже реализован, но ручная проверка именно `C-*` ещё не завершена.
-`VERIFIED` используется только при явном repository/manual evidence.
+Краткий индекс ниже добавляет текущий статус отслеживания. Все `C-*`
+identifiers/findings остаются в обязательном реестре, но accepted target
+architecture может явно supersede устаревший remediation или acceptance
+workflow. Такое supersession записывается прямо в finding и не считается его
+закрытием. `IMPLEMENTED / RECHECK PENDING` означает, что связанный bounded fix
+уже реализован, но ручная проверка именно `C-*` ещё не завершена.
+`VERIFIED` используется только после явного repository/manual evidence.
 
 | Finding | Текущий статус | Связанный clean-start fix / граница |
 | --- | --- | --- |
@@ -59,9 +61,12 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
 - Идентичность `PhysicalObject`, endpoint, `Connection`, `ConnectionMember`,
   `Cable` и `Blueprint` не зависит от подписей, координат, порядка или
   представления. Существующие неизменяемые версии остаются неизменяемыми.
-- `C-COR-01` сначала диагностируется и исправляется отдельно; корневую
-  причину `C-COR-01` нельзя заранее подменять объяснением про `C-UX-07` или
-  маршруты.
+- `C-COR-01` не требует дальнейшей диагностики или развития устаревшего
+  MapComposite workflow: MapComposite superseded и подлежит destructive
+  removal. Finding остаётся `OPEN` до удаления MapComposite и manual recheck
+  replacement Location-driven interaction.
+- `C-UX-08` имеет ту же границу: старое membership workflow superseded,
+  finding остаётся `OPEN` до removal и replacement recheck.
 - `C-CAP-01` — отдельный семантический пробел, а не расширение обычного
   1:1 patch-panel сценария. Новая каноническая сущность `Fanout/Splitter` не
   вводится.
@@ -80,10 +85,10 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
   создания `PhysicalObject`: пользователь выбирает компактный `Blueprint`, а
   штатный путь создания без `Blueprint` отсутствует.
 
-Порядок не является новым планом работ: сначала отдельное расследование
-`C-COR-01`, затем отдельный семантический контракт `C-CAP-01`, далее
-исправления пользовательского опыта и представления в порядке, удобном для
-конкретной ограниченной задачи, с учётом зависимостей выше.
+Порядок не является новым планом работ: superseded MapComposite findings
+ожидают destructive removal и replacement recheck; остальные исправления
+проверяются в порядке, удобном для конкретной ограниченной задачи, с учётом
+зависимостей выше.
 
 ## Реестр замечаний и ручные проверки
 
@@ -256,23 +261,22 @@ recheck; до неё finding остаётся OPEN.
 Старый сценарий проверки каналов composite сохранён только как historical
 provenance и не является текущим acceptance workflow.
 
-**Граница `11-04`.** Рамка или фон composite не маскируют каналы; специальное
-взаимодействие с самим composite не должно мешать обычному взаимодействию с
-объектами. `C-UX-07` и прокладка кабелей не считаются причиной автоматически.
+**Граница replacement.** Location frame/proxy не блокирует interaction с
+реально видимым `PhysicalObject`. Обычный выбор объекта, port interaction,
+context actions и Cable route interaction остаются доступны; Location
+presentation не становится topology entity и не меняет canonical facts.
 
-**Ручная проверка.** Создать и разместить два composite: `811` с `FPP-811` и
-`DIST-811`, `COMM-3` с `PP-301` и `SW-301-ACCESS`; раскрыть оба. По очереди
-кликнуть каждый канал, открыть его контекстное меню, выбрать port и начать
-редактирование маршрута `Cable`. Переместить объекты представления, создать и
-отредактировать несколько маршрутов, переключать выбор между composites.
-Выполнить полную перезагрузку страницы и повторить все клики, включая
-контрольный объект вне composite.
+**Текущая manual recheck после removal.** На SavedMap с Location hierarchy
+показать Location frame или collapsed proxy и проверить обычный выбор реально
+видимого `PhysicalObject`, port interaction, context actions и Cable route
+interaction. Обновить страницу и повторить те же действия. Для этой recheck не
+создавать и не использовать `MapComposite`.
 
-**Закрыто, если.** Каждый видимый канал обоих composites и контрольный объект
-выбирается, взаимодействие с его port и контекстным меню доступно до и после
-перезагрузки, а выбор одного composite не блокирует другой; проверка
-воспроизводится после
-длительной сессии.
+**Критерий replacement recheck.** После reload все перечисленные действия
+доступны, frame/proxy не перехватывает interaction с видимым объектом, а
+canonical topology, Location assignment и Cable evidence не меняются. Это
+manual recheck replacement workflow, а не установление `VERIFIED` до
+destructive removal и явного подтверждения.
 
 ### C-UX-08 — Устаревшее membership MapComposite
 
@@ -281,6 +285,11 @@ superseded новой Location-driven моделью. Не добавлять re
 в MapComposite и не объявлять finding VERIFIED. После destructive removal и
 проверки replacement workflow выполнить manual recheck; до неё finding остаётся
 OPEN.
+
+Старое ручное добавление и удаление объектов из membership MapComposite не
+является будущим требованием. Grouping membership теперь следует только из
+canonical Location hierarchy и `PhysicalObject -> Location`; оно не задаётся
+ручным membership record на карте.
 
 ### C-UX-09 — Компактное окно выбора Blueprint
 
@@ -394,11 +403,12 @@ internal/external/boundary Cable при перемещении Location subtree,
 
 **Ручная проверка.** Создать два объекта и `Cable` между ними на `SavedMap`,
 создать route с несколькими waypoints и сохранить. Переместить один endpoint,
-затем member object и раскрытый group; осмотреть сохранённый route, открыть
-его редактирование, при необходимости сохранить допустимое обновление через
-пользовательский интерфейс, перезагрузить страницу и повторить перемещения.
-Проверить, что подводы к endpoints, промежуточные точки и сегменты следуют
-установленной договором семантике, а trace остаётся тем же `Cable`.
+затем member object и Location subtree group; осмотреть сохранённый route,
+открыть его редактирование, при необходимости сохранить допустимое обновление
+через пользовательский интерфейс, перезагрузить страницу и повторить
+перемещения. Проверить, что подводы к endpoints, промежуточные точки и
+сегменты следуют установленной договором семантике, а trace остаётся тем же
+`Cable`.
 
 **Закрыто, если.** Для одиночного объекта и group перемещение даёт заранее
 определённый читаемый результат, маршрут не оставляет неуправляемых вытянутых
