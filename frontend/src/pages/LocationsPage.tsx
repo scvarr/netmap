@@ -139,11 +139,12 @@ function LocationTree({
   );
 }
 
-function LocationParentPicker({ items, selected, forbidden, onSelect }: {
+function LocationParentPicker({ items, selected, forbidden, onSelect, allowRoot = true }: {
   items: LocationDocument[];
   selected: string | null;
   forbidden: Set<string>;
   onSelect: (id: string | null) => void;
+  allowRoot?: boolean;
 }) {
   const { t } = useI18n();
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(items.filter((item) => items.some((child) => child.parent_location_ref?.entity_id === item.location_ref.entity_id)).map((item) => item.location_ref.entity_id)));
@@ -158,7 +159,7 @@ function LocationParentPicker({ items, selected, forbidden, onSelect }: {
       return <li key={id}><div className="object-location-picker-tree__row"><span className="object-location-picker-tree__toggle">{hasChildren ? <button type="button" aria-label={isExpanded ? t("location.pickerCollapse", { name: item.name }) : t("location.pickerExpand", { name: item.name })} onClick={() => setExpanded((previous) => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; })}>{isExpanded ? "−" : "+"}</button> : <span aria-hidden="true" />}</span><button type="button" role="radio" aria-checked={selected === id} className="object-location-picker-tree__choice" onClick={() => onSelect(id)}><strong>{item.name}</strong>{item.type && <small>{item.type}</small>}</button></div>{hasChildren && isExpanded && render(id)}</li>;
     })}</ul>;
   };
-  return <fieldset className="location-parent-picker"><legend>{t("location.parent")}</legend><div className="object-location-picker__toolbar"><button type="button" role="radio" aria-checked={selected === null} onClick={() => onSelect(null)}>{t("location.root")}</button></div>{render(null)}</fieldset>;
+  return <fieldset className="location-parent-picker"><legend>{t("location.parent")}</legend>{allowRoot && <div className="object-location-picker__toolbar"><button type="button" role="radio" aria-checked={selected === null} onClick={() => onSelect(null)}>{t("location.root")}</button></div>}{render(null)}</fieldset>;
 }
 
 export function LocationsPage({
@@ -461,7 +462,7 @@ export function LocationsPage({
         <section className="catalog-dialog" role="dialog" aria-modal="true" aria-label={t("location.seriesTitle")}>
           <div className="catalog-dialog__surface location-series-dialog__surface">
             <h2>{t("location.seriesTitle")}</h2>
-            <LocationParentPicker items={sorted} selected={seriesForm.parentId} forbidden={new Set()} onSelect={(parentId) => { if (!busy) setSeriesForm({ ...seriesForm, parentId, preview: null, error: null }); }} />
+            <LocationParentPicker items={sorted} selected={seriesForm.parentId} forbidden={new Set()} allowRoot={false} onSelect={(parentId) => { if (!busy) setSeriesForm({ ...seriesForm, parentId, preview: null, error: null }); }} />
             {(["pattern", "from", "to", "step", "type"] as const).map((field) => (
               <label key={field}><span>{t(`location.series.${field}`)}</span>
                 <input disabled={busy} type={field === "from" || field === "to" || field === "step" ? "number" : "text"}

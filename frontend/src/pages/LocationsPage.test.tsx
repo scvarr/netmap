@@ -20,6 +20,7 @@ describe('LocationsPage', () => {
     await userEvent.click(screen.getAllByRole('button', { name: 'Создать серию дочерних' })[2]);
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('radio', { name: 'Стойка 01' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(dialog).queryByRole('radio', { name: 'Корневое местоположение' })).not.toBeInTheDocument();
     await userEvent.type(within(dialog).getByLabelText('Шаблон'), 'U##');
     await userEvent.type(within(dialog).getByLabelText('До'), '2');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Показать предварительный просмотр' }));
@@ -69,6 +70,7 @@ describe('LocationsPage', () => {
     const dataSource = source(); renderPage(dataSource); await screen.findByText('Москва');
     await userEvent.click(screen.getAllByRole('button', { name: 'Добавить дочернее' })[0]);
     expect(screen.getByRole('radio', { name: /Москва/ })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Корневое местоположение' })).toBeInTheDocument();
     expect(within(screen.getByRole('dialog')).getByText('my arbitrary type')).toBeInTheDocument();
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Свернуть Москва' }));
     expect(screen.queryByRole('radio', { name: /ЦОД-1/ })).not.toBeInTheDocument();
