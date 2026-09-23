@@ -166,7 +166,7 @@ describe('UI-SHELL.1 routes and product surfaces', () => {
   });
 
   it('exposes the Location management sidebar surface and route', async () => {
-    const locationDataSource = { loadLocations: vi.fn().mockResolvedValue([]), createLocation: vi.fn(), updateLocation: vi.fn(), reparentLocation: vi.fn(), deleteLocation: vi.fn(), loadPhysicalObjectLocation: vi.fn(), setPhysicalObjectLocation: vi.fn() };
+    const locationDataSource = { loadLocations: vi.fn().mockResolvedValue([]), createLocation: vi.fn(), previewLocationSeries: vi.fn(), createLocationSeries: vi.fn(), updateLocation: vi.fn(), reparentLocation: vi.fn(), deleteLocation: vi.fn(), loadPhysicalObjectLocation: vi.fn(), setPhysicalObjectLocation: vi.fn() };
     renderApp('/infrastructure/locations', { locationDataSource });
     expect(await screen.findByRole('heading', { name: 'Местоположения' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Местоположения' })).toHaveAttribute('href', '/infrastructure/locations');

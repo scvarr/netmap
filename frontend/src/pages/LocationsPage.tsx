@@ -5,6 +5,8 @@ import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
 import type {
   LocationDataSource,
   LocationDocument,
+  LocationSeriesPreview,
+  LocationSeriesRequest,
 } from "../topology/locationTypes";
 
 type Form = {
@@ -13,6 +15,16 @@ type Form = {
   name: string;
   type: string;
   parentId: string | null;
+  error: string | null;
+};
+type SeriesForm = {
+  parentId: string | null;
+  pattern: string;
+  from: string;
+  to: string;
+  step: string;
+  type: string;
+  preview: LocationSeriesPreview | null;
   error: string | null;
 };
 const failure = (reason: unknown) =>
@@ -46,6 +58,7 @@ function LocationTree({
   onToggle,
   onEdit,
   onChild,
+  onSeries,
   onMove,
   onDelete,
 }: {
@@ -55,6 +68,7 @@ function LocationTree({
   onToggle: (id: string) => void;
   onEdit: (item: LocationDocument) => void;
   onChild: (item: LocationDocument) => void;
+  onSeries: (item: LocationDocument) => void;
   onMove: (item: LocationDocument) => void;
   onDelete: (item: LocationDocument) => void;
 }) {
@@ -89,6 +103,9 @@ function LocationTree({
               <button type="button" onClick={() => onChild(item)}>
                 {t("location.createChild")}
               </button>
+              <button type="button" onClick={() => onSeries(item)}>
+                {t("location.seriesAction")}
+              </button>
               <button type="button" onClick={() => onEdit(item)}>
                 {t("location.edit")}
               </button>
@@ -111,6 +128,7 @@ function LocationTree({
             onToggle={onToggle}
             onEdit={onEdit}
             onChild={onChild}
+            onSeries={onSeries}
             onMove={onMove}
             onDelete={onDelete}
           />}
@@ -153,6 +171,7 @@ export function LocationsPage({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const [form, setForm] = useState<Form | null>(null);
+  const [seriesForm, setSeriesForm] = useState<SeriesForm | null>(null);
   const [collapsedLocations, setCollapsedLocations] = useState<Set<string>>(
     new Set(),
   );
@@ -183,6 +202,42 @@ export function LocationsPage({
   );
   const openCreate = (parentId: string | null) =>
     setForm({ mode: "create", name: "", type: "", parentId, error: null });
+  const openSeries = (location: LocationDocument) =>
+    setSeriesForm({ parentId: location.location_ref.entity_id, pattern: "", from: "1", to: "", step: "1", type: "", preview: null, error: null });
+  const seriesRequest = (value: SeriesForm): LocationSeriesRequest | null => {
+    if (!value.parentId || [value.from, value.to, value.step].some((part) => !/^-?\d+$/.test(part.trim()))) return null;
+    const from = Number(value.from), to = Number(value.to), step = Number(value.step);
+    if (![from, to, step].every(Number.isSafeInteger)) return null;
+    return { parent_location_id: value.parentId, pattern: value.pattern, from, to, step, type: value.type.trim() || null };
+  };
+  const previewSeries = async () => {
+    if (!seriesForm) return;
+    const request = seriesRequest(seriesForm);
+    if (!request) { setSeriesForm({ ...seriesForm, preview: null, error: t("location.seriesInputError") }); return; }
+    setBusy(true);
+    const submitted = seriesForm;
+    try {
+      const preview = await dataSource.previewLocationSeries(request);
+      setSeriesForm({ ...submitted, preview, error: null });
+    } catch (reason) {
+      setSeriesForm({ ...submitted, preview: null, error: failure(reason) });
+    } finally { setBusy(false); }
+  };
+  const createSeries = async () => {
+    if (!seriesForm?.preview || seriesForm.preview.conflicts.length || !seriesForm.preview.names.length) return;
+    const request = seriesRequest(seriesForm);
+    if (!request) return;
+    setBusy(true);
+    const submitted = seriesForm;
+    try {
+      await dataSource.createLocationSeries(request);
+      setSeriesForm(null);
+      setLocations(null);
+      try { await refresh(); } catch { setRefreshAfterWrite(true); }
+    } catch (reason) {
+      setSeriesForm({ ...submitted, preview: null, error: failure(reason) });
+    } finally { setBusy(false); }
+  };
   const openEdit = (location: LocationDocument) =>
     setForm({
       mode: "edit",
@@ -314,6 +369,7 @@ export function LocationsPage({
           }
           onEdit={openEdit}
           onChild={(item) => openCreate(item.location_ref.entity_id)}
+          onSeries={openSeries}
           onMove={openMove}
           onDelete={setDeleting}
         />
@@ -399,6 +455,34 @@ export function LocationsPage({
               </button>
             </div>
           </form>
+        </section>
+      )}
+      {seriesForm && (
+        <section className="catalog-dialog" role="dialog" aria-modal="true" aria-label={t("location.seriesTitle")}>
+          <div className="catalog-dialog__surface location-series-dialog__surface">
+            <h2>{t("location.seriesTitle")}</h2>
+            <LocationParentPicker items={sorted} selected={seriesForm.parentId} forbidden={new Set()} onSelect={(parentId) => { if (!busy) setSeriesForm({ ...seriesForm, parentId, preview: null, error: null }); }} />
+            {(["pattern", "from", "to", "step", "type"] as const).map((field) => (
+              <label key={field}><span>{t(`location.series.${field}`)}</span>
+                <input disabled={busy} type={field === "from" || field === "to" || field === "step" ? "number" : "text"}
+                  value={seriesForm[field]} onChange={(event) => setSeriesForm({ ...seriesForm, [field]: event.target.value, preview: null, error: null })} />
+              </label>
+            ))}
+            {seriesForm.error && <p role="alert" className="catalog-dialog__error">{t("location.seriesError", { error: seriesForm.error })}</p>}
+            {!seriesForm.preview && <p className="location-form__hint">{t("location.seriesPreviewRequired")}</p>}
+            {seriesForm.preview && <div>
+              <h3>{t("location.seriesPreviewTitle", { count: seriesForm.preview.names.length })}</h3>
+              <ol aria-label={t("location.seriesPreviewNames")} className="location-series-preview">
+                {seriesForm.preview.names.map((name, index) => <li key={`${index}-${name}`}>{name}{seriesForm.preview!.conflicts.includes(name) && ` — ${t("location.seriesConflict")}`}</li>)}
+              </ol>
+              {seriesForm.preview.conflicts.length > 0 && <p role="alert">{t("location.seriesBlocked")}</p>}
+            </div>}
+            <div className="catalog-dialog__actions">
+              <button type="button" disabled={busy} onClick={() => setSeriesForm(null)}>{t("action.cancel")}</button>
+              <button type="button" disabled={busy} onClick={() => void previewSeries()}>{t("location.seriesPreview")}</button>
+              <button type="button" disabled={busy || !seriesForm.preview?.names.length || !!seriesForm.preview.conflicts.length} onClick={() => void createSeries()}>{t("location.seriesCreate")}</button>
+            </div>
+          </div>
         </section>
       )}
       {deleting && (

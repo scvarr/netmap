@@ -157,3 +157,44 @@ def test_location_deletion_reports_child_and_assignment_conflicts_without_side_e
     assert client.delete(f"/v1/locations/{parent_id}").status_code == 204
     with SessionLocal() as session:
         assert tuple(session.scalars(select(Location))) == ()
+
+
+def test_location_series_preview_and_atomic_create():
+    parent_id = create_location("RACK-811")["location_ref"]["entity_id"]
+    request = {"parent_location_id": parent_id, "pattern": "U##", "from": 1, "to": 42, "step": 1, "type": "custom/unit"}
+    preview = client.post("/v1/locations/series/preview", json=request)
+    assert preview.status_code == 200, preview.text
+    assert preview.json() == {"names": [f"U{number:02}" for number in range(1, 43)], "conflicts": []}
+    assert len(set(preview.json()["names"])) == 42
+    with SessionLocal() as session:
+        assert session.scalars(select(Location).where(Location.parent_location_id == uuid.UUID(parent_id))).all() == []
+
+    created = client.post("/v1/locations/series", json=request)
+    assert created.status_code == 201, created.text
+    assert [entry["name"] for entry in created.json()["locations"]] == preview.json()["names"]
+    assert {entry["type"] for entry in created.json()["locations"]} == {"custom/unit"}
+    with SessionLocal() as session:
+        assert len(session.scalars(select(Location).where(Location.parent_location_id == uuid.UUID(parent_id))).all()) == 42
+
+
+def test_location_series_pattern_range_conflicts_and_failed_write_leave_no_rows():
+    parent_id = create_location("Parent")["location_ref"]["entity_id"]
+    other_id = create_location("Other")["location_ref"]["entity_id"]
+    create_location("slot-01-end", parent_location_id=other_id)
+    base = {"parent_location_id": parent_id, "pattern": "slot-##-end", "from": 1, "to": 3, "step": 1}
+    assert client.post("/v1/locations/series/preview", json=base).json() == {
+        "names": ["slot-01-end", "slot-02-end", "slot-03-end"], "conflicts": []
+    }
+    for change in ({"pattern": "slot"}, {"pattern": "#-#"}, {"pattern": "#", "from": 9, "to": 11},
+                   {"step": 0}, {"step": -1}, {"parent_location_id": str(uuid.uuid4())}):
+        response = client.post("/v1/locations/series/preview", json={**base, **change})
+        assert response.status_code == 422, response.text
+    assert client.post("/v1/locations/series/preview", json={**base, "pattern": "N##", "from": 3, "to": 1, "step": -1}).json()["names"] == ["N03", "N02", "N01"]
+
+    create_location("slot-02-end", parent_location_id=parent_id)
+    failed = client.post("/v1/locations/series", json=base)
+    assert failed.status_code == 422
+    preview = client.post("/v1/locations/series/preview", json=base)
+    assert preview.json()["conflicts"] == ["slot-02-end"]
+    with SessionLocal() as session:
+        assert {child.name for child in session.scalars(select(Location).where(Location.parent_location_id == uuid.UUID(parent_id)))} == {"slot-02-end"}

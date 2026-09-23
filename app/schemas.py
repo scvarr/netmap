@@ -122,6 +122,30 @@ class CreateLocationRequest(BaseModel):
     parent_location_id: uuid.UUID | None = None
 
 
+class LocationSeriesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    parent_location_id: uuid.UUID
+    pattern: str
+    from_: int = Field(alias="from")
+    to: int
+    step: int
+    type: str | None = None
+
+
+class LocationSeriesPreviewDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    names: list[str]
+    conflicts: list[str]
+
+
+class LocationSeriesCreatedDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    locations: list[LocationDocument]
+
+
 class UpdateLocationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 

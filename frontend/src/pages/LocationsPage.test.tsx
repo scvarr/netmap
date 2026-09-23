@@ -9,10 +9,45 @@ const root = { location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type:
 const child = { location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'dc' }, name: 'ЦОД-1', type: 'my arbitrary type', parent_location_ref: root.location_ref };
 const grandchild = { location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'rack' }, name: 'Стойка 01', type: null, parent_location_ref: child.location_ref };
 const secondRoot = { location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'piter' }, name: 'Санкт-Петербург', type: null, parent_location_ref: null };
-const source = (overrides: Record<string, unknown> = {}) => ({ loadLocations: vi.fn().mockResolvedValue([root, child, grandchild, secondRoot]), createLocation: vi.fn().mockResolvedValue(root), updateLocation: vi.fn().mockResolvedValue(root), reparentLocation: vi.fn().mockResolvedValue(root), deleteLocation: vi.fn().mockResolvedValue(undefined), loadPhysicalObjectLocation: vi.fn(), setPhysicalObjectLocation: vi.fn(), ...overrides });
+const source = (overrides: Record<string, unknown> = {}) => ({ loadLocations: vi.fn().mockResolvedValue([root, child, grandchild, secondRoot]), createLocation: vi.fn().mockResolvedValue(root), previewLocationSeries: vi.fn().mockResolvedValue({ names: ['U01', 'U02'], conflicts: [] }), createLocationSeries: vi.fn().mockResolvedValue([]), updateLocation: vi.fn().mockResolvedValue(root), reparentLocation: vi.fn().mockResolvedValue(root), deleteLocation: vi.fn().mockResolvedValue(undefined), loadPhysicalObjectLocation: vi.fn(), setPhysicalObjectLocation: vi.fn(), ...overrides });
 const renderPage = (dataSource: any) => render(<MemoryRouter><I18nProvider><LocationsPage dataSource={dataSource} /></I18nProvider></MemoryRouter>);
 
 describe('LocationsPage', () => {
+  it('previews a child series, blocks conflicts, and refreshes after one atomic write', async () => {
+    const newChild = { location_ref: { ...root.location_ref, entity_id: 'u01' }, name: 'U01', type: null, parent_location_ref: grandchild.location_ref };
+    const dataSource = source({ loadLocations: vi.fn().mockResolvedValueOnce([root, child, grandchild, secondRoot]).mockResolvedValueOnce([root, child, grandchild, secondRoot, newChild]), previewLocationSeries: vi.fn().mockResolvedValueOnce({ names: ['U01', 'U02'], conflicts: ['U02'] }).mockResolvedValueOnce({ names: ['U01', 'U02'], conflicts: [] }) });
+    renderPage(dataSource); await screen.findByText('Стойка 01');
+    await userEvent.click(screen.getAllByRole('button', { name: 'Создать серию дочерних' })[2]);
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('radio', { name: 'Стойка 01' })).toHaveAttribute('aria-checked', 'true');
+    await userEvent.type(within(dialog).getByLabelText('Шаблон'), 'U##');
+    await userEvent.type(within(dialog).getByLabelText('До'), '2');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Показать предварительный просмотр' }));
+    await waitFor(() => expect(dataSource.previewLocationSeries).toHaveBeenCalledWith({ parent_location_id: 'rack', pattern: 'U##', from: 1, to: 2, step: 1, type: null }));
+    expect(within(dialog).getByRole('list', { name: 'Имена серии' })).toHaveTextContent('U01');
+    expect(within(dialog).getByRole('list', { name: 'Имена серии' })).toHaveTextContent('U02');
+    expect(within(dialog).getByRole('button', { name: 'Создать серию' })).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Показать предварительный просмотр' }));
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Создать серию' })).toBeEnabled());
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Создать серию' }));
+    await waitFor(() => expect(dataSource.createLocationSeries).toHaveBeenCalledTimes(1));
+    expect(dataSource.createLocation).not.toHaveBeenCalled();
+    await waitFor(() => expect(dataSource.loadLocations).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('U01')).toBeInTheDocument();
+  });
+
+  it('keeps create disabled after a rejected pattern preview', async () => {
+    const dataSource = source({ previewLocationSeries: vi.fn().mockRejectedValue(new Error('Pattern must contain exactly one continuous # group')) });
+    renderPage(dataSource); await screen.findByText('Стойка 01');
+    await userEvent.click(screen.getAllByRole('button', { name: 'Создать серию дочерних' })[2]);
+    const dialog = screen.getByRole('dialog');
+    await userEvent.type(within(dialog).getByLabelText('Шаблон'), '#-#');
+    await userEvent.type(within(dialog).getByLabelText('До'), '2');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Показать предварительный просмотр' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Pattern must contain exactly one continuous # group');
+    expect(within(dialog).getByRole('button', { name: 'Создать серию' })).toBeDisabled();
+    expect(dataSource.createLocationSeries).not.toHaveBeenCalled();
+  });
   it('renders an arbitrary-depth tree, collapses branches, and preserves arbitrary user type through root creation', async () => {
     const dataSource = source(); renderPage(dataSource);
     expect(await screen.findByText('Стойка 01')).toBeInTheDocument();

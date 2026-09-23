@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import uuid
 
 from sqlalchemy import select
@@ -37,6 +38,64 @@ class LocationCatalog:
         self.session.add(location)
         self.session.flush()
         return location
+
+    @staticmethod
+    def series_names(pattern: str, from_: int, to: int, step: int) -> tuple[str, ...]:
+        if len(pattern) > 255:
+            raise ValidationError("Location pattern is too long")
+        groups = list(re.finditer(r"#+", pattern))
+        if len(groups) != 1:
+            raise ValidationError("Pattern must contain exactly one continuous # group")
+        if step == 0 or (to - from_) * step < 0:
+            raise ValidationError("Step must move from From toward To and cannot be zero")
+        group = groups[0]
+        count = abs(to - from_) // abs(step) + 1
+        # A preview is returned in one HTTP response; bound pathological allocations.
+        if count > 10_000:
+            raise ValidationError("Location series exceeds 10000 names")
+        prefix, suffix = pattern[:group.start()], pattern[group.end():]
+        width = len(group.group())
+        maximum = 10 ** width
+        names: list[str] = []
+        seen: set[str] = set()
+        for value in range(from_, to + (1 if step > 0 else -1), step):
+            if abs(value) >= maximum:
+                raise ValidationError("Number exceeds pattern width", {"value": value, "width": width})
+            digits = str(abs(value))
+            name = LocationCatalog._trim_required(
+                f"{prefix}{'-' if value < 0 else ''}{digits.zfill(width)}{suffix}", "Location name"
+            )
+            if name in seen:
+                raise ValidationError("Location series contains duplicate names", {"name": name})
+            seen.add(name)
+            names.append(name)
+        return tuple(names)
+
+    def preview_series(
+        self, parent_location_id: uuid.UUID, pattern: str, from_: int, to: int, step: int,
+        type_: str | None = None, *, lock: bool = False,
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        self._require_location(parent_location_id, lock=lock)
+        self._trim_optional(type_, "Location type")
+        names = self.series_names(pattern, from_, to, step)
+        query = select(Location).where(Location.parent_location_id == parent_location_id)
+        if lock:
+            query = query.with_for_update()
+        existing = {child.name for child in self.session.scalars(query)}
+        return names, tuple(name for name in names if name in existing)
+
+    def create_series(
+        self, parent_location_id: uuid.UUID, pattern: str, from_: int, to: int,
+        step: int, type_: str | None,
+    ) -> tuple[Location, ...]:
+        names, conflicts = self.preview_series(parent_location_id, pattern, from_, to, step, type_, lock=True)
+        if conflicts:
+            raise ValidationError("Location series conflicts with existing children", {"conflicts": conflicts})
+        normalized_type = self._trim_optional(type_, "Location type")
+        locations = tuple(Location(name=name, type=normalized_type, parent_location_id=parent_location_id) for name in names)
+        self.session.add_all(locations)
+        self.session.flush()
+        return locations
 
     def update(self, location_id: uuid.UUID, name: str, type_: str | None) -> Location:
         location = self._require_location(location_id, lock=True)

@@ -86,6 +86,9 @@ from app.schemas import (
     L2ForwardingContextCreationDocument,
     LocationDocument,
     LocationListDocument,
+    LocationSeriesRequest,
+    LocationSeriesPreviewDocument,
+    LocationSeriesCreatedDocument,
     MapPlacementsDocument,
     MapRegionDocument,
     MapTextAnnotationDocument, MapCompositeDocument, MapPresentationVariantDocument,
@@ -358,6 +361,25 @@ def create_location(
     with session.begin():
         location = LocationCatalog(session).create(query.name, query.type, query.parent_location_id)
         return _location_document(location)
+
+
+@app.post("/v1/locations/series/preview", response_model=LocationSeriesPreviewDocument,
+          responses={422: {"model": ErrorResponse}})
+def preview_location_series(query: LocationSeriesRequest, session: Session = Depends(get_session)) -> LocationSeriesPreviewDocument:
+    names, conflicts = LocationCatalog(session).preview_series(
+        query.parent_location_id, query.pattern, query.from_, query.to, query.step, query.type
+    )
+    return {"names": names, "conflicts": conflicts}
+
+
+@app.post("/v1/locations/series", response_model=LocationSeriesCreatedDocument,
+          status_code=201, responses={422: {"model": ErrorResponse}})
+def create_location_series(query: LocationSeriesRequest, session: Session = Depends(get_session)) -> LocationSeriesCreatedDocument:
+    with session.begin():
+        locations = LocationCatalog(session).create_series(
+            query.parent_location_id, query.pattern, query.from_, query.to, query.step, query.type
+        )
+        return {"locations": [_location_document(location) for location in locations]}
 
 
 @app.get(

@@ -3,7 +3,7 @@
 ## Статус и граница
 
 Это компактный последовательный implementation plan для spatial cutover.
-NetMap pre-production; все milestones ниже **IMPLEMENTATION PENDING**. Не
+NetMap pre-production; P-UX-19 реализован, P-UX-03A..E остаются **IMPLEMENTATION PENDING**. Не
 объединять их в одну implementation task и не объявлять выполненными до
 targeted validation и, где указано, manual acceptance.
 
@@ -15,6 +15,9 @@ Location frames и hierarchical scene — derived presentation.
 ## Ordered milestones
 
 ### P-UX-19 — Location series creation
+
+**IMPLEMENTED.** Targeted backend/frontend validation пройдена; дальнейшие
+spatial milestones не затронуты.
 
 Создать atomic canonical Locations под выбранным parent по pattern/range/step.
 Поддержать одну непрерывную группу `#`, numeric width validation, preview до

@@ -1,4 +1,4 @@
-import type { LocationDataSource, LocationDocument, PhysicalObjectLocationDocument } from './locationTypes';
+import type { LocationDataSource, LocationDocument, LocationSeriesPreview, LocationSeriesRequest, PhysicalObjectLocationDocument } from './locationTypes';
 
 const DEFAULT_ENDPOINT = '/api/v1';
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -24,6 +24,14 @@ export const parseLocationList = (value: unknown): LocationDocument[] => {
   return ((value as Record<string, unknown>).locations as unknown[]).map(parseLocationDocument);
 };
 
+export const parseLocationSeriesPreview = (value: unknown): LocationSeriesPreview => {
+  if (!isObject(value) || !Array.isArray(value.names) || !Array.isArray(value.conflicts) ||
+      !value.names.every((name) => typeof name === 'string') ||
+      !value.conflicts.every((name) => typeof name === 'string')) malformed('series preview must contain names and conflicts.');
+  const document = value as Record<string, unknown>;
+  return { names: document.names as string[], conflicts: document.conflicts as string[] };
+};
+
 export const parsePhysicalObjectLocationDocument = (value: unknown): PhysicalObjectLocationDocument => {
   if (!isObject(value) || !isObject(value.physical_object_ref)) malformed('document.physical_object_ref must be an object.');
   const document = value as Record<string, unknown>; const objectRef = document.physical_object_ref as Record<string, unknown>;
@@ -46,6 +54,8 @@ export class ApiLocationDataSource implements LocationDataSource {
   }
   async loadLocations() { return parseLocationList(await this.request('/locations')); }
   async createLocation(request: { name: string; type: string | null; parent_location_id: string | null }) { return parseLocationDocument(await this.request('/locations', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) })); }
+  async previewLocationSeries(request: LocationSeriesRequest) { return parseLocationSeriesPreview(await this.request('/locations/series/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) })); }
+  async createLocationSeries(request: LocationSeriesRequest) { return parseLocationList(await this.request('/locations/series', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) })); }
   async updateLocation(locationId: string, request: { name: string; type: string | null }) { return parseLocationDocument(await this.request(`/locations/${encodeURIComponent(locationId)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) })); }
   async reparentLocation(locationId: string, parentLocationId: string | null) { return parseLocationDocument(await this.request(`/locations/${encodeURIComponent(locationId)}/parent`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parent_location_id: parentLocationId }) })); }
   async deleteLocation(locationId: string) { await this.request(`/locations/${encodeURIComponent(locationId)}`, { method: 'DELETE' }); }
