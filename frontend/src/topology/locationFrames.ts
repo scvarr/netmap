@@ -3,12 +3,8 @@ import type { MapPlacement } from './savedMapTypes';
 import type { FlowRectangle } from './nodeFootprint';
 
 /** Flow-coordinate presentation spacing; none of this is Location data. */
-export const LOCATION_FRAME_PADDING = 24;
-export const LOCATION_FRAME_HEADER = 32;
-const LABEL_WIDTH = 260;
-const LABEL_CHARS_PER_LINE = 30;
-const LABEL_LINE_HEIGHT = 16;
-const CAPTION_GAP = 6;
+export const LOCATION_FRAME_PADDING = 20;
+const CAPTION_GAP = 2;
 
 export interface DisplayedPhysicalObject {
   physicalObjectId: string;
@@ -28,7 +24,7 @@ export interface LocationCaption {
   physicalObjectId: string;
   pathLocationIds: string[];
   label: string;
-  bounds: FlowRectangle;
+  position: { x: number; y: number };
 }
 
 export interface LocationPresentation {
@@ -44,21 +40,12 @@ const union = (rectangles: readonly FlowRectangle[]): FlowRectangle => {
   return { x, y, width: right - x, height: bottom - y };
 };
 
-const labelLines = (label: string) => Math.max(1, Math.ceil(label.length / LABEL_CHARS_PER_LINE));
-const headerHeight = (label: string) => Math.max(LOCATION_FRAME_HEADER, 12 + labelLines(label) * LABEL_LINE_HEIGHT);
-const frameBounds = (content: FlowRectangle, label: string): FlowRectangle => {
-  const header = headerHeight(label);
-  return {
-    x: content.x - LOCATION_FRAME_PADDING,
-    y: content.y - LOCATION_FRAME_PADDING - header,
-    width: Math.max(content.width + LOCATION_FRAME_PADDING * 2, LABEL_WIDTH),
-    height: content.height + LOCATION_FRAME_PADDING * 2 + header,
-  };
-};
-const captionBounds = (object: FlowRectangle, label: string): FlowRectangle => {
-  const height = 8 + labelLines(label) * LABEL_LINE_HEIGHT;
-  return { x: object.x, y: object.y - CAPTION_GAP - height, width: LABEL_WIDTH, height };
-};
+const frameBounds = (content: FlowRectangle): FlowRectangle => ({
+  x: content.x - LOCATION_FRAME_PADDING,
+  y: content.y - LOCATION_FRAME_PADDING,
+  width: content.width + LOCATION_FRAME_PADDING * 2,
+  height: content.height + LOCATION_FRAME_PADDING * 2,
+});
 
 type Representation =
   | { kind: 'frame'; frame: LocationFrame; content: FlowRectangle; extent: FlowRectangle }
@@ -114,7 +101,7 @@ export function deriveLocationPresentation(
         pathLocationIds: [id],
         label: location.name,
         depth,
-        bounds: frameBounds(content, location.name),
+        bounds: frameBounds(content),
       };
       frames.set(id, frame);
       return { kind: 'frame', frame, content, extent: frame.bounds };
@@ -127,7 +114,7 @@ export function deriveLocationPresentation(
         ...child.frame,
         pathLocationIds: [id, ...child.frame.pathLocationIds],
         label,
-        bounds: frameBounds(child.content, label),
+        bounds: child.frame.bounds,
       };
       frames.set(frame.locationId, frame);
       return { kind: 'frame', frame, content: child.content, extent: frame.bounds };
@@ -139,10 +126,10 @@ export function deriveLocationPresentation(
       physicalObjectId,
       pathLocationIds: child?.kind === 'caption' ? [id, ...child.caption.pathLocationIds] : [id],
       label,
-      bounds: captionBounds(object, label),
+      position: { x: object.x, y: object.y - CAPTION_GAP },
     };
     captions.set(physicalObjectId, caption);
-    return { kind: 'caption', caption, object, extent: union([object, caption.bounds]) };
+    return { kind: 'caption', caption, object, extent: object };
   };
   for (const location of locations) {
     const id = location.location_ref.entity_id;

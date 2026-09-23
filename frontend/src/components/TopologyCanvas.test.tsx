@@ -140,6 +140,7 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(frame()).toHaveTextContent('Room');
     expect(globalThis.document.querySelectorAll('.location-frame')).toHaveLength(1);
     expect(caption()).toHaveTextContent('Unit');
+    expect(caption().style.width).toBe('');
     const initialLeft = Number.parseFloat(frame().style.left);
     const initialWidth = Number.parseFloat(frame().style.width);
     const initialCaptionLeft = Number.parseFloat(caption().style.left);

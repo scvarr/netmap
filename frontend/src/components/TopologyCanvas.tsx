@@ -601,7 +601,7 @@ export function TopologyCanvas({
               key={caption.physicalObjectId}
               className="location-caption"
               data-physical-object-id={caption.physicalObjectId}
-              style={{ left: caption.bounds.x, top: caption.bounds.y, width: caption.bounds.width, height: caption.bounds.height }}
+              style={{ left: caption.position.x, top: caption.position.y }}
             >{caption.label}</div>)}
           </div>
         </ViewportPortal>}

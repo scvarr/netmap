@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveLocationPresentation } from './locationFrames';
+import { deriveLocationPresentation, LOCATION_FRAME_PADDING } from './locationFrames';
 import type { LocationDocument } from './locationTypes';
 import type { MapPlacement } from './savedMapTypes';
 import type { FlowRectangle } from './nodeFootprint';
@@ -33,6 +33,12 @@ describe('expanded Location presentation arity', () => {
     expect(result.captions).toHaveLength(0);
     expect(result.frames[0]).toMatchObject({ locationId: 'room', label: 'room', pathLocationIds: ['room'] });
     objects.forEach((object) => contains(result.frames[0].bounds, object.rectangle));
+    expect(result.frames[0].bounds).toEqual({
+      x: 10 - LOCATION_FRAME_PADDING,
+      y: 20 - LOCATION_FRAME_PADDING,
+      width: 550 - 10 + LOCATION_FRAME_PADDING * 2,
+      height: 190 - 20 + LOCATION_FRAME_PADDING * 2,
+    });
   });
 
   it('retains a parent frame for two non-empty child Locations and ignores an empty sibling', () => {
@@ -43,13 +49,16 @@ describe('expanded Location presentation arity', () => {
     );
     expect(result.frames.map((frame) => frame.locationId)).toEqual(['room']);
     expect(result.captions.map((caption) => caption.label)).toEqual(['rack-a', 'rack-b']);
-    result.captions.forEach((caption) => contains(result.frames[0].bounds, caption.bounds));
+    contains(result.frames[0].bounds, shown('a', 0, 0).rectangle);
+    contains(result.frames[0].bounds, shown('b', 400, 0).rectangle);
   });
 
   it('suppresses a single-object frame and provides one compact object caption', () => {
     const result = deriveLocationPresentation([location('unit')], [placement('a', 'unit')], [shown('a', 10, 20)]);
     expect(result.frames).toEqual([]);
     expect(result.captions).toMatchObject([{ physicalObjectId: 'a', label: 'unit', pathLocationIds: ['unit'] }]);
+    expect(result.captions[0]).not.toHaveProperty('bounds');
+    expect(result.captions[0].position.x).toBe(10);
   });
 
   it('compresses a deep unary chain into one path without repeated padding or headers', () => {
@@ -60,18 +69,29 @@ describe('expanded Location presentation arity', () => {
     expect(deep.captions).toHaveLength(1);
     expect(deep.captions[0].pathLocationIds).toEqual(locations.map((item) => item.location_ref.entity_id));
     expect(deep.captions[0].label).toBe(locations.map((item) => item.name).join(' / '));
-    expect(deep.captions[0].bounds.width).toBe(one.captions[0].bounds.width);
-    expect(deep.captions[0].bounds.height).toBeLessThan(one.captions[0].bounds.height * locations.length / 2);
+    expect(deep.captions[0].position).toEqual(one.captions[0].position);
   });
 
   it('merges unary ancestor names into one retained branching frame', () => {
+    const objects = [shown('x', 0, 0), shown('y', 300, 0)];
     const result = deriveLocationPresentation(
       [location('A'), location('B', 'A'), location('C', 'B')],
       [placement('x', 'C'), placement('y', 'C')],
-      [shown('x', 0, 0), shown('y', 300, 0)],
+      objects,
     );
+    const uncompressed = deriveLocationPresentation([location('C')], [placement('x', 'C'), placement('y', 'C')], objects);
     expect(result.frames).toMatchObject([{ locationId: 'C', label: 'A / B / C', pathLocationIds: ['A', 'B', 'C'] }]);
+    expect(result.frames[0].bounds).toEqual(uncompressed.frames[0].bounds);
     expect(result.captions).toEqual([]);
+  });
+
+  it('does not size a retained frame from a long unary path label', () => {
+    const long = 'Very-long-semantic-Location-name-that-exceeds-the-displayed-frame-width';
+    const objects = [shown('x', 0, 0), shown('y', 100, 100)];
+    const plain = deriveLocationPresentation([location('branch')], [placement('x', 'branch'), placement('y', 'branch')], objects);
+    const path = deriveLocationPresentation([location(long), location('branch', long)], [placement('x', 'branch'), placement('y', 'branch')], objects);
+    expect(path.frames[0].label).toBe(`${long} / branch`);
+    expect(path.frames[0].bounds).toEqual(plain.frames[0].bounds);
   });
 
   it('retains a parent with one direct object and one non-empty child', () => {
@@ -82,18 +102,26 @@ describe('expanded Location presentation arity', () => {
     );
     expect(result.frames.map((frame) => frame.locationId)).toEqual(['parent']);
     expect(result.captions.map((caption) => caption.label)).toEqual(['child']);
-    contains(result.frames[0].bounds, result.captions[0].bounds);
+    contains(result.frames[0].bounds, shown('b', 300, 100).rectangle);
     contains(result.frames[0].bounds, shown('a', 0, 0).rectangle);
   });
 
-  it('derives frame and caption bounds afresh on movement and resize', () => {
+  it('keeps the same parent bounds when a child object gains a unary caption', () => {
+    const objects = [shown('a', 0, 0), shown('b', 300, 100)];
+    const direct = deriveLocationPresentation([location('parent')], [placement('a', 'parent'), placement('b', 'parent')], objects);
+    const unary = deriveLocationPresentation([location('parent'), location('child', 'parent')], [placement('a', 'parent'), placement('b', 'child')], objects);
+    expect(unary.captions).toHaveLength(1);
+    expect(unary.frames[0].bounds).toEqual(direct.frames[0].bounds);
+  });
+
+  it('derives frame bounds and caption position afresh on movement and resize', () => {
     const locations = [location('room'), location('unit', 'room')];
     const placements = [placement('a', 'room'), placement('b', 'unit')];
     const derive = (x: number, width: number) => deriveLocationPresentation(locations, placements, [shown('a', 0, 0), shown('b', x, 100, width, 60)]);
     const initial = derive(300, 100);
     const moved = derive(400, 100);
     const resized = derive(300, 400);
-    expect(moved.captions[0].bounds.x - initial.captions[0].bounds.x).toBe(100);
+    expect(moved.captions[0].position.x - initial.captions[0].position.x).toBe(100);
     expect(moved.frames[0].bounds.width).toBeGreaterThan(initial.frames[0].bounds.width);
     expect(resized.frames[0].bounds.width).toBeGreaterThan(initial.frames[0].bounds.width);
   });

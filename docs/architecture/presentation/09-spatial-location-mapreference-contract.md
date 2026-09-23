@@ -82,6 +82,10 @@ Locations). Unary Location сохраняется в компактном path l
 descendant, без отдельного слоя frame padding/header; цепочка таких Locations
 даёт один path на branching frame или рядом с единственным PhysicalObject.
 Это не меняет canonical hierarchy или membership.
+Expanded frame bounds — union отображаемых объектов и retained child frames с
+небольшим одинаковым padding. Label лежит на границе frame и не резервирует
+отдельный header. Unary caption — только декоративная подпись у объекта: её
+размер не входит в bounds родительского frame.
 
 Если дочерний Location свёрнут в компактный proxy, frame родителя вычисляется
 по этому текущему presentation, а не по скрытым развёрнутым объектам.
