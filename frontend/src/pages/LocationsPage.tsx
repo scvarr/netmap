@@ -461,27 +461,32 @@ export function LocationsPage({
       {seriesForm && (
         <section className="catalog-dialog" role="dialog" aria-modal="true" aria-label={t("location.seriesTitle")}>
           <div className="catalog-dialog__surface location-series-dialog__surface">
-            <h2>{t("location.seriesTitle")}</h2>
-            <LocationParentPicker items={sorted} selected={seriesForm.parentId} forbidden={new Set()} allowRoot={false} onSelect={(parentId) => { if (!busy) setSeriesForm({ ...seriesForm, parentId, preview: null, error: null }); }} />
-            {(["pattern", "from", "to", "step", "type"] as const).map((field) => (
-              <label key={field}><span>{t(`location.series.${field}`)}</span>
-                <input disabled={busy} type={field === "from" || field === "to" || field === "step" ? "number" : "text"}
-                  value={seriesForm[field]} onChange={(event) => setSeriesForm({ ...seriesForm, [field]: event.target.value, preview: null, error: null })} />
-              </label>
-            ))}
-            {seriesForm.error && <p role="alert" className="catalog-dialog__error">{t("location.seriesError", { error: seriesForm.error })}</p>}
-            {!seriesForm.preview && <p className="location-form__hint">{t("location.seriesPreviewRequired")}</p>}
-            {seriesForm.preview && <div>
-              <h3>{t("location.seriesPreviewTitle", { count: seriesForm.preview.names.length })}</h3>
-              <ol aria-label={t("location.seriesPreviewNames")} className="location-series-preview">
-                {seriesForm.preview.names.map((name, index) => <li key={`${index}-${name}`}>{name}{seriesForm.preview!.conflicts.includes(name) && ` — ${t("location.seriesConflict")}`}</li>)}
-              </ol>
-              {seriesForm.preview.conflicts.length > 0 && <p role="alert">{t("location.seriesBlocked")}</p>}
-            </div>}
-            <div className="catalog-dialog__actions">
-              <button type="button" disabled={busy} onClick={() => setSeriesForm(null)}>{t("action.cancel")}</button>
-              <button type="button" disabled={busy} onClick={() => void previewSeries()}>{t("location.seriesPreview")}</button>
-              <button type="button" disabled={busy || !seriesForm.preview?.names.length || !!seriesForm.preview.conflicts.length} onClick={() => void createSeries()}>{t("location.seriesCreate")}</button>
+            <div className="location-series-dialog__controls">
+              <div className="location-series-dialog__fields">
+                <h2>{t("location.seriesTitle")}</h2>
+                <LocationParentPicker items={sorted} selected={seriesForm.parentId} forbidden={new Set()} allowRoot={false} onSelect={(parentId) => { if (!busy) setSeriesForm({ ...seriesForm, parentId, preview: null, error: null }); }} />
+                {(["pattern", "from", "to", "step", "type"] as const).map((field) => (
+                  <label key={field}><span>{t(`location.series.${field}`)}</span>
+                    <input disabled={busy} type={field === "from" || field === "to" || field === "step" ? "number" : "text"}
+                      value={seriesForm[field]} onChange={(event) => setSeriesForm({ ...seriesForm, [field]: event.target.value, preview: null, error: null })} />
+                  </label>
+                ))}
+                {seriesForm.error && <p role="alert" className="catalog-dialog__error">{t("location.seriesError", { error: seriesForm.error })}</p>}
+              </div>
+              <div className="catalog-dialog__actions location-series-dialog__actions">
+                <button type="button" disabled={busy} onClick={() => setSeriesForm(null)}>{t("action.cancel")}</button>
+                <button type="button" disabled={busy} onClick={() => void previewSeries()}>{t("location.seriesPreview")}</button>
+                <button type="button" disabled={busy || !seriesForm.preview?.names.length || !!seriesForm.preview.conflicts.length} onClick={() => void createSeries()}>{t("location.seriesCreate")}</button>
+              </div>
+            </div>
+            <div className="location-series-dialog__preview">
+              {seriesForm.preview ? <>
+                <h3>{t("location.seriesPreviewTitle", { count: seriesForm.preview.names.length })}</h3>
+                <ol aria-label={t("location.seriesPreviewNames")} className="location-series-preview">
+                  {seriesForm.preview.names.map((name, index) => <li key={`${index}-${name}`}>{name}{seriesForm.preview!.conflicts.includes(name) && ` — ${t("location.seriesConflict")}`}</li>)}
+                </ol>
+                {seriesForm.preview.conflicts.length > 0 && <p role="alert">{t("location.seriesBlocked")}</p>}
+              </> : <p className="location-form__hint">{t("location.seriesPreviewRequired")}</p>}
             </div>
           </div>
         </section>
