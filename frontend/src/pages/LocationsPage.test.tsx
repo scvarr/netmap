@@ -69,13 +69,16 @@ describe('LocationsPage', () => {
   it('creates a child through the hierarchy picker, preselects its parent, and allows changing it before save', async () => {
     const dataSource = source(); renderPage(dataSource); await screen.findByText('Москва');
     await userEvent.click(screen.getAllByRole('button', { name: 'Добавить дочернее' })[0]);
+    expect(screen.getByRole('dialog').querySelector('.location-picker-dialog__tree')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Москва/ })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('radio', { name: 'Корневое местоположение' })).toBeInTheDocument();
     expect(within(screen.getByRole('dialog')).getByText('my arbitrary type')).toBeInTheDocument();
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Свернуть Москва' }));
+    expect(screen.getByRole('radio', { name: /Москва/ })).toHaveAttribute('aria-checked', 'true');
     expect(screen.queryByRole('radio', { name: /ЦОД-1/ })).not.toBeInTheDocument();
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Развернуть Москва' }));
     await userEvent.click(screen.getByRole('radio', { name: 'Санкт-Петербург' }));
+    expect(screen.getByRole('radio', { name: 'Санкт-Петербург' })).toHaveAttribute('aria-checked', 'true');
     await userEvent.type(screen.getByLabelText('Название'), 'Этаж 1');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(dataSource.createLocation).toHaveBeenCalledWith({ name: 'Этаж 1', type: null, parent_location_id: 'piter' }));

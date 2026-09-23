@@ -50,7 +50,7 @@ const messages = {
     'blueprint.instantiate.title': 'Создать объект', 'blueprint.instantiate.from': 'Создать объект из «{name}»', 'blueprint.instantiate.version': 'Версия: v{version}', 'blueprint.instantiate.name': 'Имя экземпляра', 'blueprint.instantiate.nameRequired': 'Введите имя экземпляра.', 'blueprint.instantiate.unsupported': 'Создание экземпляра не поддерживается источником данных.', 'blueprint.instantiate.failed': 'Не удалось создать объект.', 'blueprint.instantiate.creating': 'Создаём…',
     'connect.connectPort': 'Подключить порт', 'create.addPoint': '+ Добавить точку',
     'connect.searchTarget': 'Поиск целевого физического объекта',
-    'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Добавить дочернее: {name}', 'location.pickerAdd': 'Добавить', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
+    'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
     'cableNaming.renameMethod': 'Naming method', 'cableNaming.renameManual': 'Enter manually', 'cableNaming.renameGenerated': 'Generate from template', 'cableNaming.renameManualLabel': 'Cable name', 'cableNaming.renameGeneratedHint': 'The first available name from the selected template will be assigned.',
@@ -98,7 +98,7 @@ const messages = {
     'blueprint.instantiate.title': 'Create object', 'blueprint.instantiate.from': 'Create object from “{name}”', 'blueprint.instantiate.version': 'Version: v{version}', 'blueprint.instantiate.name': 'Instance name', 'blueprint.instantiate.nameRequired': 'Enter an instance name.', 'blueprint.instantiate.unsupported': 'Instance creation is not supported by this datasource.', 'blueprint.instantiate.failed': 'Could not create object.', 'blueprint.instantiate.creating': 'Creating…',
     'connect.connectPort': 'Connect port', 'create.addPoint': '+ Add point',
     'connect.searchTarget': 'Search target physical object',
-    'map.objectMissing': 'The object with this canonical reference is absent from the projection.', 'map.tracePhysical': 'The L1 trace is shown on the physical map.', 'location.pickerCollapse': 'Collapse {name}', 'location.pickerExpand': 'Expand {name}', 'location.pickerCreateChild': 'Add child: {name}', 'location.pickerAdd': 'Add', 'location.pickerNoResults': 'No matching locations.',
+    'map.objectMissing': 'The object with this canonical reference is absent from the projection.', 'map.tracePhysical': 'The L1 trace is shown on the physical map.', 'location.pickerCollapse': 'Collapse {name}', 'location.pickerExpand': 'Expand {name}', 'location.pickerCreateChild': 'Create child location: {name}', 'location.pickerAdd': '+ Child location', 'location.pickerNoResults': 'No matching locations.',
   },
 } as const;
 

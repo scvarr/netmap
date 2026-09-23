@@ -18,11 +18,18 @@ describe('PhysicalObjectLocationSection', () => {
   });
 
   it('changes association only after explicit save', async () => {
-    const dataSource = renderSection(); await screen.findByText('Москва / ЦОД-1 / Стойка 4'); await userEvent.click(screen.getByRole('button', { name: 'Изменить' })); await userEvent.click(screen.getByRole('radio', { name: 'Москва' })); expect(dataSource.setPhysicalObjectLocation).not.toHaveBeenCalled(); await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Сохранить' })); expect(dataSource.setPhysicalObjectLocation).toHaveBeenCalledWith(objectId, 'moscow');
+    const dataSource = renderSection(); await screen.findByText('Москва / ЦОД-1 / Стойка 4'); await userEvent.click(screen.getByRole('button', { name: 'Изменить' }));
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.querySelector('.location-picker-dialog__tree')).toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Свернуть Москва' }));
+    expect(within(dialog).getByRole('radio', { name: 'Москва' })).toHaveAttribute('aria-checked', 'false');
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Москва' }));
+    expect(within(dialog).getByRole('radio', { name: 'Москва' })).toHaveAttribute('aria-checked', 'true');
+    expect(dataSource.setPhysicalObjectLocation).not.toHaveBeenCalled(); await userEvent.click(within(dialog).getByRole('button', { name: 'Сохранить' })); expect(dataSource.setPhysicalObjectLocation).toHaveBeenCalledWith(objectId, 'moscow');
   });
 
   it('creates a direct child, reloads locations, selects it as draft, and waits for save', async () => {
-    const child = { location_ref: ref('new-child'), name: 'Новая стойка', type: 'rack', parent_location_ref: ref('dc') }; const dataSource = source({ createLocation: vi.fn().mockResolvedValue(child), loadLocations: vi.fn().mockResolvedValueOnce([moscow, dc, rack]).mockResolvedValueOnce([moscow, dc, rack, child]) }); renderSection(dataSource); await screen.findByText('Москва / ЦОД-1 / Стойка 4'); await userEvent.click(screen.getByRole('button', { name: 'Изменить' })); await userEvent.click(screen.getByRole('button', { name: 'Добавить дочернее: ЦОД-1' })); await userEvent.type(screen.getByLabelText('Название'), 'Новая стойка'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(dataSource.createLocation).toHaveBeenCalledWith({ name: 'Новая стойка', type: null, parent_location_id: 'dc' })); expect(dataSource.loadLocations).toHaveBeenCalledTimes(2); expect(screen.getByRole('radio', { name: /Новая стойка/ })).toHaveAttribute('aria-checked', 'true'); expect(dataSource.setPhysicalObjectLocation).not.toHaveBeenCalled();
+    const child = { location_ref: ref('new-child'), name: 'Новая стойка', type: 'rack', parent_location_ref: ref('dc') }; const dataSource = source({ createLocation: vi.fn().mockResolvedValue(child), loadLocations: vi.fn().mockResolvedValueOnce([moscow, dc, rack]).mockResolvedValueOnce([moscow, dc, rack, child]) }); renderSection(dataSource); await screen.findByText('Москва / ЦОД-1 / Стойка 4'); await userEvent.click(screen.getByRole('button', { name: 'Изменить' })); const childAction = screen.getByRole('button', { name: 'Создать дочернее местоположение: ЦОД-1' }); expect(childAction).toHaveTextContent('+ Дочернее местоположение'); await userEvent.click(childAction); expect(screen.getByText('Москва / ЦОД-1')).toBeInTheDocument(); await userEvent.type(screen.getByLabelText('Название'), 'Новая стойка'); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' })); await waitFor(() => expect(dataSource.createLocation).toHaveBeenCalledWith({ name: 'Новая стойка', type: null, parent_location_id: 'dc' })); expect(dataSource.loadLocations).toHaveBeenCalledTimes(2); expect(screen.getByRole('radio', { name: /Новая стойка/ })).toHaveAttribute('aria-checked', 'true'); expect(dataSource.setPhysicalObjectLocation).not.toHaveBeenCalled();
   });
 
   it('creates a root with null parent and retries only the authoritative reload after its failure', async () => {

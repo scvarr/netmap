@@ -391,7 +391,7 @@ export function LocationsPage({
           }
         >
           <form
-            className="catalog-dialog__surface"
+            className="catalog-dialog__surface location-picker-dialog__surface"
             onSubmit={(event) => void submit(event)}
           >
             <h2>
@@ -426,12 +426,14 @@ export function LocationsPage({
               </>
             )}{" "}
             {form.mode !== "edit" && (
-              <LocationParentPicker
-                items={sorted}
-                selected={form.parentId}
-                forbidden={forbiddenParents}
-                onSelect={(parentId) => setForm({ ...form, parentId })}
-              />
+              <div className="location-picker-dialog__tree">
+                <LocationParentPicker
+                  items={sorted}
+                  selected={form.parentId}
+                  forbidden={forbiddenParents}
+                  onSelect={(parentId) => setForm({ ...form, parentId })}
+                />
+              </div>
             )}
             {form.error && (
               <p className="catalog-dialog__error" role="alert">
