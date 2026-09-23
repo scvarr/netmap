@@ -10,14 +10,8 @@ import { MapContextMenu, type MapContextTarget } from "../components/MapContextM
 import { CableRenameDialog } from "../components/CableRenameDialog";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
-import type { MapRegionDraft } from "../components/MapRegionLayer";
-import { MapRegionTree } from "../components/MapRegionTree";
 import {
   PresentationAuthoringPanel,
-  type RegionCreateOperation,
-  type RegionDeleteOperation,
-  type RegionEditOperation,
-  type RegionPropertiesOperation,
   type TextAnnotationDeleteOperation,
   type TextAnnotationOperation,
 } from "../components/PresentationAuthoringPanel";
@@ -59,16 +53,11 @@ import type {
   SavedMapView,
   SavedMapViewKey,
   MapCableRouteWaypoint,
-  MapCompositePresentation,
-  MapRegion,
   MapTextAnnotation,
 } from "../topology/savedMapTypes";
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
-import { compositeFrameGeometry, LAYOUT_NODE_HEIGHT, LAYOUT_NODE_WIDTH } from "../topology/layout";
 import { directlyAttachedCableIds, presentationSceneDocument } from "../topology/presentationScene";
-import { defaultMapRegionStyle, nextMapRegionZOrder } from "../topology/regionPresentation";
-import { deleteRegionDraftVertex, insertRegionDraftVertex, moveRegionDraftVertex, translateRegionDraft, validateRegionDraftPolygon } from '../topology/regionDraftGeometry';
 import type {
   TopologyDataSource,
   TopologyProjectionDocument,
@@ -80,8 +69,6 @@ import { isHistoricalCableLabelReuseConfirmationStale, isHistoricalCableLabelReu
 import { CableNamingFields } from "../components/CableNamingFields";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
 import { displayNodeLabel } from "../topology/presentation";
-import type { LocationDataSource, LocationDocument } from "../topology/locationTypes";
-import { locationPath } from "../topology/locationPresentation";
 import { locationDescendantIds } from "../topology/locationFocus";
 import { useI18n } from "../i18n";
 
@@ -93,7 +80,6 @@ interface MapPageProps {
   deviceDetailsDataSource?: DeviceDetailsDataSource;
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
-  locationDataSource?: Pick<LocationDataSource, 'loadLocations'>;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   cableDeleteDataSource?: CableDeleteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
@@ -159,21 +145,6 @@ interface PresentationVariantDeletionOperation {
   status: "confirming" | "deleting";
   error: string | null;
 }
-interface CompositeCreateOperation {
-  status: "selecting" | "confirming" | "creating";
-  name: string;
-  error: string | null;
-}
-interface CompositeDeletionOperation {
-  mapId: string;
-  variantId: string;
-  compositeId: string;
-  compositeName: string;
-  status: "confirming" | "deleting";
-  error: string | null;
-}
-interface CompositePresentationOperation { mapId: string; variantId: string; bulk?: boolean; fitAfterRefresh?: boolean; status: 'saving' | 'refresh-failed'; }
-interface CompositeVisibilityOperation { mapId: string; variantId: string; compositeId: string; compositeName: string; draft: Set<string>; status: 'editing' | 'saving' | 'refresh-failed'; error: string | null; }
 interface CreationRefreshOperation { mapId: string; variantId: string; status: "refresh-failed"; }
 interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; objectLabel: string; portLabel: string; }
 interface WiringDraft { mapId: string; variantId: string; source: WiringEndpoint; draftWaypoints: MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; }
@@ -230,7 +201,6 @@ export function MapPage({
   dataSource,
   savedMapDataSource,
   catalogInventoryDataSource,
-  locationDataSource,
   physicalObjectDeleteDataSource,
   cableDeleteDataSource,
   physicalObjectDetailsDataSource,
@@ -259,16 +229,7 @@ export function MapPage({
   const [traceViewNotice, setTraceViewNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
   const [utilitySection, setUtilitySection] = useState<"layout" | "tools" | null>(null);
-  const [compositeMemberIds, setCompositeMemberIds] = useState<Set<string>>(new Set());
-  const [compositeCreate, setCompositeCreate] = useState<CompositeCreateOperation | null>(null);
-  const [compositeCreationRefresh, setCompositeCreationRefresh] = useState<CreationRefreshOperation | null>(null);
-  const [compositeDeletion, setCompositeDeletion] = useState<CompositeDeletionOperation | null>(null);
-  const [compositeDeletionRefresh, setCompositeDeletionRefresh] = useState<CreationRefreshOperation | null>(null);
-  const [compositePresentationOperation, setCompositePresentationOperation] = useState<CompositePresentationOperation | null>(null);
-  const [compositeVisibility, setCompositeVisibility] = useState<CompositeVisibilityOperation | null>(null);
-  const compositePresentationPending = useRef(false);
   const [viewportFitRevision, setViewportFitRevision] = useState(0);
-  const [selectedCompositeId, setSelectedCompositeId] = useState<string | null>(null);
   const [objectSearch, setObjectSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
@@ -291,15 +252,7 @@ export function MapPage({
   const [cableRename, setCableRename] = useState<CableRenameState | null>(null);
   const [wiringHistoricalCandidate, setWiringHistoricalCandidate] = useState<string | null>(null);
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
-  const [regionMode, setRegionMode] = useState(false);
-  const [showRegionReferenceOutlines, setShowRegionReferenceOutlines] = useState(true);
-  const [regionDraft, setRegionDraft] = useState<MapRegionDraft | null>(null);
-  const [regionCreate, setRegionCreate] = useState<RegionCreateOperation | null>(null);
-  const [regionEdit, setRegionEdit] = useState<RegionEditOperation | null>(null);
-  const [regionProperties, setRegionProperties] = useState<RegionPropertiesOperation | null>(null);
-  const [regionDeletion, setRegionDeletion] = useState<RegionDeleteOperation | null>(null);
-  const [locations, setLocations] = useState<readonly LocationDocument[]>([]);
-  const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
+  const [annotationMode, setAnnotationMode] = useState(false);
   const [selectedTextAnnotationId, setSelectedTextAnnotationId] = useState<string | null>(null);
   const [textAnnotationEdit, setTextAnnotationEdit] = useState<TextAnnotationOperation | null>(null);
   const [textAnnotationDeletion, setTextAnnotationDeletion] = useState<TextAnnotationDeleteOperation | null>(null);
@@ -320,11 +273,9 @@ export function MapPage({
   const skipNextMapLoad = useRef<string | null>(null);
   const viewportCenter = useRef<(() => XYPosition) | null>(null);
   const consumedAddIntent = useRef<string | null>(null);
-  const regionOperationSequence = useRef(0);
+  const textAnnotationOperationSequence = useRef(0);
   const presentationVariantSubmitPending = useRef(false);
   const presentationVariantDeletionPending = useRef(false);
-  const compositeCreatePending = useRef(false);
-  const compositeDeletionPending = useRef(false);
 
   selectedMapId.current = mapId;
   const legacy = !savedMapDataSource;
@@ -342,19 +293,8 @@ export function MapPage({
     [];
   const placementMembershipKey = ids.join(",");
   const hasLoadedMap = legacy || Boolean(activeMap);
-  const physicalRegionMode = regionMode && !legacy && Boolean(activeMap) && viewMode === "physical";
-  const regionOperationActive = Boolean(regionDraft || regionCreate || regionEdit || regionProperties || regionDeletion);
   const textAnnotationOperationActive = Boolean(textAnnotationEdit || textAnnotationDeletion);
-  const completeRegionDraft = useCallback(() => {
-    setRegionDraft((current) => current?.status === 'drawing' && current.points.length >= 3 ? { ...current, status: 'editing', selectedVertexIndex: null } : current);
-    if (activeMap) setRegionCreate({ mapId: activeMap.map_ref.entity_id, label: '', locationId: null, status: 'editing', error: null });
-  }, [activeMap]);
-  useEffect(() => {
-    let active = true;
-    if (!locationDataSource) { setLocations([]); return () => { active = false; }; }
-    void locationDataSource.loadLocations().then((items) => { if (active) setLocations(items); }).catch(() => { if (active) setLocations([]); });
-    return () => { active = false; };
-  }, [locationDataSource]);
+  const physicalAnnotationMode = annotationMode && !legacy && Boolean(activeMap) && viewMode === "physical";
   useEffect(() => {
     let active = true;
     setCatalogInventory(null);
@@ -365,20 +305,6 @@ export function MapPage({
     );
     return () => { active = false; };
   }, [catalogInventoryDataSource, maps?.length]);
-  const locationChoices = useMemo(() => locations.map((location) => ({
-    id: location.location_ref.entity_id,
-    path: locationPath([...locations], location.location_ref.entity_id) ?? location.name,
-  })).sort((left, right) => natural(left.path, right.path)), [locations]);
-  const locationFocusObjectIds = useMemo(() => {
-    if (viewMode !== 'physical' || !selectedRegionId || !activeMap) return null;
-    const region = activeMap.regions.find((item) => item.region_ref.entity_id === selectedRegionId);
-    const locationId = region?.location_ref?.entity_id;
-    if (!locationId) return null;
-    const focusedLocations = locationDescendantIds(locations, locationId);
-    return new Set(activeMap.placements
-      .filter((placement) => placement.location_ref && focusedLocations.has(placement.location_ref.entity_id))
-      .map((placement) => placement.physical_object_ref.entity_id));
-  }, [activeMap, locations, selectedRegionId, viewMode]);
   const objectSearchResults = useMemo(() => {
     const query = objectSearch.trim().toLocaleLowerCase();
     if (viewMode !== "physical" || !query) return [];
@@ -388,118 +314,6 @@ export function MapPage({
       .filter((item) => item.label.toLocaleLowerCase().includes(query))
       .sort((left, right) => natural(left.label, right.label)) ?? [];
   }, [document, objectSearch, viewMode]);
-  const compositeInputs = useMemo(() => (activeMap?.composites ?? []).map((composite) => ({
-    id: composite.composite_ref.entity_id,
-    displayName: composite.name,
-    collapsed: composite.presentation.collapsed,
-    x: composite.presentation.x,
-    y: composite.presentation.y,
-    width: composite.presentation.width,
-    height: composite.presentation.height,
-    memberNodeIds: composite.physical_object_refs.map((reference) => nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id)?.id).filter((id): id is string => Boolean(id)),
-    explicitVisibleNodeIds: (composite.visible_when_collapsed_refs ?? []).map((reference) => nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id)?.id).filter((id): id is string => Boolean(id)),
-  })), [activeMap, document]);
-
-  const initialCompositeGeometry = (composite: SavedMap['composites'][number]) => {
-    const memberPositions = composite.physical_object_refs.flatMap((reference) => {
-      const node = nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id);
-      const position = activeMap?.placements.find((item) => item.physical_object_ref.entity_id === reference.entity_id)?.positions['L1/PHYSICAL_OBJECT'];
-      const dimensions = node?.attributes.blueprint_presentation
-        ? blueprintNodeDisplayDimensions(node.attributes.blueprint_presentation, position?.display_width)
-        : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT };
-      return node && position ? [{ x: position.x, y: position.y, ...dimensions }] : [];
-    });
-    if (!memberPositions.length) {
-      const fallback = compositeFrameGeometry([]);
-      return { ...fallback, x: composite.presentation.x, y: composite.presentation.y };
-    }
-    return compositeFrameGeometry(memberPositions);
-  };
-  const compactCollapsedGeometry = (composite: SavedMap['composites'][number]) => {
-    const memberNodeIds = new Set(composite.physical_object_refs
-      .map((reference) => nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id)?.id)
-      .filter((id): id is string => Boolean(id)));
-    const boundaryNodeIds = new Set<string>();
-    for (const edge of document?.edges ?? []) {
-      const sourceMember = memberNodeIds.has(edge.from_node_id);
-      const targetMember = memberNodeIds.has(edge.to_node_id);
-      if (sourceMember !== targetMember) boundaryNodeIds.add(sourceMember ? edge.from_node_id : edge.to_node_id);
-    }
-    const explicitObjectIds = new Set((composite.visible_when_collapsed_refs ?? []).map((reference) => reference.entity_id));
-    const positions = composite.physical_object_refs.flatMap((reference) => {
-      const node = nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id);
-      const nodeId = node?.id;
-      const position = activeMap?.placements.find((item) => item.physical_object_ref.entity_id === reference.entity_id)?.positions['L1/PHYSICAL_OBJECT'];
-      const dimensions = node?.attributes.blueprint_presentation
-        ? blueprintNodeDisplayDimensions(node.attributes.blueprint_presentation, position?.display_width)
-        : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT };
-      return node && nodeId && (boundaryNodeIds.has(nodeId) || explicitObjectIds.has(reference.entity_id)) && position ? [{ x: position.x, y: position.y, ...dimensions }] : [];
-    });
-    return compositeFrameGeometry(positions);
-  };
-  const compositeBoundaryObjectIds = (composite: SavedMap['composites'][number]) => {
-    const members = new Set(composite.physical_object_refs.map((reference) => nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id)?.id).filter((id): id is string => Boolean(id)));
-    const boundary = new Set<string>();
-    for (const edge of document?.edges ?? []) {
-      const sourceMember = members.has(edge.from_node_id);
-      const targetMember = members.has(edge.to_node_id);
-      if (sourceMember !== targetMember) boundary.add(sourceMember ? edge.from_node_id : edge.to_node_id);
-    }
-    return new Set(composite.physical_object_refs.filter((reference) => {
-      const node = nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id);
-      return Boolean(node && boundary.has(node.id));
-    }).map((reference) => reference.entity_id));
-  };
-  const saveCompositePresentation = async (compositeId: string, presentation: Omit<MapCompositePresentation, 'variant_ref' | 'geometry_persisted'>) => {
-    if (!activeMap || !savedMapDataSource?.setCompositePresentation || compositePresentationOperation || compositePresentationPending.current) return;
-    compositePresentationPending.current = true;
-    const operation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, presentation, fitAfterRefresh: !presentation.collapsed, status: 'saving' as const };
-    setCompositePresentationOperation(operation);
-    try { await savedMapDataSource.setCompositePresentation(operation.mapId, operation.compositeId, operation.variantId, operation.presentation); }
-    catch { compositePresentationPending.current = false; setCompositePresentationOperation(null); setError('Не удалось изменить состояние составного блока.'); return; }
-    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) { setMap(detail); if (operation.fitAfterRefresh) setViewportFitRevision((revision) => revision + 1); } setCompositePresentationOperation(null); compositePresentationPending.current = false; }
-    catch { setCompositePresentationOperation({ ...operation, status: 'refresh-failed' }); }
-  };
-  const toggledCompositePresentation = (composite: SavedMap['composites'][number], expandedGeometry?: { x: number; y: number; width: number; height: number }) => {
-    const geometry = composite.presentation.collapsed
-      ? composite.presentation
-      : composite.presentation.geometry_persisted
-        ? { ...compactCollapsedGeometry(composite), x: composite.presentation.x, y: composite.presentation.y }
-        : expandedGeometry ?? initialCompositeGeometry(composite);
-    return { collapsed: !composite.presentation.collapsed, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height };
-  };
-  const toggleCompositePresentation = (compositeId: string, expandedGeometry?: { x: number; y: number; width: number; height: number }) => {
-    const composite = activeMap?.composites.find((item) => item.composite_ref.entity_id === compositeId);
-    if (composite) void saveCompositePresentation(compositeId, toggledCompositePresentation(composite, expandedGeometry));
-  };
-  const setAllCompositesCollapsed = async (collapsed: boolean) => {
-    if (!activeMap || !savedMapDataSource?.setCompositePresentations || compositePresentationOperation || compositePresentationPending.current) return;
-    const updates = activeMap.composites.filter((composite) => composite.presentation.collapsed !== collapsed)
-      .map((composite) => ({ composite_id: composite.composite_ref.entity_id, ...toggledCompositePresentation(composite) }));
-    if (!updates.length) return;
-    const operation: CompositePresentationOperation = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, bulk: true, fitAfterRefresh: !collapsed, status: 'saving' };
-    compositePresentationPending.current = true;
-    setCompositePresentationOperation(operation);
-    try { await savedMapDataSource.setCompositePresentations(operation.mapId, operation.variantId, updates); }
-    catch {
-      compositePresentationPending.current = false;
-      setCompositePresentationOperation(null);
-      setError('Не удалось изменить состояние составных блоков.');
-      return;
-    }
-    try {
-      const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId);
-      if (selectedMapId.current === operation.mapId) { setMap(detail); if (operation.fitAfterRefresh) setViewportFitRevision((revision) => revision + 1); }
-      compositePresentationPending.current = false;
-      setCompositePresentationOperation(null);
-    } catch { setCompositePresentationOperation({ ...operation, status: 'refresh-failed' }); }
-  };
-  const retryCompositePresentationRefresh = async () => {
-    const operation = compositePresentationOperation; if (!operation || operation.status !== 'refresh-failed' || !savedMapDataSource) return;
-    setCompositePresentationOperation({ ...operation, status: 'saving' });
-    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) { setMap(detail); if (operation.fitAfterRefresh) setViewportFitRevision((revision) => revision + 1); } setCompositePresentationOperation(null); compositePresentationPending.current = false; } catch { setCompositePresentationOperation(operation); }
-  };
-
   const selectedCableId = selection?.type === "node" ? cableIdForNode(selection.item) : null;
   const drawableSelectedCable = Boolean(
     selectedCableId && document && viewMode === "physical" && presentationSceneDocument(document).edges.some((edge) => edge.kind === 'cable' && edge.cableNode && cableIdForNode(edge.cableNode) === selectedCableId),
@@ -515,98 +329,15 @@ export function MapPage({
   }, [cableRouteEdit, mapId, viewMode]);
 
   useEffect(() => {
-    regionOperationSequence.current += 1;
-    setRegionMode(false);
-    setRegionDraft(null);
-    setRegionCreate(null);
-    setRegionEdit(null);
-    setRegionProperties(null);
-    setRegionDeletion(null);
-    setSelectedRegionId(null);
+    textAnnotationOperationSequence.current += 1;
     setSelectedTextAnnotationId(null);
     setTextAnnotationEdit(null);
     setTextAnnotationDeletion(null);
-    setCompositeMemberIds(new Set());
-    setCompositeCreate(null);
   }, [mapId, viewMode]);
-
-  useEffect(() => {
-    if (!physicalRegionMode) {
-      regionOperationSequence.current += 1;
-      setRegionDraft(null);
-      setRegionCreate(null);
-      setRegionEdit(null);
-      setRegionProperties(null);
-      setRegionDeletion(null);
-      setSelectedTextAnnotationId(null);
-      setTextAnnotationEdit(null);
-      setTextAnnotationDeletion(null);
-      return;
-    }
-    setSelection(null);
-    setContextAnchor(null);
-    setContinuationAnchor(null);
-    setInsertion(null);
-    setCableRouteEdit(null);
-    setCableRouteReset(null);
-    setWiring({ status: "idle" });
-  }, [physicalRegionMode]);
-
-  useEffect(() => {
-    if (selectedRegionId && !activeMap?.regions.some((region) => region.region_ref.entity_id === selectedRegionId)) setSelectedRegionId(null);
-  }, [activeMap, selectedRegionId]);
 
   useEffect(() => {
     if (selectedTextAnnotationId && !activeMap?.text_annotations.some((annotation) => annotation.annotation_ref.entity_id === selectedTextAnnotationId)) setSelectedTextAnnotationId(null);
   }, [activeMap, selectedTextAnnotationId]);
-
-  const cancelRegionDraft = useCallback(() => {
-    regionOperationSequence.current += 1;
-    setRegionDraft(null);
-    setRegionCreate(null);
-  }, []);
-  const cancelRegionEdit = useCallback(() => {
-    regionOperationSequence.current += 1;
-    setRegionDraft(null);
-    setRegionEdit(null);
-  }, []);
-  const cancelRegionProperties = useCallback(() => {
-    regionOperationSequence.current += 1;
-    setRegionProperties(null);
-  }, []);
-  const deleteSelectedRegionDraftVertex = useCallback(() => {
-    setRegionDraft((current) => current?.status === 'editing' && current.selectedVertexIndex !== null && current.selectedVertexIndex !== undefined && current.points.length > 3
-      ? { ...current, points: deleteRegionDraftVertex(current.points, current.selectedVertexIndex), selectedVertexIndex: Math.min(current.selectedVertexIndex, current.points.length - 2) }
-      : current);
-  }, []);
-  const regionDraftValidation = useMemo(() => regionDraft?.status === 'editing' ? validateRegionDraftPolygon(regionDraft.points) : null, [regionDraft]);
-  useEffect(() => {
-    if (!physicalRegionMode || !regionDraft) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && (regionDraft.status === 'drawing' || regionCreate?.status === 'editing')) {
-        event.preventDefault();
-        cancelRegionDraft();
-      } else if (event.key === 'Escape' && regionEdit?.status === 'editing') {
-        event.preventDefault();
-        cancelRegionEdit();
-      } else if (event.key === 'Escape' && regionProperties?.status === 'editing') {
-        event.preventDefault();
-        cancelRegionProperties();
-      } else if (event.key === 'Enter' && regionDraft.status === 'drawing' && regionDraft.points.length >= 3) {
-        event.preventDefault();
-        completeRegionDraft();
-      } else if ((event.key === 'Delete' || event.key === 'Backspace') && regionCreate?.status === 'editing' && regionDraft.status === 'editing' && regionDraft.selectedVertexIndex !== null && regionDraft.points.length > 3) {
-        event.preventDefault();
-        deleteSelectedRegionDraftVertex();
-      } else if ((event.key === 'Delete' || event.key === 'Backspace') && regionEdit?.status === 'editing' && regionDraft.status === 'editing' && regionDraft.selectedVertexIndex !== null && regionDraft.points.length > 3) {
-        event.preventDefault();
-        deleteSelectedRegionDraftVertex();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [cancelRegionDraft, cancelRegionEdit, cancelRegionProperties, completeRegionDraft, deleteSelectedRegionDraftVertex, physicalRegionMode, regionCreate?.status, regionDraft, regionEdit?.status, regionProperties?.status]);
-
   const selectMap = useCallback(
     (id: string) => {
       insertionSequence.current += 1;
@@ -1030,7 +761,6 @@ export function MapPage({
 
   const setViewMode = (nextView: TopologyViewMode) => {
     setContextAnchor(null);
-    setRegionMode(false);
     if (nextView !== "physical") setWiring({ status: "idle" });
     setParams((current) => {
       const next = new URLSearchParams(current);
@@ -1572,246 +1302,6 @@ export function MapPage({
     try { if (await reloadMap(operation.mapId)) setCableRouteReset(null); }
     catch { if (selectedMapId.current === operation.mapId) setCableRouteReset(operation); }
   };
-
-  const saveRegion = async () => {
-    if (!savedMapDataSource || !activeMap || !regionCreate || regionCreate.status !== 'editing' || regionDraft?.status !== 'editing' || !regionDraftValidation?.valid) return;
-    const label = regionCreate.label.trim();
-    if (!label) {
-      setRegionCreate((current) => current?.mapId === regionCreate.mapId ? { ...current, error: t('map.regionLabelRequired') } : current);
-      return;
-    }
-    const operation = regionCreate;
-    const request = ++regionOperationSequence.current;
-    const region = {
-      label,
-      points: regionDraft.points.map(({ x, y }) => ({ x, y })),
-      label_position: null,
-      style: defaultMapRegionStyle(),
-      z_order: nextMapRegionZOrder(activeMap.regions),
-      location_id: operation.locationId,
-    };
-    setRegionCreate((current) => current?.mapId === operation.mapId ? { ...current, status: 'saving', error: null } : current);
-    try {
-      await savedMapDataSource.createRegion(operation.mapId, region);
-    } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
-        setRegionCreate((current) => current?.mapId === operation.mapId ? { ...current, status: 'editing', error: t('map.regionSaveFailed') } : current);
-      return;
-    }
-    try {
-      const refreshed = await reloadMap(operation.mapId);
-      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
-      if (refreshed) {
-        setRegionDraft(null);
-        setRegionCreate(null);
-      } else {
-        setRegionCreate((current) => current?.mapId === operation.mapId ? { ...current, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') } : current);
-      }
-    } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
-        setRegionCreate((current) => current?.mapId === operation.mapId ? { ...current, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') } : current);
-    }
-  };
-
-  const retryRegionRefresh = async () => {
-    if (!regionCreate || regionCreate.status !== 'refresh-failed') return;
-    const operation = regionCreate;
-    const request = ++regionOperationSequence.current;
-    setRegionCreate({ ...operation, status: 'saving', error: null });
-    try {
-      const refreshed = await reloadMap(operation.mapId);
-      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
-      if (refreshed) {
-        setRegionDraft(null);
-        setRegionCreate(null);
-      } else {
-        setRegionCreate({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
-      }
-    } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
-        setRegionCreate({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
-    }
-  };
-
-  const startRegionEdit = useCallback(() => {
-    if (!activeMap || !selectedRegionId || regionOperationActive || textAnnotationOperationActive) return;
-    const region = activeMap.regions.find((item) => item.region_ref.entity_id === selectedRegionId);
-    if (!region) return;
-    const original: MapRegion = {
-      ...region,
-      points: region.points.map(({ x, y }) => ({ x, y })),
-      ...(region.label_position ? { label_position: { ...region.label_position } } : { label_position: null }),
-      style: { ...region.style },
-    };
-    setRegionDraft({ status: 'editing', points: original.points.map(({ x, y }) => ({ x, y })), selectedVertexIndex: null });
-    setRegionEdit({ mapId: activeMap.map_ref.entity_id, regionId: selectedRegionId, original, labelPosition: original.label_position ? { ...original.label_position } : null, status: 'editing', error: null });
-  }, [activeMap, regionOperationActive, selectedRegionId, textAnnotationOperationActive]);
-
-  const cloneRegion = (region: MapRegion): MapRegion => ({
-    ...region,
-    points: region.points.map(({ x, y }) => ({ x, y })),
-    label_position: region.label_position ? { ...region.label_position } : null,
-    style: { ...region.style },
-  });
-
-  const startRegionProperties = useCallback(() => {
-    if (!activeMap || !selectedRegionId || regionOperationActive || textAnnotationOperationActive) return;
-    const original = activeMap.regions.find((region) => region.region_ref.entity_id === selectedRegionId);
-    if (!original) return;
-    const copied = cloneRegion(original);
-    setRegionProperties({ mapId: activeMap.map_ref.entity_id, regionId: selectedRegionId, original: copied, label: copied.label, locationId: copied.location_ref?.entity_id ?? null, labelPosition: copied.label_position ? { ...copied.label_position } : null, style: { ...copied.style }, status: 'editing', error: null });
-  }, [activeMap, regionOperationActive, selectedRegionId, textAnnotationOperationActive]);
-
-  const regionPropertiesPreview = regionProperties ? {
-    ...regionProperties.original,
-    label: regionProperties.label,
-    label_position: regionProperties.labelPosition ? { ...regionProperties.labelPosition } : null,
-    style: { ...regionProperties.style },
-    location_ref: regionProperties.locationId ? { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: regionProperties.locationId } : null,
-  } : undefined;
-
-  const regionReplaceError = (reason: unknown) =>
-    reason instanceof Error && reason.message.includes('MAP_REGION_SPATIAL_CONFLICT')
-      ? t('map.regionSpatialConflict')
-      : t('map.regionReplaceFailed');
-
-  const saveExistingRegion = async () => {
-    if (!savedMapDataSource || !regionEdit || regionEdit.status !== 'editing' || regionDraft?.status !== 'editing' || !regionDraftValidation?.valid) return;
-    const operation = regionEdit;
-    const request = ++regionOperationSequence.current;
-    const replacement = {
-      label: operation.original.label,
-      points: regionDraft.points.map(({ x, y }) => ({ x, y })),
-      label_position: operation.labelPosition ? { ...operation.labelPosition } : null,
-      style: { ...operation.original.style },
-      z_order: operation.original.z_order,
-      location_id: operation.original.location_ref?.entity_id ?? null,
-    };
-    setRegionEdit((current) => current?.regionId === operation.regionId ? { ...current, status: 'saving', error: null } : current);
-    try {
-      await savedMapDataSource.replaceRegion(operation.mapId, operation.regionId, replacement);
-    } catch (reason) {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
-        setRegionEdit((current) => current?.regionId === operation.regionId ? { ...current, status: 'editing', error: regionReplaceError(reason) } : current);
-      return;
-    }
-    try {
-      const refreshed = await reloadMap(operation.mapId);
-      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
-      if (refreshed) {
-        setRegionDraft(null);
-        setRegionEdit(null);
-      } else {
-        setRegionEdit((current) => current?.regionId === operation.regionId ? { ...current, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') } : current);
-      }
-    } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
-        setRegionEdit((current) => current?.regionId === operation.regionId ? { ...current, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') } : current);
-    }
-  };
-
-  const retryExistingRegionRefresh = async () => {
-    if (!regionEdit || regionEdit.status !== 'refresh-failed') return;
-    const operation = regionEdit;
-    const request = ++regionOperationSequence.current;
-    setRegionEdit({ ...operation, status: 'saving', error: null });
-    try {
-      const refreshed = await reloadMap(operation.mapId);
-      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
-      if (refreshed) {
-        setRegionDraft(null);
-        setRegionEdit(null);
-      } else {
-        setRegionEdit({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
-      }
-    } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId)
-        setRegionEdit({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
-    }
-  };
-
-  const saveRegionProperties = async () => {
-    if (!savedMapDataSource || !regionProperties || regionProperties.status !== 'editing') return;
-    const label = regionProperties.label.trim();
-    if (!label) {
-      setRegionProperties((current) => current ? { ...current, error: t('map.regionLabelRequired') } : current);
-      return;
-    }
-    const operation = regionProperties;
-    const request = ++regionOperationSequence.current;
-    const replacement = { label, points: operation.original.points.map(({ x, y }) => ({ x, y })), label_position: operation.labelPosition ? { ...operation.labelPosition } : null, style: { ...operation.style }, z_order: operation.original.z_order, location_id: operation.locationId };
-    setRegionProperties({ ...operation, status: 'saving', error: null });
-    try { await savedMapDataSource.replaceRegion(operation.mapId, operation.regionId, replacement); }
-    catch (reason) {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionProperties({ ...operation, status: 'editing', error: regionReplaceError(reason) });
-      return;
-    }
-    try {
-      const refreshed = await reloadMap(operation.mapId);
-      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
-      if (refreshed) setRegionProperties(null);
-      else setRegionProperties({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
-    } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionProperties({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
-    }
-  };
-
-  const retryRegionPropertiesRefresh = async () => {
-    if (!regionProperties || regionProperties.status !== 'refresh-failed') return;
-    const operation = regionProperties;
-    const request = ++regionOperationSequence.current;
-    setRegionProperties({ ...operation, status: 'saving', error: null });
-    try {
-      const refreshed = await reloadMap(operation.mapId);
-      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
-      if (refreshed) setRegionProperties(null);
-      else setRegionProperties({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
-    } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionProperties({ ...operation, status: 'refresh-failed', error: t('map.regionSavedRefreshFailed') });
-    }
-  };
-
-  const beginRegionDeletion = () => {
-    if (!activeMap || !selectedRegionId || regionOperationActive || textAnnotationOperationActive) return;
-    const region = activeMap.regions.find((item) => item.region_ref.entity_id === selectedRegionId);
-    if (region) setRegionDeletion({ mapId: activeMap.map_ref.entity_id, regionId: selectedRegionId, label: region.label, status: 'confirming', error: null });
-  };
-
-  const confirmRegionDeletion = async () => {
-    if (!savedMapDataSource || !regionDeletion || regionDeletion.status !== 'confirming') return;
-    const operation = regionDeletion;
-    const request = ++regionOperationSequence.current;
-    setRegionDeletion({ ...operation, status: 'deleting', error: null });
-    try { await savedMapDataSource.deleteRegion(operation.mapId, operation.regionId); }
-    catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionDeletion({ ...operation, status: 'confirming', error: t('map.regionDeleteFailed') });
-      return;
-    }
-    try {
-      const refreshed = await reloadMap(operation.mapId);
-      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
-      if (refreshed) { setRegionDeletion(null); setSelectedRegionId(null); }
-      else setRegionDeletion({ ...operation, status: 'refresh-failed', error: t('map.regionDeletedRefreshFailed') });
-    } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionDeletion({ ...operation, status: 'refresh-failed', error: t('map.regionDeletedRefreshFailed') });
-    }
-  };
-
-  const retryRegionDeletionRefresh = async () => {
-    if (!regionDeletion || regionDeletion.status !== 'refresh-failed') return;
-    const operation = regionDeletion;
-    const request = ++regionOperationSequence.current;
-    setRegionDeletion({ ...operation, status: 'deleting', error: null });
-    try {
-      const refreshed = await reloadMap(operation.mapId);
-      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
-      if (refreshed) { setRegionDeletion(null); setSelectedRegionId(null); }
-      else setRegionDeletion({ ...operation, status: 'refresh-failed', error: t('map.regionDeletedRefreshFailed') });
-    } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setRegionDeletion({ ...operation, status: 'refresh-failed', error: t('map.regionDeletedRefreshFailed') });
-    }
-  };
-
   const textAnnotationPreview = textAnnotationEdit?.position ? {
     annotation_ref: { entity_type: 'MapTextAnnotation' as const, entity_id: textAnnotationEdit.annotationId ?? 'draft-text-annotation' },
     text: textAnnotationEdit.text,
@@ -1820,18 +1310,18 @@ export function MapPage({
     font_size: textAnnotationEdit.fontSize,
   } : undefined;
   const startTextAnnotation = () => {
-    if (!activeMap || regionOperationActive || textAnnotationOperationActive) return;
+    if (!activeMap || textAnnotationOperationActive) return;
     setSelectedTextAnnotationId(null);
     setTextAnnotationEdit({ mapId: activeMap.map_ref.entity_id, text: '', position: null, textColor: '#1f2937', fontSize: 18, status: 'placing', error: null });
   };
   const editTextAnnotation = () => {
-    if (!activeMap || !selectedTextAnnotationId || regionOperationActive || textAnnotationOperationActive) return;
+    if (!activeMap || !selectedTextAnnotationId || textAnnotationOperationActive) return;
     const original = activeMap.text_annotations.find((annotation) => annotation.annotation_ref.entity_id === selectedTextAnnotationId);
     if (!original) return;
     setTextAnnotationEdit({ mapId: activeMap.map_ref.entity_id, annotationId: selectedTextAnnotationId, original, text: original.text, position: { ...original.position }, textColor: original.text_color, fontSize: original.font_size, status: 'editing', error: null });
   };
   const beginTextAnnotationDeletion = () => {
-    if (!activeMap || !selectedTextAnnotationId || regionOperationActive || textAnnotationOperationActive) return;
+    if (!activeMap || !selectedTextAnnotationId || textAnnotationOperationActive) return;
     const annotation = activeMap.text_annotations.find((item) => item.annotation_ref.entity_id === selectedTextAnnotationId);
     if (annotation) setTextAnnotationDeletion({ mapId: activeMap.map_ref.entity_id, annotationId: selectedTextAnnotationId, text: annotation.text, status: 'confirming', error: null });
   };
@@ -1842,23 +1332,23 @@ export function MapPage({
     const operation = textAnnotationEdit;
     const position = operation.position;
     if (!position) return;
-    const request = ++regionOperationSequence.current;
+    const request = ++textAnnotationOperationSequence.current;
     const write = { text, position: { x: position.x!, y: position.y! }, text_color: operation.textColor, font_size: operation.fontSize };
     setTextAnnotationEdit({ ...operation, status: 'saving', error: null });
     try {
       if (operation.annotationId) await savedMapDataSource.replaceTextAnnotation(operation.mapId, operation.annotationId, write);
       else await savedMapDataSource.createTextAnnotation(operation.mapId, write);
     } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setTextAnnotationEdit({ ...operation, status: 'editing', error: t('map.textAnnotationSaveFailed') });
+      if (request === textAnnotationOperationSequence.current && selectedMapId.current === operation.mapId) setTextAnnotationEdit({ ...operation, status: 'editing', error: t('map.textAnnotationSaveFailed') });
       return;
     }
     try {
       const refreshed = await reloadMap(operation.mapId);
-      if (request !== regionOperationSequence.current || selectedMapId.current !== operation.mapId) return;
+      if (request !== textAnnotationOperationSequence.current || selectedMapId.current !== operation.mapId) return;
       if (refreshed) setTextAnnotationEdit(null);
       else setTextAnnotationEdit({ ...operation, status: 'refresh-failed', error: t('map.textAnnotationSavedRefreshFailed') });
     } catch {
-      if (request === regionOperationSequence.current && selectedMapId.current === operation.mapId) setTextAnnotationEdit({ ...operation, status: 'refresh-failed', error: t('map.textAnnotationSavedRefreshFailed') });
+      if (request === textAnnotationOperationSequence.current && selectedMapId.current === operation.mapId) setTextAnnotationEdit({ ...operation, status: 'refresh-failed', error: t('map.textAnnotationSavedRefreshFailed') });
     }
   };
   const retryTextAnnotationRefresh = async () => {
@@ -2023,55 +1513,6 @@ export function MapPage({
     if (selectedMapId.current !== currentMap.map_ref.entity_id || viewMode !== 'physical') throw new Error('Map changed');
     setSceneDocument({ sceneKey: `${currentMap.map_ref.entity_id}/physical`, document: next });
   };
-  const compositeConflict = (physicalObjectIds: Iterable<string>) => {
-    if (!activeMap) return null;
-    const names = new Set<string>();
-    const selectedIds = new Set(physicalObjectIds);
-    for (const composite of activeMap.composites) {
-      if (composite.physical_object_refs.some((member) => selectedIds.has(member.entity_id))) names.add(composite.name);
-    }
-    if (names.size === 0) return null;
-    return names.size === 1
-      ? `Один или несколько выбранных объектов уже входят в составной блок «${[...names][0]}».`
-      : "Некоторые выбранные объекты уже входят в другие составные блоки.";
-  };
-  const toggleCompositeMember = (physicalObjectId: string) => {
-    const existing = compositeConflict([physicalObjectId]);
-    if (existing) {
-      setCompositeCreate((current) => current?.status === "selecting" ? { ...current, error: existing } : current);
-      return;
-    }
-    setCompositeMemberIds((current) => {
-      const next = new Set(current);
-      if (next.has(physicalObjectId)) next.delete(physicalObjectId);
-      else next.add(physicalObjectId);
-      return next;
-    });
-    setCompositeCreate((current) => current?.status === "selecting" ? { ...current, error: null } : current);
-  };
-  const cancelCompositeCreate = () => {
-    setCompositeMemberIds(new Set());
-    setCompositeCreate(null);
-  };
-  const beginCompositeCreate = () => {
-    setSelection(null);
-    setContextAnchor(null);
-    setContinuationAnchor(null);
-    setCableRouteEdit(null);
-    setCompositeMemberIds(new Set());
-    setCompositeCreate({ status: "selecting", name: "", error: null });
-    setUtilitySection("layout");
-  };
-  useEffect(() => {
-    if (compositeCreate?.status !== "selecting") return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      cancelCompositeCreate();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [compositeCreate?.status]);
   const activeVariant = activeMap?.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
   const openPresentationVariantCreate = () => {
     if (!activeMap) return;
@@ -2082,108 +1523,6 @@ export function MapPage({
     const primary = activeMap.variants.find((item) => item.name === "Основной");
     if (!activeVariant || !primary || activeVariant.name === "Основной") return;
     setPresentationVariantDeletion({ mapId: activeMap.map_ref.entity_id, variantId: activeVariant.variant_ref.entity_id, variantName: activeVariant.name, primaryVariantId: primary.variant_ref.entity_id, status: "confirming", error: null });
-  };
-  const beginCompositeDeletion = (compositeId: string) => {
-    if (!activeMap) return;
-    const composite = activeMap.composites.find((item) => item.composite_ref.entity_id === compositeId);
-    if (!composite) return;
-    setCompositeDeletion({ mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, compositeName: composite.name, status: "confirming", error: null });
-  };
-  const beginCompositeVisibility = (compositeId: string) => {
-    if (!activeMap) return;
-    const composite = activeMap.composites.find((item) => item.composite_ref.entity_id === compositeId);
-    if (!composite) return;
-    setCompositeVisibility({ mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, compositeId, compositeName: composite.name, draft: new Set((composite.visible_when_collapsed_refs ?? []).map((reference) => reference.entity_id)), status: 'editing', error: null });
-  };
-  const saveCompositeVisibility = async () => {
-    const operation = compositeVisibility;
-    if (!operation || operation.status !== 'editing' || !savedMapDataSource?.setCompositeVisibleMembers) return;
-    setCompositeVisibility({ ...operation, status: 'saving', error: null });
-    try { await savedMapDataSource.setCompositeVisibleMembers(operation.mapId, operation.compositeId, [...operation.draft]); }
-    catch { setCompositeVisibility({ ...operation, status: 'editing', error: 'Не удалось сохранить видимость составного блока.' }); return; }
-    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositeVisibility(null); }
-    catch { setCompositeVisibility({ ...operation, status: 'refresh-failed', error: null }); }
-  };
-  const retryCompositeVisibilityRefresh = async () => {
-    const operation = compositeVisibility;
-    if (!operation || operation.status !== 'refresh-failed' || !savedMapDataSource) return;
-    try { const detail = await savedMapDataSource.loadMap(operation.mapId, operation.variantId); if (selectedMapId.current === operation.mapId) setMap(detail); setCompositeVisibility(null); } catch { /* Keep the refresh-only retry. */ }
-  };
-  const refreshDeletedComposite = async (refresh: CreationRefreshOperation) => {
-    if (!savedMapDataSource) return;
-    const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
-    if (selectedMapId.current === refresh.mapId) setMap(detail);
-    setCompositeDeletionRefresh(null);
-  };
-  const retryCompositeDeletionRefresh = async () => {
-    if (!compositeDeletionRefresh) return;
-    try { await refreshDeletedComposite(compositeDeletionRefresh); } catch { /* Keep the bounded retry visible. */ }
-  };
-  const confirmCompositeDeletion = async () => {
-    const operation = compositeDeletion;
-    if (!savedMapDataSource?.deleteComposite || !operation || operation.status !== "confirming" || compositeDeletionPending.current) return;
-    compositeDeletionPending.current = true;
-    setCompositeDeletion({ ...operation, status: "deleting", error: null });
-    try {
-      await savedMapDataSource.deleteComposite(operation.mapId, operation.compositeId);
-    } catch {
-      setCompositeDeletion({ ...operation, status: "confirming", error: "Не удалось удалить составной блок." });
-      compositeDeletionPending.current = false;
-      return;
-    }
-    compositeDeletionPending.current = false;
-    setCompositeDeletion(null);
-    const refresh = { mapId: operation.mapId, variantId: operation.variantId, status: "refresh-failed" as const };
-    try { await refreshDeletedComposite(refresh); }
-    catch { setCompositeDeletionRefresh(refresh); }
-  };
-  const continueCompositeCreate = () => {
-    const conflict = compositeConflict(compositeMemberIds);
-    if (conflict) {
-      setCompositeCreate((current) => current?.status === "selecting" ? { ...current, error: conflict } : current);
-      return;
-    }
-    setCompositeCreate((current) => current?.status === "selecting" ? { status: "confirming", name: "", error: null } : current);
-  };
-  const submitCompositeCreate = async () => {
-    if (!activeMap || !savedMapDataSource?.createComposite || !compositeCreate || compositeCreate.status !== "confirming" || compositeCreatePending.current) return;
-    const trimmedName = compositeCreate.name.trim();
-    if (!trimmedName || compositeMemberIds.size < 2) return;
-    const conflict = compositeConflict(compositeMemberIds);
-    if (conflict) {
-      setCompositeCreate((current) => current?.status === "confirming" ? { ...current, status: "selecting", error: conflict } : current);
-      return;
-    }
-    compositeCreatePending.current = true;
-    setCompositeCreate((current) => current?.status === "confirming" ? { ...current, status: "creating", error: null } : current);
-    try {
-      const refresh = { mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, status: "refresh-failed" as const };
-      await savedMapDataSource.createComposite(refresh.mapId, trimmedName, [...compositeMemberIds], refresh.variantId);
-      setCompositeMemberIds(new Set());
-      setCompositeCreate(null);
-      try {
-        const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
-        if (selectedMapId.current === refresh.mapId) setMap(detail);
-      } catch {
-        setCompositeCreationRefresh(refresh);
-      }
-    } catch {
-      setCompositeCreate((current) => current?.status === "creating" ? { ...current, status: "confirming", error: "Не удалось создать составной блок." } : current);
-    } finally {
-      compositeCreatePending.current = false;
-    }
-  };
-
-  const retryCompositeCreationRefresh = async () => {
-    const refresh = compositeCreationRefresh;
-    if (!refresh || !savedMapDataSource) return;
-    try {
-      const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
-      if (selectedMapId.current === refresh.mapId) setMap(detail);
-      setCompositeCreationRefresh(null);
-    } catch {
-      // The acknowledged create is never retried; keep only the read retry visible.
-    }
   };
 
   return (
@@ -2230,27 +1569,12 @@ export function MapPage({
       {!legacy && activeMap && viewMode === "physical" && !selection && (
         <aside className="map-utility-panel" aria-label="Служебные инструменты карты">
           <section className="map-utility-panel__section">
-            <button type="button" className="map-utility-panel__header" aria-expanded={utilitySection === "layout"} onClick={() => setUtilitySection((current) => current === "layout" && compositeCreate?.status !== "selecting" ? null : "layout")}>
+            <button type="button" className="map-utility-panel__header" aria-expanded={utilitySection === "layout"} onClick={() => setUtilitySection((current) => current === "layout" ? null : "layout")}>
               <span>{utilitySection === "layout" ? "Компоновка" : `Компоновка · ${activeVariant?.name ?? "—"}`}</span><span aria-hidden="true">{utilitySection === "layout" ? "‹" : "›"}</span>
             </button>
             {utilitySection === "layout" && <div className="map-utility-panel__content">
-              {compositeCreate?.status === "selecting" ? <>
-                <strong>Создание составного блока</strong>
-                <output aria-live="polite">Выбрано: {compositeMemberIds.size}</output>
-                {compositeCreate.error && <p role="alert">{compositeCreate.error}</p>}
-                <div className="map-utility-panel__actions"><button type="button" onClick={cancelCompositeCreate}>Отмена</button><button type="button" disabled={compositeMemberIds.size < 2} onClick={continueCompositeCreate}>Продолжить</button></div>
-              </> : <>
-                <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); return next; })} />
-                <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
-                <hr />
-                <strong>Составные блоки</strong>
-                {activeMap.composites.length === 0 ? <p className="map-utility-panel__empty">Составных блоков пока нет.</p> : <div className="map-composite-list">{activeMap.composites.map((composite) => <div className={`map-composite-list__item${selectedCompositeId === composite.composite_ref.entity_id ? ' map-composite-list__item--selected' : ''}`} key={composite.composite_ref.entity_id}><div><strong>{composite.name}</strong><span>{composite.physical_object_refs.length} {composite.physical_object_refs.length === 1 ? "объект" : composite.physical_object_refs.length < 5 ? "объекта" : "объектов"}</span></div><div className="map-utility-panel__actions"><button type="button" disabled={!savedMapDataSource?.setCompositePresentation || Boolean(compositePresentationOperation)} onClick={() => toggleCompositePresentation(composite.composite_ref.entity_id)}>{composite.presentation.collapsed ? 'Развернуть' : 'Свернуть'}</button><button type="button" disabled={!savedMapDataSource?.setCompositeVisibleMembers} onClick={() => beginCompositeVisibility(composite.composite_ref.entity_id)}>Настроить видимость</button><button type="button" disabled={!savedMapDataSource?.deleteComposite} onClick={() => beginCompositeDeletion(composite.composite_ref.entity_id)}>Удалить</button></div></div>)}</div>}
-                <div className="map-utility-panel__actions">
-                  <button type="button" disabled={!savedMapDataSource?.setCompositePresentations || Boolean(compositePresentationOperation) || !activeMap.composites.some((composite) => !composite.presentation.collapsed)} onClick={() => void setAllCompositesCollapsed(true)}>Свернуть все</button>
-                  <button type="button" disabled={!savedMapDataSource?.setCompositePresentations || Boolean(compositePresentationOperation) || !activeMap.composites.some((composite) => composite.presentation.collapsed)} onClick={() => void setAllCompositesCollapsed(false)}>Развернуть все</button>
-                </div>
-                <button type="button" disabled={!savedMapDataSource?.createComposite || physicalRegionMode} onClick={beginCompositeCreate}>Создать составной блок</button>
-              </>}
+              <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); return next; })} />
+              <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
             </div>}
           </section>
           <section className="map-utility-panel__section">
@@ -2258,14 +1582,14 @@ export function MapPage({
               <span>Инструменты</span><span aria-hidden="true">{utilitySection === "tools" ? "‹" : "›"}</span>
             </button>
             {utilitySection === "tools" && <div className="map-utility-panel__content">
-              <button type="button" onClick={() => setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id })} disabled={physicalRegionMode || !document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
-              <button type="button" aria-pressed={physicalRegionMode} onClick={() => { setRegionMode((active) => !active); setUtilitySection(null); }}>{t("map.regions")}</button>
+              <button type="button" onClick={() => setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id })} disabled={!document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
+              <button type="button" aria-pressed={physicalAnnotationMode} onClick={() => { setAnnotationMode((active) => !active); setUtilitySection(null); }}>{t("map.textAnnotation")}</button>
             </div>}
           </section>
         </aside>
       )}
 
-      {!legacy && activeMap && viewMode === "physical" && !physicalRegionMode && (
+      {!legacy && activeMap && viewMode === "physical" && !physicalAnnotationMode && (
         <section className="map-object-search" aria-label={t("map.objectSearch")}>
           <label>
             {t("map.objectSearch")}
@@ -2286,144 +1610,27 @@ export function MapPage({
         </section>
       )}
 
-      {physicalRegionMode && (
-        <section hidden className="map-region-mode" aria-label={t("map.regions")}>
-          <span>{t("map.regionReference")}</span>
-          <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t("map.regionOutlines")}</button>
-          <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t("map.regionHideObjects")}</button>
-          <button type="button" disabled={regionOperationActive || textAnnotationOperationActive} onClick={() => { if (regionOperationActive || textAnnotationOperationActive) return; regionOperationSequence.current += 1; setSelectedRegionId(null); setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); setRegionEdit(null); setRegionProperties(null); setRegionDeletion(null); }}>{t("map.regionNew")}</button>
-          <button type="button" disabled={regionOperationActive || textAnnotationOperationActive} onClick={startTextAnnotation}>{t('map.textAnnotationAdd')}</button>
-          {activeMap?.text_annotations?.map((annotation) => <button key={annotation.annotation_ref.entity_id} type="button" aria-pressed={selectedTextAnnotationId === annotation.annotation_ref.entity_id} disabled={regionOperationActive || textAnnotationOperationActive} onClick={() => { if (regionOperationActive || textAnnotationOperationActive) return; setSelectedTextAnnotationId((current) => current === annotation.annotation_ref.entity_id ? null : annotation.annotation_ref.entity_id); }}>{annotation.text.split('\n')[0] || t('map.textAnnotation')}</button>)}
-          <MapRegionTree regions={activeMap?.regions ?? []} selectedRegionId={selectedRegionId} selectionDisabled={regionOperationActive || textAnnotationOperationActive} onSelect={(regionId) => { if (regionOperationActive || textAnnotationOperationActive) return; setSelectedRegionId((current) => current === regionId ? null : regionId); }} />
-          {selectedRegionId && !regionOperationActive && !textAnnotationOperationActive && <>
-            <button type="button" onClick={startRegionEdit}>{t('map.regionEdit')}</button>
-            <button type="button" onClick={startRegionProperties}>{t('map.regionProperties')}</button>
-            <button type="button" onClick={beginRegionDeletion}>{t('map.regionDelete')}</button>
-          </>}
-          {regionDraft?.status === 'drawing' && <>
-            <span>{t("map.regionPoints", { count: regionDraft.points.length })}</span>
-            <button type="button" disabled={regionDraft.points.length < 3} onClick={completeRegionDraft}>{t("map.regionDone")}</button>
-            <button type="button" onClick={cancelRegionDraft}>{t("map.cancel")}</button>
-          </>}
-          {regionDraft?.status === 'editing' && <>
-            {regionCreate && <>
-              <label>
-                {t('map.regionLabel')}
-                <input value={regionCreate.label} disabled={regionCreate.status !== 'editing'} onChange={(event) => setRegionCreate((current) => current ? { ...current, label: event.target.value, error: null } : current)} />
-              </label>
-              <button type="button" disabled={regionCreate.status !== 'editing' || regionDraft.selectedVertexIndex === null || regionDraft.points.length <= 3} onClick={deleteSelectedRegionDraftVertex}>{t('map.regionDeleteVertex')}</button>
-              {regionDraftValidation && !regionDraftValidation.valid && <span role="alert">{t(`map.regionInvalid.${regionDraftValidation.reason}`)}</span>}
-              {regionCreate.error && <span role="alert">{regionCreate.error}</span>}
-              {regionCreate.status === 'saving' && <span role="status">{t('map.regionSaving')}</span>}
-              {regionCreate.status === 'editing' && <button type="button" disabled={!regionDraftValidation?.valid} onClick={() => void saveRegion()}>{t('map.save')}</button>}
-              {regionCreate.status === 'refresh-failed' && <button type="button" onClick={() => void retryRegionRefresh()}>{t('map.retryRefresh')}</button>}
-            </>}
-            {regionCreate?.status === 'editing' && <button type="button" onClick={cancelRegionDraft}>{t("map.cancel")}</button>}
-            {regionEdit && <>
-              <button type="button" disabled={regionEdit.status !== 'editing' || regionDraft.selectedVertexIndex === null || regionDraft.points.length <= 3} onClick={deleteSelectedRegionDraftVertex}>{t('map.regionDeleteVertex')}</button>
-              {regionDraftValidation && !regionDraftValidation.valid && <span role="alert">{t(`map.regionInvalid.${regionDraftValidation.reason}`)}</span>}
-              {regionEdit.error && <span role="alert">{regionEdit.error}</span>}
-              {regionEdit.status === 'saving' && <span role="status">{t('map.regionSaving')}</span>}
-              {regionEdit.status === 'editing' && <button type="button" disabled={!regionDraftValidation?.valid} onClick={() => void saveExistingRegion()}>{t('map.save')}</button>}
-              {regionEdit.status === 'refresh-failed' && <button type="button" onClick={() => void retryExistingRegionRefresh()}>{t('map.retryRefresh')}</button>}
-              {regionEdit.status === 'editing' && <button type="button" onClick={cancelRegionEdit}>{t('map.cancel')}</button>}
-            </>}
-          </>}
-          {regionProperties && <>
-            <label>{t('map.regionLabel')}<input value={regionProperties.label} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, label: event.target.value, error: null } : current)} /></label>
-            <label>{t('map.regionFillColor')}<input aria-label={t('map.regionFillColor')} type="color" value={regionProperties.style.fill_color} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, fill_color: event.target.value }, error: null } : current)} /></label>
-            <label>{t('map.regionFillOpacity')}<input aria-label={t('map.regionFillOpacity')} type="number" min="0" max="1" step="0.01" value={regionProperties.style.fill_opacity} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, fill_opacity: Number(event.target.value) }, error: null } : current)} /></label>
-            <label>{t('map.regionStrokeColor')}<input aria-label={t('map.regionStrokeColor')} type="color" value={regionProperties.style.stroke_color} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, stroke_color: event.target.value }, error: null } : current)} /></label>
-            <label>{t('map.regionStrokeWidth')}<input aria-label={t('map.regionStrokeWidth')} type="number" min="0" step="0.5" value={regionProperties.style.stroke_width} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, stroke_width: Number(event.target.value) }, error: null } : current)} /></label>
-            <label>{t('map.regionStrokeStyle')}<select aria-label={t('map.regionStrokeStyle')} value={regionProperties.style.stroke_style} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, stroke_style: event.target.value as MapRegion['style']['stroke_style'] }, error: null } : current)}><option value="solid">{t('map.regionStrokeSolid')}</option><option value="dashed">{t('map.regionStrokeDashed')}</option><option value="dotted">{t('map.regionStrokeDotted')}</option></select></label>
-            <label>{t('map.regionLabelColor')}<input aria-label={t('map.regionLabelColor')} type="color" value={regionProperties.style.label_color ?? regionProperties.style.stroke_color} disabled={regionProperties.status !== 'editing'} onChange={(event) => setRegionProperties((current) => current ? { ...current, style: { ...current.style, label_color: event.target.value }, error: null } : current)} /></label>
-            <button type="button" disabled={regionProperties.status !== 'editing'} onClick={() => setRegionProperties((current) => current ? { ...current, style: { ...current.style, label_color: null }, error: null } : current)}>{t('map.regionLabelColorAutomatic')}</button>
-            <button type="button" disabled={regionProperties.status !== 'editing'} onClick={() => setRegionProperties((current) => current ? { ...current, labelPosition: null, error: null } : current)}>{t('map.regionLabelPositionAutomatic')}</button>
-            {regionProperties.error && <span role="alert">{regionProperties.error}</span>}
-            {regionProperties.status === 'saving' && <span role="status">{t('map.regionSaving')}</span>}
-            {regionProperties.status === 'editing' && <><button type="button" onClick={() => void saveRegionProperties()}>{t('map.save')}</button><button type="button" onClick={cancelRegionProperties}>{t('map.cancel')}</button></>}
-            {regionProperties.status === 'refresh-failed' && <button type="button" onClick={() => void retryRegionPropertiesRefresh()}>{t('map.retryRefresh')}</button>}
-          </>}
-          {regionDeletion && <section role="alertdialog" aria-label={t('map.regionDeleteConfirm', { label: regionDeletion.label })}>
-            <span>{t('map.regionDeleteConfirm', { label: regionDeletion.label })}</span>
-            {regionDeletion.error && <span role="alert">{regionDeletion.error}</span>}
-            {regionDeletion.status === 'confirming' && <><button type="button" onClick={() => void confirmRegionDeletion()}>{t('map.regionDeleteConfirmAction')}</button><button type="button" onClick={() => setRegionDeletion(null)}>{t('map.cancel')}</button></>}
-            {regionDeletion.status === 'deleting' && <span role="status">{t('map.regionDeleting')}</span>}
-            {regionDeletion.status === 'refresh-failed' && <button type="button" onClick={() => void retryRegionDeletionRefresh()}>{t('map.retryRefresh')}</button>}
-          </section>}
-          {selectedTextAnnotationId && !regionOperationActive && !textAnnotationOperationActive && <>
-            <button type="button" onClick={editTextAnnotation}>{t('map.textAnnotationEdit')}</button>
-            <button type="button" onClick={beginTextAnnotationDeletion}>{t('map.textAnnotationDelete')}</button>
-          </>}
-          {textAnnotationEdit && <section aria-label={t('map.textAnnotation')}>
-            {textAnnotationEdit.status === 'placing' && <span>{t('map.textAnnotationPlace')}</span>}
-            {textAnnotationEdit.status !== 'placing' && <>
-              <label>{t('map.textAnnotationText')}<textarea value={textAnnotationEdit.text} disabled={textAnnotationEdit.status !== 'editing'} onChange={(event) => setTextAnnotationEdit((current) => current ? { ...current, text: event.target.value, error: null } : current)} /></label>
-              <label>{t('map.textAnnotationColor')}<input aria-label={t('map.textAnnotationColor')} type="color" value={textAnnotationEdit.textColor} disabled={textAnnotationEdit.status !== 'editing'} onChange={(event) => setTextAnnotationEdit((current) => current ? { ...current, textColor: event.target.value, error: null } : current)} /></label>
-              <label>{t('map.textAnnotationFontSize')}<input aria-label={t('map.textAnnotationFontSize')} type="number" min="1" value={textAnnotationEdit.fontSize} disabled={textAnnotationEdit.status !== 'editing'} onChange={(event) => setTextAnnotationEdit((current) => current ? { ...current, fontSize: Number(event.target.value), error: null } : current)} /></label>
-              {textAnnotationEdit.error && <span role="alert">{textAnnotationEdit.error}</span>}
-              {textAnnotationEdit.status === 'saving' && <span role="status">{t('map.textAnnotationSaving')}</span>}
-              {textAnnotationEdit.status === 'editing' && <><button type="button" disabled={!textAnnotationEdit.position || textAnnotationEdit.fontSize <= 0} onClick={() => void saveTextAnnotation()}>{t('map.save')}</button><button type="button" onClick={() => setTextAnnotationEdit(null)}>{t('map.cancel')}</button></>}
-              {textAnnotationEdit.status === 'refresh-failed' && <button type="button" onClick={() => void retryTextAnnotationRefresh()}>{t('map.retryRefresh')}</button>}
-            </>}
-            {textAnnotationEdit.status === 'placing' && <button type="button" onClick={() => setTextAnnotationEdit(null)}>{t('map.cancel')}</button>}
-          </section>}
-          {textAnnotationDeletion && <section role="alertdialog" aria-label={t('map.textAnnotationDeleteConfirm')}><span>{t('map.textAnnotationDeleteConfirm')}</span>{textAnnotationDeletion.error && <span role="alert">{textAnnotationDeletion.error}</span>}{textAnnotationDeletion.status === 'confirming' && <><button type="button" onClick={() => void confirmTextAnnotationDeletion()}>{t('map.textAnnotationDelete')}</button><button type="button" onClick={() => setTextAnnotationDeletion(null)}>{t('map.cancel')}</button></>}{textAnnotationDeletion.status === 'deleting' && <span role="status">{t('map.textAnnotationDeleting')}</span>}{textAnnotationDeletion.status === 'refresh-failed' && <button type="button" onClick={() => void retryTextAnnotationDeletionRefresh()}>{t('map.retryRefresh')}</button>}</section>}
-        </section>
-      )}
-
-      {physicalRegionMode && activeMap && <>
-        <section className="map-presentation-toolbar" aria-label={t('map.regions')}>
-          <div className="map-presentation-toolbar__reference" role="group" aria-label={t('map.regionReference')}>
-            <button type="button" aria-pressed={showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(true)}>{t('map.regionOutlines')}</button>
-            <button type="button" aria-pressed={!showRegionReferenceOutlines} onClick={() => setShowRegionReferenceOutlines(false)}>{t('map.regionHideObjects')}</button>
-          </div>
-          <button type="button" className="primary-action" aria-label={t('map.regionNew')} disabled={regionOperationActive || textAnnotationOperationActive} onClick={() => { if (regionOperationActive || textAnnotationOperationActive) return; regionOperationSequence.current += 1; setSelectedRegionId(null); setRegionDraft({ status: 'drawing', points: [] }); setRegionCreate(null); setRegionEdit(null); setRegionProperties(null); setRegionDeletion(null); }}>{`+ ${t('map.regions')}`}</button>
-          <button type="button" className="primary-action" aria-label={t('map.textAnnotationAdd')} disabled={regionOperationActive || textAnnotationOperationActive} onClick={startTextAnnotation}>{`+ ${t('map.textAnnotation')}`}</button>
+      {physicalAnnotationMode && activeMap && <>
+        <section className="map-presentation-toolbar" aria-label={t('map.textAnnotation')}>
+          <button type="button" className="primary-action" aria-label={t('map.textAnnotationAdd')} disabled={textAnnotationOperationActive} onClick={startTextAnnotation}>{`+ ${t('map.textAnnotation')}`}</button>
         </section>
         <PresentationAuthoringPanel
-          regions={activeMap.regions ?? []} annotations={activeMap.text_annotations ?? []}
-          locationChoices={locationChoices}
-          selectedRegionId={selectedRegionId} selectedAnnotationId={selectedTextAnnotationId}
-          selectionDisabled={regionOperationActive || textAnnotationOperationActive}
-          regionDraft={regionDraft} regionDraftValidation={regionDraftValidation}
-          regionCreate={regionCreate} regionEdit={regionEdit} regionProperties={regionProperties} regionDeletion={regionDeletion}
+          annotations={activeMap.text_annotations ?? []}
+          selectedAnnotationId={selectedTextAnnotationId}
+          selectionDisabled={textAnnotationOperationActive}
           textAnnotationEdit={textAnnotationEdit} textAnnotationDeletion={textAnnotationDeletion}
-          setRegionCreate={setRegionCreate} setRegionProperties={setRegionProperties} setRegionDeletion={setRegionDeletion}
           setTextAnnotationEdit={setTextAnnotationEdit} setTextAnnotationDeletion={setTextAnnotationDeletion}
-          onSelectRegion={(id) => { if (!regionOperationActive && !textAnnotationOperationActive) setSelectedRegionId((current) => current === id ? null : id); }}
-          onSelectAnnotation={(id) => { if (!regionOperationActive && !textAnnotationOperationActive) setSelectedTextAnnotationId((current) => current === id ? null : id); }}
-          onGeometry={startRegionEdit} onProperties={startRegionProperties} onDeleteRegion={beginRegionDeletion}
-          onDraftDone={completeRegionDraft} onCancelDraft={cancelRegionDraft} onDeleteVertex={deleteSelectedRegionDraftVertex} onSaveRegion={() => void saveRegion()} onRetryRegionRefresh={() => void retryRegionRefresh()}
-          onSaveExistingRegion={() => void saveExistingRegion()} onCancelRegionEdit={cancelRegionEdit} onRetryExistingRegionRefresh={() => void retryExistingRegionRefresh()}
-          onSaveProperties={() => void saveRegionProperties()} onCancelProperties={cancelRegionProperties} onRetryPropertiesRefresh={() => void retryRegionPropertiesRefresh()} onConfirmRegionDeletion={() => void confirmRegionDeletion()} onRetryRegionDeletionRefresh={() => void retryRegionDeletionRefresh()}
+          onSelectAnnotation={(id) => { if (!textAnnotationOperationActive) setSelectedTextAnnotationId((current) => current === id ? null : id); }}
           onEditAnnotation={editTextAnnotation} onDeleteAnnotation={beginTextAnnotationDeletion} onSaveAnnotation={() => void saveTextAnnotation()} onRetryAnnotationRefresh={() => void retryTextAnnotationRefresh()} onConfirmAnnotationDeletion={() => void confirmTextAnnotationDeletion()} onRetryAnnotationDeletionRefresh={() => void retryTextAnnotationDeletionRefresh()}
         />
       </>}
 
-      {(compositeCreate?.status === "confirming" || compositeCreate?.status === "creating") && (
-        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Создать составной блок">
-          <form className="map-dialog__surface" onSubmit={(event) => { event.preventDefault(); void submitCompositeCreate(); }}>
-            <h2>Создать составной блок</h2>
-            <p>В блок войдут выбранные объекты: {compositeMemberIds.size}.</p>
-            <label>
-              Название составного блока
-              <input autoFocus value={compositeCreate.name} disabled={compositeCreate.status === "creating"} onChange={(event) => setCompositeCreate((current) => current && current.status !== "creating" ? { ...current, name: event.target.value, error: null } : current)} />
-            </label>
-            {compositeCreate.error && <p role="alert">{compositeCreate.error}</p>}
-            <div className="map-dialog__actions">
-              <button type="button" disabled={compositeCreate.status === "creating"} onClick={() => setCompositeCreate((current) => current ? { ...current, status: "selecting", error: null } : current)}>Назад</button>
-              <button type="submit" disabled={compositeCreate.status === "creating" || !compositeCreate.name.trim()}>Создать</button>
-            </div>
-          </form>
-        </section>
-      )}
       {presentationVariantDeletion && (
         <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Удалить компоновку">
           <div className="map-dialog__surface">
             <h2>Удалить компоновку</h2>
             <p>Удалить компоновку «{presentationVariantDeletion.variantName}»?</p>
-            <p>Будут удалены только сохранённые расположение, размеры, трассы и состояние составных блоков этой компоновки. Объекты карты и связи не удаляются.</p>
+            <p>Будут удалены только сохранённые расположение, размеры и трассы этой компоновки. Объекты карты и связи не удаляются.</p>
             {presentationVariantDeletion.error && <p role="alert">{presentationVariantDeletion.error}</p>}
             <div className="map-dialog__actions">
               <button type="button" disabled={presentationVariantDeletion.status === "deleting"} onClick={() => setPresentationVariantDeletion(null)}>Отмена</button>
@@ -2432,45 +1639,11 @@ export function MapPage({
           </div>
         </section>
       )}
-      {compositeDeletion && (
-        <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Удалить составной блок">
-          <div className="map-dialog__surface">
-            <h2>Удалить составной блок</h2>
-            <p>Удалить составной блок «{compositeDeletion.compositeName}»?</p>
-            <p>Будет удалена только группировка объектов. Сами объекты карты и их связи останутся без изменений.</p>
-            {compositeDeletion.error && <p role="alert">{compositeDeletion.error}</p>}
-            <div className="map-dialog__actions">
-              <button type="button" disabled={compositeDeletion.status === "deleting"} onClick={() => setCompositeDeletion(null)}>Отмена</button>
-              <button type="button" disabled={compositeDeletion.status === "deleting"} onClick={() => void confirmCompositeDeletion()}>Удалить</button>
-            </div>
-          </div>
-        </section>
-      )}
-      {compositeVisibility && (() => {
-        const composite = activeMap?.composites.find((item) => item.composite_ref.entity_id === compositeVisibility.compositeId);
-        return <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Видимость при сворачивании">
-          <div className="map-dialog__surface">
-            <h2>Видимость при сворачивании</h2>
-            <p>Выберите объекты, которые должны оставаться видимыми при сворачивании составного блока «{compositeVisibility.compositeName}». Объекты с физическими связями за пределы блока показываются автоматически.</p>
-            <div className="composite-visibility-dialog__members">{[...(composite?.physical_object_refs ?? [])].map((reference) => ({ reference, node: nodeForPhysicalObject(document?.nodes ?? [], reference.entity_id) })).sort((left, right) => natural(left.node ? displayNodeLabel(left.node) : 'Объект', right.node ? displayNodeLabel(right.node) : 'Объект')).map(({ reference, node }) => {
-              const label = node ? displayNodeLabel(node) : 'Объект';
-              const automatic = composite ? compositeBoundaryObjectIds(composite).has(reference.entity_id) : false;
-              return <label className="composite-visibility-dialog__member" key={reference.entity_id}><input type="checkbox" disabled={compositeVisibility.status !== 'editing'} checked={compositeVisibility.draft.has(reference.entity_id)} onChange={() => setCompositeVisibility((current) => { if (!current || current.status !== 'editing') return current; const draft = new Set(current.draft); if (draft.has(reference.entity_id)) draft.delete(reference.entity_id); else draft.add(reference.entity_id); return { ...current, draft, error: null }; })} /><span>{label}</span>{automatic && <small>Показывается автоматически</small>}</label>;
-            })}</div>
-            {compositeVisibility.error && <p role="alert">{compositeVisibility.error}</p>}
-            {compositeVisibility.status === 'refresh-failed' && <p role="alert">Видимость составного блока сохранена, но карту не удалось обновить.</p>}
-            <div className="map-dialog__actions">
-              <button type="button" disabled={compositeVisibility.status === 'saving'} onClick={() => setCompositeVisibility(null)}>Отмена</button>
-              {compositeVisibility.status === 'refresh-failed' ? <button type="button" onClick={() => void retryCompositeVisibilityRefresh()}>Повторить обновление</button> : <button type="button" disabled={compositeVisibility.status !== 'editing'} onClick={() => void saveCompositeVisibility()}>Сохранить</button>}
-            </div>
-          </div>
-        </section>;
-      })()}
       {presentationVariantCreate && (
         <section className="map-dialog" role="dialog" aria-modal="true" aria-label="Создать копию компоновки">
           <div className="map-dialog__surface">
             <h2>Создать копию компоновки</h2>
-            <p>Будет создана независимая копия текущей компоновки «{presentationVariantCreate.sourceVariantName}». Положение и размеры объектов, трассы кабелей и состояние составных блоков будут скопированы. Исходная компоновка не изменится.</p>
+            <p>Будет создана независимая копия текущей компоновки «{presentationVariantCreate.sourceVariantName}». Положение и размеры объектов, а также трассы кабелей будут скопированы. Исходная компоновка не изменится.</p>
             <label>
               Название новой компоновки
               <input autoFocus value={presentationVariantCreate.name} disabled={presentationVariantCreate.status === "creating"} onChange={(event) => setPresentationVariantCreate((current) => current ? { ...current, name: event.target.value, error: null } : null)} />
@@ -2590,9 +1763,6 @@ export function MapPage({
       </div></section>}
       {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
       {presentationVariantCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Компоновка создана, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantCreationRefresh()}>Повторить обновление</button></section>}
-      {compositeCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Составной блок создан, но карту не удалось обновить.</p><button type="button" onClick={() => void retryCompositeCreationRefresh()}>Повторить обновление</button></section>}
-      {compositeDeletionRefresh?.status === "refresh-failed" && <section role="alert"><p>Составной блок удалён, но карту не удалось обновить.</p><button type="button" onClick={() => void retryCompositeDeletionRefresh()}>Повторить обновление</button></section>}
-      {compositePresentationOperation?.status === 'refresh-failed' && <section role="alert"><p>{compositePresentationOperation.bulk ? 'Состояние составных блоков сохранено, но карту не удалось обновить.' : 'Состояние составного блока сохранено, но карту не удалось обновить.'}</p><button type="button" onClick={() => void retryCompositePresentationRefresh()}>Повторить обновление</button></section>}
       {variantDeletion?.status === "refresh-failed" && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
       {error && <p role="alert">{error}</p>}
@@ -2618,7 +1788,7 @@ export function MapPage({
       )}
       {(legacy || activeMap) && (
         <>
-          {!physicalRegionMode && <TraceCommandBar
+          {!physicalAnnotationMode && <TraceCommandBar
             catalogInventoryDataSource={catalogInventoryDataSource}
             physicalObjectDetailsDataSource={physicalObjectDetailsDataSource}
             traceDataSource={traceDataSource}
@@ -2638,7 +1808,7 @@ export function MapPage({
               }
             }}
           />}
-          {!physicalRegionMode && traceViewNotice && viewMode === "physical" && <p className="map-page__trace-notice" role="status">{traceViewNotice}</p>}
+          {!physicalAnnotationMode && traceViewNotice && viewMode === "physical" && <p className="map-page__trace-notice" role="status">{traceViewNotice}</p>}
           <section className="map-page__canvas">
             {!document && <ViewState kind="loading" />}
             {document && (
@@ -2646,14 +1816,13 @@ export function MapPage({
                 <TopologyCanvas
                   document={document}
                   focusPhysicalObjectId={params.get("focus")}
-                  selection={physicalRegionMode ? null : selection}
+                  selection={physicalAnnotationMode ? null : selection}
                   onSelectionChange={(nextSelection) => {
                     setContextAnchor(null);
                     if (nextSelection?.type !== "continuation")
                       setContinuationAnchor(null);
                     setSelection(nextSelection);
                   }}
-                  compositeMemberSelection={compositeCreate?.status === "selecting" ? { selectedPhysicalObjectIds: compositeMemberIds, onPhysicalObjectClick: toggleCompositeMember } : undefined}
                   sceneKey={presentationSceneKey}
                   positionOverrides={!legacy ? positions : undefined}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}
@@ -2661,9 +1830,18 @@ export function MapPage({
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}
                   lockedNodeIds={!legacy ? lockedNodeIds : undefined}
                   authoritativePositionRevision={authoritativePositionRevision}
-                  onPhysicalNodeDragStop={!legacy && !physicalRegionMode ? move : undefined}
-                  onBlueprintDisplayResize={!legacy && viewMode === "physical" && !physicalRegionMode ? (id, displayWidth) => {
+                  onPhysicalNodeDragStop={!legacy && !physicalAnnotationMode ? move : undefined}
+                  onBlueprintDisplayResize={!legacy && viewMode === "physical" && !physicalAnnotationMode ? (id, displayWidth) => {
                     void resizeBlueprint(id, displayWidth).catch((reason) => setError(errorMessage(reason, t("map.sizeFailed"))));
+                  } : undefined}
+                  annotationMode={physicalAnnotationMode ? {
+                    annotationPlacement: textAnnotationEdit?.status === 'placing',
+                    previewAnnotation: textAnnotationPreview,
+                    selectedAnnotationId: selectedTextAnnotationId,
+                    editableAnnotationId: textAnnotationEdit?.status === 'editing' && textAnnotationEdit.annotationId ? textAnnotationEdit.annotationId : null,
+                    onAnnotationPlace: (position) => setTextAnnotationEdit((current) => current?.status === 'placing' ? { ...current, position, status: 'editing' } : current),
+                    onAnnotationSelect: (annotationId) => { if (!textAnnotationOperationActive) setSelectedTextAnnotationId((current) => current === annotationId ? null : annotationId); },
+                    onMoveAnnotation: (annotationId, position) => setTextAnnotationEdit((current) => current?.status === 'editing' && current.annotationId === annotationId ? { ...current, position, error: null } : current),
                   } : undefined}
                   onNodeCollisionRejected={() =>
                     setError(t("map.collision"))
@@ -2675,78 +1853,47 @@ export function MapPage({
                     selectedTraceBranchId,
                   )}
                   cableRoutes={
-                    !physicalRegionMode && viewMode === "physical" ? activeMap?.cable_routes : undefined
+                    !physicalAnnotationMode && viewMode === "physical" ? activeMap?.cable_routes : undefined
                   }
-                  compositeInputs={viewMode === "physical" ? compositeInputs : undefined}
-                  selectedCompositeId={selectedCompositeId}
-                  onCompositeClick={(compositeId) => { setSelection(null); setSelectedCompositeId(compositeId); }}
-                  onCompositeDragStop={(compositeId, geometry) => { const composite = activeMap?.composites.find((item) => item.composite_ref.entity_id === compositeId); if (composite?.presentation.collapsed) void saveCompositePresentation(compositeId, { collapsed: true, x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height }); }}
                   viewportFitRevision={viewportFitRevision}
-                  onCompositeToggle={toggleCompositePresentation}
-                  cableRouteDraft={!physicalRegionMode && cableRouteEdit ? { cableId: cableRouteEdit.cableId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
-                  wiringRoute={!physicalRegionMode && wiring.status !== "idle" && wiring.status !== "selecting-source" ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target, waypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex, onWaypointSelect: (index) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}
-                  physicalPortStates={physicalRegionMode ? undefined : physicalPortStates}
+                  cableRouteDraft={!physicalAnnotationMode && cableRouteEdit ? { cableId: cableRouteEdit.cableId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
+                  wiringRoute={!physicalAnnotationMode && wiring.status !== "idle" && wiring.status !== "selecting-source" ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target, waypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex, onWaypointSelect: (index) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}
+                  physicalPortStates={physicalAnnotationMode ? undefined : physicalPortStates}
                   wiringHighlightedConnectionMemberIds={wiringInternalContinuity.members}
                   wiringContinuationConnectionPointIds={wiringInternalContinuity.points}
-                  onPhysicalPortClick={!physicalRegionMode && (wiring.status === "selecting-source" || wiring.status === "selecting-target") ? onPhysicalPortClick : undefined}
+                  onPhysicalPortClick={!physicalAnnotationMode && (wiring.status === "selecting-source" || wiring.status === "selecting-target") ? onPhysicalPortClick : undefined}
                   onViewportCenterReady={
                     viewMode === "physical" ? receiveViewportCenter : undefined
                   }
                   onPhysicalPaneContextMenu={
-                    viewMode === "physical" && !physicalRegionMode
+                    viewMode === "physical" && !physicalAnnotationMode
                       ? (anchor, screen) => !contextBusy && setContextAnchor({ kind: "empty", anchor, screen })
                       : undefined
                   }
-                  onPhysicalNodeContextMenu={viewMode === "physical" && !physicalRegionMode ? (node, screen) => {
+                  onPhysicalNodeContextMenu={viewMode === "physical" && !physicalAnnotationMode ? (node, screen) => {
                     if (contextBusy) return;
                     const id = physicalObjectIdForNode(node); if (!id) return;
                     setSelection({ type: "node", item: node });
                     setContextAnchor({ kind: "object", id, label: displayNodeLabel(node), locked: Boolean(activeMap?.placements.find((placement) => placement.physical_object_ref.entity_id === id)?.positions["L1/PHYSICAL_OBJECT"]?.locked), screen });
                   } : undefined}
-                  onPhysicalCableContextMenu={viewMode === "physical" && !physicalRegionMode ? (node, screen) => {
+                  onPhysicalCableContextMenu={viewMode === "physical" && !physicalAnnotationMode ? (node, screen) => {
                     if (contextBusy) return;
                     const id = cableIdForNode(node); if (!id) return;
                     setSelection({ type: "node", item: node });
                     setContextAnchor({ kind: "cable", id, label: displayNodeLabel(node), hasRoute: Boolean(activeMap?.cable_routes?.some((route) => route.cable_ref.entity_id === id)), screen });
                   } : undefined}
-                  onPhysicalPortContextMenu={viewMode === "physical" && !physicalRegionMode ? openPortContext : undefined}
+                  onPhysicalPortContextMenu={viewMode === "physical" && !physicalAnnotationMode ? openPortContext : undefined}
                   onPaneClick={(anchor) => {
-                    if (physicalRegionMode) return;
+                    if (physicalAnnotationMode) return;
                     setContextAnchor(null);
                     setSelection(null);
                     setWiring((current) => current.status === "selecting-target" ? { ...current, draftWaypoints: [...current.draftWaypoints, anchor], selectedWaypointIndex: current.draftWaypoints.length } : current);
                   }}
-                  onContinuationClickAnchor={!physicalRegionMode ? (continuationId, anchor) =>
+                  onContinuationClickAnchor={!physicalAnnotationMode ? (continuationId, anchor) =>
                     mapId &&
                     setContinuationAnchor({ continuationId, mapId, anchor })
                   : undefined}
-                  regions={viewMode === "physical" ? activeMap?.regions : undefined}
                   textAnnotations={viewMode === "physical" ? activeMap?.text_annotations : undefined}
-                  selectedRegionId={!regionEdit ? selectedRegionId : undefined}
-                  locationFocusObjectIds={locationFocusObjectIds}
-                  regionMode={physicalRegionMode ? {
-                    showReferenceOutlines: showRegionReferenceOutlines,
-                    draft: regionDraft ?? undefined,
-                    editableDraft: regionCreate?.status === 'editing' || regionEdit?.status === 'editing',
-                    invalidDraft: regionDraftValidation ? !regionDraftValidation.valid : false,
-                  hiddenRegionId: regionEdit?.regionId,
-                  previewRegion: regionPropertiesPreview,
-                  editableLabelRegionId: regionProperties?.status === 'editing' ? regionProperties.regionId : null,
-                  annotationPlacement: textAnnotationEdit?.status === 'placing',
-                  previewAnnotation: textAnnotationPreview,
-                  selectedAnnotationId: selectedTextAnnotationId,
-                  editableAnnotationId: textAnnotationEdit?.status === 'editing' && textAnnotationEdit.annotationId ? textAnnotationEdit.annotationId : null,
-                  onAnnotationPlace: (position) => setTextAnnotationEdit((current) => current?.status === 'placing' ? { ...current, position, status: 'editing' } : current),
-                  onAnnotationSelect: (annotationId) => { if (!regionOperationActive && !textAnnotationOperationActive) setSelectedTextAnnotationId((current) => current === annotationId ? null : annotationId); },
-                  onMoveAnnotation: (annotationId, position) => setTextAnnotationEdit((current) => current?.status === 'editing' && current.annotationId === annotationId ? { ...current, position, error: null } : current),
-                  onMoveLabel: (position) => setRegionProperties((current) => current?.status === 'editing' ? { ...current, labelPosition: { ...position }, error: null } : current),
-                    onDraftPoint: (point) => setRegionDraft((current) => current?.status === 'drawing' ? { ...current, points: [...current.points, point] } : current),
-                    onCompleteDraft: completeRegionDraft,
-                    onMoveDraftVertex: (index, point) => { if (regionCreate?.status === 'editing' || regionEdit?.status === 'editing') setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: moveRegionDraftVertex(current.points, index, point) } : current); },
-                    onInsertDraftVertex: (edgeStartIndex, point) => { if (regionCreate?.status === 'editing' || regionEdit?.status === 'editing') setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: insertRegionDraftVertex(current.points, edgeStartIndex, point), selectedVertexIndex: edgeStartIndex + 1 } : current); },
-                    onTranslateDraft: (delta) => { if (regionCreate?.status === 'editing' || regionEdit?.status === 'editing') { setRegionDraft((current) => current?.status === 'editing' ? { ...current, points: translateRegionDraft(current.points, delta) } : current); if (regionEdit?.status === 'editing') setRegionEdit((current) => current?.status === 'editing' ? { ...current, labelPosition: current.labelPosition ? { x: current.labelPosition.x + delta.x, y: current.labelPosition.y + delta.y } : null } : current); } },
-                    onSelectDraftVertex: (index) => { if (regionCreate?.status === 'editing' || regionEdit?.status === 'editing') setRegionDraft((current) => current?.status === 'editing' ? { ...current, selectedVertexIndex: index } : current); },
-                  } : undefined}
                 />
               </ReactFlowProvider>
             )}
@@ -2763,7 +1910,7 @@ export function MapPage({
       )}
       <QuickInspector
         document={document}
-        selection={physicalRegionMode ? null : selection}
+        selection={physicalAnnotationMode ? null : selection}
         onSelectNode={(node) => setSelection({ type: "node", item: node })}
         onClose={() => setSelection(null)}
         cableRoutePresentation={(!legacy && viewMode === "physical" && selectedCableId && drawableSelectedCable) ? { present: Boolean(selectedCableRoute), waypointCount: selectedCableRoute?.waypoints.length ?? 0, editing: Boolean(cableRouteEdit), selectedWaypointIndex: cableRouteEdit?.selectedWaypointIndex ?? null, savePending: cableRouteEdit?.status === "saving", refreshFailed: cableRouteEdit?.status === "refresh-failed", error: cableRouteEdit?.error ?? null, resetPending: cableRouteReset?.status === "pending", resetRefreshFailed: cableRouteReset?.status === "refresh-failed" } : undefined}

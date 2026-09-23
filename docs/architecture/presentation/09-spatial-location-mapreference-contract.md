@@ -3,10 +3,9 @@
 ## Статус и граница
 
 Это главный целевой contract hierarchical Location presentation NetMap.
-Целевой contract согласован; реализация остаётся **IMPLEMENTATION PENDING**.
-Текущие development-stage `MapComposite` и manual `MapRegion` ещё существуют
-в коде до отдельных destructive milestones. Этот документ не утверждает, что
-они уже удалены.
+Целевой contract согласован; hierarchical Location presentation остаётся
+**IMPLEMENTATION PENDING**. P-UX-03A удалил development-stage `MapComposite`
+и manual `MapRegion`; P-UX-03B..E ещё не реализованы.
 
 NetMap pre-production. Если старые spatial models конфликтуют с этим
 contract, они удаляются; compatibility layers, converters, fallback readers и
@@ -113,15 +112,14 @@ re-layout не выполняется.
 
 ## MapComposite и MapRegion: superseded
 
-Существующий `MapComposite` implementation superseded этой Location-driven
+Удалённый `MapComposite` implementation superseded этой Location-driven
 hierarchical presentation model и больше не является target product
 capability. Его membership, API, schema и UI не сохраняются, не
 конвертируются в Locations и не поддерживаются параллельно. Допустимо
 переиспользовать отдельные алгоритмы boundary detection, collapsed proxy,
-frame geometry, exact evidence и rendering helpers, но сама сущность удаляется
-отдельным destructive implementation milestone.
+frame geometry, exact evidence и rendering helpers в будущих milestones.
 
-Manual `MapRegion` также не является target capability и удаляется без
+Manual `MapRegion` также не является target capability и удалён без
 конвертации development polygons в Location frames. `MapTextAnnotation`
 остаётся самостоятельной presentation capability.
 

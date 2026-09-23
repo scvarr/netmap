@@ -8,7 +8,6 @@ EXPECTED_UNIQUENESS_CONSTRAINTS = {
     "uq_map_placements_map_object": "MAP_PLACEMENT_CONFLICT",
     "uq_map_cable_routes_variant_cable_view": "MAP_CABLE_ROUTE_CONFLICT",
     "uq_map_cable_routes_map_cable_view": "MAP_CABLE_ROUTE_CONFLICT",
-    "uq_map_composite_members_placement": "MAP_COMPOSITE_OVERLAP",
     "uq_map_presentation_variants_map_name": "MAP_PRESENTATION_VARIANT_NAME_CONFLICT",
 }
 

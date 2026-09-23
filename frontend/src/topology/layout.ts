@@ -26,20 +26,16 @@ const loadElk = (): Promise<ELK> => {
 export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
   /** Temporary MapPage authoring state; deliberately separate from topology selection. */
-  compositeMemberSelected?: boolean;
   traceHighlighted?: boolean;
-  locationFocus?: 'match' | 'dim';
   traceHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
-  hiddenCompositeConnectionPointIds?: ReadonlySet<string>;
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
   onPhysicalPortContextMenu?: (port: { physicalObjectId: string; connectionPointId: string; label: string }, screen: { x: number; y: number }) => void;
   onBlueprintDisplayResize?: (physicalObjectId: string, displayWidth: number) => void;
   blueprintResizeEnabled?: boolean;
   /** Bounded presentation control; never topology or persisted node data. */
-  onCompositeToggle?: () => void;
 }
 
 export interface LogicalEdgeData extends Record<string, unknown> {
@@ -64,132 +60,13 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   cablePresentationEmphasis?: 'normal' | 'attached' | 'selected' | 'traced' | 'editing';
 }
 
-export type DeviceFlowNode = Node<DeviceNodeData, 'device' | 'composite'>;
+export type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 export type LogicalFlowEdge = Edge<LogicalEdgeData>;
 
 export interface FlowProjection {
   nodes: DeviceFlowNode[];
   edges: LogicalFlowEdge[];
 }
-
-/** Presentation geometry only; never persisted as a PhysicalObject position. */
-export const COMPOSITE_FRAME_HEADER_HEIGHT = 28;
-export const COMPOSITE_FRAME_PADDING = 10;
-export const COMPOSITE_FRAME_CONTENT_GAP = 6;
-export const COMPOSITE_FRAME_MIN_WIDTH = 200;
-export const COMPOSITE_FRAME_EMPTY_CONTENT_HEIGHT = 20;
-
-const displayedDimensions = (node: DeviceFlowNode) => ({
-  width: node.width ?? node.measured?.width ?? LAYOUT_NODE_WIDTH,
-  height: node.height ?? node.measured?.height ?? LAYOUT_NODE_HEIGHT,
-});
-
-export interface CompositeFrameGeometry {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-/** A derived presentation frame: it never changes its members' coordinates. */
-export const compositeFrameGeometry = (
-  rectangles: readonly { x: number; y: number; width: number; height: number }[],
-): CompositeFrameGeometry => {
-  if (!rectangles.length) {
-    return {
-      x: 0,
-      y: 0,
-      width: COMPOSITE_FRAME_MIN_WIDTH,
-      height: COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_CONTENT_GAP + COMPOSITE_FRAME_EMPTY_CONTENT_HEIGHT + COMPOSITE_FRAME_PADDING * 2,
-    };
-  }
-  const left = Math.min(...rectangles.map((item) => item.x));
-  const top = Math.min(...rectangles.map((item) => item.y));
-  const right = Math.max(...rectangles.map((item) => item.x + item.width));
-  const bottom = Math.max(...rectangles.map((item) => item.y + item.height));
-  return {
-    x: left - COMPOSITE_FRAME_PADDING,
-    y: top - COMPOSITE_FRAME_HEADER_HEIGHT - COMPOSITE_FRAME_CONTENT_GAP - COMPOSITE_FRAME_PADDING,
-    width: Math.max(COMPOSITE_FRAME_MIN_WIDTH, right - left + COMPOSITE_FRAME_PADDING * 2),
-    height: bottom - top + COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_CONTENT_GAP + COMPOSITE_FRAME_PADDING * 2,
-  };
-};
-
-/**
- * Turns all collapsed composite visible members into React Flow children. Their
- * relative positions are derived from the authoritative expanded geometry.
- */
-export const applyCollapsedCompositePresentation = (
-  projection: FlowProjection,
-  scene: PresentationSceneDocument,
-): FlowProjection => {
-  const nodes = projection.nodes.map((node) => ({ ...node, data: { ...node.data } }));
-  const nodesById = new Map(nodes.map((node) => [node.id, node]));
-
-  for (const composite of scene.composites) {
-    const frameId = `map-composite:${composite.id}`;
-    const frame = nodesById.get(frameId);
-    const members = (composite.visibleNodeIds ?? [...composite.boundaryNodeIds, ...(composite.explicitVisibleNodeIds ?? [])])
-      .map((id) => nodesById.get(id))
-      .filter((node): node is DeviceFlowNode => Boolean(node))
-      .sort((left, right) => left.id.localeCompare(right.id));
-    if (!frame) continue;
-
-    if (members.length === 0) {
-      const fallback = compositeFrameGeometry([]);
-      frame.width = fallback.width;
-      frame.height = fallback.height;
-      frame.zIndex = 0;
-      frame.data.projection = {
-        ...frame.data.projection,
-        attributes: { ...frame.data.projection.attributes, width: fallback.width, height: fallback.height },
-      };
-      continue;
-    }
-
-    const rectangles = members.map((node) => ({ ...node.position, ...displayedDimensions(node) }));
-    const left = Math.min(...rectangles.map((item) => item.x));
-    const top = Math.min(...rectangles.map((item) => item.y));
-    const right = Math.max(...rectangles.map((item) => item.x + item.width));
-    const groupWidth = right - left;
-    const frameGeometry = compositeFrameGeometry(rectangles);
-    const effectiveWidth = frameGeometry.width;
-    const effectiveHeight = frameGeometry.height;
-    const contentWidth = effectiveWidth - COMPOSITE_FRAME_PADDING * 2;
-    const offsetX = COMPOSITE_FRAME_PADDING + (contentWidth - groupWidth) / 2;
-    const offsetY = COMPOSITE_FRAME_HEADER_HEIGHT + COMPOSITE_FRAME_CONTENT_GAP + COMPOSITE_FRAME_PADDING;
-
-    frame.width = effectiveWidth;
-    frame.height = effectiveHeight;
-    frame.zIndex = 0;
-    frame.data.projection = {
-      ...frame.data.projection,
-      attributes: {
-        ...frame.data.projection.attributes,
-        width: effectiveWidth,
-        height: effectiveHeight,
-      },
-    };
-
-    for (const member of members) {
-      member.parentId = frameId;
-      member.extent = 'parent';
-      member.expandParent = false;
-      member.zIndex = 1;
-      member.position = {
-        x: offsetX + member.position.x - left,
-        y: offsetY + member.position.y - top,
-      };
-    }
-  }
-
-  const frameIds = new Set(scene.composites.map((composite) => `map-composite:${composite.id}`));
-  return {
-    ...projection,
-    // React Flow requires parent nodes to precede their children in the node array.
-    nodes: [...nodes.filter((node) => frameIds.has(node.id)), ...nodes.filter((node) => !frameIds.has(node.id))],
-  };
-};
 
 export type TopologyLayoutEngine = (
   scene: PresentationSceneDocument,
@@ -290,9 +167,7 @@ export const toFlowProjection: TopologyLayoutEngine = async (scene) => {
     },
   children: orderedNodes.map((node) => ({
       id: node.id,
-      ...(node.kind === 'MAP_COMPOSITE'
-        ? { width: Number(node.attributes.width), height: Number(node.attributes.height) }
-        : node.attributes.blueprint_presentation
+      ...(node.attributes.blueprint_presentation
         ? blueprintNodeDisplayDimensions(node.attributes.blueprint_presentation, undefined)
         : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT }),
     })),
@@ -308,15 +183,11 @@ export const toFlowProjection: TopologyLayoutEngine = async (scene) => {
   return {
     nodes: orderedNodes.map((projection) => ({
       id: projection.id,
-      type: (projection.kind === 'MAP_COMPOSITE' ? 'composite' : 'device') as DeviceFlowNode['type'],
-      ...(projection.kind === 'MAP_COMPOSITE'
-        ? { width: Number(projection.attributes.width), height: Number(projection.attributes.height) }
-        : projection.attributes.blueprint_presentation
+      type: 'device' as const,
+      ...(projection.attributes.blueprint_presentation
         ? blueprintNodeDisplayDimensions(projection.attributes.blueprint_presentation, undefined)
         : { width: undefined, height: undefined }),
-      position: projection.kind === 'MAP_COMPOSITE'
-        ? { x: Number(projection.attributes.x), y: Number(projection.attributes.y) }
-        : positions.get(projection.id) ?? { x: 0, y: 0 },
+      position: positions.get(projection.id) ?? { x: 0, y: 0 },
       data: { projection },
     })),
     edges: scene.edges.map((edge) => ({

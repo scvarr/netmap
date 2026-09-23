@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
-  applyCollapsedCompositePresentation,
-  compositeFrameGeometry,
   toFlowProjection,
 } from './layout';
 import { presentationSceneDocument } from './presentationScene';
@@ -61,69 +59,11 @@ const bounds = async (document: TopologyProjectionDocument, ids: string[]) => {
 };
 
 describe('ELK topology layout', () => {
-  it('derives collapsed boundary children inside an effective presentation frame without changing their authoritative positions', () => {
-    const a = { id: 'a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [], attributes: {} } as any;
-    const b = { id: 'b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [], attributes: {} } as any;
-    const frame = { id: 'map-composite:rack', kind: 'MAP_COMPOSITE', label: 'Rack', source_refs: [], attributes: { composite_id: 'rack', width: 280, height: 180 } } as any;
-    const scene: PresentationSceneDocument = { layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [a, b, frame], edges: [{ id: 'bc', source: 'b', target: 'outside', kind: 'projection' }], composites: [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['a', 'b'], boundaryNodeIds: ['a', 'b'], compositionBasis: 'presentation' }] };
-    const result = applyCollapsedCompositePresentation({ nodes: [
-      { id: 'a', type: 'device' as const, position: { x: 100, y: 600 }, width: 212, height: 144, data: { projection: a } },
-      { id: 'b', type: 'device' as const, position: { x: 380, y: 640 }, width: 212, height: 144, data: { projection: b } },
-      { id: frame.id, type: 'device' as const, position: { x: 30, y: 40 }, width: 280, height: 180, data: { projection: frame } },
-    ], edges: [{ id: 'bc', source: 'b', target: 'outside', type: 'floating', data: {} }] }, scene);
-
-    const derivedA = result.nodes.find((node) => node.id === 'a')!;
-    const derivedB = result.nodes.find((node) => node.id === 'b')!;
-    const derivedFrame = result.nodes.find((node) => node.id === frame.id)!;
-    expect(derivedA).toMatchObject({ parentId: frame.id, extent: 'parent' });
-    expect(derivedB).toMatchObject({ parentId: frame.id, extent: 'parent' });
-    expect(derivedA.position.x).toBeLessThan(derivedB.position.x);
-    expect(derivedFrame.width).toBe(512);
-    expect(derivedFrame.height).toBe(238);
-    expect(derivedA.position.x).toBeGreaterThanOrEqual(0);
-    expect(derivedA.position.y).toBe(44);
-    expect(derivedB.position.x + 212).toBeLessThanOrEqual(derivedFrame.width!);
-    expect(derivedB.position.y + 144).toBeLessThanOrEqual(derivedFrame.height!);
-    expect(result.edges[0]).toMatchObject({ source: 'b', target: 'outside' });
-  });
-
-  it('fits collapsed content below the header instead of retaining a stale oversized frame', () => {
-    const frame = { id: 'map-composite:rack', kind: 'MAP_COMPOSITE', label: 'Rack', source_refs: [], attributes: { composite_id: 'rack', width: 280, height: 900 } } as any;
-    const member = { id: 'boundary', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [], attributes: {} } as any;
-    const scene: PresentationSceneDocument = { layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [frame, member], edges: [], composites: [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['boundary'], boundaryNodeIds: ['boundary'], compositionBasis: 'presentation' }] };
-    const result = applyCollapsedCompositePresentation({ nodes: [
-      { id: frame.id, type: 'composite' as const, position: { x: 10, y: 20 }, width: 280, height: 900, data: { projection: frame } },
-      { id: member.id, type: 'device' as const, position: { x: 300, y: 400 }, width: 120, height: 50, data: { projection: member } },
-    ], edges: [] }, scene);
-    const derivedFrame = result.nodes.find((node) => node.id === frame.id)!;
-    const derivedMember = result.nodes.find((node) => node.id === member.id)!;
-    expect(derivedFrame).toMatchObject({ width: 200, height: 104 });
-    expect(derivedMember.position).toEqual({ x: 40, y: 44 });
-  });
-
-  it('parents an explicit-only visible member and includes it in collapsed frame fit', () => {
-    const frame = { id: 'map-composite:rack', kind: 'MAP_COMPOSITE', label: 'Rack', source_refs: [], attributes: { composite_id: 'rack' } } as any;
-    const explicit = { id: 'explicit', kind: 'PHYSICAL_OBJECT', label: 'PC1', source_refs: [], attributes: {} } as any;
-    const scene: PresentationSceneDocument = { layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [frame, explicit], edges: [], composites: [{ id: 'rack', displayName: 'Rack', memberNodeIds: ['explicit'], boundaryNodeIds: [], explicitVisibleNodeIds: ['explicit'], visibleNodeIds: ['explicit'], compositionBasis: 'presentation' }] };
-    const result = applyCollapsedCompositePresentation({ nodes: [{ id: frame.id, type: 'composite' as const, position: { x: 0, y: 0 }, data: { projection: frame } }, { id: explicit.id, type: 'device' as const, position: { x: 300, y: 400 }, width: 120, height: 50, data: { projection: explicit } }], edges: [] }, scene);
-    expect(result.nodes.find((node) => node.id === explicit.id)).toMatchObject({ parentId: frame.id, extent: 'parent' });
-    expect(result.nodes.find((node) => node.id === frame.id)).toMatchObject({ width: 200, height: 104 });
-  });
-
-  it('derives an expanded outline from all members without touching their positions', () => {
-    const geometry = compositeFrameGeometry([
-      { x: 100, y: 200, width: 120, height: 50 },
-      { x: 500, y: 600, width: 300, height: 70 },
-    ]);
-    expect(geometry).toEqual({ x: 90, y: 156, width: 720, height: 524 });
-  });
-
-  it('receives already-formed scene edges without inspecting projection endpoint pairs', async () => {
+      it('receives already-formed scene edges without inspecting projection endpoint pairs', async () => {
     const scene: PresentationSceneDocument = {
       layer: 'L1', detail_level: 'PHYSICAL_OBJECT',
       nodes: documentFor(['A', 'B'], [], 'L1', 'PHYSICAL_OBJECT').nodes,
       edges: [{ id: 'displayed-cable', source: 'A', target: 'B', kind: 'cable' }],
-      composites: [],
     };
 
     const flow = await toFlowProjection(scene);

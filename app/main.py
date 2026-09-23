@@ -52,7 +52,7 @@ from app.schemas import (
     AdjacencyCandidatesArtifact,
     AdjacencyCandidatesQuery,
     CreateConnectionPointRequest,
-    CreateMapPlacementRequest, CreateMapPresentationVariantRequest, CreateMapCompositeRequest, SetMapCompositePresentationRequest, SetMapCompositePresentationUpdate, SetMapCompositeVisibleMembersRequest,
+    CreateMapPlacementRequest, CreateMapPresentationVariantRequest,
     CreateObjectBlueprintRequest,
     CreateObjectBlueprintVersionRequest,
     CreateDeviceInterfaceRequest,
@@ -63,7 +63,6 @@ from app.schemas import (
     CreatePhysicalObjectRequest,
     CreatePortBlockRequest,
     CreatePortBlockVersionRequest,
-    CreateMapRegionRequest,
     CreateMapTextAnnotationRequest,
     CreateLocationRequest,
     CreateSavedMapRequest,
@@ -90,8 +89,7 @@ from app.schemas import (
     LocationSeriesPreviewDocument,
     LocationSeriesCreatedDocument,
     MapPlacementsDocument,
-    MapRegionDocument,
-    MapTextAnnotationDocument, MapCompositeDocument, MapPresentationVariantDocument,
+    MapTextAnnotationDocument, MapPresentationVariantDocument,
     L3ReachabilityArtifact,
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
@@ -125,7 +123,6 @@ from app.schemas import (
     NATEvaluationQuery,
     MoveMapPlacementRequest,
     SetMapCableRouteRequest,
-    ReplaceMapRegionRequest,
     ReplaceMapTextAnnotationRequest,
     SetMapViewLockRequest,
     GenerateCableLabelRequest,
@@ -224,44 +221,6 @@ def _saved_map_document(detail) -> dict[str, object]:
                 "waypoints": route.waypoints,
             }
             for route in detail.cable_routes
-        ],
-        "composites": [
-            {"composite_ref": {"entity_type": "MapComposite", "entity_id": composite.id}, "name": composite.name,
-             "physical_object_refs": [{"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": member.placement.physical_object_id} for member in composite.members],
-             "visible_when_collapsed_refs": [{"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": rule.placement.physical_object_id} for rule in composite.visible_placements],
-             "presentation": {"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": detail.variant.id},
-                 "collapsed": next((item.collapsed for item in composite.presentations if item.variant_id == detail.variant.id), False),
-                 "x": next((item.x for item in composite.presentations if item.variant_id == detail.variant.id), 0), "y": next((item.y for item in composite.presentations if item.variant_id == detail.variant.id), 0),
-                "width": next((item.width for item in composite.presentations if item.variant_id == detail.variant.id), 280), "height": next((item.height for item in composite.presentations if item.variant_id == detail.variant.id), 180),
-                "geometry_persisted": any(item.variant_id == detail.variant.id for item in composite.presentations)}}
-            for composite in detail.composites
-        ],
-        "regions": [
-            {
-                "region_ref": {"entity_type": "MapRegion", "entity_id": region.id},
-                "location_ref": (
-                    {
-                        "ref_type": "CANONICAL_FACT",
-                        "entity_type": "Location",
-                        "entity_id": region.location_id,
-                    }
-                    if region.location_id is not None
-                    else None
-                ),
-                "label": region.label,
-                "points": region.points,
-                "label_position": region.label_position,
-                "style": {
-                    "fill_color": region.fill_color,
-                    "fill_opacity": region.fill_opacity,
-                    "stroke_color": region.stroke_color,
-                    "stroke_width": region.stroke_width,
-                    "stroke_style": region.stroke_style,
-                    "label_color": region.label_color,
-                },
-                "z_order": region.z_order,
-            }
-            for region in detail.regions
         ],
         "text_annotations": [
             {
@@ -505,59 +464,6 @@ def delete_map_presentation_variant(map_id: uuid.UUID, variant_id: uuid.UUID, se
         SavedMapCatalog(session).delete_variant(map_id, variant_id)
 
 
-@app.post("/v1/maps/{map_id}/composites", response_model=MapCompositeDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
-def create_map_composite(map_id: uuid.UUID, query: CreateMapCompositeRequest, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> MapCompositeDocument:
-    with session.begin():
-        catalog = SavedMapCatalog(session)
-        variant = catalog._require_variant(map_id, variant_id)
-        composite = catalog.create_composite(map_id, query.name, query.physical_object_ids)
-        return {
-            "composite_ref": {"entity_type": "MapComposite", "entity_id": composite.id},
-            "name": composite.name,
-            "physical_object_refs": [
-                {"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": physical_object_id}
-                for physical_object_id in query.physical_object_ids
-            ],
-            "visible_when_collapsed_refs": [],
-            "presentation": {
-                "variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id},
-                "collapsed": False,
-                "x": 0,
-                "y": 0,
-                "width": 280,
-                "height": 180,
-                "geometry_persisted": False,
-            },
-        }
-
-
-@app.delete("/v1/maps/{map_id}/composites/{composite_id}", status_code=204, responses={422: {"model": ErrorResponse}})
-def delete_map_composite(map_id: uuid.UUID, composite_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
-    with session.begin(): SavedMapCatalog(session).delete_composite(map_id, composite_id)
-
-
-@app.put("/v1/maps/{map_id}/composites/{composite_id}/presentation", status_code=204, responses={422: {"model": ErrorResponse}})
-def set_map_composite_presentation(map_id: uuid.UUID, composite_id: uuid.UUID, query: SetMapCompositePresentationRequest, variant_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
-    with session.begin():
-        SavedMapCatalog(session).set_composite_presentation(map_id, composite_id, variant_id, query.collapsed, query.x, query.y, query.width, query.height)
-
-
-@app.put("/v1/maps/{map_id}/composites/{composite_id}/visible-members", status_code=204, responses={422: {"model": ErrorResponse}})
-def set_map_composite_visible_members(map_id: uuid.UUID, composite_id: uuid.UUID, query: SetMapCompositeVisibleMembersRequest, session: Session = Depends(get_session)) -> None:
-    with session.begin():
-        SavedMapCatalog(session).set_composite_visible_members(map_id, composite_id, query.physical_object_ids)
-
-
-@app.put("/v1/maps/{map_id}/composites/presentation", status_code=204, responses={422: {"model": ErrorResponse}})
-def set_map_composite_presentations(map_id: uuid.UUID, query: list[SetMapCompositePresentationUpdate], variant_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
-    with session.begin():
-        catalog = SavedMapCatalog(session)
-        catalog._require_map(map_id)
-        catalog._require_variant(map_id, variant_id)
-        for update in query:
-            catalog.set_composite_presentation(map_id, update.composite_id, variant_id, update.collapsed, update.x, update.y, update.width, update.height)
-
-
 @app.delete("/v1/maps/{map_id}", status_code=204, responses={422: {"model": ErrorResponse}})
 def delete_saved_map(map_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
     with session.begin():
@@ -648,78 +554,6 @@ def delete_map_cable_route(
 ) -> None:
     with session.begin():
         SavedMapCatalog(session).delete_cable_route(map_id, cable_id, variant_id)
-
-
-@app.post("/v1/maps/{map_id}/regions", response_model=MapRegionDocument, status_code=201, responses={422: {"model": ErrorResponse}})
-def create_map_region(
-    map_id: uuid.UUID,
-    query: CreateMapRegionRequest,
-    session: Session = Depends(get_session),
-) -> MapRegionDocument:
-    with session.begin():
-        region = SavedMapCatalog(session).create_region(
-            map_id,
-            query.label,
-            [point.model_dump() for point in query.points],
-            None if query.label_position is None else query.label_position.model_dump(),
-            query.style.model_dump(),
-            query.z_order,
-            query.location_id,
-        )
-        return {
-            "region_ref": {"entity_type": "MapRegion", "entity_id": region.id},
-            "label": region.label,
-            "points": region.points,
-            "label_position": region.label_position,
-            "style": query.style.model_dump(),
-            "z_order": region.z_order,
-            "location_ref": (
-                {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": region.location_id}
-                if region.location_id is not None else None
-            ),
-        }
-
-
-@app.put("/v1/maps/{map_id}/regions/{region_id}", response_model=MapRegionDocument, responses={422: {"model": ErrorResponse}})
-def replace_map_region(
-    map_id: uuid.UUID,
-    region_id: uuid.UUID,
-    query: ReplaceMapRegionRequest,
-    session: Session = Depends(get_session),
-) -> MapRegionDocument:
-    with session.begin():
-        region = SavedMapCatalog(session).replace_region(
-            map_id,
-            region_id,
-            query.label,
-            [point.model_dump() for point in query.points],
-            None if query.label_position is None else query.label_position.model_dump(),
-            query.style.model_dump(),
-            query.z_order,
-            query.location_id,
-        )
-        return {
-            "region_ref": {"entity_type": "MapRegion", "entity_id": region.id},
-            "label": region.label,
-            "points": region.points,
-            "label_position": region.label_position,
-            "style": query.style.model_dump(),
-            "z_order": region.z_order,
-            "location_ref": (
-                {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": region.location_id}
-                if region.location_id is not None else None
-            ),
-        }
-
-
-@app.delete("/v1/maps/{map_id}/regions/{region_id}", status_code=204, responses={422: {"model": ErrorResponse}})
-def delete_map_region(
-    map_id: uuid.UUID,
-    region_id: uuid.UUID,
-    session: Session = Depends(get_session),
-) -> None:
-    with session.begin():
-        SavedMapCatalog(session).delete_region(map_id, region_id)
 
 
 @app.post("/v1/maps/{map_id}/text-annotations", response_model=MapTextAnnotationDocument, status_code=201, responses={422: {"model": ErrorResponse}})

@@ -5,7 +5,6 @@ import type { FlowProjection, TopologyLayoutEngine } from '../topology/layout';
 import type { TopologyProjectionDocument } from '../topology/types';
 import type { PresentationSceneDocument } from '../topology/presentationScene';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
-import type { MapRegion } from '../topology/savedMapTypes';
 
 const { fitViewMock, getZoomMock, screenTransform } = vi.hoisted(() => ({
   fitViewMock: vi.fn(),
@@ -60,9 +59,7 @@ vi.mock('@xyflow/react', () => ({
           <span data-testid={`position-${node.id}`}>{node.position.x},{node.position.y}</span>
           <span data-testid={`parent-${node.id}`}>{node.parentId ?? 'none'}</span>
           <span data-testid={`highlighted-members-${node.id}`}>{[...(node.data.traceHighlightedConnectionMemberIds ?? [])].join(',')}</span>
-          <span data-testid={`location-focus-${node.id}`}>{node.data.locationFocus ?? 'none'}</span>
           <span data-testid={`draggable-${node.id}`}>{String(node.draggable !== false)}</span>
-          <button onClick={() => node.data.onCompositeToggle?.()}>toggle {node.id}</button>
           <button onClick={() => {
             if (node.draggable === false) return;
             onNodeDragStart({}, node);
@@ -99,28 +96,13 @@ const documentFor = (id: string): TopologyProjectionDocument => ({
   edges: [],
   gaps: [],
   warnings: [],
+
 });
 
 const flowFor = (scene: PresentationSceneDocument): FlowProjection => ({
-  nodes: scene.nodes.map((projection) => ({
-    id: projection.id,
-    type: projection.kind === 'MAP_COMPOSITE' ? 'composite' : 'device',
-    position: projection.kind === 'MAP_COMPOSITE'
-      ? { x: Number(projection.attributes.x), y: Number(projection.attributes.y) }
-      : { x: 0, y: 0 },
-    ...(projection.kind === 'MAP_COMPOSITE' ? { width: Number(projection.attributes.width), height: Number(projection.attributes.height) } : {}),
-    data: { projection },
-  })),
+  nodes: scene.nodes.map((projection) => ({ id: projection.id, type: 'device', position: { x: 0, y: 0 }, data: { projection } })),
   edges: [],
 });
-
-const region: MapRegion = {
-  region_ref: { entity_type: 'MapRegion', entity_id: 'region-a' },
-  label: 'Zone A',
-  points: [{ x: 10, y: 20 }, { x: 110, y: 20 }, { x: 110, y: 90 }, { x: 10, y: 90 }],
-  style: { fill_color: '#123456', fill_opacity: .25, stroke_color: '#abcdef', stroke_width: 3, stroke_style: 'dashed' },
-  z_order: 2,
-};
 
 const deferred = <T,>() => {
   let resolve!: (value: T) => void;
@@ -157,17 +139,6 @@ describe('TopologyCanvas async layout boundary', () => {
     render(<TopologyCanvas document={documentFor('physical-minimap')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} />);
     expect(await screen.findByTestId('minimap')).toHaveAttribute('data-position', 'bottom-right');
     expect(screen.getByTestId('minimap')).toHaveAttribute('data-class', 'topology-canvas__minimap');
-  });
-
-  it('marks matching Location objects and dims unrelated objects without topology writes', async () => {
-    const matched = { ...documentFor('physical-match').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'matched-object' }] };
-    const unrelated = { ...documentFor('physical-unrelated').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'unrelated-object' }] };
-    const document = { ...documentFor('physical-scene'), nodes: [matched, unrelated] };
-    const layoutEngine: TopologyLayoutEngine = vi.fn(async (input) => flowFor(input));
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} locationFocusObjectIds={new Set(['matched-object'])} />);
-
-    expect(await screen.findByTestId('location-focus-physical-match')).toHaveTextContent('match');
-    expect(screen.getByTestId('location-focus-physical-unrelated')).toHaveTextContent('dim');
   });
   it('enriches only a collapsed cable edge from current SavedMap routes without rerunning layout', async () => {
     const document: TopologyProjectionDocument = {
@@ -265,194 +236,6 @@ describe('TopologyCanvas async layout boundary', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'logical-A' }));
     expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: document.nodes[0] });
-  });
-
-  it('routes composite membership mode only to eligible objects while blocking selection and movement', async () => {
-    const object = { ...documentFor('physical-member').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'object-id' }] };
-    const edge = { id: 'edge-id', from_node_id: object.id, to_node_id: object.id, kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} };
-    const document = { ...documentFor('physical-member'), nodes: [object], edges: [edge] };
-    const layoutEngine: TopologyLayoutEngine = async () => ({ nodes: [{ id: object.id, type: 'device', position: { x: 0, y: 0 }, data: { projection: object } }], edges: [{ id: edge.id, source: object.id, target: object.id, type: 'floating', data: { projection: edge } }] });
-    const onSelectionChange = vi.fn(); const onPhysicalObjectClick = vi.fn(); const onPhysicalNodeDragStop = vi.fn(); const onPhysicalNodeContextMenu = vi.fn(); const onPhysicalPaneContextMenu = vi.fn();
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={layoutEngine} draggableNodeIds={new Set([object.id])} onPhysicalNodeDragStop={onPhysicalNodeDragStop} onPhysicalNodeContextMenu={onPhysicalNodeContextMenu} onPhysicalPaneContextMenu={onPhysicalPaneContextMenu} compositeMemberSelection={{ selectedPhysicalObjectIds: new Set(), onPhysicalObjectClick }} />);
-
-    fireEvent.click(await screen.findByRole('button', { name: object.id }));
-    fireEvent.click(screen.getByRole('button', { name: `edge ${edge.id}` }));
-    fireEvent.click(screen.getByRole('button', { name: `drag ${object.id}` }));
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }));
-    fireEvent.click(screen.getByRole('button', { name: `context ${object.id}` }));
-    fireEvent.click(screen.getByRole('button', { name: 'context pane' }));
-
-    expect(onPhysicalObjectClick).toHaveBeenCalledWith('object-id');
-    expect(onSelectionChange).not.toHaveBeenCalled();
-    expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
-    expect(onPhysicalNodeContextMenu).not.toHaveBeenCalled();
-    expect(onPhysicalPaneContextMenu).not.toHaveBeenCalled();
-    expect(screen.getByTestId(`draggable-${object.id}`)).toHaveTextContent('false');
-  });
-
-  it('renders persisted Regions without intercepting normal topology selection', async () => {
-    const document = documentFor('physical-region');
-    const onSelectionChange = vi.fn();
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={async (input) => flowFor(input)} regions={[region]} />);
-
-    const rendered = await screen.findByTestId('map-region-region-a');
-    expect(rendered.querySelector('polygon')).toHaveAttribute('fill', '#123456');
-    expect(rendered.querySelector('text')).toHaveTextContent('Zone A');
-    fireEvent.click(screen.getByRole('button', { name: 'physical-region' }));
-    expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: document.nodes[0] });
-  });
-
-  it('replaces topology interaction and cables with real-bounds reference outlines in Region mode', async () => {
-    const document: TopologyProjectionDocument = {
-      ...documentFor('physical-region-mode'),
-      nodes: [{ id: 'object-a', kind: 'PHYSICAL_OBJECT', label: 'Object A', source_refs: [], attributes: {} }],
-      edges: [{ id: 'edge-a', from_node_id: 'object-a', to_node_id: 'object-a', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }],
-    };
-    const layoutEngine: TopologyLayoutEngine = async () => ({
-      nodes: [{ id: 'object-a', type: 'device', position: { x: 40, y: 60 }, width: 320, height: 80, data: { projection: document.nodes[0] } }],
-      edges: [{ id: 'edge-a', source: 'object-a', target: 'object-a', type: 'floating', data: { projection: document.edges[0] } }],
-    });
-    const onSelectionChange = vi.fn();
-    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={layoutEngine} regions={[region]} />);
-    await screen.findByRole('button', { name: 'object-a' });
-    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={layoutEngine} regions={[region]} regionMode={{ showReferenceOutlines: true }} />);
-
-    expect(await screen.findByTestId('map-reference-outline-object-a')).toHaveAttribute('width', '320');
-    expect(screen.getByTestId('map-reference-outline-object-a')).toHaveAttribute('height', '80');
-    expect(screen.queryByRole('button', { name: 'object-a' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('svg-path-edge-a')).not.toBeInTheDocument();
-    expect(onSelectionChange).not.toHaveBeenCalled();
-  });
-
-  it('uses React Flow measurement for an ordinary object outline without explicit layout dimensions', async () => {
-    const document: TopologyProjectionDocument = {
-      ...documentFor('physical-measured-region-mode'),
-      nodes: [{ id: 'ordinary-object', kind: 'PHYSICAL_OBJECT', label: 'Ordinary', source_refs: [], attributes: {} }],
-    };
-    const layoutEngine: TopologyLayoutEngine = async () => ({
-      nodes: [{ id: 'ordinary-object', type: 'device', position: { x: 10, y: 20 }, data: { projection: document.nodes[0] } }],
-      edges: [],
-    });
-    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} />);
-    await screen.findByRole('button', { name: 'ordinary-object' });
-    fireEvent.click(screen.getByRole('button', { name: 'measure ordinary-object' }));
-    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} regionMode={{ showReferenceOutlines: true }} />);
-    expect(await screen.findByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('x', '10');
-    expect(screen.getByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('width', '178');
-    expect(screen.getByTestId('map-reference-outline-ordinary-object')).toHaveAttribute('height', '112');
-  });
-
-  it('can hide Region-mode object outlines while keeping the persisted Region layer', async () => {
-    const document = documentFor('physical-region-hidden');
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: false }} />);
-    expect(await screen.findByTestId('map-region-region-a')).toBeInTheDocument();
-    expect(screen.queryByTestId('map-reference-outlines')).not.toBeInTheDocument();
-  });
-
-  it('renders an active draft above persisted Regions and sends pane points in flow coordinates', async () => {
-    const document = documentFor('physical-region-draft');
-    const onDraftPoint = vi.fn();
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 1, y: 2 }, { x: 30, y: 2 }, { x: 30, y: 40 }] }, onDraftPoint }} />);
-
-    expect(await screen.findByTestId('map-region-region-a')).toBeInTheDocument();
-    expect(screen.getByTestId('map-reference-outlines')).toBeInTheDocument();
-    expect(screen.getByTestId('map-region-draft-fill')).toHaveAttribute('points', '1,2 30,2 30,40');
-    expect(screen.getByTestId('map-region-draft-segments')).toBeInTheDocument();
-    expect(screen.getByTestId('map-region-draft-close')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'move pane' }));
-    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '30');
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { ctrlKey: true });
-    expect(onDraftPoint).toHaveBeenCalledWith({ x: 10, y: 20 });
-  });
-
-  it('uses the same screen-axis constrained point for Region draft preview and click', async () => {
-    screenTransform.scale = 2;
-    screenTransform.offsetX = 100;
-    screenTransform.offsetY = 50;
-    const onDraftPoint = vi.fn();
-    render(<TopologyCanvas document={documentFor('physical-region-shift')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }] }, onDraftPoint }} />);
-
-    await screen.findByTestId('map-region-draft');
-    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 150, clientY: 100, shiftKey: true });
-    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '25');
-    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '20');
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 150, clientY: 100, shiftKey: true });
-    expect(onDraftPoint).toHaveBeenCalledWith({ x: 25, y: 20 });
-  });
-
-  it('completes a three-point draft by screen-space click on its first vertex without appending it', async () => {
-    const onDraftPoint = vi.fn(); const onCompleteDraft = vi.fn();
-    render(<TopologyCanvas document={documentFor('physical-region-close')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 50 }] }, onDraftPoint, onCompleteDraft }} />);
-    await screen.findByTestId('map-region-draft');
-    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 17, clientY: 25 });
-    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '10');
-    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '20');
-    expect(screen.getByTestId('map-region-draft-vertex-0')).toHaveAttribute('data-closing-target', 'true');
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 17, clientY: 25 });
-    expect(onCompleteDraft).toHaveBeenCalledTimes(1); expect(onDraftPoint).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 80, clientY: 20, ctrlKey: true });
-    expect(onDraftPoint).toHaveBeenCalledWith({ x: 80, y: 20 });
-  });
-
-  it('uses the same closing hit radius under pan, zoom, and Shift', async () => {
-    screenTransform.scale = 2; screenTransform.offsetX = 100; screenTransform.offsetY = 50;
-    const onDraftPoint = vi.fn(); const onCompleteDraft = vi.fn();
-    render(<TopologyCanvas document={documentFor('physical-region-close-scaled')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 50 }] }, onDraftPoint, onCompleteDraft }} />);
-    await screen.findByTestId('map-region-draft');
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 126, clientY: 94, shiftKey: true });
-    expect(onCompleteDraft).toHaveBeenCalledTimes(1); expect(onDraftPoint).not.toHaveBeenCalled();
-  });
-
-  it('edits only the active draft through vertex, midpoint, and polygon pointer drags', async () => {
-    const onMoveDraftVertex = vi.fn(); const onInsertDraftVertex = vi.fn(); const onTranslateDraft = vi.fn(); const onSelectDraftVertex = vi.fn();
-    render(<TopologyCanvas document={documentFor('physical-region-editor')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regions={[region]} regionMode={{ showReferenceOutlines: true, editableDraft: true, draft: { status: 'editing', points: [{ x: 10, y: 20 }, { x: 40, y: 20 }, { x: 40, y: 50 }] }, onMoveDraftVertex, onInsertDraftVertex, onTranslateDraft, onSelectDraftVertex }} />);
-    await screen.findByTestId('region-draft-editor');
-    fireEvent.pointerDown(screen.getByTestId('region-draft-editor-vertex-1'), { clientX: 40, clientY: 20 }); fireEvent.pointerMove(window, { clientX: 44, clientY: 25, ctrlKey: true }); fireEvent.pointerUp(window);
-    expect(onSelectDraftVertex).toHaveBeenCalledWith(1); expect(onMoveDraftVertex).toHaveBeenCalledWith(1, { x: 44, y: 25 });
-    fireEvent.pointerDown(screen.getByTestId('region-draft-midpoint-1'), { clientX: 40, clientY: 35 }); fireEvent.pointerMove(window, { clientX: 43, clientY: 37, ctrlKey: true }); fireEvent.pointerUp(window);
-    expect(onInsertDraftVertex).toHaveBeenCalledWith(1, { x: 40, y: 35 }); expect(onMoveDraftVertex).toHaveBeenLastCalledWith(2, { x: 43, y: 37 });
-    fireEvent.pointerDown(screen.getByTestId('region-draft-editor').querySelector('polygon')!, { clientX: 20, clientY: 25 }); fireEvent.pointerMove(window, { clientX: 24, clientY: 30 }); fireEvent.pointerUp(window);
-    expect(onSelectDraftVertex).toHaveBeenLastCalledWith(null); expect(onTranslateDraft).toHaveBeenCalledWith({ x: 4, y: 5 });
-  });
-
-  it('uses the dominant screen-space Y delta for a vertical Shift-constrained Region segment', async () => {
-    screenTransform.scale = 2;
-    screenTransform.offsetX = 100;
-    screenTransform.offsetY = 50;
-    render(<TopologyCanvas document={documentFor('physical-region-shift-y')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }] }, onDraftPoint: vi.fn() }} />);
-
-    await screen.findByTestId('map-region-draft');
-    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 130, clientY: 120, shiftKey: true });
-    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '10');
-    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '35');
-  });
-
-  it('keeps Region points free with Ctrl and does not constrain the first point', async () => {
-    screenTransform.scale = 2;
-    screenTransform.offsetX = 100;
-    screenTransform.offsetY = 50;
-    const onDraftPoint = vi.fn();
-    const view = render(<TopologyCanvas document={documentFor('physical-region-free')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 10, y: 20 }] }, onDraftPoint }} />);
-
-    await screen.findByTestId('map-region-draft');
-    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 150, clientY: 120, ctrlKey: true });
-    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('x2', '25');
-    expect(screen.getByTestId('map-region-draft-preview')).toHaveAttribute('y2', '35');
-    view.rerender(<TopologyCanvas document={documentFor('physical-region-first')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [] }, onDraftPoint }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 151, clientY: 119, shiftKey: true });
-    expect(onDraftPoint).toHaveBeenLastCalledWith({ x: 25.5, y: 34.5 });
-  });
-
-  it('uses one assisted point and feedback for drawing preview and committed click', async () => {
-    const onDraftPoint = vi.fn();
-    render(<TopologyCanvas document={documentFor('physical-region-assist')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} regionMode={{ showReferenceOutlines: true, draft: { status: 'drawing', points: [{ x: 0, y: 0 }] }, onDraftPoint }} />);
-    await screen.findByTestId('map-region-draft');
-    fireEvent.mouseMove(screen.getByRole('button', { name: 'move pane' }), { clientX: 98, clientY: 18 });
-    expect(screen.getByTestId('map-region-draft-assist-feedback')).toHaveAttribute('data-snapped-angle', 'true');
-    expect(screen.getByTestId('map-region-draft-assist-feedback')).toHaveAttribute('data-snapped-length', 'true');
-    const preview = screen.getByTestId('map-region-draft-preview');
-    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 98, clientY: 18 });
-    expect(onDraftPoint).toHaveBeenCalledWith({ x: Number(preview.getAttribute('x2')), y: Number(preview.getAttribute('y2')) });
   });
 
   it('applies stored overrides and saves a manual drag for the current view', async () => {
@@ -657,65 +440,7 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(layoutEngine).toHaveBeenCalledTimes(1);
   });
 
-  it('routes drag eligibility and stop callbacks separately for synthetic composites', async () => {
-    const physical = { ...documentFor('physical-node').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'object-a' }] };
-    const document = { ...documentFor('physical-node'), nodes: [physical] };
-    const onPhysicalNodeDragStop = vi.fn(); const onCompositeDragStop = vi.fn();
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} draggableNodeIds={new Set([physical.id])} onPhysicalNodeDragStop={onPhysicalNodeDragStop} onCompositeDragStop={onCompositeDragStop} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [], collapsed: true, x: 10, y: 20, width: 280, height: 180 }]} />);
-    await screen.findByRole('button', { name: physical.id });
-    expect(screen.getByTestId(`draggable-${physical.id}`)).toHaveTextContent('true');
-    expect(screen.getByTestId('draggable-map-composite:rack')).toHaveTextContent('true');
-    fireEvent.click(screen.getByRole('button', { name: 'drag map-composite:rack' }));
-    expect(onCompositeDragStop).toHaveBeenCalledWith('rack', { x: 42, y: 84, width: 200, height: 74 });
-    expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
-  });
-
-  it('routes both collapsed and expanded canvas controls without selecting or dragging a frame', async () => {
-    const physical = { ...documentFor('physical-node').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'object-a' }] };
-    const document = { ...documentFor('physical-node'), nodes: [physical] };
-    const onSelectionChange = vi.fn(); const onCompositeToggle = vi.fn();
-    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={async (input) => flowFor(input)} onCompositeToggle={onCompositeToggle} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [], collapsed: true, x: 10, y: 20, width: 900, height: 900 }]} />);
-    await screen.findByRole('button', { name: 'toggle map-composite:rack' });
-    fireEvent.click(screen.getByRole('button', { name: 'toggle map-composite:rack' }));
-    expect(onCompositeToggle).toHaveBeenLastCalledWith('rack', { x: 10, y: 20, width: 200, height: 74 });
-    expect(onSelectionChange).not.toHaveBeenCalled();
-
-    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={async (input) => flowFor(input)} onCompositeToggle={onCompositeToggle} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [physical.id], collapsed: false, x: 10, y: 20, width: 900, height: 900 }]} />);
-    await screen.findByRole('button', { name: 'toggle map-composite:rack' });
-    fireEvent.click(screen.getByRole('button', { name: 'toggle map-composite:rack' }));
-    expect(onCompositeToggle).toHaveBeenLastCalledWith('rack', { x: -10, y: -44, width: 232, height: 198 });
-    expect(onSelectionChange).not.toHaveBeenCalled();
-  });
-
-  it('keeps a collapsed boundary object selectable but makes it a non-draggable frame child', async () => {
-    const boundary = { ...documentFor('boundary').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'boundary-object' }] };
-    const outside = { ...boundary, id: 'outside', label: 'outside', source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'outside-object' }] };
-    const document = { ...documentFor('physical-boundary'), nodes: [boundary, outside], edges: [{ id: 'crossing', from_node_id: boundary.id, to_node_id: outside.id, kind: 'L1_PHYSICAL_LINK' as const, aggregate: false, source_refs: [], attributes: {} }] };
-    const onSelectionChange = vi.fn();
-    const onPhysicalNodeDragStop = vi.fn();
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={onSelectionChange} layoutEngine={async (input) => flowFor(input)} draggableNodeIds={new Set([boundary.id, outside.id])} onPhysicalNodeDragStop={onPhysicalNodeDragStop} onCompositeDragStop={vi.fn()} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [boundary.id], collapsed: true, x: 10, y: 20, width: 280, height: 180 }]} />);
-
-    await screen.findByRole('button', { name: boundary.id });
-    expect(screen.getByTestId(`parent-${boundary.id}`)).toHaveTextContent('map-composite:rack');
-    expect(screen.getByTestId(`draggable-${boundary.id}`)).toHaveTextContent('false');
-    fireEvent.click(screen.getByRole('button', { name: boundary.id }));
-    expect(onSelectionChange).toHaveBeenCalledWith({ type: 'node', item: boundary });
-    fireEvent.click(screen.getByRole('button', { name: `drag ${boundary.id}` }));
-    expect(onPhysicalNodeDragStop).not.toHaveBeenCalled();
-  });
-
-  it('derives an expanded composite outline behind ordinary independent member nodes', async () => {
-    const member = { ...documentFor('member').nodes[0], source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'member-object' }] };
-    const document = { ...documentFor('physical-member'), nodes: [member] };
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} draggableNodeIds={new Set([member.id])} onPhysicalNodeDragStop={vi.fn()} compositeInputs={[{ id: 'rack', displayName: 'Rack', memberNodeIds: [member.id], collapsed: false, x: 10, y: 20, width: 900, height: 900 }]} />);
-    await screen.findByRole('button', { name: member.id });
-    expect(screen.getByTestId('parent-member')).toHaveTextContent('none');
-    expect(screen.getByTestId('draggable-member')).toHaveTextContent('true');
-    expect(screen.getByTestId('position-map-composite:rack')).toHaveTextContent('-10,-44');
-    expect(screen.getByTestId('draggable-map-composite:rack')).toHaveTextContent('false');
-  });
-
-  it('rejects an overlapping final drop locally and restores the confirmed position', async () => {
+      it('rejects an overlapping final drop locally and restores the confirmed position', async () => {
     fitViewMock.mockClear();
     const source = { ...documentFor('physical-A').nodes[0], id: 'collision-source', source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'source-object' }] };
     const blocker = { ...source, id: 'collision-blocker', source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'blocker-object' }] };
@@ -781,28 +506,7 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(fitViewMock).toHaveBeenCalledTimes(1);
   });
 
-  it('does not fit an obsolete in-flight layout when expand requests a fresh projection', async () => {
-    fitViewMock.mockClear();
-    const original = documentFor('physical-A');
-    const stale = deferred<FlowProjection>();
-    const fresh = deferred<FlowProjection>();
-    const layoutEngine = vi.fn<TopologyLayoutEngine>().mockImplementation(async (scene) => flowFor(scene));
-    const props = { selection: null, onSelectionChange: vi.fn(), layoutEngine, sceneKey: 'same-map' };
-    const view = render(<TopologyCanvas {...props} document={original} viewportFitRevision={0} />);
-    await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
-    fitViewMock.mockClear();
-    layoutEngine.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise);
-    view.rerender(<TopologyCanvas {...props} document={{ ...original }} viewportFitRevision={0} />);
-    const expanded = documentFor('physical-expanded');
-    view.rerender(<TopologyCanvas {...props} document={expanded} viewportFitRevision={1} />);
-    await act(async () => stale.resolve(flowFor(layoutEngine.mock.calls[1][0])));
-    expect(fitViewMock).not.toHaveBeenCalled();
-    await act(async () => fresh.resolve(flowFor(layoutEngine.mock.calls[2][0])));
-    expect(screen.getByRole('button', { name: 'physical-expanded' })).toBeInTheDocument();
-    expect(fitViewMock).toHaveBeenCalledExactlyOnceWith({ duration: 300, maxZoom: 1.1, padding: 0.2 });
-  });
-
-  it('fits each new scene once and applies an explicit authoritative rollback without ELK', async () => {
+    it('fits each new scene once and applies an explicit authoritative rollback without ELK', async () => {
     fitViewMock.mockClear();
     const document = documentFor('physical-A');
     const layoutEngine: TopologyLayoutEngine = vi.fn(async (input) => flowFor(input));
@@ -815,5 +519,16 @@ describe('TopologyCanvas async layout boundary', () => {
     await waitFor(() => expect(screen.getByTestId('position-physical-A')).toHaveTextContent('99,77'));
     expect(layoutEngine).toHaveBeenCalledTimes(1);
     expect(fitViewMock).toHaveBeenCalledTimes(2);
+  });
+  it('keeps text annotation placement and selection active on the physical canvas', async () => {
+    const place = vi.fn();
+    const select = vi.fn();
+    const annotation = { annotation_ref: { entity_type: 'MapTextAnnotation' as const, entity_id: 'text-a' }, text: 'Note', position: { x: 12, y: 34 }, text_color: '#123456', font_size: 16 };
+    render(<TopologyCanvas document={documentFor('physical-text')} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (input) => flowFor(input)} textAnnotations={[annotation]} annotationMode={{ annotationPlacement: true, onAnnotationPlace: place, onAnnotationSelect: select }} />);
+    await screen.findByTestId('map-text-annotation-text-a');
+    fireEvent.click(screen.getByRole('button', { name: 'click pane' }), { clientX: 10, clientY: 20 });
+    expect(place).toHaveBeenCalledWith({ x: 10, y: 20 });
+    fireEvent.click(screen.getByTestId('map-text-annotation-text-a'));
+    expect(select).toHaveBeenCalledWith('text-a');
   });
 });

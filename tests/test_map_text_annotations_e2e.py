@@ -24,7 +24,7 @@ def test_text_annotation_is_saved_map_owned_presentation_with_create_read_replac
     annotation_id = created.json()["annotation_ref"]["entity_id"]
     saved = client.get(f"/v1/maps/{map_id}").json()
     assert saved["text_annotations"] == [{"annotation_ref": {"entity_type": "MapTextAnnotation", "entity_id": annotation_id}, **payload("Line one\nLine two")}]
-    assert saved["regions"] == []
+    assert "regions" not in saved and "composites" not in saved
     assert saved["placements"][0]["physical_object_ref"]["entity_id"] == object_id
 
     replacement = {**payload("Replacement"), "position": {"x": 99, "y": 4}, "text_color": "#abcdef", "font_size": 24}

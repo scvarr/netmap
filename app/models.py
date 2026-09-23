@@ -35,9 +35,6 @@ class Location(Base):
     physical_objects: Mapped[list["PhysicalObject"]] = relationship(
         back_populates="location", passive_deletes=True
     )
-    map_regions: Mapped[list["MapRegion"]] = relationship(
-        back_populates="location", passive_deletes=True
-    )
 
 
 class PhysicalObject(Base):
@@ -84,12 +81,6 @@ class SavedMap(Base):
     presentation_variants: Mapped[list["MapPresentationVariant"]] = relationship(
         back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
     )
-    composites: Mapped[list["MapComposite"]] = relationship(
-        back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
-    )
-    regions: Mapped[list["MapRegion"]] = relationship(
-        back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
-    )
     text_annotations: Mapped[list["MapTextAnnotation"]] = relationship(
         back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -114,9 +105,6 @@ class MapPlacement(Base):
     view_positions: Mapped[list["MapViewPosition"]] = relationship(
         back_populates="placement", cascade="all, delete-orphan", passive_deletes=True
     )
-    composite_visibility_rules: Mapped[list["MapCompositeVisiblePlacement"]] = relationship(
-        back_populates="placement", passive_deletes=True
-    )
     saved_map: Mapped[SavedMap] = relationship(back_populates="placements")
     physical_object: Mapped[PhysicalObject] = relationship(back_populates="map_placements")
 
@@ -131,53 +119,6 @@ class MapPresentationVariant(Base):
     saved_map: Mapped[SavedMap] = relationship(back_populates="presentation_variants")
     positions: Mapped[list["MapViewPosition"]] = relationship(back_populates="variant", passive_deletes=True)
     cable_routes: Mapped[list["MapCableRoute"]] = relationship(back_populates="variant", passive_deletes=True)
-    composite_presentations: Mapped[list["MapCompositePresentation"]] = relationship(back_populates="variant", passive_deletes=True)
-
-
-class MapComposite(Base):
-    """SavedMap-local presentation grouping of placements, never a topology entity."""
-    __tablename__ = "map_composites"
-    __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),)
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    saved_map: Mapped[SavedMap] = relationship(back_populates="composites")
-    members: Mapped[list["MapCompositeMember"]] = relationship(back_populates="composite", cascade="all, delete-orphan", passive_deletes=True)
-    presentations: Mapped[list["MapCompositePresentation"]] = relationship(back_populates="composite", cascade="all, delete-orphan", passive_deletes=True)
-    visible_placements: Mapped[list["MapCompositeVisiblePlacement"]] = relationship(back_populates="composite", cascade="all, delete-orphan", passive_deletes=True)
-
-
-class MapCompositeMember(Base):
-    __tablename__ = "map_composite_members"
-    __table_args__ = (UniqueConstraint("placement_id", name="uq_map_composite_members_placement"),)
-    composite_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_composites.id", ondelete="CASCADE"), primary_key=True)
-    placement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_placements.id", ondelete="CASCADE"), primary_key=True)
-    composite: Mapped[MapComposite] = relationship(back_populates="members")
-    placement: Mapped[MapPlacement] = relationship()
-
-
-class MapCompositeVisiblePlacement(Base):
-    """Explicit collapsed visibility, scoped to one SavedMap composite."""
-    __tablename__ = "map_composite_visible_placements"
-    composite_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_composites.id", ondelete="CASCADE"), primary_key=True)
-    placement_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_placements.id", ondelete="CASCADE"), primary_key=True)
-    composite: Mapped[MapComposite] = relationship(back_populates="visible_placements")
-    placement: Mapped[MapPlacement] = relationship(back_populates="composite_visibility_rules")
-
-
-class MapCompositePresentation(Base):
-    __tablename__ = "map_composite_presentations"
-    __table_args__ = (UniqueConstraint("composite_id", "variant_id", name="uq_map_composite_presentations_composite_variant"), CheckConstraint("width > 0 AND height > 0", name="dimensions_positive"))
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    composite_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_composites.id", ondelete="CASCADE"), nullable=False)
-    variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_presentation_variants.id", ondelete="CASCADE"), nullable=False)
-    collapsed: Mapped[bool] = mapped_column(nullable=False, server_default="false")
-    x: Mapped[float] = mapped_column(Float, nullable=False, default=0)
-    y: Mapped[float] = mapped_column(Float, nullable=False, default=0)
-    width: Mapped[float] = mapped_column(Float, nullable=False, default=280)
-    height: Mapped[float] = mapped_column(Float, nullable=False, default=180)
-    composite: Mapped[MapComposite] = relationship(back_populates="presentations")
-    variant: Mapped[MapPresentationVariant] = relationship(back_populates="composite_presentations")
 
 
 class MapViewKey(StrEnum):
@@ -236,42 +177,6 @@ class MapCableRoute(Base):
     saved_map: Mapped[SavedMap] = relationship(back_populates="cable_routes")
     variant: Mapped[MapPresentationVariant] = relationship(back_populates="cable_routes")
     cable: Mapped["Cable"] = relationship(back_populates="map_routes")
-
-
-class MapRegion(Base):
-    """SavedMap-owned Physical/L1 polygon presentation, never topology evidence."""
-
-    __tablename__ = "map_regions"
-    __table_args__ = (
-        CheckConstraint("char_length(btrim(label)) > 0", name="label_not_blank"),
-        CheckConstraint("fill_color ~ '^#[0-9A-Fa-f]{6}$'", name="fill_color_hex"),
-        CheckConstraint("fill_opacity >= 0 AND fill_opacity <= 1", name="fill_opacity_range"),
-        CheckConstraint("stroke_color ~ '^#[0-9A-Fa-f]{6}$'", name="stroke_color_hex"),
-        CheckConstraint("stroke_width >= 0", name="stroke_width_nonnegative"),
-        CheckConstraint("stroke_style IN ('solid', 'dashed', 'dotted')", name="stroke_style_valid"),
-        CheckConstraint("label_color IS NULL OR label_color ~ '^#[0-9A-Fa-f]{6}$'", name="label_color_hex"),
-        Index("ix_map_regions_map_z_order", "map_id", "z_order"),
-        Index("ix_map_regions_location_id", "location_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
-    # Presentation assistance only. This is never containment or topology evidence.
-    location_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("locations.id", ondelete="SET NULL"), nullable=True
-    )
-    label: Mapped[str] = mapped_column(String(255), nullable=False)
-    points: Mapped[list[dict[str, float]]] = mapped_column(JSONB, nullable=False)
-    label_position: Mapped[dict[str, float] | None] = mapped_column(JSONB, nullable=True)
-    fill_color: Mapped[str] = mapped_column(String(7), nullable=False)
-    fill_opacity: Mapped[float] = mapped_column(Float, nullable=False)
-    stroke_color: Mapped[str] = mapped_column(String(7), nullable=False)
-    stroke_width: Mapped[float] = mapped_column(Float, nullable=False)
-    stroke_style: Mapped[str] = mapped_column(String(16), nullable=False)
-    label_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
-    z_order: Mapped[int] = mapped_column(Integer, nullable=False)
-    saved_map: Mapped[SavedMap] = relationship(back_populates="regions")
-    location: Mapped[Location | None] = relationship(back_populates="map_regions")
 
 
 class MapTextAnnotation(Base):

@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 
 from app.database import SessionLocal
 from app.main import app
-from app.models import MapCableRoute, MapComposite, MapCompositeMember, MapCompositePresentation, MapPlacement, MapRegion, MapTextAnnotation, MapViewPosition
+from app.models import MapCableRoute, MapPlacement, MapTextAnnotation, MapViewPosition
 from tests.l1_builders import create_interface_cable, create_map, create_object_with_point
 
 
@@ -25,19 +25,6 @@ def test_creating_a_layout_copy_clones_only_variant_specific_presentation_state(
     cable_id = create_interface_cable(client)["cable_ref"]["entity_id"]
     route = [{"x": 7, "y": 8}]
     assert client.put(f"/v1/maps/{map_id}/cable-routes/{cable_id}?variant_id={source_id}", json={"view": "physical", "waypoints": route}).status_code == 200
-    composite_response = client.post(f"/v1/maps/{map_id}/composites?variant_id={source_id}", json={"name": "Pair", "physical_object_ids": [left_id, right_id]})
-    assert composite_response.status_code == 201, composite_response.text
-    composite = composite_response.json()
-    assert composite["physical_object_refs"] == [
-        {"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": left_id},
-        {"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": right_id},
-    ]
-    overlap = client.post(f"/v1/maps/{map_id}/composites?variant_id={source_id}", json={"name": "Duplicate", "physical_object_ids": [left_id, right_id]})
-    assert overlap.status_code == 409
-    assert overlap.json()["error"]["details"]["reason"] == "MAP_COMPOSITE_OVERLAP"
-    composite_id = composite["composite_ref"]["entity_id"]
-    assert client.put(f"/v1/maps/{map_id}/composites/{composite_id}/presentation?variant_id={source_id}", json={"collapsed": True, "x": 11, "y": 12, "width": 333, "height": 222}).status_code == 204
-
     copied = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": "Copy", "source_variant_id": source_id})
     assert copied.status_code == 201, copied.text
     created_variant = copied.json()
@@ -47,19 +34,15 @@ def test_creating_a_layout_copy_clones_only_variant_specific_presentation_state(
     copied_positions = next(item["positions"] for item in detail["placements"] if item["physical_object_ref"]["entity_id"] == left_id)
     assert copied_positions == {"L1/PHYSICAL_OBJECT": {"x": 10, "y": 20, "locked": True, "display_width": 320}, "L2/DEVICE": {"x": 50, "y": 60, "locked": False}}
     assert detail["cable_routes"][0]["waypoints"] == route
-    assert detail["composites"][0]["presentation"] == {"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": copy_id}, "collapsed": True, "x": 11, "y": 12, "width": 333, "height": 222, "geometry_persisted": True}
     with SessionLocal() as session:
         assert session.scalar(select(func.count()).select_from(MapPlacement)) == 2
-        assert session.scalar(select(func.count()).select_from(MapCompositeMember)) == 2
 
     assert client.put(f"/v1/maps/{map_id}/placements/{left_id}/positions/physical?variant_id={copy_id}", json={"x": 99, "y": 98, "display_width": 444}).status_code == 200
     assert client.put(f"/v1/maps/{map_id}/cable-routes/{cable_id}?variant_id={copy_id}", json={"view": "physical", "waypoints": []}).status_code == 200
-    assert client.put(f"/v1/maps/{map_id}/composites/{composite_id}/presentation?variant_id={copy_id}", json={"collapsed": False, "x": 1, "y": 2, "width": 280, "height": 180}).status_code == 204
     source = client.get(f"/v1/maps/{map_id}?variant_id={source_id}").json()
     source_positions = next(item["positions"] for item in source["placements"] if item["physical_object_ref"]["entity_id"] == left_id)
     assert source_positions["L1/PHYSICAL_OBJECT"] == {"x": 10, "y": 20, "locked": True, "display_width": 320}
     assert source["cable_routes"][0]["waypoints"] == route
-    assert source["composites"][0]["presentation"]["collapsed"] is True
 
 
 def test_layout_copy_rejects_a_source_variant_from_another_saved_map():
@@ -78,9 +61,6 @@ def test_deleting_a_non_primary_layout_removes_only_its_presentation_state():
     assert client.post(f"/v1/maps/{map_id}/placements?variant_id={primary_id}", json={"physical_object_id": second_object_id, "x": 30, "y": 40}).status_code == 201
     cable_id = create_interface_cable(client)["cable_ref"]["entity_id"]
     assert client.put(f"/v1/maps/{map_id}/cable-routes/{cable_id}?variant_id={primary_id}", json={"view": "physical", "waypoints": [{"x": 1, "y": 2}]}).status_code == 200
-    composite_id = client.post(f"/v1/maps/{map_id}/composites?variant_id={primary_id}", json={"name": "Pair", "physical_object_ids": [object_id, second_object_id]}).json()["composite_ref"]["entity_id"]
-    assert client.put(f"/v1/maps/{map_id}/composites/{composite_id}/presentation?variant_id={primary_id}", json={"collapsed": True, "x": 1, "y": 2, "width": 300, "height": 200}).status_code == 204
-    assert client.post(f"/v1/maps/{map_id}/regions", json={"label": "Zone", "points": [{"x": 0, "y": 0}, {"x": 10, "y": 0}, {"x": 0, "y": 10}], "label_position": None, "style": {"fill_color": "#123456", "fill_opacity": 0.2, "stroke_color": "#abcdef", "stroke_width": 1, "stroke_style": "solid", "label_color": None}, "z_order": 0}).status_code == 201
     assert client.post(f"/v1/maps/{map_id}/text-annotations", json={"text": "Keep", "position": {"x": 5, "y": 6}, "text_color": "#123456", "font_size": 12}).status_code == 201
     copy_id = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": "Copy", "source_variant_id": primary_id}).json()["variant_ref"]["entity_id"]
 
@@ -89,15 +69,12 @@ def test_deleting_a_non_primary_layout_removes_only_its_presentation_state():
     with SessionLocal() as session:
         assert session.scalar(select(func.count()).select_from(MapViewPosition)) == 2
         assert session.scalar(select(func.count()).select_from(MapCableRoute)) == 1
-        assert session.scalar(select(func.count()).select_from(MapCompositePresentation)) == 1
         assert session.scalar(select(func.count()).select_from(MapPlacement)) == 2
-        assert session.scalar(select(func.count()).select_from(MapComposite)) == 1
-        assert session.scalar(select(func.count()).select_from(MapCompositeMember)) == 2
-        assert session.scalar(select(func.count()).select_from(MapRegion)) == 1
         assert session.scalar(select(func.count()).select_from(MapTextAnnotation)) == 1
     primary = client.get(f"/v1/maps/{map_id}?variant_id={primary_id}").json()
     assert primary["active_variant_ref"]["entity_id"] == primary_id
-    assert primary["placements"] and primary["cable_routes"] and primary["composites"] and primary["regions"] and primary["text_annotations"]
+    assert primary["placements"] and primary["cable_routes"] and primary["text_annotations"]
+    assert "composites" not in primary and "regions" not in primary
 
 
 def test_deleting_primary_or_foreign_layout_is_rejected():

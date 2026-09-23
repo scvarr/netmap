@@ -30,7 +30,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
         .filter((link) => data.traceHighlightedConnectionMemberIds?.has(link.connection_member_id))
         .flatMap((link) => [link.from_connection_point_id, link.to_connection_point_id]),
     );
-    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.compositeMemberSelected ? ' blueprint-map-node--composite-member-selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}${data.locationFocus === 'match' ? ' blueprint-map-node--location-focus' : ''}${data.locationFocus === 'dim' ? ' blueprint-map-node--location-dim' : ''}`} style={{ width: displayWidth, height: displayHeight + nameplateHeight, gridTemplateRows: `${nameplateHeight}px ${displayHeight}px` }}>
+    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: displayWidth, height: displayHeight + nameplateHeight, gridTemplateRows: `${nameplateHeight}px ${displayHeight}px` }}>
     <NodeResizer
       isVisible={Boolean(selected && data.blueprintResizeEnabled)}
       minWidth={minimumBlueprintDisplayWidth(blueprint)}
@@ -49,7 +49,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       {faces.map((face) => {
         return <section key={face} className="blueprint-map-node__face" data-testid={`blueprint-face-${face}`}>
           <div className="blueprint-map-node__face-surface" style={{ height: faceDimensions.height, background: blueprint.body.fill_color ?? '#18383a' }}>
-            {blueprint.slots.filter((slot) => (slot.face ?? 'FRONT') === face).map((slot) => { const style = { left: `${slot.rendered_position.x * 100}%`, top: `${slot.rendered_position.y * 100}%`, transform: 'translate(-50%, -50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; const hiddenInternal = data.hiddenCompositeConnectionPointIds?.has(slot.connection_point_id); return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${hiddenInternal ? ' blueprint-map-node__port--hidden-composite-connection' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={hiddenInternal ? `${slot.display_name} · Подключено к скрытому объекту внутри составного блока` : `${slot.display_name} · ${slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
+            {blueprint.slots.filter((slot) => (slot.face ?? 'FRONT') === face).map((slot) => { const style = { left: `${slot.rendered_position.x * 100}%`, top: `${slot.rendered_position.y * 100}%`, transform: 'translate(-50%, -50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
           </div>
         </section>;
       })}
@@ -61,7 +61,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
   }
   const genericPoints = physical ? genericConnectionPoints(projection) : [];
   return (
-    <div className={`device-node${physical ? ` device-node--physical device-node--class-${classPresentation.accent}` : ''}${selected ? ' device-node--selected' : ''}${data.compositeMemberSelected ? ' device-node--composite-member-selected' : ''}${data.traceHighlighted ? ' device-node--trace-highlighted' : ''}${data.locationFocus === 'match' ? ' device-node--location-focus' : ''}${data.locationFocus === 'dim' ? ' device-node--location-dim' : ''}`}>
+    <div className={`device-node${physical ? ` device-node--physical device-node--class-${classPresentation.accent}` : ''}${selected ? ' device-node--selected' : ''}${data.traceHighlighted ? ' device-node--trace-highlighted' : ''}`}>
       <Handle type="target" position={Position.Top} className="device-node__handle" />
       <span className="device-node__kind">
         {physical ? classPresentation.label : projection.kind}
@@ -76,8 +76,8 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       {genericPoints.map((point, index) => {
         const offset = genericEndpointOffset(index, genericPoints.length);
         const state = data.physicalPortStates?.[point.connection_point_id];
-        const hiddenInternal = data.hiddenCompositeConnectionPointIds?.has(point.connection_point_id);
-        return <span key={point.connection_point_id} className={`generic-map-node__endpoint${hiddenInternal ? ' generic-map-node__endpoint--hidden-composite-connection' : ''}${state ? ` generic-map-node__endpoint--wiring-${state}` : ''}`} style={{ top: `${offset * 100}%` }} title={hiddenInternal ? `${point.display_name} · Подключено к скрытому объекту внутри составного блока` : `${point.display_name} · внешних подключений: ${point.external_connection_count}`} data-connection-point-id={point.connection_point_id} {...portProps(point.connection_point_id, point.display_name)}>
+
+        return <span key={point.connection_point_id} className={`generic-map-node__endpoint${state ? ` generic-map-node__endpoint--wiring-${state}` : ''}`} style={{ top: `${offset * 100}%` }} title={`${point.display_name} · внешних подключений: ${point.external_connection_count}`} data-connection-point-id={point.connection_point_id} {...portProps(point.connection_point_id, point.display_name)}>
           <Handle id={point.connection_point_id} type="source" position={Position.Right} className="generic-map-node__handle" />
           {genericPoints.length <= 8 && <small>{point.display_name}</small>}
         </span>;

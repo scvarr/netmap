@@ -3,7 +3,7 @@
 ## Статус и граница
 
 Это компактный последовательный implementation plan для spatial cutover.
-NetMap pre-production; P-UX-19 реализован, P-UX-03A..E остаются **IMPLEMENTATION PENDING**. Не
+NetMap pre-production; P-UX-19 и P-UX-03A реализованы, P-UX-03B..E остаются **IMPLEMENTATION PENDING**. Не
 объединять их в одну implementation task и не объявлять выполненными до
 targeted validation и, где указано, manual acceptance.
 
@@ -27,6 +27,10 @@ persisted `LocationTemplate` не создаются. Провести targeted 
 validation для preview, range/pattern errors, conflicts и atomicity.
 
 ### P-UX-03A — Destructive spatial cleanup
+
+**IMPLEMENTED.** MapComposite и MapRegion удалены; targeted backend/frontend
+validation и проверка forward migration выполнены. Spatial cutover продолжается
+в P-UX-03B..E.
 
 Удалить `MapComposite` UI/API/model/persistence/tests и `MapRegion`
 UI/API/model/persistence/tests. Сохранить `SavedMap`, variants, placements,

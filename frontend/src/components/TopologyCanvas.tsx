@@ -17,8 +17,6 @@ import {
 import "@xyflow/react/dist/style.css";
 import {
   toFlowProjection,
-  applyCollapsedCompositePresentation,
-  compositeFrameGeometry,
   type DeviceNodeData,
   type DeviceFlowNode,
   type FlowProjection,
@@ -36,7 +34,6 @@ import {
   type TopologyLayoutStore,
 } from "../topology/layoutStore";
 import { DeviceNode } from "./DeviceNode";
-import { CompositeNode } from "./CompositeNode";
 import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute } from "./FloatingTopologyEdge";
 import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
 import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
@@ -44,25 +41,19 @@ import { physicalObjectIdForNode } from "../topology/projection";
 import { perfMark, perfMeasure } from "../perfMarks";
 import type { XYPosition } from "@xyflow/react";
 import { overlapsAnyNode } from "../topology/nodeFootprint";
-import type { MapCableRoute, MapRegion } from "../topology/savedMapTypes";
+import type { MapCableRoute } from "../topology/savedMapTypes";
 import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation";
 import { cableIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint, MapTextAnnotation } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
-import { presentationSceneDocument, type MapCompositeSceneInput } from "../topology/presentationScene";
-import { MapRegionLayer, type MapReferenceOutline, type MapRegionDraft } from "./MapRegionLayer";
-import { RegionDraftEditor, type RegionDraftPointerTarget, type RegionDraftSegmentFeedback } from './RegionDraftEditor';
-import { assistSegment, type SegmentAssistResult } from '../topology/geometryAssist';
+import { presentationSceneDocument } from "../topology/presentationScene";
+import { MapTextAnnotationLayer } from "./MapTextAnnotationLayer";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
   selection: TopologySelection;
   onSelectionChange: (selection: TopologySelection) => void;
-  compositeMemberSelection?: {
-    selectedPhysicalObjectIds: ReadonlySet<string>;
-    onPhysicalObjectClick: (physicalObjectId: string) => void;
-  };
   layoutEngine?: TopologyLayoutEngine;
   layoutStore?: TopologyLayoutStore;
   traceOverlay?: PhysicalTraceOverlay;
@@ -96,70 +87,27 @@ interface TopologyCanvasProps {
     anchor: XYPosition,
   ) => void;
   cableRoutes?: readonly MapCableRoute[];
-  compositeInputs?: readonly MapCompositeSceneInput[];
-  selectedCompositeId?: string | null;
-  onCompositeClick?: (compositeId: string) => void;
-  onCompositeDragStop?: (compositeId: string, geometry: XYPosition & { width: number; height: number }) => void;
-  onCompositeToggle?: (compositeId: string, geometry: XYPosition & { width: number; height: number }) => void;
   cableRouteDraft?: { cableId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
   wiringRoute?: { source: { physicalObjectId: string; connectionPointId: string }; target?: { physicalObjectId: string; connectionPointId: string }; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
-  regions?: readonly MapRegion[];
   textAnnotations?: readonly MapTextAnnotation[];
-  selectedRegionId?: string | null;
-  /** Session-only Region→Location reading aid; no map or topology mutation follows. */
-  locationFocusObjectIds?: ReadonlySet<string> | null;
-  regionMode?: { showReferenceOutlines: boolean; draft?: MapRegionDraft; editableDraft?: boolean; invalidDraft?: boolean; hiddenRegionId?: string | null; previewRegion?: MapRegion; editableLabelRegionId?: string | null; onMoveLabel?: (position: XYPosition) => void; annotationPlacement?: boolean; previewAnnotation?: MapTextAnnotation; selectedAnnotationId?: string | null; editableAnnotationId?: string | null; onAnnotationPlace?: (position: XYPosition) => void; onAnnotationSelect?: (annotationId: string) => void; onMoveAnnotation?: (annotationId: string, position: XYPosition) => void; onDraftPoint?: (point: XYPosition) => void; onCompleteDraft?: () => void; onMoveDraftVertex?: (index: number, point: XYPosition) => void; onInsertDraftVertex?: (edgeStartIndex: number, point: XYPosition) => void; onTranslateDraft?: (delta: XYPosition) => void; onSelectDraftVertex?: (index: number | null) => void };
+  annotationMode?: { annotationPlacement?: boolean; previewAnnotation?: MapTextAnnotation; selectedAnnotationId?: string | null; editableAnnotationId?: string | null; onAnnotationPlace?: (position: XYPosition) => void; onAnnotationSelect?: (annotationId: string) => void; onMoveAnnotation?: (annotationId: string, position: XYPosition) => void };
+
 }
 
-const nodeTypes = { device: DeviceNode, composite: CompositeNode };
+const nodeTypes = { device: DeviceNode };
 const edgeTypes = {
   floating: FloatingTopologyEdge,
   continuation: OffMapContinuationEdge,
-};
-
-interface ScreenPosition { x: number; y: number }
-const REGION_DRAFT_CLOSE_RADIUS_PX = 12;
-
-const isRegionDraftClosingTarget = ({
-  draft,
-  pointerScreen,
-  flowToScreenPosition,
-}: {
-  draft: MapRegionDraft;
-  pointerScreen: ScreenPosition;
-  flowToScreenPosition: (position: XYPosition) => ScreenPosition;
-}) => {
-  if (draft.status !== 'drawing' || draft.points.length < 3) return false;
-  const firstScreen = flowToScreenPosition(draft.points[0]);
-  return Math.hypot(pointerScreen.x - firstScreen.x, pointerScreen.y - firstScreen.y) <= REGION_DRAFT_CLOSE_RADIUS_PX;
-};
-
-const regionDraftAssistForPointer = ({
-  points,
-  pointerScreen,
-  shiftKey, ctrlKey,
-  screenToFlowPosition,
-  flowToScreenPosition,
-}: {
-  points: readonly XYPosition[];
-  pointerScreen: ScreenPosition;
-  shiftKey: boolean; ctrlKey: boolean;
-  screenToFlowPosition: (position: ScreenPosition) => XYPosition;
-  flowToScreenPosition: (position: XYPosition) => ScreenPosition;
-}): SegmentAssistResult | undefined => {
-  if (points.length === 0) return undefined;
-  return assistSegment({ anchor: points.at(-1)!, pointerScreen, shiftKey, ctrlKey, screenToFlowPosition, flowToScreenPosition });
 };
 
 export function TopologyCanvas({
   document,
   selection,
   onSelectionChange,
-  compositeMemberSelection,
   layoutEngine = toFlowProjection,
   layoutStore,
   traceOverlay,
@@ -184,33 +132,19 @@ export function TopologyCanvas({
   onPaneClick,
   onContinuationClickAnchor,
   cableRoutes,
-  compositeInputs,
-  selectedCompositeId,
-  onCompositeClick,
-  onCompositeDragStop,
-  onCompositeToggle,
   cableRouteDraft,
   physicalPortStates,
   onPhysicalPortClick,
   wiringRoute,
   wiringHighlightedConnectionMemberIds,
   wiringContinuationConnectionPointIds,
-  regions = [],
   textAnnotations = [],
-  selectedRegionId,
-  locationFocusObjectIds,
-  regionMode,
+  annotationMode,
 }: TopologyCanvasProps) {
   const { t } = useI18n();
-  const compositeMembershipMode = Boolean(compositeMemberSelection);
   const [projection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
-  const [regionDraftPreview, setRegionDraftPreview] = useState<XYPosition | undefined>();
-  const [regionDraftAssist, setRegionDraftAssist] = useState<SegmentAssistResult | undefined>();
-  const [regionDraftEditorFeedback, setRegionDraftEditorFeedback] = useState<readonly RegionDraftSegmentFeedback[]>([]);
-  const [regionDraftClosingTarget, setRegionDraftClosingTarget] = useState(false);
-  const regionDraftDrag = useRef<{ kind: 'vertex'; index: number } | { kind: 'polygon'; last: XYPosition } | { kind: 'label' } | { kind: 'annotation'; id: string } | null>(null);
   const fitAfterLayout = useRef(false);
   const appliedViewportFitRevision = useRef(0);
   const fittedSceneKey = useRef<string | null>(null);
@@ -220,90 +154,30 @@ export function TopologyCanvas({
   const currentDocument = useRef(document);
   const appliedSceneKey = useRef<string | null>(null);
   const confirmedNodePositions = useRef(new Map<string, XYPosition>());
-  const latestReferenceOutlines = useRef<MapReferenceOutline[]>([]);
   const canvasRef = useRef<HTMLDivElement>(null);
   const focusedObjectKey = useRef<string | null>(null);
   const { fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
-  const presentationScene = useMemo(() => presentationSceneDocument(document, compositeInputs), [document, compositeInputs]);
+  const presentationScene = useMemo(() => presentationSceneDocument(document), [document]);
 
   currentDocument.current = document;
 
+  const annotationDrag = useRef<string | null>(null);
   useEffect(() => {
-    if (!regionMode?.editableDraft && !regionMode?.editableLabelRegionId) regionDraftDrag.current = null;
-  }, [regionMode?.editableDraft, regionMode?.editableLabelRegionId]);
-
-  useEffect(() => {
-    const onPointerMove = (event: globalThis.PointerEvent) => {
-      const drag = regionDraftDrag.current;
-      if (!drag) return;
-      const pointerScreen = { x: event.clientX, y: event.clientY };
-      const point = screenToFlowPosition(pointerScreen);
-      if (drag.kind === 'label') {
-        regionMode?.onMoveLabel?.(point);
-        return;
-      }
-      if (drag.kind === 'annotation') {
-        regionMode?.onMoveAnnotation?.(drag.id, point);
-        return;
-      }
-      if (!regionMode?.editableDraft || !regionMode.draft || regionMode.draft.status !== 'editing') return;
-      if (drag.kind === 'vertex') {
-        const points = regionMode.draft.points;
-        const previousIndex = (drag.index + points.length - 1) % points.length;
-        const nextIndex = (drag.index + 1) % points.length;
-        const candidates = [previousIndex, nextIndex].map((anchorIndex) => ({ anchorIndex, assist: assistSegment({ anchor: points[anchorIndex], pointerScreen, shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, screenToFlowPosition, flowToScreenPosition }) }));
-        const chosen = candidates.reduce((best, candidate) => {
-          const bestDistance = Math.hypot(flowToScreenPosition(best.assist.point).x - pointerScreen.x, flowToScreenPosition(best.assist.point).y - pointerScreen.y);
-          const candidateDistance = Math.hypot(flowToScreenPosition(candidate.assist.point).x - pointerScreen.x, flowToScreenPosition(candidate.assist.point).y - pointerScreen.y);
-          return candidateDistance < bestDistance ? candidate : best;
-        });
-        regionMode.onMoveDraftVertex?.(drag.index, chosen.assist.point);
-        const edited = points.map((current, index) => index === drag.index ? chosen.assist.point : current);
-        setRegionDraftEditorFeedback([
-          { start: edited[previousIndex], end: edited[drag.index], snappedAngle: chosen.anchorIndex === previousIndex && chosen.assist.snappedAngle, snappedLength: chosen.anchorIndex === previousIndex && chosen.assist.snappedLength },
-          { start: edited[drag.index], end: edited[nextIndex], snappedAngle: chosen.anchorIndex === nextIndex && chosen.assist.snappedAngle, snappedLength: chosen.anchorIndex === nextIndex && chosen.assist.snappedLength },
-        ]);
-      }
-      else {
-        regionMode.onTranslateDraft?.({ x: point.x - drag.last.x, y: point.y - drag.last.y });
-        drag.last = point;
-      }
+    const move = (event: globalThis.PointerEvent) => {
+      if (annotationDrag.current) annotationMode?.onMoveAnnotation?.(annotationDrag.current, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
     };
-    const finish = () => { regionDraftDrag.current = null; setRegionDraftEditorFeedback([]); };
-    window.addEventListener('pointermove', onPointerMove);
+    const finish = () => { annotationDrag.current = null; };
+    window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', finish);
     window.addEventListener('pointercancel', finish);
-    return () => { window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', finish); };
-  }, [flowToScreenPosition, regionMode, screenToFlowPosition]);
-
-  const onRegionDraftEditorPointerDown = (target: RegionDraftPointerTarget, event: PointerEvent<SVGElement>) => {
-    if (!regionMode?.editableDraft || regionMode.draft?.status !== 'editing') return;
-    event.preventDefault(); event.stopPropagation();
-    const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    if (target.kind === 'vertex') {
-      regionMode.onSelectDraftVertex?.(target.index);
-      regionDraftDrag.current = target;
-    } else if (target.kind === 'midpoint') {
-      const insertedIndex = target.index + 1;
-      regionMode.onInsertDraftVertex?.(target.index, point);
-      regionDraftDrag.current = { kind: 'vertex', index: insertedIndex };
-    } else {
-      regionMode.onSelectDraftVertex?.(null);
-      regionDraftDrag.current = { kind: 'polygon', last: point };
-    }
-  };
-
-  const onRegionLabelPointerDown = (event: PointerEvent<SVGTextElement>) => {
-    if (!regionMode?.editableLabelRegionId) return;
-    event.preventDefault(); event.stopPropagation();
-    regionDraftDrag.current = { kind: 'label' };
-  };
+    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', finish); };
+  }, [annotationMode, screenToFlowPosition]);
   const onAnnotationPointerDown = (annotationId: string, event: PointerEvent<SVGTextElement>) => {
-    if (regionMode?.editableAnnotationId !== annotationId) return;
+    if (annotationMode?.editableAnnotationId !== annotationId) return;
     event.preventDefault(); event.stopPropagation();
-    regionDraftDrag.current = { kind: 'annotation', id: annotationId };
+    annotationDrag.current = annotationId;
   };
 
   useEffect(() => {
@@ -318,7 +192,7 @@ export function TopologyCanvas({
         if (!current || currentDocument.current !== document) return;
         const storedPositions =
           positionOverrides ?? layoutStore?.load(viewKey) ?? {};
-        const next = applyCollapsedCompositePresentation({
+        const next: FlowProjection = {
           ...nextProjection,
           nodes: applyTopologyPositionOverrides(
             nextProjection.nodes,
@@ -330,7 +204,7 @@ export function TopologyCanvas({
               ? { ...node, ...blueprintNodeDisplayDimensions(blueprint, displayWidth) }
               : node;
           }),
-        }, presentationScene);
+        };
         confirmedNodePositions.current = new Map(
           next.nodes.map((node) => [node.id, node.position]),
         );
@@ -384,7 +258,7 @@ export function TopologyCanvas({
     if (!positionOverrides) return;
     setProjection((current) => {
       if (!current) return current;
-      const nodes = applyCollapsedCompositePresentation({
+      const nodes = {
         ...current,
         nodes: current.nodes.map((node) => {
           const position = positionOverrides[node.id];
@@ -392,7 +266,7 @@ export function TopologyCanvas({
             ? { ...node, position, parentId: undefined, extent: undefined, expandParent: undefined }
             : node;
         }),
-      }, presentationScene).nodes;
+      }.nodes;
       confirmedNodePositions.current = new Map(
         nodes.map((node) => [node.id, node.position]),
       );
@@ -456,94 +330,24 @@ export function TopologyCanvas({
     );
   }
 
-  const currentReferenceOutlines: MapReferenceOutline[] = projection.nodes
-    .filter((node) => node.data.projection.kind === "PHYSICAL_OBJECT" && node.data.projection.attributes.class !== "cable")
-    .map((node) => {
-      return {
-        id: node.id,
-        x: node.position.x,
-        y: node.position.y,
-        width: node.measured?.width ?? node.width ?? 0,
-        height: node.measured?.height ?? node.height ?? 0,
-      };
-    });
-  if (!regionMode) latestReferenceOutlines.current = currentReferenceOutlines;
-  const referenceOutlines = regionMode ? latestReferenceOutlines.current : currentReferenceOutlines;
-  const expandedCompositeFrames: DeviceFlowNode[] = !regionMode ? (compositeInputs ?? [])
-    .filter((composite) => !composite.collapsed)
-    .map((composite) => {
-      const members = projection.nodes.filter((node) => composite.memberNodeIds.includes(node.id));
-      const geometry = compositeFrameGeometry(members.map((node) => ({
-        x: node.position.x,
-        y: node.position.y,
-        width: node.measured?.width ?? node.width ?? 212,
-        height: node.measured?.height ?? node.height ?? 144,
-      })));
-      return {
-        id: `map-composite:${composite.id}`,
-        type: 'composite',
-        position: { x: geometry.x, y: geometry.y },
-        width: geometry.width,
-        height: geometry.height,
-        draggable: false,
-        selectable: false,
-        zIndex: -1,
-        data: { projection: {
-          id: `map-composite:${composite.id}`,
-          kind: 'MAP_COMPOSITE',
-          label: composite.displayName,
-          source_refs: [],
-          attributes: { presentation_only: true, composite_id: composite.id, collapsed: false, width: geometry.width, height: geometry.height },
-          status: 'CONFIGURED',
-        } as TopologyProjectionNode },
-      };
-    }) : [];
-  const nodes = [...expandedCompositeFrames, ...(regionMode ? [] : projection.nodes)].map((node) => {
-    const compositeId = node.data.projection.kind === 'MAP_COMPOSITE' ? String(node.data.projection.attributes.composite_id) : null;
-    const objectId = physicalObjectIdForNode(node.data.projection);
-    const locationFocus: DeviceNodeData['locationFocus'] = locationFocusObjectIds && objectId
-      ? (locationFocusObjectIds.has(objectId) ? 'match' : 'dim')
-      : undefined;
-    return ({
+  const nodes = projection.nodes.map((node) => ({
     ...node,
-    draggable: compositeMembershipMode
-      ? false
-      : node.data.projection.kind === 'MAP_COMPOSITE'
-        ? Boolean(onCompositeDragStop) && Boolean(node.data.projection.attributes.collapsed)
-        : node.parentId
-          ? false
-        : draggableNodeIds
-          ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id)
-          : lockedNodeIds?.has(node.id)
-            ? false
-            : undefined,
+    draggable: draggableNodeIds ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id) : lockedNodeIds?.has(node.id) ? false : undefined,
     data: {
       ...node.data,
-      onCompositeToggle: node.data.projection.kind === 'MAP_COMPOSITE'
-        ? () => onCompositeToggle?.(String(node.data.projection.attributes.composite_id), {
-          ...node.position,
-          width: node.width ?? node.measured?.width ?? Number(node.data.projection.attributes.width),
-          height: node.height ?? node.measured?.height ?? Number(node.data.projection.attributes.height),
-        })
-        : undefined,
-      compositeMemberSelected: Boolean(objectId && compositeMemberSelection?.selectedPhysicalObjectIds.has(objectId)),
-      locationFocus,
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
-      traceHighlightedConnectionMemberIds:
-        traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
+      traceHighlightedConnectionMemberIds: traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
       wiringHighlightedConnectionMemberIds,
       wiringContinuationConnectionPointIds,
-      hiddenCompositeConnectionPointIds: new Set(presentationScene.hiddenCompositeConnectionPointIds ?? []),
       physicalPortStates,
-      onPhysicalPortClick: compositeMembershipMode ? undefined : onPhysicalPortClick,
-      onPhysicalPortContextMenu: compositeMembershipMode ? undefined : onPhysicalPortContextMenu,
-      onBlueprintDisplayResize: compositeMembershipMode ? undefined : onBlueprintDisplayResize,
-      blueprintResizeEnabled: !compositeMembershipMode && !node.parentId && Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
+      onPhysicalPortClick,
+      onPhysicalPortContextMenu,
+      onBlueprintDisplayResize,
+      blueprintResizeEnabled: Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
     },
-    selected: compositeId ? selectedCompositeId === compositeId : selection?.type === "node" && selection.item.id === node.id,
-    });
-  });
-  const edges = (regionMode ? [] : projection.edges).map((edge) => {
+    selected: selection?.type === "node" && selection.item.id === node.id,
+  }));
+  const edges = (annotationMode ? [] : projection.edges).map((edge) => {
     const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
       : undefined;
@@ -595,17 +399,12 @@ export function TopologyCanvas({
   });
 
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
-    if (regionMode) return;
-    if (node.data.projection.kind === 'MAP_COMPOSITE') { onCompositeClick?.(String(node.data.projection.attributes.composite_id)); return; }
+    if (annotationMode) return;
     const physicalObjectId = physicalObjectIdForNode(node.data.projection);
-    if (compositeMembershipMode) {
-      if (physicalObjectId) compositeMemberSelection?.onPhysicalObjectClick(physicalObjectId);
-      return;
-    }
     onSelectionChange({ type: "node", item: node.data.projection });
   };
   const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
-    if (regionMode || compositeMembershipMode) return;
+    if (annotationMode) return;
     const item = edge.data?.projection;
     if (edge.data?.continuation) {
       onContinuationClickAnchor?.(
@@ -618,7 +417,7 @@ export function TopologyCanvas({
     else if (item) onSelectionChange({ type: "edge", item });
   };
   const onNodeContextMenu: NodeMouseHandler<DeviceFlowNode> = (event, node) => {
-    if (regionMode || compositeMembershipMode) {
+    if (annotationMode) {
       event.preventDefault();
       return;
     }
@@ -628,7 +427,7 @@ export function TopologyCanvas({
     else onPhysicalNodeContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
   };
   const onEdgeContextMenu: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
-    if (regionMode || compositeMembershipMode) {
+    if (annotationMode) {
       event.preventDefault();
       return;
     }
@@ -637,7 +436,7 @@ export function TopologyCanvas({
     onPhysicalCableContextMenu?.(edge.data.cableNode, { x: event.clientX, y: event.clientY });
   };
   const onNodesChange: OnNodesChange<DeviceFlowNode> = (changes) => {
-    if (regionMode || compositeMembershipMode) return;
+    if (annotationMode) return;
     setProjection((current) =>
       current
         ? {
@@ -648,19 +447,11 @@ export function TopologyCanvas({
     );
   };
   const onNodeDragStart: OnNodeDrag<DeviceFlowNode> = (_, node) => {
-    if (regionMode || compositeMembershipMode) return;
+    if (annotationMode) return;
     confirmedNodePositions.current.set(node.id, node.position);
   };
   const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
-    if (regionMode || compositeMembershipMode) return;
-    if (draggedNode.data.projection.kind === 'MAP_COMPOSITE') {
-      onCompositeDragStop?.(String(draggedNode.data.projection.attributes.composite_id), {
-        ...draggedNode.position,
-        width: draggedNode.width ?? draggedNode.measured?.width ?? Number(draggedNode.data.projection.attributes.width),
-        height: draggedNode.height ?? draggedNode.measured?.height ?? Number(draggedNode.data.projection.attributes.height),
-      });
-      return;
-    }
+    if (annotationMode) return;
     const confirmedPosition = confirmedNodePositions.current.get(draggedNode.id);
     const placedNodes = draggableNodeIds
       ? projection.nodes.filter((node) => draggableNodeIds.has(node.id))
@@ -727,54 +518,16 @@ export function TopologyCanvas({
         onNodeContextMenu={onNodeContextMenu}
         onEdgeContextMenu={onEdgeContextMenu}
         onPaneClick={(event) => {
-          if (compositeMembershipMode) return;
-          if (regionMode) {
-            if (regionMode.annotationPlacement) {
-              regionMode.onAnnotationPlace?.(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
-              return;
-            }
-            if (regionMode.draft?.status === 'drawing') {
-              const pointerScreen = { x: event.clientX, y: event.clientY };
-              if (isRegionDraftClosingTarget({ draft: regionMode.draft, pointerScreen, flowToScreenPosition })) {
-                regionMode.onCompleteDraft?.();
-                return;
-              }
-              const assist = regionDraftAssistForPointer({
-                points: regionMode.draft.points,
-                pointerScreen,
-                shiftKey: event.shiftKey,
-                ctrlKey: event.ctrlKey,
-                screenToFlowPosition,
-                flowToScreenPosition,
-              });
-              regionMode.onDraftPoint?.(assist?.point ?? screenToFlowPosition(pointerScreen));
-            }
+          if (annotationMode) {
+            if (annotationMode.annotationPlacement) annotationMode.onAnnotationPlace?.(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
             return;
           }
           const anchor = screenToFlowPosition({ x: event.clientX, y: event.clientY });
           onSelectionChange(null);
           onPaneClick?.(anchor);
         }}
-        onPaneMouseMove={(event) => {
-          if (regionMode?.draft?.status === 'drawing') {
-            const pointerScreen = { x: event.clientX, y: event.clientY };
-            const closingTarget = isRegionDraftClosingTarget({ draft: regionMode.draft, pointerScreen, flowToScreenPosition });
-            setRegionDraftClosingTarget(closingTarget);
-            const assist = closingTarget ? undefined : regionDraftAssistForPointer({
-              points: regionMode.draft.points,
-              pointerScreen,
-              shiftKey: event.shiftKey,
-              ctrlKey: event.ctrlKey,
-              screenToFlowPosition,
-              flowToScreenPosition,
-            });
-            setRegionDraftAssist(assist);
-            setRegionDraftPreview(closingTarget ? regionMode.draft.points[0] : assist?.point);
-          }
-        }}
         onPaneContextMenu={(event) => {
-          if (regionMode || compositeMembershipMode || !onPhysicalPaneContextMenu) {
-            if (compositeMembershipMode) event.preventDefault();
+          if (annotationMode || !onPhysicalPaneContextMenu) {
             return;
           }
           event.preventDefault();
@@ -790,14 +543,13 @@ export function TopologyCanvas({
         }}
         minZoom={0.35}
         maxZoom={document.layer === "L1" ? 4 : 1.8}
-        nodesDraggable={!regionMode && !compositeMembershipMode && (
+        nodesDraggable={!annotationMode && (
           Boolean(onPhysicalNodeDragStop) ||
-          Boolean(onCompositeDragStop) ||
           (!disableAutoLayout && document.layer === "L1")
         )}
         nodesConnectable={false}
-        elementsSelectable={!regionMode && !compositeMembershipMode}
-        panOnDrag={!regionMode?.editableDraft && !regionMode?.editableLabelRegionId}
+        elementsSelectable={!annotationMode}
+        panOnDrag
         proOptions={{ hideAttribution: true }}
       >
         <Panel position="top-left">
@@ -817,26 +569,9 @@ export function TopologyCanvas({
           size={1.4}
           color="#25383c"
         />
-        {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (regions.length > 0 || textAnnotations.length > 0 || regionMode) && (
+        {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (
           <ViewportPortal>
-            <MapRegionLayer
-              regions={regions}
-              selectedRegionId={selectedRegionId}
-              hiddenRegionId={regionMode?.hiddenRegionId}
-              previewRegion={regionMode?.previewRegion}
-              interactiveLabelRegionId={regionMode?.editableLabelRegionId}
-              onLabelPointerDown={onRegionLabelPointerDown}
-              annotations={textAnnotations}
-              previewAnnotation={regionMode?.previewAnnotation}
-              selectedAnnotationId={regionMode?.selectedAnnotationId}
-              interactiveAnnotationId={regionMode?.editableAnnotationId}
-              onAnnotationPointerDown={onAnnotationPointerDown}
-              onAnnotationClick={(annotationId) => regionMode?.onAnnotationSelect?.(annotationId)}
-              referenceOutlines={referenceOutlines}
-              showReferenceOutlines={Boolean(regionMode?.showReferenceOutlines)}
-              draft={regionMode?.draft && { ...regionMode.draft, previewPoint: regionMode.draft.status === 'drawing' ? regionDraftPreview : undefined, closingTarget: regionDraftClosingTarget, assist: regionDraftAssist }}
-            />
-            {regionMode?.draft?.status === 'editing' && <RegionDraftEditor points={regionMode.draft.points} selectedVertexIndex={regionMode.draft.selectedVertexIndex ?? null} invalid={Boolean(regionMode.invalidDraft)} interactive={Boolean(regionMode.editableDraft)} feedback={regionDraftEditorFeedback} onPointerDown={onRegionDraftEditorPointerDown} />}
+            <MapTextAnnotationLayer annotations={textAnnotations} previewAnnotation={annotationMode?.previewAnnotation} selectedAnnotationId={annotationMode?.selectedAnnotationId} interactiveAnnotationId={annotationMode?.editableAnnotationId} onAnnotationPointerDown={onAnnotationPointerDown} onAnnotationClick={(annotationId) => annotationMode?.onAnnotationSelect?.(annotationId)} />
           </ViewportPortal>
         )}
         <MiniMap
@@ -849,8 +584,8 @@ export function TopologyCanvas({
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        {!regionMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} />}
-        {!regionMode && wiringRoute && <ViewportPortal><svg className="cable-routes-foreground cable-routes-foreground--wiring" aria-hidden="true"><WiringRoute {...wiringRoute} /></svg></ViewportPortal>}
+        {!annotationMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} />}
+        {!annotationMode && wiringRoute && <ViewportPortal><svg className="cable-routes-foreground cable-routes-foreground--wiring" aria-hidden="true"><WiringRoute {...wiringRoute} /></svg></ViewportPortal>}
       </ReactFlow>
     </div>
   );

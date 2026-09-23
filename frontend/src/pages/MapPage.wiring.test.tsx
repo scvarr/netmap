@@ -24,7 +24,7 @@ describe('MapPage visual wiring', () => {
     const initialMapReads = maps.loadMap.mock.calls.length;
     const initialMapLists = maps.listMaps.mock.calls.length;
     await fireEvent.click(screen.getByRole('button', { name: 'Трассировка' }));
-    expect(screen.getByLabelText('L1 трассировка PhysicalObject')).toHaveClass('trace-command--docked');
+    expect(screen.getByLabelText('Трассировка сети L1')).toHaveClass('trace-command--docked');
     startWiring();
     expect(screen.getByText('Выберите исходный свободный порт')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Свернуть' }));
@@ -115,7 +115,7 @@ describe('MapPage visual wiring', () => {
     const mapId = '00000000-0000-4000-8000-000000000001';
     const cableId = '00000000-0000-4000-8000-000000000003';
     const variantId = '00000000-0000-4000-8000-000000000004';
-    const savedMap: any = { map_ref: { entity_type: 'SavedMap', entity_id: mapId }, active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, name: 'Основной' }], name: 'M1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: '00000000-0000-4000-8000-000000000011' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0, locked: false } } }], cable_routes: [], composites: [], regions: [], text_annotations: [] };
+    const savedMap: any = { map_ref: { entity_type: 'SavedMap', entity_id: mapId }, active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, name: 'Основной' }], name: 'M1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: '00000000-0000-4000-8000-000000000011' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0, locked: false } } }], cable_routes: [], text_annotations: [] };
     let acknowledged = false; let postWriteReads = 0;
     const refreshedMap = { ...savedMap, cable_routes: [{ cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: cableId }, view: 'L1/PHYSICAL_OBJECT', waypoints: [] }] };
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {

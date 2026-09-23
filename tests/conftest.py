@@ -33,7 +33,6 @@ from app.models import (
     PortBlockPort,
     PortBlockVersion,
     MapCableRoute,
-    MapRegion,
     MapPlacement,
     MapViewPosition,
     Location,
@@ -94,7 +93,6 @@ def clean_database(request: pytest.FixtureRequest):
 
     require_confirmed_test_database()
     with SessionLocal.begin() as session:
-        session.execute(delete(MapRegion))
         session.execute(delete(MapCableRoute))
         session.execute(delete(MapViewPosition))
         session.execute(delete(MapPlacement))
