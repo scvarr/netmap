@@ -125,32 +125,38 @@ describe('TopologyCanvas async layout boundary', () => {
       source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'server' }],
       attributes: { blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint', entity_id: 'blueprint' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion', entity_id: 'version' }, body: { kind: 'RECTANGLE' as const, width: 100, height: 50 }, slots: [] } },
     };
-    const document: TopologyProjectionDocument = { ...documentFor('physical-framed'), nodes: [projection] };
+    const peer: TopologyProjectionNode = { id: 'physical-peer', kind: 'PHYSICAL_OBJECT', label: 'Peer', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'peer' }], attributes: {} };
+    const document: TopologyProjectionDocument = { ...documentFor('physical-framed'), nodes: [projection, peer] };
     const locationFrameInput = {
-      locations: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }],
-      placements: [{ physical_object_ref: projection.source_refs[0], location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, positions: {} }],
+      locations: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }, { location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'unit' }, name: 'Unit', type: null, parent_location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' } }],
+      placements: [{ physical_object_ref: projection.source_refs[0], location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'unit' }, positions: {} }, { physical_object_ref: peer.source_refs[0], location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, positions: {} }],
     };
     const layoutEngine: TopologyLayoutEngine = async (scene) => flowFor(scene);
-    const props = { document, selection: null, onSelectionChange: vi.fn(), layoutEngine, locationFrameInput, positionSnapshot: locationFrameInput.placements, positionOverrides: { 'physical-framed': { x: 10, y: 20 } }, displayWidthOverrides: { 'physical-framed': 200 } };
+    const props = { document, selection: null, onSelectionChange: vi.fn(), layoutEngine, locationFrameInput, positionSnapshot: locationFrameInput.placements, positionOverrides: { 'physical-framed': { x: 10, y: 20 }, 'physical-peer': { x: 80, y: 300 } }, displayWidthOverrides: { 'physical-framed': 200 } };
     const view = render(<TopologyCanvas {...props} />);
     await screen.findByRole('button', { name: 'physical-framed' });
     const frame = () => globalThis.document.querySelector('.location-frame') as HTMLElement;
+    const caption = () => globalThis.document.querySelector('.location-caption') as HTMLElement;
     expect(frame()).toHaveTextContent('Room');
-    expect(frame().style.left).toBe('-14px');
-    expect(frame().style.width).toBe('248px');
+    expect(globalThis.document.querySelectorAll('.location-frame')).toHaveLength(1);
+    expect(caption()).toHaveTextContent('Unit');
+    const initialLeft = Number.parseFloat(frame().style.left);
+    const initialWidth = Number.parseFloat(frame().style.width);
+    const initialCaptionLeft = Number.parseFloat(caption().style.left);
     expect(frame().closest('[aria-hidden="true"]')).not.toBeNull();
     expect(frame().className).toBe('location-frame');
     fireEvent.click(screen.getByRole('button', { name: 'drag physical-framed' }));
-    expect(frame().style.left).toBe('18px');
-    expect(frame().style.top).toBe('28px');
+    expect(Number.parseFloat(frame().style.left) - initialLeft).toBe(32);
+    expect(Number.parseFloat(caption().style.left) - initialCaptionLeft).toBe(32);
     view.rerender(<TopologyCanvas {...props} positionOverrides={{ 'physical-framed': { x: 10, y: 20 } }} authoritativePositionRevision={1} />);
-    await waitFor(() => expect(frame().style.left).toBe('-14px'));
+    await waitFor(() => expect(Number.parseFloat(frame().style.left)).toBe(initialLeft));
     view.rerender(<TopologyCanvas {...props} positionSnapshot={[...locationFrameInput.placements]} positionOverrides={{ 'physical-framed': { x: 200, y: 100 } }} authoritativePositionRevision={1} />);
-    await waitFor(() => expect(frame().style.left).toBe('176px'));
+    await waitFor(() => expect(Number.parseFloat(caption().style.left)).toBeGreaterThan(initialCaptionLeft));
     view.rerender(<TopologyCanvas {...props} displayWidthOverrides={{ 'physical-framed': 320 }} authoritativePositionRevision={1} />);
-    await waitFor(() => expect(frame().style.width).toBe('368px'));
+    await waitFor(() => expect(Number.parseFloat(frame().style.width)).toBeGreaterThan(initialWidth));
     view.rerender(<TopologyCanvas {...props} document={{ ...document, layer: 'L2', detail_level: 'DEVICE' }} />);
     await waitFor(() => expect(globalThis.document.querySelector('.location-frame')).toBeNull());
+    expect(globalThis.document.querySelector('.location-caption')).toBeNull();
   });
   it('reveals a requested physical object once without refitting unrelated rerenders', async () => {
     const object = {

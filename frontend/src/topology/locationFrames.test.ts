@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { deriveLocationFrames, LOCATION_FRAME_HEADER, LOCATION_FRAME_PADDING } from './locationFrames';
+import { deriveLocationPresentation } from './locationFrames';
 import type { LocationDocument } from './locationTypes';
 import type { MapPlacement } from './savedMapTypes';
+import type { FlowRectangle } from './nodeFootprint';
 
 const location = (id: string, parent: string | null = null): LocationDocument => ({
   location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: id },
@@ -17,62 +18,92 @@ const placement = (id: string, at: string | null): MapPlacement => ({
 const shown = (physicalObjectId: string, x: number, y: number, width = 100, height = 60) => ({
   physicalObjectId, rectangle: { x, y, width, height },
 });
-const contains = (outer: { x: number; y: number; width: number; height: number }, inner: { x: number; y: number; width: number; height: number }) => {
-  expect(outer.x).toBeLessThan(inner.x);
-  expect(outer.y).toBeLessThan(inner.y);
-  expect(outer.x + outer.width).toBeGreaterThan(inner.x + inner.width);
-  expect(outer.y + outer.height).toBeGreaterThan(inner.y + inner.height);
+const contains = (outer: FlowRectangle, inner: FlowRectangle) => {
+  expect(outer.x).toBeLessThanOrEqual(inner.x);
+  expect(outer.y).toBeLessThanOrEqual(inner.y);
+  expect(outer.x + outer.width).toBeGreaterThanOrEqual(inner.x + inner.width);
+  expect(outer.y + outer.height).toBeGreaterThanOrEqual(inner.y + inner.height);
 };
 
-describe('expanded canonical Location frames', () => {
-  it('frames a direct object using its actual rendered rectangle and presentation space', () => {
-    const [frame] = deriveLocationFrames([location('room')], [placement('server', 'room')], [shown('server', 10, 20, 310, 170)]);
-    expect(frame).toMatchObject({ locationId: 'room', label: 'room', depth: 0, parentLocationId: null });
-    expect(frame.bounds).toEqual({ x: 10 - LOCATION_FRAME_PADDING, y: 20 - LOCATION_FRAME_PADDING - LOCATION_FRAME_HEADER, width: 310 + LOCATION_FRAME_PADDING * 2, height: 170 + LOCATION_FRAME_PADDING * 2 + LOCATION_FRAME_HEADER });
+describe('expanded Location presentation arity', () => {
+  it('retains a full frame for two direct displayed objects using their actual rectangles', () => {
+    const objects = [shown('a', 10, 20, 310, 170), shown('b', 450, 80, 100, 60)];
+    const result = deriveLocationPresentation([location('room')], [placement('a', 'room'), placement('b', 'room')], objects);
+    expect(result.frames).toHaveLength(1);
+    expect(result.captions).toHaveLength(0);
+    expect(result.frames[0]).toMatchObject({ locationId: 'room', label: 'room', pathLocationIds: ['room'] });
+    objects.forEach((object) => contains(result.frames[0].bounds, object.rectangle));
   });
 
-  it('builds every populated ancestor, enclosing a child frame and direct parent object', () => {
-    const frames = deriveLocationFrames(
-      [location('room'), location('rack', 'room'), location('unit', 'rack')],
-      [placement('parent-object', 'room'), placement('leaf-object', 'unit')],
-      [shown('parent-object', 0, 0), shown('leaf-object', 400, 200)],
-    );
-    expect(frames.map((frame) => frame.locationId)).toEqual(['room', 'rack', 'unit']);
-    const [room, rack, unit] = frames;
-    expect(frames.map((frame) => frame.depth)).toEqual([0, 1, 2]);
-    contains(room.bounds, rack.bounds);
-    contains(rack.bounds, unit.bounds);
-    contains(room.bounds, shown('parent-object', 0, 0).rectangle);
-  });
-
-  it('keeps siblings separate and omits empty branches, unknown Locations and unlocated objects', () => {
-    const frames = deriveLocationFrames(
+  it('retains a parent frame for two non-empty child Locations and ignores an empty sibling', () => {
+    const result = deriveLocationPresentation(
       [location('room'), location('rack-a', 'room'), location('rack-b', 'room'), location('empty', 'room')],
-      [placement('a', 'rack-a'), placement('b', 'rack-b'), placement('none', null), placement('unknown', 'missing')],
-      [shown('a', 0, 0), shown('b', 400, 0), shown('none', 800, 0), shown('unknown', 1000, 0)],
+      [placement('a', 'rack-a'), placement('b', 'rack-b')],
+      [shown('a', 0, 0), shown('b', 400, 0)],
     );
-    expect(frames.map((frame) => frame.locationId)).toEqual(['room', 'rack-a', 'rack-b']);
-    expect(frames[1].bounds.x + frames[1].bounds.width).toBeLessThan(frames[2].bounds.x);
-    expect(frames[0].bounds.x + frames[0].bounds.width).toBeLessThan(800);
+    expect(result.frames.map((frame) => frame.locationId)).toEqual(['room']);
+    expect(result.captions.map((caption) => caption.label)).toEqual(['rack-a', 'rack-b']);
+    result.captions.forEach((caption) => contains(result.frames[0].bounds, caption.bounds));
   });
 
-  it('recomputes bounds from current position and display dimensions', () => {
-    const input = [location('rack')];
-    const placements = [placement('switch', 'rack')];
-    const first = deriveLocationFrames(input, placements, [shown('switch', 5, 8, 100, 60)])[0].bounds;
-    const moved = deriveLocationFrames(input, placements, [shown('switch', 55, 88, 100, 60)])[0].bounds;
-    const resized = deriveLocationFrames(input, placements, [shown('switch', 5, 8, 240, 180)])[0].bounds;
-    expect(moved.x - first.x).toBe(50);
-    expect(moved.y - first.y).toBe(80);
-    expect(resized.width - first.width).toBe(140);
-    expect(resized.height - first.height).toBe(120);
+  it('suppresses a single-object frame and provides one compact object caption', () => {
+    const result = deriveLocationPresentation([location('unit')], [placement('a', 'unit')], [shown('a', 10, 20)]);
+    expect(result.frames).toEqual([]);
+    expect(result.captions).toMatchObject([{ physicalObjectId: 'a', label: 'unit', pathLocationIds: ['unit'] }]);
   });
 
-  it('has no fixed hierarchy depth or Location type taxonomy', () => {
-    const levels = Array.from({ length: 9 }, (_, index) => location(`L${index}`, index ? `L${index - 1}` : null));
-    const frames = deriveLocationFrames(levels, [placement('x', 'L8')], [shown('x', 0, 0)]);
-    expect(frames).toHaveLength(9);
-    expect(frames.at(-1)?.depth).toBe(8);
-    expect(frames[0].bounds.width).toBeGreaterThan(frames.at(-1)!.bounds.width);
+  it('compresses a deep unary chain into one path without repeated padding or headers', () => {
+    const locations = Array.from({ length: 12 }, (_, index) => location(`L${index}`, index ? `L${index - 1}` : null));
+    const one = deriveLocationPresentation([location('L11')], [placement('a', 'L11')], [shown('a', 0, 100)]);
+    const deep = deriveLocationPresentation(locations, [placement('a', 'L11')], [shown('a', 0, 100)]);
+    expect(deep.frames).toEqual([]);
+    expect(deep.captions).toHaveLength(1);
+    expect(deep.captions[0].pathLocationIds).toEqual(locations.map((item) => item.location_ref.entity_id));
+    expect(deep.captions[0].label).toBe(locations.map((item) => item.name).join(' / '));
+    expect(deep.captions[0].bounds.width).toBe(one.captions[0].bounds.width);
+    expect(deep.captions[0].bounds.height).toBeLessThan(one.captions[0].bounds.height * locations.length / 2);
+  });
+
+  it('merges unary ancestor names into one retained branching frame', () => {
+    const result = deriveLocationPresentation(
+      [location('A'), location('B', 'A'), location('C', 'B')],
+      [placement('x', 'C'), placement('y', 'C')],
+      [shown('x', 0, 0), shown('y', 300, 0)],
+    );
+    expect(result.frames).toMatchObject([{ locationId: 'C', label: 'A / B / C', pathLocationIds: ['A', 'B', 'C'] }]);
+    expect(result.captions).toEqual([]);
+  });
+
+  it('retains a parent with one direct object and one non-empty child', () => {
+    const result = deriveLocationPresentation(
+      [location('parent'), location('child', 'parent')],
+      [placement('a', 'parent'), placement('b', 'child')],
+      [shown('a', 0, 0), shown('b', 300, 100)],
+    );
+    expect(result.frames.map((frame) => frame.locationId)).toEqual(['parent']);
+    expect(result.captions.map((caption) => caption.label)).toEqual(['child']);
+    contains(result.frames[0].bounds, result.captions[0].bounds);
+    contains(result.frames[0].bounds, shown('a', 0, 0).rectangle);
+  });
+
+  it('derives frame and caption bounds afresh on movement and resize', () => {
+    const locations = [location('room'), location('unit', 'room')];
+    const placements = [placement('a', 'room'), placement('b', 'unit')];
+    const derive = (x: number, width: number) => deriveLocationPresentation(locations, placements, [shown('a', 0, 0), shown('b', x, 100, width, 60)]);
+    const initial = derive(300, 100);
+    const moved = derive(400, 100);
+    const resized = derive(300, 400);
+    expect(moved.captions[0].bounds.x - initial.captions[0].bounds.x).toBe(100);
+    expect(moved.frames[0].bounds.width).toBeGreaterThan(initial.frames[0].bounds.width);
+    expect(resized.frames[0].bounds.width).toBeGreaterThan(initial.frames[0].bounds.width);
+  });
+
+  it('does not invent representation for empty, unlocated, unknown or undisplayed placements', () => {
+    const result = deriveLocationPresentation(
+      [location('empty'), location('known')],
+      [placement('unlocated', null), placement('unknown', 'missing'), placement('hidden', 'known')],
+      [shown('unlocated', 0, 0), shown('unknown', 100, 0)],
+    );
+    expect(result).toEqual({ frames: [], captions: [] });
   });
 });

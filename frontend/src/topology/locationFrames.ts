@@ -2,9 +2,13 @@ import type { LocationDocument } from './locationTypes';
 import type { MapPlacement } from './savedMapTypes';
 import type { FlowRectangle } from './nodeFootprint';
 
-/** Presentation spacing in flow coordinates; Location has no stored geometry. */
+/** Flow-coordinate presentation spacing; none of this is Location data. */
 export const LOCATION_FRAME_PADDING = 24;
 export const LOCATION_FRAME_HEADER = 32;
+const LABEL_WIDTH = 260;
+const LABEL_CHARS_PER_LINE = 30;
+const LABEL_LINE_HEIGHT = 16;
+const CAPTION_GAP = 6;
 
 export interface DisplayedPhysicalObject {
   physicalObjectId: string;
@@ -14,9 +18,22 @@ export interface DisplayedPhysicalObject {
 export interface LocationFrame {
   locationId: string;
   parentLocationId: string | null;
+  pathLocationIds: string[];
   label: string;
   depth: number;
   bounds: FlowRectangle;
+}
+
+export interface LocationCaption {
+  physicalObjectId: string;
+  pathLocationIds: string[];
+  label: string;
+  bounds: FlowRectangle;
+}
+
+export interface LocationPresentation {
+  frames: LocationFrame[];
+  captions: LocationCaption[];
 }
 
 const union = (rectangles: readonly FlowRectangle[]): FlowRectangle => {
@@ -27,58 +44,112 @@ const union = (rectangles: readonly FlowRectangle[]): FlowRectangle => {
   return { x, y, width: right - x, height: bottom - y };
 };
 
-/** Direct canonical membership, then bottom-up bounds over displayed descendants only. */
-export function deriveLocationFrames(
+const labelLines = (label: string) => Math.max(1, Math.ceil(label.length / LABEL_CHARS_PER_LINE));
+const headerHeight = (label: string) => Math.max(LOCATION_FRAME_HEADER, 12 + labelLines(label) * LABEL_LINE_HEIGHT);
+const frameBounds = (content: FlowRectangle, label: string): FlowRectangle => {
+  const header = headerHeight(label);
+  return {
+    x: content.x - LOCATION_FRAME_PADDING,
+    y: content.y - LOCATION_FRAME_PADDING - header,
+    width: Math.max(content.width + LOCATION_FRAME_PADDING * 2, LABEL_WIDTH),
+    height: content.height + LOCATION_FRAME_PADDING * 2 + header,
+  };
+};
+const captionBounds = (object: FlowRectangle, label: string): FlowRectangle => {
+  const height = 8 + labelLines(label) * LABEL_LINE_HEIGHT;
+  return { x: object.x, y: object.y - CAPTION_GAP - height, width: LABEL_WIDTH, height };
+};
+
+type Representation =
+  | { kind: 'frame'; frame: LocationFrame; content: FlowRectangle; extent: FlowRectangle }
+  | { kind: 'caption'; caption: LocationCaption; object: FlowRectangle; extent: FlowRectangle };
+
+/** Canonical direct arity determines whether a populated Location has a frame. */
+export function deriveLocationPresentation(
   locations: readonly LocationDocument[],
   placements: readonly MapPlacement[],
   displayedObjects: readonly DisplayedPhysicalObject[],
-): LocationFrame[] {
+): LocationPresentation {
   const byId = new Map(locations.map((location) => [location.location_ref.entity_id, location]));
   const children = new Map<string, string[]>();
   for (const location of locations) {
     const parentId = location.parent_location_ref?.entity_id;
-    if (parentId && byId.has(parentId)) children.set(parentId, [...(children.get(parentId) ?? []), location.location_ref.entity_id]);
+    if (!parentId || !byId.has(parentId)) continue;
+    const siblings = children.get(parentId) ?? [];
+    siblings.push(location.location_ref.entity_id);
+    children.set(parentId, siblings);
   }
   const displayedById = new Map(displayedObjects.map((object) => [object.physicalObjectId, object.rectangle]));
-  const direct = new Map<string, FlowRectangle[]>();
+  const direct = new Map<string, DisplayedPhysicalObject[]>();
   for (const placement of placements) {
     const locationId = placement.location_ref?.entity_id;
     const rectangle = displayedById.get(placement.physical_object_ref.entity_id);
-    if (locationId && byId.has(locationId) && rectangle) direct.set(locationId, [...(direct.get(locationId) ?? []), rectangle]);
+    if (!locationId || !byId.has(locationId) || !rectangle) continue;
+    const members = direct.get(locationId) ?? [];
+    members.push({ physicalObjectId: placement.physical_object_ref.entity_id, rectangle });
+    direct.set(locationId, members);
   }
 
   const frames = new Map<string, LocationFrame>();
+  const captions = new Map<string, LocationCaption>();
   const visiting = new Set<string>();
-  const visit = (id: string, depth: number): LocationFrame | null => {
-    if (visiting.has(id)) return null; // An invalid catalog must not invent cyclic containment.
+  const visit = (id: string, depth: number): Representation | null => {
+    if (visiting.has(id)) return null; // Invalid cyclic catalogs provide no containment evidence.
     visiting.add(id);
     const location = byId.get(id)!;
-    const childFrames = (children.get(id) ?? []).flatMap((childId) => {
-      const frame = visit(childId, depth + 1);
-      return frame ? [frame] : [];
+    const childRepresentations = (children.get(id) ?? []).flatMap((childId) => {
+      const representation = visit(childId, depth + 1);
+      return representation ? [representation] : [];
     });
     visiting.delete(id);
-    const content = [...(direct.get(id) ?? []), ...childFrames.map((frame) => frame.bounds)];
-    if (!content.length) return null;
-    const contentBounds = union(content);
-    const frame: LocationFrame = {
-      locationId: id,
-      parentLocationId: location.parent_location_ref?.entity_id ?? null,
-      label: location.name,
-      depth,
-      bounds: {
-        x: contentBounds.x - LOCATION_FRAME_PADDING,
-        y: contentBounds.y - LOCATION_FRAME_PADDING - LOCATION_FRAME_HEADER,
-        width: contentBounds.width + LOCATION_FRAME_PADDING * 2,
-        height: contentBounds.height + LOCATION_FRAME_PADDING * 2 + LOCATION_FRAME_HEADER,
-      },
+    const objects = direct.get(id) ?? [];
+    const arity = objects.length + childRepresentations.length;
+    if (arity === 0) return null;
+
+    if (arity >= 2) {
+      const content = union([...objects.map((object) => object.rectangle), ...childRepresentations.map((child) => child.extent)]);
+      const frame: LocationFrame = {
+        locationId: id,
+        parentLocationId: location.parent_location_ref?.entity_id ?? null,
+        pathLocationIds: [id],
+        label: location.name,
+        depth,
+        bounds: frameBounds(content, location.name),
+      };
+      frames.set(id, frame);
+      return { kind: 'frame', frame, content, extent: frame.bounds };
+    }
+
+    const child = childRepresentations[0];
+    if (child?.kind === 'frame') {
+      const label = `${location.name} / ${child.frame.label}`;
+      const frame = {
+        ...child.frame,
+        pathLocationIds: [id, ...child.frame.pathLocationIds],
+        label,
+        bounds: frameBounds(child.content, label),
+      };
+      frames.set(frame.locationId, frame);
+      return { kind: 'frame', frame, content: child.content, extent: frame.bounds };
+    }
+    const object = child?.kind === 'caption' ? child.object : objects[0].rectangle;
+    const physicalObjectId = child?.kind === 'caption' ? child.caption.physicalObjectId : objects[0].physicalObjectId;
+    const label = child?.kind === 'caption' ? `${location.name} / ${child.caption.label}` : location.name;
+    const caption: LocationCaption = {
+      physicalObjectId,
+      pathLocationIds: child?.kind === 'caption' ? [id, ...child.caption.pathLocationIds] : [id],
+      label,
+      bounds: captionBounds(object, label),
     };
-    frames.set(id, frame);
-    return frame;
+    captions.set(physicalObjectId, caption);
+    return { kind: 'caption', caption, object, extent: union([object, caption.bounds]) };
   };
   for (const location of locations) {
     const id = location.location_ref.entity_id;
     if (!location.parent_location_ref || !byId.has(location.parent_location_ref.entity_id)) visit(id, 0);
   }
-  return [...frames.values()].sort((a, b) => a.depth - b.depth || a.locationId.localeCompare(b.locationId));
+  return {
+    frames: [...frames.values()].sort((a, b) => a.depth - b.depth || a.locationId.localeCompare(b.locationId)),
+    captions: [...captions.values()].sort((a, b) => a.physicalObjectId.localeCompare(b.physicalObjectId)),
+  };
 }

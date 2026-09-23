@@ -49,7 +49,7 @@ import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { blueprintMapNameplateHeight } from "../topology/blueprintDisplaySize";
 import { nodeFootprint } from "../topology/nodeFootprint";
-import { deriveLocationFrames } from "../topology/locationFrames";
+import { deriveLocationPresentation } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
 import type { MapPlacement } from "../topology/savedMapTypes";
 import { presentationSceneDocument } from "../topology/presentationScene";
@@ -352,8 +352,8 @@ export function TopologyCanvas({
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));
-  const locationFrames = locationFrameInput && document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
-    ? deriveLocationFrames(locationFrameInput.locations, locationFrameInput.placements, projection.nodes.flatMap((node) => {
+  const locationPresentation = locationFrameInput && document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
+    ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, projection.nodes.flatMap((node) => {
       const physicalObjectId = physicalObjectIdForNode(node.data.projection);
       if (!physicalObjectId) return [];
       const blueprint = node.data.projection.attributes.blueprint_presentation;
@@ -366,7 +366,7 @@ export function TopologyCanvas({
       }
       return [{ physicalObjectId, rectangle }];
     }))
-    : [];
+    : { frames: [], captions: [] };
   const edges = (annotationMode ? [] : projection.edges).map((edge) => {
     const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
@@ -589,14 +589,20 @@ export function TopologyCanvas({
           size={1.4}
           color="#25383c"
         />
-        {locationFrames.length > 0 && <ViewportPortal>
+        {(locationPresentation.frames.length > 0 || locationPresentation.captions.length > 0) && <ViewportPortal>
           <div className="location-frame-layer" aria-hidden="true">
-            {locationFrames.map((frame) => <div
+            {locationPresentation.frames.map((frame) => <div
               key={frame.locationId}
               className="location-frame"
               data-location-id={frame.locationId}
               style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
             ><span className="location-frame__label">{frame.label}</span></div>)}
+            {locationPresentation.captions.map((caption) => <div
+              key={caption.physicalObjectId}
+              className="location-caption"
+              data-physical-object-id={caption.physicalObjectId}
+              style={{ left: caption.bounds.x, top: caption.bounds.y, width: caption.bounds.width, height: caption.bounds.height }}
+            >{caption.label}</div>)}
           </div>
         </ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (

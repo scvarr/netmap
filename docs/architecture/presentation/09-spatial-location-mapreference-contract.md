@@ -76,6 +76,13 @@ persisted. Она меняется при movement, resize, collapse и expand; 
 Locations дают вложенные presentation areas. Пустой Location без отображаемого
 содержимого не получает guessed geometry.
 
+Для expanded presentation полный frame рисуется при двух или более
+непосредственных отображаемых элементах (PhysicalObjects и непустых дочерних
+Locations). Unary Location сохраняется в компактном path label единственного
+descendant, без отдельного слоя frame padding/header; цепочка таких Locations
+даёт один path на branching frame или рядом с единственным PhysicalObject.
+Это не меняет canonical hierarchy или membership.
+
 Если дочерний Location свёрнут в компактный proxy, frame родителя вычисляется
 по этому текущему presentation, а не по скрытым развёрнутым объектам.
 

@@ -40,7 +40,7 @@ layers, fallback readers или параллельные old/new contracts.
 
 ### P-UX-03B — Expanded hierarchical Location presentation
 
-**IMPLEMENTED.** Physical SavedMap показывает derived nested frames по canonical Location catalog, live placement `location_ref` и текущим node rectangles. Frame geometry пересчитывается при drag, rollback, resize и смене variant; пустые branches не рисуются. Targeted frontend validation пройдена; collapse и group move остаются отдельными milestones.
+**IMPLEMENTED.** Physical SavedMap показывает derived nested frames по canonical Location catalog, live placement `location_ref` и текущим node rectangles. Frame geometry пересчитывается при drag, rollback, resize и смене variant; пустые branches не рисуются. Unary Location chains представлены компактным path label без повторных frame shells. Targeted frontend validation пройдена; collapse и group move остаются отдельными milestones.
 
 Derive direct membership и canonical subtree; построить nested dynamic frames.
 Movement и resize объектов обновляют frames, но frame geometry не persisted.
