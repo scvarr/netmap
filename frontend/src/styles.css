@@ -75,7 +75,12 @@ button { font: inherit; }
 .location-frame-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 .location-frame { position: absolute; box-sizing: border-box; border: 1px solid rgb(91 188 168 / .55); border-radius: 14px; background: rgb(39 110 101 / .075); pointer-events: none; }
 .location-frame__label { position: absolute; top: 0; left: 10px; transform: translateY(-50%); display: block; box-sizing: border-box; max-width: calc(100% - 20px); padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: #0a1518; color: #a6e9d8; font: 600 11px/16px ui-monospace, monospace; pointer-events: none; }
-.location-caption { position: absolute; transform: translateY(-100%); box-sizing: border-box; width: max-content; max-width: 180px; padding: 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a6e9d8; font: 600 11px/14px ui-monospace, monospace; text-shadow: 0 1px 3px #071013, 0 0 5px #071013; pointer-events: none; }
+.blueprint-map-node__nameplate { display: flex; align-items: center; gap: 6px; }
+.blueprint-map-node__title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.blueprint-map-node__location { flex: 0 1 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; color: #86b4aa; font-size: 9px; font-weight: 500; pointer-events: none; }
+.device-node__nameplate { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.device-node__nameplate strong { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.device-node__location { flex: 0 1 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; color: #86b4aa; font: 500 9px ui-monospace, "Cascadia Code", monospace; pointer-events: none; }
 .topology-layout-state { width: 100%; height: 100%; display: grid; place-items: center; color: #7f9495; font-size: 12px; }
 .device-node {
   width: 178px; min-height: 112px; padding: 15px 16px; display: flex; flex-direction: column; gap: 5px;

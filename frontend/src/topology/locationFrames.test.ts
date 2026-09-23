@@ -30,7 +30,7 @@ describe('expanded Location presentation arity', () => {
     const objects = [shown('a', 10, 20, 310, 170), shown('b', 450, 80, 100, 60)];
     const result = deriveLocationPresentation([location('room')], [placement('a', 'room'), placement('b', 'room')], objects);
     expect(result.frames).toHaveLength(1);
-    expect(result.captions).toHaveLength(0);
+    expect(result.objectPaths).toHaveLength(0);
     expect(result.frames[0]).toMatchObject({ locationId: 'room', label: 'room', pathLocationIds: ['room'] });
     objects.forEach((object) => contains(result.frames[0].bounds, object.rectangle));
     expect(result.frames[0].bounds).toEqual({
@@ -48,28 +48,25 @@ describe('expanded Location presentation arity', () => {
       [shown('a', 0, 0), shown('b', 400, 0)],
     );
     expect(result.frames.map((frame) => frame.locationId)).toEqual(['room']);
-    expect(result.captions.map((caption) => caption.label)).toEqual(['rack-a', 'rack-b']);
+    expect(result.objectPaths.map((path) => path.label)).toEqual(['rack-a', 'rack-b']);
     contains(result.frames[0].bounds, shown('a', 0, 0).rectangle);
     contains(result.frames[0].bounds, shown('b', 400, 0).rectangle);
   });
 
-  it('suppresses a single-object frame and provides one compact object caption', () => {
+  it('suppresses a single-object frame and provides its Location path without geometry', () => {
     const result = deriveLocationPresentation([location('unit')], [placement('a', 'unit')], [shown('a', 10, 20)]);
     expect(result.frames).toEqual([]);
-    expect(result.captions).toMatchObject([{ physicalObjectId: 'a', label: 'unit', pathLocationIds: ['unit'] }]);
-    expect(result.captions[0]).not.toHaveProperty('bounds');
-    expect(result.captions[0].position.x).toBe(10);
+    expect(result.objectPaths).toEqual([{ physicalObjectId: 'a', label: 'unit', pathLocationIds: ['unit'] }]);
   });
 
   it('compresses a deep unary chain into one path without repeated padding or headers', () => {
     const locations = Array.from({ length: 12 }, (_, index) => location(`L${index}`, index ? `L${index - 1}` : null));
-    const one = deriveLocationPresentation([location('L11')], [placement('a', 'L11')], [shown('a', 0, 100)]);
     const deep = deriveLocationPresentation(locations, [placement('a', 'L11')], [shown('a', 0, 100)]);
     expect(deep.frames).toEqual([]);
-    expect(deep.captions).toHaveLength(1);
-    expect(deep.captions[0].pathLocationIds).toEqual(locations.map((item) => item.location_ref.entity_id));
-    expect(deep.captions[0].label).toBe(locations.map((item) => item.name).join(' / '));
-    expect(deep.captions[0].position).toEqual(one.captions[0].position);
+    expect(deep.objectPaths).toHaveLength(1);
+    expect(deep.objectPaths[0].pathLocationIds).toEqual(locations.map((item) => item.location_ref.entity_id));
+    expect(deep.objectPaths[0].label).toBe(locations.map((item) => item.name).join(' / '));
+    expect(deep.objectPaths[0]).not.toHaveProperty('bounds');
   });
 
   it('merges unary ancestor names into one retained branching frame', () => {
@@ -82,7 +79,7 @@ describe('expanded Location presentation arity', () => {
     const uncompressed = deriveLocationPresentation([location('C')], [placement('x', 'C'), placement('y', 'C')], objects);
     expect(result.frames).toMatchObject([{ locationId: 'C', label: 'A / B / C', pathLocationIds: ['A', 'B', 'C'] }]);
     expect(result.frames[0].bounds).toEqual(uncompressed.frames[0].bounds);
-    expect(result.captions).toEqual([]);
+    expect(result.objectPaths).toEqual([]);
   });
 
   it('does not size a retained frame from a long unary path label', () => {
@@ -101,27 +98,27 @@ describe('expanded Location presentation arity', () => {
       [shown('a', 0, 0), shown('b', 300, 100)],
     );
     expect(result.frames.map((frame) => frame.locationId)).toEqual(['parent']);
-    expect(result.captions.map((caption) => caption.label)).toEqual(['child']);
+    expect(result.objectPaths.map((path) => path.label)).toEqual(['child']);
     contains(result.frames[0].bounds, shown('b', 300, 100).rectangle);
     contains(result.frames[0].bounds, shown('a', 0, 0).rectangle);
   });
 
-  it('keeps the same parent bounds when a child object gains a unary caption', () => {
+  it('keeps the same parent bounds when a child object gains a unary path', () => {
     const objects = [shown('a', 0, 0), shown('b', 300, 100)];
     const direct = deriveLocationPresentation([location('parent')], [placement('a', 'parent'), placement('b', 'parent')], objects);
     const unary = deriveLocationPresentation([location('parent'), location('child', 'parent')], [placement('a', 'parent'), placement('b', 'child')], objects);
-    expect(unary.captions).toHaveLength(1);
+    expect(unary.objectPaths).toHaveLength(1);
     expect(unary.frames[0].bounds).toEqual(direct.frames[0].bounds);
   });
 
-  it('derives frame bounds and caption position afresh on movement and resize', () => {
+  it('derives frame bounds afresh on movement and resize without changing the object path', () => {
     const locations = [location('room'), location('unit', 'room')];
     const placements = [placement('a', 'room'), placement('b', 'unit')];
     const derive = (x: number, width: number) => deriveLocationPresentation(locations, placements, [shown('a', 0, 0), shown('b', x, 100, width, 60)]);
     const initial = derive(300, 100);
     const moved = derive(400, 100);
     const resized = derive(300, 400);
-    expect(moved.captions[0].position.x - initial.captions[0].position.x).toBe(100);
+    expect(moved.objectPaths).toEqual(initial.objectPaths);
     expect(moved.frames[0].bounds.width).toBeGreaterThan(initial.frames[0].bounds.width);
     expect(resized.frames[0].bounds.width).toBeGreaterThan(initial.frames[0].bounds.width);
   });
@@ -132,6 +129,6 @@ describe('expanded Location presentation arity', () => {
       [placement('unlocated', null), placement('unknown', 'missing'), placement('hidden', 'known')],
       [shown('unlocated', 0, 0), shown('unknown', 100, 0)],
     );
-    expect(result).toEqual({ frames: [], captions: [] });
+    expect(result).toEqual({ frames: [], objectPaths: [] });
   });
 });

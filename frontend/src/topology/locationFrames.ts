@@ -4,7 +4,6 @@ import type { FlowRectangle } from './nodeFootprint';
 
 /** Flow-coordinate presentation spacing; none of this is Location data. */
 export const LOCATION_FRAME_PADDING = 20;
-const CAPTION_GAP = 2;
 
 export interface DisplayedPhysicalObject {
   physicalObjectId: string;
@@ -20,16 +19,15 @@ export interface LocationFrame {
   bounds: FlowRectangle;
 }
 
-export interface LocationCaption {
+export interface ObjectLocationPath {
   physicalObjectId: string;
   pathLocationIds: string[];
   label: string;
-  position: { x: number; y: number };
 }
 
 export interface LocationPresentation {
   frames: LocationFrame[];
-  captions: LocationCaption[];
+  objectPaths: ObjectLocationPath[];
 }
 
 const union = (rectangles: readonly FlowRectangle[]): FlowRectangle => {
@@ -49,7 +47,7 @@ const frameBounds = (content: FlowRectangle): FlowRectangle => ({
 
 type Representation =
   | { kind: 'frame'; frame: LocationFrame; content: FlowRectangle; extent: FlowRectangle }
-  | { kind: 'caption'; caption: LocationCaption; object: FlowRectangle; extent: FlowRectangle };
+  | { kind: 'object'; path: ObjectLocationPath; object: FlowRectangle; extent: FlowRectangle };
 
 /** Canonical direct arity determines whether a populated Location has a frame. */
 export function deriveLocationPresentation(
@@ -78,7 +76,7 @@ export function deriveLocationPresentation(
   }
 
   const frames = new Map<string, LocationFrame>();
-  const captions = new Map<string, LocationCaption>();
+  const objectPaths = new Map<string, ObjectLocationPath>();
   const visiting = new Set<string>();
   const visit = (id: string, depth: number): Representation | null => {
     if (visiting.has(id)) return null; // Invalid cyclic catalogs provide no containment evidence.
@@ -119,17 +117,16 @@ export function deriveLocationPresentation(
       frames.set(frame.locationId, frame);
       return { kind: 'frame', frame, content: child.content, extent: frame.bounds };
     }
-    const object = child?.kind === 'caption' ? child.object : objects[0].rectangle;
-    const physicalObjectId = child?.kind === 'caption' ? child.caption.physicalObjectId : objects[0].physicalObjectId;
-    const label = child?.kind === 'caption' ? `${location.name} / ${child.caption.label}` : location.name;
-    const caption: LocationCaption = {
+    const object = child?.kind === 'object' ? child.object : objects[0].rectangle;
+    const physicalObjectId = child?.kind === 'object' ? child.path.physicalObjectId : objects[0].physicalObjectId;
+    const label = child?.kind === 'object' ? `${location.name} / ${child.path.label}` : location.name;
+    const path: ObjectLocationPath = {
       physicalObjectId,
-      pathLocationIds: child?.kind === 'caption' ? [id, ...child.caption.pathLocationIds] : [id],
+      pathLocationIds: child?.kind === 'object' ? [id, ...child.path.pathLocationIds] : [id],
       label,
-      position: { x: object.x, y: object.y - CAPTION_GAP },
     };
-    captions.set(physicalObjectId, caption);
-    return { kind: 'caption', caption, object, extent: object };
+    objectPaths.set(physicalObjectId, path);
+    return { kind: 'object', path, object, extent: object };
   };
   for (const location of locations) {
     const id = location.location_ref.entity_id;
@@ -137,6 +134,6 @@ export function deriveLocationPresentation(
   }
   return {
     frames: [...frames.values()].sort((a, b) => a.depth - b.depth || a.locationId.localeCompare(b.locationId)),
-    captions: [...captions.values()].sort((a, b) => a.physicalObjectId.localeCompare(b.physicalObjectId)),
+    objectPaths: [...objectPaths.values()].sort((a, b) => a.physicalObjectId.localeCompare(b.physicalObjectId)),
   };
 }

@@ -57,6 +57,7 @@ vi.mock('@xyflow/react', () => ({
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
           <button onClick={() => onNodeContextMenu?.({ preventDefault: vi.fn() }, node)}>context {node.id}</button>
           <span data-testid={`position-${node.id}`}>{node.position.x},{node.position.y}</span>
+          <span data-testid={`location-path-${node.id}`}>{node.data.locationPresentationPath ?? ''}</span>
           <span data-testid={`parent-${node.id}`}>{node.parentId ?? 'none'}</span>
           <span data-testid={`highlighted-members-${node.id}`}>{[...(node.data.traceHighlightedConnectionMemberIds ?? [])].join(',')}</span>
           <span data-testid={`draggable-${node.id}`}>{String(node.draggable !== false)}</span>
@@ -136,28 +137,28 @@ describe('TopologyCanvas async layout boundary', () => {
     const view = render(<TopologyCanvas {...props} />);
     await screen.findByRole('button', { name: 'physical-framed' });
     const frame = () => globalThis.document.querySelector('.location-frame') as HTMLElement;
-    const caption = () => globalThis.document.querySelector('.location-caption') as HTMLElement;
     expect(frame()).toHaveTextContent('Room');
     expect(globalThis.document.querySelectorAll('.location-frame')).toHaveLength(1);
-    expect(caption()).toHaveTextContent('Unit');
-    expect(caption().style.width).toBe('');
+    expect(screen.getByTestId('location-path-physical-framed')).toHaveTextContent('Unit');
+    expect(globalThis.document.querySelector('.location-caption')).toBeNull();
     const initialLeft = Number.parseFloat(frame().style.left);
     const initialWidth = Number.parseFloat(frame().style.width);
-    const initialCaptionLeft = Number.parseFloat(caption().style.left);
     expect(frame().closest('[aria-hidden="true"]')).not.toBeNull();
     expect(frame().className).toBe('location-frame');
     fireEvent.click(screen.getByRole('button', { name: 'drag physical-framed' }));
     expect(Number.parseFloat(frame().style.left) - initialLeft).toBe(32);
-    expect(Number.parseFloat(caption().style.left) - initialCaptionLeft).toBe(32);
+    expect(screen.getByTestId('location-path-physical-framed')).toHaveTextContent('Unit');
     view.rerender(<TopologyCanvas {...props} positionOverrides={{ 'physical-framed': { x: 10, y: 20 } }} authoritativePositionRevision={1} />);
     await waitFor(() => expect(Number.parseFloat(frame().style.left)).toBe(initialLeft));
     view.rerender(<TopologyCanvas {...props} positionSnapshot={[...locationFrameInput.placements]} positionOverrides={{ 'physical-framed': { x: 200, y: 100 } }} authoritativePositionRevision={1} />);
-    await waitFor(() => expect(Number.parseFloat(caption().style.left)).toBeGreaterThan(initialCaptionLeft));
+    await waitFor(() => expect(screen.getByTestId('position-physical-framed')).toHaveTextContent('200,100'));
     view.rerender(<TopologyCanvas {...props} displayWidthOverrides={{ 'physical-framed': 320 }} authoritativePositionRevision={1} />);
     await waitFor(() => expect(Number.parseFloat(frame().style.width)).toBeGreaterThan(initialWidth));
     view.rerender(<TopologyCanvas {...props} document={{ ...document, layer: 'L2', detail_level: 'DEVICE' }} />);
     await waitFor(() => expect(globalThis.document.querySelector('.location-frame')).toBeNull());
-    expect(globalThis.document.querySelector('.location-caption')).toBeNull();
+    expect(screen.getByTestId('location-path-physical-framed')).toBeEmptyDOMElement();
+    view.rerender(<TopologyCanvas {...props} locationFrameInput={undefined} />);
+    await waitFor(() => expect(screen.getByTestId('location-path-physical-framed')).toBeEmptyDOMElement());
   });
   it('reveals a requested physical object once without refitting unrelated rerenders', async () => {
     const object = {

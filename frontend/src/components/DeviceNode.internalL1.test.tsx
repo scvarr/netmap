@@ -8,6 +8,7 @@ vi.mock('@xyflow/react', () => ({
 }));
 
 import { DeviceNode } from './DeviceNode';
+import { nodeFootprint } from '../topology/nodeFootprint';
 
 const projection = {
   id: 'panel', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'object-1' }],
@@ -26,6 +27,34 @@ const projection = {
 };
 
 describe('DeviceNode internal L1 overlay', () => {
+  it('puts the Location path inside the existing Blueprint nameplate without changing its height or footprint', () => {
+    const props = { data: { projection, locationPresentationPath: 'U01 / SLOT-A' }, selected: false, width: 160 } as any;
+    const view = render(<DeviceNode {...props} />);
+    const body = screen.getByTestId('blueprint-map-node');
+    const nameplate = body.querySelector('.blueprint-map-node__nameplate')!;
+    expect(nameplate).toHaveTextContent('PP1');
+    expect(nameplate).toHaveTextContent('U01 / SLOT-A');
+    expect(nameplate.querySelector('.blueprint-map-node__location')).toBeInTheDocument();
+    const height = body.style.height;
+    const nameplateHeight = (nameplate as HTMLElement).style.height;
+    view.rerender(<DeviceNode {...({ ...props, data: { projection } } as any)} />);
+    expect(body.style.height).toBe(height);
+    expect((body.querySelector('.blueprint-map-node__nameplate') as HTMLElement).style.height).toBe(nameplateHeight);
+    expect(body.querySelector('.blueprint-map-node__location')).toBeNull();
+    const base = { id: 'panel', type: 'device', position: { x: 0, y: 0 }, width: 160, data: { projection } } as any;
+    expect(nodeFootprint({ ...base, data: props.data })).toEqual(nodeFootprint(base));
+  });
+
+  it('shows the Location path beside a generic physical name and omits it in logical context', () => {
+    const generic = { ...projection, attributes: { class: 'switch' } };
+    const view = render(<DeviceNode {...({ data: { projection: generic, locationPresentationPath: 'U03' }, selected: false } as any)} />);
+    const header = document.querySelector('.device-node__nameplate')!;
+    expect(header).toHaveTextContent('PP1');
+    expect(header).toHaveTextContent('U03');
+    expect(header.querySelector('.device-node__location')).toBeInTheDocument();
+    view.rerender(<DeviceNode {...({ data: { projection: { ...generic, kind: 'NETWORK_DEVICE' }, locationPresentationPath: 'U03' }, selected: false } as any)} />);
+    expect(document.querySelector('.device-node__location')).toBeNull();
+  });
   it('marks an exact hidden-composite Blueprint port without changing unrelated ports', () => {
     render(<DeviceNode {...({ data: { projection, hiddenCompositeConnectionPointIds: new Set(['front-01']) }, selected: false, width: 160 } as any)} />);
     const hidden = document.querySelector('[data-connection-point-id="front-01"]')!;

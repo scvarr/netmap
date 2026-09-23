@@ -335,23 +335,6 @@ export function TopologyCanvas({
     );
   }
 
-  const nodes = projection.nodes.map((node) => ({
-    ...node,
-    draggable: draggableNodeIds ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id) : lockedNodeIds?.has(node.id) ? false : undefined,
-    data: {
-      ...node.data,
-      traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
-      traceHighlightedConnectionMemberIds: traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
-      wiringHighlightedConnectionMemberIds,
-      wiringContinuationConnectionPointIds,
-      physicalPortStates,
-      onPhysicalPortClick,
-      onPhysicalPortContextMenu,
-      onBlueprintDisplayResize,
-      blueprintResizeEnabled: Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
-    },
-    selected: selection?.type === "node" && selection.item.id === node.id,
-  }));
   const locationPresentation = locationFrameInput && document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
     ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, projection.nodes.flatMap((node) => {
       const physicalObjectId = physicalObjectIdForNode(node.data.projection);
@@ -366,7 +349,26 @@ export function TopologyCanvas({
       }
       return [{ physicalObjectId, rectangle }];
     }))
-    : { frames: [], captions: [] };
+    : { frames: [], objectPaths: [] };
+  const locationPathsByObjectId = new Map(locationPresentation.objectPaths.map((path) => [path.physicalObjectId, path.label]));
+  const nodes = projection.nodes.map((node) => ({
+    ...node,
+    draggable: draggableNodeIds ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id) : lockedNodeIds?.has(node.id) ? false : undefined,
+    data: {
+      ...node.data,
+      locationPresentationPath: locationPathsByObjectId.get(physicalObjectIdForNode(node.data.projection) ?? ""),
+      traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
+      traceHighlightedConnectionMemberIds: traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
+      wiringHighlightedConnectionMemberIds,
+      wiringContinuationConnectionPointIds,
+      physicalPortStates,
+      onPhysicalPortClick,
+      onPhysicalPortContextMenu,
+      onBlueprintDisplayResize,
+      blueprintResizeEnabled: Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
+    },
+    selected: selection?.type === "node" && selection.item.id === node.id,
+  }));
   const edges = (annotationMode ? [] : projection.edges).map((edge) => {
     const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
@@ -589,7 +591,7 @@ export function TopologyCanvas({
           size={1.4}
           color="#25383c"
         />
-        {(locationPresentation.frames.length > 0 || locationPresentation.captions.length > 0) && <ViewportPortal>
+        {locationPresentation.frames.length > 0 && <ViewportPortal>
           <div className="location-frame-layer" aria-hidden="true">
             {locationPresentation.frames.map((frame) => <div
               key={frame.locationId}
@@ -597,12 +599,6 @@ export function TopologyCanvas({
               data-location-id={frame.locationId}
               style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
             ><span className="location-frame__label">{frame.label}</span></div>)}
-            {locationPresentation.captions.map((caption) => <div
-              key={caption.physicalObjectId}
-              className="location-caption"
-              data-physical-object-id={caption.physicalObjectId}
-              style={{ left: caption.position.x, top: caption.position.y }}
-            >{caption.label}</div>)}
           </div>
         </ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (

@@ -43,7 +43,10 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       onResizeEnd={(_, dimensions) => { if (objectId) data.onBlueprintDisplayResize?.(objectId, dimensions.width); }}
     />
     <Handle type="target" position={Position.Top} className="device-node__handle" />
-    <strong className="blueprint-map-node__nameplate" style={{ height: nameplateHeight }} title={displayNodeLabel(projection)}>{displayNodeLabel(projection)}</strong>
+    <strong className="blueprint-map-node__nameplate" style={{ height: nameplateHeight }} title={data.locationPresentationPath ? `${displayNodeLabel(projection)} — ${data.locationPresentationPath}` : displayNodeLabel(projection)}>
+      <span className="blueprint-map-node__title">{displayNodeLabel(projection)}</span>
+      {data.locationPresentationPath && <span className="blueprint-map-node__location">{data.locationPresentationPath}</span>}
+    </strong>
     <div className="blueprint-map-node__body" style={{ height: displayHeight }}>
     <div className="blueprint-map-node__panels">
       {faces.map((face) => {
@@ -66,7 +69,10 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       <span className="device-node__kind">
         {physical ? classPresentation.label : projection.kind}
       </span>
-      <strong>{displayNodeLabel(projection)}</strong>
+      <div className="device-node__nameplate">
+        <strong title={displayNodeLabel(projection)}>{displayNodeLabel(projection)}</strong>
+        {physical && data.locationPresentationPath && <span className="device-node__location" title={data.locationPresentationPath}>{data.locationPresentationPath}</span>}
+      </div>
       <span className="device-node__role">
         {physical
           ? `CP: ${String(projection.attributes.connection_point_count ?? '—')} · NI: ${String(projection.attributes.owned_interface_count ?? '—')}`
