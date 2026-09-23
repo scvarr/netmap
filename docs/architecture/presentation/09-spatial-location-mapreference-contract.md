@@ -3,9 +3,9 @@
 ## Статус и граница
 
 Это главный целевой contract hierarchical Location presentation NetMap.
-Целевой contract согласован; hierarchical Location presentation остаётся
-**IMPLEMENTATION PENDING**. P-UX-03A удалил development-stage `MapComposite`
-и manual `MapRegion`; P-UX-03B..E ещё не реализованы.
+Целевой contract согласован; P-UX-03B expanded derived Location frames
+реализован. P-UX-03A удалил development-stage `MapComposite` и manual
+`MapRegion`; P-UX-03C..E остаются **IMPLEMENTATION PENDING**.
 
 NetMap pre-production. Если старые spatial models конфликтуют с этим
 contract, они удаляются; compatibility layers, converters, fallback readers и

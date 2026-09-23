@@ -77,6 +77,7 @@ export function App(props: AppProps) {
             physicalObjectDetailsDataSource={props.physicalObjectDetailsDataSource}
             physicalEndpointConnectionWriteDataSource={props.physicalEndpointConnectionWriteDataSource}
             savedMapDataSource={props.savedMapDataSource}
+            locationDataSource={props.locationDataSource}
             catalogInventoryDataSource={props.catalogInventoryDataSource}
             cableLabelDataSource={props.cableLabelDataSource}
           />}

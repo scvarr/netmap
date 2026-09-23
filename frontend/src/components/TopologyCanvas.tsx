@@ -47,6 +47,11 @@ import { cableIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint, MapTextAnnotation } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
+import { blueprintMapNameplateHeight } from "../topology/blueprintDisplaySize";
+import { nodeFootprint } from "../topology/nodeFootprint";
+import { deriveLocationFrames } from "../topology/locationFrames";
+import type { LocationDocument } from "../topology/locationTypes";
+import type { MapPlacement } from "../topology/savedMapTypes";
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { MapTextAnnotationLayer } from "./MapTextAnnotationLayer";
 
@@ -65,7 +70,10 @@ interface TopologyCanvasProps {
   /** A one-shot presentation request to reveal a physical object. */
   focusPhysicalObjectId?: string | null;
   positionOverrides?: Record<string, XYPosition>;
+  /** New authoritative SavedMap placement snapshot, including variant switches and refreshes. */
+  positionSnapshot?: readonly MapPlacement[];
   displayWidthOverrides?: Record<string, number>;
+  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[] };
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
@@ -116,7 +124,9 @@ export function TopologyCanvas({
   viewportFitRevision = 0,
   focusPhysicalObjectId,
   positionOverrides,
+  positionSnapshot,
   displayWidthOverrides,
+  locationFrameInput,
   draggableNodeIds,
   lockedNodeIds,
   authoritativePositionRevision,
@@ -148,9 +158,8 @@ export function TopologyCanvas({
   const fitAfterLayout = useRef(false);
   const appliedViewportFitRevision = useRef(0);
   const fittedSceneKey = useRef<string | null>(null);
-  const appliedAuthoritativePositionRevision = useRef(
-    authoritativePositionRevision,
-  );
+  const appliedPositionSnapshot = useRef(positionSnapshot);
+  const appliedAuthoritativePositionRevision = useRef(authoritativePositionRevision);
   const currentDocument = useRef(document);
   const appliedSceneKey = useRef<string | null>(null);
   const confirmedNodePositions = useRef(new Map<string, XYPosition>());
@@ -244,17 +253,13 @@ export function TopologyCanvas({
     } : current);
   }, [displayWidthOverrides]);
 
-  // A position acknowledgement is already reflected by React Flow's drag state.
-  // Only an explicit authoritative revision (for example, a failed persistence rollback)
-  // may replace positions without rebuilding the layout scene.
+  // A fresh props object alone must not reset a live drag. An authoritative
+  // SavedMap snapshot (or explicit rollback revision) can replace positions.
   useEffect(() => {
-    if (
-      appliedAuthoritativePositionRevision.current ===
-      authoritativePositionRevision
-    )
-      return;
-    appliedAuthoritativePositionRevision.current =
-      authoritativePositionRevision;
+    if (appliedPositionSnapshot.current === positionSnapshot &&
+        appliedAuthoritativePositionRevision.current === authoritativePositionRevision) return;
+    appliedPositionSnapshot.current = positionSnapshot;
+    appliedAuthoritativePositionRevision.current = authoritativePositionRevision;
     if (!positionOverrides) return;
     setProjection((current) => {
       if (!current) return current;
@@ -272,7 +277,7 @@ export function TopologyCanvas({
       );
       return { ...current, nodes };
     });
-  }, [authoritativePositionRevision]);
+  }, [authoritativePositionRevision, positionOverrides, positionSnapshot]);
 
   useEffect(() => {
     if (!projection) return;
@@ -347,6 +352,21 @@ export function TopologyCanvas({
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));
+  const locationFrames = locationFrameInput && document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
+    ? deriveLocationFrames(locationFrameInput.locations, locationFrameInput.placements, projection.nodes.flatMap((node) => {
+      const physicalObjectId = physicalObjectIdForNode(node.data.projection);
+      if (!physicalObjectId) return [];
+      const blueprint = node.data.projection.attributes.blueprint_presentation;
+      const rectangle = nodeFootprint(node);
+      if (blueprint) {
+        const width = node.width ?? rectangle.width;
+        const face = blueprintNodeDisplayDimensions(blueprint, width);
+        rectangle.width = width;
+        rectangle.height = face.height + blueprintMapNameplateHeight(blueprint, width);
+      }
+      return [{ physicalObjectId, rectangle }];
+    }))
+    : [];
   const edges = (annotationMode ? [] : projection.edges).map((edge) => {
     const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
@@ -569,6 +589,16 @@ export function TopologyCanvas({
           size={1.4}
           color="#25383c"
         />
+        {locationFrames.length > 0 && <ViewportPortal>
+          <div className="location-frame-layer" aria-hidden="true">
+            {locationFrames.map((frame) => <div
+              key={frame.locationId}
+              className="location-frame"
+              data-location-id={frame.locationId}
+              style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
+            ><span className="location-frame__label">{frame.label}</span></div>)}
+          </div>
+        </ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (
           <ViewportPortal>
             <MapTextAnnotationLayer annotations={textAnnotations} previewAnnotation={annotationMode?.previewAnnotation} selectedAnnotationId={annotationMode?.selectedAnnotationId} interactiveAnnotationId={annotationMode?.editableAnnotationId} onAnnotationPointerDown={onAnnotationPointerDown} onAnnotationClick={(annotationId) => annotationMode?.onAnnotationSelect?.(annotationId)} />

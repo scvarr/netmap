@@ -3,7 +3,7 @@
 ## Статус и граница
 
 Это компактный последовательный implementation plan для spatial cutover.
-NetMap pre-production; P-UX-19 и P-UX-03A реализованы, P-UX-03B..E остаются **IMPLEMENTATION PENDING**. Не
+NetMap pre-production; P-UX-19 и P-UX-03A/B реализованы, P-UX-03C..E остаются **IMPLEMENTATION PENDING**. Не
 объединять их в одну implementation task и не объявлять выполненными до
 targeted validation и, где указано, manual acceptance.
 
@@ -39,6 +39,8 @@ forward migration для удаления schema. Не добавлять compat
 layers, fallback readers или параллельные old/new contracts.
 
 ### P-UX-03B — Expanded hierarchical Location presentation
+
+**IMPLEMENTED.** Physical SavedMap показывает derived nested frames по canonical Location catalog, live placement `location_ref` и текущим node rectangles. Frame geometry пересчитывается при drag, rollback, resize и смене variant; пустые branches не рисуются. Targeted frontend validation пройдена; collapse и group move остаются отдельными milestones.
 
 Derive direct membership и canonical subtree; построить nested dynamic frames.
 Movement и resize объектов обновляют frames, но frame geometry не persisted.

@@ -70,6 +70,7 @@ import { CableNamingFields } from "../components/CableNamingFields";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
 import { displayNodeLabel } from "../topology/presentation";
 import { locationDescendantIds } from "../topology/locationFocus";
+import type { LocationDataSource, LocationDocument } from "../topology/locationTypes";
 import { useI18n } from "../i18n";
 
 export { mapCandidateChoices } from "../components/MapInsertionPicker";
@@ -79,6 +80,7 @@ interface MapPageProps {
   /** Retained for callers that share App wiring; L1 object trace does not use it. */
   deviceDetailsDataSource?: DeviceDetailsDataSource;
   savedMapDataSource?: SavedMapDataSource;
+  locationDataSource?: LocationDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   cableDeleteDataSource?: CableDeleteDataSource;
@@ -200,6 +202,7 @@ function MapToolbarDropdown({ label, value, options, onChange }: { label: string
 export function MapPage({
   dataSource,
   savedMapDataSource,
+  locationDataSource,
   catalogInventoryDataSource,
   physicalObjectDeleteDataSource,
   cableDeleteDataSource,
@@ -218,6 +221,7 @@ export function MapPage({
   const [catalogInventory, setCatalogInventory] =
     useState<CatalogInventoryDocument | null>(null);
   const [map, setMap] = useState<SavedMap | null>(null);
+  const [locations, setLocations] = useState<LocationDocument[] | null>(null);
   const [sceneDocument, setSceneDocument] = useState<LoadedSceneDocument | null>(
     null,
   );
@@ -279,6 +283,16 @@ export function MapPage({
 
   selectedMapId.current = mapId;
   const legacy = !savedMapDataSource;
+  useEffect(() => {
+    let active = true;
+    setLocations(null);
+    if (!locationDataSource || !savedMapDataSource || !mapId) return () => { active = false; };
+    void locationDataSource.loadLocations().then(
+      (catalog) => { if (active) setLocations(catalog); },
+      () => { if (active) setLocations(null); },
+    );
+    return () => { active = false; };
+  }, [locationDataSource, savedMapDataSource, mapId]);
   const presentationSceneKey =
     !legacy && mapId ? `${mapId}/${viewMode}` : `legacy/${viewMode}`;
   const activeMap = !legacy && map?.map_ref.entity_id === mapId ? map : null;
@@ -1825,7 +1839,11 @@ export function MapPage({
                   }}
                   sceneKey={presentationSceneKey}
                   positionOverrides={!legacy ? positions : undefined}
+                  positionSnapshot={activeMap?.placements}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}
+                  locationFrameInput={!legacy && viewMode === "physical" && activeMap && locations
+                    ? { locations, placements: activeMap.placements }
+                    : undefined}
                   directlyAttachedCableIds={directlyAttachedCables}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}
                   lockedNodeIds={!legacy ? lockedNodeIds : undefined}

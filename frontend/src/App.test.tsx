@@ -153,6 +153,15 @@ const renderApp = (route: string, overrides: Partial<AppProps> = {}) => {
 };
 
 describe('UI-SHELL.1 routes and product surfaces', () => {
+  it('passes the Location data source through App to a SavedMap page', async () => {
+    const loadLocations = vi.fn().mockResolvedValue([]);
+    const savedMap = { map_ref: { entity_type: 'SavedMap', entity_id: 'map-a' }, active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: 'variant-a' }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant', entity_id: 'variant-a' }, name: 'Primary' }], name: 'Map A', created_at: 'now', updated_at: 'now', placements: [], cable_routes: [], text_annotations: [] };
+    renderApp('/map?map=map-a&view=physical', {
+      locationDataSource: { loadLocations } as unknown as AppProps['locationDataSource'],
+      savedMapDataSource: { listMaps: vi.fn().mockResolvedValue([savedMap]), loadMap: vi.fn().mockResolvedValue(savedMap) } as unknown as AppProps['savedMapDataSource'],
+    });
+    await waitFor(() => expect(loadLocations).toHaveBeenCalledTimes(1));
+  });
   it('redirects / to /map and uses the stable logical default', async () => {
     const { dataSource } = renderApp('/');
     expect(await screen.findByTestId('location')).toHaveTextContent('/map');

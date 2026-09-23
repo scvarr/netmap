@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TopologyCanvas } from './TopologyCanvas';
 import type { FlowProjection, TopologyLayoutEngine } from '../topology/layout';
-import type { TopologyProjectionDocument } from '../topology/types';
+import type { TopologyProjectionDocument, TopologyProjectionNode } from '../topology/types';
 import type { PresentationSceneDocument } from '../topology/presentationScene';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 
@@ -119,6 +119,39 @@ afterEach(() => {
 });
 
 describe('TopologyCanvas async layout boundary', () => {
+  it('renders only physical SavedMap frames and follows controlled drag, rollback and blueprint resize', async () => {
+    const projection: TopologyProjectionNode = {
+      id: 'physical-framed', kind: 'PHYSICAL_OBJECT', label: 'Server',
+      source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'server' }],
+      attributes: { blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint', entity_id: 'blueprint' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion', entity_id: 'version' }, body: { kind: 'RECTANGLE' as const, width: 100, height: 50 }, slots: [] } },
+    };
+    const document: TopologyProjectionDocument = { ...documentFor('physical-framed'), nodes: [projection] };
+    const locationFrameInput = {
+      locations: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }],
+      placements: [{ physical_object_ref: projection.source_refs[0], location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, positions: {} }],
+    };
+    const layoutEngine: TopologyLayoutEngine = async (scene) => flowFor(scene);
+    const props = { document, selection: null, onSelectionChange: vi.fn(), layoutEngine, locationFrameInput, positionSnapshot: locationFrameInput.placements, positionOverrides: { 'physical-framed': { x: 10, y: 20 } }, displayWidthOverrides: { 'physical-framed': 200 } };
+    const view = render(<TopologyCanvas {...props} />);
+    await screen.findByRole('button', { name: 'physical-framed' });
+    const frame = () => globalThis.document.querySelector('.location-frame') as HTMLElement;
+    expect(frame()).toHaveTextContent('Room');
+    expect(frame().style.left).toBe('-14px');
+    expect(frame().style.width).toBe('248px');
+    expect(frame().closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(frame().className).toBe('location-frame');
+    fireEvent.click(screen.getByRole('button', { name: 'drag physical-framed' }));
+    expect(frame().style.left).toBe('18px');
+    expect(frame().style.top).toBe('28px');
+    view.rerender(<TopologyCanvas {...props} positionOverrides={{ 'physical-framed': { x: 10, y: 20 } }} authoritativePositionRevision={1} />);
+    await waitFor(() => expect(frame().style.left).toBe('-14px'));
+    view.rerender(<TopologyCanvas {...props} positionSnapshot={[...locationFrameInput.placements]} positionOverrides={{ 'physical-framed': { x: 200, y: 100 } }} authoritativePositionRevision={1} />);
+    await waitFor(() => expect(frame().style.left).toBe('176px'));
+    view.rerender(<TopologyCanvas {...props} displayWidthOverrides={{ 'physical-framed': 320 }} authoritativePositionRevision={1} />);
+    await waitFor(() => expect(frame().style.width).toBe('368px'));
+    view.rerender(<TopologyCanvas {...props} document={{ ...document, layer: 'L2', detail_level: 'DEVICE' }} />);
+    await waitFor(() => expect(globalThis.document.querySelector('.location-frame')).toBeNull());
+  });
   it('reveals a requested physical object once without refitting unrelated rerenders', async () => {
     const object = {
       ...documentFor('physical-focus').nodes[0],
