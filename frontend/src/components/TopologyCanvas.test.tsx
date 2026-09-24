@@ -176,6 +176,39 @@ describe('TopologyCanvas async layout boundary', () => {
     fireEvent.pointerUp(heading, { pointerId: 1, clientX: 80, clientY: 40 });
     expect(onGroupMove).not.toHaveBeenCalled();
   });
+  it('recomputes child and parent preview bounds when a child moves beyond the old parent frame', async () => {
+    const objects: TopologyProjectionNode[] = ['child-a', 'child-b', 'sibling'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
+    const parentRef = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'parent' };
+    const childRef = { ...parentRef, entity_id: 'child' };
+    const positions = [0, 300, 800];
+    const onGroupMove = vi.fn(), onGroupMoveRejected = vi.fn();
+    render(<TopologyCanvas document={{ ...documentFor('physical-child-outbound'), nodes: objects }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: positions[index], y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref: parentRef, name: 'Parent', type: null, parent_location_ref: null }, { location_ref: childRef, name: 'Child', type: null, parent_location_ref: parentRef }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? childRef : parentRef, positions: { 'L1/PHYSICAL_OBJECT': { x: positions[index], y: 0, locked: false } } })), onGroupMove, onGroupMoveRejected }} />);
+    await screen.findByRole('button', { name: 'child-a' });
+    const child = globalThis.document.querySelector('.location-frame[data-location-id="child"]') as HTMLElement;
+    const parent = globalThis.document.querySelector('.location-frame[data-location-id="parent"]') as HTMLElement;
+    const originalParentRight = Number.parseFloat(parent.style.left) + Number.parseFloat(parent.style.width);
+    const heading = child.querySelector('.location-frame__heading') as HTMLElement;
+    heading.setPointerCapture = vi.fn();
+    expect(globalThis.document.querySelectorAll('.location-frame--drag-preview')).toHaveLength(0);
+    fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(heading, { pointerId: 1, clientX: 2010, clientY: 10 });
+    const childPreview = globalThis.document.querySelector('.location-frame--drag-preview[data-preview-location-id="child"]') as HTMLElement;
+    const parentPreview = globalThis.document.querySelector('.location-frame--drag-preview[data-preview-location-id="parent"]') as HTMLElement;
+    expect(childPreview).toBeInTheDocument();
+    expect(parentPreview).toBeInTheDocument();
+    expect(Number.parseFloat(childPreview.style.left)).toBe(Number.parseFloat(child.style.left) + 2000);
+    expect(childPreview.style.width).toBe(child.style.width);
+    expect(Number.parseFloat(childPreview.style.left)).toBeGreaterThan(originalParentRight);
+    expect(Number.parseFloat(parentPreview.style.left)).toBe(780);
+    expect(Number.parseFloat(parentPreview.style.left) + Number.parseFloat(parentPreview.style.width)).toBe(Number.parseFloat(childPreview.style.left) + Number.parseFloat(childPreview.style.width) + 20);
+    expect(Number.parseFloat(parentPreview.style.width)).toBeGreaterThan(Number.parseFloat(parent.style.width));
+    expect(onGroupMove).not.toHaveBeenCalled();
+    fireEvent.pointerUp(heading, { pointerId: 1, clientX: 2010, clientY: 10 });
+    expect(onGroupMove).toHaveBeenCalledExactlyOnceWith('child', expect.objectContaining({ delta_x: 2000, delta_y: 0 }));
+    expect(onGroupMoveRejected).not.toHaveBeenCalled();
+    expect(globalThis.document.querySelectorAll('.location-frame--drag-preview')).toHaveLength(0);
+  });
+
   it('dispatches parent and child frame drags by their own Location identity and reports a rejected child move', async () => {
     const objects: TopologyProjectionNode[] = ['child-a', 'child-b', 'parent-a'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
     const parentRef = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'parent' };
@@ -190,7 +223,7 @@ describe('TopologyCanvas async layout boundary', () => {
       heading.setPointerCapture = vi.fn();
       fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
       fireEvent.pointerMove(heading, { pointerId: 1, clientX: endX, clientY: 10 });
-      expect(globalThis.document.querySelector('.location-frame--drag-preview')).toHaveAttribute('data-preview-location-id', id);
+      expect(globalThis.document.querySelector(`.location-frame--drag-preview[data-preview-location-id="${id}"]`)).toBeInTheDocument();
       fireEvent.pointerUp(heading, { pointerId: 1, clientX: endX, clientY: 10 });
     };
     drag('child', 20);

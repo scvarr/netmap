@@ -359,8 +359,8 @@ export function TopologyCanvas({
     );
   }
 
-  const locationPresentation = locationFrameInput && document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
-    ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, projection.nodes.flatMap((node) => {
+  const showLocationPresentation = Boolean(locationFrameInput && document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT");
+  const displayedPhysicalObjects = showLocationPresentation ? projection.nodes.flatMap((node) => {
       const physicalObjectId = physicalObjectIdForNode(node.data.projection);
       if (!physicalObjectId) return [];
       const blueprint = node.data.projection.attributes.blueprint_presentation;
@@ -372,9 +372,50 @@ export function TopologyCanvas({
         rectangle.height = face.height + blueprintMapNameplateHeight(blueprint, width);
       }
       return [{ physicalObjectId, rectangle }];
-    }), locationFrameInput.states ?? [])
+    }) : [];
+  const locationPresentation = showLocationPresentation && locationFrameInput
+    ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationFrameInput.states ?? [])
     : { frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map<string, string>() };
   const renderableFrames = locationPresentation.frames.filter((frame) => hasRenderableBounds(frame.bounds));
+  const previewFrames = (() => {
+    if (!frameDragPreview || !locationFrameInput || !hasRenderableBounds(frameDragPreview.bounds) ||
+      !Number.isFinite(frameDragPreview.delta.x) || !Number.isFinite(frameDragPreview.delta.y) ||
+      !renderableFrames.some((frame) => frame.locationId === frameDragPreview.locationId)) return [];
+    const byLocationId = new Map(locationFrameInput.locations.map((location) => [location.location_ref.entity_id, location]));
+    const subtree = new Set([frameDragPreview.locationId]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const location of locationFrameInput.locations) {
+        const id = location.location_ref.entity_id;
+        if (!subtree.has(id) && location.parent_location_ref && subtree.has(location.parent_location_ref.entity_id)) {
+          subtree.add(id);
+          changed = true;
+        }
+      }
+    }
+    const movingObjects = new Set(locationFrameInput.placements.filter((placement) =>
+      placement.positions['L1/PHYSICAL_OBJECT'] && placement.location_ref && subtree.has(placement.location_ref.entity_id),
+    ).map((placement) => placement.physical_object_ref.entity_id));
+    const previewObjects = displayedPhysicalObjects.map((object) => movingObjects.has(object.physicalObjectId)
+      ? { ...object, rectangle: { ...object.rectangle, x: object.rectangle.x + frameDragPreview.delta.x, y: object.rectangle.y + frameDragPreview.delta.y } }
+      : object);
+    const future = deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, previewObjects, locationFrameInput.states ?? []);
+    const ancestors = new Set<string>();
+    let parentId = byLocationId.get(frameDragPreview.locationId)?.parent_location_ref?.entity_id;
+    while (parentId && !ancestors.has(parentId)) {
+      ancestors.add(parentId);
+      parentId = byLocationId.get(parentId)?.parent_location_ref?.entity_id;
+    }
+    const currentById = new Map(renderableFrames.map((frame) => [frame.locationId, frame]));
+    return future.frames.filter((frame) => {
+      const current = currentById.get(frame.locationId);
+      if (!current || !hasRenderableBounds(frame.bounds)) return false;
+      if (frame.locationId === frameDragPreview.locationId) return true;
+      return ancestors.has(frame.locationId) && (frame.bounds.x !== current.bounds.x || frame.bounds.y !== current.bounds.y ||
+        frame.bounds.width !== current.bounds.width || frame.bounds.height !== current.bounds.height);
+    });
+  })();
   const locationPathsByObjectId = new Map(locationPresentation.objectPaths.map((path) => [path.physicalObjectId, path.label]));
   const proxyNodeId = (locationId: string) => `location-proxy:${locationId}`;
   const hiddenNodeProxies = new Map(projection.nodes.flatMap((node) => {
@@ -708,7 +749,7 @@ export function TopologyCanvas({
                 style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
               ><span className="location-frame__heading nodrag nopan" onPointerDown={locationFrameInput?.onGroupMove ? (event) => startFrameDrag(event, frame.locationId, frame.bounds) : undefined} onPointerMove={updateFrameDrag} onPointerUp={finishFrameDrag} onPointerCancel={cancelFrameDrag} onLostPointerCapture={cancelFrameDrag}><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button className="location-action" type="button" aria-label={toggleLabel} title={toggleLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>⚙</button></span>}</span></div>;
             })}
-            {frameDragPreview && hasRenderableBounds(frameDragPreview.bounds) && Number.isFinite(frameDragPreview.delta.x) && Number.isFinite(frameDragPreview.delta.y) && renderableFrames.some((frame) => frame.locationId === frameDragPreview.locationId) && <div className="location-frame location-frame--drag-preview" data-preview-location-id={frameDragPreview.locationId} aria-hidden="true" style={{ left: frameDragPreview.bounds.x + frameDragPreview.delta.x, top: frameDragPreview.bounds.y + frameDragPreview.delta.y, width: frameDragPreview.bounds.width, height: frameDragPreview.bounds.height }} />}
+            {previewFrames.map((frame) => <div key={frame.locationId} className="location-frame location-frame--drag-preview" data-preview-location-id={frame.locationId} aria-hidden="true" style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }} />)}
           </div>
         </ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (
