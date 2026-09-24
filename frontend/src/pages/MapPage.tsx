@@ -1,5 +1,6 @@
 import { ReactFlowProvider, type XYPosition } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   MapInsertionPicker,
@@ -176,16 +177,45 @@ const emptyPhysicalDocument: TopologyProjectionDocument = {
 
 function MapToolbarDropdown({ label, value, options, onChange }: { label: string; value: string; options: readonly { value: string; label: string }[]; onChange(value: string): void }) {
   const [open, setOpen] = useState(false);
+  const [menuBounds, setMenuBounds] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
   const selected = options.find((item) => item.value === value);
   useEffect(() => {
     const closeOnOutsideClick = (event: MouseEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false);
+      if (!root.current?.contains(event.target as Node) && !menu.current?.contains(event.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", closeOnOutsideClick);
     return () => document.removeEventListener("mousedown", closeOnOutsideClick);
   }, []);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const updateMenuBounds = () => {
+      const rect = trigger.current?.getBoundingClientRect();
+      if (!rect) return;
+      const gap = 5;
+      const margin = 8;
+      const below = window.innerHeight - rect.bottom - gap - margin;
+      const above = rect.top - gap - margin;
+      const placeAbove = below < 120 && above > below;
+      const maxHeight = Math.max(0, Math.min(240, placeAbove ? above : below));
+      const width = Math.min(rect.width, window.innerWidth - 2 * margin);
+      setMenuBounds({
+        top: placeAbove ? rect.top - gap - maxHeight : rect.bottom + gap,
+        left: Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin)),
+        width,
+        maxHeight,
+      });
+    };
+    updateMenuBounds();
+    window.addEventListener("resize", updateMenuBounds);
+    window.addEventListener("scroll", updateMenuBounds, true);
+    return () => {
+      window.removeEventListener("resize", updateMenuBounds);
+      window.removeEventListener("scroll", updateMenuBounds, true);
+    };
+  }, [open]);
   useEffect(() => {
     const selectProgrammatically = () => {
       const nextValue = trigger.current?.value;
@@ -197,7 +227,7 @@ function MapToolbarDropdown({ label, value, options, onChange }: { label: string
   }, [onChange, options]);
   return <div className="map-toolbar-dropdown" ref={root} onKeyDown={(event) => { if (event.key === "Escape") { setOpen(false); trigger.current?.focus(); } }}>
     <button type="button" ref={trigger} value={value} className="map-toolbar-dropdown__trigger map-page__select" aria-label={label} aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}><span>{selected?.label ?? "—"}</span><span aria-hidden="true">⌄</span></button>
-    {open && <div className="map-toolbar-dropdown__menu" role="listbox" aria-label={label}>{options.map((item) => <button key={item.value} type="button" role="option" aria-selected={item.value === value} onClick={() => { onChange(item.value); setOpen(false); }}>{item.label}</button>)}</div>}
+    {open && menuBounds && createPortal(<div ref={menu} className="map-toolbar-dropdown__menu" role="listbox" aria-label={label} style={menuBounds}>{options.map((item) => <button key={item.value} type="button" role="option" aria-selected={item.value === value} onClick={() => { onChange(item.value); setOpen(false); }}>{item.label}</button>)}</div>, document.body)}
   </div>;
 }
 

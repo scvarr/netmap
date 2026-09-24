@@ -141,8 +141,9 @@ describe('MapPage SavedMap scope', () => {
   });
   it('renders toolbar dropdown values, selects entries, and closes on Escape', async () => {
     const copyId = 'variant-copy';
+    const secondId = 'variant-second';
     const base = saved(A, [[PP, 1, 2]]);
-    const primary = { ...base, variants: [...base.variants, { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: copyId }, name: 'Копия' }] };
+    const primary = { ...base, variants: [...base.variants, { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: copyId }, name: 'Копия' }, { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: secondId }, name: 'Вариант B' }] };
     const copied = { ...primary, active_variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: copyId } };
     const mapB = saved(B, [[SW, 3, 4]]);
     const maps: any = { listMaps: vi.fn().mockResolvedValue([primary, mapB]), loadMap: vi.fn((id: string, variantId?: string) => Promise.resolve(id === B ? mapB : variantId === copyId ? copied : primary)), createMap: vi.fn(), addPlacement: vi.fn(), movePosition: vi.fn(), removePlacement: vi.fn() };
@@ -153,8 +154,15 @@ describe('MapPage SavedMap scope', () => {
     openLayout();
     expect(screen.getByLabelText('Текущая компоновка')).toHaveTextContent('Основной');
     fireEvent.click(screen.getByLabelText('Текущая компоновка'));
+    const menu = screen.getByRole('listbox', { name: 'Текущая компоновка' });
+    expect(within(menu).getAllByRole('option').map((option) => option.textContent)).toEqual(['Основной', 'Копия', 'Вариант B']);
+    expect(menu.closest('.map-utility-panel__section')).toBeNull();
+    expect(menu.parentElement).toBe(document.body);
     expect(screen.getByRole('option', { name: 'Копия' })).toBeInTheDocument();
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Текущая компоновка' }), { key: 'Escape' });
+    fireEvent.keyDown(menu, { key: 'Escape' });
+    expect(screen.queryByRole('listbox', { name: 'Текущая компоновка' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText('Текущая компоновка'));
+    fireEvent.mouseDown(screen.getByRole('button', { name: 'Компоновка' }));
     expect(screen.queryByRole('listbox', { name: 'Текущая компоновка' })).not.toBeInTheDocument();
     fireEvent.click(screen.getByLabelText('Текущая компоновка'));
     fireEvent.click(screen.getByRole('option', { name: 'Копия' }));
