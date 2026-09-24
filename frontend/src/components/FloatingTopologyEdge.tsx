@@ -322,7 +322,8 @@ function ForegroundPortMarkers({ physicalPortStates }: { physicalPortStates?: Re
 
 function ForegroundNodePortMarkers({ nodeId, physicalPortStates }: { nodeId: string; physicalPortStates?: Record<string, ForegroundPortState> }) {
   const node = useInternalNode<DeviceFlowNode>(nodeId);
-  if (!node || node.data.projection.kind !== 'PHYSICAL_OBJECT') return null;
+  // A collapsed Location proxy is a presentation anchor, never a PhysicalObject with ports.
+  if (!node || node.data.locationProxy || !node.data.projection || node.data.projection.kind !== 'PHYSICAL_OBJECT') return null;
   const projection = node.data.projection;
   const blueprint = projection.attributes.blueprint_presentation;
   const ports = blueprint

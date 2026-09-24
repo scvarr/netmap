@@ -12,7 +12,7 @@ vi.mock('@xyflow/react', () => ({
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
   getStraightPath: () => ['straight'],
   useInternalNode: (id: string) => activeNodes[id],
-  useNodes: () => Object.values(activeNodes).map((node: any) => ({ id: node.data.projection.id, data: node.data })),
+  useNodes: () => Object.entries(activeNodes).map(([id, node]: [string, any]) => ({ id, data: node.data })),
   useReactFlow: () => ({ screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x: x + 1000, y: y + 2000 }), flowToScreenPosition: ({ x, y }: { x: number; y: number }) => ({ x: x - 1000, y: y - 2000 }), getViewport: () => ({ zoom: 1 }) }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -43,6 +43,16 @@ const withNodes = (nodes: Record<string, any>, run: () => void) => {
 };
 
 describe('direct cable route edge interaction', () => {
+  it('renders a cable to a Location proxy without treating the proxy as a port-bearing object', () => {
+    const proxy = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 152, height: 60 }, data: { projection: null, locationProxy: { locationId: 'room', label: 'Room', hiddenObjectCount: 1 } } };
+    const cable = { id: 'real-cable', source: 'proxy', target: 'target', data: { cableNode: { id: 'canonical-cable' }, cableRoute: { waypoints: [{ x: 180, y: 20 }] } } };
+    withNodes({ proxy, target }, () => {
+      const { container } = render(<ForegroundCableRoutes edges={[cable] as any} />);
+      expect(container.querySelector('[data-testid="foreground-cable-real-cable"]')).not.toBeNull();
+      expect(container.querySelectorAll('.cable-route-port-marker')).toHaveLength(markerPoints.length);
+      expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', expect.stringContaining('L 180 20'));
+    });
+  });
   it('exposes one source-target segment for zero waypoints and three segments for two', () => {
     const zero = renderEdge();
     expect(zero.container.querySelectorAll('.cable-route-segment-hit')).toHaveLength(1);
