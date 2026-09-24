@@ -123,7 +123,7 @@ afterEach(() => {
 });
 
 describe('TopologyCanvas async layout boundary', () => {
-  it('starts one group move only from a frame label after one completed pointer gesture', async () => {
+  it('shows the frame preview during drag and commits the pointerup displacement once', async () => {
     const objects: TopologyProjectionNode[] = ['a', 'b'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
     const document: TopologyProjectionDocument = { ...documentFor('physical-group'), nodes: objects };
     const location_ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
@@ -131,15 +131,88 @@ describe('TopologyCanvas async layout boundary', () => {
     const onGroupMove = vi.fn(), onCollapse = vi.fn(), onConfigure = vi.fn();
     render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: index * 300, y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref, name: 'Room', type: null, parent_location_ref: null }], placements, onGroupMove, onCollapse, onConfigure }} />);
     await screen.findByRole('button', { name: 'a' });
+    expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeNull();
     fireEvent.pointerDown(screen.getByRole('button', { name: 'Свернуть Room' }), { clientX: 10, clientY: 10 });
     fireEvent.pointerUp(screen.getByRole('button', { name: 'Свернуть Room' }), { clientX: 50, clientY: 30 });
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Настроить сворачивание Room' }), { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(screen.getByRole('button', { name: 'Настроить сворачивание Room' }), { clientX: 50, clientY: 30 });
     expect(onGroupMove).not.toHaveBeenCalled();
+    const heading = globalThis.document.querySelector('.location-frame__heading') as HTMLElement;
+    expect(heading).toHaveClass('nodrag', 'nopan');
+    expect(globalThis.document.querySelector('.location-frame__drag-handle')).toBeNull();
+    heading.setPointerCapture = vi.fn();
+    const frame = heading.closest('.location-frame') as HTMLElement;
+    const original = { left: Number.parseFloat(frame.style.left), top: Number.parseFloat(frame.style.top), width: frame.style.width, height: frame.style.height };
+    fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(heading, { pointerId: 1, clientX: 50, clientY: 30 });
+    const preview = globalThis.document.querySelector('.location-frame--drag-preview') as HTMLElement;
+    expect(preview).toBeInTheDocument();
+    expect(preview.style.left).toBe(`${original.left + 40}px`);
+    expect(preview.style.top).toBe(`${original.top + 20}px`);
+    expect(preview.style.width).toBe(original.width);
+    expect(preview.style.height).toBe(original.height);
+    expect(preview).toHaveAttribute('data-preview-location-id', 'room');
+    expect(preview).toBeEmptyDOMElement();
+    expect(onGroupMove).not.toHaveBeenCalled();
+    fireEvent.pointerUp(heading, { pointerId: 1, clientX: 70, clientY: 40 });
+    expect(onGroupMove).toHaveBeenCalledTimes(1);
+    expect(onGroupMove).toHaveBeenCalledWith('room', expect.objectContaining({ delta_x: 60, delta_y: 30 }));
+    expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeNull();
+  });
+
+  it('cancels a drag without a write or transient preview', async () => {
+    const objects: TopologyProjectionNode[] = ['a', 'b'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
+    const location_ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
+    const onGroupMove = vi.fn();
+    render(<TopologyCanvas document={{ ...documentFor('physical-cancel'), nodes: objects }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: index * 300, y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref, name: 'Room', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: index * 300, y: 0, locked: false } } })), onGroupMove }} />);
+    await screen.findByRole('button', { name: 'a' });
     const heading = globalThis.document.querySelector('.location-frame__heading') as HTMLElement;
     heading.setPointerCapture = vi.fn();
     fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.pointerUp(heading, { pointerId: 1, clientX: 50, clientY: 30 });
-    expect(onGroupMove).toHaveBeenCalledTimes(1);
-    expect(onGroupMove).toHaveBeenCalledWith('room', expect.objectContaining({ delta_x: 40, delta_y: 20 }));
+    fireEvent.pointerMove(heading, { pointerId: 1, clientX: 80, clientY: 40 });
+    expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeInTheDocument();
+    fireEvent.pointerCancel(heading, { pointerId: 1 });
+    expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeNull();
+    fireEvent.pointerUp(heading, { pointerId: 1, clientX: 80, clientY: 40 });
+    expect(onGroupMove).not.toHaveBeenCalled();
+  });
+  it('dispatches parent and child frame drags by their own Location identity and reports a rejected child move', async () => {
+    const objects: TopologyProjectionNode[] = ['child-a', 'child-b', 'parent-a'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
+    const parentRef = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'parent' };
+    const childRef = { ...parentRef, entity_id: 'child' };
+    const positions = [0, 300, 800];
+    const onGroupMove = vi.fn(), onGroupMoveRejected = vi.fn();
+    render(<TopologyCanvas document={{ ...documentFor('physical-hierarchy'), nodes: objects }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: positions[index], y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref: parentRef, name: 'Parent', type: null, parent_location_ref: null }, { location_ref: childRef, name: 'Child', type: null, parent_location_ref: parentRef }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? childRef : parentRef, positions: { 'L1/PHYSICAL_OBJECT': { x: positions[index], y: 0, locked: false } } })), onGroupMove, onGroupMoveRejected }} />);
+    await screen.findByRole('button', { name: 'child-a' });
+    const drag = (id: string, endX: number) => {
+      const heading = globalThis.document.querySelector(`.location-frame[data-location-id="${id}"] .location-frame__heading`) as HTMLElement;
+      expect(heading).toBeInTheDocument();
+      heading.setPointerCapture = vi.fn();
+      fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
+      fireEvent.pointerMove(heading, { pointerId: 1, clientX: endX, clientY: 10 });
+      expect(globalThis.document.querySelector('.location-frame--drag-preview')).toHaveAttribute('data-preview-location-id', id);
+      fireEvent.pointerUp(heading, { pointerId: 1, clientX: endX, clientY: 10 });
+    };
+    drag('child', 20);
+    expect(onGroupMove).toHaveBeenLastCalledWith('child', expect.objectContaining({ delta_x: 10 }));
+    drag('parent', 20);
+    expect(onGroupMove).toHaveBeenLastCalledWith('parent', expect.objectContaining({ delta_x: 10 }));
+    expect(onGroupMove).toHaveBeenCalledTimes(2);
+    drag('child', 810);
+    expect(onGroupMove).toHaveBeenCalledTimes(2);
+    expect(onGroupMoveRejected).toHaveBeenCalledTimes(1);
+    expect(onGroupMoveRejected).toHaveBeenCalledWith('Перемещение Location пересекает внешний объект.');
+  });
+
+  it('does not render a frame or preview at the canvas origin when frame geometry is invalid', async () => {
+    const objects: TopologyProjectionNode[] = ['a', 'b'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
+    const location_ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
+    render(<TopologyCanvas document={{ ...documentFor('physical-invalid-frame'), nodes: objects }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: index === 0 ? Number.NaN : 300, y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref, name: 'Room', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: index === 0 ? Number.NaN : 300, y: 0, locked: false } } })), onGroupMove: vi.fn(), onCollapse: vi.fn(), onConfigure: vi.fn() }} />);
+    await screen.findByRole('button', { name: 'a' });
+    expect(globalThis.document.querySelector('.location-frame')).toBeNull();
+    expect(globalThis.document.querySelector('.location-frame__heading')).toBeNull();
+    expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Свернуть Room' })).toBeNull();
   });
   it('replaces hidden nodes with one immovable Location proxy and preserves real cable route data', async () => {
     const a: TopologyProjectionNode = { id: 'physical-a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'a' }], attributes: {} };

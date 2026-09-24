@@ -48,7 +48,7 @@ import type { MapCableRouteWaypoint, MapTextAnnotation } from "../topology/saved
 import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { blueprintMapNameplateHeight } from "../topology/blueprintDisplaySize";
-import { nodeFootprint } from "../topology/nodeFootprint";
+import { nodeFootprint, type FlowRectangle } from "../topology/nodeFootprint";
 import { deriveLocationPresentation, projectCollapsedEdges } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
 import type { LocationGroupMove, MapLocationState, MapPlacement } from "../topology/savedMapTypes";
@@ -114,6 +114,22 @@ const edgeTypes = {
   continuation: OffMapContinuationEdge,
 };
 
+const hasRenderableBounds = (bounds: FlowRectangle) =>
+  Number.isFinite(bounds.x) && Number.isFinite(bounds.y) &&
+  Number.isFinite(bounds.width) && Number.isFinite(bounds.height) &&
+  bounds.width > 0 && bounds.height > 0;
+
+interface FrameDrag {
+  pointerId: number;
+  locationId: string;
+  start: XYPosition;
+  bounds: FlowRectangle;
+}
+
+interface FrameDragPreview extends FrameDrag {
+  delta: XYPosition;
+}
+
 export function TopologyCanvas({
   document,
   selection,
@@ -167,7 +183,8 @@ export function TopologyCanvas({
   const confirmedNodePositions = useRef(new Map<string, XYPosition>());
   const canvasRef = useRef<HTMLDivElement>(null);
   const focusedObjectKey = useRef<string | null>(null);
-  const frameDrag = useRef<{ locationId: string; start: XYPosition } | null>(null);
+  const frameDrag = useRef<FrameDrag | null>(null);
+  const [frameDragPreview, setFrameDragPreview] = useState<FrameDragPreview | null>(null);
   const { fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
@@ -196,7 +213,11 @@ export function TopologyCanvas({
     let current = true;
     const sceneChanged = appliedSceneKey.current !== presentationSceneKey;
     appliedSceneKey.current = presentationSceneKey;
-    if (sceneChanged) setProjection(null);
+    if (sceneChanged) {
+      frameDrag.current = null;
+      setFrameDragPreview(null);
+      setProjection(null);
+    }
     setLayoutError(null);
     perfMark("layout-start");
     void layoutEngine(presentationScene).then(
@@ -353,6 +374,7 @@ export function TopologyCanvas({
       return [{ physicalObjectId, rectangle }];
     }), locationFrameInput.states ?? [])
     : { frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map<string, string>() };
+  const renderableFrames = locationPresentation.frames.filter((frame) => hasRenderableBounds(frame.bounds));
   const locationPathsByObjectId = new Map(locationPresentation.objectPaths.map((path) => [path.physicalObjectId, path.label]));
   const proxyNodeId = (locationId: string) => `location-proxy:${locationId}`;
   const hiddenNodeProxies = new Map(projection.nodes.flatMap((node) => {
@@ -536,15 +558,38 @@ export function TopologyCanvas({
     setLayoutRevision((revision) => revision + 1);
   };
 
+  const startFrameDrag = (event: PointerEvent<HTMLElement>, locationId: string, bounds: FlowRectangle) => {
+    if (!locationFrameInput?.onGroupMove || !hasRenderableBounds(bounds)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const drag = { pointerId: event.pointerId, locationId, start: screenToFlowPosition({ x: event.clientX, y: event.clientY }), bounds: { ...bounds } };
+    frameDrag.current = drag;
+    setFrameDragPreview({ ...drag, delta: { x: 0, y: 0 } });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const updateFrameDrag = (event: PointerEvent<HTMLElement>) => {
+    const drag = frameDrag.current;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    const delta = { x: point.x - drag.start.x, y: point.y - drag.start.y };
+    if (Number.isFinite(delta.x) && Number.isFinite(delta.y)) setFrameDragPreview({ ...drag, delta });
+  };
+
+  const cancelFrameDrag = (event?: PointerEvent<HTMLElement>) => {
+    if (event && frameDrag.current?.pointerId !== event.pointerId) return;
+    frameDrag.current = null;
+    setFrameDragPreview(null);
+  };
+
   const finishFrameDrag = (event: PointerEvent<HTMLElement>) => {
     const drag = frameDrag.current;
-    frameDrag.current = null;
-    if (!drag || !locationFrameInput?.onGroupMove) return;
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    cancelFrameDrag();
+    if (!locationFrameInput?.onGroupMove) return;
     const end = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     const delta = { x: end.x - drag.start.x, y: end.y - drag.start.y };
-    if (!delta.x && !delta.y) return;
-    const frame = locationPresentation.frames.find((item) => item.locationId === drag.locationId);
-    if (!frame) return;
+    if ((!delta.x && !delta.y) || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return;
     const rectangles = new Map(projection.nodes.flatMap((node) => {
       const id = physicalObjectIdForNode(node.data.projection);
       if (!id) return [];
@@ -569,7 +614,7 @@ export function TopologyCanvas({
       return [{ cableId, sourceObjectId, targetObjectId, source, target, savedWaypoints: cableRoutes?.find((route) => route.cable_ref.entity_id === cableId)?.waypoints }];
     });
     try {
-      const move = prepareLocationGroupMove(drag.locationId, delta, frame.bounds, locationFrameInput.locations, locationFrameInput.placements, rectangles, cables);
+      const move = prepareLocationGroupMove(drag.locationId, delta, drag.bounds, locationFrameInput.locations, locationFrameInput.placements, rectangles, cables);
       locationFrameInput.onGroupMove(drag.locationId, move);
     } catch (reason) {
       locationFrameInput.onGroupMoveRejected?.(reason instanceof Error ? reason.message : String(reason));
@@ -650,9 +695,9 @@ export function TopologyCanvas({
           size={1.4}
           color="#25383c"
         />
-        {(locationPresentation.frames.length > 0 || locationPresentation.proxies.length > 0) && <ViewportPortal>
+        {(renderableFrames.length > 0 || locationPresentation.proxies.length > 0) && <ViewportPortal>
           <div className="location-frame-layer" aria-hidden={!locationFrameInput?.onCollapse && !locationFrameInput?.onConfigure ? true : undefined}>
-            {locationPresentation.frames.map((frame) => {
+            {renderableFrames.map((frame) => {
               const collapsed = locationFrameInput?.states?.some((state) => state.location_ref.entity_id === frame.locationId && state.collapsed) ?? false;
               const toggleLabel = t(collapsed ? 'map.locationExpand' : 'map.locationCollapse', { name: frame.label });
               const configureLabel = t('map.locationConfigureCollapse', { name: frame.label });
@@ -661,8 +706,9 @@ export function TopologyCanvas({
                 className="location-frame"
                 data-location-id={frame.locationId}
                 style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
-              ><span className="location-frame__heading" onPointerDown={locationFrameInput?.onGroupMove ? (event) => { event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); frameDrag.current = { locationId: frame.locationId, start: screenToFlowPosition({ x: event.clientX, y: event.clientY }) }; } : undefined} onPointerUp={finishFrameDrag} onPointerCancel={() => { frameDrag.current = null; }}><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button className="location-action" type="button" aria-label={toggleLabel} title={toggleLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>⚙</button></span>}</span></div>;
+              ><span className="location-frame__heading nodrag nopan" onPointerDown={locationFrameInput?.onGroupMove ? (event) => startFrameDrag(event, frame.locationId, frame.bounds) : undefined} onPointerMove={updateFrameDrag} onPointerUp={finishFrameDrag} onPointerCancel={cancelFrameDrag} onLostPointerCapture={cancelFrameDrag}><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button className="location-action" type="button" aria-label={toggleLabel} title={toggleLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>⚙</button></span>}</span></div>;
             })}
+            {frameDragPreview && hasRenderableBounds(frameDragPreview.bounds) && Number.isFinite(frameDragPreview.delta.x) && Number.isFinite(frameDragPreview.delta.y) && renderableFrames.some((frame) => frame.locationId === frameDragPreview.locationId) && <div className="location-frame location-frame--drag-preview" data-preview-location-id={frameDragPreview.locationId} aria-hidden="true" style={{ left: frameDragPreview.bounds.x + frameDragPreview.delta.x, top: frameDragPreview.bounds.y + frameDragPreview.delta.y, width: frameDragPreview.bounds.width, height: frameDragPreview.bounds.height }} />}
           </div>
         </ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (
