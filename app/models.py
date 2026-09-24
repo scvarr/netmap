@@ -119,6 +119,20 @@ class MapPresentationVariant(Base):
     saved_map: Mapped[SavedMap] = relationship(back_populates="presentation_variants")
     positions: Mapped[list["MapViewPosition"]] = relationship(back_populates="variant", passive_deletes=True)
     cable_routes: Mapped[list["MapCableRoute"]] = relationship(back_populates="variant", passive_deletes=True)
+    location_states: Mapped[list["MapLocationState"]] = relationship(back_populates="variant", passive_deletes=True)
+
+
+class MapLocationState(Base):
+    """Variant-specific Location presentation; refs are validated against live canonical facts."""
+
+    __tablename__ = "map_location_states"
+    __table_args__ = (UniqueConstraint("variant_id", "location_id", name="uq_map_location_states_variant_location"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_presentation_variants.id", ondelete="CASCADE"), nullable=False)
+    location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
+    collapsed: Mapped[bool] = mapped_column(nullable=False, server_default="false")
+    visible_direct_elements: Mapped[list[dict[str, str]]] = mapped_column(JSONB, nullable=False, default=list)
+    variant: Mapped[MapPresentationVariant] = relationship(back_populates="location_states")
 
 
 class MapViewKey(StrEnum):

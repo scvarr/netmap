@@ -3,7 +3,7 @@
 ## Статус и граница
 
 Это компактный последовательный implementation plan для spatial cutover.
-NetMap pre-production; P-UX-19 и P-UX-03A/B реализованы, P-UX-03C..E остаются **IMPLEMENTATION PENDING**. Не
+NetMap pre-production; P-UX-19 и P-UX-03A/B/C реализованы, P-UX-03D/E остаются **IMPLEMENTATION PENDING**. Не
 объединять их в одну implementation task и не объявлять выполненными до
 targeted validation и, где указано, manual acceptance.
 
@@ -47,6 +47,14 @@ Movement и resize объектов обновляют frames, но frame geomet
 Не выбирать произвольных глубоких descendants вместо direct elements.
 
 ### P-UX-03C — Variant-specific Location collapse
+
+**IMPLEMENTED.** Variant + Location state хранит `collapsed` и typed canonical
+UUID refs прямых элементов; отсутствие state означает expanded. PUT валидирует
+canonical direct membership, SavedMap detail возвращает состояние активного
+variant без N+1, копирование variant создаёт независимые states. Клиент строит
+рекурсивное partial collapse, компактные derived proxies и перепривязывает
+только presentation anchors реальных Cables/continuations, сохраняя routes.
+Targeted backend/frontend проверки и typecheck выполнены. P-UX-03D не включён.
 
 Ввести Location presentation state для каждой пары
 `MapPresentationVariant + Location`: collapsed/expanded и explicit visible

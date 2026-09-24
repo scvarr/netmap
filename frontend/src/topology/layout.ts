@@ -25,6 +25,7 @@ const loadElk = (): Promise<ELK> => {
 
 export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
+  locationProxy?: { locationId: string; label: string; hiddenObjectCount: number; traced?: boolean };
   /** Physical SavedMap decoration derived from canonical Location context. */
   locationPresentationPath?: string;
   /** Temporary MapPage authoring state; deliberately separate from topology selection. */
@@ -62,7 +63,7 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   cablePresentationEmphasis?: 'normal' | 'attached' | 'selected' | 'traced' | 'editing';
 }
 
-export type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
+export type DeviceFlowNode = Node<DeviceNodeData, 'device' | 'locationProxy'>;
 export type LogicalFlowEdge = Edge<LogicalEdgeData>;
 
 export interface FlowProjection {

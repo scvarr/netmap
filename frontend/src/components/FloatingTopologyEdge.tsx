@@ -187,7 +187,7 @@ export function FloatingTopologyEdge({
   if (!sourceNode || !targetNode) return null;
 
   const pair = data?.endpointPair;
-  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => data?.cableNode
+  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => node.data.locationProxy ? null : data?.cableNode
     ? getRenderedConnectionPoint(node.data.projection, rectangle(node), connectionPointId)
     : getConnectionPointEndpoint(node.data.projection, rectangle(node), connectionPointId);
   const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
@@ -245,8 +245,8 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
   const pair = data.endpointPair;
   const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
   const endpoints = {
-    source: getRenderedConnectionPoint(sourceNode.data.projection, rectangle(sourceNode), pair?.from_connection_point_id) ?? floating.source,
-    target: getRenderedConnectionPoint(targetNode.data.projection, rectangle(targetNode), pair?.to_connection_point_id) ?? floating.target,
+    source: sourceNode.data.locationProxy ? floating.source : getRenderedConnectionPoint(sourceNode.data.projection, rectangle(sourceNode), pair?.from_connection_point_id) ?? floating.source,
+    target: targetNode.data.locationProxy ? floating.target : getRenderedConnectionPoint(targetNode.data.projection, rectangle(targetNode), pair?.to_connection_point_id) ?? floating.target,
   };
   const draft = data.cableRouteDraft;
   const waypoints = draft?.waypoints ?? data.cableRoute?.waypoints;

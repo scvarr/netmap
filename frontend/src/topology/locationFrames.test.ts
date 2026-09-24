@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { deriveLocationPresentation, LOCATION_FRAME_PADDING } from './locationFrames';
+import { deriveLocationPresentation, LOCATION_FRAME_PADDING, projectCollapsedEdges } from './locationFrames';
 import type { LocationDocument } from './locationTypes';
-import type { MapPlacement } from './savedMapTypes';
+import type { MapLocationState, MapPlacement } from './savedMapTypes';
 import type { FlowRectangle } from './nodeFootprint';
 
 const location = (id: string, parent: string | null = null): LocationDocument => ({
@@ -17,6 +17,57 @@ const placement = (id: string, at: string | null): MapPlacement => ({
 });
 const shown = (physicalObjectId: string, x: number, y: number, width = 100, height = 60) => ({
   physicalObjectId, rectangle: { x, y, width, height },
+});
+const state = (id: string, collapsed: boolean, refs: MapLocationState['visible_direct_elements'] = []): MapLocationState => ({ location_ref: location(id).location_ref, collapsed, visible_direct_elements: refs });
+
+describe('variant Location collapse projection', () => {
+  const hierarchy = [location('room'), location('rack', 'room')];
+  const placements = [placement('switch', 'rack'), placement('ups', 'room')];
+  const objects = [shown('switch', 0, 0), shown('ups', 400, 0)];
+
+  it('keeps absent state expanded and collapses all into one compact proxy', () => {
+    expect(deriveLocationPresentation(hierarchy, placements, objects).frames).toHaveLength(1);
+    const collapsed = deriveLocationPresentation(hierarchy, placements, objects, [state('room', true)]);
+    expect(collapsed.frames).toEqual([]);
+    expect(collapsed.proxies).toMatchObject([{ locationId: 'room', hiddenObjectCount: 2 }]);
+    expect([...collapsed.hiddenObjectProxy.entries()]).toEqual([['ups', 'room'], ['switch', 'room']]);
+    expect(collapsed.proxies[0].bounds.width).toBe(152);
+  });
+
+  it('keeps a direct child recursively and forms a frame with the hidden remainder', () => {
+    const states = [state('room', true, [{ entity_type: 'Location', entity_id: 'rack' }]), state('rack', true)];
+    const partial = deriveLocationPresentation(hierarchy, placements, objects, states);
+    expect(partial.frames.map((frame) => frame.locationId)).toEqual(['room']);
+    expect(partial.proxies.map((proxy) => proxy.locationId)).toEqual(['rack', 'room']);
+    expect([...partial.hiddenObjectProxy.entries()]).toEqual([['switch', 'rack'], ['ups', 'room']]);
+    const hiddenChild = deriveLocationPresentation(hierarchy, placements, objects, [state('room', true), state('rack', true)]);
+    expect(hiddenChild.proxies.map((proxy) => proxy.locationId)).toEqual(['room']);
+  });
+
+  it('expands without losing the visible set and applies independent variant states', () => {
+    const retained = state('room', false, [{ entity_type: 'Location', entity_id: 'rack' }]);
+    const expanded = deriveLocationPresentation(hierarchy, placements, objects, [retained]);
+    expect(expanded.proxies).toEqual([]);
+    expect(expanded.frames).toHaveLength(1);
+    const again = deriveLocationPresentation(hierarchy, placements, objects, [{ ...retained, collapsed: true }]);
+    expect(again.hiddenObjectProxy.get('ups')).toBe('room');
+    expect(deriveLocationPresentation(hierarchy, placements, objects, []).hiddenObjectProxy.size).toBe(0);
+  });
+
+  it('keeps each real cable and route while remapping hidden endpoints, including continuations', () => {
+    const edges = [
+      { id: 'same', source: 'a', target: 'b', evidence: 'canonical-same', waypoints: [{ x: 1, y: 2 }], data: {} },
+      { id: 'boundary', source: 'a', target: 'visible', evidence: 'canonical-boundary', waypoints: [{ x: 3, y: 4 }], data: {} },
+      { id: 'other', source: 'a', target: 'c', evidence: 'canonical-other', waypoints: [], data: {} },
+      { id: 'continuation', source: 'a', target: 'a', evidence: 'canonical-continuation', waypoints: [], data: { continuation: true } },
+    ];
+    const result = projectCollapsedEdges(edges, new Map([['a', 'location-proxy:room'], ['b', 'location-proxy:room'], ['c', 'location-proxy:other']]));
+    expect(result.map((edge) => edge.id)).toEqual(['boundary', 'other', 'continuation']);
+    expect(result[0]).toEqual({ ...edges[1], source: 'location-proxy:room' });
+    expect(result[1]).toEqual({ ...edges[2], source: 'location-proxy:room', target: 'location-proxy:other' });
+    expect(result[2]).toEqual({ ...edges[3], source: 'location-proxy:room', target: 'location-proxy:room' });
+    expect(edges[1].waypoints).toEqual([{ x: 3, y: 4 }]);
+  });
 });
 const contains = (outer: FlowRectangle, inner: FlowRectangle) => {
   expect(outer.x).toBeLessThanOrEqual(inner.x);
@@ -129,6 +180,6 @@ describe('expanded Location presentation arity', () => {
       [placement('unlocated', null), placement('unknown', 'missing'), placement('hidden', 'known')],
       [shown('unlocated', 0, 0), shown('unknown', 100, 0)],
     );
-    expect(result).toEqual({ frames: [], objectPaths: [] });
+    expect(result).toEqual({ frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map() });
   });
 });

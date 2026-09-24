@@ -54,6 +54,8 @@ import type {
   SavedMapViewKey,
   MapCableRouteWaypoint,
   MapTextAnnotation,
+  MapLocationDirectElementRef,
+  MapLocationDirectElementChoice,
 } from "../topology/savedMapTypes";
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
@@ -222,6 +224,10 @@ export function MapPage({
     useState<CatalogInventoryDocument | null>(null);
   const [map, setMap] = useState<SavedMap | null>(null);
   const [locations, setLocations] = useState<LocationDocument[] | null>(null);
+  const [locationConfigId, setLocationConfigId] = useState<string | null>(null);
+  const [locationConfigVisible, setLocationConfigVisible] = useState<MapLocationDirectElementRef[]>([]);
+  const [directLocationChoices, setDirectLocationChoices] = useState<MapLocationDirectElementChoice[] | null>(null);
+  const [locationStateBusy, setLocationStateBusy] = useState(false);
   const [sceneDocument, setSceneDocument] = useState<LoadedSceneDocument | null>(
     null,
   );
@@ -410,6 +416,24 @@ export function MapPage({
     },
     [mapId, savedMapDataSource, variantId],
   );
+
+  const locationStateFor = (locationId: string) => activeMap?.location_states?.find((state) => state.location_ref.entity_id === locationId);
+  const writeLocationState = async (locationId: string, collapsed: boolean, visible_direct_elements: MapLocationDirectElementRef[]) => {
+    if (!activeMap || !savedMapDataSource?.setLocationState) return;
+    setLocationStateBusy(true);
+    try {
+      await savedMapDataSource.setLocationState(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, locationId, { collapsed, visible_direct_elements });
+      await reloadMap(activeMap.map_ref.entity_id);
+      setLocationConfigId(null);
+    } catch (reason) { setError(errorMessage(reason, 'Не удалось сохранить состояние Location')); }
+    finally { setLocationStateBusy(false); }
+  };
+  const openLocationConfig = (locationId: string) => {
+    setLocationConfigVisible([...(locationStateFor(locationId)?.visible_direct_elements ?? [])]);
+    setDirectLocationChoices(null);
+    setLocationConfigId(locationId);
+    if (activeMap && savedMapDataSource?.loadLocationDirectElements) void savedMapDataSource.loadLocationDirectElements(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, locationId).then(setDirectLocationChoices, (reason) => setError(errorMessage(reason, 'Не удалось загрузить прямые элементы Location')));
+  };
 
   const refreshDeletedPresentationVariant = async (deletion: { mapId: string; primaryVariantId: string }) => {
     if (!savedMapDataSource) return;
@@ -1842,7 +1866,7 @@ export function MapPage({
                   positionSnapshot={activeMap?.placements}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}
                   locationFrameInput={!legacy && viewMode === "physical" && activeMap && locations
-                    ? { locations, placements: activeMap.placements }
+                    ? { locations, placements: activeMap.placements, states: activeMap.location_states ?? [], onCollapse: (locationId, collapsed) => { const state = locationStateFor(locationId); void writeLocationState(locationId, collapsed, state?.visible_direct_elements ?? []); }, onConfigure: openLocationConfig }
                     : undefined}
                   directlyAttachedCableIds={directlyAttachedCables}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}
@@ -1949,6 +1973,10 @@ export function MapPage({
         mapOperation={mapOperation?.mapId === mapId ? mapOperation : null}
         onRetryMapRefresh={retryMapRefresh}
       />
+      {locationConfigId && viewMode === 'physical' && <div className="map-dialog-backdrop"><section className="map-dialog" role="dialog" aria-label="Настроить сворачивание"><h2>Настроить сворачивание</h2><p>Оставлять представленными при сворачивании:</p>
+        {directLocationChoices === null ? <p>Загрузка…</p> : directLocationChoices.map(({ ref, label }) => <label key={`${ref.entity_type}:${ref.entity_id}`} className="map-location-choice"><input type="checkbox" checked={locationConfigVisible.some((item) => item.entity_type === ref.entity_type && item.entity_id === ref.entity_id)} onChange={(event) => setLocationConfigVisible((current) => event.target.checked ? [...current, ref] : current.filter((item) => item.entity_type !== ref.entity_type || item.entity_id !== ref.entity_id))} />{label}</label>)}
+        <div className="map-dialog__actions"><button type="button" disabled={locationStateBusy} onClick={() => setLocationConfigId(null)}>Отмена</button><button type="button" disabled={locationStateBusy || directLocationChoices === null} onClick={() => void writeLocationState(locationConfigId, locationStateFor(locationConfigId)?.collapsed ?? false, locationConfigVisible)}>Сохранить</button></div>
+      </section></div>}
     </main>
   );
 }

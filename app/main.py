@@ -89,7 +89,7 @@ from app.schemas import (
     LocationSeriesPreviewDocument,
     LocationSeriesCreatedDocument,
     MapPlacementsDocument,
-    MapTextAnnotationDocument, MapPresentationVariantDocument,
+    MapTextAnnotationDocument, MapPresentationVariantDocument, MapLocationStateDocument, MapLocationDirectElementChoice, SetMapLocationStateRequest,
     L3ReachabilityArtifact,
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
@@ -180,6 +180,11 @@ def _saved_map_document(detail) -> dict[str, object]:
         "updated_at": saved_map.updated_at,
         "active_variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": detail.variant.id},
         "variants": [{"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id}, "name": variant.name} for variant in detail.variants],
+        "location_states": [{
+            "location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id},
+            "collapsed": state.collapsed,
+            "visible_direct_elements": detail.valid_location_refs[state.location_id],
+        } for state in detail.location_states],
         "placements": [
             {
                 "physical_object_ref": {
@@ -446,6 +451,20 @@ def create_saved_map(query: CreateSavedMapRequest, session: Session = Depends(ge
 @app.get("/v1/maps/{map_id}", response_model=SavedMapDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
 def get_saved_map(map_id: uuid.UUID, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> SavedMapDocument:
     return _saved_map_document(SavedMapCatalog(session).detail(map_id, variant_id))
+
+
+@app.put("/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{location_id}", response_model=MapLocationStateDocument, responses={422: {"model": ErrorResponse}})
+def set_map_location_state(map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID, query: SetMapLocationStateRequest, session: Session = Depends(get_session)) -> MapLocationStateDocument:
+    with session.begin():
+        state = SavedMapCatalog(session).set_location_state(map_id, variant_id, location_id, query.collapsed, [
+            {"entity_type": ref.entity_type, "entity_id": str(ref.entity_id)} for ref in query.visible_direct_elements
+        ])
+        return {"location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id}, "collapsed": state.collapsed, "visible_direct_elements": state.visible_direct_elements}
+
+
+@app.get("/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{location_id}/direct-elements", response_model=list[MapLocationDirectElementChoice], responses={422: {"model": ErrorResponse}})
+def get_map_location_direct_elements(map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID, session: Session = Depends(get_session)) -> list[MapLocationDirectElementChoice]:
+    return SavedMapCatalog(session).direct_location_elements(map_id, variant_id, location_id)
 
 
 @app.post("/v1/maps/{map_id}/presentation-variants", response_model=MapPresentationVariantDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})

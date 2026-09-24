@@ -8,7 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
-from app.models import Cable, MapCableRoute, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.device_catalog import DeviceCatalog
+from app.models import Cable, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -19,6 +20,8 @@ class SavedMapDetail:
     text_annotations: tuple[MapTextAnnotation, ...]
     variant: MapPresentationVariant
     variants: tuple[MapPresentationVariant, ...]
+    location_states: tuple[MapLocationState, ...]
+    valid_location_refs: dict[uuid.UUID, list[dict[str, str]]]
 
 
 class SavedMapCatalog:
@@ -43,7 +46,8 @@ class SavedMapCatalog:
     def detail(self, map_id: uuid.UUID, variant_id: uuid.UUID | None = None) -> SavedMapDetail:
         saved_map = self._require_map(map_id)
         variant = self._require_variant(map_id, variant_id)
-        return SavedMapDetail(saved_map, self._placements(map_id, variant.id), self._cable_routes(map_id, variant.id), self._text_annotations(map_id), variant, self._variants(map_id))
+        states = self._location_states(variant.id)
+        return SavedMapDetail(saved_map, self._placements(map_id, variant.id), self._cable_routes(map_id, variant.id), self._text_annotations(map_id), variant, self._variants(map_id), states, self._valid_location_refs(states))
 
     def create_variant(self, map_id: uuid.UUID, name: str, source_variant_id: uuid.UUID) -> MapPresentationVariant:
         self._require_map(map_id)
@@ -65,8 +69,59 @@ class SavedMapCatalog:
             map_id=route.map_id, variant_id=variant.id, cable_id=route.cable_id, view_key=route.view_key,
             waypoints=[{"x": point["x"], "y": point["y"]} for point in route.waypoints],
         ) for route in source_routes)
+        self.session.add_all(MapLocationState(
+            variant_id=variant.id, location_id=state.location_id, collapsed=state.collapsed,
+            visible_direct_elements=[dict(ref) for ref in state.visible_direct_elements],
+        ) for state in self._location_states(source.id))
         self._flush()
         return variant
+
+    def set_location_state(self, map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID, collapsed: bool, refs: list[dict[str, str]]) -> MapLocationState:
+        self._require_map(map_id)
+        self._require_variant(map_id, variant_id)
+        if self.session.get(Location, location_id) is None:
+            raise ValidationError("Location does not exist", {"location_id": str(location_id)})
+        keys = [(ref["entity_type"], ref["entity_id"]) for ref in refs]
+        if len(keys) != len(set(keys)):
+            raise ValidationError("Duplicate visible direct element", {"location_id": str(location_id)})
+        for kind, entity_id in keys:
+            entity = self.session.get(PhysicalObject if kind == "PhysicalObject" else Location, uuid.UUID(entity_id))
+            parent_id = (entity.location_id if kind == "PhysicalObject" else entity.parent_location_id) if entity else None
+            if entity is None or parent_id != location_id:
+                raise ValidationError("Visible element is not a direct canonical element of Location", {"entity_type": kind, "entity_id": entity_id, "location_id": str(location_id)})
+        state = self.session.scalar(select(MapLocationState).where(MapLocationState.variant_id == variant_id, MapLocationState.location_id == location_id).with_for_update())
+        if state is None:
+            state = MapLocationState(variant_id=variant_id, location_id=location_id)
+            self.session.add(state)
+        state.collapsed = collapsed
+        state.visible_direct_elements = refs
+        self._flush()
+        return state
+
+    def direct_location_elements(self, map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID) -> list[dict[str, object]]:
+        self._require_map(map_id)
+        self._require_variant(map_id, variant_id)
+        if self.session.get(Location, location_id) is None:
+            raise ValidationError("Location does not exist", {"location_id": str(location_id)})
+        children = self.session.scalars(select(Location).where(Location.parent_location_id == location_id).order_by(Location.name, Location.id)).all()
+        object_ids = self.session.scalars(select(PhysicalObject.id).where(PhysicalObject.location_id == location_id).order_by(PhysicalObject.id)).all()
+        aliases = DeviceCatalog(self.session).physical_object_display_aliases(list(object_ids))
+        return [
+            *({"ref": {"entity_type": "Location", "entity_id": child.id}, "label": child.name} for child in children),
+            *({"ref": {"entity_type": "PhysicalObject", "entity_id": object_id}, "label": aliases[object_id].value if object_id in aliases else f"PhysicalObject {object_id}"} for object_id in object_ids),
+        ]
+
+    def _location_states(self, variant_id: uuid.UUID) -> tuple[MapLocationState, ...]:
+        return tuple(self.session.scalars(select(MapLocationState).where(MapLocationState.variant_id == variant_id).order_by(MapLocationState.location_id)))
+
+    def _valid_location_refs(self, states: tuple[MapLocationState, ...]) -> dict[uuid.UUID, list[dict[str, str]]]:
+        object_ids = {uuid.UUID(ref["entity_id"]) for state in states for ref in state.visible_direct_elements if ref["entity_type"] == "PhysicalObject"}
+        location_ids = {uuid.UUID(ref["entity_id"]) for state in states for ref in state.visible_direct_elements if ref["entity_type"] == "Location"}
+        objects = dict(self.session.execute(select(PhysicalObject.id, PhysicalObject.location_id).where(PhysicalObject.id.in_(object_ids))).all()) if object_ids else {}
+        locations = dict(self.session.execute(select(Location.id, Location.parent_location_id).where(Location.id.in_(location_ids))).all()) if location_ids else {}
+        return {state.location_id: [ref for ref in state.visible_direct_elements if (
+            objects if ref["entity_type"] == "PhysicalObject" else locations
+        ).get(uuid.UUID(ref["entity_id"])) == state.location_id] for state in states}
 
     def delete_variant(self, map_id: uuid.UUID, variant_id: uuid.UUID) -> None:
         variant = self._require_variant(map_id, variant_id)

@@ -50,6 +50,7 @@ vi.mock('@xyflow/react', () => ({
       <svg>{edges.map((edge) => <path key={edge.id} data-testid={`svg-path-${edge.id}`} d="M0,0L1,1" />)}</svg>
       {edges.map((edge) => <button key={`edge-${edge.id}`} onClick={() => onEdgeClick?.({}, edge)}>edge {edge.id}</button>)}
       {edges.map((edge) => <output key={`route-${edge.id}`} data-testid={`route-${edge.id}`}>{edge.data?.cableRoute ? JSON.stringify(edge.data.cableRoute.waypoints) : 'no-route'}</output>)}
+      {edges.map((edge) => <output key={`endpoints-${edge.id}`} data-testid={`endpoints-${edge.id}`}>{edge.source}:{edge.target}</output>)}
       {edges.map((edge) => <output key={`traced-${edge.id}`} data-testid={`traced-${edge.id}`}>{String(Boolean(edge.animated))}</output>)}
       {edges.map((edge) => <output key={`emphasis-${edge.id}`} data-testid={`emphasis-${edge.id}`}>{edge.data?.cablePresentationEmphasis ?? 'none'}</output>)}
       {nodes.map((node) => (
@@ -120,6 +121,21 @@ afterEach(() => {
 });
 
 describe('TopologyCanvas async layout boundary', () => {
+  it('replaces hidden nodes with one immovable Location proxy and preserves real cable route data', async () => {
+    const a: TopologyProjectionNode = { id: 'physical-a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'a' }], attributes: {} };
+    const b: TopologyProjectionNode = { id: 'physical-b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'b' }], attributes: {} };
+    const document = { ...documentFor('physical-a'), nodes: [a, b] };
+    const onCollapse = vi.fn();
+    const input = { locations: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }], placements: [{ physical_object_ref: a.source_refs[0], location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, positions: {} }, { physical_object_ref: b.source_refs[0], location_ref: null, positions: {} }], states: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, collapsed: true, visible_direct_elements: [] }], onCollapse, onConfigure: vi.fn() };
+    const layoutEngine: TopologyLayoutEngine = async () => ({ nodes: [{ id: a.id, type: 'device', position: { x: 0, y: 0 }, data: { projection: a } }, { id: b.id, type: 'device', position: { x: 400, y: 0 }, data: { projection: b } }], edges: [{ id: 'real-cable', source: a.id, target: b.id, data: { cableNode: { ...a, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable' }] } } }] });
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} locationFrameInput={input} />);
+    expect(await screen.findByRole('button', { name: 'location-proxy:room' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'physical-a' })).toBeNull();
+    expect(screen.getByTestId('endpoints-real-cable')).toHaveTextContent('location-proxy:room:physical-b');
+    expect(screen.getByTestId('draggable-location-proxy:room')).toHaveTextContent('false');
+    fireEvent.click(screen.getByRole('button', { name: 'Развернуть' }));
+    expect(onCollapse).toHaveBeenCalledWith('room', false);
+  });
   it('renders only physical SavedMap frames and follows controlled drag, rollback and blueprint resize', async () => {
     const projection: TopologyProjectionNode = {
       id: 'physical-framed', kind: 'PHYSICAL_OBJECT', label: 'Server',

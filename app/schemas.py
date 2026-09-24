@@ -238,6 +238,28 @@ class MapPresentationVariantDocument(BaseModel):
     name: str
 
 
+class MapLocationDirectElementRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    entity_type: Literal["PhysicalObject", "Location"]
+    entity_id: uuid.UUID
+
+
+class SetMapLocationStateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    collapsed: bool
+    visible_direct_elements: list[MapLocationDirectElementRef]
+
+
+class MapLocationStateDocument(SetMapLocationStateRequest):
+    location_ref: LocationRef
+
+
+class MapLocationDirectElementChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    ref: MapLocationDirectElementRef
+    label: str
+
+
 class MapPresentationPoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -285,6 +307,7 @@ class SavedMapSummary(BaseModel):
 class SavedMapDocument(SavedMapSummary):
     active_variant_ref: MapPresentationVariantRef
     variants: list[MapPresentationVariantDocument]
+    location_states: list[MapLocationStateDocument]
     placements: list[MapPlacementDocument]
     cable_routes: list[MapCableRouteDocument]
     text_annotations: list[MapTextAnnotationDocument]

@@ -30,7 +30,11 @@ export function OffMapContinuationEdge({ id, source, data, selected }: EdgeProps
   const sourceNode = useInternalNode<DeviceFlowNode>(source);
   const continuation = data?.continuation;
   if (!sourceNode || !continuation) return null;
-  const endpoint = getConnectionPointEndpoint(
+  const endpoint = sourceNode.data.locationProxy ? {
+    x: rectangle(sourceNode).x + rectangle(sourceNode).width,
+    y: rectangle(sourceNode).y + rectangle(sourceNode).height / 2,
+    side: Position.Right,
+  } : getConnectionPointEndpoint(
     sourceNode.data.projection,
     rectangle(sourceNode),
     continuation.local_connection_point_ref.entity_id,

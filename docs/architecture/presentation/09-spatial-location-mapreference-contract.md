@@ -5,7 +5,7 @@
 Это главный целевой contract hierarchical Location presentation NetMap.
 Целевой contract согласован; P-UX-03B expanded derived Location frames
 реализован. P-UX-03A удалил development-stage `MapComposite` и manual
-`MapRegion`; P-UX-03C..E остаются **IMPLEMENTATION PENDING**.
+`MapRegion`; P-UX-03C реализован, P-UX-03D/E остаются **IMPLEMENTATION PENDING**.
 
 NetMap pre-production. Если старые spatial models конфликтуют с этим
 contract, они удаляются; compatibility layers, converters, fallback readers и
@@ -39,12 +39,22 @@ hierarchy между вариантами не меняются.
 
 ## Location presentation state и непосредственные элементы
 
-Для пары `SavedMap + MapPresentationVariant + Location` может существовать
+Для пары `MapPresentationVariant + Location` может существовать
 presentation state:
 
 - `collapsed` / `expanded`;
 - набор непосредственно принадлежащих Location элементов, оставляемых
   представленными при collapse.
+
+P-UX-03C хранит это в `map_location_states`: `variant_id`, `location_id`,
+`collapsed` и список `{entity_type, entity_id}` с canonical UUID. Отсутствие
+строки означает expanded с пустым visible set. Expanded сохраняет настроенный
+set для следующего collapse. Ref проверяется при записи по текущей canonical
+иерархии, а при чтении stale refs игнорируются. Состояние удаляется с variant
+или Location; геометрия и membership здесь не хранятся. SavedMap detail
+возвращает состояния только активного variant одним пакетным чтением; PUT
+полного состояния конкретного Location идемпотентен. При копировании variant
+его Location states копируются независимо.
 
 Непосредственный элемент Location L — это только:
 
@@ -64,6 +74,17 @@ Expanded Location показывает свои непосредственные
 presentation proxy с explicit grouping basis — конкретным Location. Proxy не
 является canonical entity, `PhysicalObject`, `Connection` или Cable endpoint.
 Collapse родителя не уничтожает и не переписывает state дочерних Locations.
+
+Visible direct child Location рекурсивно применяет собственное состояние;
+скрытые displayed descendants одного Location дают один компактный proxy.
+Frame для partial collapse вычисляется по видимым direct representations и
+этому proxy; при полном collapse остаётся только proxy. Скрытый endpoint
+PhysicalObject определяется по canonical direct membership, а не по геометрии.
+Реальные Cables сохраняют собственные identity и exact evidence: same-proxy
+кабель не рисуется, остальные подключаются к текущему proxy anchor.
+`MapCableRoute.waypoints` не изменяются из-за collapse/expand. L1 off-map
+continuation использует proxy anchor скрытого локального объекта. Trace
+подсвечивает proxy, если скрытый объект был подсвечен.
 
 Boundary connectivity остаётся основанной на exact canonical evidence.
 Presentation aggregation не создаёт topology relation, не меняет endpoint и не

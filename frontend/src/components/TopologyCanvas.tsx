@@ -49,11 +49,12 @@ import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { blueprintMapNameplateHeight } from "../topology/blueprintDisplaySize";
 import { nodeFootprint } from "../topology/nodeFootprint";
-import { deriveLocationPresentation } from "../topology/locationFrames";
+import { deriveLocationPresentation, projectCollapsedEdges } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
-import type { MapPlacement } from "../topology/savedMapTypes";
+import type { MapLocationState, MapPlacement } from "../topology/savedMapTypes";
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { MapTextAnnotationLayer } from "./MapTextAnnotationLayer";
+import { LocationProxyNode } from "./LocationProxyNode";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -73,7 +74,7 @@ interface TopologyCanvasProps {
   /** New authoritative SavedMap placement snapshot, including variant switches and refreshes. */
   positionSnapshot?: readonly MapPlacement[];
   displayWidthOverrides?: Record<string, number>;
-  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[] };
+  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; states?: readonly MapLocationState[]; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void };
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
@@ -106,7 +107,7 @@ interface TopologyCanvasProps {
 
 }
 
-const nodeTypes = { device: DeviceNode };
+const nodeTypes = { device: DeviceNode, locationProxy: LocationProxyNode };
 const edgeTypes = {
   floating: FloatingTopologyEdge,
   continuation: OffMapContinuationEdge,
@@ -348,10 +349,16 @@ export function TopologyCanvas({
         rectangle.height = face.height + blueprintMapNameplateHeight(blueprint, width);
       }
       return [{ physicalObjectId, rectangle }];
-    }))
-    : { frames: [], objectPaths: [] };
+    }), locationFrameInput.states ?? [])
+    : { frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map<string, string>() };
   const locationPathsByObjectId = new Map(locationPresentation.objectPaths.map((path) => [path.physicalObjectId, path.label]));
-  const nodes = projection.nodes.map((node) => ({
+  const proxyNodeId = (locationId: string) => `location-proxy:${locationId}`;
+  const hiddenNodeProxies = new Map(projection.nodes.flatMap((node) => {
+    const objectId = physicalObjectIdForNode(node.data.projection);
+    const locationId = objectId && locationPresentation.hiddenObjectProxy.get(objectId);
+    return locationId ? [[node.id, proxyNodeId(locationId)] as const] : [];
+  }));
+  const nodes: DeviceFlowNode[] = projection.nodes.filter((node) => !hiddenNodeProxies.has(node.id)).map((node) => ({
     ...node,
     draggable: draggableNodeIds ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id) : lockedNodeIds?.has(node.id) ? false : undefined,
     data: {
@@ -369,7 +376,13 @@ export function TopologyCanvas({
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));
-  const edges = (annotationMode ? [] : projection.edges).map((edge) => {
+  for (const proxy of locationPresentation.proxies) nodes.push({
+    id: proxyNodeId(proxy.locationId), type: 'locationProxy',
+    position: { x: proxy.bounds.x, y: proxy.bounds.y }, width: proxy.bounds.width, height: proxy.bounds.height,
+    draggable: false, selectable: false,
+    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)) } },
+  });
+  const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
       : undefined;
@@ -422,6 +435,7 @@ export function TopologyCanvas({
 
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
     if (annotationMode) return;
+    if (node.data.locationProxy) return;
     const physicalObjectId = physicalObjectIdForNode(node.data.projection);
     onSelectionChange({ type: "node", item: node.data.projection });
   };
@@ -444,6 +458,7 @@ export function TopologyCanvas({
       return;
     }
     event.preventDefault();
+    if (node.data.locationProxy) return;
     const projectionNode = node.data.projection;
     if (cableIdForNode(projectionNode)) onPhysicalCableContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
     else onPhysicalNodeContextMenu?.(projectionNode, { x: event.clientX, y: event.clientY });
@@ -470,10 +485,12 @@ export function TopologyCanvas({
   };
   const onNodeDragStart: OnNodeDrag<DeviceFlowNode> = (_, node) => {
     if (annotationMode) return;
+    if (node.data.locationProxy) return;
     confirmedNodePositions.current.set(node.id, node.position);
   };
   const onNodeDragStop: OnNodeDrag<DeviceFlowNode> = (_, draggedNode) => {
     if (annotationMode) return;
+    if (draggedNode.data.locationProxy) return;
     const confirmedPosition = confirmedNodePositions.current.get(draggedNode.id);
     const placedNodes = draggableNodeIds
       ? projection.nodes.filter((node) => draggableNodeIds.has(node.id))
@@ -591,14 +608,15 @@ export function TopologyCanvas({
           size={1.4}
           color="#25383c"
         />
-        {locationPresentation.frames.length > 0 && <ViewportPortal>
-          <div className="location-frame-layer" aria-hidden="true">
+        {(locationPresentation.frames.length > 0 || locationPresentation.proxies.length > 0) && <ViewportPortal>
+          <div className="location-frame-layer" aria-hidden={!locationFrameInput?.onCollapse && !locationFrameInput?.onConfigure ? true : undefined}>
             {locationPresentation.frames.map((frame) => <div
               key={frame.locationId}
               className="location-frame"
               data-location-id={frame.locationId}
               style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
-            ><span className="location-frame__label">{frame.label}</span></div>)}
+            ><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button type="button" onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !locationFrameInput.states?.find((state) => state.location_ref.entity_id === frame.locationId)?.collapsed)}>{locationFrameInput.states?.find((state) => state.location_ref.entity_id === frame.locationId)?.collapsed ? 'Развернуть' : 'Свернуть'}</button><button type="button" onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>Настроить</button></span>}</div>)}
+            {locationFrameInput?.onCollapse && locationFrameInput.onConfigure && locationPresentation.proxies.map((proxy) => <div key={`actions:${proxy.locationId}`} className="location-proxy-actions" style={{ left: proxy.bounds.x, top: proxy.bounds.y + proxy.bounds.height }}><button type="button" onClick={() => locationFrameInput.onCollapse?.(proxy.locationId, false)}>Развернуть</button><button type="button" onClick={() => locationFrameInput.onConfigure?.(proxy.locationId)}>Настроить</button></div>)}
           </div>
         </ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (

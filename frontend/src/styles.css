@@ -75,6 +75,13 @@ button { font: inherit; }
 .location-frame-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 .location-frame { position: absolute; box-sizing: border-box; border: 1px solid rgb(91 188 168 / .55); border-radius: 14px; background: rgb(39 110 101 / .075); pointer-events: none; }
 .location-frame__label { position: absolute; top: 0; left: 10px; transform: translateY(-50%); display: block; box-sizing: border-box; max-width: calc(100% - 20px); padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: #0a1518; color: #a6e9d8; font: 600 11px/16px ui-monospace, monospace; pointer-events: none; }
+.location-frame__actions { position: absolute; top: -11px; right: 10px; display: flex; gap: 4px; pointer-events: auto; }
+.location-frame__actions button, .location-proxy-actions button { padding: 2px 5px; font-size: 10px; }
+.location-proxy { width: 152px; height: 60px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border: 1px solid #72cdb7; border-radius: 8px; background: #163d38; color: #dcfff4; font-size: 11px; text-align: center; }
+.location-proxy--traced { border-color: #f0bd66; box-shadow: 0 0 0 2px rgb(240 189 102 / .3); }
+.location-proxy__handle { opacity: 0; pointer-events: none; }
+.location-proxy-actions { position: absolute; display: flex; gap: 4px; pointer-events: auto; }
+.map-location-choice { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .blueprint-map-node__nameplate { display: flex; align-items: center; gap: 6px; }
 .blueprint-map-node__title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .blueprint-map-node__location { flex: 0 1 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; color: #86b4aa; font-size: 9px; font-weight: 500; pointer-events: none; }

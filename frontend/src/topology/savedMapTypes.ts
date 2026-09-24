@@ -15,7 +15,10 @@ export interface MapPresentationPoint { x: number; y: number }
 export interface MapTextAnnotationRef { entity_type: 'MapTextAnnotation'; entity_id: string }
 export interface MapTextAnnotation { annotation_ref: MapTextAnnotationRef; text: string; position: MapPresentationPoint; text_color: string; font_size: number }
 export interface MapTextAnnotationWrite { text: string; position: MapPresentationPoint; text_color: string; font_size: number }
-export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; active_variant_ref: MapPresentationVariantRef; variants: MapPresentationVariant[]; placements: MapPlacement[]; cable_routes: MapCableRoute[]; text_annotations: MapTextAnnotation[] }
+export interface MapLocationDirectElementRef { entity_type: 'PhysicalObject' | 'Location'; entity_id: string }
+export interface MapLocationState { location_ref: LocationRef; collapsed: boolean; visible_direct_elements: MapLocationDirectElementRef[] }
+export interface MapLocationDirectElementChoice { ref: MapLocationDirectElementRef; label: string }
+export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; active_variant_ref: MapPresentationVariantRef; variants: MapPresentationVariant[]; location_states?: MapLocationState[]; placements: MapPlacement[]; cable_routes: MapCableRoute[]; text_annotations: MapTextAnnotation[] }
 export interface SavedMapSummary { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string }
 export interface SavedMapDataSource {
   listMaps(): Promise<SavedMapSummary[]>;
@@ -25,6 +28,8 @@ export interface SavedMapDataSource {
   /** Acknowledges variant creation; load SavedMap separately for authoritative state. */
   createPresentationVariant?(mapId: string, name: string, sourceVariantId: string): Promise<MapPresentationVariant>;
   deletePresentationVariant?(mapId: string, variantId: string): Promise<void>;
+  setLocationState?(mapId: string, variantId: string, locationId: string, state: Pick<MapLocationState, 'collapsed' | 'visible_direct_elements'>): Promise<void>;
+  loadLocationDirectElements?(mapId: string, variantId: string, locationId: string): Promise<MapLocationDirectElementChoice[]>;
   addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
   movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
   setPositionLock(mapId: string, physicalObjectId: string, view: SavedMapView, locked: boolean, variantId?: string): Promise<void>;
