@@ -3,7 +3,7 @@
 ## Статус и граница
 
 Это компактный последовательный implementation plan для spatial cutover.
-NetMap pre-production; P-UX-19 и P-UX-03A/B/C реализованы, P-UX-03D/E остаются **IMPLEMENTATION PENDING**. Не
+NetMap pre-production; P-UX-19 и P-UX-03A/B/C/D реализованы, P-UX-03E остаётся **IMPLEMENTATION PENDING**. Не
 объединять их в одну implementation task и не объявлять выполненными до
 targeted validation и, где указано, manual acceptance.
 
@@ -63,6 +63,13 @@ boundary evidence и derived proxies. Collapse родителя не уничт�
 state; membership объектов не дублировать.
 
 ### P-UX-03D — Interactive Location group move
+
+**IMPLEMENTED.** Drag заголовка expanded frame отправляет один displacement
+для canonical subtree активного L1 variant; locked member, external collision
+или неоднозначный boundary route отклоняют всю операцию. Positions и saved
+routes записываются одной транзакцией. После записи выполняется authoritative
+reload с отдельным read-only retry. Targeted backend/frontend validation и
+frontend build пройдены; ручная spatial acceptance остаётся в P-UX-03E.
 
 Добавить frame handle/context action. Перемещать canonical subtree одним delta,
 включая скрытые placements; валидировать collisions и отклонять пересечение с

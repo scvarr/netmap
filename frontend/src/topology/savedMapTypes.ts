@@ -11,6 +11,12 @@ export interface MapViewPosition { x: number; y: number; locked: boolean; displa
 export interface MapPlacement { physical_object_ref: ProjectionSourceRef; location_ref?: LocationRef | null; positions: Partial<Record<SavedMapViewKey, MapViewPosition>> }
 export interface MapCableRouteWaypoint { x: number; y: number }
 export interface MapCableRoute { cable_ref: ProjectionSourceRef; view: 'L1/PHYSICAL_OBJECT'; waypoints: MapCableRouteWaypoint[] }
+export interface LocationGroupMove {
+  delta_x: number; delta_y: number;
+  frame: { x: number; y: number; width: number; height: number };
+  footprints: Array<{ physical_object_id: string; x: number; y: number; width: number; height: number }>;
+  boundary_routes: Array<{ cable_id: string; moving_endpoint_is_source: boolean; moving_endpoint: MapCableRouteWaypoint; external_endpoint: MapCableRouteWaypoint }>;
+}
 export interface MapPresentationPoint { x: number; y: number }
 export interface MapTextAnnotationRef { entity_type: 'MapTextAnnotation'; entity_id: string }
 export interface MapTextAnnotation { annotation_ref: MapTextAnnotationRef; text: string; position: MapPresentationPoint; text_color: string; font_size: number }
@@ -29,6 +35,7 @@ export interface SavedMapDataSource {
   createPresentationVariant?(mapId: string, name: string, sourceVariantId: string): Promise<MapPresentationVariant>;
   deletePresentationVariant?(mapId: string, variantId: string): Promise<void>;
   setLocationState?(mapId: string, variantId: string, locationId: string, state: Pick<MapLocationState, 'collapsed' | 'visible_direct_elements'>): Promise<void>;
+  moveLocationGroup?(mapId: string, variantId: string, locationId: string, move: LocationGroupMove): Promise<void>;
   loadLocationDirectElements?(mapId: string, variantId: string, locationId: string): Promise<MapLocationDirectElementChoice[]>;
   addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
   movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;

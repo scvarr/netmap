@@ -57,6 +57,7 @@ import type {
   MapTextAnnotation,
   MapLocationDirectElementRef,
   MapLocationDirectElementChoice,
+  LocationGroupMove,
 } from "../topology/savedMapTypes";
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
@@ -298,6 +299,7 @@ export function MapPage({
   const [textAnnotationDeletion, setTextAnnotationDeletion] = useState<TextAnnotationDeleteOperation | null>(null);
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
+  const [groupMoveRefresh, setGroupMoveRefresh] = useState<{ mapId: string; variantId: string } | null>(null);
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
   const [copiedBlueprintDisplayWidth, setCopiedBlueprintDisplayWidth] = useState<number>();
@@ -317,6 +319,7 @@ export function MapPage({
   const textAnnotationOperationSequence = useRef(0);
   const presentationVariantSubmitPending = useRef(false);
   const presentationVariantDeletionPending = useRef(false);
+  const groupMovePending = useRef(false);
 
   selectedMapId.current = mapId;
   const acceptsMapDetail = (targetMapId: string, request: number) =>
@@ -451,6 +454,35 @@ export function MapPage({
     },
     [mapId, savedMapDataSource, variantId],
   );
+
+  const moveLocationGroup = async (locationId: string, moveRequest: LocationGroupMove) => {
+    if (!activeMap || !savedMapDataSource?.moveLocationGroup || groupMovePending.current || (groupMoveRefresh?.mapId === activeMap.map_ref.entity_id && groupMoveRefresh.variantId === activeMap.active_variant_ref.entity_id)) return;
+    const targetMapId = activeMap.map_ref.entity_id, targetVariantId = activeMap.active_variant_ref.entity_id;
+    groupMovePending.current = true;
+    setError(null);
+    try {
+      await savedMapDataSource.moveLocationGroup(targetMapId, targetVariantId, locationId, moveRequest);
+    } catch (reason) {
+      if (selectedMapId.current === targetMapId) setError(errorMessage(reason, 'Не удалось переместить Location'));
+      groupMovePending.current = false;
+      return;
+    }
+    if (selectedMapId.current === targetMapId) setGroupMoveRefresh({ mapId: targetMapId, variantId: targetVariantId });
+    try {
+      if (await reloadMap(targetMapId) && selectedMapId.current === targetMapId) setGroupMoveRefresh(null);
+    } catch {
+      if (selectedMapId.current === targetMapId) setError('Location перемещён, но карту не удалось обновить.');
+    } finally { groupMovePending.current = false; }
+  };
+
+  const retryGroupMoveRefresh = async () => {
+    if (!groupMoveRefresh || groupMovePending.current) return;
+    groupMovePending.current = true;
+    try {
+      if (await reloadMap(groupMoveRefresh.mapId)) { setGroupMoveRefresh(null); setError(null); }
+    } catch { setError('Не удалось обновить карту после перемещения Location.'); }
+    finally { groupMovePending.current = false; }
+  };
 
   const locationStateFor = (locationId: string) => activeMap?.location_states?.find((state) => state.location_ref.entity_id === locationId);
   const writeLocationState = async (locationId: string, collapsed: boolean, visible_direct_elements: MapLocationDirectElementRef[]) => {
@@ -1844,6 +1876,7 @@ export function MapPage({
       {presentationVariantCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Компоновка создана, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantCreationRefresh()}>Повторить обновление</button></section>}
       {variantDeletion?.status === "refresh-failed" && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
+      {groupMoveRefresh && activeMap?.map_ref.entity_id === groupMoveRefresh.mapId && activeMap.active_variant_ref.entity_id === groupMoveRefresh.variantId && <section role="alert"><p>Location перемещён. Обновите карту для продолжения.</p><button type="button" onClick={() => void retryGroupMoveRefresh()}>{t("map.retryRefresh")}</button></section>}
       {error && <p role="alert">{error}</p>}
       {document &&
         params.get("focus") &&
@@ -1907,7 +1940,7 @@ export function MapPage({
                   positionSnapshot={activeMap?.placements}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}
                   locationFrameInput={!legacy && viewMode === "physical" && activeMap && locations
-                    ? { locations, placements: activeMap.placements, states: activeMap.location_states ?? [], onCollapse: (locationId, collapsed) => { const state = locationStateFor(locationId); void writeLocationState(locationId, collapsed, state?.visible_direct_elements ?? []); }, onConfigure: openLocationConfig }
+                    ? { locations, placements: activeMap.placements, states: activeMap.location_states ?? [], onCollapse: (locationId, collapsed) => { const state = locationStateFor(locationId); void writeLocationState(locationId, collapsed, state?.visible_direct_elements ?? []); }, onConfigure: openLocationConfig, onGroupMove: !physicalAnnotationMode && !(groupMoveRefresh?.mapId === activeMap.map_ref.entity_id && groupMoveRefresh.variantId === activeMap.active_variant_ref.entity_id) ? (locationId: string, moveRequest: LocationGroupMove) => { void moveLocationGroup(locationId, moveRequest); } : undefined, onGroupMoveRejected: (message: string) => setError(message) }
                     : undefined}
                   directlyAttachedCableIds={directlyAttachedCables}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}

@@ -2,14 +2,48 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from math import isclose
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.device_catalog import DeviceCatalog
-from app.models import Cable, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import Cable, Connection, ConnectionPoint, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+
+
+def _boundary_prefix(frame: dict[str, float], points: list[dict[str, float]]) -> int:
+    """Count waypoints strictly before the one unambiguous frame exit."""
+    left, top = frame["x"], frame["y"]
+    right, bottom = left + frame["width"], top + frame["height"]
+    def inside(point: dict[str, float]) -> bool:
+        return left < point["x"] < right and top < point["y"] < bottom
+    if not inside(points[0]) or inside(points[-1]):
+        raise ValidationError("Boundary route endpoints do not straddle LocationFrame", {})
+    crossing: int | None = None
+    for index, (start, end) in enumerate(zip(points, points[1:])):
+        if any((any(isclose(point["x"], x, abs_tol=1e-7) for x in (left, right)) and top <= point["y"] <= bottom) or (any(isclose(point["y"], y, abs_tol=1e-7) for y in (top, bottom)) and left <= point["x"] <= right) for point in (start, end)):
+            raise ValidationError("Boundary route touches LocationFrame boundary", {})
+        dx, dy = end["x"] - start["x"], end["y"] - start["y"]
+        hits = []
+        for x in (left, right):
+            if dx:
+                t = (x - start["x"]) / dx
+                y = start["y"] + t * dy
+                if 0 < t < 1 and top < y < bottom: hits.append(t)
+        for y in (top, bottom):
+            if dy:
+                t = (y - start["y"]) / dy
+                x = start["x"] + t * dx
+                if 0 < t < 1 and left < x < right: hits.append(t)
+        if hits:
+            if len(hits) != 1 or crossing is not None or not inside(start) or inside(end):
+                raise ValidationError("Boundary route cannot be split unambiguously", {})
+            crossing = index
+    if crossing is None:
+        raise ValidationError("Boundary route does not cross LocationFrame", {})
+    return crossing
 
 
 @dataclass(frozen=True)
@@ -251,6 +285,86 @@ class SavedMapCatalog:
         route.waypoints = [{"x": point["x"], "y": point["y"]} for point in waypoints]
         self._flush()
         return route
+
+    def move_location_group(
+        self, map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID,
+        delta_x: float, delta_y: float, frame: dict[str, float],
+        footprints: list[dict[str, object]], boundary_routes: list[dict[str, object]],
+    ) -> None:
+        """Move one canonical Location subtree within one physical presentation variant."""
+        self._require_variant(map_id, variant_id)
+        if self.session.get(Location, location_id) is None:
+            raise ValidationError("Location does not exist", {"location_id": str(location_id)})
+        subtree = select(Location.id).where(Location.id == location_id).cte("moving_locations", recursive=True)
+        subtree = subtree.union_all(select(Location.id).join(subtree, Location.parent_location_id == subtree.c.id))
+        location_ids = set(self.session.scalars(select(subtree.c.id)))
+        subtree_object_ids = set(self.session.scalars(select(PhysicalObject.id).where(PhysicalObject.location_id.in_(location_ids))))
+        records = self.session.execute(select(MapViewPosition, MapPlacement.physical_object_id, PhysicalObject.location_id)
+            .join(MapPlacement, MapPlacement.id == MapViewPosition.placement_id)
+            .join(PhysicalObject, PhysicalObject.id == MapPlacement.physical_object_id)
+            .where(MapPlacement.map_id == map_id, MapViewPosition.variant_id == variant_id,
+                   MapViewPosition.view_key == MapViewKey.PHYSICAL).with_for_update()).all()
+        positions = {object_id: position for position, object_id, _ in records}
+        moving_ids = {object_id for _, object_id, canonical_location_id in records if canonical_location_id in location_ids}
+        if not moving_ids:
+            raise ValidationError("Location has no physical positions in this variant", {})
+        if any(positions[object_id].locked for object_id in moving_ids):
+            raise ValidationError("Location group contains a locked position", {})
+        geometry = {item["physical_object_id"]: item for item in footprints}
+        if len(geometry) != len(footprints) or set(geometry) != set(positions):
+            raise ValidationError("Location group footprint snapshot is incomplete", {})
+        for object_id, item in geometry.items():
+            position = positions[object_id]
+            if not isclose(item["x"], position.x, abs_tol=1e-7) or not isclose(item["y"], position.y, abs_tol=1e-7):
+                raise ValidationError("Location group footprint snapshot is stale", {})
+        for moving_id in moving_ids:
+            source = geometry[moving_id]
+            x, y = source["x"] + delta_x, source["y"] + delta_y
+            for external_id in positions.keys() - moving_ids:
+                other = geometry[external_id]
+                if x < other["x"] + other["width"] and x + source["width"] > other["x"] and y < other["y"] + other["height"] and y + source["height"] > other["y"]:
+                    raise ValidationError("Location group collides with an external PhysicalObject", {"physical_object_id": str(external_id)})
+        routes = self.session.scalars(select(MapCableRoute).where(
+            MapCableRoute.map_id == map_id, MapCableRoute.variant_id == variant_id,
+            MapCableRoute.view_key == MapViewKey.PHYSICAL).with_for_update()).all()
+        first, second = aliased(ConnectionPoint), aliased(ConnectionPoint)
+        endpoint_rows = self.session.execute(select(Cable.id, first.physical_object_id, second.physical_object_id)
+            .join(Connection, Connection.id == Cable.connection_id)
+            .join(first, first.id == Connection.point_a_id)
+            .join(second, second.id == Connection.point_b_id)
+            .where(Cable.id.in_([route.cable_id for route in routes]))).all()
+        endpoints = {cable_id: (a, b) for cable_id, a, b in endpoint_rows}
+        boundary = {item["cable_id"]: item for item in boundary_routes}
+        if len(boundary) != len(boundary_routes):
+            raise ValidationError("Duplicate boundary Cable evidence", {})
+        expected_boundary = {route.cable_id for route in routes if route.cable_id in endpoints and sum(object_id in subtree_object_ids for object_id in endpoints[route.cable_id]) == 1}
+        if set(boundary) != expected_boundary:
+            raise ValidationError("Boundary Cable evidence is incomplete", {})
+        route_updates: list[tuple[MapCableRoute, list[dict[str, float]]]] = []
+        for route in routes:
+            pair = endpoints.get(route.cable_id)
+            if pair is None:
+                raise ValidationError("Saved Cable route has no canonical endpoints", {"cable_id": str(route.cable_id)})
+            inside_count = sum(object_id in subtree_object_ids for object_id in pair)
+            if inside_count == 0: continue
+            if inside_count == 2:
+                route_updates.append((route, [{"x": point["x"] + delta_x, "y": point["y"] + delta_y} for point in route.waypoints]))
+                continue
+            evidence = boundary[route.cable_id]
+            oriented = route.waypoints if evidence["moving_endpoint_is_source"] else list(reversed(route.waypoints))
+            points = [evidence["moving_endpoint"], *oriented, evidence["external_endpoint"]]
+            prefix = _boundary_prefix(frame, points)
+            transformed = [
+                {"x": point["x"] + delta_x, "y": point["y"] + delta_y} if index < prefix else dict(point)
+                for index, point in enumerate(oriented)
+            ]
+            route_updates.append((route, transformed if evidence["moving_endpoint_is_source"] else list(reversed(transformed))))
+        for object_id in moving_ids:
+            positions[object_id].x += delta_x
+            positions[object_id].y += delta_y
+        for route, waypoints in route_updates:
+            route.waypoints = waypoints
+        self._flush()
 
     def delete_cable_route(self, map_id: uuid.UUID, cable_id: uuid.UUID, variant_id: uuid.UUID | None = None) -> None:
         variant = self._require_variant(map_id, variant_id)

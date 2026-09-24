@@ -5,7 +5,7 @@
 Это главный целевой contract hierarchical Location presentation NetMap.
 Целевой contract согласован; P-UX-03B expanded derived Location frames
 реализован. P-UX-03A удалил development-stage `MapComposite` и manual
-`MapRegion`; P-UX-03C реализован, P-UX-03D/E остаются **IMPLEMENTATION PENDING**.
+`MapRegion`; P-UX-03C/D реализованы, P-UX-03E остаётся **IMPLEMENTATION PENDING**.
 
 NetMap pre-production. Если старые spatial models конфликтуют с этим
 contract, они удаляются; compatibility layers, converters, fallback readers и
@@ -126,6 +126,14 @@ Collision validation учитывает все перемещаемые placemen
 положение пересекается с объектом вне subtree, операция отклоняется; automatic
 re-layout не выполняется.
 
+P-UX-03D перемещает только позиции L1/PHYSICAL_OBJECT активного variant через
+drag заголовка отображаемого frame. Locked member отклоняет весь gesture.
+Клиент посылает один displacement и текущую geometry evidence; сервер заново
+разрешает canonical subtree, сверяет активные позиции и проверяет конечные
+прямоугольники перед атомарной записью. Отсутствующие позиции не создаются.
+После записи клиент повторно читает authoritative variant; при ошибке чтения
+повторяется только чтение.
+
 ## Cable route semantics при group move
 
 Для перемещаемого subtree Cable классифицируется так:
@@ -140,8 +148,11 @@ re-layout не выполняется.
 
 Если `MapCableRoute` отсутствует, renderer пересчитывает обычную линию от
 нового endpoint. Persisted group move, затрагивающий positions и routes,
-является одной пользовательской операцией и в целевой реализации должен иметь
-атомарную server-side write boundary. Точный API здесь не проектируется.
+является одной пользовательской операцией с атомарной server-side write
+boundary. В P-UX-03D boundary route с сохранёнными waypoints преобразуется
+лишь при единственном однозначном выходе rendered polyline через текущую
+границу frame; временная точка пересечения не сохраняется. Неоднозначный
+маршрут отклоняет всю операцию.
 
 ## MapComposite и MapRegion: superseded
 

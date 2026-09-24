@@ -218,6 +218,35 @@ class SetMapCableRouteRequest(BaseModel):
     waypoints: list[MapCableRouteWaypoint]
 
 
+class GroupMoveRectangle(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    x: FiniteFloat
+    y: FiniteFloat
+    width: FiniteFloat = Field(gt=0)
+    height: FiniteFloat = Field(gt=0)
+
+
+class GroupMoveFootprint(GroupMoveRectangle):
+    physical_object_id: uuid.UUID
+
+
+class GroupMoveBoundaryRoute(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cable_id: uuid.UUID
+    moving_endpoint_is_source: bool
+    moving_endpoint: MapCableRouteWaypoint
+    external_endpoint: MapCableRouteWaypoint
+
+
+class GroupMoveLocationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    delta_x: FiniteFloat
+    delta_y: FiniteFloat
+    frame: GroupMoveRectangle
+    footprints: list[GroupMoveFootprint]
+    boundary_routes: list[GroupMoveBoundaryRoute]
+
+
 class CreateMapPresentationVariantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=255)

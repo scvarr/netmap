@@ -123,6 +123,24 @@ afterEach(() => {
 });
 
 describe('TopologyCanvas async layout boundary', () => {
+  it('starts one group move only from a frame label after one completed pointer gesture', async () => {
+    const objects: TopologyProjectionNode[] = ['a', 'b'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
+    const document: TopologyProjectionDocument = { ...documentFor('physical-group'), nodes: objects };
+    const location_ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
+    const placements = objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: index * 300, y: 0, locked: false } } }));
+    const onGroupMove = vi.fn(), onCollapse = vi.fn(), onConfigure = vi.fn();
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: index * 300, y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref, name: 'Room', type: null, parent_location_ref: null }], placements, onGroupMove, onCollapse, onConfigure }} />);
+    await screen.findByRole('button', { name: 'a' });
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Свернуть Room' }), { clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(screen.getByRole('button', { name: 'Свернуть Room' }), { clientX: 50, clientY: 30 });
+    expect(onGroupMove).not.toHaveBeenCalled();
+    const heading = globalThis.document.querySelector('.location-frame__heading') as HTMLElement;
+    heading.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerUp(heading, { pointerId: 1, clientX: 50, clientY: 30 });
+    expect(onGroupMove).toHaveBeenCalledTimes(1);
+    expect(onGroupMove).toHaveBeenCalledWith('room', expect.objectContaining({ delta_x: 40, delta_y: 20 }));
+  });
   it('replaces hidden nodes with one immovable Location proxy and preserves real cable route data', async () => {
     const a: TopologyProjectionNode = { id: 'physical-a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'a' }], attributes: {} };
     const b: TopologyProjectionNode = { id: 'physical-b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'b' }], attributes: {} };

@@ -34,7 +34,7 @@ import {
   type TopologyLayoutStore,
 } from "../topology/layoutStore";
 import { DeviceNode } from "./DeviceNode";
-import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute } from "./FloatingTopologyEdge";
+import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute, getFloatingEndpoints, getRenderedConnectionPoint } from "./FloatingTopologyEdge";
 import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
 import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
 import { physicalObjectIdForNode } from "../topology/projection";
@@ -51,7 +51,8 @@ import { blueprintMapNameplateHeight } from "../topology/blueprintDisplaySize";
 import { nodeFootprint } from "../topology/nodeFootprint";
 import { deriveLocationPresentation, projectCollapsedEdges } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
-import type { MapLocationState, MapPlacement } from "../topology/savedMapTypes";
+import type { LocationGroupMove, MapLocationState, MapPlacement } from "../topology/savedMapTypes";
+import { prepareLocationGroupMove, type GroupCableGeometry } from "../topology/locationGroupMove";
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { MapTextAnnotationLayer } from "./MapTextAnnotationLayer";
 import { LocationProxyNode } from "./LocationProxyNode";
@@ -74,7 +75,7 @@ interface TopologyCanvasProps {
   /** New authoritative SavedMap placement snapshot, including variant switches and refreshes. */
   positionSnapshot?: readonly MapPlacement[];
   displayWidthOverrides?: Record<string, number>;
-  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; states?: readonly MapLocationState[]; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void };
+  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; states?: readonly MapLocationState[]; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; onGroupMove?: (locationId: string, move: LocationGroupMove) => void; onGroupMoveRejected?: (message: string) => void };
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
@@ -166,6 +167,7 @@ export function TopologyCanvas({
   const confirmedNodePositions = useRef(new Map<string, XYPosition>());
   const canvasRef = useRef<HTMLDivElement>(null);
   const focusedObjectKey = useRef<string | null>(null);
+  const frameDrag = useRef<{ locationId: string; start: XYPosition } | null>(null);
   const { fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
@@ -534,6 +536,46 @@ export function TopologyCanvas({
     setLayoutRevision((revision) => revision + 1);
   };
 
+  const finishFrameDrag = (event: PointerEvent<HTMLElement>) => {
+    const drag = frameDrag.current;
+    frameDrag.current = null;
+    if (!drag || !locationFrameInput?.onGroupMove) return;
+    const end = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    const delta = { x: end.x - drag.start.x, y: end.y - drag.start.y };
+    if (!delta.x && !delta.y) return;
+    const frame = locationPresentation.frames.find((item) => item.locationId === drag.locationId);
+    if (!frame) return;
+    const rectangles = new Map(projection.nodes.flatMap((node) => {
+      const id = physicalObjectIdForNode(node.data.projection);
+      if (!id) return [];
+      return [[id, nodeFootprint(node)] as const];
+    }));
+    const originalNodes = new Map(projection.nodes.map((node) => [node.id, node]));
+    const displayedNodes = new Map(nodes.map((node) => [node.id, node]));
+    const cables: GroupCableGeometry[] = edges.flatMap((edge) => {
+      const cableId = edge.data?.cableNode && cableIdForNode(edge.data.cableNode);
+      const pair = edge.data?.endpointPair, original = edge.data?.projection;
+      if (!cableId || !pair || !original) return [];
+      const originalSource = originalNodes.get(original.from_node_id)?.data.projection;
+      const originalTarget = originalNodes.get(original.to_node_id)?.data.projection;
+      const sourceObjectId = originalSource && physicalObjectIdForNode(originalSource);
+      const targetObjectId = originalTarget && physicalObjectIdForNode(originalTarget);
+      const sourceNode = displayedNodes.get(edge.source), targetNode = displayedNodes.get(edge.target);
+      if (!sourceObjectId || !targetObjectId || !sourceNode || !targetNode) return [];
+      const box = (node: DeviceFlowNode) => ({ x: node.position.x, y: node.position.y, width: node.measured?.width ?? node.width ?? 212, height: node.measured?.height ?? node.height ?? 144 });
+      const floating = getFloatingEndpoints(box(sourceNode), box(targetNode));
+      const source = sourceNode.data.locationProxy ? floating.source : getRenderedConnectionPoint(sourceNode.data.projection, box(sourceNode), pair.from_connection_point_id) ?? floating.source;
+      const target = targetNode.data.locationProxy ? floating.target : getRenderedConnectionPoint(targetNode.data.projection, box(targetNode), pair.to_connection_point_id) ?? floating.target;
+      return [{ cableId, sourceObjectId, targetObjectId, source, target, savedWaypoints: cableRoutes?.find((route) => route.cable_ref.entity_id === cableId)?.waypoints }];
+    });
+    try {
+      const move = prepareLocationGroupMove(drag.locationId, delta, frame.bounds, locationFrameInput.locations, locationFrameInput.placements, rectangles, cables);
+      locationFrameInput.onGroupMove(drag.locationId, move);
+    } catch (reason) {
+      locationFrameInput.onGroupMoveRejected?.(reason instanceof Error ? reason.message : String(reason));
+    }
+  };
+
   return (
     <div
       className="topology-canvas"
@@ -619,7 +661,7 @@ export function TopologyCanvas({
                 className="location-frame"
                 data-location-id={frame.locationId}
                 style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
-              ><span className="location-frame__heading"><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button className="location-action" type="button" aria-label={toggleLabel} title={toggleLabel} onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>⚙</button></span>}</span></div>;
+              ><span className="location-frame__heading" onPointerDown={locationFrameInput?.onGroupMove ? (event) => { event.preventDefault(); event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); frameDrag.current = { locationId: frame.locationId, start: screenToFlowPosition({ x: event.clientX, y: event.clientY }) }; } : undefined} onPointerUp={finishFrameDrag} onPointerCancel={() => { frameDrag.current = null; }}><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button className="location-action" type="button" aria-label={toggleLabel} title={toggleLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>⚙</button></span>}</span></div>;
             })}
           </div>
         </ViewportPortal>}

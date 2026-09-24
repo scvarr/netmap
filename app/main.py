@@ -123,6 +123,7 @@ from app.schemas import (
     NATEvaluationQuery,
     MoveMapPlacementRequest,
     SetMapCableRouteRequest,
+    GroupMoveLocationRequest,
     ReplaceMapTextAnnotationRequest,
     SetMapViewLockRequest,
     GenerateCableLabelRequest,
@@ -546,6 +547,16 @@ def set_map_view_lock(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key
 def delete_map_placement(map_id: uuid.UUID, physical_object_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
     with session.begin():
         SavedMapCatalog(session).remove_placement(map_id, physical_object_id)
+
+
+@app.post("/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{location_id}/group-move", status_code=204, responses={422: {"model": ErrorResponse}})
+def move_map_location_group(map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID, query: GroupMoveLocationRequest, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        SavedMapCatalog(session).move_location_group(
+            map_id, variant_id, location_id, query.delta_x, query.delta_y,
+            query.frame.model_dump(), [item.model_dump() for item in query.footprints],
+            [item.model_dump() for item in query.boundary_routes],
+        )
 
 
 @app.put("/v1/maps/{map_id}/cable-routes/{cable_id}", response_model=SavedMapDocument, responses={422: {"model": ErrorResponse}})
