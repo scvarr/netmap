@@ -51,6 +51,7 @@ vi.mock('@xyflow/react', () => ({
       <svg>{edges.map((edge) => <path key={edge.id} data-testid={`svg-path-${edge.id}`} d="M0,0L1,1" />)}</svg>
       {edges.map((edge) => <button key={`edge-${edge.id}`} onClick={() => onEdgeClick?.({}, edge)}>edge {edge.id}</button>)}
       {edges.map((edge) => <output key={`route-${edge.id}`} data-testid={`route-${edge.id}`}>{edge.data?.cableRoute ? JSON.stringify(edge.data.cableRoute.waypoints) : 'no-route'}</output>)}
+      {edges.filter((edge) => edge.data?.cableRouteDraft).map((edge) => <button key={`move-route-${edge.id}`} onClick={() => edge.data!.cableRouteDraft!.onWaypointMove(0, { x: 450, y: 1000 })}>move route {edge.id}</button>)}
       {edges.map((edge) => <output key={`endpoints-${edge.id}`} data-testid={`endpoints-${edge.id}`}>{edge.source}:{edge.target}</output>)}
       {edges.map((edge) => <output key={`traced-${edge.id}`} data-testid={`traced-${edge.id}`}>{String(Boolean(edge.animated))}</output>)}
       {edges.map((edge) => <output key={`emphasis-${edge.id}`} data-testid={`emphasis-${edge.id}`}>{edge.data?.cablePresentationEmphasis ?? 'none'}</output>)}
@@ -226,6 +227,24 @@ describe('TopologyCanvas async layout boundary', () => {
     fireEvent.pointerUp(heading, { pointerId: 1, clientX: 2010, clientY: 10 });
     expect(onGroupMove).toHaveBeenCalledExactlyOnceWith('child', expect.objectContaining({ delta_x: 2000, delta_y: 0, boundary_routes: [expect.objectContaining({ cable_id: 'cable', moving_endpoint_is_source: true })] }));
     expect(onGroupMoveRejected).not.toHaveBeenCalled();
+  });
+
+  it('normalizes a saved route using the rendered Location frame before its one route write', async () => {
+    const room = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
+    const objects: TopologyProjectionNode[] = ['inside', 'inside-2', 'outside'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
+    const cableNode: TopologyProjectionNode = { id: 'cable', kind: 'CABLE', label: 'Cable', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable' }], attributes: {} };
+    const onWaypointMove = vi.fn();
+    const routeNormalizerRef: { current: ((id: string, points: readonly { x: number; y: number }[]) => { x: number; y: number; anchor?: unknown }[]) | null } = { current: null };
+    const edge: any = { id: 'cable-edge', from_node_id: 'inside', to_node_id: 'outside', kind: 'L1_PHYSICAL_LINK', source_refs: [], attributes: {} };
+    render(<TopologyCanvas document={{ ...documentFor('physical-route-anchor'), nodes: objects, edges: [edge] }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: [0, 300, 1000][index], y: 0 }, data: { projection } })), edges: [{ id: 'cable-edge', source: 'inside', target: 'outside', data: { cableNode, projection: edge } }] })} routeNormalizerRef={routeNormalizerRef as any} cableRouteDraft={{ cableId: 'cable', waypoints: [{ x: 532, y: 72, anchor: { location_id: 'room', edge: 'right', offset: .5 } }], selectedWaypointIndex: null, onWaypointSelect: vi.fn(), onWaypointMove, onWaypointInsert: vi.fn() }} locationFrameInput={{ locations: [{ location_ref: room, name: 'Room', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? room : null, positions: { 'L1/PHYSICAL_OBJECT': { x: [0, 300, 1000][index], y: 0, locked: false } } })) }} />);
+    await screen.findByRole('button', { name: 'inside' });
+    await waitFor(() => expect(routeNormalizerRef.current).not.toBeNull());
+    const result = routeNormalizerRef.current!('cable', [{ x: 100, y: 72 }, { x: 700, y: 72 }]);
+    expect(result.filter((point) => point.anchor)).toEqual([expect.objectContaining({ anchor: expect.objectContaining({ location_id: 'room', edge: 'right' }) })]);
+    expect(routeNormalizerRef.current!('cable', result).filter((point) => point.anchor)).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'move route cable-edge' }));
+    expect(onWaypointMove).toHaveBeenCalledWith(0, expect.objectContaining({ y: expect.any(Number), anchor: expect.objectContaining({ location_id: 'room', edge: 'bottom' }) }));
+    expect(onWaypointMove.mock.calls[0][1].y).toBeLessThan(1000);
   });
 
   it('dispatches parent and child frame drags by their own Location identity and reports a rejected child move', async () => {

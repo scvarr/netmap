@@ -138,21 +138,29 @@ drag заголовка отображаемого frame. Locked member откл
 
 Для перемещаемого subtree Cable классифицируется так:
 
-- **internal** — оба endpoint внутри: objects и сохранённая внутренняя route
-  geometry получают тот же delta, внутренняя форма сохраняется;
+- **internal** — оба endpoint внутри: objects и свободные waypoints сохранённой
+  route получают тот же delta; boundary anchors разрешаются из новой derived
+  geometry связанных frames;
 - **external** — оба endpoint снаружи: не меняется;
-- **boundary** — ровно один endpoint внутри: пересечение текущей Cable
-  geometry с boundary Location frame становится временной geometry anchor;
-  внутренняя часть движется, внешняя остаётся, изменяется только connecting
-  участок.
+- **boundary** — ровно один endpoint внутри: свободные waypoints до первого
+  выхода через границу движутся с subtree, внешний suffix остаётся на месте.
+  Boundary anchor остаётся привязанным к LocationFrame и следует за его новой
+  derived geometry; connecting участок перестраивается.
 
 Если `MapCableRoute` отсутствует, renderer пересчитывает обычную линию от
 нового endpoint. Persisted group move, затрагивающий positions и routes,
 является одной пользовательской операцией с атомарной server-side write
-boundary. В P-UX-03D boundary route с сохранёнными waypoints преобразуется
-лишь при единственном однозначном выходе rendered polyline через текущую
-границу frame; временная точка пересечения не сохраняется. Неоднозначный
-маршрут отклоняет всю операцию.
+boundary. `MapCableRoute.waypoints` активного variant допускает обычные `{x,y}`
+и boundary anchor `{x,y,anchor:{location_id,edge,offset}}`, где edge —
+`top|right|bottom|left`, offset нормализован в `0..1`. `x/y` у anchor служат
+snapshot/fallback; при renderable frame его binding определяет положение.
+Frame bounds не сохраняются. Редактор показывает anchor отличным маркером и
+проецирует его drag на периметр связанного frame. При сохранении route
+пересечения renderable frames нормализуются в anchors; повторное сохранение
+не создаёт дубликатов. Legacy `{x,y}` route читается без mutation. Если
+group move требует anchor для legacy boundary route, сервер материализует его
+в той же транзакции, что positions и route transform. Однократный переход
+через boundary waypoint допустим; неоднозначный re-entry отклоняет операцию.
 
 ## MapComposite и MapRegion: superseded
 

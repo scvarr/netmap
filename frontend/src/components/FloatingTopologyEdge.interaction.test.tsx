@@ -1,6 +1,7 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute } from './FloatingTopologyEdge';
+import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 
 const markerPoints = ['eligible', 'source', 'destination', 'unavailable'].map((id) => ({ connection_point_id: id, display_name: id, cardinality: 1, external_connection_count: 0 }));
 const source = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'source', kind: 'PHYSICAL_OBJECT', label: 'source', source_refs: [], attributes: { connection_points: markerPoints } } } };
@@ -17,7 +18,7 @@ vi.mock('@xyflow/react', () => ({
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-const editor = (waypoints: Array<{ x: number; y: number }>) => ({
+const editor = (waypoints: MapCableRouteWaypoint[]) => ({
   cablePhysicalObjectId: 'cable', waypoints, selectedWaypointIndex: null,
   onWaypointSelect: vi.fn(), onWaypointMove: vi.fn(), onWaypointInsert: vi.fn(),
 });
@@ -124,6 +125,19 @@ describe('direct cable route edge interaction', () => {
     const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
     expect(container.querySelector('.cable-route-waypoint')).toHaveAttribute('r', '6');
     expect(container.querySelector('.cable-route-waypoint-hit')).toHaveAttribute('r', '18');
+  });
+  it('shows a boundary anchor as a distinct diamond and passes its raw pointer to the boundary projection', () => {
+    const anchor = { x: 100, y: 50, anchor: { location_id: 'room', edge: 'right' as const, offset: .5 } };
+    const draft = editor([anchor]);
+    const edge = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'cable-node' } } };
+    const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
+    expect(container.querySelector('rect.cable-route-waypoint--boundary')).toBeInTheDocument();
+    expect(container.querySelector('circle.cable-route-waypoint')).toBeNull();
+    const handle = container.querySelector('.cable-route-waypoint-hit') as SVGCircleElement;
+    Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
+    fireEvent.pointerDown(handle, { pointerId: 1 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 7, clientY: 8 });
+    expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 1007, y: 2008 });
   });
 
   it('keeps normal cables visual-only in the foreground and puts edit controls above object bodies', () => {

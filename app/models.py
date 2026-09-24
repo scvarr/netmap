@@ -187,7 +187,7 @@ class MapCableRoute(Base):
     variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_presentation_variants.id", ondelete="CASCADE"), nullable=False)
     cable_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cables.id", ondelete="CASCADE"), nullable=False)
     view_key: Mapped[MapViewKey] = mapped_column(String(32), nullable=False)
-    waypoints: Mapped[list[dict[str, float]]] = mapped_column(JSONB, nullable=False, default=list)
+    waypoints: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False, default=list)
     saved_map: Mapped[SavedMap] = relationship(back_populates="cable_routes")
     variant: Mapped[MapPresentationVariant] = relationship(back_populates="cable_routes")
     cable: Mapped["Cable"] = relationship(back_populates="map_routes")

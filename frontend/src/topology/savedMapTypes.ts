@@ -9,7 +9,8 @@ export type SavedMapViewKey = 'L1/PHYSICAL_OBJECT' | 'L2/DEVICE';
 export interface MapViewPosition { x: number; y: number; locked: boolean; display_width?: number }
 /** `location_ref` is derived/live canonical context for this scene, not MapPlacement state. */
 export interface MapPlacement { physical_object_ref: ProjectionSourceRef; location_ref?: LocationRef | null; positions: Partial<Record<SavedMapViewKey, MapViewPosition>> }
-export interface MapCableRouteWaypoint { x: number; y: number }
+export interface MapLocationBoundaryAnchor { location_id: string; edge: 'top' | 'right' | 'bottom' | 'left'; offset: number }
+export interface MapCableRouteWaypoint { x: number; y: number; anchor?: MapLocationBoundaryAnchor }
 export interface MapCableRoute { cable_ref: ProjectionSourceRef; view: 'L1/PHYSICAL_OBJECT'; waypoints: MapCableRouteWaypoint[] }
 export interface LocationGroupMove {
   delta_x: number; delta_y: number;

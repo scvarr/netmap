@@ -289,6 +289,7 @@ export function MapPage({
   const [mapOperation, setMapOperation] = useState<MapOperation | null>(null);
   const [mapDeletion, setMapDeletion] = useState<MapDeletionOperation | null>(null);
   const [cableRouteEdit, setCableRouteEdit] = useState<CableRouteEditState | null>(null);
+  const routeNormalizerRef = useRef<((cableId: string, waypoints: readonly MapCableRouteWaypoint[]) => MapCableRouteWaypoint[]) | null>(null);
   const [cableRouteReset, setCableRouteReset] = useState<CableRouteResetOperation | null>(null);
   const [cableRename, setCableRename] = useState<CableRenameState | null>(null);
   const [wiringHistoricalCandidate, setWiringHistoricalCandidate] = useState<string | null>(null);
@@ -936,7 +937,7 @@ export function MapPage({
       return;
     }
     setWiring({ ...operation, status: "route-saving", error: null });
-    try { await savedMapDataSource.setCableRoute(operation.mapId, operation.canonicalResult.cable_ref.entity_id, operation.draftWaypoints, operation.variantId); }
+    try { await savedMapDataSource.setCableRoute(operation.mapId, operation.canonicalResult.cable_ref.entity_id, routeNormalizerRef.current?.(operation.canonicalResult.cable_ref.entity_id, operation.draftWaypoints) ?? operation.draftWaypoints, operation.variantId); }
     catch { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "route-failed", error: null }); return; }
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
     try { if (await refreshWiringAfterRouteWrite(operation)) setWiring({ status: "idle" }); }
@@ -1359,7 +1360,7 @@ export function MapPage({
     if (!savedMapDataSource || !cableRouteEdit || cableRouteEdit.status === "saving") return;
     const operation = cableRouteEdit;
     setCableRouteEdit({ ...operation, status: "saving", error: null });
-    try { await savedMapDataSource.setCableRoute(operation.mapId, operation.cableId, operation.draftWaypoints, operation.variantId); }
+    try { await savedMapDataSource.setCableRoute(operation.mapId, operation.cableId, routeNormalizerRef.current?.(operation.cableId, operation.draftWaypoints) ?? operation.draftWaypoints, operation.variantId); }
     catch {
       if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cableId === operation.cableId ? { ...current, status: "editing", error: t("map.routeEditorFailed") } : current);
       return;
@@ -1973,6 +1974,7 @@ export function MapPage({
                   cableRoutes={
                     !physicalAnnotationMode && viewMode === "physical" ? activeMap?.cable_routes : undefined
                   }
+                  routeNormalizerRef={routeNormalizerRef}
                   viewportFitRevision={viewportFitRevision}
                   cableRouteDraft={!physicalAnnotationMode && cableRouteEdit ? { cableId: cableRouteEdit.cableId, waypoints: cableRouteEdit.draftWaypoints, selectedWaypointIndex: cableRouteEdit.selectedWaypointIndex, onWaypointSelect: (index) => setCableRouteEdit((current) => current ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current), onWaypointInsert: (index, waypoint) => setCableRouteEdit((current) => current ? { ...current, draftWaypoints: [...current.draftWaypoints.slice(0, index), waypoint, ...current.draftWaypoints.slice(index)], selectedWaypointIndex: index } : current) } : undefined}
                   wiringRoute={!physicalAnnotationMode && wiring.status !== "idle" && wiring.status !== "selecting-source" ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target, waypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex, onWaypointSelect: (index) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, selectedWaypointIndex: index } : current), onWaypointMove: (index, waypoint) => setWiring((current) => current.status !== "idle" && current.status !== "selecting-source" ? { ...current, draftWaypoints: current.draftWaypoints.map((point, pointIndex) => pointIndex === index ? waypoint : point) } : current) } : undefined}

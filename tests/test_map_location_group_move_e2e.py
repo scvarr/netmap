@@ -126,8 +126,8 @@ def nested_request(ids, reverse=False):
 
 @pytest.mark.parametrize("waypoints,expected", [
     (None, None),
-    ([{"x": 200, "y": 130}, {"x": 400, "y": 130}], [{"x": 600, "y": 150}, {"x": 400, "y": 130}]),
-    ([{"x": 200, "y": 130}, {"x": 320, "y": 130}, {"x": 400, "y": 130}], [{"x": 600, "y": 150}, {"x": 320, "y": 130}, {"x": 400, "y": 130}]),
+    ([{"x": 200, "y": 130}, {"x": 400, "y": 130}], [(600, 150), (320, 130), (400, 130)]),
+    ([{"x": 200, "y": 130}, {"x": 320, "y": 130}, {"x": 400, "y": 130}], [(600, 150), (320, 130), (400, 130)]),
 ])
 def test_nested_child_move_commits_without_parent_containment_and_keeps_boundary_anchor(waypoints, expected):
     ids = nested_scene(waypoints)
@@ -142,7 +142,12 @@ def test_nested_child_move_commits_without_parent_containment_and_keeps_boundary
     assert positions["child_b"][:2] == (600, 120)
     assert positions["sibling"] == before[0]["sibling"]
     assert positions["outside"] == before[0]["outside"]
-    assert routes.get(ids["cables"]["boundary"]) == expected
+    saved_route = routes.get(ids["cables"]["boundary"])
+    if expected is None:
+        assert saved_route is None
+    else:
+        assert [(point["x"], point["y"]) for point in saved_route] == expected
+        assert saved_route[1]["anchor"] == {"location_id": str(ids["room"]), "edge": "right", "offset": 0.5}
     assert membership == before[2] and hierarchy == before[3]
 
 
@@ -150,11 +155,13 @@ def test_nested_child_boundary_anchor_is_fixed_with_reversed_cable_orientation()
     ids = nested_scene([{"x": 400, "y": 130}, {"x": 320, "y": 130}, {"x": 200, "y": 130}], reverse=True)
     response = move(ids, nested_request(ids, reverse=True))
     assert response.status_code == 204, response.text
-    assert snapshot(ids)[1][ids["cables"]["boundary"]] == [{"x": 400, "y": 130}, {"x": 320, "y": 130}, {"x": 600, "y": 150}]
+    saved_route = snapshot(ids)[1][ids["cables"]["boundary"]]
+    assert [(point["x"], point["y"]) for point in saved_route] == [(400, 130), (320, 130), (600, 150)]
+    assert saved_route[1]["anchor"] == {"location_id": str(ids["room"]), "edge": "right", "offset": 0.5}
 
 
 def test_nested_child_route_reentry_still_rejects_atomically():
-    ids = nested_scene([{"x": 200, "y": 130}, {"x": 320, "y": 130}, {"x": 200, "y": 130}, {"x": 400, "y": 130}])
+    ids = nested_scene([{"x": 200, "y": 130}, {"x": 400, "y": 130}, {"x": 200, "y": 130}, {"x": 400, "y": 130}])
     before = snapshot(ids)
     response = move(ids, nested_request(ids))
     assert response.status_code == 422
@@ -173,7 +180,8 @@ def test_group_move_moves_hidden_descendant_and_internal_route_without_touching_
     assert positions["external"] == before[0]["external"]
     assert routes[ids["cables"]["internal"]] == [{"x": 110, "y": 100}]
     assert routes[ids["cables"]["external"]] == before[1][ids["cables"]["external"]]
-    assert routes[ids["cables"]["boundary"]] == [{"x": 140, "y": 50}, {"x": 360, "y": 30}]
+    assert [(point["x"], point["y"]) for point in routes[ids["cables"]["boundary"]]] == [(140, 50), (220, 30), (360, 30)]
+    assert routes[ids["cables"]["boundary"]][1]["anchor"]["location_id"] == str(ids["room"])
     assert ids["cables"]["no_route"] not in routes
     assert membership == before[2] and hierarchy == before[3]
 
@@ -239,5 +247,41 @@ def test_group_move_write_failure_rolls_back_positions_and_routes(monkeypatch):
     monkeypatch.setattr(SavedMapCatalog, "_flush", fail)
     with TestClient(app, raise_server_exceptions=False) as non_raising:
         response = non_raising.post(f'/v1/maps/{ids["map"]}/presentation-variants/{ids["variant"]}/locations/{ids["room"]}/group-move', json=request(ids))
+    assert response.status_code == 500
+    assert snapshot(ids) == before
+
+
+def test_legacy_route_read_does_not_materialize_anchor():
+    ids = nested_scene([{"x": 200, "y": 130}, {"x": 400, "y": 130}])
+    before = snapshot(ids)
+    response = client.get(f'/v1/maps/{ids["map"]}')
+    assert response.status_code == 200, response.text
+    assert snapshot(ids) == before
+    assert before[1][ids["cables"]["boundary"]] == [{"x": 200, "y": 130}, {"x": 400, "y": 130}]
+
+
+def test_explicit_route_save_persists_boundary_binding_and_variant_copy():
+    ids = nested_scene([{"x": 200, "y": 130}, {"x": 400, "y": 130}])
+    anchor = {"x": 320, "y": 130, "anchor": {"location_id": str(ids["room"]), "edge": "right", "offset": .5}}
+    waypoints = [{"x": 200, "y": 130}, anchor, {"x": 400, "y": 130}]
+    response = client.put(f'/v1/maps/{ids["map"]}/cable-routes/{ids["cables"]["boundary"]}?variant_id={ids["variant"]}', json={"view": "physical", "waypoints": waypoints})
+    assert response.status_code == 200, response.text
+    assert snapshot(ids)[1][ids["cables"]["boundary"]] == waypoints
+    with SessionLocal.begin() as session:
+        copy = SavedMapCatalog(session).create_variant(ids["map"], "Копия", ids["variant"])
+        copy_id = copy.id
+    with SessionLocal() as session:
+        copied = session.scalar(select(MapCableRoute).where(MapCableRoute.variant_id == copy_id, MapCableRoute.cable_id == ids["cables"]["boundary"]))
+        assert copied.waypoints == waypoints
+
+
+def test_route_normalization_failure_rolls_back_legacy_anchor_and_positions(monkeypatch):
+    ids = nested_scene([{"x": 200, "y": 130}, {"x": 400, "y": 130}])
+    before = snapshot(ids)
+    def fail(*_args):
+        raise RuntimeError("route transformation failed")
+    monkeypatch.setattr("app.saved_map_catalog.normalize_boundary_route", fail)
+    with TestClient(app, raise_server_exceptions=False) as non_raising:
+        response = non_raising.post(f'/v1/maps/{ids["map"]}/presentation-variants/{ids["variant"]}/locations/{ids["room"]}/group-move', json=nested_request(ids))
     assert response.status_code == 500
     assert snapshot(ids) == before

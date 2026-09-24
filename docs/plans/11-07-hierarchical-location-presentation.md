@@ -69,7 +69,13 @@ state; membership объектов не дублировать.
 или неоднозначный boundary route отклоняют всю операцию. Positions и saved
 routes записываются одной транзакцией. После записи выполняется authoritative
 reload с отдельным read-only retry. Targeted backend/frontend validation и
-frontend build пройдены; ручная spatial acceptance остаётся в P-UX-03E.
+frontend build пройдены. Boundary Cable routes используют variant-specific
+Location boundary anchors в `MapCableRoute.waypoints`: binding на Location,
+сторону и нормализованное положение вдоль неё. Legacy `{x,y}` routes читаются
+без изменения и получают необходимые anchors при явном сохранении трассы или
+в той же atomic transaction, что group move. Положение anchor вычисляется из
+текущего derived frame; geometry Location не сохраняется. Редактор ограничивает
+drag anchor периметром frame. Ручная spatial acceptance остаётся в P-UX-03E.
 
 Добавить frame handle/context action. Перемещать canonical subtree одним delta,
 включая скрытые placements; валидировать collisions и отклонять пересечение с

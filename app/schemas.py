@@ -204,11 +204,20 @@ class MapPlacementDocument(BaseModel):
     positions: dict[Literal["L1/PHYSICAL_OBJECT", "L2/DEVICE"], MapViewPositionDocument]
 
 
+class MapLocationBoundaryAnchor(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    location_id: uuid.UUID
+    edge: Literal["top", "right", "bottom", "left"]
+    offset: FiniteFloat = Field(ge=0, le=1)
+
+
 class MapCableRouteWaypoint(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     x: FiniteFloat
     y: FiniteFloat
+    anchor: MapLocationBoundaryAnchor | None = None
 
 
 class SetMapCableRouteRequest(BaseModel):

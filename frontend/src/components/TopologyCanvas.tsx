@@ -56,6 +56,7 @@ import { prepareLocationGroupMove, type GroupCableGeometry } from "../topology/l
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { MapTextAnnotationLayer } from "./MapTextAnnotationLayer";
 import { LocationProxyNode } from "./LocationProxyNode";
+import { normalizeLocationBoundaryAnchors, projectBoundaryWaypoint, resolveBoundaryWaypoint } from "../topology/locationBoundaryAnchors";
 
 interface TopologyCanvasProps {
   document: TopologyProjectionDocument;
@@ -98,6 +99,7 @@ interface TopologyCanvasProps {
   ) => void;
   cableRoutes?: readonly MapCableRoute[];
   cableRouteDraft?: { cableId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
+  routeNormalizerRef?: { current: ((cableId: string, waypoints: readonly MapCableRouteWaypoint[]) => MapCableRouteWaypoint[]) | null };
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
   wiringRoute?: { source: { physicalObjectId: string; connectionPointId: string }; target?: { physicalObjectId: string; connectionPointId: string }; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; };
@@ -161,6 +163,7 @@ export function TopologyCanvas({
   onContinuationClickAnchor,
   cableRoutes,
   cableRouteDraft,
+  routeNormalizerRef,
   physicalPortStates,
   onPhysicalPortClick,
   wiringRoute,
@@ -184,6 +187,7 @@ export function TopologyCanvas({
   const canvasRef = useRef<HTMLDivElement>(null);
   const focusedObjectKey = useRef<string | null>(null);
   const frameDrag = useRef<FrameDrag | null>(null);
+  const routeNormalizer = useRef<((cableId: string, waypoints: readonly MapCableRouteWaypoint[]) => MapCableRouteWaypoint[]) | null>(null);
   const [frameDragPreview, setFrameDragPreview] = useState<FrameDragPreview | null>(null);
   const { fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
@@ -203,6 +207,11 @@ export function TopologyCanvas({
     window.addEventListener('pointercancel', finish);
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', finish); window.removeEventListener('pointercancel', finish); };
   }, [annotationMode, screenToFlowPosition]);
+  useEffect(() => {
+    if (!routeNormalizerRef) return;
+    routeNormalizerRef.current = (cableId, waypoints) => routeNormalizer.current?.(cableId, waypoints) ?? [...waypoints];
+    return () => { routeNormalizerRef.current = null; };
+  }, [routeNormalizerRef]);
   const onAnnotationPointerDown = (annotationId: string, event: PointerEvent<SVGTextElement>) => {
     if (annotationMode?.editableAnnotationId !== annotationId) return;
     event.preventDefault(); event.stopPropagation();
@@ -344,6 +353,7 @@ export function TopologyCanvas({
     return () => onViewportCenterReady(null);
   }, [onViewportCenterReady, screenToFlowPosition]);
 
+  routeNormalizer.current = null;
   if (layoutError) {
     return (
       <div className="topology-layout-state" role="alert">
@@ -377,6 +387,8 @@ export function TopologyCanvas({
     ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationFrameInput.states ?? [])
     : { frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map<string, string>() };
   const renderableFrames = locationPresentation.frames.filter((frame) => hasRenderableBounds(frame.bounds));
+  const boundaryFrames = renderableFrames.map((frame) => ({ locationId: frame.locationId, bounds: frame.bounds }));
+  const resolveRouteWaypoints = (waypoints: readonly MapCableRouteWaypoint[]) => waypoints.map((point) => resolveBoundaryWaypoint(point, boundaryFrames));
   const previewFrames = (() => {
     if (!frameDragPreview || !locationFrameInput || !hasRenderableBounds(frameDragPreview.bounds) ||
       !Number.isFinite(frameDragPreview.delta.x) || !Number.isFinite(frameDragPreview.delta.y) ||
@@ -448,13 +460,19 @@ export function TopologyCanvas({
     data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
   });
   const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
-    const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
+    const savedRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
       : undefined;
+    const cableRoute = savedRoute && { ...savedRoute, waypoints: resolveRouteWaypoints(savedRoute.waypoints) };
     const matchingDraft = edge.data?.cableNode
       && cableRouteDraft
       && cableIdForNode(edge.data.cableNode) === cableRouteDraft.cableId
-      ? cableRouteDraft
+      ? { ...cableRouteDraft, waypoints: resolveRouteWaypoints(cableRouteDraft.waypoints), onWaypointMove: (index: number, point: MapCableRouteWaypoint) => {
+        const anchor = cableRouteDraft.waypoints[index]?.anchor;
+        if (!anchor) { cableRouteDraft.onWaypointMove(index, point); return; }
+        const frame = boundaryFrames.find((item) => item.locationId === anchor.location_id);
+        if (frame) cableRouteDraft.onWaypointMove(index, projectBoundaryWaypoint(frame.locationId, frame.bounds, point));
+      } }
       : undefined;
     const tracedCableId = edge.data?.cableNode
       ? cableIdForNode(edge.data.cableNode)
@@ -497,6 +515,29 @@ export function TopologyCanvas({
       },
     };
   });
+
+  const renderedNodeById = new Map(nodes.map((node) => [node.id, node]));
+  const nodeBox = (node: DeviceFlowNode) => ({ x: node.position.x, y: node.position.y, width: node.measured?.width ?? node.width ?? 212, height: node.measured?.height ?? node.height ?? 144 });
+  const routeEndpoints = (sourceNode: DeviceFlowNode, targetNode: DeviceFlowNode, sourcePointId?: string, targetPointId?: string) => {
+    const sourceBox = nodeBox(sourceNode), targetBox = nodeBox(targetNode);
+    const floating = getFloatingEndpoints(sourceBox, targetBox);
+    return {
+      source: sourceNode.data.locationProxy ? floating.source : getRenderedConnectionPoint(sourceNode.data.projection, sourceBox, sourcePointId) ?? floating.source,
+      target: targetNode.data.locationProxy ? floating.target : getRenderedConnectionPoint(targetNode.data.projection, targetBox, targetPointId) ?? floating.target,
+    };
+  };
+  routeNormalizer.current = (cableId, waypoints) => {
+    const edge = edges.find((item) => item.data?.cableNode && cableIdForNode(item.data.cableNode) === cableId);
+    let endpoints = edge && renderedNodeById.get(edge.source) && renderedNodeById.get(edge.target)
+      ? routeEndpoints(renderedNodeById.get(edge.source)!, renderedNodeById.get(edge.target)!, edge.data?.endpointPair?.from_connection_point_id, edge.data?.endpointPair?.to_connection_point_id)
+      : null;
+    if (!endpoints && wiringRoute?.target) {
+      const sourceNode = nodes.find((node) => physicalObjectIdForNode(node.data.projection) === wiringRoute.source.physicalObjectId);
+      const targetNode = nodes.find((node) => physicalObjectIdForNode(node.data.projection) === wiringRoute.target?.physicalObjectId);
+      if (sourceNode && targetNode) endpoints = routeEndpoints(sourceNode, targetNode, wiringRoute.source.connectionPointId, wiringRoute.target.connectionPointId);
+    }
+    return endpoints ? normalizeLocationBoundaryAnchors(endpoints.source, endpoints.target, resolveRouteWaypoints(waypoints), boundaryFrames) : [...waypoints];
+  };
 
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
     if (annotationMode) return;

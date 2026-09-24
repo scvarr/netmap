@@ -10,65 +10,8 @@ from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.device_catalog import DeviceCatalog
+from app.location_boundary_anchors import normalize_boundary_route
 from app.models import Cable, Connection, ConnectionPoint, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
-
-
-def _boundary_prefix(frame: dict[str, float], points: list[dict[str, float]]) -> int:
-    """Count internal waypoints before one unambiguous frame exit."""
-    left, top = frame["x"], frame["y"]
-    right, bottom = left + frame["width"], top + frame["height"]
-    def near(a: float, b: float) -> bool:
-        return isclose(a, b, rel_tol=0, abs_tol=1e-7)
-    def inside(point: dict[str, float]) -> bool:
-        return left < point["x"] < right and top < point["y"] < bottom
-    def on_edge(point: dict[str, float]) -> bool:
-        return ((any(near(point["x"], x) for x in (left, right)) and top <= point["y"] <= bottom) or
-                (any(near(point["y"], y) for y in (top, bottom)) and left <= point["x"] <= right))
-    def hits(start: dict[str, float], end: dict[str, float]) -> list[float] | None:
-        if (any(near(start["x"], x) and near(end["x"], x) and max(min(start["y"], end["y"]), top) < min(max(start["y"], end["y"]), bottom) for x in (left, right)) or
-                any(near(start["y"], y) and near(end["y"], y) and max(min(start["x"], end["x"]), left) < min(max(start["x"], end["x"]), right) for y in (top, bottom))):
-            return None
-        dx, dy = end["x"] - start["x"], end["y"] - start["y"]
-        parameters = []
-        for x in (left, right):
-            if dx:
-                t = (x - start["x"]) / dx
-                y = start["y"] + t * dy
-                if 0 <= t <= 1 and top <= y <= bottom: parameters.append(t)
-        for y in (top, bottom):
-            if dy:
-                t = (y - start["y"]) / dy
-                x = start["x"] + t * dx
-                if 0 <= t <= 1 and left <= x <= right: parameters.append(t)
-        ordered = sorted(parameters)
-        return [t for index, t in enumerate(ordered) if index == 0 or abs(t - ordered[index - 1]) > 1e-9]
-    if len(points) < 2 or not inside(points[0]) or on_edge(points[0]) or inside(points[-1]) or on_edge(points[-1]):
-        raise ValidationError("Boundary route endpoints do not straddle LocationFrame", {})
-    boundary_points = [index for index, point in enumerate(points) if on_edge(point)]
-    if len(boundary_points) > 1:
-        raise ValidationError("Boundary route cannot be split unambiguously", {})
-    if boundary_points:
-        boundary = boundary_points[0]
-        if boundary in (0, len(points) - 1) or any(not inside(point) for point in points[:boundary]) or any(inside(point) for point in points[boundary + 1:]):
-            raise ValidationError("Boundary route cannot be split unambiguously", {})
-        for index, (start, end) in enumerate(zip(points, points[1:])):
-            crossings = hits(start, end)
-            expected = 1 if index in (boundary - 1, boundary) else 0
-            if crossings is None or len(crossings) != expected or (index == boundary - 1 and not near(crossings[0], 1)) or (index == boundary and not near(crossings[0], 0)):
-                raise ValidationError("Boundary route cannot be split unambiguously", {})
-        return boundary - 1
-    crossing: int | None = None
-    for index, (start, end) in enumerate(zip(points, points[1:])):
-        crossings = hits(start, end)
-        if crossings is None:
-            raise ValidationError("Boundary route cannot be split unambiguously", {})
-        if crossings:
-            if len(crossings) != 1 or crossing is not None or not inside(start) or inside(end):
-                raise ValidationError("Boundary route cannot be split unambiguously", {})
-            crossing = index
-    if crossing is None:
-        raise ValidationError("Boundary route does not cross LocationFrame", {})
-    return crossing
 
 
 @dataclass(frozen=True)
@@ -126,7 +69,7 @@ class SavedMapCatalog:
         ))
         self.session.add_all(MapCableRoute(
             map_id=route.map_id, variant_id=variant.id, cable_id=route.cable_id, view_key=route.view_key,
-            waypoints=[{"x": point["x"], "y": point["y"]} for point in route.waypoints],
+            waypoints=[dict(point) for point in route.waypoints],
         ) for route in source_routes)
         self.session.add_all(MapLocationState(
             variant_id=variant.id, location_id=state.location_id, collapsed=state.collapsed,
@@ -287,7 +230,7 @@ class SavedMapCatalog:
         self,
         map_id: uuid.UUID,
         cable_id: uuid.UUID,
-        waypoints: list[dict[str, float]], variant_id: uuid.UUID | None = None,
+        waypoints: list[dict[str, object]], variant_id: uuid.UUID | None = None,
     ) -> MapCableRoute:
         variant = self._require_variant(map_id, variant_id)
         self._require_cable(cable_id)
@@ -307,7 +250,7 @@ class SavedMapCatalog:
                 view_key=MapViewKey.PHYSICAL,
             )
             self.session.add(route)
-        route.waypoints = [{"x": point["x"], "y": point["y"]} for point in waypoints]
+        route.waypoints = [dict(point) for point in waypoints]
         self._flush()
         return route
 
@@ -365,7 +308,7 @@ class SavedMapCatalog:
         expected_boundary = {route.cable_id for route in routes if route.cable_id in endpoints and sum(object_id in subtree_object_ids for object_id in endpoints[route.cable_id]) == 1}
         if set(boundary) != expected_boundary:
             raise ValidationError("Boundary Cable evidence is incomplete", {})
-        route_updates: list[tuple[MapCableRoute, list[dict[str, float]]]] = []
+        route_updates: list[tuple[MapCableRoute, list[dict[str, object]]]] = []
         for route in routes:
             pair = endpoints.get(route.cable_id)
             if pair is None:
@@ -373,15 +316,14 @@ class SavedMapCatalog:
             inside_count = sum(object_id in subtree_object_ids for object_id in pair)
             if inside_count == 0: continue
             if inside_count == 2:
-                route_updates.append((route, [{"x": point["x"] + delta_x, "y": point["y"] + delta_y} for point in route.waypoints]))
+                route_updates.append((route, [dict(point) if point.get("anchor") else {"x": point["x"] + delta_x, "y": point["y"] + delta_y} for point in route.waypoints]))
                 continue
             evidence = boundary[route.cable_id]
             oriented = route.waypoints if evidence["moving_endpoint_is_source"] else list(reversed(route.waypoints))
-            points = [evidence["moving_endpoint"], *oriented, evidence["external_endpoint"]]
-            prefix = _boundary_prefix(frame, points)
+            normalized, anchor_index = normalize_boundary_route(location_id, frame, evidence["moving_endpoint"], oriented, evidence["external_endpoint"])
             transformed = [
-                {"x": point["x"] + delta_x, "y": point["y"] + delta_y} if index < prefix else dict(point)
-                for index, point in enumerate(oriented)
+                {"x": point["x"] + delta_x, "y": point["y"] + delta_y} if index < anchor_index and not point.get("anchor") else dict(point)
+                for index, point in enumerate(normalized)
             ]
             route_updates.append((route, transformed if evidence["moving_endpoint_is_source"] else list(reversed(transformed))))
         for object_id in moving_ids:

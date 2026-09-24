@@ -266,6 +266,11 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
     });
   const moveWaypoint = (index: number, event: PointerEvent<SVGElement>) => {
     if (!draft) return;
+    if (draft.waypoints[index]?.anchor) {
+      draft.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+      setFeedback([]);
+      return;
+    }
     const anchors = [segmentPoints[index], segmentPoints[index + 2]];
     if (event.ctrlKey) {
       const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -306,7 +311,9 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
     {draft?.waypoints.map((waypoint, index) => (
       <g key={`${edge.id}:foreground-waypoint:${index}`}>
         <circle className="cable-route-waypoint-hit" cx={waypoint.x} cy={waypoint.y} r={18} fill="transparent" pointerEvents="all" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); moveWaypoint(index, event); }} onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setFeedback([]); }} />
-        <circle className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={6} pointerEvents="none" />
+        {waypoint.anchor
+          ? <rect className={`cable-route-waypoint cable-route-waypoint--boundary${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} x={waypoint.x - 5} y={waypoint.y - 5} width={10} height={10} transform={`rotate(45 ${waypoint.x} ${waypoint.y})`} pointerEvents="none" />
+          : <circle className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={6} pointerEvents="none" />}
       </g>
     ))}
     {feedback.map((item, index) => <text key={index} className="cable-route-geometry-feedback" x={(item.start.x + item.end.x) / 2} y={(item.start.y + item.end.y) / 2 - 10} textAnchor="middle" fontSize={12 / getViewport().zoom} strokeWidth={3 / getViewport().zoom}>{`${Math.round(segmentAngle(item.start, item.end))}° · ${Math.round(segmentLength(item.start, item.end))}`}</text>)}

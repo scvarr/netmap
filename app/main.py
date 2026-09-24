@@ -571,7 +571,7 @@ def set_map_cable_route(
         catalog.set_cable_route(
             map_id,
             cable_id,
-            [waypoint.model_dump() for waypoint in query.waypoints], variant_id,
+            [waypoint.model_dump(exclude_none=True, mode="json") for waypoint in query.waypoints], variant_id,
         )
         return _saved_map_document(catalog.detail(map_id, variant_id))
 
