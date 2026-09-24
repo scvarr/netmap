@@ -55,6 +55,8 @@ def test_variant_location_state_validation_copy_stale_refs_and_cascade():
     assign(ups, room)
     assign(switch, rack)
     assign(foreign, other)
+    for object_id in (ups, switch):
+        assert client.post(f'/v1/maps/{map_id}/placements', json={'physical_object_id': object_id, 'x': 1, 'y': 2}).status_code == 201
     assert detail(map_id)['location_states'] == []
     choices = client.get(f'/v1/maps/{map_id}/presentation-variants/{primary}/locations/{room}/direct-elements')
     assert choices.status_code == 200
@@ -103,3 +105,46 @@ def test_variant_location_state_validation_copy_stale_refs_and_cascade():
     assert client.delete(f'/v1/maps/{map_id}/presentation-variants/{copy_id}').status_code == 204
     with SessionLocal() as session:
         assert session.scalar(select(func.count()).select_from(MapLocationState).where(MapLocationState.variant_id == uuid.UUID(copy_id))) == 0
+
+
+def test_direct_elements_offer_only_placed_content_in_direct_canonical_branches():
+    map_id = create_map(client, 'Direct elements map')
+    other_map_id = create_map(client, 'Direct elements other map')
+    variant_id = detail(map_id)['active_variant_ref']['entity_id']
+    root = location('Root')
+    populated = location('Populated', root)
+    deep = location('Deep', populated)
+    empty = location('Empty', root)
+    sibling = location('Sibling')
+    sibling_child = location('Sibling child', sibling)
+    direct_placed, _ = create_object_with_point(client, 'Direct placed')
+    direct_unplaced, _ = create_object_with_point(client, 'Direct unplaced')
+    deep_placed, _ = create_object_with_point(client, 'Deep placed')
+    empty_other_map, _ = create_object_with_point(client, 'Empty other map')
+    sibling_other_map, _ = create_object_with_point(client, 'Sibling other map')
+    for object_id, parent in (
+        (direct_placed, root), (direct_unplaced, root), (deep_placed, deep),
+        (empty_other_map, empty), (sibling_other_map, sibling_child),
+    ):
+        assign(object_id, parent)
+    for object_id, target_map in (
+        (direct_placed, map_id), (deep_placed, map_id),
+        (empty_other_map, other_map_id), (sibling_other_map, other_map_id),
+    ):
+        assert client.post(f'/v1/maps/{target_map}/placements', json={'physical_object_id': object_id, 'x': 1, 'y': 2}).status_code == 201
+    for index in range(12):
+        location(f'Empty {index}', root)
+    statements = []
+    def record(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().lower().startswith(('select', 'with')):
+            statements.append(statement)
+    event.listen(engine, 'before_cursor_execute', record)
+    try:
+        response = client.get(f'/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{root}/direct-elements')
+    finally:
+        event.remove(engine, 'before_cursor_execute', record)
+    assert response.status_code == 200, response.text
+    assert {tuple(choice['ref'].values()) for choice in response.json()} == {
+        ('Location', populated), ('PhysicalObject', direct_placed),
+    }
+    assert len(statements) < 12

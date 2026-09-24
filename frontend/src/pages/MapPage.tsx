@@ -1973,8 +1973,15 @@ export function MapPage({
         mapOperation={mapOperation?.mapId === mapId ? mapOperation : null}
         onRetryMapRefresh={retryMapRefresh}
       />
-      {locationConfigId && viewMode === 'physical' && <div className="map-dialog-backdrop"><section className="map-dialog" role="dialog" aria-label="Настроить сворачивание"><h2>Настроить сворачивание</h2><p>Оставлять представленными при сворачивании:</p>
-        {directLocationChoices === null ? <p>Загрузка…</p> : directLocationChoices.map(({ ref, label }) => <label key={`${ref.entity_type}:${ref.entity_id}`} className="map-location-choice"><input type="checkbox" checked={locationConfigVisible.some((item) => item.entity_type === ref.entity_type && item.entity_id === ref.entity_id)} onChange={(event) => setLocationConfigVisible((current) => event.target.checked ? [...current, ref] : current.filter((item) => item.entity_type !== ref.entity_type || item.entity_id !== ref.entity_id))} />{label}</label>)}
+      {locationConfigId && viewMode === 'physical' && <div className="map-dialog" role="dialog" aria-modal="true" aria-label="Настроить сворачивание"><section className="map-dialog__surface map-location-dialog">
+        <h2>Настройка сворачивания: {locations?.find((location) => location.location_ref.entity_id === locationConfigId)?.name ?? locationConfigId}</h2>
+        <p>Оставить видимыми при сворачивании:</p>
+        <div className="map-location-dialog__choices">
+          {directLocationChoices === null ? <p>Загрузка…</p> : directLocationChoices.map(({ ref, label }) => {
+            const checked = locationConfigVisible.some((item) => item.entity_type === ref.entity_type && item.entity_id === ref.entity_id);
+            return <label key={`${ref.entity_type}:${ref.entity_id}`} className={`map-location-choice${checked ? ' map-location-choice--selected' : ''}`}><input type="checkbox" checked={checked} onChange={(event) => setLocationConfigVisible((current) => event.target.checked ? [...current, ref] : current.filter((item) => item.entity_type !== ref.entity_type || item.entity_id !== ref.entity_id))} /><span>{label}</span>{ref.entity_type === 'Location' && <small>местоположение</small>}</label>;
+          })}
+        </div>
         <div className="map-dialog__actions"><button type="button" disabled={locationStateBusy} onClick={() => setLocationConfigId(null)}>Отмена</button><button type="button" disabled={locationStateBusy || directLocationChoices === null} onClick={() => void writeLocationState(locationConfigId, locationStateFor(locationConfigId)?.collapsed ?? false, locationConfigVisible)}>Сохранить</button></div>
       </section></div>}
     </main>

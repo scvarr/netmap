@@ -7,7 +7,7 @@ import { createMapPageHarness } from './MapPage.testHarness';
 import type { SavedMapDataSource } from '../topology/savedMapTypes';
 import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
 
-vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => { useEffect(() => { props.onViewportCenterReady?.(() => ({ x: 123, y: 456 })); }, [props.onViewportCenterReady]); return <div data-testid="canvas" data-layer={props.document.layer} data-scene={props.sceneKey} data-focus={props.focusPhysicalObjectId ?? ''} data-position={JSON.stringify(props.positionOverrides)} data-display-widths={JSON.stringify(props.displayWidthOverrides)} data-locked={JSON.stringify([...props.lockedNodeIds ?? []])} data-cable-routes={JSON.stringify(props.cableRoutes ?? [])} data-location-frames={JSON.stringify(props.locationFrameInput ?? null)}>{!props.annotationMode && props.document.nodes.map((node: any) => <button key={node.id} onClick={() => props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}<button onClick={() => props.onPhysicalNodeDragStop?.(PP, { x: 77, y: 88 })}>drag</button><button onClick={() => props.onBlueprintDisplayResize?.(PP, 320)}>resize</button><button onClick={() => props.onPhysicalPaneContextMenu?.({ x: 12, y: 34 }, { x: 120, y: 340 })}>pane context</button></div>; } }));
+vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => { useEffect(() => { props.onViewportCenterReady?.(() => ({ x: 123, y: 456 })); }, [props.onViewportCenterReady]); return <div data-testid="canvas" data-layer={props.document.layer} data-scene={props.sceneKey} data-focus={props.focusPhysicalObjectId ?? ''} data-position={JSON.stringify(props.positionOverrides)} data-display-widths={JSON.stringify(props.displayWidthOverrides)} data-locked={JSON.stringify([...props.lockedNodeIds ?? []])} data-cable-routes={JSON.stringify(props.cableRoutes ?? [])} data-location-frames={JSON.stringify(props.locationFrameInput ?? null)}>{!props.annotationMode && props.document.nodes.map((node: any) => <button key={node.id} onClick={() => props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}{props.locationFrameInput && <button onClick={() => props.locationFrameInput.onConfigure('room')}>configure room</button>}<button onClick={() => props.onPhysicalNodeDragStop?.(PP, { x: 77, y: 88 })}>drag</button><button onClick={() => props.onBlueprintDisplayResize?.(PP, 320)}>resize</button><button onClick={() => props.onPhysicalPaneContextMenu?.({ x: 12, y: 34 }, { x: 120, y: 340 })}>pane context</button></div>; } }));
 vi.mock('../components/TraceCommandBar', () => ({ TraceCommandBar: (props: any) => <div data-testid="trace-logical" data-branch={props.selectedBranchId ?? ''} data-artifact={props.traceArtifact?.verdict ?? ''}>{props.logicalDocument?.nodes.map((node: any) => node.label).join(',')}<button onClick={() => props.onTraceArtifact({ verdict: 'REACHABLE', nodes: [], edges: [], branches: [{ branch_id: 'branch-a', edge_ids: [], evidence_refs: [] }] })}>reachable</button></div> }));
 vi.mock('../components/QuickInspector', () => ({ QuickInspector: (props: any) => props.selection ? <div data-testid="inspector" data-selected={props.selection.item.label}><button onClick={() => props.onRemoveFromMap?.(PP)}>remove</button><button onClick={() => props.onDeletePhysicalObject?.(PP)}>delete</button></div> : null }));
 const renderMapPage = createMapPageHarness(MapPage);
@@ -29,6 +29,44 @@ const openTools = () => fireEvent.click(screen.getByRole('button', { name: 'Ин
 const startRegions = () => { openTools(); fireEvent.click(screen.getByRole('button', { name: 'Области' })); };
 
 describe('MapPage SavedMap scope', () => {
+  it('shows a compact Location dialog and saves only selected direct refs while cancellation writes nothing', async () => {
+    const roomRef = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
+    const currentMap = { ...saved(A, [[PP, 10, 20]]), placements: [{ ...saved(A, [[PP, 10, 20]]).placements[0], location_ref: roomRef }] };
+    const loadLocationDirectElements = vi.fn().mockResolvedValue([
+      { ref: { entity_type: 'PhysicalObject', entity_id: PP }, label: 'PP1' },
+      { ref: { entity_type: 'Location', entity_id: 'child' }, label: 'Child' },
+    ]);
+    const setLocationState = vi.fn().mockResolvedValue(undefined);
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([currentMap]), loadMap: vi.fn().mockResolvedValue(currentMap), loadLocationDirectElements, setLocationState };
+    const locationDataSource: any = { loadLocations: vi.fn().mockResolvedValue([{ location_ref: roomRef, name: 'Room', type: null, parent_location_ref: null }]) };
+    renderMapPage({ dataSource: { loadProjection: vi.fn(scopedProjection) }, savedMapDataSource: maps, locationDataSource }, `/map?map=${A}&view=physical`);
+    fireEvent.click(await screen.findByRole('button', { name: 'configure room' }));
+    let dialog = screen.getByRole('dialog', { name: 'Настроить сворачивание' });
+    expect(dialog).toHaveClass('map-dialog');
+    expect(dialog.querySelector('.map-dialog__surface.map-location-dialog')).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading')).toHaveTextContent('Настройка сворачивания: Room');
+    const choices = dialog.querySelector('.map-location-dialog__choices')!;
+    expect(choices.closest('.map-dialog__surface')).toBeInTheDocument();
+    await within(dialog).findByLabelText('PP1');
+    expect(choices.querySelectorAll('input[type="checkbox"]')).toHaveLength(2);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
+    expect(setLocationState).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'configure room' }));
+    dialog = screen.getByRole('dialog', { name: 'Настроить сворачивание' });
+    await within(dialog).findByLabelText('PP1');
+    fireEvent.click(within(dialog).getByText('PP1'));
+    fireEvent.click(within(dialog).getByText('Child'));
+    expect(within(dialog).getByLabelText('PP1')).toBeChecked();
+    expect(within(dialog).getByLabelText(/Child/)).toBeChecked();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(setLocationState).toHaveBeenCalledWith(A, `variant-${A}`, 'room', {
+      collapsed: false,
+      visible_direct_elements: [
+        { entity_type: 'PhysicalObject', entity_id: PP },
+        { entity_type: 'Location', entity_id: 'child' },
+      ],
+    }));
+  });
   it('loads the Location catalog once and passes current live placement membership only to the physical canvas', async () => {
     const place = { ...saved(A, [[PP, 10, 20]]).placements[0], location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' } };
     const currentMap = { ...saved(A, []), placements: [place] };

@@ -104,10 +104,20 @@ class SavedMapCatalog:
         if self.session.get(Location, location_id) is None:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
         children = self.session.scalars(select(Location).where(Location.parent_location_id == location_id).order_by(Location.name, Location.id)).all()
-        object_ids = self.session.scalars(select(PhysicalObject.id).where(PhysicalObject.location_id == location_id).order_by(PhysicalObject.id)).all()
+        subtree = select(Location.id.label("location_id"), Location.id.label("direct_child_id")).where(Location.parent_location_id == location_id).cte("location_subtree", recursive=True)
+        subtree = subtree.union_all(select(Location.id, subtree.c.direct_child_id).join(subtree, Location.parent_location_id == subtree.c.location_id))
+        populated_children = set(self.session.scalars(
+            select(subtree.c.direct_child_id).join(PhysicalObject, PhysicalObject.location_id == subtree.c.location_id)
+            .join(MapPlacement, MapPlacement.physical_object_id == PhysicalObject.id)
+            .where(MapPlacement.map_id == map_id).distinct()
+        ))
+        object_ids = self.session.scalars(
+            select(PhysicalObject.id).join(MapPlacement, MapPlacement.physical_object_id == PhysicalObject.id)
+            .where(PhysicalObject.location_id == location_id, MapPlacement.map_id == map_id).order_by(PhysicalObject.id)
+        ).all()
         aliases = DeviceCatalog(self.session).physical_object_display_aliases(list(object_ids))
         return [
-            *({"ref": {"entity_type": "Location", "entity_id": child.id}, "label": child.name} for child in children),
+            *({"ref": {"entity_type": "Location", "entity_id": child.id}, "label": child.name} for child in children if child.id in populated_children),
             *({"ref": {"entity_type": "PhysicalObject", "entity_id": object_id}, "label": aliases[object_id].value if object_id in aliases else f"PhysicalObject {object_id}"} for object_id in object_ids),
         ]
 

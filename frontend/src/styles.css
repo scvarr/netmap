@@ -84,7 +84,15 @@ button { font: inherit; }
 .location-proxy--traced { border-color: #f0bd66; box-shadow: 0 0 0 2px rgb(240 189 102 / .3); }
 .location-proxy__handle { opacity: 0; pointer-events: none; }
 .location-proxy-actions { position: absolute; display: flex; gap: 3px; padding: 2px 4px; border-radius: 0 0 5px 5px; background: #0a1518; pointer-events: auto; }
-.map-location-choice { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.map-dialog__surface.map-location-dialog { box-sizing: border-box; max-height: min(calc(100vh - 40px), 640px); overflow: hidden; }
+.map-location-dialog__choices { min-height: 0; overflow-y: auto; display: grid; align-content: start; gap: 4px; }
+.map-location-dialog .map-location-choice { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 8px; border: 1px solid transparent; border-radius: 6px; color: #cfe1de; cursor: pointer; }
+.map-location-dialog .map-location-choice:hover, .map-location-dialog .map-location-choice:focus-within { border-color: #55e5b5; background: #102124; }
+.map-location-dialog .map-location-choice:focus-within { outline: 1px solid #55e5b5; outline-offset: -1px; }
+.map-location-dialog .map-location-choice--selected { border-color: #3a7968; background: #15372f; }
+.map-location-dialog .map-location-choice input { flex: 0 0 auto; width: 15px; height: 15px; margin: 0; padding: 0; accent-color: #55e5b5; cursor: pointer; }
+.map-location-dialog .map-location-choice span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.map-location-dialog .map-location-choice small { color: #86b4aa; font-size: 10px; }
 .blueprint-map-node__nameplate { display: flex; align-items: center; gap: 6px; }
 .blueprint-map-node__title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .blueprint-map-node__location { flex: 0 1 auto; max-width: 42%; overflow: hidden; text-overflow: ellipsis; color: #86b4aa; font-size: 9px; font-weight: 500; pointer-events: none; }
