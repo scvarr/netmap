@@ -126,14 +126,25 @@ describe('TopologyCanvas async layout boundary', () => {
     const b: TopologyProjectionNode = { id: 'physical-b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'b' }], attributes: {} };
     const document = { ...documentFor('physical-a'), nodes: [a, b] };
     const onCollapse = vi.fn();
-    const input = { locations: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }], placements: [{ physical_object_ref: a.source_refs[0], location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, positions: {} }, { physical_object_ref: b.source_refs[0], location_ref: null, positions: {} }], states: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, collapsed: true, visible_direct_elements: [] }], onCollapse, onConfigure: vi.fn() };
+    const onConfigure = vi.fn();
+    const input = { locations: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }], placements: [{ physical_object_ref: a.source_refs[0], location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, positions: {} }, { physical_object_ref: b.source_refs[0], location_ref: null, positions: {} }], states: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, collapsed: true, visible_direct_elements: [] }], onCollapse, onConfigure };
     const layoutEngine: TopologyLayoutEngine = async () => ({ nodes: [{ id: a.id, type: 'device', position: { x: 0, y: 0 }, data: { projection: a } }, { id: b.id, type: 'device', position: { x: 400, y: 0 }, data: { projection: b } }], edges: [{ id: 'real-cable', source: a.id, target: b.id, data: { cableNode: { ...a, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable' }] } } }] });
     render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} locationFrameInput={input} />);
     expect(await screen.findByRole('button', { name: 'location-proxy:room' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'physical-a' })).toBeNull();
     expect(screen.getByTestId('endpoints-real-cable')).toHaveTextContent('location-proxy:room:physical-b');
     expect(screen.getByTestId('draggable-location-proxy:room')).toHaveTextContent('false');
-    fireEvent.click(screen.getByRole('button', { name: 'Развернуть' }));
+    const expand = screen.getByRole('button', { name: 'Развернуть Room' });
+    expect(expand).toHaveTextContent('+');
+    expect(expand).toHaveAttribute('title', 'Развернуть Room');
+    const configure = screen.getByRole('button', { name: 'Настроить сворачивание Room' });
+    expect(configure).toHaveTextContent('⚙');
+    expect(configure).toHaveAttribute('title', 'Настроить сворачивание Room');
+    expect(screen.queryByText('Развернуть')).toBeNull();
+    expect(screen.queryByText('Настроить')).toBeNull();
+    fireEvent.click(configure);
+    expect(onConfigure).toHaveBeenCalledWith('room');
+    fireEvent.click(expand);
     expect(onCollapse).toHaveBeenCalledWith('room', false);
   });
   it('renders only physical SavedMap frames and follows controlled drag, rollback and blueprint resize', async () => {
@@ -144,9 +155,13 @@ describe('TopologyCanvas async layout boundary', () => {
     };
     const peer: TopologyProjectionNode = { id: 'physical-peer', kind: 'PHYSICAL_OBJECT', label: 'Peer', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'peer' }], attributes: {} };
     const document: TopologyProjectionDocument = { ...documentFor('physical-framed'), nodes: [projection, peer] };
+    const onCollapse = vi.fn();
+    const onConfigure = vi.fn();
     const locationFrameInput = {
       locations: [{ location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }, { location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'unit' }, name: 'Unit', type: null, parent_location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' } }],
       placements: [{ physical_object_ref: projection.source_refs[0], location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'unit' }, positions: {} }, { physical_object_ref: peer.source_refs[0], location_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' }, positions: {} }],
+      onCollapse,
+      onConfigure,
     };
     const layoutEngine: TopologyLayoutEngine = async (scene) => flowFor(scene);
     const props = { document, selection: null, onSelectionChange: vi.fn(), layoutEngine, locationFrameInput, positionSnapshot: locationFrameInput.placements, positionOverrides: { 'physical-framed': { x: 10, y: 20 }, 'physical-peer': { x: 80, y: 300 } }, displayWidthOverrides: { 'physical-framed': 200 } };
@@ -159,7 +174,18 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(globalThis.document.querySelector('.location-caption')).toBeNull();
     const initialLeft = Number.parseFloat(frame().style.left);
     const initialWidth = Number.parseFloat(frame().style.width);
-    expect(frame().closest('[aria-hidden="true"]')).not.toBeNull();
+    const collapse = screen.getByRole('button', { name: 'Свернуть Room' });
+    expect(collapse).toHaveTextContent('−');
+    expect(collapse).toHaveAttribute('title', 'Свернуть Room');
+    const configure = screen.getByRole('button', { name: 'Настроить сворачивание Room' });
+    expect(configure).toHaveTextContent('⚙');
+    expect(configure).toHaveAttribute('title', 'Настроить сворачивание Room');
+    expect(screen.queryByText('Свернуть')).toBeNull();
+    expect(screen.queryByText('Настроить')).toBeNull();
+    fireEvent.click(configure);
+    expect(onConfigure).toHaveBeenCalledWith('room');
+    fireEvent.click(collapse);
+    expect(onCollapse).toHaveBeenCalledWith('room', true);
     expect(frame().className).toBe('location-frame');
     fireEvent.click(screen.getByRole('button', { name: 'drag physical-framed' }));
     expect(Number.parseFloat(frame().style.left) - initialLeft).toBe(32);

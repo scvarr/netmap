@@ -610,13 +610,23 @@ export function TopologyCanvas({
         />
         {(locationPresentation.frames.length > 0 || locationPresentation.proxies.length > 0) && <ViewportPortal>
           <div className="location-frame-layer" aria-hidden={!locationFrameInput?.onCollapse && !locationFrameInput?.onConfigure ? true : undefined}>
-            {locationPresentation.frames.map((frame) => <div
-              key={frame.locationId}
-              className="location-frame"
-              data-location-id={frame.locationId}
-              style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
-            ><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button type="button" onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !locationFrameInput.states?.find((state) => state.location_ref.entity_id === frame.locationId)?.collapsed)}>{locationFrameInput.states?.find((state) => state.location_ref.entity_id === frame.locationId)?.collapsed ? 'Развернуть' : 'Свернуть'}</button><button type="button" onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>Настроить</button></span>}</div>)}
-            {locationFrameInput?.onCollapse && locationFrameInput.onConfigure && locationPresentation.proxies.map((proxy) => <div key={`actions:${proxy.locationId}`} className="location-proxy-actions" style={{ left: proxy.bounds.x, top: proxy.bounds.y + proxy.bounds.height }}><button type="button" onClick={() => locationFrameInput.onCollapse?.(proxy.locationId, false)}>Развернуть</button><button type="button" onClick={() => locationFrameInput.onConfigure?.(proxy.locationId)}>Настроить</button></div>)}
+            {locationPresentation.frames.map((frame) => {
+              const collapsed = locationFrameInput?.states?.some((state) => state.location_ref.entity_id === frame.locationId && state.collapsed) ?? false;
+              const toggleLabel = t(collapsed ? 'map.locationExpand' : 'map.locationCollapse', { name: frame.label });
+              const configureLabel = t('map.locationConfigureCollapse', { name: frame.label });
+              return <div
+                key={frame.locationId}
+                className="location-frame"
+                data-location-id={frame.locationId}
+                style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
+              ><span className="location-frame__heading"><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button className="location-action" type="button" aria-label={toggleLabel} title={toggleLabel} onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>⚙</button></span>}</span></div>;
+            })}
+            {locationFrameInput?.onCollapse && locationFrameInput.onConfigure && locationPresentation.proxies.map((proxy) => {
+              const locationName = locationFrameInput.locations.find((location) => location.location_ref.entity_id === proxy.locationId)?.name ?? proxy.label;
+              const expandLabel = t('map.locationExpand', { name: locationName });
+              const configureLabel = t('map.locationConfigureCollapse', { name: locationName });
+              return <div key={`actions:${proxy.locationId}`} className="location-proxy-actions" style={{ left: proxy.bounds.x, top: proxy.bounds.y + proxy.bounds.height }}><button className="location-action" type="button" aria-label={expandLabel} title={expandLabel} onClick={() => locationFrameInput.onCollapse?.(proxy.locationId, false)}>+</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onClick={() => locationFrameInput.onConfigure?.(proxy.locationId)}>⚙</button></div>;
+            })}
           </div>
         </ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (

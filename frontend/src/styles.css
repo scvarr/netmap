@@ -74,13 +74,16 @@ button { font: inherit; }
 .topology-canvas .react-flow__nodes { position: relative; z-index: 1; }
 .location-frame-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
 .location-frame { position: absolute; box-sizing: border-box; border: 1px solid rgb(91 188 168 / .55); border-radius: 14px; background: rgb(39 110 101 / .075); pointer-events: none; }
-.location-frame__label { position: absolute; top: 0; left: 10px; transform: translateY(-50%); display: block; box-sizing: border-box; max-width: calc(100% - 20px); padding: 0 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: #0a1518; color: #a6e9d8; font: 600 11px/16px ui-monospace, monospace; pointer-events: none; }
-.location-frame__actions { position: absolute; top: -11px; right: 10px; display: flex; gap: 4px; pointer-events: auto; }
-.location-frame__actions button, .location-proxy-actions button { padding: 2px 5px; font-size: 10px; }
+.location-frame__heading { position: absolute; top: 0; left: 10px; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 5px; box-sizing: border-box; max-width: calc(100% - 20px); padding: 0 4px; background: #0a1518; pointer-events: none; }
+.location-frame__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a6e9d8; font: 600 11px/16px ui-monospace, monospace; }
+.location-frame__actions { display: inline-flex; flex: 0 0 auto; gap: 3px; pointer-events: auto; }
+.location-action { display: inline-grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; padding: 0; border: 1px solid #3a7168; border-radius: 5px; color: #b5e9d9; background: #102b29; cursor: pointer; font: 700 15px/1 ui-monospace, monospace; }
+.location-action:hover { border-color: #70cbb0; color: #e1fff2; background: #1a4139; }
+.location-action:focus-visible { outline: 2px solid #8de2c8; outline-offset: 2px; }
 .location-proxy { width: 152px; height: 60px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border: 1px solid #72cdb7; border-radius: 8px; background: #163d38; color: #dcfff4; font-size: 11px; text-align: center; }
 .location-proxy--traced { border-color: #f0bd66; box-shadow: 0 0 0 2px rgb(240 189 102 / .3); }
 .location-proxy__handle { opacity: 0; pointer-events: none; }
-.location-proxy-actions { position: absolute; display: flex; gap: 4px; pointer-events: auto; }
+.location-proxy-actions { position: absolute; display: flex; gap: 3px; padding: 2px 4px; border-radius: 0 0 5px 5px; background: #0a1518; pointer-events: auto; }
 .map-location-choice { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
 .blueprint-map-node__nameplate { display: flex; align-items: center; gap: 6px; }
 .blueprint-map-node__title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
