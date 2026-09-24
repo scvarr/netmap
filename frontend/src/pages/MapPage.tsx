@@ -275,6 +275,7 @@ export function MapPage({
   const [blueprintSizePending, setBlueprintSizePending] = useState(false);
   const [blueprintSizeError, setBlueprintSizeError] = useState<string | null>(null);
   const selectedMapId = useRef<string | null>(mapId);
+  const mapDetailRequest = useRef(0);
   const deletedMapIds = useRef(new Set<string>());
   const mapListRequest = useRef(0);
   const insertionSequence = useRef(0);
@@ -288,6 +289,8 @@ export function MapPage({
   const presentationVariantDeletionPending = useRef(false);
 
   selectedMapId.current = mapId;
+  const acceptsMapDetail = (targetMapId: string, request: number) =>
+    selectedMapId.current === targetMapId && mapDetailRequest.current === request && !deletedMapIds.current.has(targetMapId);
   const legacy = !savedMapDataSource;
   useEffect(() => {
     let active = true;
@@ -409,8 +412,10 @@ export function MapPage({
   const reloadMap = useCallback(
     async (targetMapId = mapId): Promise<boolean> => {
       if (!savedMapDataSource || !targetMapId) return false;
-      const detail = await savedMapDataSource.loadMap(targetMapId, variantId ?? undefined);
-      if (selectedMapId.current !== targetMapId) return false;
+      const requestedVariantId = variantId;
+      const request = ++mapDetailRequest.current;
+      const detail = await savedMapDataSource.loadMap(targetMapId, requestedVariantId ?? undefined);
+      if (!acceptsMapDetail(targetMapId, request)) return false;
       setMap(detail);
       return true;
     },
@@ -437,7 +442,9 @@ export function MapPage({
 
   const refreshDeletedPresentationVariant = async (deletion: { mapId: string; primaryVariantId: string }) => {
     if (!savedMapDataSource) return;
+    const request = ++mapDetailRequest.current;
     const detail = await savedMapDataSource.loadMap(deletion.mapId, deletion.primaryVariantId);
+    if (!acceptsMapDetail(deletion.mapId, request)) return;
     skipNextMapLoad.current = `${deletion.mapId}/${deletion.primaryVariantId}`;
     setMap(detail);
     setVariantDeletion(null);
@@ -468,6 +475,7 @@ export function MapPage({
     setPresentationVariantDeletion(null);
     const deletion = { mapId: operation.mapId, primaryVariantId: operation.primaryVariantId };
     setVariantDeletion({ ...deletion, status: "refreshing" });
+    mapDetailRequest.current += 1;
     setParams((currentParams) => {
       const next = new URLSearchParams(currentParams);
       next.set("variant", operation.primaryVariantId);
@@ -521,9 +529,10 @@ export function MapPage({
     }
     if (variantDeletion?.mapId === mapId && variantDeletion.primaryVariantId === variantId) return undefined;
     let active = true;
+    const request = ++mapDetailRequest.current;
     setError(null);
     void savedMapDataSource.loadMap(mapId, variantId ?? undefined).then(
-      (detail) => active && selectedMapId.current === mapId && !deletedMapIds.current.has(mapId) && setMap(detail),
+      (detail) => active && acceptsMapDetail(mapId, request) && setMap(detail),
       (reason) =>
         active && setError(errorMessage(reason, t("map.loadFailed"))),
     );
@@ -654,6 +663,7 @@ export function MapPage({
       const created = await savedMapDataSource.createPresentationVariant(operation.mapId, operation.name.trim(), operation.sourceVariantId);
       const refresh = { mapId: operation.mapId, variantId: created.variant_ref.entity_id, status: "refresh-failed" as const };
       setPresentationVariantCreate(null);
+      const request = ++mapDetailRequest.current;
       skipNextMapLoad.current = `${refresh.mapId}/${refresh.variantId}`;
       setParams((current) => {
         const next = new URLSearchParams(current);
@@ -662,7 +672,7 @@ export function MapPage({
       });
       try {
         const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
-        if (selectedMapId.current === refresh.mapId) setMap(detail);
+        if (acceptsMapDetail(refresh.mapId, request)) setMap(detail);
       } catch {
         setPresentationVariantCreationRefresh(refresh);
       }
@@ -677,8 +687,9 @@ export function MapPage({
     const refresh = presentationVariantCreationRefresh;
     if (!refresh || !savedMapDataSource) return;
     try {
+      const request = ++mapDetailRequest.current;
       const detail = await savedMapDataSource.loadMap(refresh.mapId, refresh.variantId);
-      if (selectedMapId.current === refresh.mapId) setMap(detail);
+      if (acceptsMapDetail(refresh.mapId, request)) setMap(detail);
       setPresentationVariantCreationRefresh(null);
     } catch {
       // The acknowledged create is never retried; keep only the read retry visible.
@@ -1611,7 +1622,7 @@ export function MapPage({
               <span>{utilitySection === "layout" ? "Компоновка" : `Компоновка · ${activeVariant?.name ?? "—"}`}</span><span aria-hidden="true">{utilitySection === "layout" ? "‹" : "›"}</span>
             </button>
             {utilitySection === "layout" && <div className="map-utility-panel__content">
-              <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); return next; })} />
+              <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => { mapDetailRequest.current += 1; setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); return next; }); }} />
               <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
             </div>}
           </section>

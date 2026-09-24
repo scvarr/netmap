@@ -3,11 +3,38 @@ from sqlalchemy import func, select
 
 from app.database import SessionLocal
 from app.main import app
-from app.models import MapCableRoute, MapPlacement, MapTextAnnotation, MapViewPosition
+from app.models import MapCableRoute, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewPosition
 from tests.l1_builders import create_interface_cable, create_map, create_object_with_point
 
 
 client = TestClient(app)
+
+
+def test_variant_catalog_remains_complete_for_every_selected_variant():
+    map_id = create_map(client, "Variant catalog")
+    primary = client.get(f"/v1/maps/{map_id}").json()
+    primary_id = primary["active_variant_ref"]["entity_id"]
+    assert [item["name"] for item in primary["variants"]] == ["Основной"]
+    ids = {"Основной": primary_id}
+    for name in ("A", "B"):
+        response = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": name, "source_variant_id": primary_id})
+        assert response.status_code == 201, response.text
+        ids[name] = response.json()["variant_ref"]["entity_id"]
+        current = client.get(f"/v1/maps/{map_id}?variant_id={primary_id}").json()
+        assert {item["name"] for item in current["variants"]} == set(ids)
+    with SessionLocal() as session:
+        assert {(str(item.id), str(item.map_id), item.name) for item in session.scalars(select(MapPresentationVariant).where(MapPresentationVariant.map_id == map_id))} == {
+            (variant_id, map_id, name) for name, variant_id in ids.items()
+        }
+    for name, variant_id in ids.items():
+        current = client.get(f"/v1/maps/{map_id}?variant_id={variant_id}").json()
+        assert current["active_variant_ref"]["entity_id"] == variant_id
+        assert {item["name"] for item in current["variants"]} == set(ids)
+    duplicate = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": "A", "source_variant_id": primary_id})
+    assert duplicate.status_code == 409
+    assert client.delete(f"/v1/maps/{map_id}/presentation-variants/{ids['B']}").status_code == 204
+    remaining = client.get(f"/v1/maps/{map_id}?variant_id={primary_id}").json()
+    assert {item["name"] for item in remaining["variants"]} == {"Основной", "A"}
 
 
 def test_creating_a_layout_copy_clones_only_variant_specific_presentation_state():
