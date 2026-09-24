@@ -32,9 +32,10 @@ vi.mock('@xyflow/react', () => ({
   MiniMap: (props: { className?: string; position?: string }) => <div data-testid="minimap" data-class={props.className} data-position={props.position} />,
   Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
-  ReactFlow: ({ nodes, edges, onNodeClick, onEdgeClick, onNodeContextMenu, onPaneContextMenu, onNodesChange, onNodeDragStart, onNodeDragStop, onPaneClick, onPaneMouseMove, children }: {
+  ReactFlow: ({ nodes, edges, nodeTypes, onNodeClick, onEdgeClick, onNodeContextMenu, onPaneContextMenu, onNodesChange, onNodeDragStart, onNodeDragStop, onPaneClick, onPaneMouseMove, children }: {
     nodes: FlowProjection['nodes'];
     edges: FlowProjection['edges'];
+    nodeTypes: Record<string, React.ComponentType<any>>;
     onNodeClick: (event: unknown, node: FlowProjection['nodes'][number]) => void;
     onEdgeClick?: (event: unknown, edge: FlowProjection['edges'][number]) => void;
     onNodeContextMenu?: (event: { preventDefault(): void }, node: FlowProjection['nodes'][number]) => void;
@@ -55,6 +56,7 @@ vi.mock('@xyflow/react', () => ({
       {edges.map((edge) => <output key={`emphasis-${edge.id}`} data-testid={`emphasis-${edge.id}`}>{edge.data?.cablePresentationEmphasis ?? 'none'}</output>)}
       {nodes.map((node) => (
         <div key={node.id}>
+          {node.type === 'locationProxy' && (() => { const ProxyNode = nodeTypes.locationProxy; return <ProxyNode data={node.data} />; })()}
           <button onClick={() => onNodeClick({}, node)}>{node.id}</button>
           <button onClick={() => onNodeContextMenu?.({ preventDefault: vi.fn() }, node)}>context {node.id}</button>
           <span data-testid={`position-${node.id}`}>{node.position.x},{node.position.y}</span>
@@ -134,12 +136,20 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(screen.queryByRole('button', { name: 'physical-a' })).toBeNull();
     expect(screen.getByTestId('endpoints-real-cable')).toHaveTextContent('location-proxy:room:physical-b');
     expect(screen.getByTestId('draggable-location-proxy:room')).toHaveTextContent('false');
+    const proxy = globalThis.document.querySelector('.location-proxy') as HTMLElement;
+    expect(proxy).toHaveTextContent('Room');
+    expect(proxy).not.toHaveTextContent('1');
+    expect(proxy).toHaveAttribute('title', 'Room — скрыто объектов: 1');
     const expand = screen.getByRole('button', { name: 'Развернуть Room' });
     expect(expand).toHaveTextContent('+');
     expect(expand).toHaveAttribute('title', 'Развернуть Room');
     const configure = screen.getByRole('button', { name: 'Настроить сворачивание Room' });
     expect(configure).toHaveTextContent('⚙');
     expect(configure).toHaveAttribute('title', 'Настроить сворачивание Room');
+    expect(proxy.querySelectorAll('.location-proxy__actions .location-action')).toHaveLength(2);
+    expect(proxy.contains(expand)).toBe(true);
+    expect(proxy.contains(configure)).toBe(true);
+    expect(globalThis.document.querySelector('.location-proxy-actions')).toBeNull();
     expect(screen.queryByText('Развернуть')).toBeNull();
     expect(screen.queryByText('Настроить')).toBeNull();
     fireEvent.click(configure);

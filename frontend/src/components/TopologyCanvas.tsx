@@ -380,7 +380,7 @@ export function TopologyCanvas({
     id: proxyNodeId(proxy.locationId), type: 'locationProxy',
     position: { x: proxy.bounds.x, y: proxy.bounds.y }, width: proxy.bounds.width, height: proxy.bounds.height,
     draggable: false, selectable: false,
-    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)) } },
+    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
   });
   const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const cableRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
@@ -620,12 +620,6 @@ export function TopologyCanvas({
                 data-location-id={frame.locationId}
                 style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
               ><span className="location-frame__heading"><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button className="location-action" type="button" aria-label={toggleLabel} title={toggleLabel} onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>⚙</button></span>}</span></div>;
-            })}
-            {locationFrameInput?.onCollapse && locationFrameInput.onConfigure && locationPresentation.proxies.map((proxy) => {
-              const locationName = locationFrameInput.locations.find((location) => location.location_ref.entity_id === proxy.locationId)?.name ?? proxy.label;
-              const expandLabel = t('map.locationExpand', { name: locationName });
-              const configureLabel = t('map.locationConfigureCollapse', { name: locationName });
-              return <div key={`actions:${proxy.locationId}`} className="location-proxy-actions" style={{ left: proxy.bounds.x, top: proxy.bounds.y + proxy.bounds.height }}><button className="location-action" type="button" aria-label={expandLabel} title={expandLabel} onClick={() => locationFrameInput.onCollapse?.(proxy.locationId, false)}>+</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onClick={() => locationFrameInput.onConfigure?.(proxy.locationId)}>⚙</button></div>;
             })}
           </div>
         </ViewportPortal>}

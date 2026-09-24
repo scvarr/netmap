@@ -44,13 +44,26 @@ const withNodes = (nodes: Record<string, any>, run: () => void) => {
 
 describe('direct cable route edge interaction', () => {
   it('renders a cable to a Location proxy without treating the proxy as a port-bearing object', () => {
-    const proxy = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 152, height: 60 }, data: { projection: null, locationProxy: { locationId: 'room', label: 'Room', hiddenObjectCount: 1 } } };
+    const proxy = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 110, height: 30 }, data: { projection: null, locationProxy: { locationId: 'room', label: 'Room', hiddenObjectCount: 1 } } };
     const cable = { id: 'real-cable', source: 'proxy', target: 'target', data: { cableNode: { id: 'canonical-cable' }, cableRoute: { waypoints: [{ x: 180, y: 20 }] } } };
     withNodes({ proxy, target }, () => {
       const { container } = render(<ForegroundCableRoutes edges={[cable] as any} />);
       expect(container.querySelector('[data-testid="foreground-cable-real-cable"]')).not.toBeNull();
       expect(container.querySelectorAll('.cable-route-port-marker')).toHaveLength(markerPoints.length);
       expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', expect.stringContaining('L 180 20'));
+      const anchor = container.querySelector('.cable-route-foreground')?.getAttribute('d')?.match(/^M ([\d.]+) ([\d.]+) /);
+      expect(anchor).not.toBeNull();
+      expect(Number(anchor![1])).toBe(proxy.measured.width);
+      expect(Number(anchor![2])).toBeGreaterThanOrEqual(0);
+      expect(Number(anchor![2])).toBeLessThanOrEqual(proxy.measured.height);
+    });
+  });
+  it('anchors a real cable between two compact Location proxies', () => {
+    const proxy = (id: string, x: number) => ({ internals: { positionAbsolute: { x, y: 0 } }, measured: { width: 110, height: 30 }, data: { projection: null, locationProxy: { locationId: id, label: id, hiddenObjectCount: 1 } } });
+    const cable = { id: 'between-proxies', source: 'left', target: 'right', data: { cableNode: { id: 'canonical-cable' } } };
+    withNodes({ left: proxy('left', 0), right: proxy('right', 300) }, () => {
+      const { container } = render(<ForegroundCableRoutes edges={[cable] as any} />);
+      expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 110 15 L 300 15');
     });
   });
   it('exposes one source-target segment for zero waypoints and three segments for two', () => {

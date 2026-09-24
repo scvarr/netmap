@@ -31,7 +31,19 @@ describe('variant Location collapse projection', () => {
     expect(collapsed.frames).toEqual([]);
     expect(collapsed.proxies).toMatchObject([{ locationId: 'room', hiddenObjectCount: 2 }]);
     expect([...collapsed.hiddenObjectProxy.entries()]).toEqual([['ups', 'room'], ['switch', 'room']]);
-    expect(collapsed.proxies[0].bounds.width).toBe(152);
+    expect(collapsed.proxies[0].bounds.height).toBeLessThan(objects[0].rectangle.height);
+    expect(collapsed.proxies[0].bounds.width).toBeLessThan(objects[0].rectangle.width + objects[1].rectangle.x);
+  });
+
+  it('derives a unary parent path once for a collapsed proxy and sizes its anchor from that path', () => {
+    const hierarchy = [location('301'), location('301A', '301')];
+    const placements = [placement('a', '301A')];
+    const objects = [shown('a', 100, 100)];
+    const collapsed = deriveLocationPresentation(hierarchy, placements, objects, [state('301A', true)]);
+    expect(collapsed.proxies).toMatchObject([{ locationId: '301A', pathLocationIds: ['301', '301A'], label: '301 / 301A' }]);
+    expect(collapsed.proxies[0].label).not.toContain('301A / 301A');
+    expect(collapsed.proxies[0].bounds.height).toBeLessThan(objects[0].rectangle.height);
+    expect(collapsed.proxies[0].bounds.width).toBeGreaterThan(deriveLocationPresentation([location('301A')], placements, objects, [state('301A', true)]).proxies[0].bounds.width);
   });
 
   it('keeps a direct child recursively and forms a frame with the hidden remainder', () => {

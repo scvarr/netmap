@@ -25,7 +25,7 @@ const loadElk = (): Promise<ELK> => {
 
 export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
-  locationProxy?: { locationId: string; label: string; hiddenObjectCount: number; traced?: boolean };
+  locationProxy?: { locationId: string; label: string; hiddenObjectCount: number; traced?: boolean; expandLabel?: string; configureLabel?: string; onExpand?: () => void; onConfigure?: () => void };
   /** Physical SavedMap decoration derived from canonical Location context. */
   locationPresentationPath?: string;
   /** Temporary MapPage authoring state; deliberately separate from topology selection. */

@@ -32,7 +32,10 @@ export interface LocationPresentation {
   hiddenObjectProxy: Map<string, string>;
 }
 
-export interface LocationProxy { locationId: string; label: string; bounds: FlowRectangle; hiddenObjectCount: number }
+export interface LocationProxy { locationId: string; pathLocationIds: string[]; label: string; bounds: FlowRectangle; hiddenObjectCount: number }
+
+const proxyWidth = (label: string): number => Math.max(100, Math.min(360, 74 + [...label].length * 7));
+const proxyHeight = 30;
 
 /** Only presentation endpoints change; each retained edge keeps its exact evidence and id. */
 export function projectCollapsedEdges<T extends { source: string; target: string }>(edges: readonly T[], hiddenNodeProxies: ReadonlyMap<string, string>): T[] {
@@ -130,8 +133,9 @@ export function deriveLocationPresentation(
     let proxyRepresentation: Representation | null = null;
     if (hidden.length) {
       const center = union(hidden.map((object) => object.rectangle));
-      const bounds = { x: center.x + center.width / 2 - 76, y: center.y + center.height / 2 - 30, width: 152, height: 60 };
-      const proxy: LocationProxy = { locationId: id, label: location.name, bounds, hiddenObjectCount: hidden.length };
+      const width = proxyWidth(location.name);
+      const bounds = { x: center.x + center.width / 2 - width / 2, y: center.y + center.height / 2 - proxyHeight / 2, width, height: proxyHeight };
+      const proxy: LocationProxy = { locationId: id, pathLocationIds: [id], label: location.name, bounds, hiddenObjectCount: hidden.length };
       proxies.set(id, proxy);
       hidden.forEach((object) => hiddenObjectProxy.set(object.physicalObjectId, id));
       proxyRepresentation = { kind: 'proxy', proxy, extent: bounds };
@@ -167,9 +171,14 @@ export function deriveLocationPresentation(
       return { kind: 'frame', frame, content: child.content, extent: frame.bounds };
     }
     if (child?.kind === 'proxy') {
-      const proxy = { ...child.proxy, label: `${location.name} / ${child.proxy.label}` };
+      if (child.proxy.locationId === id) return child;
+      const pathLocationIds = [id, ...child.proxy.pathLocationIds];
+      const label = pathLocationIds.map((pathId) => byId.get(pathId)!.name).join(' / ');
+      const width = proxyWidth(label);
+      const centerX = child.proxy.bounds.x + child.proxy.bounds.width / 2;
+      const proxy = { ...child.proxy, pathLocationIds, label, bounds: { ...child.proxy.bounds, x: centerX - width / 2, width } };
       proxies.set(child.proxy.locationId, proxy);
-      return { kind: 'proxy', proxy, extent: child.extent };
+      return { kind: 'proxy', proxy, extent: proxy.bounds };
     }
     const object = child?.kind === 'object' ? child.object : objects[0].rectangle;
     const physicalObjectId = child?.kind === 'object' ? child.path.physicalObjectId : objects[0].physicalObjectId;
