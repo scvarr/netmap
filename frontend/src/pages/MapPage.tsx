@@ -463,7 +463,9 @@ export function MapPage({
     try {
       await savedMapDataSource.moveLocationGroup(targetMapId, targetVariantId, locationId, moveRequest);
     } catch (reason) {
-      if (selectedMapId.current === targetMapId) setError(errorMessage(reason, 'Не удалось переместить Location'));
+      if (selectedMapId.current === targetMapId) setError(reason instanceof Error && reason.message
+        ? `Не удалось переместить Location: ${reason.message}`
+        : 'Не удалось переместить Location');
       groupMovePending.current = false;
       return;
     }

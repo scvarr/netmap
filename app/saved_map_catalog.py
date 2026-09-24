@@ -14,31 +14,56 @@ from app.models import Cable, Connection, ConnectionPoint, Location, MapCableRou
 
 
 def _boundary_prefix(frame: dict[str, float], points: list[dict[str, float]]) -> int:
-    """Count waypoints strictly before the one unambiguous frame exit."""
+    """Count internal waypoints before one unambiguous frame exit."""
     left, top = frame["x"], frame["y"]
     right, bottom = left + frame["width"], top + frame["height"]
+    def near(a: float, b: float) -> bool:
+        return isclose(a, b, rel_tol=0, abs_tol=1e-7)
     def inside(point: dict[str, float]) -> bool:
         return left < point["x"] < right and top < point["y"] < bottom
-    if not inside(points[0]) or inside(points[-1]):
-        raise ValidationError("Boundary route endpoints do not straddle LocationFrame", {})
-    crossing: int | None = None
-    for index, (start, end) in enumerate(zip(points, points[1:])):
-        if any((any(isclose(point["x"], x, abs_tol=1e-7) for x in (left, right)) and top <= point["y"] <= bottom) or (any(isclose(point["y"], y, abs_tol=1e-7) for y in (top, bottom)) and left <= point["x"] <= right) for point in (start, end)):
-            raise ValidationError("Boundary route touches LocationFrame boundary", {})
+    def on_edge(point: dict[str, float]) -> bool:
+        return ((any(near(point["x"], x) for x in (left, right)) and top <= point["y"] <= bottom) or
+                (any(near(point["y"], y) for y in (top, bottom)) and left <= point["x"] <= right))
+    def hits(start: dict[str, float], end: dict[str, float]) -> list[float] | None:
+        if (any(near(start["x"], x) and near(end["x"], x) and max(min(start["y"], end["y"]), top) < min(max(start["y"], end["y"]), bottom) for x in (left, right)) or
+                any(near(start["y"], y) and near(end["y"], y) and max(min(start["x"], end["x"]), left) < min(max(start["x"], end["x"]), right) for y in (top, bottom))):
+            return None
         dx, dy = end["x"] - start["x"], end["y"] - start["y"]
-        hits = []
+        parameters = []
         for x in (left, right):
             if dx:
                 t = (x - start["x"]) / dx
                 y = start["y"] + t * dy
-                if 0 < t < 1 and top < y < bottom: hits.append(t)
+                if 0 <= t <= 1 and top <= y <= bottom: parameters.append(t)
         for y in (top, bottom):
             if dy:
                 t = (y - start["y"]) / dy
                 x = start["x"] + t * dx
-                if 0 < t < 1 and left < x < right: hits.append(t)
-        if hits:
-            if len(hits) != 1 or crossing is not None or not inside(start) or inside(end):
+                if 0 <= t <= 1 and left <= x <= right: parameters.append(t)
+        ordered = sorted(parameters)
+        return [t for index, t in enumerate(ordered) if index == 0 or abs(t - ordered[index - 1]) > 1e-9]
+    if len(points) < 2 or not inside(points[0]) or on_edge(points[0]) or inside(points[-1]) or on_edge(points[-1]):
+        raise ValidationError("Boundary route endpoints do not straddle LocationFrame", {})
+    boundary_points = [index for index, point in enumerate(points) if on_edge(point)]
+    if len(boundary_points) > 1:
+        raise ValidationError("Boundary route cannot be split unambiguously", {})
+    if boundary_points:
+        boundary = boundary_points[0]
+        if boundary in (0, len(points) - 1) or any(not inside(point) for point in points[:boundary]) or any(inside(point) for point in points[boundary + 1:]):
+            raise ValidationError("Boundary route cannot be split unambiguously", {})
+        for index, (start, end) in enumerate(zip(points, points[1:])):
+            crossings = hits(start, end)
+            expected = 1 if index in (boundary - 1, boundary) else 0
+            if crossings is None or len(crossings) != expected or (index == boundary - 1 and not near(crossings[0], 1)) or (index == boundary and not near(crossings[0], 0)):
+                raise ValidationError("Boundary route cannot be split unambiguously", {})
+        return boundary - 1
+    crossing: int | None = None
+    for index, (start, end) in enumerate(zip(points, points[1:])):
+        crossings = hits(start, end)
+        if crossings is None:
+            raise ValidationError("Boundary route cannot be split unambiguously", {})
+        if crossings:
+            if len(crossings) != 1 or crossing is not None or not inside(start) or inside(end):
                 raise ValidationError("Boundary route cannot be split unambiguously", {})
             crossing = index
     if crossing is None:

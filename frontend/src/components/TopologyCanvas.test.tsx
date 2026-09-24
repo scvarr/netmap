@@ -209,6 +209,25 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(globalThis.document.querySelectorAll('.location-frame--drag-preview')).toHaveLength(0);
   });
 
+  it('commits one child group move with a saved boundary waypoint through the canvas gesture', async () => {
+    const objects: TopologyProjectionNode[] = ['child-a', 'child-b', 'sibling', 'outside'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
+    const parentRef = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'parent' };
+    const childRef = { ...parentRef, entity_id: 'child' }, outsideRef = { ...parentRef, entity_id: 'outside' };
+    const positions = [0, 300, 800, 1200];
+    const cableNode: TopologyProjectionNode = { id: 'boundary-cable', kind: 'CABLE', label: 'Boundary', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable' }], attributes: {} };
+    const boundaryEdge: any = { id: 'boundary-edge', from_node_id: 'child-a', to_node_id: 'outside', kind: 'L1_PHYSICAL_LINK', source_refs: [], attributes: {} };
+    const onGroupMove = vi.fn(), onGroupMoveRejected = vi.fn();
+    render(<TopologyCanvas document={{ ...documentFor('physical-child-cable'), nodes: objects, edges: [boundaryEdge] }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: positions[index], y: 300 }, data: { projection } })), edges: [{ id: 'boundary-edge', source: 'child-a', target: 'outside', data: { cableNode, projection: boundaryEdge, endpointPair: { from_connection_point_id: 'source', from_member_index: 1, to_connection_point_id: 'target', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member' } } }] })} cableRoutes={[{ cable_ref: cableNode.source_refs[0], view: 'L1/PHYSICAL_OBJECT', waypoints: [{ x: 300, y: 372 }, { x: 532, y: 372 }, { x: 900, y: 372 }] }]} locationFrameInput={{ locations: [{ location_ref: parentRef, name: 'Parent', type: null, parent_location_ref: null }, { location_ref: childRef, name: 'Child', type: null, parent_location_ref: parentRef }, { location_ref: outsideRef, name: 'Outside', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? childRef : index === 2 ? parentRef : outsideRef, positions: { 'L1/PHYSICAL_OBJECT': { x: positions[index], y: 300, locked: false } } })), onGroupMove, onGroupMoveRejected }} />);
+    await screen.findByRole('button', { name: 'child-a' });
+    const heading = globalThis.document.querySelector('.location-frame[data-location-id="child"] .location-frame__heading') as HTMLElement;
+    heading.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
+    fireEvent.pointerMove(heading, { pointerId: 1, clientX: 2010, clientY: 10 });
+    fireEvent.pointerUp(heading, { pointerId: 1, clientX: 2010, clientY: 10 });
+    expect(onGroupMove).toHaveBeenCalledExactlyOnceWith('child', expect.objectContaining({ delta_x: 2000, delta_y: 0, boundary_routes: [expect.objectContaining({ cable_id: 'cable', moving_endpoint_is_source: true })] }));
+    expect(onGroupMoveRejected).not.toHaveBeenCalled();
+  });
+
   it('dispatches parent and child frame drags by their own Location identity and reports a rejected child move', async () => {
     const objects: TopologyProjectionNode[] = ['child-a', 'child-b', 'parent-a'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
     const parentRef = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'parent' };

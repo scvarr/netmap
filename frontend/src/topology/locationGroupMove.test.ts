@@ -40,11 +40,25 @@ describe('Location group movement geometry', () => {
     expect(() => prepareLocationGroupMove('room', { x: 40, y: 20 }, frame, locations, overlapping, rectangles, cables)).not.toThrow();
   });
 
-  it('splits one clear boundary exit and rejects a re-entry or a waypoint on the frame', () => {
+  it('splits one clear crossing and accepts a saved boundary waypoint', () => {
     expect(boundaryWaypointPrefix(frame, [{ x: 50, y: 30 }, { x: 100, y: 30 }, { x: 360, y: 30 }, { x: 500, y: 30 }])).toBe(1);
-    expect(boundaryWaypointPrefix(frame, [{ x: 50, y: 30 }, { x: 360, y: 30 }, { x: 50, y: 30 }, { x: 500, y: 30 }])).toBeNull();
-    expect(boundaryWaypointPrefix(frame, [{ x: 50, y: 30 }, { x: 220, y: 30 }, { x: 500, y: 30 }])).toBeNull();
+    expect(boundaryWaypointPrefix(frame, [{ x: 50, y: 30 }, { x: 220, y: 30 }, { x: 500, y: 30 }])).toBe(0);
     const reversed: GroupCableGeometry = { cableId: 'reverse', sourceObjectId: 'external', targetObjectId: 'a', source: { x: 500, y: 30 }, target: { x: 50, y: 30 }, savedWaypoints: [{ x: 360, y: 30 }, { x: 100, y: 30 }] };
     expect(prepareLocationGroupMove('room', { x: 40, y: 20 }, frame, locations, placements, rectangles, [reversed]).boundary_routes).toMatchObject([{ cable_id: 'reverse', moving_endpoint_is_source: false }]);
+  });
+
+  it('prepares a child move with no route, one ordinary crossing, a boundary anchor, and reversed cable orientation', () => {
+    const childFrame = { x: -20, y: 80, width: 340, height: 100 };
+    const childPlacements = [placement('child-a', 'rack', 0, 100), placement('child-b', 'rack', 200, 100), placement('sibling', 'room', 0, 0), placement('outside', 'outside', 900, 0)];
+    const childRectangles = new Map(childPlacements.map((item) => [item.physical_object_ref.entity_id, { x: item.positions['L1/PHYSICAL_OBJECT']!.x, y: item.positions['L1/PHYSICAL_OBJECT']!.y, width: 100, height: 60 }]));
+    const route = (savedWaypoints?: GroupCableGeometry['savedWaypoints']): GroupCableGeometry => ({ cableId: 'child-boundary', sourceObjectId: 'child-a', targetObjectId: 'outside', source: { x: 50, y: 130 }, target: { x: 900, y: 30 }, savedWaypoints });
+    const move = (cable: GroupCableGeometry) => prepareLocationGroupMove('rack', { x: 400, y: 20 }, childFrame, locations, childPlacements, childRectangles, [cable]);
+    expect(move(route()).boundary_routes).toEqual([]);
+    expect(move(route([{ x: 200, y: 130 }, { x: 400, y: 130 }])).boundary_routes).toHaveLength(1);
+    expect(move(route([{ x: 200, y: 130 }, { x: 320, y: 130 }, { x: 400, y: 130 }])).boundary_routes).toMatchObject([{ cable_id: 'child-boundary', moving_endpoint_is_source: true }]);
+    const reverse: GroupCableGeometry = { cableId: 'child-boundary', sourceObjectId: 'outside', targetObjectId: 'child-a', source: { x: 900, y: 30 }, target: { x: 50, y: 130 }, savedWaypoints: [{ x: 400, y: 130 }, { x: 320, y: 130 }, { x: 200, y: 130 }] };
+    expect(move(reverse).boundary_routes).toMatchObject([{ cable_id: 'child-boundary', moving_endpoint_is_source: false }]);
+    expect(() => move(route([{ x: 200, y: 130 }, { x: 400, y: 130 }, { x: 200, y: 130 }, { x: 500, y: 130 }]))).toThrow(/однозначно/);
+    expect(() => move(route([{ x: 200, y: 130 }, { x: 320, y: 130 }, { x: 200, y: 130 }, { x: 500, y: 130 }]))).toThrow(/однозначно/);
   });
 });

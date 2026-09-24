@@ -12,26 +12,47 @@ export interface GroupCableGeometry {
   savedWaypoints?: readonly MapCableRouteWaypoint[];
 }
 
-/** Reject tangencies, boundary waypoints and re-entry; they have no stable inside prefix. */
+/** Return the count of internal waypoints before one unambiguous frame exit. */
 export const boundaryWaypointPrefix = (frame: FlowRectangle, points: readonly MapCableRouteWaypoint[]): number | null => {
   const right = frame.x + frame.width, bottom = frame.y + frame.height;
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1e-7;
   const inside = (point: MapCableRouteWaypoint) => frame.x < point.x && point.x < right && frame.y < point.y && point.y < bottom;
   const onEdge = (point: MapCableRouteWaypoint) =>
-    ((point.x === frame.x || point.x === right) && frame.y <= point.y && point.y <= bottom) ||
-    ((point.y === frame.y || point.y === bottom) && frame.x <= point.x && point.x <= right);
-  if (!inside(points[0]) || inside(points[points.length - 1]) || points.some(onEdge)) return null;
-  let prefix: number | null = null;
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const a = points[index], b = points[index + 1], dx = b.x - a.x, dy = b.y - a.y;
-    const hits = [frame.x, right].flatMap((x) => {
+    ((near(point.x, frame.x) || near(point.x, right)) && frame.y <= point.y && point.y <= bottom) ||
+    ((near(point.y, frame.y) || near(point.y, bottom)) && frame.x <= point.x && point.x <= right);
+  const hits = (a: MapCableRouteWaypoint, b: MapCableRouteWaypoint): number[] | null => {
+    if ([frame.x, right].some((x) => near(a.x, x) && near(b.x, x) && Math.max(Math.min(a.y, b.y), frame.y) < Math.min(Math.max(a.y, b.y), bottom)) ||
+      [frame.y, bottom].some((y) => near(a.y, y) && near(b.y, y) && Math.max(Math.min(a.x, b.x), frame.x) < Math.min(Math.max(a.x, b.x), right))) return null;
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const parameters = [frame.x, right].flatMap((x) => {
       const t = dx ? (x - a.x) / dx : -1, y = a.y + t * dy;
-      return t > 0 && t < 1 && y > frame.y && y < bottom ? [t] : [];
+      return t >= 0 && t <= 1 && y >= frame.y && y <= bottom ? [t] : [];
     }).concat([frame.y, bottom].flatMap((y) => {
       const t = dy ? (y - a.y) / dy : -1, x = a.x + t * dx;
-      return t > 0 && t < 1 && x > frame.x && x < right ? [t] : [];
+      return t >= 0 && t <= 1 && x >= frame.x && x <= right ? [t] : [];
     }));
-    if (hits.length) {
-      if (hits.length !== 1 || prefix !== null || !inside(a) || inside(b)) return null;
+    return parameters.sort((a, b) => a - b).filter((t, index, sorted) => index === 0 || Math.abs(t - sorted[index - 1]) > 1e-9);
+  };
+  if (points.length < 2 || !inside(points[0]) || onEdge(points[0]) || inside(points[points.length - 1]) || onEdge(points[points.length - 1])) return null;
+  const boundaryPoints = points.flatMap((point, index) => onEdge(point) ? [index] : []);
+  if (boundaryPoints.length > 1) return null;
+  if (boundaryPoints.length === 1) {
+    const boundary = boundaryPoints[0];
+    if (boundary === 0 || boundary === points.length - 1) return null;
+    if (points.slice(0, boundary).some((point) => !inside(point)) || points.slice(boundary + 1).some((point) => inside(point))) return null;
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const crossings = hits(points[index], points[index + 1]);
+      if (!crossings || crossings.length !== (index === boundary - 1 || index === boundary ? 1 : 0) ||
+        (index === boundary - 1 && !near(crossings[0], 1)) || (index === boundary && !near(crossings[0], 0))) return null;
+    }
+    return boundary - 1;
+  }
+  let prefix: number | null = null;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const crossings = hits(points[index], points[index + 1]);
+    if (!crossings) return null;
+    if (crossings.length) {
+      if (crossings.length !== 1 || prefix !== null || !inside(points[index]) || inside(points[index + 1])) return null;
       prefix = index;
     }
   }

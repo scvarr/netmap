@@ -1,4 +1,5 @@
 from fastapi.testclient import TestClient
+import pytest
 from sqlalchemy import select
 
 from app.database import SessionLocal
@@ -78,6 +79,87 @@ def snapshot(ids):
         membership = dict(session.execute(select(PhysicalObject.id, PhysicalObject.location_id)).all())
         hierarchy = dict(session.execute(select(Location.id, Location.parent_location_id)).all())
         return {name: (positions[object_id].x, positions[object_id].y, positions[object_id].display_width) for name, object_id in ids["objects"].items()}, routes, membership, hierarchy
+
+
+def nested_scene(waypoints, reverse=False):
+    with SessionLocal.begin() as session:
+        parent = Location(name="parent")
+        child = Location(name="child", parent=parent)
+        outside = Location(name="outside")
+        session.add_all([parent, child, outside])
+        objects = {name: PhysicalObject(location=location) for name, location in [
+            ("child_a", child), ("child_b", child), ("sibling", parent), ("outside", outside),
+        ]}
+        session.add_all(objects.values())
+        saved = SavedMap(name="nested group move")
+        session.add(saved); session.flush()
+        variant = MapPresentationVariant(map_id=saved.id, name="Основной")
+        session.add(variant); session.flush()
+        coordinates = {"child_a": (0, 100), "child_b": (200, 100), "sibling": (0, 0), "outside": (900, 0)}
+        for name, obj in objects.items():
+            placement = MapPlacement(map_id=saved.id, physical_object_id=obj.id)
+            placement.view_positions.append(MapViewPosition(variant_id=variant.id, view_key=MapViewKey.PHYSICAL, x=coordinates[name][0], y=coordinates[name][1]))
+            session.add(placement)
+        first = objects["outside" if reverse else "child_a"]
+        second = objects["child_a" if reverse else "outside"]
+        point_a = ConnectionPoint(physical_object=first, cardinality=1)
+        point_b = ConnectionPoint(physical_object=second, cardinality=1)
+        session.add_all([point_a, point_b]); session.flush()
+        connection = Connection(point_a_id=point_a.id, point_b_id=point_b.id, cardinality=1)
+        session.add(connection); session.flush()
+        cable = Cable(connection_id=connection.id)
+        session.add(cable); session.flush()
+        if waypoints is not None:
+            session.add(MapCableRoute(map_id=saved.id, variant_id=variant.id, cable_id=cable.id, view_key=MapViewKey.PHYSICAL, waypoints=waypoints))
+        return {"map": saved.id, "variant": variant.id, "room": child.id,
+                "objects": {name: obj.id for name, obj in objects.items()}, "cables": {"boundary": cable.id}}
+
+
+def nested_request(ids, reverse=False):
+    coordinates = {"child_a": (0, 100), "child_b": (200, 100), "sibling": (0, 0), "outside": (900, 0)}
+    return {"delta_x": 400, "delta_y": 20,
+            "frame": {"x": -20, "y": 80, "width": 340, "height": 100},
+            "footprints": [{"physical_object_id": str(ids["objects"][name]), "x": x, "y": y, "width": 100, "height": 60} for name, (x, y) in coordinates.items()],
+            "boundary_routes": [{"cable_id": str(ids["cables"]["boundary"]), "moving_endpoint_is_source": not reverse,
+                                 "moving_endpoint": {"x": 50, "y": 130}, "external_endpoint": {"x": 900, "y": 30}}]}
+
+
+@pytest.mark.parametrize("waypoints,expected", [
+    (None, None),
+    ([{"x": 200, "y": 130}, {"x": 400, "y": 130}], [{"x": 600, "y": 150}, {"x": 400, "y": 130}]),
+    ([{"x": 200, "y": 130}, {"x": 320, "y": 130}, {"x": 400, "y": 130}], [{"x": 600, "y": 150}, {"x": 320, "y": 130}, {"x": 400, "y": 130}]),
+])
+def test_nested_child_move_commits_without_parent_containment_and_keeps_boundary_anchor(waypoints, expected):
+    ids = nested_scene(waypoints)
+    before = snapshot(ids)
+    payload = nested_request(ids)
+    if waypoints is None:
+        payload["boundary_routes"] = []
+    response = move(ids, payload)
+    assert response.status_code == 204, response.text
+    positions, routes, membership, hierarchy = snapshot(ids)
+    assert positions["child_a"][:2] == (400, 120)
+    assert positions["child_b"][:2] == (600, 120)
+    assert positions["sibling"] == before[0]["sibling"]
+    assert positions["outside"] == before[0]["outside"]
+    assert routes.get(ids["cables"]["boundary"]) == expected
+    assert membership == before[2] and hierarchy == before[3]
+
+
+def test_nested_child_boundary_anchor_is_fixed_with_reversed_cable_orientation():
+    ids = nested_scene([{"x": 400, "y": 130}, {"x": 320, "y": 130}, {"x": 200, "y": 130}], reverse=True)
+    response = move(ids, nested_request(ids, reverse=True))
+    assert response.status_code == 204, response.text
+    assert snapshot(ids)[1][ids["cables"]["boundary"]] == [{"x": 400, "y": 130}, {"x": 320, "y": 130}, {"x": 600, "y": 150}]
+
+
+def test_nested_child_route_reentry_still_rejects_atomically():
+    ids = nested_scene([{"x": 200, "y": 130}, {"x": 320, "y": 130}, {"x": 200, "y": 130}, {"x": 400, "y": 130}])
+    before = snapshot(ids)
+    response = move(ids, nested_request(ids))
+    assert response.status_code == 422
+    assert response.json()["error"]["message"] == "Boundary route cannot be split unambiguously"
+    assert snapshot(ids) == before
 
 
 def test_group_move_moves_hidden_descendant_and_internal_route_without_touching_canonical_or_external():
