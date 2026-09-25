@@ -376,7 +376,7 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers
       const className = `cable-route-port-marker${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
       return endpoint && <g key={port.id}>{port.network
         ? <rect className={className} x={endpoint.x - 3.5} y={endpoint.y - 3.5} width={7} height={7} rx={1} pointerEvents="none" />
-        : <circle className={className} cx={endpoint.x} cy={endpoint.y} r={3.5} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x + 7} y={endpoint.y - 7} fontSize={12} fontWeight="bold" fill="#ffca66" stroke="#172629" strokeWidth={2} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
+        : <circle className={className} cx={endpoint.x} cy={endpoint.y} r={3.5} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
     })}
   </g>;
 }
