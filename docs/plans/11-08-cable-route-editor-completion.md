@@ -12,19 +12,25 @@ relation.
 
 ### C-ROUTE-01 — Cable selection precision and stacking
 
-**NEXT / IMPLEMENTATION PENDING.** Следующий implementation milestone после
-merge P-UX-03D.
+**IMPLEMENTED.**
 
-- Обычный Cable не перехватывает click соседнего Cable широкой невидимой
-  selection area; interactive hit width соответствует видимой линии.
-- Selected Cable визуально выше всех non-selected Cable независимо от порядка
-  insertion/render; editing Cable выше selected Cable.
-- Wiring draft сохраняет наивысший editing emphasis.
-- Cable selection не меняет canonical state или route persistence.
+- Interactive hit area обычного Cable соответствует видимой толщине линии;
+  большие hit targets для route-editor segment insertion и waypoint drag сохранены.
+- Selected Cable отображается выше non-selected независимо от исходного render
+  order; editing Cable отображается выше selected, а wiring draft сохраняет
+  верхний editing priority.
+- Foreground Cable поддерживает обычный click и существующее context menu.
+  Правая кнопка на editor segment или waypoint не вызывает insert/drag.
+- Geometry feedback сохраняет screen-stable размер; короткие и конфликтующие
+  подписи подавляются, а feedback отображается поверх остальных элементов route
+  editor.
+- Targeted validation: 58 targeted frontend tests passed; frontend build passed;
+  `git diff --check` passed.
 
 ### C-ROUTE-02 — Cross-route geometry snapping
 
-**OPEN.** Выполняется после C-ROUTE-01.
+**OPEN — NEXT CONTRACT TO AGREE.** Обсудить и согласовать контракт после
+C-ROUTE-01 перед началом реализации.
 
 - Drag/insert waypoint текущего Cable может snap к waypoint или ближайшей
   точке segment другого отображаемого Cable.
