@@ -5,7 +5,7 @@
 Этот файл — внутренний workflow contract только для ChatGPT, который
 координирует разработку NetMap.
 
-`Codex`, `Luna`, `Terra` и `Sol` не должны читать `docs/chatgpt.md` как
+`Luna`, `Sol` и `Astra` не должны читать `docs/chatgpt.md` как
 project instructions. ChatGPT не включает этот файл в обязательный reading
 list operational prompts для coding agents. Единственное исключение —
 bounded task, которая непосредственно редактирует или проверяет
@@ -55,8 +55,50 @@ roadmap или устройство репозитория. `docs/chatgpt.md` в
 включается.
 
 Перед каждым operational prompt model, reasoning effort и session указываются
-заново, даже если они не изменились. Размер репозитория сам по себе не
-является причиной выбирать наиболее сильную модель.
+заново, даже если они не изменились. В заголовке также указывается краткая
+конкретная причина выбора профиля:
+
+```text
+Model: Sol
+Reasoning effort: Medium
+Session: new
+Причина: bounded implementation обычной сложности.
+```
+
+Если указано `Session: continue current`, выбранная модель должна совпадать с
+моделью текущей coding-agent session. В пределах одной coding-agent session
+модель не меняется. Для corrective work в той же session сохраняется модель;
+можно изменить только reasoning effort. Если требуется другая модель,
+начинается новая coding-agent session. Это правило действует как при
+повышении, так и при понижении модели.
+
+## Выбор модели и reasoning effort
+
+Рабочая линейка моделей: `Luna`, `Sol` и `Astra`. Политика не привязывается к
+номеру поколения модели.
+
+`Sol + Medium` — основной профиль для обычной bounded implementation и
+integration работы, а также для большинства corrective implementation задач,
+если нет конкретной причины снизить effort. Не повышать модель или effort
+«для надёжности».
+
+`Luna` подходит для документации, инвентаризации, механического cleanup,
+простого restructuring и других задач без необходимости в сложном
+implementation reasoning. Обычно выбирается `Low` или `Medium` в зависимости
+от объёма анализа.
+
+`Astra` — исключение для задач с конкретной существенной сложностью: например,
+архитектурной неопределённостью, сложной concurrency/transactional
+correctness, нетривиальной migration существующих данных или semantics,
+identity/remapping problem, либо нескольких действительно конкурирующих
+implementation strategies, где `Sol` объективно недостаточен. Не выбирать
+`Astra` «на всякий случай».
+
+`Low` предназначен для локальных corrective задач, небольших bugfix и
+механических docs/cleanup задач. `Medium` — default для обычной bounded
+implementation. `High` используется только при конкретно обоснованной
+повышенной сложности. Размер diff, количество файлов или слоёв сами по себе
+не являются причиной выбирать `High`.
 
 ## Реализация, review и merge
 
