@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiSavedMapDataSource } from './apiSavedMapDataSource';
+import { ApiSavedMapDataSource, SavedMapApiError } from './apiSavedMapDataSource';
 
 const mapId = '00000000-0000-4000-8000-000000000001';
 const objectId = '00000000-0000-4000-8000-000000000002';
@@ -36,6 +36,13 @@ describe('ApiSavedMapDataSource', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(`/api/v1/maps/${mapId}/presentation-variants/${variantId}/locations/${objectId}/group-move`, expect.objectContaining({ method: 'POST', body: JSON.stringify(move) }));
     await expect(source.moveLocationGroup(mapId, variantId, objectId, move)).rejects.toThrow('VALIDATION_ERROR: Boundary route cannot be split unambiguously');
+  });
+  it('keeps structured FastAPI validation paths on a group-move failure', async () => {
+    const details = { errors: [{ loc: ['body', 'boundary_routes', 0, 'moving_endpoint', 'side'], msg: 'Extra inputs are not permitted', type: 'extra_forbidden' }] };
+    fetchMock.mockResolvedValue(response({ error: { code: 'VALIDATION_ERROR', message: 'Request validation failed', details } }, 422));
+    const move = { delta_x: 1, delta_y: 1, frame: { x: 0, y: 0, width: 1, height: 1 }, footprints: [], boundary_routes: [] };
+    try { await new ApiSavedMapDataSource().moveLocationGroup(mapId, variantId, objectId, move); throw new Error('Expected validation failure'); }
+    catch (reason) { expect(reason).toBeInstanceOf(SavedMapApiError); expect(reason).toMatchObject({ code: 'VALIDATION_ERROR', serverMessage: 'Request validation failed', details }); }
   });
   it('loads typed canonical direct elements for the collapse editor', async () => { const choices = [{ ref: { entity_type: 'Location', entity_id: objectId }, label: 'Rack' }, { ref: { entity_type: 'PhysicalObject', entity_id: mapId }, label: 'UPS' }]; fetchMock.mockResolvedValue(response(choices)); await expect(new ApiSavedMapDataSource().loadLocationDirectElements(mapId, variantId, objectId)).resolves.toEqual(choices); expect(fetchMock.mock.calls[0][0]).toBe(`/api/v1/maps/${mapId}/presentation-variants/${variantId}/locations/${objectId}/direct-elements`); });
   it.each([{ name: 'Copy' }, { variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, name: '' }])('rejects malformed variant creation response', async (invalid) => { fetchMock.mockResolvedValue(response(invalid)); await expect(new ApiSavedMapDataSource().createPresentationVariant(mapId, 'Copy', variantId)).rejects.toThrow('Malformed SavedMap'); });

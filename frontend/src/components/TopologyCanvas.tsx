@@ -693,7 +693,7 @@ export function TopologyCanvas({
       const floating = getFloatingEndpoints(box(sourceNode), box(targetNode));
       const source = sourceNode.data.locationProxy ? floating.source : getRenderedConnectionPoint(sourceNode.data.projection, box(sourceNode), pair.from_connection_point_id) ?? floating.source;
       const target = targetNode.data.locationProxy ? floating.target : getRenderedConnectionPoint(targetNode.data.projection, box(targetNode), pair.to_connection_point_id) ?? floating.target;
-      return [{ cableId, sourceObjectId, targetObjectId, source, target, savedWaypoints: cableRoutes?.find((route) => route.cable_ref.entity_id === cableId)?.waypoints }];
+      return [{ cableId, sourceObjectId, targetObjectId, source: { x: source.x, y: source.y }, target: { x: target.x, y: target.y }, savedWaypoints: cableRoutes?.find((route) => route.cable_ref.entity_id === cableId)?.waypoints }];
     });
     try {
       const move = prepareLocationGroupMove(drag.locationId, delta, drag.bounds, locationFrameInput.locations, locationFrameInput.placements, rectangles, cables);

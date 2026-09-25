@@ -11,6 +11,7 @@ import { MapContextMenu, type MapContextTarget } from "../components/MapContextM
 import { CableRenameDialog } from "../components/CableRenameDialog";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
+import { SavedMapApiError } from "../topology/apiSavedMapDataSource";
 import {
   PresentationAuthoringPanel,
   type TextAnnotationDeleteOperation,
@@ -164,6 +165,14 @@ const savedMapViewKey = (value: SavedMapView): SavedMapViewKey =>
 const natural = (left: string, right: string) =>
   left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
 const errorMessage = (_reason: unknown, fallback: string) => fallback;
+interface GroupMoveError { message: string; code?: string; details?: unknown }
+const groupMoveValidationEntries = (details: unknown): { path: string; message: string }[] => {
+  if (!details || typeof details !== 'object' || !('errors' in details) || !Array.isArray(details.errors)) return [];
+  return details.errors.flatMap((entry: unknown) => {
+    if (!entry || typeof entry !== 'object' || !('loc' in entry) || !Array.isArray(entry.loc) || !('msg' in entry) || typeof entry.msg !== 'string') return [];
+    return [{ path: entry.loc.map(String).join(' → '), message: entry.msg }];
+  });
+};
 const isRouteEditorKeyboardTarget = (target: EventTarget | null) =>
   target instanceof Element && Boolean(target.closest('input, textarea, select, button, [contenteditable="true"], [role="textbox"], [role="combobox"], [role="listbox"], [role="menu"], [role="menuitem"], [role="dialog"]'));
 const emptyPhysicalDocument: TopologyProjectionDocument = {
@@ -301,6 +310,7 @@ export function MapPage({
   const [authoritativePositionRevision, setAuthoritativePositionRevision] =
     useState(0);
   const [groupMoveRefresh, setGroupMoveRefresh] = useState<{ mapId: string; variantId: string } | null>(null);
+  const [groupMoveError, setGroupMoveError] = useState<GroupMoveError | null>(null);
   const [canonicalDeleteRevision, setCanonicalDeleteRevision] = useState(0);
   const [coordinateBridgeRevision, setCoordinateBridgeRevision] = useState(0);
   const [copiedBlueprintDisplayWidth, setCopiedBlueprintDisplayWidth] = useState<number>();
@@ -460,13 +470,13 @@ export function MapPage({
     if (!activeMap || !savedMapDataSource?.moveLocationGroup || groupMovePending.current || (groupMoveRefresh?.mapId === activeMap.map_ref.entity_id && groupMoveRefresh.variantId === activeMap.active_variant_ref.entity_id)) return;
     const targetMapId = activeMap.map_ref.entity_id, targetVariantId = activeMap.active_variant_ref.entity_id;
     groupMovePending.current = true;
-    setError(null);
+    setGroupMoveError(null);
     try {
       await savedMapDataSource.moveLocationGroup(targetMapId, targetVariantId, locationId, moveRequest);
     } catch (reason) {
-      if (selectedMapId.current === targetMapId) setError(reason instanceof Error && reason.message
-        ? `Не удалось переместить Location: ${reason.message}`
-        : 'Не удалось переместить Location');
+      if (selectedMapId.current === targetMapId) setGroupMoveError(reason instanceof SavedMapApiError
+        ? { message: reason.serverMessage, code: reason.code, details: reason.details }
+        : { message: reason instanceof Error && reason.message ? reason.message : 'Ошибка перемещения Location.' });
       groupMovePending.current = false;
       return;
     }
@@ -474,7 +484,7 @@ export function MapPage({
     try {
       if (await reloadMap(targetMapId) && selectedMapId.current === targetMapId) setGroupMoveRefresh(null);
     } catch {
-      if (selectedMapId.current === targetMapId) setError('Location перемещён, но карту не удалось обновить.');
+      if (selectedMapId.current === targetMapId) setGroupMoveError({ message: 'Location перемещён, но карту не удалось обновить.' });
     } finally { groupMovePending.current = false; }
   };
 
@@ -482,8 +492,8 @@ export function MapPage({
     if (!groupMoveRefresh || groupMovePending.current) return;
     groupMovePending.current = true;
     try {
-      if (await reloadMap(groupMoveRefresh.mapId)) { setGroupMoveRefresh(null); setError(null); }
-    } catch { setError('Не удалось обновить карту после перемещения Location.'); }
+      if (await reloadMap(groupMoveRefresh.mapId)) { setGroupMoveRefresh(null); setGroupMoveError(null); }
+    } catch { setGroupMoveError({ message: 'Не удалось обновить карту после перемещения Location.' }); }
     finally { groupMovePending.current = false; }
   };
 
@@ -1880,6 +1890,15 @@ export function MapPage({
       {variantDeletion?.status === "refresh-failed" && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
       {groupMoveRefresh && activeMap?.map_ref.entity_id === groupMoveRefresh.mapId && activeMap.active_variant_ref.entity_id === groupMoveRefresh.variantId && <section role="alert"><p>Location перемещён. Обновите карту для продолжения.</p><button type="button" onClick={() => void retryGroupMoveRefresh()}>{t("map.retryRefresh")}</button></section>}
+      {groupMoveError && createPortal(<section className="map-dialog map-dialog--group-move" role="dialog" aria-modal="true" aria-label="Не удалось переместить Location"><div className="map-dialog__surface map-dialog__surface--group-move">
+        <h2>Не удалось переместить Location</h2>
+        <p role="alert">{groupMoveError.message}</p>
+        {(groupMoveError.code || groupMoveValidationEntries(groupMoveError.details).length > 0) && <details className="map-group-move-error__details"><summary>Технические подробности</summary>
+          {groupMoveError.code && <p>Код ошибки: <code>{groupMoveError.code}</code></p>}
+          {groupMoveValidationEntries(groupMoveError.details).length > 0 && <ul>{groupMoveValidationEntries(groupMoveError.details).map((entry, index) => <li key={index}><code>{entry.path}</code><span>{entry.message}</span></li>)}</ul>}
+        </details>}
+        <div className="map-dialog__actions"><button type="button" onClick={() => setGroupMoveError(null)}>Закрыть</button></div>
+      </div></section>, globalThis.document.body)}
       {error && <p role="alert">{error}</p>}
       {document &&
         params.get("focus") &&
@@ -1943,7 +1962,7 @@ export function MapPage({
                   positionSnapshot={activeMap?.placements}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}
                   locationFrameInput={!legacy && viewMode === "physical" && activeMap && locations
-                    ? { locations, placements: activeMap.placements, states: activeMap.location_states ?? [], onCollapse: (locationId, collapsed) => { const state = locationStateFor(locationId); void writeLocationState(locationId, collapsed, state?.visible_direct_elements ?? []); }, onConfigure: openLocationConfig, onGroupMove: !physicalAnnotationMode && !(groupMoveRefresh?.mapId === activeMap.map_ref.entity_id && groupMoveRefresh.variantId === activeMap.active_variant_ref.entity_id) ? (locationId: string, moveRequest: LocationGroupMove) => { void moveLocationGroup(locationId, moveRequest); } : undefined, onGroupMoveRejected: (message: string) => setError(message) }
+                    ? { locations, placements: activeMap.placements, states: activeMap.location_states ?? [], onCollapse: (locationId, collapsed) => { const state = locationStateFor(locationId); void writeLocationState(locationId, collapsed, state?.visible_direct_elements ?? []); }, onConfigure: openLocationConfig, onGroupMove: !physicalAnnotationMode && !(groupMoveRefresh?.mapId === activeMap.map_ref.entity_id && groupMoveRefresh.variantId === activeMap.active_variant_ref.entity_id) ? (locationId: string, moveRequest: LocationGroupMove) => { void moveLocationGroup(locationId, moveRequest); } : undefined, onGroupMoveRejected: (message: string) => setGroupMoveError({ message }) }
                     : undefined}
                   directlyAttachedCableIds={directlyAttachedCables}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}

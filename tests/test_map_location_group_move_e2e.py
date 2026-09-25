@@ -148,6 +148,10 @@ def test_nested_child_move_commits_without_parent_containment_and_keeps_boundary
     else:
         assert [(point["x"], point["y"]) for point in saved_route] == expected
         assert saved_route[1]["anchor"] == {"location_id": str(ids["room"]), "edge": "right", "offset": 0.5}
+        authoritative = client.get(f'/v1/maps/{ids["map"]}?variant_id={ids["variant"]}')
+        assert authoritative.status_code == 200, authoritative.text
+        returned_route = next(route for route in authoritative.json()["cable_routes"] if route["cable_ref"]["entity_id"] == str(ids["cables"]["boundary"]))
+        assert returned_route["waypoints"][1]["anchor"] == saved_route[1]["anchor"]
     assert membership == before[2] and hierarchy == before[3]
 
 
@@ -166,6 +170,19 @@ def test_nested_child_route_reentry_still_rejects_atomically():
     response = move(ids, nested_request(ids))
     assert response.status_code == 422
     assert response.json()["error"]["message"] == "Boundary route cannot be split unambiguously"
+    assert snapshot(ids) == before
+
+
+def test_group_move_rejects_renderer_only_endpoint_side_at_strict_api_boundary():
+    ids = nested_scene([{"x": 200, "y": 130}, {"x": 400, "y": 130}])
+    before = snapshot(ids)
+    payload = nested_request(ids)
+    payload["boundary_routes"][0]["moving_endpoint"]["side"] = "right"
+    response = move(ids, payload)
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert any(item["loc"][-1] == "side" and item["type"] == "extra_forbidden" for item in error["details"]["errors"])
     assert snapshot(ids) == before
 
 

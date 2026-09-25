@@ -5,6 +5,7 @@ import type { FlowProjection, TopologyLayoutEngine } from '../topology/layout';
 import type { TopologyProjectionDocument, TopologyProjectionNode } from '../topology/types';
 import type { PresentationSceneDocument } from '../topology/presentationScene';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
+import { ApiSavedMapDataSource } from '../topology/apiSavedMapDataSource';
 
 const { fitViewMock, getZoomMock, screenTransform } = vi.hoisted(() => ({
   fitViewMock: vi.fn(),
@@ -116,6 +117,7 @@ const deferred = <T,>() => {
 };
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   fitViewMock.mockClear();
   getZoomMock.mockClear();
   screenTransform.scale = 1;
@@ -217,7 +219,11 @@ describe('TopologyCanvas async layout boundary', () => {
     const positions = [0, 300, 800, 1200];
     const cableNode: TopologyProjectionNode = { id: 'boundary-cable', kind: 'CABLE', label: 'Boundary', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable' }], attributes: {} };
     const boundaryEdge: any = { id: 'boundary-edge', from_node_id: 'child-a', to_node_id: 'outside', kind: 'L1_PHYSICAL_LINK', source_refs: [], attributes: {} };
-    const onGroupMove = vi.fn(), onGroupMoveRejected = vi.fn();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const api = new ApiSavedMapDataSource();
+    const apiId = '00000000-0000-4000-8000-000000000001';
+    const onGroupMove = vi.fn((_locationId: string, move: Parameters<ApiSavedMapDataSource['moveLocationGroup']>[3]) => { void api.moveLocationGroup(apiId, apiId, apiId, move); }), onGroupMoveRejected = vi.fn();
     render(<TopologyCanvas document={{ ...documentFor('physical-child-cable'), nodes: objects, edges: [boundaryEdge] }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: positions[index], y: 300 }, data: { projection } })), edges: [{ id: 'boundary-edge', source: 'child-a', target: 'outside', data: { cableNode, projection: boundaryEdge, endpointPair: { from_connection_point_id: 'source', from_member_index: 1, to_connection_point_id: 'target', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member' } } }] })} cableRoutes={[{ cable_ref: cableNode.source_refs[0], view: 'L1/PHYSICAL_OBJECT', waypoints: [{ x: 300, y: 372 }, { x: 532, y: 372 }, { x: 900, y: 372 }] }]} locationFrameInput={{ locations: [{ location_ref: parentRef, name: 'Parent', type: null, parent_location_ref: null }, { location_ref: childRef, name: 'Child', type: null, parent_location_ref: parentRef }, { location_ref: outsideRef, name: 'Outside', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? childRef : index === 2 ? parentRef : outsideRef, positions: { 'L1/PHYSICAL_OBJECT': { x: positions[index], y: 300, locked: false } } })), onGroupMove, onGroupMoveRejected }} />);
     await screen.findByRole('button', { name: 'child-a' });
     const heading = globalThis.document.querySelector('.location-frame[data-location-id="child"] .location-frame__heading') as HTMLElement;
@@ -227,6 +233,11 @@ describe('TopologyCanvas async layout boundary', () => {
     fireEvent.pointerUp(heading, { pointerId: 1, clientX: 2010, clientY: 10 });
     expect(onGroupMove).toHaveBeenCalledExactlyOnceWith('child', expect.objectContaining({ delta_x: 2000, delta_y: 0, boundary_routes: [expect.objectContaining({ cable_id: 'cable', moving_endpoint_is_source: true })] }));
     expect(onGroupMoveRejected).not.toHaveBeenCalled();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.boundary_routes).toHaveLength(1);
+    expect(Object.keys(body.boundary_routes[0].moving_endpoint).sort()).toEqual(['x', 'y']);
+    expect(Object.keys(body.boundary_routes[0].external_endpoint).sort()).toEqual(['x', 'y']);
   });
 
   it('normalizes a saved route using the rendered Location frame before its one route write', async () => {

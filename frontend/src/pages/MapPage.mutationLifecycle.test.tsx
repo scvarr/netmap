@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MapPage } from './MapPage';
 import { createMapPageHarness } from './MapPage.testHarness';
+import { SavedMapApiError } from '../topology/apiSavedMapDataSource';
 
-vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (p: any) => <><button onClick={() => { const item = p.document.cableNode ?? p.document.nodes[0]; p.onViewportCenterReady?.(() => ({ x: 12, y: 34 })); if (!p.onPhysicalCableContextMenu && !p.onPhysicalNodeContextMenu) p.onSelectionChange({ type: 'node', item }); if (p.document.cableNode) p.onPhysicalCableContextMenu?.(item, { x: 12, y: 34 }); else p.onPhysicalNodeContextMenu?.(item, { x: 12, y: 34 }); }}>select</button><button onClick={() => p.onSelectionChange({ type: 'node', item: p.document.cableNode })}>select cable</button><button onClick={() => p.onSelectionChange({ type: 'node', item: p.document.nodes[0] })}>select other</button><button onClick={() => p.onPaneClick?.({ x: 9, y: 9 })}>pane</button><button onClick={() => { p.onViewportCenterReady?.(() => ({ x: 12, y: 34 })); p.onSelectionChange({ type: 'continuation', item: p.document.l1_off_map_continuations?.[0] }); }}>continuation</button><button onClick={() => p.onNodeCollisionRejected?.()}>collision</button><button onClick={() => p.locationFrameInput?.onGroupMove?.('room', { delta_x: 40, delta_y: 20, frame: { x: 0, y: 0, width: 100, height: 100 }, footprints: [], boundary_routes: [] })}>group move</button><button onClick={() => p.cableRouteDraft?.onWaypointInsert(0, { x: 70, y: 80 })}>route segment</button><button onClick={() => p.cableRouteDraft?.onWaypointSelect(0)}>route handle</button>{p.cableRouteDraft && <output data-testid="route-draft">active</output>}<div role="dialog"><button>dialog control</button></div></> }));
+vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (p: any) => <><button onClick={() => { const item = p.document.cableNode ?? p.document.nodes[0]; p.onViewportCenterReady?.(() => ({ x: 12, y: 34 })); if (!p.onPhysicalCableContextMenu && !p.onPhysicalNodeContextMenu) p.onSelectionChange({ type: 'node', item }); if (p.document.cableNode) p.onPhysicalCableContextMenu?.(item, { x: 12, y: 34 }); else p.onPhysicalNodeContextMenu?.(item, { x: 12, y: 34 }); }}>select</button><button onClick={() => p.onSelectionChange({ type: 'node', item: p.document.cableNode })}>select cable</button><button onClick={() => p.onSelectionChange({ type: 'node', item: p.document.nodes[0] })}>select other</button><button onClick={() => p.onPaneClick?.({ x: 9, y: 9 })}>pane</button><button onClick={() => { p.onViewportCenterReady?.(() => ({ x: 12, y: 34 })); p.onSelectionChange({ type: 'continuation', item: p.document.l1_off_map_continuations?.[0] }); }}>continuation</button><button onClick={() => p.onNodeCollisionRejected?.()}>collision</button><button onClick={() => p.locationFrameInput?.onGroupMove?.('room', { delta_x: 40, delta_y: 20, frame: { x: 0, y: 0, width: 100, height: 100 }, footprints: [], boundary_routes: [] })}>group move</button><button onClick={() => p.locationFrameInput?.onGroupMoveRejected?.('Перемещение Location пересекает внешний объект.')}>group move rejected</button><button onClick={() => p.cableRouteDraft?.onWaypointInsert(0, { x: 70, y: 80 })}>route segment</button><button onClick={() => p.cableRouteDraft?.onWaypointSelect(0)}>route handle</button>{p.cableRouteDraft && <output data-testid="route-draft">active</output>}<div role="dialog"><button>dialog control</button></div></> }));
 const renderMapPage = createMapPageHarness(MapPage);
 const A = 'map-a'; const O = 'object';
 const node = { id: 'node', kind: 'PHYSICAL_OBJECT', label: 'SW1', attributes: { class: 'switch' }, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: O }] };
@@ -33,12 +34,41 @@ describe('MapPage mutation lifecycles', () => {
   });
   it('shows the server validation reason after a rejected group move without retrying the write', async () => {
     const withLocation = { ...map, placements: [{ ...map.placements[0], location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' } }] };
-    const moveLocationGroup = vi.fn().mockRejectedValue(new Error('VALIDATION_ERROR: Boundary route cannot be split unambiguously'));
+    const details = { errors: [{ loc: ['body', 'boundary_routes', 0, 'moving_endpoint', 'side'], msg: 'Extra inputs are not permitted', type: 'extra_forbidden' }] };
+    const moveLocationGroup = vi.fn().mockRejectedValue(new SavedMapApiError('VALIDATION_ERROR', 'Request validation failed', details));
     const maps: any = { listMaps: vi.fn().mockResolvedValue([withLocation]), loadMap: vi.fn().mockResolvedValue(withLocation), moveLocationGroup, createMap: vi.fn() };
     renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(doc) }, deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, savedMapDataSource: maps, locationDataSource: { loadLocations: vi.fn().mockResolvedValue([{ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }]) } as any }, `/map?map=${A}&view=physical`);
     fireEvent.click(await screen.findByText('group move'));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Boundary route cannot be split unambiguously');
+    const dialog = await screen.findByRole('dialog', { name: 'Не удалось переместить Location' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog.querySelector('[role="alert"]')).toHaveTextContent('Request validation failed');
+    fireEvent.click(screen.getByText('Технические подробности'));
+    expect(dialog).toHaveTextContent('VALIDATION_ERROR');
+    expect(dialog).toHaveTextContent('body → boundary_routes → 0 → moving_endpoint → side');
+    expect(dialog).toHaveTextContent('Extra inputs are not permitted');
     expect(moveLocationGroup).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+    expect(screen.queryByRole('dialog', { name: 'Не удалось переместить Location' })).not.toBeInTheDocument();
+  });
+  it('does not show a group-move error dialog after a successful write and reload', async () => {
+    const withLocation = { ...map, placements: [{ ...map.placements[0], location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' } }] };
+    const moveLocationGroup = vi.fn().mockResolvedValue(undefined);
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([withLocation]), loadMap: vi.fn().mockResolvedValue(withLocation), moveLocationGroup, createMap: vi.fn() };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(doc) }, deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, savedMapDataSource: maps, locationDataSource: { loadLocations: vi.fn().mockResolvedValue([{ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }]) } as any }, `/map?map=${A}&view=physical`);
+    fireEvent.click(await screen.findByText('group move'));
+    await waitFor(() => expect(maps.loadMap).toHaveBeenCalledTimes(3));
+    expect(moveLocationGroup).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Не удалось переместить Location' })).not.toBeInTheDocument();
+  });
+  it('shows a client geometry rejection in the same persistent group-move dialog', async () => {
+    const withLocation = { ...map, placements: [{ ...map.placements[0], location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' } }] };
+    const moveLocationGroup = vi.fn();
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([withLocation]), loadMap: vi.fn().mockResolvedValue(withLocation), moveLocationGroup, createMap: vi.fn() };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(doc) }, deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, savedMapDataSource: maps, locationDataSource: { loadLocations: vi.fn().mockResolvedValue([{ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }]) } as any }, `/map?map=${A}&view=physical`);
+    fireEvent.click(await screen.findByText('group move rejected'));
+    const dialog = screen.getByRole('dialog', { name: 'Не удалось переместить Location' });
+    expect(dialog.querySelector('[role="alert"]')).toHaveTextContent('Перемещение Location пересекает внешний объект.');
+    expect(moveLocationGroup).not.toHaveBeenCalled();
   });
   it('distinguishes a persisted explicit straight route from absent route in the inspector', async () => { const cableMap: any = { ...map, cable_routes: [{ cable_ref: cableNode.source_refs[0], view: 'L1/PHYSICAL_OBJECT', waypoints: [] }] }; const maps: any = { listMaps: vi.fn().mockResolvedValue([cableMap]), loadMap: vi.fn().mockResolvedValue(cableMap), createMap: vi.fn() }; renderPage(maps, vi.fn(), collapsedCableDocument); await screen.findByText('select'); fireEvent.click(screen.getByText('select')); expect(await screen.findByText('Точек: 0')).toBeInTheDocument(); expect(screen.getByRole('menuitem', { name: 'Сбросить трассу' })).toBeInTheDocument(); });
   it('cancels a moved or inserted draft with zero route writes', async () => { const cableMap: any = { ...map, cable_routes: [] }; const maps: any = { listMaps: vi.fn().mockResolvedValue([cableMap]), loadMap: vi.fn().mockResolvedValue(cableMap), createMap: vi.fn(), setCableRoute: vi.fn(), deleteCableRoute: vi.fn() }; renderPage(maps, vi.fn(), collapsedCableDocument); await screen.findByText('select'); fireEvent.click(screen.getByText('select')); fireEvent.click(await screen.findByRole('menuitem', { name: 'Редактировать трассу' })); fireEvent.click(screen.getByText('route segment')); fireEvent.click(screen.getByRole('button', { name: 'Отменить' })); expect(maps.setCableRoute).not.toHaveBeenCalled(); expect(maps.deleteCableRoute).not.toHaveBeenCalled(); });

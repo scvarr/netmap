@@ -16,7 +16,7 @@ export interface LocationGroupMove {
   delta_x: number; delta_y: number;
   frame: { x: number; y: number; width: number; height: number };
   footprints: Array<{ physical_object_id: string; x: number; y: number; width: number; height: number }>;
-  boundary_routes: Array<{ cable_id: string; moving_endpoint_is_source: boolean; moving_endpoint: MapCableRouteWaypoint; external_endpoint: MapCableRouteWaypoint }>;
+  boundary_routes: Array<{ cable_id: string; moving_endpoint_is_source: boolean; moving_endpoint: MapPresentationPoint; external_endpoint: MapPresentationPoint }>;
 }
 export interface MapPresentationPoint { x: number; y: number }
 export interface MapTextAnnotationRef { entity_type: 'MapTextAnnotation'; entity_id: string }

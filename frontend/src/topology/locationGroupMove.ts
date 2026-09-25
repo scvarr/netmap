@@ -1,5 +1,5 @@
 import type { LocationDocument } from './locationTypes';
-import type { LocationGroupMove, MapCableRouteWaypoint, MapPlacement } from './savedMapTypes';
+import type { LocationGroupMove, MapCableRouteWaypoint, MapPlacement, MapPresentationPoint } from './savedMapTypes';
 import type { FlowRectangle } from './nodeFootprint';
 import { rectanglesOverlap } from './nodeFootprint';
 
@@ -7,8 +7,8 @@ export interface GroupCableGeometry {
   cableId: string;
   sourceObjectId: string;
   targetObjectId: string;
-  source: MapCableRouteWaypoint;
-  target: MapCableRouteWaypoint;
+  source: MapPresentationPoint;
+  target: MapPresentationPoint;
   savedWaypoints?: readonly MapCableRouteWaypoint[];
 }
 
@@ -47,8 +47,10 @@ export function prepareLocationGroupMove(
   for (const cable of cables) {
     if (!cable.savedWaypoints || canonicalMembers.has(cable.sourceObjectId) === canonicalMembers.has(cable.targetObjectId)) continue;
     const sourceMoves = canonicalMembers.has(cable.sourceObjectId);
-    const moving_endpoint = sourceMoves ? cable.source : cable.target;
-    const external_endpoint = sourceMoves ? cable.target : cable.source;
+    const moving = sourceMoves ? cable.source : cable.target;
+    const external = sourceMoves ? cable.target : cable.source;
+    const moving_endpoint: MapPresentationPoint = { x: moving.x, y: moving.y };
+    const external_endpoint: MapPresentationPoint = { x: external.x, y: external.y };
     boundary_routes.push({ cable_id: cable.cableId, moving_endpoint_is_source: sourceMoves, moving_endpoint, external_endpoint });
   }
   return { delta_x: delta.x, delta_y: delta.y, frame, footprints, boundary_routes };
