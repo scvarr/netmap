@@ -473,6 +473,18 @@ describe('direct cable route edge interaction', () => {
     expect(view.container.querySelector('.cable-route-length-input')).toBeNull();
   });
 
+  it('opens the numeric input with the same readable value shown in the measurement', () => {
+    const draft = editor([{ x: 120, y: 60 }]);
+    draft.selectedWaypointIndex = 0;
+    const base = edgeProps(draft);
+    const edge = { ...base, data: { ...base.data, cableNode: { id: 'cable' } } };
+    const view = render(<ForegroundCableRoutes edges={[edge] as any} />);
+    const displayed = view.container.querySelector('.cable-route-length-action')!;
+    expect(displayed).toHaveTextContent('22');
+    fireEvent.click(displayed);
+    expect(view.container.querySelector('input.cable-route-length-input')).toHaveValue('22');
+  });
+
   it('keeps invalid input editable and cancels Escape or blur without moving the route', () => {
     const draft = editor([{ x: 150, y: 50 }]);
     draft.selectedWaypointIndex = 0;
