@@ -216,7 +216,7 @@ export function FloatingTopologyEdge({
           className="cable-route-segment-hit"
           x1={point.x} y1={point.y} x2={next.x} y2={next.y}
           stroke="transparent" strokeWidth={22} pointerEvents="stroke"
-          onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); draft.onWaypointInsert(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }}
+          onPointerDown={(event) => { if (event.button !== 0) return; event.stopPropagation(); event.preventDefault(); draft.onWaypointInsert(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }}
         />;
       })}
       {draft && !data?.renderRouteEditorInForeground && draft.waypoints.map((waypoint, index) => (
@@ -227,7 +227,7 @@ export function FloatingTopologyEdge({
           cy={waypoint.y}
           r={6}
           style={{ pointerEvents: 'all' }}
-          onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }}
+          onPointerDown={(event) => { if (event.button !== 0) return; event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }}
           onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); draft.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY })); }}
           onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }}
         />
@@ -238,7 +238,7 @@ export function FloatingTopologyEdge({
 
 type GeometryFeedback = { start: MapCableRouteWaypoint; end: MapCableRouteWaypoint; assist: SegmentAssistResult };
 
-function ForegroundCableRoute({ edge, onCableClick, onFeedbackChange }: { edge: LogicalFlowEdge; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onFeedbackChange: (edgeId: string, feedback: readonly GeometryFeedback[]) => void }) {
+function ForegroundCableRoute({ edge, onCableClick, onCableContextMenu, onFeedbackChange }: { edge: LogicalFlowEdge; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void; onFeedbackChange: (edgeId: string, feedback: readonly GeometryFeedback[]) => void }) {
   const { screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const sourceNode = useInternalNode<DeviceFlowNode>(edge.source);
   const targetNode = useInternalNode<DeviceFlowNode>(edge.target);
@@ -258,6 +258,7 @@ function ForegroundCableRoute({ edge, onCableClick, onFeedbackChange }: { edge: 
   const style = draft ? { stroke: '#8d7aff', strokeWidth: 5, opacity: 1 } : edge.style;
   const segmentPoints = [endpoints.source, ...(waypoints ?? []), endpoints.target];
   const setFeedback = (items: readonly GeometryFeedback[]) => onFeedbackChange(edge.id, items);
+  const forwardContextMenu = onCableContextMenu ? (event: MouseEvent<SVGElement>) => { event.stopPropagation(); onCableContextMenu(event, edge); } : undefined;
   const assistFrom = (anchor: MapCableRouteWaypoint, event: PointerEvent<SVGElement>) =>
     assistSegment({
       anchor,
@@ -312,14 +313,14 @@ function ForegroundCableRoute({ edge, onCableClick, onFeedbackChange }: { edge: 
   };
 
   return <g data-testid={`foreground-cable-${edge.id}`} data-emphasis={emphasis}>
-    <path className={`cable-route-foreground cable-route-foreground--${emphasis}`} d={path} fill="none" style={{ ...style, pointerEvents: onCableClick ? 'stroke' : 'none' }} onClick={onCableClick ? (event) => { event.stopPropagation(); onCableClick(event, edge); } : undefined} />
+    <path className={`cable-route-foreground cable-route-foreground--${emphasis}`} d={path} fill="none" style={{ ...style, pointerEvents: onCableClick || onCableContextMenu ? 'stroke' : 'none' }} onClick={onCableClick ? (event) => { event.stopPropagation(); onCableClick(event, edge); } : undefined} onContextMenu={forwardContextMenu} />
     {draft && segmentPoints.slice(0, -1).map((point, index) => {
       const next = segmentPoints[index + 1];
-      return <line key={`${edge.id}:foreground-segment:${index}`} className="cable-route-segment-hit" x1={point.x} y1={point.y} x2={next.x} y2={next.y} stroke="transparent" strokeWidth={22} pointerEvents="stroke" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); const assist = assistFrom(point, event); draft.onWaypointInsert(index, assist.point); setFeedback([]); }} />;
+      return <line key={`${edge.id}:foreground-segment:${index}`} className="cable-route-segment-hit" x1={point.x} y1={point.y} x2={next.x} y2={next.y} stroke="transparent" strokeWidth={22} pointerEvents="stroke" onPointerDown={(event) => { if (event.button !== 0) return; event.stopPropagation(); event.preventDefault(); const assist = assistFrom(point, event); draft.onWaypointInsert(index, assist.point); setFeedback([]); }} onContextMenu={forwardContextMenu} />;
     })}
     {draft?.waypoints.map((waypoint, index) => (
       <g key={`${edge.id}:foreground-waypoint:${index}`}>
-        <circle className="cable-route-waypoint-hit" cx={waypoint.x} cy={waypoint.y} r={18} fill="transparent" pointerEvents="all" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); moveWaypoint(index, event); }} onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setFeedback([]); }} />
+        <circle className="cable-route-waypoint-hit" cx={waypoint.x} cy={waypoint.y} r={18} fill="transparent" pointerEvents="all" onPointerDown={(event) => { if (event.button !== 0) return; event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); moveWaypoint(index, event); }} onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setFeedback([]); }} onContextMenu={forwardContextMenu} />
         {waypoint.anchor
           ? <rect className={`cable-route-waypoint cable-route-waypoint--boundary${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} x={waypoint.x - 3} y={waypoint.y - 3} width={6} height={6} transform={`rotate(45 ${waypoint.x} ${waypoint.y})`} pointerEvents="none" />
           : <circle className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={3.5} pointerEvents="none" />}
@@ -377,7 +378,7 @@ export function layoutGeometryFeedback(items: readonly GeometryFeedback[], zoom:
 }
 
 /** Foreground cable selection and route editing share the same visual stack. */
-export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, onCableClick }: { edges: readonly LogicalFlowEdge[]; physicalPortStates?: Record<string, ForegroundPortState>; wiringRoute?: Parameters<typeof WiringRoute>[0]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void }) {
+export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, onCableClick, onCableContextMenu }: { edges: readonly LogicalFlowEdge[]; physicalPortStates?: Record<string, ForegroundPortState>; wiringRoute?: Parameters<typeof WiringRoute>[0]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void }) {
   const { zoom } = useViewport();
   const [feedbackByCable, setFeedbackByCable] = useState<Record<string, readonly GeometryFeedback[]>>({});
   const cables = edges.filter((edge) => Boolean(edge.data?.cableNode));
@@ -386,7 +387,7 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, 
   const feedback = layoutGeometryFeedback(ordered.flatMap(({ edge }) => edge.data?.cableRouteDraft ? feedbackByCable[edge.id] ?? [] : []), zoom);
   return <ViewportPortal>
     <svg className="cable-routes-foreground" aria-hidden="true">
-      {ordered.map(({ edge }) => <ForegroundCableRoute key={edge.id} edge={edge} onCableClick={onCableClick} onFeedbackChange={(edgeId, items) => setFeedbackByCable((current) => ({ ...current, [edgeId]: items }))} />)}
+      {ordered.map(({ edge }) => <ForegroundCableRoute key={edge.id} edge={edge} onCableClick={onCableClick} onCableContextMenu={onCableContextMenu} onFeedbackChange={(edgeId, items) => setFeedbackByCable((current) => ({ ...current, [edgeId]: items }))} />)}
       <ForegroundPortMarkers physicalPortStates={physicalPortStates} />
       {wiringRoute && <g data-testid="foreground-wiring-route"><WiringRoute {...wiringRoute} /></g>}
       <g className="cable-route-feedback-layer" pointerEvents="none">

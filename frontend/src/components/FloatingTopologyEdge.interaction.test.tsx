@@ -254,6 +254,34 @@ describe('direct cable route edge interaction', () => {
     expect(editorView.container.querySelector('.cable-route-waypoint-hit')).toHaveAttribute('r', '18');
   });
 
+  it('forwards a right click on the foreground Cable to its context menu handler', () => {
+    const bare = edgeProps(editor([]));
+    const { cableRouteDraft: _unused, ...data } = bare.data;
+    const edge = { ...bare, data: { ...data, cableNode: { id: 'cable' } }, style: { strokeWidth: 2 } };
+    const onCableContextMenu = vi.fn((event: React.MouseEvent<SVGElement>) => event.preventDefault());
+    const onAncestorContextMenu = vi.fn();
+    const { container } = render(<div onContextMenu={onAncestorContextMenu}><ForegroundCableRoutes edges={[edge] as any} onCableContextMenu={onCableContextMenu} /></div>);
+    const path = container.querySelector('.cable-route-foreground')!;
+    expect(path).toHaveStyle({ pointerEvents: 'stroke' });
+    const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 120, clientY: 50 });
+    fireEvent(path, event);
+    expect(onCableContextMenu).toHaveBeenCalledWith(expect.anything(), edge);
+    expect(event.defaultPrevented).toBe(true);
+    expect(onAncestorContextMenu).not.toHaveBeenCalled();
+    const draft = editor([{ x: 200, y: 50 }]);
+    const editing = { ...edge, data: { ...edge.data, cableRouteDraft: draft } };
+    const editingView = render(<ForegroundCableRoutes edges={[editing] as any} onCableContextMenu={onCableContextMenu} />);
+    const segment = editingView.container.querySelector('.cable-route-segment-hit')!;
+    fireEvent.pointerDown(segment, { button: 2 });
+    fireEvent.contextMenu(segment);
+    expect(draft.onWaypointInsert).not.toHaveBeenCalled();
+    const waypoint = editingView.container.querySelector('.cable-route-waypoint-hit')!;
+    fireEvent.pointerDown(waypoint, { button: 2 });
+    fireEvent.contextMenu(waypoint);
+    expect(draft.onWaypointSelect).not.toHaveBeenCalled();
+    expect(onCableContextMenu).toHaveBeenCalledTimes(3);
+  });
+
   it('orders visual Cable states independently of edges order and follows selection changes', () => {
     const bare = edgeProps(editor([]));
     const { cableRouteDraft: _unused, ...data } = bare.data;

@@ -808,7 +808,7 @@ export function TopologyCanvas({
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        {!annotationMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} wiringRoute={wiringRoute} onCableClick={(event, edge) => onEdgeClick(event, edge)} />}
+        {!annotationMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} wiringRoute={wiringRoute} onCableClick={(event, edge) => onEdgeClick(event, edge)} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
       </ReactFlow>
     </div>
   );
