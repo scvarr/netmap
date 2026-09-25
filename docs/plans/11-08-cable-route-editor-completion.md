@@ -48,8 +48,9 @@ relation.
 - Save записывает только собственные coordinates/anchor route текущего Cable.
   Cross-Cable reference/dependency не сохраняется; последующее изменение
   другого Cable не двигает текущий route.
-- Targeted validation: 73 geometry/editor tests and 14 route lifecycle tests
-  passed; frontend build and `git diff --check` passed.
+- Targeted validation: 78 targeted frontend tests passed; `npm run build` and
+  `git diff --check` passed. Manual visual recheck passed after compact own and
+  foreign waypoint markers and precise hit areas were implemented.
 
 ### C-ROUTE-03 — Numeric segment geometry
 
