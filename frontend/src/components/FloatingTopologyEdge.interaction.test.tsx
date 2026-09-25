@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute, layoutGeometryFeedback } from './FloatingTopologyEdge';
+import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute, layoutGeometryFeedback, layoutSelectedMeasurements } from './FloatingTopologyEdge';
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 
 const markerPoints = ['eligible', 'source', 'destination', 'unavailable'].map((id) => ({ connection_point_id: id, display_name: id, cardinality: 1, external_connection_count: 0 }));
@@ -21,7 +21,7 @@ vi.mock('@xyflow/react', () => ({
 }));
 
 const editor = (waypoints: MapCableRouteWaypoint[]) => ({
-  cablePhysicalObjectId: 'cable', waypoints, selectedWaypointIndex: null,
+  cablePhysicalObjectId: 'cable', waypoints, selectedWaypointIndex: null as number | null,
   onWaypointSelect: vi.fn(), onWaypointMove: vi.fn(), onWaypointInsert: vi.fn(),
 });
 const edgeProps = (draft: ReturnType<typeof editor>) => ({ id: 'cable', source: 'source', target: 'target', data: { projection: { id: 'edge', from_node_id: 'source', to_node_id: 'target', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableRouteDraft: draft } });
@@ -424,5 +424,97 @@ describe('direct cable route edge interaction', () => {
     expect(view.container.querySelector('.cable-route-geometry-feedback')).toHaveAttribute('font-size', '3');
     expect(view.container.querySelector('.cable-route-geometry-feedback')).toHaveAttribute('stroke-width', '0.75');
     viewportZoom = 1;
+  });
+
+  it('keeps adjacent selected measurements after pointerup, including short segments, without controls on other waypoints', () => {
+    const draft = editor([{ x: 103, y: 50 }, { x: 106, y: 50 }]);
+    draft.selectedWaypointIndex = 0;
+    const base = edgeProps(draft);
+    const edge = { ...base, data: { ...base.data, cableNode: { id: 'cable' } } };
+    const view = render(<ForegroundCableRoutes edges={[edge] as any} />);
+    expect(view.container.querySelectorAll('.cable-route-selected-measurement')).toHaveLength(2);
+    expect(view.container.querySelectorAll('.cable-route-length-action')).toHaveLength(2);
+    const handle = view.container.querySelector('.cable-route-waypoint--selected')!;
+    Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
+    fireEvent.pointerDown(handle, { pointerId: 1 });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(view.container.querySelectorAll('.cable-route-selected-measurement')).toHaveLength(2);
+    expect(view.container.querySelectorAll('.cable-route-length-action')).toHaveLength(2);
+    const labels = layoutSelectedMeasurements([{ x: 100, y: 50 }, { x: 103, y: 50 }, { x: 106, y: 50 }], 0, 1);
+    expect(Math.abs(labels[0].y - labels[1].y)).toBeGreaterThanOrEqual(22);
+    draft.selectedWaypointIndex = null;
+    view.rerender(<ForegroundCableRoutes edges={[edge] as any} />);
+    expect(view.container.querySelector('.cable-route-selected-measurement')).toBeNull();
+  });
+
+  it('edits an adjacent length exactly and shields route shortcuts and pointer interactions', () => {
+    const draft = editor([{ x: 150, y: 50 }, { x: 200, y: 80 }]);
+    draft.selectedWaypointIndex = 0;
+    const base = edgeProps(draft);
+    const edge = { ...base, data: { ...base.data, cableNode: { id: 'cable' } } };
+    const onKeyDown = vi.fn(), onPointerDown = vi.fn(), onContextMenu = vi.fn();
+    const view = render(<div onKeyDown={onKeyDown} onPointerDown={onPointerDown} onContextMenu={onContextMenu}><ForegroundCableRoutes edges={[edge] as any} onCableContextMenu={onContextMenu} /></div>);
+    const length = view.container.querySelector('.cable-route-length-action')!;
+    fireEvent.pointerDown(length);
+    fireEvent.click(length);
+    const input = view.container.querySelector('input.cable-route-length-input') as HTMLInputElement;
+    expect(input).toHaveFocus();
+    expect(input).toHaveValue(String(Math.hypot(50, 0)));
+    expect(input.selectionStart).toBe(0);
+    fireEvent.pointerDown(input);
+    fireEvent.contextMenu(input);
+    fireEvent.change(input, { target: { value: '17.5' } });
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true, ctrlKey: true });
+    expect(draft.onWaypointMove).toHaveBeenCalledWith(0, { x: 117.5, y: 50 });
+    expect(draft.onWaypointInsert).not.toHaveBeenCalled();
+    expect(onKeyDown).not.toHaveBeenCalled();
+    expect(onPointerDown).not.toHaveBeenCalled();
+    expect(onContextMenu).not.toHaveBeenCalled();
+    expect(view.container.querySelector('.cable-route-length-input')).toBeNull();
+  });
+
+  it('keeps invalid input editable and cancels Escape or blur without moving the route', () => {
+    const draft = editor([{ x: 150, y: 50 }]);
+    draft.selectedWaypointIndex = 0;
+    const base = edgeProps(draft);
+    const edge = { ...base, data: { ...base.data, cableNode: { id: 'cable' } } };
+    const routeEscape = vi.fn();
+    const view = render(<div onKeyDown={routeEscape}><ForegroundCableRoutes edges={[edge] as any} /></div>);
+    const open = () => fireEvent.click(view.container.querySelector('.cable-route-length-action')!);
+    open();
+    let input = view.container.querySelector('input.cable-route-length-input')!;
+    fireEvent.change(input, { target: { value: 'Infinity' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(view.container.querySelector('.cable-route-length-input')).toHaveAttribute('aria-invalid', 'true');
+    expect(draft.onWaypointMove).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(view.container.querySelector('.cable-route-length-input')).toBeNull();
+    expect(routeEscape).not.toHaveBeenCalled();
+    open();
+    input = view.container.querySelector('input.cable-route-length-input')!;
+    fireEvent.change(input, { target: { value: '19' } });
+    fireEvent.blur(input);
+    expect(draft.onWaypointMove).not.toHaveBeenCalled();
+    fireEvent.keyDown(view.container.firstElementChild!, { key: 'Escape' });
+    expect(routeEscape).toHaveBeenCalled();
+  });
+
+  it('shows boundary measurements as information and permits editing an ordinary neighboring waypoint', () => {
+    const anchor = { x: 150, y: 50, anchor: { location_id: 'room', edge: 'left' as const, offset: .5 } };
+    const draft = editor([anchor, { x: 180, y: 50 }]);
+    draft.selectedWaypointIndex = 0;
+    const base = edgeProps(draft);
+    const edge = { ...base, data: { ...base.data, cableNode: { id: 'cable' } } };
+    const view = render(<ForegroundCableRoutes edges={[edge] as any} />);
+    expect(view.container.querySelectorAll('.cable-route-length-readonly')).toHaveLength(2);
+    expect(view.container.querySelector('.cable-route-length-action')).toBeNull();
+    draft.selectedWaypointIndex = 1;
+    view.rerender(<ForegroundCableRoutes edges={[edge] as any} />);
+    fireEvent.click(view.container.querySelector('.cable-route-length-action')!);
+    const input = view.container.querySelector('input.cable-route-length-input')!;
+    fireEvent.change(input, { target: { value: '60' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(draft.onWaypointMove).toHaveBeenCalledWith(1, { x: 210, y: 50 });
+    expect(anchor.anchor).toEqual({ location_id: 'room', edge: 'left', offset: .5 });
   });
 });

@@ -54,8 +54,28 @@ relation.
 
 ### C-ROUTE-03 — Numeric segment geometry
 
-**OPEN.** Числовое задание длины segment меняет координаты waypoint; persistent
-constraint не создаётся.
+**IMPLEMENTED.**
+
+- У выбранного waypoint после pointerup сохраняются measurements обоих соседних
+  segments (`angle° · length`), включая короткие segments. Для остальных
+  waypoints постоянные числовые controls не создаются. Конфликтующие подписи
+  разнесены детерминированно; размер текста стабилен при zoom.
+- Нажатие на length открывает inline numeric input с focus и выделенным текущим
+  значением. Enter применяет, Escape и blur отменяют ввод, не закрывая route
+  editor. При invalid input геометрия не меняется, а поле остаётся открытым.
+- Принимается только finite, strictly positive число в coordinate/map units;
+  дробные значения допустимы. Противоположный endpoint остаётся неподвижным:
+  `selectedWaypoint = fixedPoint + normalize(selectedWaypoint - fixedPoint) * L`.
+  Направление выбранного segment сохраняется, другой соседний segment
+  перестраивается естественно. Numeric action не использует foreign snap,
+  angle assist и модификаторы drag.
+- Выбранный Location boundary anchor показывает measurements только как
+  информацию. Ordinary waypoint рядом с ним можно переместить численно,
+  сохраняя anchor metadata. Numeric input меняет только draft; Save сохраняет
+  координаты и существующие anchors, Cancel восстанавливает исходный route.
+  Persistent length/angle constraint не создаётся; schema/API не менялись.
+- Targeted validation: 54 route/geometry/frontend tests passed; `npm run build`
+  и `git diff --check` прошли.
 
 ### C-CABLE-01 — Bulk port pairing
 

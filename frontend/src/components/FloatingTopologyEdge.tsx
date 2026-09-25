@@ -10,7 +10,7 @@ import {
   type EdgeProps,
   type InternalNode,
 } from '@xyflow/react';
-import { useEffect, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
@@ -24,6 +24,7 @@ import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } 
 import { assistBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
 import { findForeignRouteSnap, FOREIGN_BOUNDARY_HALF_SIDE_FLOW, FOREIGN_BOUNDARY_STROKE_FLOW, FOREIGN_WAYPOINT_RADIUS_FLOW, FOREIGN_WAYPOINT_STROKE_FLOW, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
 import { cableIdForNode } from '../topology/projection';
+import { waypointAtSegmentLength } from '../topology/numericSegmentGeometry';
 
 const CABLE_ANGLE_FAMILIES = [{ step: 45, capturePx: 12 }, { step: 15, capturePx: 5 }];
 const EDITING_CABLE_STROKE_FLOW = 5;
@@ -400,15 +401,37 @@ export function layoutGeometryFeedback(items: readonly GeometryFeedback[], zoom:
   return accepted.sort((a, b) => a.index - b.index);
 }
 
+type SelectedMeasurement = { segmentIndex: number; fixed: MapCableRouteWaypoint; selected: MapCableRouteWaypoint; angle: number; length: number; x: number; y: number };
+
+export function layoutSelectedMeasurements(points: readonly MapCableRouteWaypoint[], waypointIndex: number, zoom: number): SelectedMeasurement[] {
+  const selected = points[waypointIndex + 1];
+  if (!selected) return [];
+  const items = [waypointIndex, waypointIndex + 1].flatMap((segmentIndex) => {
+    const start = points[segmentIndex], end = points[segmentIndex + 1];
+    const fixed = segmentIndex === waypointIndex ? start : end;
+    if (!start || !end || !fixed) return [];
+    return [{ segmentIndex, fixed, selected, angle: Math.round(segmentAngle(start, end)), length: segmentLength(start, end), x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 - 10 / zoom }];
+  });
+  if (items.length === 2 && Math.abs(items[0].x - items[1].x) * zoom < 110 && Math.abs(items[0].y - items[1].y) * zoom < 22) {
+    items[1].y = items[0].y + 24 / zoom;
+  }
+  return items;
+}
+
 /** Foreground cable selection and route editing share the same visual stack. */
 export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, onCableClick, onCableContextMenu }: { edges: readonly LogicalFlowEdge[]; physicalPortStates?: Record<string, ForegroundPortState>; wiringRoute?: Parameters<typeof WiringRoute>[0]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void }) {
   const { zoom } = useViewport();
   const nodes = useNodes<DeviceFlowNode>();
   const [feedbackByCable, setFeedbackByCable] = useState<Record<string, readonly GeometryFeedback[]>>({});
   const [activeSnap, setActiveSnap] = useState<{ edgeId: string; snap: ForeignRouteSnap } | null>(null);
+  const [numericEdit, setNumericEdit] = useState<{ edgeId: string; waypointIndex: number; segmentIndex: number; value: string; invalid: boolean } | null>(null);
+  const numericInputRef = useRef<HTMLInputElement>(null);
   const cables = edges.filter((edge) => Boolean(edge.data?.cableNode));
   const editingCableId = cables.find((edge) => edge.data?.cableRouteDraft)?.id ?? null;
+  const editingWaypointIndex = cables.find((edge) => edge.id === editingCableId)?.data?.cableRouteDraft?.selectedWaypointIndex;
   useEffect(() => { setActiveSnap(null); setFeedbackByCable({}); }, [editingCableId]);
+  useEffect(() => { setNumericEdit(null); }, [editingCableId, editingWaypointIndex]);
+  useEffect(() => { numericInputRef.current?.focus(); numericInputRef.current?.select(); }, [numericEdit?.edgeId, numericEdit?.waypointIndex, numericEdit?.segmentIndex]);
   if (!cables.length && !wiringRoute) return null;
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const geometryByCable = new Map(cables.flatMap((edge) => {
@@ -435,9 +458,23 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, 
   const foreignGeometry = editingEdge ? foreignGeometryFor(editingEdge) : [];
   const ordered = cables.map((edge, index) => ({ edge, index })).sort((a, b) => cablePriority(a.edge) - cablePriority(b.edge) || a.index - b.index);
   const feedback = layoutGeometryFeedback(ordered.flatMap(({ edge }) => edge.data?.cableRouteDraft ? feedbackByCable[edge.id] ?? [] : []), zoom);
+  const selectedDraft = editingEdge?.data?.cableRouteDraft;
+  const selectedIndex = selectedDraft?.selectedWaypointIndex;
+  const selectedGeometry = editingEdge && selectedIndex != null ? geometryByCable.get(editingEdge.id) : undefined;
+  const selectedPoints = selectedGeometry ? [selectedGeometry.segments[0]?.[0], ...selectedDraft!.waypoints, selectedGeometry.segments.at(-1)?.[1]].filter((point): point is MapCableRouteWaypoint => Boolean(point)) : [];
+  const measurements = selectedIndex != null ? layoutSelectedMeasurements(selectedPoints, selectedIndex, zoom) : [];
+  const activeNumericEdit = numericEdit && editingEdge?.id === numericEdit.edgeId && selectedIndex === numericEdit.waypointIndex && measurements.some((item) => item.segmentIndex === numericEdit.segmentIndex) && !selectedDraft?.waypoints[selectedIndex]?.anchor ? numericEdit : null;
+  const applyNumericEdit = () => {
+    if (!activeNumericEdit || !selectedDraft) return;
+    const measurement = measurements.find((item) => item.segmentIndex === activeNumericEdit.segmentIndex);
+    const moved = measurement && waypointAtSegmentLength(measurement.fixed, measurement.selected, activeNumericEdit.value);
+    if (!moved) { setNumericEdit({ ...activeNumericEdit, invalid: true }); return; }
+    selectedDraft.onWaypointMove(activeNumericEdit.waypointIndex, moved);
+    setNumericEdit(null);
+  };
   const snap = activeSnap && cables.some((edge) => edge.id === activeSnap.edgeId && edge.data?.cableRouteDraft) ? activeSnap.snap : null;
   return <ViewportPortal>
-    <svg className="cable-routes-foreground" aria-hidden="true">
+    <svg className="cable-routes-foreground" aria-hidden={activeNumericEdit ? undefined : true}>
       {ordered.map(({ edge }) => <ForegroundCableRoute key={edge.id} edge={edge} foreignGeometry={edge.data?.cableRouteDraft ? foreignGeometry : []} onCableClick={onCableClick} onCableContextMenu={onCableContextMenu} onFeedbackChange={(edgeId, items) => setFeedbackByCable((current) => ({ ...current, [edgeId]: items }))} onSnapChange={(next) => setActiveSnap(next ? { edgeId: edge.id, snap: next } : null)} />)}
       <ForegroundPortMarkers physicalPortStates={physicalPortStates} />
       {wiringRoute && <g data-testid="foreground-wiring-route"><WiringRoute {...wiringRoute} /></g>}
@@ -448,6 +485,14 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, 
         {snap?.kind === 'segment' && snap.segment && <line className="cable-route-foreign-segment-feedback" x1={snap.segment[0].x} y1={snap.segment[0].y} x2={snap.segment[1].x} y2={snap.segment[1].y} stroke="#ffca66" strokeWidth={4 / zoom} opacity={0.9} pointerEvents="none" />}
         {snap && <circle className={`cable-route-foreign-${snap.kind}-feedback`} cx={snap.point.x} cy={snap.point.y} r={6 / zoom} fill="#ffca66" stroke="#172629" strokeWidth={2 / zoom} pointerEvents="none" />}
         {feedback.map((item) => <text key={item.index} className="cable-route-geometry-feedback" x={item.x} y={item.y} textAnchor="middle" fontSize={12 / zoom} strokeWidth={3 / zoom}>{item.label}</text>)}
+      </g>
+      <g className="cable-route-selected-measurements">
+        {measurements.map((item) => {
+          const editing = activeNumericEdit?.segmentIndex === item.segmentIndex;
+          return editing ? <foreignObject key={item.segmentIndex} x={item.x - 48 / zoom} y={item.y - 17 / zoom} width={96 / zoom} height={26 / zoom} style={{ pointerEvents: 'all' }} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+            <input ref={numericInputRef} className={`cable-route-length-input${activeNumericEdit.invalid ? ' cable-route-length-input--invalid' : ''}`} aria-label="Segment length" aria-invalid={activeNumericEdit.invalid} value={activeNumericEdit.value} inputMode="decimal" style={{ fontSize: 12 / zoom, width: 92 / zoom, height: 22 / zoom }} onChange={(event) => setNumericEdit({ ...activeNumericEdit, value: event.target.value, invalid: false })} onKeyDown={(event) => { event.stopPropagation(); if (event.key === 'Enter') { event.preventDefault(); applyNumericEdit(); } else if (event.key === 'Escape') { event.preventDefault(); setNumericEdit(null); } }} onKeyUp={(event) => event.stopPropagation()} onBlur={() => setNumericEdit(null)} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }} />
+          </foreignObject> : <text key={item.segmentIndex} className="cable-route-geometry-feedback cable-route-selected-measurement" x={item.x} y={item.y} textAnchor="middle" fontSize={12 / zoom} strokeWidth={3 / zoom} pointerEvents="none">{item.angle}° · <tspan className={item.selected.anchor ? 'cable-route-length-readonly' : 'cable-route-length-action'} pointerEvents={item.selected.anchor ? 'none' : 'all'} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => { event.stopPropagation(); if (!item.selected.anchor && editingEdge && selectedIndex != null) setNumericEdit({ edgeId: editingEdge.id, waypointIndex: selectedIndex, segmentIndex: item.segmentIndex, value: String(item.length), invalid: false }); }} onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}>{Math.round(item.length)}</tspan></text>;
+        })}
       </g>
     </svg>
   </ViewportPortal>;
