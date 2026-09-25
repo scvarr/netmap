@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { MapPage } from './MapPage';
 import { createMapPageHarness } from './MapPage.testHarness';
 import { SavedMapApiError } from '../topology/apiSavedMapDataSource';
@@ -26,10 +26,14 @@ describe('MapPage mutation lifecycles', () => {
     renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(doc) }, deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, savedMapDataSource: maps, locationDataSource: { loadLocations: vi.fn().mockResolvedValue([{ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }]) } as any }, `/map?map=${A}&view=physical`);
     await screen.findByText('group move');
     fireEvent.click(screen.getByText('group move'));
-    expect(await screen.findByText('Location перемещён. Обновите карту для продолжения.')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: 'Не удалось переместить Location' });
+    expect(dialog.querySelector('[role="alert"]')).toHaveTextContent('Location перемещён, но карту не удалось обновить.');
+    expect(dialog).toContainElement(screen.getByRole('button', { name: 'Повторить обновление' }));
+    expect(screen.queryByText('Location перемещён. Обновите карту для продолжения.')).not.toBeInTheDocument();
     expect(moveLocationGroup).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
     await waitFor(() => expect(maps.loadMap).toHaveBeenCalledTimes(4));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Не удалось переместить Location' })).not.toBeInTheDocument());
     expect(moveLocationGroup).toHaveBeenCalledTimes(1);
   });
   it('shows the server validation reason after a rejected group move without retrying the write', async () => {
@@ -52,13 +56,34 @@ describe('MapPage mutation lifecycles', () => {
   });
   it('does not show a group-move error dialog after a successful write and reload', async () => {
     const withLocation = { ...map, placements: [{ ...map.placements[0], location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' } }] };
+    let finishReload: (value: typeof withLocation) => void = () => {};
+    const pendingReload = new Promise<typeof withLocation>((resolve) => { finishReload = resolve; });
     const moveLocationGroup = vi.fn().mockResolvedValue(undefined);
-    const maps: any = { listMaps: vi.fn().mockResolvedValue([withLocation]), loadMap: vi.fn().mockResolvedValue(withLocation), moveLocationGroup, createMap: vi.fn() };
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([withLocation]), loadMap: vi.fn().mockResolvedValueOnce(withLocation).mockResolvedValueOnce(withLocation).mockReturnValueOnce(pendingReload), moveLocationGroup, createMap: vi.fn() };
     renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(doc) }, deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, savedMapDataSource: maps, locationDataSource: { loadLocations: vi.fn().mockResolvedValue([{ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }]) } as any }, `/map?map=${A}&view=physical`);
     fireEvent.click(await screen.findByText('group move'));
     await waitFor(() => expect(maps.loadMap).toHaveBeenCalledTimes(3));
+    expect(screen.queryByText('Location перемещён. Обновите карту для продолжения.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Не удалось переместить Location' })).not.toBeInTheDocument();
+    await act(async () => { finishReload(withLocation); await pendingReload; });
     expect(moveLocationGroup).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog', { name: 'Не удалось переместить Location' })).not.toBeInTheDocument();
+  });
+  it('does not show a stale group-move reload error after switching maps', async () => {
+    const withLocation = { ...map, placements: [{ ...map.placements[0], location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' } }] };
+    const otherMap = { ...withLocation, map_ref: { ...withLocation.map_ref, entity_id: 'map-b' }, name: 'B' };
+    let finishWrite: () => void = () => {};
+    const pendingWrite = new Promise<void>((resolve) => { finishWrite = resolve; });
+    const moveLocationGroup = vi.fn().mockReturnValue(pendingWrite);
+    const maps: any = { listMaps: vi.fn().mockResolvedValue([withLocation, otherMap]), loadMap: vi.fn((id) => Promise.resolve(id === 'map-b' ? otherMap : withLocation)), moveLocationGroup, createMap: vi.fn() };
+    renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(doc) }, deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, savedMapDataSource: maps, locationDataSource: { loadLocations: vi.fn().mockResolvedValue([{ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' }, name: 'Room', type: null, parent_location_ref: null }]) } as any }, `/map?map=${A}&view=physical`);
+    fireEvent.click(await screen.findByText('group move'));
+    fireEvent.click(screen.getByRole('button', { name: 'Карты' }));
+    fireEvent.click(screen.getByRole('option', { name: 'B' }));
+    await act(async () => { finishWrite(); await pendingWrite; });
+    expect(moveLocationGroup).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('dialog', { name: 'Не удалось переместить Location' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Location перемещён. Обновите карту для продолжения.')).not.toBeInTheDocument();
   });
   it('shows a client geometry rejection in the same persistent group-move dialog', async () => {
     const withLocation = { ...map, placements: [{ ...map.placements[0], location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' } }] };

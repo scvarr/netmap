@@ -318,6 +318,7 @@ export function MapPage({
   const [blueprintSizePending, setBlueprintSizePending] = useState(false);
   const [blueprintSizeError, setBlueprintSizeError] = useState<string | null>(null);
   const selectedMapId = useRef<string | null>(mapId);
+  const selectedVariantId = useRef<string | null>(variantId);
   const mapDetailRequest = useRef(0);
   const deletedMapIds = useRef(new Set<string>());
   const mapListRequest = useRef(0);
@@ -333,6 +334,8 @@ export function MapPage({
   const groupMovePending = useRef(false);
 
   selectedMapId.current = mapId;
+  selectedVariantId.current = variantId;
+  useEffect(() => { setGroupMoveRefresh(null); setGroupMoveError(null); }, [mapId, variantId]);
   const acceptsMapDetail = (targetMapId: string, request: number) =>
     selectedMapId.current === targetMapId && mapDetailRequest.current === request && !deletedMapIds.current.has(targetMapId);
   const legacy = !savedMapDataSource;
@@ -469,22 +472,28 @@ export function MapPage({
   const moveLocationGroup = async (locationId: string, moveRequest: LocationGroupMove) => {
     if (!activeMap || !savedMapDataSource?.moveLocationGroup || groupMovePending.current || (groupMoveRefresh?.mapId === activeMap.map_ref.entity_id && groupMoveRefresh.variantId === activeMap.active_variant_ref.entity_id)) return;
     const targetMapId = activeMap.map_ref.entity_id, targetVariantId = activeMap.active_variant_ref.entity_id;
+    const requestedVariantId = variantId;
+    const stillSelected = () => selectedMapId.current === targetMapId && selectedVariantId.current === requestedVariantId;
     groupMovePending.current = true;
     setGroupMoveError(null);
     try {
       await savedMapDataSource.moveLocationGroup(targetMapId, targetVariantId, locationId, moveRequest);
     } catch (reason) {
-      if (selectedMapId.current === targetMapId) setGroupMoveError(reason instanceof SavedMapApiError
+      if (stillSelected()) setGroupMoveError(reason instanceof SavedMapApiError
         ? { message: reason.serverMessage, code: reason.code, details: reason.details }
         : { message: reason instanceof Error && reason.message ? reason.message : 'Ошибка перемещения Location.' });
       groupMovePending.current = false;
       return;
     }
-    if (selectedMapId.current === targetMapId) setGroupMoveRefresh({ mapId: targetMapId, variantId: targetVariantId });
+    if (!stillSelected()) { groupMovePending.current = false; return; }
     try {
-      if (await reloadMap(targetMapId) && selectedMapId.current === targetMapId) setGroupMoveRefresh(null);
+      const reloaded = await reloadMap(targetMapId);
+      if (!reloaded && stillSelected()) throw new Error('Authoritative reload was not applied');
     } catch {
-      if (selectedMapId.current === targetMapId) setGroupMoveError({ message: 'Location перемещён, но карту не удалось обновить.' });
+      if (stillSelected()) {
+        setGroupMoveRefresh({ mapId: targetMapId, variantId: targetVariantId });
+        setGroupMoveError({ message: 'Location перемещён, но карту не удалось обновить.' });
+      }
     } finally { groupMovePending.current = false; }
   };
 
@@ -1889,7 +1898,6 @@ export function MapPage({
       {presentationVariantCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Компоновка создана, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantCreationRefresh()}>Повторить обновление</button></section>}
       {variantDeletion?.status === "refresh-failed" && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
-      {groupMoveRefresh && activeMap?.map_ref.entity_id === groupMoveRefresh.mapId && activeMap.active_variant_ref.entity_id === groupMoveRefresh.variantId && <section role="alert"><p>Location перемещён. Обновите карту для продолжения.</p><button type="button" onClick={() => void retryGroupMoveRefresh()}>{t("map.retryRefresh")}</button></section>}
       {groupMoveError && createPortal(<section className="map-dialog map-dialog--group-move" role="dialog" aria-modal="true" aria-label="Не удалось переместить Location"><div className="map-dialog__surface map-dialog__surface--group-move">
         <h2>Не удалось переместить Location</h2>
         <p role="alert">{groupMoveError.message}</p>
@@ -1897,7 +1905,7 @@ export function MapPage({
           {groupMoveError.code && <p>Код ошибки: <code>{groupMoveError.code}</code></p>}
           {groupMoveValidationEntries(groupMoveError.details).length > 0 && <ul>{groupMoveValidationEntries(groupMoveError.details).map((entry, index) => <li key={index}><code>{entry.path}</code><span>{entry.message}</span></li>)}</ul>}
         </details>}
-        <div className="map-dialog__actions"><button type="button" onClick={() => setGroupMoveError(null)}>Закрыть</button></div>
+        <div className="map-dialog__actions">{groupMoveRefresh && <button type="button" onClick={() => void retryGroupMoveRefresh()}>{t("map.retryRefresh")}</button>}<button type="button" onClick={() => setGroupMoveError(null)}>Закрыть</button></div>
       </div></section>, globalThis.document.body)}
       {error && <p role="alert">{error}</p>}
       {document &&
