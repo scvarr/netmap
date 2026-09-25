@@ -31,4 +31,11 @@ export interface PhysicalEndpointConnectionWriteDataSource {
     request: CreatePhysicalEndpointConnectionRequest,
   ): Promise<PhysicalEndpointConnectionCreationDocument>;
   deleteExternalPhysicalConnection?(connectionId: string): Promise<void>;
+  previewBulkCableLabels?(templateId: string, count: number): Promise<{ labels: { label: string; historical: boolean }[] }>;
+  createBulkPhysicalConnections?(request: {
+    pairs: { source: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }>; target: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }> }[];
+    template_id: string | null;
+    expected_generated_labels: string[];
+    confirmed_historical_labels: string[];
+  }): Promise<{ created: { connection_id: string; cable_id: string }[] }>;
 }

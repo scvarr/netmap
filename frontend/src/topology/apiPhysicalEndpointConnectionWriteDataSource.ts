@@ -69,6 +69,7 @@ const readBackendError = async (response: Response): Promise<Error> => {
       && typeof body.error.code === 'string'
       && typeof body.error.message === 'string'
     ) {
+      if (isObject(body.error.details) && body.error.details.reason === 'BULK_LABEL_PREVIEW_STALE') return new Error('BULK_LABEL_PREVIEW_STALE');
       return historicalCableLabelError(body);
     }
   } catch {
@@ -80,6 +81,22 @@ const readBackendError = async (response: Response): Promise<Error> => {
 export class ApiPhysicalEndpointConnectionWriteDataSource
 implements PhysicalEndpointConnectionWriteDataSource {
   constructor(private readonly endpoint = DEFAULT_ENDPOINT) {}
+
+  async previewBulkCableLabels(templateId: string, count: number): Promise<{ labels: { label: string; historical: boolean }[] }> {
+    const response = await fetch(`${this.endpoint}/bulk-label-preview?template_id=${encodeURIComponent(templateId)}&count=${count}`);
+    if (!response.ok) throw await readBackendError(response);
+    const body: unknown = await response.json();
+    if (!isObject(body) || !Array.isArray(body.labels) || body.labels.length !== count || body.labels.some((item: unknown) => !isObject(item) || typeof item.label !== 'string' || typeof item.historical !== 'boolean')) malformed('invalid bulk label preview.');
+    return { labels: (body as Record<string, unknown>).labels as { label: string; historical: boolean }[] };
+  }
+
+  async createBulkPhysicalConnections(request: Parameters<NonNullable<PhysicalEndpointConnectionWriteDataSource['createBulkPhysicalConnections']>>[0]): Promise<{ created: { connection_id: string; cable_id: string }[] }> {
+    const response = await fetch(`${this.endpoint}/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
+    if (!response.ok) throw await readBackendError(response);
+    const body: unknown = await response.json();
+    if (!isObject(body) || !Array.isArray(body.created) || body.created.length !== request.pairs.length || body.created.some((item: unknown) => !isObject(item) || typeof item.connection_id !== 'string' || typeof item.cable_id !== 'string')) malformed('invalid bulk creation response.');
+    return { created: (body as Record<string, unknown>).created as { connection_id: string; cable_id: string }[] };
+  }
 
   async createPhysicalEndpointConnection(
     request: CreatePhysicalEndpointConnectionRequest,

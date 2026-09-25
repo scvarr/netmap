@@ -23,7 +23,7 @@ import { blueprintDisplayDimensions, blueprintMapNameplateHeight, visibleBluepri
 import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } from '../topology/geometryAssist';
 import { assistBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
 import { findForeignRouteSnap, FOREIGN_BOUNDARY_HALF_SIDE_FLOW, FOREIGN_BOUNDARY_STROKE_FLOW, FOREIGN_WAYPOINT_RADIUS_FLOW, FOREIGN_WAYPOINT_STROKE_FLOW, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
-import { cableIdForNode } from '../topology/projection';
+import { cableIdForNode, physicalObjectIdForNode } from '../topology/projection';
 import { waypointAtSegmentLength } from '../topology/numericSegmentGeometry';
 
 const CABLE_ANGLE_FAMILIES = [{ step: 45, capturePx: 12 }, { step: 15, capturePx: 5 }];
@@ -355,12 +355,12 @@ function ForegroundCableRoute({ edge, foreignGeometry, onCableClick, onCableCont
 
 export type ForegroundPortState = 'eligible' | 'source' | 'destination' | 'unavailable';
 
-function ForegroundPortMarkers({ physicalPortStates }: { physicalPortStates?: Record<string, ForegroundPortState> }) {
+function ForegroundPortMarkers({ physicalPortStates, bulkPortNumbers }: { physicalPortStates?: Record<string, ForegroundPortState>; bulkPortNumbers?: Record<string, number> }) {
   const nodes = useNodes<DeviceFlowNode>();
-  return <>{nodes.map((node) => <ForegroundNodePortMarkers key={node.id} nodeId={node.id} physicalPortStates={physicalPortStates} />)}</>;
+  return <>{nodes.map((node) => <ForegroundNodePortMarkers key={node.id} nodeId={node.id} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} />)}</>;
 }
 
-function ForegroundNodePortMarkers({ nodeId, physicalPortStates }: { nodeId: string; physicalPortStates?: Record<string, ForegroundPortState> }) {
+function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers }: { nodeId: string; physicalPortStates?: Record<string, ForegroundPortState>; bulkPortNumbers?: Record<string, number> }) {
   const node = useInternalNode<DeviceFlowNode>(nodeId);
   // A collapsed Location proxy is a presentation anchor, never a PhysicalObject with ports.
   if (!node || node.data.locationProxy || !node.data.projection || node.data.projection.kind !== 'PHYSICAL_OBJECT') return null;
@@ -374,9 +374,9 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates }: { nodeId: str
       const endpoint = getRenderedConnectionPoint(projection, rectangle(node), port.id);
       const state = physicalPortStates?.[port.id];
       const className = `cable-route-port-marker${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
-      return endpoint && (port.network
-        ? <rect key={port.id} className={className} x={endpoint.x - 3.5} y={endpoint.y - 3.5} width={7} height={7} rx={1} pointerEvents="none" />
-        : <circle key={port.id} className={className} cx={endpoint.x} cy={endpoint.y} r={3.5} pointerEvents="none" />);
+      return endpoint && <g key={port.id}>{port.network
+        ? <rect className={className} x={endpoint.x - 3.5} y={endpoint.y - 3.5} width={7} height={7} rx={1} pointerEvents="none" />
+        : <circle className={className} cx={endpoint.x} cy={endpoint.y} r={3.5} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x + 7} y={endpoint.y - 7} fontSize={12} fontWeight="bold" fill="#ffca66" stroke="#172629" strokeWidth={2} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
     })}
   </g>;
 }
@@ -419,7 +419,7 @@ export function layoutSelectedMeasurements(points: readonly MapCableRouteWaypoin
 }
 
 /** Foreground cable selection and route editing share the same visual stack. */
-export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, onCableClick, onCableContextMenu }: { edges: readonly LogicalFlowEdge[]; physicalPortStates?: Record<string, ForegroundPortState>; wiringRoute?: Parameters<typeof WiringRoute>[0]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void }) {
+export function ForegroundCableRoutes({ edges, physicalPortStates, bulkPortNumbers, bulkPairs, wiringRoute, onCableClick, onCableContextMenu }: { edges: readonly LogicalFlowEdge[]; physicalPortStates?: Record<string, ForegroundPortState>; bulkPortNumbers?: Record<string, number>; bulkPairs?: readonly { source: { physicalObjectId: string; connectionPointId: string }; target: { physicalObjectId: string; connectionPointId: string } }[]; wiringRoute?: Parameters<typeof WiringRoute>[0]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void }) {
   const { zoom } = useViewport();
   const nodes = useNodes<DeviceFlowNode>();
   const [feedbackByCable, setFeedbackByCable] = useState<Record<string, readonly GeometryFeedback[]>>({});
@@ -432,7 +432,7 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, 
   useEffect(() => { setActiveSnap(null); setFeedbackByCable({}); }, [editingCableId]);
   useEffect(() => { setNumericEdit(null); }, [editingCableId, editingWaypointIndex]);
   useEffect(() => { numericInputRef.current?.focus(); numericInputRef.current?.select(); }, [numericEdit?.edgeId, numericEdit?.waypointIndex, numericEdit?.segmentIndex]);
-  if (!cables.length && !wiringRoute) return null;
+  if (!cables.length && !wiringRoute && !bulkPortNumbers && !bulkPairs) return null;
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const geometryByCable = new Map(cables.flatMap((edge) => {
     const sourceNode = nodeById.get(edge.source), targetNode = nodeById.get(edge.target);
@@ -476,7 +476,16 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, 
   return <ViewportPortal>
     <svg className="cable-routes-foreground" aria-hidden={activeNumericEdit ? undefined : true}>
       {ordered.map(({ edge }) => <ForegroundCableRoute key={edge.id} edge={edge} foreignGeometry={edge.data?.cableRouteDraft ? foreignGeometry : []} onCableClick={onCableClick} onCableContextMenu={onCableContextMenu} onFeedbackChange={(edgeId, items) => setFeedbackByCable((current) => ({ ...current, [edgeId]: items }))} onSnapChange={(next) => setActiveSnap(next ? { edgeId: edge.id, snap: next } : null)} />)}
-      <ForegroundPortMarkers physicalPortStates={physicalPortStates} />
+      <ForegroundPortMarkers physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} />
+      {bulkPairs?.map((pair, index) => {
+        const source = nodes.find((node) => node.data.projection && physicalObjectIdForNode(node.data.projection) === pair.source.physicalObjectId);
+        const target = nodes.find((node) => node.data.projection && physicalObjectIdForNode(node.data.projection) === pair.target.physicalObjectId);
+        if (!source || !target) return null;
+        const rect = (node: DeviceFlowNode): NodeRectangle => ({ x: node.position.x, y: node.position.y, width: node.measured?.width ?? node.width ?? LAYOUT_NODE_WIDTH, height: node.measured?.height ?? node.height ?? LAYOUT_NODE_HEIGHT });
+        const a = getRenderedConnectionPoint(source.data.projection, rect(source), pair.source.connectionPointId);
+        const b = getRenderedConnectionPoint(target.data.projection, rect(target), pair.target.connectionPointId);
+        return a && b ? <line key={index} data-testid="bulk-pair-preview" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ffca66" strokeWidth={2} strokeDasharray="7 5" opacity={0.9} pointerEvents="none" /> : null;
+      })}
       {wiringRoute && <g data-testid="foreground-wiring-route"><WiringRoute {...wiringRoute} /></g>}
       <g className="cable-route-feedback-layer" pointerEvents="none">
         {foreignGeometry.flatMap((route) => route.waypoints).map((waypoint, index) => waypoint.anchor

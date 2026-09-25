@@ -133,6 +133,27 @@ class CableLabelCatalog:
         else:
             self._assign(cable, normalized_cable_label(label), confirmed_historical_label)
 
+    def preview_batch(self, template_id: uuid.UUID, count: int) -> list[tuple[str, bool]]:
+        """Reserve no labels; report ordered free candidates and historical reuse."""
+        if count < 1 or count > 256:
+            raise ValidationError("Bulk label count must be 1 to 256")
+        self.settings()
+        template = self.session.get(CableLabelTemplate, template_id)
+        if template is None:
+            raise ValidationError("Cable label template does not exist", {"template_id": str(template_id)})
+        occupied = set(self.session.scalars(select(Cable.label).where(Cable.label.is_not(None))))
+        result: list[str] = []
+        ordinal = template.start_at
+        while len(result) < count:
+            candidate = sequence_value(template.pattern, ordinal)
+            if candidate is None:
+                raise ValidationError("Cable label template sequence is exhausted", {"template_id": str(template_id)})
+            if candidate not in occupied:
+                result.append(candidate)
+            ordinal += 1
+        historical = set(self.session.scalars(select(CableLabelHistory.label).where(CableLabelHistory.label.in_(result))))
+        return [(label, label in historical) for label in result]
+
     def release_cable_label(self, cable: Cable) -> None:
         """Release a current label before deleting the canonical Cable."""
         self.settings()

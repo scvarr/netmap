@@ -84,4 +84,15 @@ describe('ApiPhysicalEndpointConnectionWriteDataSource', () => {
     ).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/topology/physical-connections/connection-a', { method: 'DELETE' });
   });
+  it('previews and posts one ordered bulk request without a SavedMap identifier', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ schema_version: '1.0', labels: [{ label: 'B001', historical: false }] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ schema_version: '1.0', created: [{ connection_id: 'connection', cable_id: 'cable' }] }), { status: 201 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const api = new ApiPhysicalEndpointConnectionWriteDataSource();
+    expect(await api.previewBulkCableLabels('template', 1)).toEqual({ labels: [{ label: 'B001', historical: false }] });
+    const request = { pairs: [{ source: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'a', member_index: 1 as const }, target: { kind: 'CONNECTION_POINT' as const, connection_point_id: 'b', member_index: 1 as const } }], template_id: 'template', expected_generated_labels: ['B001'], confirmed_historical_labels: [] };
+    expect(await api.createBulkPhysicalConnections(request)).toEqual({ created: [{ connection_id: 'connection', cable_id: 'cable' }] });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/v1/topology/physical-connections/bulk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
+  });
 });

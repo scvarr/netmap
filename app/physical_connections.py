@@ -254,6 +254,81 @@ class PhysicalConnectionCatalog:
             connection_id=connection.id,
         )
 
+    def create_bulk_point_links(
+        self,
+        pairs: list[tuple[ConnectionPointEndpoint, ConnectionPointEndpoint]],
+        *,
+        template_id: uuid.UUID | None,
+        expected_generated_labels: list[str],
+        confirmed_historical_labels: list[str],
+    ) -> list[CreatedEndpointPhysicalConnection]:
+        if not 1 <= len(pairs) <= 256:
+            raise ValidationError("Bulk pairing requires 1 to 256 pairs")
+        ids = [endpoint.connection_point_id for pair in pairs for endpoint in pair]
+        if len(set(ids)) != len(ids):
+            raise ValidationError("Duplicate ConnectionPoint in bulk pairing")
+        if any(endpoint.member_index != 1 for pair in pairs for endpoint in pair):
+            raise ValidationError("Bulk pairing supports only member 1")
+        points = list(self.session.scalars(
+            select(ConnectionPoint).where(ConnectionPoint.id.in_(ids))
+            .order_by(ConnectionPoint.id).with_for_update()
+        ))
+        by_id = {point.id: point for point in points}
+        if len(by_id) != len(ids):
+            raise ValidationError("ConnectionPoint does not exist")
+        if any(point.cardinality != 1 for point in points):
+            raise ValidationError("Bulk pairing supports only cardinality=1 ConnectionPoints")
+        source_owners = {by_id[source.connection_point_id].physical_object_id for source, _ in pairs}
+        target_owners = {by_id[target.connection_point_id].physical_object_id for _, target in pairs}
+        if len(source_owners) != 1 or len(target_owners) != 1 or source_owners == target_owners:
+            raise ValidationError("Bulk pairing requires two different PhysicalObjects")
+        a = aliased(ConnectionPoint)
+        b = aliased(ConnectionPoint)
+        occupied = self.session.scalar(
+            select(Connection.id).join(ConnectionMember)
+            .join(a, Connection.point_a_id == a.id).join(b, Connection.point_b_id == b.id)
+            .where(a.physical_object_id != b.physical_object_id,
+                   or_(and_(a.id.in_(ids), ConnectionMember.point_a_member == 1),
+                       and_(b.id.in_(ids), ConnectionMember.point_b_member == 1)))
+            .limit(1)
+        )
+        if occupied is not None:
+            raise ValidationError("ConnectionPoint member is already occupied", {"reason": "CONNECTION_POINT_MEMBER_OCCUPIED"})
+        labels: list[str | None] = [None] * len(pairs)
+        catalog = CableLabelCatalog(self.session)
+        if template_id is None:
+            if expected_generated_labels or confirmed_historical_labels:
+                raise ValidationError("Labels require a Cable label template")
+        else:
+            preview = catalog.preview_batch(template_id, len(pairs))
+            labels = [label for label, _ in preview]
+            if labels != expected_generated_labels:
+                raise ValidationError("Bulk label preview is stale", {"reason": "BULK_LABEL_PREVIEW_STALE"})
+            historical = {label for label, used in preview if used}
+            if set(confirmed_historical_labels) - historical:
+                raise ValidationError("Historical label confirmation is stale", {"reason": "BULK_LABEL_PREVIEW_STALE"})
+            unconfirmed = historical - set(confirmed_historical_labels)
+            if unconfirmed:
+                raise ValidationError("Historical Cable labels require confirmation", {"reason": "HISTORICAL_CABLE_LABEL_REUSE_REQUIRED", "labels": sorted(unconfirmed)})
+        repository = CanonicalRepository(self.session)
+        created: list[CreatedEndpointPhysicalConnection] = []
+        for (source, target), label in zip(pairs, labels):
+            connection, _ = repository.add_connection(
+                source.connection_point_id, target.connection_point_id,
+                cardinality=1, members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+            )
+            cable = Cable(connection_id=connection.id)
+            self.session.add(cable)
+            self.session.flush()
+            catalog.assign_new_cable(cable, label=label, template_id=None, generate=False,
+                                     confirmed_historical_label=label if label in confirmed_historical_labels else None)
+            created.append(CreatedEndpointPhysicalConnection(
+                source=MaterializedPhysicalEndpoint(source, source.connection_point_id, None),
+                target=MaterializedPhysicalEndpoint(target, target.connection_point_id, None),
+                cable_id=cable.id, connection_id=connection.id,
+            ))
+        return created
+
     def delete_external_connection(self, connection_id: uuid.UUID) -> None:
         """Atomically delete a direct Connection or its attached Cable."""
         connection = self.session.scalar(

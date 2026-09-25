@@ -101,6 +101,8 @@ interface TopologyCanvasProps {
   cableRouteDraft?: { cableId: string; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   routeNormalizerRef?: { current: ((cableId: string, waypoints: readonly MapCableRouteWaypoint[]) => MapCableRouteWaypoint[]) | null };
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
+  bulkPortNumbers?: Record<string, number>;
+  bulkPairs?: readonly { source: { physicalObjectId: string; connectionPointId: string }; target: { physicalObjectId: string; connectionPointId: string } }[];
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
   wiringRoute?: { source: { physicalObjectId: string; connectionPointId: string }; target?: { physicalObjectId: string; connectionPointId: string }; waypoints: readonly MapCableRouteWaypoint[]; selectedWaypointIndex: number | null; onWaypointSelect: (index: number) => void; onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void; };
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
@@ -165,6 +167,8 @@ export function TopologyCanvas({
   cableRouteDraft,
   routeNormalizerRef,
   physicalPortStates,
+  bulkPortNumbers,
+  bulkPairs,
   onPhysicalPortClick,
   wiringRoute,
   wiringHighlightedConnectionMemberIds,
@@ -808,7 +812,7 @@ export function TopologyCanvas({
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        {!annotationMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} wiringRoute={wiringRoute} onCableClick={(event, edge) => onEdgeClick(event, edge)} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
+        {!annotationMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} onCableClick={(event, edge) => onEdgeClick(event, edge)} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
       </ReactFlow>
     </div>
   );

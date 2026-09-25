@@ -58,6 +58,11 @@ from app.schemas import (
     CreateDeviceInterfaceRequest,
     CreateNetworkDeviceRequest,
     CreatePhysicalEndpointConnectionRequest,
+    CreateBulkPhysicalConnectionsRequest,
+    BulkCableLabelPreviewDocument,
+    BulkCableLabelPreviewItem,
+    BulkPhysicalConnectionCreationDocument,
+    BulkPhysicalConnectionItem,
     CreatePhysicalLinkRequest,
     CreateCableLabelTemplateRequest,
     CreatePhysicalObjectRequest,
@@ -1265,6 +1270,40 @@ def create_physical_endpoint_connection(
             cable_ref=ref("Cable", created.cable_id),
             connection_ref=ref("Connection", created.connection_id),
         )
+
+
+@app.get("/v1/topology/physical-connections/bulk-label-preview", response_model=BulkCableLabelPreviewDocument)
+def preview_bulk_cable_labels(
+    template_id: uuid.UUID,
+    count: int,
+    session: Session = Depends(get_session),
+) -> BulkCableLabelPreviewDocument:
+    with session.begin():
+        labels = CableLabelCatalog(session).preview_batch(template_id, count)
+        return BulkCableLabelPreviewDocument(labels=[BulkCableLabelPreviewItem(label=label, historical=historical) for label, historical in labels])
+
+
+@app.post("/v1/topology/physical-connections/bulk", response_model=BulkPhysicalConnectionCreationDocument, status_code=201)
+def create_bulk_physical_connections(
+    query: CreateBulkPhysicalConnectionsRequest,
+    session: Session = Depends(get_session),
+) -> BulkPhysicalConnectionCreationDocument:
+    pairs = [
+        (ConnectionPointEndpoint(pair.source.connection_point_id, pair.source.member_index),
+         ConnectionPointEndpoint(pair.target.connection_point_id, pair.target.member_index))
+        for pair in query.pairs
+    ]
+    with session.begin():
+        created = PhysicalConnectionCatalog(session).create_bulk_point_links(
+            pairs, template_id=query.template_id,
+            expected_generated_labels=query.expected_generated_labels,
+            confirmed_historical_labels=query.confirmed_historical_labels,
+        )
+        return BulkPhysicalConnectionCreationDocument(created=[BulkPhysicalConnectionItem(
+            source_connection_point_id=item.source.connection_point_id,
+            target_connection_point_id=item.target.connection_point_id,
+            connection_id=item.connection_id, cable_id=item.cable_id,
+        ) for item in created])
 
 
 @app.delete(

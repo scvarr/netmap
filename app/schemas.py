@@ -1082,6 +1082,42 @@ class CreatePhysicalEndpointConnectionRequest(BaseModel):
     confirmed_historical_label: str | None = None
 
 
+class BulkPhysicalPointPair(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source: ConnectionPointPhysicalEndpointRequest
+    target: ConnectionPointPhysicalEndpointRequest
+
+
+class CreateBulkPhysicalConnectionsRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    pairs: list[BulkPhysicalPointPair] = Field(min_length=1, max_length=256)
+    template_id: uuid.UUID | None = None
+    expected_generated_labels: list[str] = Field(default_factory=list)
+    confirmed_historical_labels: list[str] = Field(default_factory=list)
+
+
+class BulkCableLabelPreviewItem(BaseModel):
+    label: str
+    historical: bool
+
+
+class BulkCableLabelPreviewDocument(BaseModel):
+    schema_version: Literal["1.0"] = "1.0"
+    labels: list[BulkCableLabelPreviewItem]
+
+
+class BulkPhysicalConnectionItem(BaseModel):
+    source_connection_point_id: uuid.UUID
+    target_connection_point_id: uuid.UUID
+    connection_id: uuid.UUID
+    cable_id: uuid.UUID
+
+
+class BulkPhysicalConnectionCreationDocument(BaseModel):
+    schema_version: Literal["1.0"] = "1.0"
+    created: list[BulkPhysicalConnectionItem]
+
+
 class SetCableLabelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -79,10 +79,21 @@ relation.
 
 ### C-CABLE-01 — Bulk port pairing
 
-**OPEN; после C-ROUTE-03.** Выбор source ports → Enter → равное число
-destination ports → preview pairs → Enter → atomic batch Cable/Connection
-creation. Optional generated labels используют существующий
-`CableLabelTemplate`. Route generation в bulk operation не входит.
+**IMPLEMENTED.** Context menu PhysicalObject на physical SavedMap запускает
+ordered выбор свободных ordinary source ports; Enter фиксирует source set.
+Destination ports выбираются на одном другом размещённом PhysicalObject в том
+же количестве. Preview показывает ordered pairing и временные прямые линии;
+следующий Enter отправляет один atomic canonical batch request.
+
+Пачка создаёт независимые Connection/ConnectionMember/Cable в одной transaction.
+Optional labels получают ordered preview из существующего CableLabelTemplate;
+historical reuse требует явного подтверждения, stale candidate set отклоняется
+до записи. SavedMap не участвует в canonical validation. MapCableRoute и
+automatic routing не создаются; после записи выполняется один physical
+projection refresh, а при его ошибке повторяется только read.
+
+Targeted validation: 15 backend naming/bulk tests и 20 frontend
+bulk/context/API tests passed; frontend build и `git diff --check` passed.
 
 ## Вне границы
 
