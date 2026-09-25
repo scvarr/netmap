@@ -8,6 +8,11 @@ state включает `MapCableRoute`, его waypoints, Location boundary anch
 transient editor geometry/snap feedback. Не вводить cross-Cable canonical
 relation.
 
+## Общий статус
+
+**C-ROUTE-01/02/03 и C-CABLE-01 завершены.** Этот bounded follow-up больше
+не блокирует P-UX-03E.
+
 ## Ordered milestones
 
 ### C-ROUTE-01 — Cable selection precision and stacking
@@ -94,6 +99,20 @@ projection refresh, а при его ошибке повторяется тол�
 
 Targeted validation: 15 backend naming/bulk tests и 20 frontend
 bulk/context/API tests passed; frontend build и `git diff --check` passed.
+
+## Endpoint-anchored route sections — OPEN
+
+Design note: route section рядом с endpoint может быть привязан к конкретному
+`ConnectionPoint`; waypoint такого section хранится относительно endpoint, а не
+как абсолютная map coordinate. Допускается несколько последовательных
+endpoint-relative waypoints. Relative points одного endpoint образуют только
+непрерывный prefix/suffix route. Между разными systems of reference остаётся
+elastic segment, принимающий deformation при перемещении объекта. Это
+`SavedMap` presentation state; canonical Cable/Connection/ConnectionPoint
+semantics не меняются. Не вводить CableBundle/shared canonical route.
+
+Exact persistence/API/schema/UX остаются OPEN. Это не новый accepted milestone
+и не часть P-UX-03E автоматически.
 
 ## Вне границы
 

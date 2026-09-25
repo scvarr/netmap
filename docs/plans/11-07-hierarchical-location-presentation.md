@@ -89,15 +89,13 @@ geometry assistance и feedback угла/расстояния. Видимые ro
 
 ### P-UX-03E — Spatial acceptance and dead-code cleanup
 
-**IMPLEMENTATION PENDING.** Перед final spatial acceptance закрываются
-bounded cable-route UX findings, обнаруженные в ручном проходе P-UX-03D и
-вынесенные в [[plans/11-08-cable-route-editor-completion|11.8 Cable route
-editor completion]]. Этот follow-up не меняет canonical Location semantics и
-не означает завершение spatial cutover. После него провести representative
-manual validation hierarchical collapse, nested frames, group move, collisions,
-exact boundary evidence и route semantics. Удалить оставшиеся obsolete
-helpers/styles/types, затем обновить связанные `C-*` statuses только после
-проверки. Зафиксировать завершение spatial cutover только после acceptance.
+**IMPLEMENTATION PENDING; READY / NEXT FOR EXECUTION.** 11-08 завершён;
+prerequisite cable-route findings закрыты implementation/review/manual recheck
+where applicable. Провести representative manual validation hierarchical
+collapse, nested frames, group move, collisions, exact boundary evidence и route
+semantics. Удалить оставшиеся obsolete helpers/styles/types, затем обновить
+связанные `C-*` statuses только после проверки. Сам P-UX-03E остаётся pending,
+и spatial cutover не завершён до его собственного acceptance.
 
 ## No-legacy policy
 

@@ -137,8 +137,8 @@ target naming/topology и не заменяет зафиксированный s
 
 Следующий spatial workflow проверяется относительно действующего target
 contract: canonical Location hierarchy → object Location assignments →
-derived Location frames on SavedMap. Manual Region/MapRegion не развиваются
-как целевая capability; derived frames пока не объявляются IMPLEMENTED.
+реализованные derived Location frames on SavedMap. Manual Region/MapRegion не
+являются target capabilities.
 
 ### FLOOR-3 / CAB-301
 
@@ -313,8 +313,8 @@ SavedMap. Phase C не моделирует public IP pools, адреса на R
 routing, NAT, BGP/static routes, VLAN/VRF, provider services, распределение
 волокон или Internet/VPN semantics; это future L2/L3 scope. `MapReference`
 остаётся future optional navigation mechanism и не используется как
-continuation физического Cable; presentation variants и `MapComposite`
-остаются средствами presentation и не создают dangling topology endpoints.
+continuation физического Cable; presentation variants не создают dangling
+topology endpoints.
 
 ## Coverage matrix
 
@@ -345,8 +345,8 @@ capability axes, а не закрытый список device classes.
 | 20 | same-SavedMap provider router handoff | RTR1 -> ISP-RTR |
 | 21 | zero-waypoint MapCableRoute | любой выбранный cable на SavedMap |
 | 22 | multi-waypoint MapCableRoute | другой cable на SavedMap |
-| 23 | MapComposite use | representative placed objects |
-| 24 | presentation variants | минимум два варианта SavedMap |
+| 23 | hierarchical Location presentation: nested hierarchy, collapse state, group move, exact boundary evidence and route semantics | representative Locations and routes |
+| 24 | presentation variants | минимум два варианта SavedMap с различными placement/collapse/route state |
 | 25 | deliberate member/cardinality/fan-out stress `1 -> 24` | FANOUT-1x24 — EXECUTED; truthful modeling FAILED; C-CAP-01 |
 
 Rows 4, 5, 14–18 и 25 должны быть проверены без подмены одного mapping
@@ -371,12 +371,13 @@ Phase C проверяет не только canonical objects, но и presenta
   удаление размещений. Проверить internal Cable inclusion, исключение
   cross-location Cable из frame дочернего Location и его inclusion во frame
   общего parent Location. Эти проверки относятся к согласованному target
-  contract; implementation pending;
+  contract; implementation есть;
+- nested hierarchy и recursive direct-element collapse state;
+- group move Location subtree, включая collision behavior;
+- exact boundary evidence и route semantics при collapse/group move;
 - хотя бы один zero-waypoint cable route;
 - хотя бы один cable route с несколькими waypoints;
-- хотя бы один MapComposite;
-- хотя бы два presentation variants с различным placement/collapse/route state,
-  но без изменения canonical topology.
+- presentation variants не меняют canonical topology.
 
 SavedMap placement, routes, collapse state и variants не используются
 как canonical truth.
@@ -418,6 +419,10 @@ PC-to-server trace. End-to-end forwarding across active switches относит�
 
 ## Phase C execution procedure
 
+MapComposite findings ниже сохранены как historical provenance старого
+workflow и superseded target architecture; они не являются active coverage или
+acceptance requirements.
+
 Acceptance выполняется вокруг coverage matrix:
 
 1. Для каждого archetype/capability создать fixture через обычный user-facing
@@ -427,8 +432,8 @@ Acceptance выполняется вокруг coverage matrix:
 4. Создать physical connections и Cables.
 5. Разместить объекты и связи на SavedMap.
 6. Проверить relevant presentation: FRONT/REAR, derived Location frames,
-   routes, composite и
-   variants.
+   nested hierarchy, collapse state, group move, exact boundary evidence,
+   route semantics и variants.
 7. Выполнить L1 trace там, где он семантически применим — по отдельным
    circuits, не через active-switch forwarding.
 8. Зафиксировать finding, если operation невозможна, вводит ложную модель или
@@ -483,6 +488,10 @@ Phase D не объявляется implemented, L1 PRODUCT COMPLETE не объ
 Phase C findings не считаются закрытыми.
 
 ## Phase C observed findings
+
+MapComposite findings in this historical register preserve provenance of the
+superseded workflow. They are not current target capabilities; replacement
+Location-driven acceptance and any unresolved status are tracked in 11-05.
 
 ### C-UX-01 — Location hierarchy navigation
 
@@ -722,9 +731,10 @@ Phase C findings не считаются закрытыми.
 - Для representation вроде rack / communication room это делает composite
   существенно менее удобным как authoring primitive.
 
-Это не correctness bug: текущий B.3 contract реализует MapComposite
-grouping/collapse/presentation, а Phase C выявил дополнительную product need
-для group translation.
+Это не correctness bug исходного workflow: исторический B.3 contract
+реализовывал MapComposite grouping/collapse/presentation, а Phase C выявил
+дополнительную product need для group translation. Этот workflow superseded;
+текущая group interaction относится к Location subtree и P-UX-03D.
 
 **Desired future behavior:**
 

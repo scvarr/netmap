@@ -46,10 +46,9 @@ compact Port Block table и RU terminology «Группа портов / Гру�
 Current execution position: **Phase C — Representative real-world L1 semantic acceptance.**
 
 В spatial strand P-UX-03A/B/C/D реализованы, ручная проверка P-UX-03D
-пройдена. P-UX-03E остаётся pending; перед его final spatial acceptance
-закрываются bounded Cable route editor findings, обнаруженные ручным проходом.
-Порядок и границы записаны в [[plans/11-08-cable-route-editor-completion|11.8
-Cable route editor completion]]. Это не завершает Phase C или spatial cutover.
+пройдена. Bounded Cable route follow-up из 11-08 завершён. Следующий spatial
+шаг — P-UX-03E final spatial acceptance/dead-code cleanup; до его собственного
+acceptance он остаётся pending. Это не завершает spatial cutover или Phase C.
 
 Первоначальная representative Phase C discovery уже выполнена: `C-*` findings
 зафиксированы и остаются обязательным списком для контроля. Сейчас идёт
@@ -65,9 +64,9 @@ Promoted semantic gaps, включая `C-CAP-01`, закрываются чер
 Phase C acceptance выполняется после необходимых обязательных fixes; только
 после него Phase C считается закрытой. Spatial presentation следует
 [[plans/11-07-hierarchical-location-presentation|11.7 plan]]: P-UX-03A/B/C/D
-реализованы, P-UX-03D manual recheck пройдена, P-UX-03E остаётся pending.
-Перед final P-UX-03E acceptance выполняется bounded Cable route editor follow-up
-из [[plans/11-08-cable-route-editor-completion|11.8 plan]]. Общий порядок
+реализованы, P-UX-03D manual recheck пройдена, P-UX-03E остаётся следующим
+pending spatial шагом. Cable route editor follow-up из
+[[plans/11-08-cable-route-editor-completion|11.8 plan]] завершён. Общий порядок
 Phase E–I не меняется.
 
 ### Phase B — Remaining bounded L1 capability families
@@ -75,39 +74,14 @@ Phase E–I не меняется.
 1. `Cable.3`: optional mutable Cable label, deterministic fallback, clear,
    Cable-specific write boundary; label не меняет Cable identity, Connection,
    endpoints, routes или trace. Cable Details не создается только ради label.
-2. **B.2 — hierarchical/composite presentation reconciliation — historical
-   implementation superseded; target cutover pending.** Текущий composite code
-   существует, но дальнейшее развитие этой модели прекращено. Target contract
-   находится в [[architecture/presentation/09-spatial-location-mapreference-contract|09
-   spatial document]] и строится вокруг canonical Location hierarchy.
-   Фактически реализованная граница:
-
-   ```text
-   TopologyProjectionDocument
-       -> PresentationSceneDocument
-       -> layout
-       -> canvas
-   ```
-
-   Сцена является временным клиентским представлением; semantic reconciliation
-   выполняется до layout. Cable-backed endpoint pairs и off-map continuations
-   формируются на уровне сцены, layout отвечает за геометрию, а точная
-   Cable/ConnectionMember evidence сохраняется. Зафиксирован минимальный
-   scene-only контракт composite: composite не является физическим endpoint.
-   Reconcile composite/hierarchical presentation через
-   `canonical/derived facts -> Projection -> hierarchical/composite scene ->
-   layout/presentation -> canvas`; no universal `Object.parent`. Свёрнутый
-   composite block остаётся только представлением: он не становится концом
-   физического `Connection`/`Cable`. Реальное устройство с внешней связью
-   доступно как boundary device с его реальной внешней связью; внутренние
-   устройства и связи, не пересекающие границу, могут быть скрыты. Связь двух
-   свёрнутых блоков по-прежнему идёт между реальными устройствами внутри них.
-   Это не добавляет canonical `Object.parent` или новых topology facts; точный
-   `MapReference` contract остаётся будущим отдельным направлением. Полный generic scene engine
-   не становится обязательным pre-L2 milestone.
-3. **B.3 — MapComposite historical implementation superseded; removal pending.**
-   MapComposite не является target capability, не расширяется и будет удалён
-   отдельным destructive milestone. `SavedMap` сохраняется как карта, а
+2. **B.2 — hierarchical Location presentation — implemented through P-UX-03A/B/C/D; final acceptance pending in P-UX-03E.** Current target contract находится в
+   [[architecture/presentation/09-spatial-location-mapreference-contract|09
+   spatial document]] и строится вокруг canonical Location hierarchy, derived
+   frames и presentation projection. MapComposite implementation superseded и
+   удалён в P-UX-03A; он не является текущей capability. Полный generic scene
+   engine не становится обязательным pre-L2 milestone.
+3. **B.3 — MapComposite removal — IMPLEMENTED in P-UX-03A.**
+   MapComposite не является target capability. `SavedMap` сохраняется как карта, а
    `MapPresentationVariant` — как её целевая именованная компоновка; варианты
    показывают одну карту по-разному без изменения topology или Location
    hierarchy. MapReference composition остаётся отдельным future direction.
@@ -121,13 +95,13 @@ Phase E–I не меняется.
    geometry assistance (angles, lengths, Shift H/V, Ctrl bypass) with transient
    feedback. NetMap does not become a CAD editor.
 
-Отдельные OPEN product directions, не входящие в B.2: физическое соединение
+Массовое сопоставление портов реализовано в C-CABLE-01: обязательный preview
+пар и atomic canonical batch write входят в существующий workflow. Остальные
+отдельные OPEN product directions, не входящие в B.2: физическое соединение
 можно будет создавать выбором устройства через поиск по всему оборудованию с
 последующим выбором свободного порта из прокручиваемого/поискового списка,
 независимо от присутствия устройств на текущей SavedMap; текущий выбор порта
-кликом по карте остаётся быстрым способом. Для patch panel -> switch нужен
-будущий режим массового сопоставления портов с обязательным предварительным
-просмотром пар; точная атомарность операции OPEN. Выбор физических концов и
+кликом по карте остаётся быстрым способом. Выбор физических концов и
 задание маршрута линии на SavedMap — разные действия. Также жгуты остаются
 OPEN presentation direction: canonical Cable отдельны, общий маршрут и
 автоматическая «гребёнка» допустимы только как SavedMap presentation; общий
@@ -146,8 +120,8 @@ SavedMap relationship между routes. Bundle/shared-route entity остаёт
 постепенно (rack -> room/server room -> floor -> building/site при необходимости)
 с реальными equipment, ports, Locations, wiring, Cable, SavedMaps,
 hierarchical Location presentation, routes, internal continuity и L1 trace.
-Derived frames отражают текущую presentation scene; их implementation остаётся
-pending.
+Expanded derived Location frames отражают текущую presentation scene и
+реализованы в P-UX-03B.
 Task-based workflow: найти, создать,
 разместить, назначить Location, соединить, исправить presentation, выполнить
 trace и понять результат без знания internal entities.

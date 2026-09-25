@@ -54,19 +54,15 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
 - `Blueprint` и `Port Block` — библиотечные сущности для создания
   `PhysicalObject` и задания их структуры; они не являются канонической
   топологией.
-- `SavedMap`, current MapComposite implementation, `MapCableRoute`, derived
-  Location frames,
+- `SavedMap`, `MapCableRoute`, derived Location frames,
   подписи и будущие кабельные направляющие — состояние представления. Оно не
   является источником канонической истины и не доказывает физические факты.
 - Идентичность `PhysicalObject`, endpoint, `Connection`, `ConnectionMember`,
   `Cable` и `Blueprint` не зависит от подписей, координат, порядка или
   представления. Существующие неизменяемые версии остаются неизменяемыми.
-- `C-COR-01` не требует дальнейшей диагностики или развития устаревшего
-  MapComposite workflow: MapComposite superseded и подлежит destructive
-  removal. Finding остаётся `OPEN` до удаления MapComposite и manual recheck
-  replacement Location-driven interaction.
-- `C-UX-08` имеет ту же границу: старое membership workflow superseded,
-  finding остаётся `OPEN` до removal и replacement recheck.
+- `C-COR-01` и `C-UX-08` описывают findings старого MapComposite workflow,
+  superseded target architecture. Их старые remediation steps неактуальны;
+  findings остаются `OPEN` до replacement Location-driven manual recheck.
 - `C-CAP-01` — отдельный семантический пробел, а не расширение обычного
   1:1 patch-panel сценария. Новая каноническая сущность `Fanout/Splitter` не
   вводится.
@@ -86,7 +82,7 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
   штатный путь создания без `Blueprint` отсутствует.
 
 Порядок не является новым планом работ: superseded MapComposite findings
-ожидают destructive removal и replacement recheck; остальные исправления
+ожидают replacement Location-driven recheck; остальные исправления
 проверяются в порядке, удобном для конкретной ограниченной задачи, с учётом
 зависимостей выше.
 
@@ -175,10 +171,10 @@ Location и принадлежность `SavedMap`; удаление и пов�
 допустимым обходным путём.
 
 **Ручная проверка.** Создать `PP-301`, назначить ему `COMM-ROOM`, разместить
-на `SavedMap`, создать один `Cable` к `SW-301-ACCESS`, добавить его в
-`MapComposite`, сохранить карту и открыть сведения объекта. Доступным действием
-переименовать его в `PP-301-RENAMED`, сохранить и обновить
-страницу. Открыть объект из списка, карту, composite, endpoint и Cable.
+на `SavedMap`, создать один `Cable` к `SW-301-ACCESS`, сохранить карту и
+открыть сведения объекта. Доступным действием переименовать его в
+`PP-301-RENAMED`, сохранить и обновить страницу. Открыть объект из списка,
+Location-driven map presentation, endpoint и Cable.
 
 **Закрыто, если.** Имя меняется без удаления, все связи, endpoints,
 размещение, Location и принадлежность остаются у того же объекта, а новое имя
@@ -254,9 +250,8 @@ subtree на одинаковое смещение, внутренняя ком�
 ### C-COR-01 — Взаимодействие с устаревшим composite workflow
 
 **Статус границы.** Прежний workflow выбора каналов раскрытых MapComposite
-superseded и не требует дальнейшего развития MapComposite. После удаления
-MapComposite и проверки replacement workflow выполнить отдельную manual
-recheck; до неё finding остаётся OPEN.
+superseded целевой Location-driven архитектурой. Реализация P-UX-03A удалила
+MapComposite; finding остаётся OPEN до replacement manual recheck.
 
 Старый сценарий проверки каналов composite сохранён только как historical
 provenance и не является текущим acceptance workflow.
@@ -266,30 +261,32 @@ provenance и не является текущим acceptance workflow.
 context actions и Cable route interaction остаются доступны; Location
 presentation не становится topology entity и не меняет canonical facts.
 
-**Текущая manual recheck после removal.** На SavedMap с Location hierarchy
-показать Location frame или collapsed proxy и проверить обычный выбор реально
-видимого `PhysicalObject`, port interaction, context actions и Cable route
-interaction. Обновить страницу и повторить те же действия. Для этой recheck не
-создавать и не использовать `MapComposite`.
+**Текущая Location-driven manual recheck.** На SavedMap с nested Location
+hierarchy проверить выбор видимых `PhysicalObject` и их ports/context actions
+при expanded frames и collapsed proxy; проверить group move и Cable route
+interaction. Обновить страницу и повторить взаимодействия. Сопоставить exact
+boundary evidence и canonical topology до/после.
 
 **Критерий replacement recheck.** После reload все перечисленные действия
 доступны, frame/proxy не перехватывает interaction с видимым объектом, а
 canonical topology, Location assignment и Cable evidence не меняются. Это
 manual recheck replacement workflow, а не установление `VERIFIED` до
-destructive removal и явного подтверждения.
+явного подтверждения.
 
 ### C-UX-08 — Устаревшее membership MapComposite
 
 **Статус границы.** Прежний workflow редактирования membership MapComposite
-superseded новой Location-driven моделью. Не добавлять replacement capability
-в MapComposite и не объявлять finding VERIFIED. После destructive removal и
-проверки replacement workflow выполнить manual recheck; до неё finding остаётся
-OPEN.
+superseded Location-driven моделью. Не добавлять replacement capability и не
+объявлять finding VERIFIED. Finding остаётся OPEN до replacement manual
+recheck.
 
 Старое ручное добавление и удаление объектов из membership MapComposite не
 является будущим требованием. Grouping membership теперь следует только из
 canonical Location hierarchy и `PhysicalObject -> Location`; оно не задаётся
-ручным membership record на карте.
+ручным membership record на карте. Replacement recheck должна подтвердить это
+поведение через пользовательский сценарий: изменить Location assignment уже
+существующего размещённого `PhysicalObject` обычным интерфейсом, затем проверить
+иерархическую группировку и collapse behavior без удаления/пересоздания объекта.
 
 ### C-UX-09 — Компактное окно выбора Blueprint
 
@@ -459,7 +456,7 @@ internal/external/boundary Cable при перемещении Location subtree,
    способом.
 10. К концу прохода через интерфейс заново создаётся полный проверочный стенд
     со всеми `Locations`, `Port Blocks`, `Blueprint`, `PhysicalObject`,
-    `Cable`, `SavedMap`, `MapComposite`, маршрутами, derived Location frames и другими
+    `Cable`, `SavedMap`, маршрутами, derived Location frames и другими
     данными сценария, включая `FANOUT-1x24` с одним многоканальным входным
     `Cable`/`Connection` и несколькими `ConnectionMember`.
 11. На построенном стенде выполняются все относящиеся к нему проверки этого

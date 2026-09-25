@@ -72,9 +72,12 @@ manual recheck; весь P-UX-03 остаётся открытым до P-UX-03E
 acceptance.
 
 Ручная acceptance P-UX-03D выявила bounded Cable route editor usability
-findings. Их follow-up ведётся отдельно в
+findings. Follow-up из 11-08 завершён в C-ROUTE-01/02/03 и C-CABLE-01.
+Следующий spatial шаг — P-UX-03E final spatial acceptance и dead-code cleanup;
+весь P-UX-03 остаётся незавершённым до его собственного acceptance. Findings
+зафиксированы в
 [[plans/11-08-cable-route-editor-completion|11.8 Cable route editor
-completion]] и не меняет canonical Location semantics.
+completion]]. Это не меняет canonical Location semantics.
 
 ### P-UX-19 — массовое создание дочерних Locations
 
@@ -388,11 +391,10 @@ UI. Canonical Location semantics/API/DB не менялись.
 ## Текущая точка clean-start прохода
 
 `P-UX-18` завершён и merged в `main`; `P-UX-19` реализован. Текущая точка —
-P-UX-03: milestones A/B/C/D реализованы, ручная перепроверка D пройдена, E
-остаётся pending. Перед final P-UX-03E acceptance закрываются bounded Cable
-route editor usability findings из ручного пространственного прохода; см.
-[[plans/11-08-cable-route-editor-completion|11.8 plan]]. Это отдельный
-presentation follow-up, а spatial cutover остаётся незавершённым до P-UX-03E.
+P-UX-03: milestones A/B/C/D реализованы, ручная перепроверка D пройдена,
+Cable route follow-up из 11-08 завершён. Следующий spatial шаг — P-UX-03E,
+который остаётся pending; весь P-UX-03 и spatial cutover незавершены до final
+acceptance.
 Synthetic representative stand продолжает использовать существующие
 Locations/objects: `PC1`, `O1`, `PP1`/`PP-301` role и `SW-301-ACCESS`.
 
