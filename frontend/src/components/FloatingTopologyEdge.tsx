@@ -22,10 +22,14 @@ import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 import { blueprintDisplayDimensions, blueprintMapNameplateHeight, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
 import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } from '../topology/geometryAssist';
 import { assistBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
-import { findForeignRouteSnap, FOREIGN_BOUNDARY_HALF_SIDE_FLOW, FOREIGN_WAYPOINT_RADIUS_FLOW, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
+import { findForeignRouteSnap, FOREIGN_BOUNDARY_HALF_SIDE_FLOW, FOREIGN_BOUNDARY_STROKE_FLOW, FOREIGN_WAYPOINT_RADIUS_FLOW, FOREIGN_WAYPOINT_STROKE_FLOW, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
 import { cableIdForNode } from '../topology/projection';
 
 const CABLE_ANGLE_FAMILIES = [{ step: 45, capturePx: 12 }, { step: 15, capturePx: 5 }];
+const EDITING_CABLE_STROKE_FLOW = 5;
+const EDITABLE_WAYPOINT_RADIUS_FLOW = 2.25;
+const EDITABLE_BOUNDARY_HALF_SIDE_FLOW = 1.75;
+const EDITABLE_WAYPOINT_STROKE_FLOW = 0.5;
 const rayIntersection = (left: MapCableRouteWaypoint, leftAngle: number, right: MapCableRouteWaypoint, rightAngle: number): MapCableRouteWaypoint | null => {
   const a = leftAngle * Math.PI / 180; const b = rightAngle * Math.PI / 180;
   const dx = Math.cos(a), dy = Math.sin(a), ex = Math.cos(b), ey = Math.sin(b);
@@ -257,7 +261,7 @@ function ForegroundCableRoute({ edge, foreignGeometry, onCableClick, onCableCont
   const waypoints = draft?.waypoints ?? data.cableRoute?.waypoints;
   const path = routedCablePath(endpoints.source, endpoints.target, waypoints ?? []);
   const emphasis = draft ? 'editing' : edge.data?.cablePresentationEmphasis ?? (edge.selected ? 'selected' : 'normal');
-  const style = draft ? { stroke: '#8d7aff', strokeWidth: 5, opacity: 1 } : edge.style;
+  const style = draft ? { stroke: '#8d7aff', strokeWidth: EDITING_CABLE_STROKE_FLOW, opacity: 1 } : edge.style;
   const segmentPoints = [endpoints.source, ...(waypoints ?? []), endpoints.target];
   const setFeedback = (items: readonly GeometryFeedback[]) => onFeedbackChange(edge.id, items);
   const snapFrom = (event: PointerEvent<SVGElement>, boundary?: { locationId: string; bounds: { x: number; y: number; width: number; height: number } }) =>
@@ -324,6 +328,13 @@ function ForegroundCableRoute({ edge, foreignGeometry, onCableClick, onCableCont
     draft.onWaypointMove(index, point);
     setFeedback(anchors.map((anchor) => ({ start: anchor, end: point, assist: assistFrom(anchor, event) })));
   };
+  const waypointHandlers = (index: number) => ({
+    onPointerDown: (event: PointerEvent<SVGElement>) => { if (event.button !== 0 || !draft) return; event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); },
+    onPointerMove: (event: PointerEvent<SVGElement>) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); moveWaypoint(index, event); },
+    onPointerUp: (event: PointerEvent<SVGElement>) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setFeedback([]); onSnapChange(null); },
+    onPointerCancel: () => { setFeedback([]); onSnapChange(null); },
+    onContextMenu: forwardContextMenu,
+  });
 
   return <g data-testid={`foreground-cable-${edge.id}`} data-emphasis={emphasis}>
     <path className={`cable-route-foreground cable-route-foreground--${emphasis}`} d={path} fill="none" style={{ ...style, pointerEvents: onCableClick || onCableContextMenu ? 'stroke' : 'none' }} onClick={onCableClick ? (event) => { event.stopPropagation(); onCableClick(event, edge); } : undefined} onContextMenu={forwardContextMenu} />
@@ -333,10 +344,9 @@ function ForegroundCableRoute({ edge, foreignGeometry, onCableClick, onCableCont
     })}
     {draft?.waypoints.map((waypoint, index) => (
       <g key={`${edge.id}:foreground-waypoint:${index}`}>
-        <circle className="cable-route-waypoint-hit" cx={waypoint.x} cy={waypoint.y} r={18} fill="transparent" pointerEvents="all" onPointerDown={(event) => { if (event.button !== 0) return; event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); moveWaypoint(index, event); }} onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setFeedback([]); onSnapChange(null); }} onPointerCancel={() => { setFeedback([]); onSnapChange(null); }} onContextMenu={forwardContextMenu} />
         {waypoint.anchor
-          ? <rect className={`cable-route-waypoint cable-route-waypoint--boundary${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} x={waypoint.x - 3} y={waypoint.y - 3} width={6} height={6} transform={`rotate(45 ${waypoint.x} ${waypoint.y})`} pointerEvents="none" />
-          : <circle className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={3.5} pointerEvents="none" />}
+          ? <rect className={`cable-route-waypoint cable-route-waypoint--editable cable-route-waypoint--boundary${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} x={waypoint.x - EDITABLE_BOUNDARY_HALF_SIDE_FLOW} y={waypoint.y - EDITABLE_BOUNDARY_HALF_SIDE_FLOW} width={EDITABLE_BOUNDARY_HALF_SIDE_FLOW * 2} height={EDITABLE_BOUNDARY_HALF_SIDE_FLOW * 2} transform={`rotate(45 ${waypoint.x} ${waypoint.y})`} pointerEvents="all" style={{ cursor: 'move', strokeWidth: EDITABLE_WAYPOINT_STROKE_FLOW }} {...waypointHandlers(index)} />
+          : <circle className={`cable-route-waypoint cable-route-waypoint--editable${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={EDITABLE_WAYPOINT_RADIUS_FLOW} pointerEvents="all" style={{ cursor: 'move', strokeWidth: EDITABLE_WAYPOINT_STROKE_FLOW }} {...waypointHandlers(index)} />}
       </g>
     ))}
   </g>;
@@ -433,8 +443,8 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, 
       {wiringRoute && <g data-testid="foreground-wiring-route"><WiringRoute {...wiringRoute} /></g>}
       <g className="cable-route-feedback-layer" pointerEvents="none">
         {foreignGeometry.flatMap((route) => route.waypoints).map((waypoint, index) => waypoint.anchor
-          ? <rect key={`foreign-waypoint:${index}`} className="cable-route-waypoint cable-route-waypoint--boundary cable-route-foreign-target-marker" x={waypoint.x - FOREIGN_BOUNDARY_HALF_SIDE_FLOW} y={waypoint.y - FOREIGN_BOUNDARY_HALF_SIDE_FLOW} width={FOREIGN_BOUNDARY_HALF_SIDE_FLOW * 2} height={FOREIGN_BOUNDARY_HALF_SIDE_FLOW * 2} transform={`rotate(45 ${waypoint.x} ${waypoint.y})`} pointerEvents="none" />
-          : <circle key={`foreign-waypoint:${index}`} className="cable-route-waypoint cable-route-foreign-target-marker" cx={waypoint.x} cy={waypoint.y} r={FOREIGN_WAYPOINT_RADIUS_FLOW} pointerEvents="none" />)}
+          ? <rect key={`foreign-waypoint:${index}`} className="cable-route-foreign-target-marker cable-route-foreign-target-marker--boundary" x={waypoint.x - FOREIGN_BOUNDARY_HALF_SIDE_FLOW} y={waypoint.y - FOREIGN_BOUNDARY_HALF_SIDE_FLOW} width={FOREIGN_BOUNDARY_HALF_SIDE_FLOW * 2} height={FOREIGN_BOUNDARY_HALF_SIDE_FLOW * 2} transform={`rotate(45 ${waypoint.x} ${waypoint.y})`} fill="none" strokeWidth={FOREIGN_BOUNDARY_STROKE_FLOW} pointerEvents="none" />
+          : <circle key={`foreign-waypoint:${index}`} className="cable-route-foreign-target-marker" cx={waypoint.x} cy={waypoint.y} r={FOREIGN_WAYPOINT_RADIUS_FLOW} fill="none" strokeWidth={FOREIGN_WAYPOINT_STROKE_FLOW} pointerEvents="none" />)}
         {snap?.kind === 'segment' && snap.segment && <line className="cable-route-foreign-segment-feedback" x1={snap.segment[0].x} y1={snap.segment[0].y} x2={snap.segment[1].x} y2={snap.segment[1].y} stroke="#ffca66" strokeWidth={4 / zoom} opacity={0.9} pointerEvents="none" />}
         {snap && <circle className={`cable-route-foreign-${snap.kind}-feedback`} cx={snap.point.x} cy={snap.point.y} r={6 / zoom} fill="#ffca66" stroke="#172629" strokeWidth={2 / zoom} pointerEvents="none" />}
         {feedback.map((item) => <text key={item.index} className="cable-route-geometry-feedback" x={item.x} y={item.y} textAnchor="middle" fontSize={12 / zoom} strokeWidth={3 / zoom}>{item.label}</text>)}

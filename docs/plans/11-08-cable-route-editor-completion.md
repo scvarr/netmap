@@ -15,7 +15,8 @@ relation.
 **IMPLEMENTED.**
 
 - Interactive hit area обычного Cable соответствует видимой толщине линии;
-  большие hit targets для route-editor segment insertion и waypoint drag сохранены.
+  большой hit target route-editor segment insertion сохранён. Editable waypoint
+  принимает drag только в пределах своего видимого marker.
 - Selected Cable отображается выше non-selected независимо от исходного render
   order; editing Cable отображается выше selected, а wiring draft сохраняет
   верхний editing priority.
@@ -34,11 +35,11 @@ relation.
 - Drag/insert waypoint текущего Cable snap к waypoint или ближайшей projection
   point видимого segment другого Cable, включая прямой Cable без saved route и
   resolved Location boundary anchors маршрутизированного Cable.
-- Waypoint capture ограничен footprint его видимого marker (круг или boundary
-  diamond) при текущем zoom, без дополнительного halo. Segment capture — 8
-  screen pixels при любом zoom. Waypoint имеет приоритет над segment; foreign
-  geometry имеет приоритет над 45°/15° assist.
-- Foreground editor показывает transient marker на snapped point и подсветку
+- Foreign snap targets имеют компактные пассивные markers, отличимые от
+  editable waypoints. Waypoint capture ограничен visible marker footprint при
+  текущем zoom, без дополнительного halo; segment capture — 8 screen pixels.
+  Waypoint имеет приоритет над segment; foreign geometry — над 45°/15° assist.
+- Foreground editor показывает transient highlight на snapped point и подсветку
   target segment. Feedback не принимает pointer events и очищается при release,
   cancel и закрытии route editor.
 - Location boundary anchor принимает только допустимую точку собственной

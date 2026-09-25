@@ -14,8 +14,8 @@ describe('foreign route geometry snap', () => {
   it('chooses the nearest waypoint independent of route order and before a closer segment', () => {
     const near = { waypoints: [{ x: 15, y: 0 }], segments: [] };
     const far = { waypoints: [{ x: 18, y: 0 }], segments: [[{ x: 10, y: -10 }, { x: 10, y: 10 }]] as const };
-    expect(snap({ x: 11, y: 0 }, [far, near])).toEqual({ kind: 'waypoint', point: { x: 15, y: 0 } });
-    expect(snap({ x: 11, y: 0 }, [near, far])).toEqual({ kind: 'waypoint', point: { x: 15, y: 0 } });
+    expect(snap({ x: 14, y: 0 }, [far, near])).toEqual({ kind: 'waypoint', point: { x: 15, y: 0 } });
+    expect(snap({ x: 14, y: 0 }, [near, far])).toEqual({ kind: 'waypoint', point: { x: 15, y: 0 } });
   });
 
   it('projects to the nearest visible segment, including a straight route without waypoints', () => {
@@ -27,10 +27,10 @@ describe('foreign route geometry snap', () => {
 
   it('captures a waypoint only inside its rendered circle, with no 8px halo', () => {
     const route = { waypoints: [{ x: 20, y: 0 }], segments: [] };
-    expect(snap({ x: 24.4, y: 0 }, [route])?.kind).toBe('waypoint');
-    expect(snap({ x: 24.6, y: 0 }, [route])).toBeNull();
+    expect(snap({ x: 21.2, y: 0 }, [route])?.kind).toBe('waypoint');
+    expect(snap({ x: 21.3, y: 0 }, [route])).toBeNull();
     expect(snap({ x: 27.9, y: 0 }, [route])).toBeNull();
-    expect(snap({ x: 25, y: 0 }, [{ ...route, segments: [[{ x: 0, y: 0 }, { x: 100, y: 0 }]] }])?.kind).toBe('segment');
+    expect(snap({ x: 22, y: 0 }, [{ ...route, segments: [[{ x: 0, y: 0 }, { x: 100, y: 0 }]] }])?.kind).toBe('segment');
   });
 
   it('uses the rendered waypoint footprint at different zoom values while segment capture stays at 8 screen pixels', () => {
@@ -47,10 +47,10 @@ describe('foreign route geometry snap', () => {
 
   it('chooses dense waypoint markers by actual pointer distance instead of their former halo or render order', () => {
     const left = { waypoints: [{ x: 10, y: 0 }], segments: [] };
-    const right = { waypoints: [{ x: 18, y: 0 }], segments: [] };
-    expect(snap({ x: 13.8, y: 0 }, [left, right])?.point).toEqual({ x: 10, y: 0 });
-    expect(snap({ x: 13.8, y: 0 }, [right, left])?.point).toEqual({ x: 10, y: 0 });
-    expect(snap({ x: 15, y: 0 }, [left, right])?.point).toEqual({ x: 18, y: 0 });
+    const right = { waypoints: [{ x: 12.1, y: 0 }], segments: [] };
+    expect(snap({ x: 11, y: 0 }, [left, right])?.point).toEqual({ x: 10, y: 0 });
+    expect(snap({ x: 11, y: 0 }, [right, left])?.point).toEqual({ x: 10, y: 0 });
+    expect(snap({ x: 11.2, y: 0 }, [left, right])?.point).toEqual({ x: 12.1, y: 0 });
   });
 
   it('keeps an anchor on its own boundary and never copies foreign anchor metadata', () => {
@@ -63,11 +63,11 @@ describe('foreign route geometry snap', () => {
 
   it('uses the rotated visible diamond footprint without a boundary marker halo', () => {
     const route = { waypoints: [{ x: 100, y: 40, anchor: { location_id: 'foreign', edge: 'right' as const, offset: .4 } }], segments: [] };
-    expect(snap({ x: 105.9, y: 40 }, [route])?.kind).toBe('waypoint');
-    expect(snap({ x: 106.1, y: 40 }, [route])).toBeNull();
-    expect(snap({ x: 104, y: 44 }, [route])).toBeNull();
-    expect(snap({ x: (100 + 5.9) * 2, y: 40 * 2 }, [route], 2)?.kind).toBe('waypoint');
-    expect(snap({ x: (100 + 6.1) * 2, y: 40 * 2 }, [route], 2)).toBeNull();
+    expect(snap({ x: 101.3, y: 40 }, [route])?.kind).toBe('waypoint');
+    expect(snap({ x: 101.4, y: 40 }, [route])).toBeNull();
+    expect(snap({ x: 100.7, y: 40.7 }, [route])).toBeNull();
+    expect(snap({ x: (100 + 1.3) * 2, y: 40 * 2 }, [route], 2)?.kind).toBe('waypoint');
+    expect(snap({ x: (100 + 1.4) * 2, y: 40 * 2 }, [route], 2)).toBeNull();
   });
 
   it('returns only an independent coordinate value for an ordinary route draft', () => {

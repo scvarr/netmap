@@ -6,10 +6,10 @@ type Point = { x: number; y: number };
 export type ForeignRouteGeometry = { waypoints: readonly MapCableRouteWaypoint[]; segments: readonly (readonly [Point, Point])[] };
 export type ForeignRouteSnap = { kind: 'waypoint' | 'segment'; point: MapCableRouteWaypoint; segment?: readonly [Point, Point] };
 export const FOREIGN_SEGMENT_CAPTURE_PX = 8;
-export const FOREIGN_WAYPOINT_RADIUS_FLOW = 3.5;
-export const FOREIGN_WAYPOINT_STROKE_FLOW = 2;
-export const FOREIGN_BOUNDARY_HALF_SIDE_FLOW = 3;
-export const FOREIGN_BOUNDARY_STROKE_FLOW = 2.5;
+export const FOREIGN_WAYPOINT_RADIUS_FLOW = 1;
+export const FOREIGN_WAYPOINT_STROKE_FLOW = 0.5;
+export const FOREIGN_BOUNDARY_HALF_SIDE_FLOW = 0.7;
+export const FOREIGN_BOUNDARY_STROKE_FLOW = 0.5;
 const BOUNDARY_WAYPOINT_PROJECTION_LIMIT_PX = 8;
 
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);

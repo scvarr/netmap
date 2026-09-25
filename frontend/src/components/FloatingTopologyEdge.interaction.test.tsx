@@ -111,7 +111,7 @@ describe('direct cable route edge interaction', () => {
     const segment = container.querySelector('.cable-route-segment-hit')!;
     fireEvent(segment, new MouseEvent('pointerdown', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true }));
     expect(draft.onWaypointInsert).toHaveBeenCalledWith(0, { x: 200, y: 50 });
-    const handle = container.querySelector('.cable-route-waypoint-hit') as SVGCircleElement;
+    const handle = container.querySelector('.cable-route-waypoint--editable') as SVGCircleElement;
     Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
     fireEvent.pointerDown(handle, { pointerId: 1 });
     fireEvent(handle, new MouseEvent('pointermove', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true }));
@@ -126,22 +126,29 @@ describe('direct cable route edge interaction', () => {
     const editing = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'editing-node' } } };
     const foreign = { ...editing, id: 'foreign', data: { cableNode: { id: 'foreign-node' }, cableRoute: { waypoints: [{ x: 200, y: 100 }] } } };
     const view = render(<ForegroundCableRoutes edges={[foreign, editing] as any} />);
-    expect(view.container.querySelector('.cable-route-foreign-target-marker')).toHaveAttribute('r', '3.5');
-    expect(view.container.querySelector('.cable-route-foreign-target-marker')).toHaveAttribute('pointer-events', 'none');
-    const handles = view.container.querySelectorAll('.cable-route-waypoint-hit');
+    const foreignMarker = view.container.querySelector('.cable-route-foreign-target-marker');
+    expect(foreignMarker).toHaveAttribute('r', '1');
+    expect(foreignMarker).toHaveAttribute('stroke-width', '0.5');
+    expect(foreignMarker).toHaveAttribute('fill', 'none');
+    expect(foreignMarker).toHaveAttribute('pointer-events', 'none');
+    expect(foreignMarker).not.toHaveClass('cable-route-waypoint--editable');
+    expect(Number(foreignMarker?.getAttribute('r'))).toBeLessThan(Number(view.container.querySelector('.cable-route-waypoint--editable')?.getAttribute('r')));
+    const handles = view.container.querySelectorAll('.cable-route-waypoint--editable');
     const handle = handles[0] as SVGCircleElement;
     Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
     fireEvent.pointerDown(handle, { pointerId: 1 });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1902 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1900 });
     expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 200, y: 100 });
     expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback')).toHaveAttribute('pointer-events', 'none');
+    expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback')).toHaveAttribute('r', '6');
+    expect(foreignMarker).toHaveAttribute('r', '1');
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: -750, clientY: -1924 });
     expect(draft.onWaypointMove.mock.lastCall?.[1].x).toBeCloseTo(249.6);
     expect(draft.onWaypointMove.mock.lastCall?.[1].y).toBeCloseTo(75.2);
     expect(view.container.querySelector('.cable-route-foreign-segment-feedback')).toHaveAttribute('pointer-events', 'none');
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: -500, clientY: -1800 });
     expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback, .cable-route-foreign-segment-feedback')).toBeNull();
-    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1902 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1900 });
     fireEvent.pointerUp(handle, { pointerId: 1 });
     expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback, .cable-route-foreign-segment-feedback')).toBeNull();
 
@@ -157,12 +164,32 @@ describe('direct cable route edge interaction', () => {
     expect(view.container.querySelector('.cable-route-foreign-target-marker')).toBeNull();
   });
 
+  it('renders dense foreign points as separate compact passive circles and diamonds', () => {
+    const draft = editor([{ x: 150, y: 50 }]);
+    const editing = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'editing-node' } } };
+    const foreign = { ...editing, id: 'foreign', data: { cableNode: { id: 'foreign-node' }, cableRoute: { waypoints: [{ x: 200, y: 100 }, { x: 204, y: 100, anchor: { location_id: 'room', edge: 'right', offset: .5 } }] } } };
+    const { container } = render(<ForegroundCableRoutes edges={[editing, foreign] as any} />);
+    const circle = container.querySelector('circle.cable-route-foreign-target-marker');
+    const diamond = container.querySelector('rect.cable-route-foreign-target-marker--boundary');
+    expect(circle).toHaveAttribute('r', '1');
+    expect(diamond).toHaveAttribute('width', '1.4');
+    expect(diamond).toHaveAttribute('height', '1.4');
+    expect(diamond).toHaveAttribute('transform', 'rotate(45 204 100)');
+    expect(circle).toHaveAttribute('pointer-events', 'none');
+    expect(diamond).toHaveAttribute('pointer-events', 'none');
+    expect(circle).toHaveAttribute('fill', 'none');
+    expect(diamond).toHaveAttribute('fill', 'none');
+    const circleReach = Number(circle?.getAttribute('r')) + Number(circle?.getAttribute('stroke-width')) / 2;
+    const diamondReach = (Number(diamond?.getAttribute('width')) + Number(diamond?.getAttribute('stroke-width'))) / Math.SQRT2;
+    expect(Number(diamond?.getAttribute('x')) + Number(diamond?.getAttribute('width')) / 2 - Number(circle?.getAttribute('cx'))).toBeGreaterThan(circleReach + diamondReach);
+  });
+
   it('excludes its own waypoints and uses straight foreign cables as segment targets', () => {
     const draft = editor([{ x: 200, y: 100 }]);
     const editing = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'editing-node' } } };
     const foreign = { ...editing, id: 'straight', data: { cableNode: { id: 'foreign-node' } } };
     const view = render(<ForegroundCableRoutes edges={[editing] as any} />);
-    const handle = view.container.querySelector('.cable-route-waypoint-hit') as SVGCircleElement;
+    const handle = view.container.querySelector('.cable-route-waypoint--editable') as SVGCircleElement;
     Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
     fireEvent.pointerDown(handle, { pointerId: 1 });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1900 });
@@ -175,23 +202,44 @@ describe('direct cable route edge interaction', () => {
     expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback, .cable-route-foreign-segment-feedback')).toBeNull();
   });
 
-  it('keeps the visible waypoint compact while its independent hit target is substantially larger', () => {
+  it('uses only the compact visible waypoint as its drag target', () => {
     const draft = editor([{ x: 100, y: 50 }]);
     const edge = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'cable-node' } } };
     const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
-    expect(container.querySelector('.cable-route-waypoint')).toHaveAttribute('r', '3.5');
-    expect(container.querySelector('.cable-route-waypoint-hit')).toHaveAttribute('r', '18');
+    const handle = container.querySelector('circle.cable-route-waypoint--editable');
+    expect(handle).toHaveAttribute('r', '2.25');
+    expect(handle).toHaveAttribute('pointer-events', 'all');
+    expect(handle).toHaveStyle({ cursor: 'move', strokeWidth: '0.5' });
+    const editingLine = container.querySelector('.cable-route-foreground--editing') as SVGPathElement;
+    expect(2 * Number(handle?.getAttribute('r')) + 0.5).toBe(Number(editingLine.style.strokeWidth));
+    expect(container.querySelector('[r="18"]')).toBeNull();
+    expect(container.querySelectorAll('.cable-route-waypoint--editable')).toHaveLength(1);
   });
-  it('shows a compact boundary diamond with a large hit area and constrains its drag to the perimeter', () => {
+  it('does not create an invisible overlapping capture area for nearby own waypoints', () => {
+    const draft = editor([{ x: 100, y: 50 }, { x: 106, y: 50 }]);
+    const edge = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'cable-node' } } };
+    const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
+    const handles = container.querySelectorAll('circle.cable-route-waypoint--editable');
+    expect(handles).toHaveLength(2);
+    expect(container.querySelectorAll('[r="18"]')).toHaveLength(0);
+    expect(Number(handles[1].getAttribute('cx')) - Number(handles[0].getAttribute('cx'))).toBeGreaterThan(2 * (Number(handles[0].getAttribute('r')) + 0.25));
+    Object.assign(handles[1], { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
+    fireEvent.pointerDown(handles[1], { pointerId: 1 });
+    expect(draft.onWaypointSelect).toHaveBeenCalledWith(1);
+    expect(draft.onWaypointSelect).toHaveBeenCalledTimes(1);
+  });
+  it('uses the compact boundary diamond as its drag target and constrains it to the perimeter', () => {
     const anchor = { x: 100, y: 50, anchor: { location_id: 'room', edge: 'right' as const, offset: .5 } };
     const draft = { ...editor([anchor]), boundaryFrames: [{ locationId: 'room', bounds: { x: 0, y: 0, width: 100, height: 100 } }] };
     const edge = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'cable-node' } } };
     const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
-    expect(container.querySelector('rect.cable-route-waypoint--boundary')).toHaveAttribute('width', '6');
-    expect(container.querySelector('rect.cable-route-waypoint--boundary')).toHaveAttribute('height', '6');
+    expect(container.querySelector('rect.cable-route-waypoint--boundary')).toHaveAttribute('width', '3.5');
+    expect(container.querySelector('rect.cable-route-waypoint--boundary')).toHaveAttribute('height', '3.5');
     expect(container.querySelector('circle.cable-route-waypoint')).toBeNull();
-    const handle = container.querySelector('.cable-route-waypoint-hit') as SVGCircleElement;
-    expect(handle).toHaveAttribute('r', '18');
+    const handle = container.querySelector('.cable-route-waypoint--editable') as SVGRectElement;
+    expect(handle).toHaveAttribute('pointer-events', 'all');
+    expect(handle).toHaveStyle({ cursor: 'move', strokeWidth: '0.5' });
+    expect(container.querySelector('[r="18"]')).toBeNull();
     Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
     fireEvent.pointerDown(handle, { pointerId: 1 });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: -870, clientY: -1930 });
@@ -305,7 +353,7 @@ describe('direct cable route edge interaction', () => {
     const editing = { ...normal, data: { ...normal.data, cableRouteDraft: draft } };
     const editorView = render(<ForegroundCableRoutes edges={[editing] as any} />);
     expect(editorView.container.querySelector('.cable-route-segment-hit')).toHaveAttribute('stroke-width', '22');
-    expect(editorView.container.querySelector('.cable-route-waypoint-hit')).toHaveAttribute('r', '18');
+    expect(editorView.container.querySelector('.cable-route-waypoint--editable')).toHaveAttribute('r', '2.25');
   });
 
   it('forwards a right click on the foreground Cable to its context menu handler', () => {
@@ -329,7 +377,7 @@ describe('direct cable route edge interaction', () => {
     fireEvent.pointerDown(segment, { button: 2 });
     fireEvent.contextMenu(segment);
     expect(draft.onWaypointInsert).not.toHaveBeenCalled();
-    const waypoint = editingView.container.querySelector('.cable-route-waypoint-hit')!;
+    const waypoint = editingView.container.querySelector('.cable-route-waypoint--editable')!;
     fireEvent.pointerDown(waypoint, { button: 2 });
     fireEvent.contextMenu(waypoint);
     expect(draft.onWaypointSelect).not.toHaveBeenCalled();
@@ -363,7 +411,7 @@ describe('direct cable route edge interaction', () => {
     const base = edgeProps(draft);
     const edge = { ...base, data: { ...base.data, cableNode: { id: 'cable' } } };
     const view = render(<ForegroundCableRoutes edges={[edge] as any} />);
-    const handle = view.container.querySelector('.cable-route-waypoint-hit') as SVGCircleElement;
+    const handle = view.container.querySelector('.cable-route-waypoint--editable') as SVGCircleElement;
     Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
     fireEvent.pointerDown(handle, { pointerId: 1 });
     fireEvent(handle, new MouseEvent('pointermove', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true }));
