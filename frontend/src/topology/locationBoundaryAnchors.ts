@@ -27,6 +27,33 @@ export const projectBoundaryWaypoint = (locationId: string, frame: FlowRectangle
   return { ...chosen.point, anchor: { location_id: locationId, edge: chosen.edge, offset: chosen.offset } };
 };
 
+/** Angular candidates are intersections of neighboring segment rays with the frame perimeter. */
+export const assistBoundaryWaypoint = (
+  locationId: string, frame: FlowRectangle, pointer: Point, neighbors: readonly Point[],
+  flowToScreenPosition: (point: Point) => Point,
+): MapCableRouteWaypoint => {
+  const distance = (point: Point) => Math.hypot(flowToScreenPosition(point).x - flowToScreenPosition(pointer).x, flowToScreenPosition(point).y - flowToScreenPosition(pointer).y);
+  for (const [step, capturePx] of [[45, 12], [15, 5]] as const) {
+    const candidates: MapCableRouteWaypoint[] = [];
+    for (const neighbor of neighbors) for (let angle = 0; angle < 360; angle += step) {
+      const radians = angle * Math.PI / 180, dx = Math.cos(radians), dy = Math.sin(radians);
+      for (const x of [frame.x, frame.x + frame.width]) {
+        if (Math.abs(dx) < 1e-9) continue;
+        const t = (x - neighbor.x) / dx, y = neighbor.y + t * dy;
+        if (t > 1e-7 && y >= frame.y - 1e-7 && y <= frame.y + frame.height + 1e-7) candidates.push(projectBoundaryWaypoint(locationId, frame, { x, y }));
+      }
+      for (const y of [frame.y, frame.y + frame.height]) {
+        if (Math.abs(dy) < 1e-9) continue;
+        const t = (y - neighbor.y) / dy, x = neighbor.x + t * dx;
+        if (t > 1e-7 && x >= frame.x - 1e-7 && x <= frame.x + frame.width + 1e-7) candidates.push(projectBoundaryWaypoint(locationId, frame, { x, y }));
+      }
+    }
+    const closest = candidates.sort((left, right) => distance(left) - distance(right))[0];
+    if (closest && distance(closest) <= capturePx) return closest;
+  }
+  return projectBoundaryWaypoint(locationId, frame, pointer);
+};
+
 const onBoundary = (point: Point, frame: FlowRectangle) =>
   ((near(point.x, frame.x) || near(point.x, frame.x + frame.width)) && frame.y <= point.y && point.y <= frame.y + frame.height) ||
   ((near(point.y, frame.y) || near(point.y, frame.y + frame.height)) && frame.x <= point.x && point.x <= frame.x + frame.width);
@@ -52,17 +79,18 @@ export const normalizeLocationBoundaryAnchors = (
   source: Point, target: Point, waypoints: readonly MapCableRouteWaypoint[], frames: readonly BoundaryFrame[],
 ): MapCableRouteWaypoint[] => {
   const resolved = waypoints.map((point) => resolveBoundaryWaypoint(point, frames));
+  const explicitLocations = new Set(resolved.flatMap((point) => point.anchor ? [point.anchor.location_id] : []));
   const points = [source, ...resolved, target];
   const result: MapCableRouteWaypoint[] = [];
   for (let index = 0; index < points.length - 1; index += 1) {
     const a = points[index], b = points[index + 1];
-    const events = frames.flatMap((frame) => crossings(a, b, frame.bounds).map((crossing) => ({ ...crossing, frame })));
+    const events = frames.filter((frame) => !explicitLocations.has(frame.locationId)).flatMap((frame) => crossings(a, b, frame.bounds).map((crossing) => ({ ...crossing, frame })));
     for (const event of events.sort((left, right) => left.t - right.t)) result.push(projectBoundaryWaypoint(event.frame.locationId, event.frame.bounds, event.point));
     if (index >= resolved.length) continue;
     const waypoint = resolved[index];
     if (waypoint.anchor) { result.push(waypoint); continue; }
     const following = points[index + 2];
-    const frame = frames.find((item) => onBoundary(waypoint, item.bounds) && inside(a, item.bounds) !== inside(following, item.bounds) && !onBoundary(a, item.bounds) && !onBoundary(following, item.bounds));
+    const frame = frames.find((item) => !explicitLocations.has(item.locationId) && onBoundary(waypoint, item.bounds) && inside(a, item.bounds) !== inside(following, item.bounds) && !onBoundary(a, item.bounds) && !onBoundary(following, item.bounds));
     result.push(frame ? projectBoundaryWaypoint(frame.locationId, frame.bounds, waypoint) : waypoint);
   }
   return result;

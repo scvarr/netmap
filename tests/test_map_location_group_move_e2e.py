@@ -111,7 +111,7 @@ def nested_scene(waypoints, reverse=False):
         session.add(cable); session.flush()
         if waypoints is not None:
             session.add(MapCableRoute(map_id=saved.id, variant_id=variant.id, cable_id=cable.id, view_key=MapViewKey.PHYSICAL, waypoints=waypoints))
-        return {"map": saved.id, "variant": variant.id, "room": child.id,
+        return {"map": saved.id, "variant": variant.id, "room": child.id, "outside_location": outside.id,
                 "objects": {name: obj.id for name, obj in objects.items()}, "cables": {"boundary": cable.id}}
 
 
@@ -170,6 +170,65 @@ def test_nested_child_route_reentry_still_rejects_atomically():
     response = move(ids, nested_request(ids))
     assert response.status_code == 422
     assert response.json()["error"]["message"] == "Boundary route cannot be split unambiguously"
+    assert snapshot(ids) == before
+
+
+def two_location_anchor_scene():
+    ids = nested_scene(None)
+    child_anchor = {"x": 320, "y": 130, "anchor": {"location_id": str(ids["room"]), "edge": "right", "offset": .5}}
+    outside_anchor = {"x": 880, "y": 30, "anchor": {"location_id": str(ids["outside_location"]), "edge": "left", "offset": .5}}
+    with SessionLocal.begin() as session:
+        extra = PhysicalObject(location_id=ids["outside_location"])
+        placement = MapPlacement(map_id=ids["map"], physical_object=extra)
+        placement.view_positions.append(MapViewPosition(variant_id=ids["variant"], view_key=MapViewKey.PHYSICAL, x=1100, y=0))
+        session.add(placement)
+        route = session.scalar(select(MapCableRoute).where(MapCableRoute.cable_id == ids["cables"]["boundary"]))
+        if route is None:
+            route = MapCableRoute(map_id=ids["map"], variant_id=ids["variant"], cable_id=ids["cables"]["boundary"], view_key=MapViewKey.PHYSICAL)
+            session.add(route)
+        route.waypoints = [child_anchor, {"x": 500, "y": 130}, outside_anchor]
+        session.flush()
+        ids["objects"]["outside_b"] = extra.id
+    return ids
+
+
+def test_explicit_anchor_of_moving_location_wins_over_other_location_anchor():
+    ids = two_location_anchor_scene()
+    before = snapshot(ids)
+    child_request = nested_request(ids)
+    child_request["footprints"].append({"physical_object_id": str(ids["objects"]["outside_b"]), "x": 1100, "y": 0, "width": 100, "height": 60})
+    child_response = move(ids, child_request)
+    assert child_response.status_code == 204, child_response.text
+    child_positions, child_routes, _, _ = snapshot(ids)
+    assert child_positions["child_a"][:2] == (400, 120)
+    route = child_routes[ids["cables"]["boundary"]]
+    assert [point.get("anchor", {}).get("location_id") for point in route] == [str(ids["room"]), None, str(ids["outside_location"])]
+
+    outside_request = {"delta_x": 0, "delta_y": 300,
+        "frame": {"x": 880, "y": -20, "width": 340, "height": 100},
+        "footprints": [{"physical_object_id": str(ids["objects"][name]), "x": x, "y": y, "width": 100, "height": 60}
+                       for name, (x, y) in {"child_a": (400, 120), "child_b": (600, 120), "sibling": (0, 0), "outside": (900, 0), "outside_b": (1100, 0)}.items()],
+        "boundary_routes": [{"cable_id": str(ids["cables"]["boundary"]), "moving_endpoint_is_source": False,
+                             "moving_endpoint": {"x": 900, "y": 30}, "external_endpoint": {"x": 450, "y": 150}}]}
+    outside_response = client.post(f'/v1/maps/{ids["map"]}/presentation-variants/{ids["variant"]}/locations/{ids["outside_location"]}/group-move', json=outside_request)
+    assert outside_response.status_code == 204, outside_response.text
+    positions, routes, membership, hierarchy = snapshot(ids)
+    assert positions["outside"][:2] == (900, 300)
+    assert positions["outside_b"][:2] == (1100, 300)
+    assert [point.get("anchor", {}).get("location_id") for point in routes[ids["cables"]["boundary"]]] == [str(ids["room"]), None, str(ids["outside_location"])]
+    assert membership == before[2] and hierarchy == before[3]
+
+
+def test_duplicate_anchor_for_the_moving_location_rejects_without_partial_write():
+    ids = two_location_anchor_scene()
+    with SessionLocal.begin() as session:
+        route = session.scalar(select(MapCableRoute).where(MapCableRoute.cable_id == ids["cables"]["boundary"]))
+        route.waypoints = [route.waypoints[0], {"x": 320, "y": 140, "anchor": {"location_id": str(ids["room"]), "edge": "right", "offset": .6}}, *route.waypoints[1:]]
+    before = snapshot(ids)
+    payload = nested_request(ids)
+    payload["footprints"].append({"physical_object_id": str(ids["objects"]["outside_b"]), "x": 1100, "y": 0, "width": 100, "height": 60})
+    response = move(ids, payload)
+    assert response.status_code == 422
     assert snapshot(ids) == before
 
 

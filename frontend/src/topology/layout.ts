@@ -9,6 +9,7 @@ import type {
 import type { PresentationSceneDocument } from './presentationScene';
 import type { MapCableRoute } from './savedMapTypes';
 import type { MapCableRouteWaypoint } from './savedMapTypes';
+import type { BoundaryFrame } from './locationBoundaryAnchors';
 import { blueprintNodeDisplayDimensions } from './blueprintDisplaySize';
 
 export const LAYOUT_NODE_WIDTH = 212;
@@ -55,6 +56,7 @@ export interface LogicalEdgeData extends Record<string, unknown> {
     onWaypointSelect: (index: number) => void;
     onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void;
     onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void;
+    boundaryFrames?: readonly BoundaryFrame[];
   };
   /** Route editing controls are rendered by the foreground cable overlay. */
   renderRouteEditorInForeground?: boolean;

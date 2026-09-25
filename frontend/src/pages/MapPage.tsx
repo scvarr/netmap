@@ -1373,7 +1373,8 @@ export function MapPage({
     if (!activeMap || !requestedCableId || viewMode !== "physical") return;
     const existing = (activeMap.cable_routes ?? []).find((route) => route.cable_ref.entity_id === requestedCableId);
     const copied = existing?.waypoints.map((point) => ({ ...point })) ?? [];
-    setCableRouteEdit({ mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, cableId: requestedCableId, originalRoutePresent: Boolean(existing), originalWaypoints: copied, draftWaypoints: copied, selectedWaypointIndex: null, status: "editing", error: null });
+    const normalized = routeNormalizerRef.current?.(requestedCableId, copied) ?? copied;
+    setCableRouteEdit({ mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, cableId: requestedCableId, originalRoutePresent: Boolean(existing), originalWaypoints: copied, draftWaypoints: normalized, selectedWaypointIndex: null, status: "editing", error: null });
   };
   const saveCableRoute = async () => {
     if (!savedMapDataSource || !cableRouteEdit || cableRouteEdit.status === "saving") return;

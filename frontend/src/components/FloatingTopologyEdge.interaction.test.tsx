@@ -123,21 +123,33 @@ describe('direct cable route edge interaction', () => {
     const draft = editor([{ x: 100, y: 50 }]);
     const edge = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'cable-node' } } };
     const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
-    expect(container.querySelector('.cable-route-waypoint')).toHaveAttribute('r', '6');
+    expect(container.querySelector('.cable-route-waypoint')).toHaveAttribute('r', '3.5');
     expect(container.querySelector('.cable-route-waypoint-hit')).toHaveAttribute('r', '18');
   });
-  it('shows a boundary anchor as a distinct diamond and passes its raw pointer to the boundary projection', () => {
+  it('shows a compact boundary diamond with a large hit area and constrains its drag to the perimeter', () => {
     const anchor = { x: 100, y: 50, anchor: { location_id: 'room', edge: 'right' as const, offset: .5 } };
-    const draft = editor([anchor]);
+    const draft = { ...editor([anchor]), boundaryFrames: [{ locationId: 'room', bounds: { x: 0, y: 0, width: 100, height: 100 } }] };
     const edge = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'cable-node' } } };
     const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
-    expect(container.querySelector('rect.cable-route-waypoint--boundary')).toBeInTheDocument();
+    expect(container.querySelector('rect.cable-route-waypoint--boundary')).toHaveAttribute('width', '6');
+    expect(container.querySelector('rect.cable-route-waypoint--boundary')).toHaveAttribute('height', '6');
     expect(container.querySelector('circle.cable-route-waypoint')).toBeNull();
     const handle = container.querySelector('.cable-route-waypoint-hit') as SVGCircleElement;
+    expect(handle).toHaveAttribute('r', '18');
     Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
     fireEvent.pointerDown(handle, { pointerId: 1 });
-    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 7, clientY: 8 });
-    expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 1007, y: 2008 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -870, clientY: -1930 });
+    expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, expect.objectContaining({ x: 100, anchor: expect.objectContaining({ location_id: 'room', edge: 'right' }) }));
+    expect(container.querySelector('.cable-route-geometry-feedback')).toHaveTextContent(/° · /);
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -950, clientY: -2001 });
+    const fortyFive = draft.onWaypointMove.mock.lastCall?.[1];
+    expect(fortyFive?.x).toBeCloseTo(50);
+    expect(fortyFive).toMatchObject({ y: 0, anchor: { edge: 'top' } });
+    expect(fortyFive?.anchor?.offset).toBeCloseTo(.5);
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -913, clientY: -2001 });
+    const fifteen = draft.onWaypointMove.mock.lastCall?.[1];
+    expect(fifteen?.x).toBeCloseTo(100 - 50 * Math.tan(Math.PI / 12));
+    expect(fifteen).toMatchObject({ y: 0, anchor: { edge: 'top' } });
   });
 
   it('keeps normal cables visual-only in the foreground and puts edit controls above object bodies', () => {

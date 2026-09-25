@@ -45,8 +45,14 @@ def _resolve(point: dict, location_id: uuid.UUID, frame: dict) -> dict:
 def normalize_boundary_route(
     location_id: uuid.UUID, frame: dict, source: dict, waypoints: list[dict], target: dict,
 ) -> tuple[list[dict], int]:
-    """Materialize the first real crossing; return oriented route and its anchor index."""
+    """Prefer this Location's explicit splitter; materialize only for legacy routes."""
+    explicit = [index for index, point in enumerate(waypoints)
+                if point.get("anchor", {}).get("location_id") == str(location_id)]
+    if len(explicit) > 1:
+        raise ValidationError("Boundary route cannot be split unambiguously", {})
     resolved = [_resolve(point, location_id, frame) for point in waypoints]
+    if explicit:
+        return resolved, explicit[0]
     points = [source, *resolved, target]
     result: list[dict] = []
     for index, (start, end) in enumerate(zip(points, points[1:])):

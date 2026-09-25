@@ -20,6 +20,7 @@ import { genericConnectionPoints, genericEndpointOffset } from '../topology/gene
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 import { blueprintDisplayDimensions, blueprintMapNameplateHeight, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
 import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } from '../topology/geometryAssist';
+import { assistBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
 
 const CABLE_ANGLE_FAMILIES = [{ step: 45, capturePx: 12 }, { step: 15, capturePx: 5 }];
 const rayIntersection = (left: MapCableRouteWaypoint, leftAngle: number, right: MapCableRouteWaypoint, rightAngle: number): MapCableRouteWaypoint | null => {
@@ -267,8 +268,13 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
   const moveWaypoint = (index: number, event: PointerEvent<SVGElement>) => {
     if (!draft) return;
     if (draft.waypoints[index]?.anchor) {
-      draft.onWaypointMove(index, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
-      setFeedback([]);
+      const anchor = draft.waypoints[index].anchor;
+      const frame = draft.boundaryFrames?.find((item) => item.locationId === anchor.location_id);
+      if (!frame) return;
+      const neighbors = [segmentPoints[index], segmentPoints[index + 2]];
+      const point = assistBoundaryWaypoint(frame.locationId, frame.bounds, screenToFlowPosition({ x: event.clientX, y: event.clientY }), neighbors, flowToScreenPosition);
+      draft.onWaypointMove(index, point);
+      setFeedback(neighbors.map((neighbor) => ({ start: neighbor, end: point, assist: assistFrom(neighbor, event) })));
       return;
     }
     const anchors = [segmentPoints[index], segmentPoints[index + 2]];
@@ -312,8 +318,8 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
       <g key={`${edge.id}:foreground-waypoint:${index}`}>
         <circle className="cable-route-waypoint-hit" cx={waypoint.x} cy={waypoint.y} r={18} fill="transparent" pointerEvents="all" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId); draft.onWaypointSelect(index); }} onPointerMove={(event) => { if (!event.currentTarget.hasPointerCapture(event.pointerId)) return; event.stopPropagation(); event.preventDefault(); moveWaypoint(index, event); }} onPointerUp={(event) => { event.stopPropagation(); event.preventDefault(); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); setFeedback([]); }} />
         {waypoint.anchor
-          ? <rect className={`cable-route-waypoint cable-route-waypoint--boundary${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} x={waypoint.x - 5} y={waypoint.y - 5} width={10} height={10} transform={`rotate(45 ${waypoint.x} ${waypoint.y})`} pointerEvents="none" />
-          : <circle className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={6} pointerEvents="none" />}
+          ? <rect className={`cable-route-waypoint cable-route-waypoint--boundary${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} x={waypoint.x - 3} y={waypoint.y - 3} width={6} height={6} transform={`rotate(45 ${waypoint.x} ${waypoint.y})`} pointerEvents="none" />
+          : <circle className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={3.5} pointerEvents="none" />}
       </g>
     ))}
     {feedback.map((item, index) => <text key={index} className="cable-route-geometry-feedback" x={(item.start.x + item.end.x) / 2} y={(item.start.y + item.end.y) / 2 - 10} textAnchor="middle" fontSize={12 / getViewport().zoom} strokeWidth={3 / getViewport().zoom}>{`${Math.round(segmentAngle(item.start, item.end))}° · ${Math.round(segmentLength(item.start, item.end))}`}</text>)}

@@ -467,7 +467,7 @@ export function TopologyCanvas({
     const matchingDraft = edge.data?.cableNode
       && cableRouteDraft
       && cableIdForNode(edge.data.cableNode) === cableRouteDraft.cableId
-      ? { ...cableRouteDraft, waypoints: resolveRouteWaypoints(cableRouteDraft.waypoints), onWaypointMove: (index: number, point: MapCableRouteWaypoint) => {
+      ? { ...cableRouteDraft, boundaryFrames, waypoints: resolveRouteWaypoints(cableRouteDraft.waypoints), onWaypointMove: (index: number, point: MapCableRouteWaypoint) => {
         const anchor = cableRouteDraft.waypoints[index]?.anchor;
         if (!anchor) { cableRouteDraft.onWaypointMove(index, point); return; }
         const frame = boundaryFrames.find((item) => item.locationId === anchor.location_id);
