@@ -157,10 +157,17 @@ snapshot/fallback; при renderable frame его binding определяет �
 Frame bounds не сохраняются. Редактор показывает anchor отличным маркером и
 проецирует его drag на периметр связанного frame. При сохранении route
 пересечения renderable frames нормализуются в anchors; повторное сохранение
-не создаёт дубликатов. Legacy `{x,y}` route читается без mutation. Если
+не создаёт дубликатов. Явный anchor для конкретного Location имеет приоритет
+над повторным geometric split этого Location; anchors других Locations
+независимы. Несколько anchors одного Location пока означают unsupported
+re-entry и отклоняются. Legacy `{x,y}` route читается без mutation; открытие
+редактора может нормализовать его только в transient draft, без persistence.
+Persisted mutation выполняется только при Save route или group move. Если
 group move требует anchor для legacy boundary route, сервер материализует его
-в той же транзакции, что positions и route transform. Однократный переход
-через boundary waypoint допустим; неоднозначный re-entry отклоняет операцию.
+в той же транзакции, что positions и route transform. При отсутствии explicit
+anchor единственный geometric crossing материализуется; повторный выход и
+re-entry одного Location пока отклоняется. Эти presentation waypoints не
+меняют canonical topology, Cable endpoints или Location hierarchy.
 
 ## MapComposite и MapRegion: superseded
 

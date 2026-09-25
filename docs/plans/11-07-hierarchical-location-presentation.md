@@ -64,32 +64,40 @@ state; membership объектов не дублировать.
 
 ### P-UX-03D — Interactive Location group move
 
-**IMPLEMENTED.** Drag заголовка expanded frame отправляет один displacement
-для canonical subtree активного L1 variant; locked member, external collision
-или неоднозначный boundary route отклоняют всю операцию. Positions и saved
-routes записываются одной транзакцией. После записи выполняется authoritative
-reload с отдельным read-only retry. Targeted backend/frontend validation и
-frontend build пройдены. Boundary Cable routes используют variant-specific
-Location boundary anchors в `MapCableRoute.waypoints`: binding на Location,
-сторону и нормализованное положение вдоль неё. Legacy `{x,y}` routes читаются
-без изменения и получают необходимые anchors при явном сохранении трассы или
-в той же atomic transaction, что group move. Положение anchor вычисляется из
-текущего derived frame; geometry Location не сохраняется. Редактор ограничивает
-drag anchor периметром frame. Ручная spatial acceptance остаётся в P-UX-03E.
+**IMPLEMENTED. Ручная перепроверка — ПРОЙДЕНА.** Drag заголовка
+отображаемого `LocationFrame` отправляет один displacement для canonical
+subtree активного L1 variant. Во время drag transient derived preview
+показывает выбранный frame и изменившиеся ancestor frames. Все размещённые
+members subtree, включая скрытые collapse-представлением, получают одинаковый
+delta; внутреннего re-layout нет. Locked member или collision с внешним
+PhysicalObject отклоняют операцию целиком. Positions и затронутые mutable
+routes записываются одной server transaction. После успешной записи выполняется
+authoritative reload; при его ошибке повторяется только read, displacement не
+повторяется.
 
-Добавить frame handle/context action. Перемещать canonical subtree одним delta,
-включая скрытые placements; валидировать collisions и отклонять пересечение с
-внешним объектом без automatic re-layout. Классифицировать internal/external/
-boundary routes, сохранить internal geometry и деформировать boundary route по
-contract. Positions и routes сохранять одной atomic server-side write
-operation.
+Boundary Cable routes используют variant-specific Location boundary anchors в
+`MapCableRoute.waypoints`. Явный anchor перемещаемого Location является
+authoritative splitter; anchors других Locations независимы и не создают
+ambiguity. Несколько anchors того же moving Location пока означают unsupported
+re-entry и отклоняют операцию. Legacy route получает anchor только при явной
+mutation — сохранении трассы или group move; чтение не пишет данные. Открытие
+route editor сразу нормализует transient draft и показывает anchors без write;
+Save сохраняет draft, Cancel его отбрасывает. Anchor разрешается из текущей
+derived frame и при drag остаётся на её периметре. Для него действуют 45°/15°
+geometry assistance и feedback угла/расстояния. Видимые route points компактны,
+а удобная большая hit area сохраняется. Геометрия Location не сохраняется.
 
 ### P-UX-03E — Spatial acceptance and dead-code cleanup
 
-Провести representative manual validation hierarchical collapse, nested frames,
-group move, collisions, exact boundary evidence и route semantics. Удалить
-оставшиеся obsolete helpers/styles/types, затем обновить связанные `C-*`
-statuses только после проверки. Зафиксировать завершение spatial cutover.
+**IMPLEMENTATION PENDING.** Перед final spatial acceptance закрываются
+bounded cable-route UX findings, обнаруженные в ручном проходе P-UX-03D и
+вынесенные в [[plans/11-08-cable-route-editor-completion|11.8 Cable route
+editor completion]]. Этот follow-up не меняет canonical Location semantics и
+не означает завершение spatial cutover. После него провести representative
+manual validation hierarchical collapse, nested frames, group move, collisions,
+exact boundary evidence и route semantics. Удалить оставшиеся obsolete
+helpers/styles/types, затем обновить связанные `C-*` statuses только после
+проверки. Зафиксировать завершение spatial cutover только после acceptance.
 
 ## No-legacy policy
 

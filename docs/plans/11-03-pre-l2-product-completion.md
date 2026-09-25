@@ -45,6 +45,12 @@ compact Port Block table и RU terminology «Группа портов / Гру�
 
 Current execution position: **Phase C — Representative real-world L1 semantic acceptance.**
 
+В spatial strand P-UX-03A/B/C/D реализованы, ручная проверка P-UX-03D
+пройдена. P-UX-03E остаётся pending; перед его final spatial acceptance
+закрываются bounded Cable route editor findings, обнаруженные ручным проходом.
+Порядок и границы записаны в [[plans/11-08-cable-route-editor-completion|11.8
+Cable route editor completion]]. Это не завершает Phase C или spatial cutover.
+
 Первоначальная representative Phase C discovery уже выполнена: `C-*` findings
 зафиксированы и остаются обязательным списком для контроля. Сейчас идёт
 clean-start повторный пользовательский проход: ручной шаг → первое
@@ -57,10 +63,12 @@ Phase C acceptance closure]].
 Promoted semantic gaps, включая `C-CAP-01`, закрываются через Phase D. Это не
 означает, что Phase D целиком уже началась или завершена. Финальный clean
 Phase C acceptance выполняется после необходимых обязательных fixes; только
-после него Phase C считается закрытой. Ближайшая spatial family —
-hierarchical Location presentation cutover по действующему spatial contract,
-сначала Location series creation, затем последовательные removal и
-presentation milestones. Общий порядок Phase E–I не меняется.
+после него Phase C считается закрытой. Spatial presentation следует
+[[plans/11-07-hierarchical-location-presentation|11.7 plan]]: P-UX-03A/B/C/D
+реализованы, P-UX-03D manual recheck пройдена, P-UX-03E остаётся pending.
+Перед final P-UX-03E acceptance выполняется bounded Cable route editor follow-up
+из [[plans/11-08-cable-route-editor-completion|11.8 plan]]. Общий порядок
+Phase E–I не меняется.
 
 ### Phase B — Remaining bounded L1 capability families
 
@@ -124,7 +132,13 @@ presentation milestones. Общий порядок Phase E–I не меняет
 OPEN presentation direction: canonical Cable отдельны, общий маршрут и
 автоматическая «гребёнка» допустимы только как SavedMap presentation; общий
 участок явно показывает количество кабелей, а trace одного Cable не делает
-весь жгут его evidence. Exact persistence/schema/editor UX OPEN.
+весь жгут его evidence. Отдельный Cable Bundle entity/persistence сейчас не
+является запланированной следующей capability. Current target — визуально
+совместное прохождение независимых `MapCableRoute` через geometry snapping:
+каждый Cable сохраняет собственный route, а snapping не создаёт canonical или
+SavedMap relationship между routes. Bundle/shared-route entity остаётся OPEN
+только при доказанной потребности, которую нельзя выразить независимыми
+совпадающими routes.
 
 ### Phase C — Representative real-world L1 semantic acceptance
 

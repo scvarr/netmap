@@ -51,7 +51,8 @@ Logical/Physical, состояние уже существующей пусто�
 
 ### P-UX-03 — hierarchical Location presentation
 
-**Статус: CONTRACT AGREED / IMPLEMENTATION PENDING.**
+**Статус: P-UX-03A/B/C/D IMPLEMENTED; P-UX-03D manual recheck passed;
+P-UX-03E IMPLEMENTATION PENDING.**
 
 **Замечание.** После создания первой карты spatial workflow должен показывать
 canonical Location hierarchy как управляемую иерархическую сцену, а не только
@@ -63,16 +64,22 @@ MapComposite как целевых capabilities. `SavedMap` сохраняет �
 представляется через recursive direct-element collapse, derived dynamic frames
 и group move. Membership, exact evidence и направление зависимости определяются
 [[architecture/presentation/09-spatial-location-mapreference-contract|spatial contract]].
-Canonical Location остаётся source of truth; старые Region/MapComposite
-реализации существуют до отдельных destructive removal milestones.
+Canonical Location остаётся source of truth; development-stage Region и
+MapComposite удалены в P-UX-03A.
 
-P-UX-03 реализуется последовательно как P-UX-03A–P-UX-03E в
-[[plans/11-07-hierarchical-location-presentation|11.7 plan]] и не считается
-выполненным до implementation и manual acceptance.
+P-UX-03 реализован последовательно по P-UX-03A–P-UX-03D. P-UX-03D прошёл
+manual recheck; весь P-UX-03 остаётся открытым до P-UX-03E final spatial
+acceptance.
+
+Ручная acceptance P-UX-03D выявила bounded Cable route editor usability
+findings. Их follow-up ведётся отдельно в
+[[plans/11-08-cable-route-editor-completion|11.8 Cable route editor
+completion]] и не меняет canonical Location semantics.
 
 ### P-UX-19 — массовое создание дочерних Locations
 
-**Статус: IMPLEMENTATION PENDING.**
+**Статус: IMPLEMENTED.** Targeted backend/frontend validation пройдена,
+согласно [[plans/11-07-hierarchical-location-presentation|11.7 plan]].
 
 Отдельная ближайшая capability создаёт атомарную серию canonical дочерних
 Locations по pattern/range/step с preview, проверкой ширины и конфликтов,
@@ -380,14 +387,14 @@ UI. Canonical Location semantics/API/DB не менялись.
 
 ## Текущая точка clean-start прохода
 
-`P-UX-18` завершён и merged в `main`; Locations hierarchy workflow теперь
-реализован. Текущий synthetic representative stand продолжает использовать
-существующие Locations/objects: `PC1`, `O1`, `PP1`/`PP-301` role и
-`SW-301-ACCESS`. Следующий spatial участок — `P-UX-03` hierarchical Location
-presentation и `P-UX-19` Location series creation. Оба остаются
-`IMPLEMENTATION PENDING`; derived frames, group move и Location series ещё не
-реализованы. Manual Region и MapComposite implementations всё ещё существуют
-до отдельных removal milestones.
+`P-UX-18` завершён и merged в `main`; `P-UX-19` реализован. Текущая точка —
+P-UX-03: milestones A/B/C/D реализованы, ручная перепроверка D пройдена, E
+остаётся pending. Перед final P-UX-03E acceptance закрываются bounded Cable
+route editor usability findings из ручного пространственного прохода; см.
+[[plans/11-08-cable-route-editor-completion|11.8 plan]]. Это отдельный
+presentation follow-up, а spatial cutover остаётся незавершённым до P-UX-03E.
+Synthetic representative stand продолжает использовать существующие
+Locations/objects: `PC1`, `O1`, `PP1`/`PP-301` role и `SW-301-ACCESS`.
 
 Правило прохода сохраняется: первый существенный defect → stop → bounded
 milestone → review → merge → продолжение того же стенда.
