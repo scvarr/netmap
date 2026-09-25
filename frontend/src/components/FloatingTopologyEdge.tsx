@@ -22,7 +22,7 @@ import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 import { blueprintDisplayDimensions, blueprintMapNameplateHeight, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
 import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } from '../topology/geometryAssist';
 import { assistBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
-import { findForeignRouteSnap, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
+import { findForeignRouteSnap, FOREIGN_BOUNDARY_HALF_SIDE_FLOW, FOREIGN_WAYPOINT_RADIUS_FLOW, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
 import { cableIdForNode } from '../topology/projection';
 
 const CABLE_ANGLE_FAMILIES = [{ step: 45, capturePx: 12 }, { step: 15, capturePx: 5 }];
@@ -418,15 +418,23 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, 
     const points = [source, ...waypoints, target];
     return [[edge.id, { waypoints, segments: points.slice(0, -1).map((point, index) => [point, points[index + 1]] as const) }] as const];
   }));
+  const foreignGeometryFor = (editing: LogicalFlowEdge): ForeignRouteGeometry[] => cables
+    .filter((other) => other.id !== editing.id && (!other.data?.cableNode?.source_refs || cableIdForNode(other.data.cableNode) !== editing.data?.cableRouteDraft?.cableId))
+    .flatMap((other) => { const geometry = geometryByCable.get(other.id); return geometry ? [geometry] : []; });
+  const editingEdge = cables.find((edge) => edge.data?.cableRouteDraft);
+  const foreignGeometry = editingEdge ? foreignGeometryFor(editingEdge) : [];
   const ordered = cables.map((edge, index) => ({ edge, index })).sort((a, b) => cablePriority(a.edge) - cablePriority(b.edge) || a.index - b.index);
   const feedback = layoutGeometryFeedback(ordered.flatMap(({ edge }) => edge.data?.cableRouteDraft ? feedbackByCable[edge.id] ?? [] : []), zoom);
   const snap = activeSnap && cables.some((edge) => edge.id === activeSnap.edgeId && edge.data?.cableRouteDraft) ? activeSnap.snap : null;
   return <ViewportPortal>
     <svg className="cable-routes-foreground" aria-hidden="true">
-      {ordered.map(({ edge }) => <ForegroundCableRoute key={edge.id} edge={edge} foreignGeometry={edge.data?.cableRouteDraft ? cables.filter((other) => other.id !== edge.id && (!other.data?.cableNode?.source_refs || cableIdForNode(other.data.cableNode) !== edge.data?.cableRouteDraft?.cableId)).flatMap((other) => { const geometry = geometryByCable.get(other.id); return geometry ? [geometry] : []; }) : []} onCableClick={onCableClick} onCableContextMenu={onCableContextMenu} onFeedbackChange={(edgeId, items) => setFeedbackByCable((current) => ({ ...current, [edgeId]: items }))} onSnapChange={(next) => setActiveSnap(next ? { edgeId: edge.id, snap: next } : null)} />)}
+      {ordered.map(({ edge }) => <ForegroundCableRoute key={edge.id} edge={edge} foreignGeometry={edge.data?.cableRouteDraft ? foreignGeometry : []} onCableClick={onCableClick} onCableContextMenu={onCableContextMenu} onFeedbackChange={(edgeId, items) => setFeedbackByCable((current) => ({ ...current, [edgeId]: items }))} onSnapChange={(next) => setActiveSnap(next ? { edgeId: edge.id, snap: next } : null)} />)}
       <ForegroundPortMarkers physicalPortStates={physicalPortStates} />
       {wiringRoute && <g data-testid="foreground-wiring-route"><WiringRoute {...wiringRoute} /></g>}
       <g className="cable-route-feedback-layer" pointerEvents="none">
+        {foreignGeometry.flatMap((route) => route.waypoints).map((waypoint, index) => waypoint.anchor
+          ? <rect key={`foreign-waypoint:${index}`} className="cable-route-waypoint cable-route-waypoint--boundary cable-route-foreign-target-marker" x={waypoint.x - FOREIGN_BOUNDARY_HALF_SIDE_FLOW} y={waypoint.y - FOREIGN_BOUNDARY_HALF_SIDE_FLOW} width={FOREIGN_BOUNDARY_HALF_SIDE_FLOW * 2} height={FOREIGN_BOUNDARY_HALF_SIDE_FLOW * 2} transform={`rotate(45 ${waypoint.x} ${waypoint.y})`} pointerEvents="none" />
+          : <circle key={`foreign-waypoint:${index}`} className="cable-route-waypoint cable-route-foreign-target-marker" cx={waypoint.x} cy={waypoint.y} r={FOREIGN_WAYPOINT_RADIUS_FLOW} pointerEvents="none" />)}
         {snap?.kind === 'segment' && snap.segment && <line className="cable-route-foreign-segment-feedback" x1={snap.segment[0].x} y1={snap.segment[0].y} x2={snap.segment[1].x} y2={snap.segment[1].y} stroke="#ffca66" strokeWidth={4 / zoom} opacity={0.9} pointerEvents="none" />}
         {snap && <circle className={`cable-route-foreign-${snap.kind}-feedback`} cx={snap.point.x} cy={snap.point.y} r={6 / zoom} fill="#ffca66" stroke="#172629" strokeWidth={2 / zoom} pointerEvents="none" />}
         {feedback.map((item) => <text key={item.index} className="cable-route-geometry-feedback" x={item.x} y={item.y} textAnchor="middle" fontSize={12 / zoom} strokeWidth={3 / zoom}>{item.label}</text>)}

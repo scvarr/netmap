@@ -34,8 +34,10 @@ relation.
 - Drag/insert waypoint текущего Cable snap к waypoint или ближайшей projection
   point видимого segment другого Cable, включая прямой Cable без saved route и
   resolved Location boundary anchors маршрутизированного Cable.
-- Capture radius 8 screen pixels при любом zoom. Waypoint имеет приоритет над
-  segment; foreign geometry имеет приоритет над 45°/15° assist.
+- Waypoint capture ограничен footprint его видимого marker (круг или boundary
+  diamond) при текущем zoom, без дополнительного halo. Segment capture — 8
+  screen pixels при любом zoom. Waypoint имеет приоритет над segment; foreign
+  geometry имеет приоритет над 45°/15° assist.
 - Foreground editor показывает transient marker на snapped point и подсветку
   target segment. Feedback не принимает pointer events и очищается при release,
   cancel и закрытии route editor.

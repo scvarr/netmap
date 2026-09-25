@@ -3,9 +3,14 @@ import type { BoundaryFrame } from './locationBoundaryAnchors';
 import { projectBoundaryWaypoint } from './locationBoundaryAnchors';
 
 type Point = { x: number; y: number };
-export type ForeignRouteGeometry = { waypoints: readonly Point[]; segments: readonly (readonly [Point, Point])[] };
+export type ForeignRouteGeometry = { waypoints: readonly MapCableRouteWaypoint[]; segments: readonly (readonly [Point, Point])[] };
 export type ForeignRouteSnap = { kind: 'waypoint' | 'segment'; point: MapCableRouteWaypoint; segment?: readonly [Point, Point] };
-export const FOREIGN_ROUTE_CAPTURE_PX = 8;
+export const FOREIGN_SEGMENT_CAPTURE_PX = 8;
+export const FOREIGN_WAYPOINT_RADIUS_FLOW = 3.5;
+export const FOREIGN_WAYPOINT_STROKE_FLOW = 2;
+export const FOREIGN_BOUNDARY_HALF_SIDE_FLOW = 3;
+export const FOREIGN_BOUNDARY_STROKE_FLOW = 2.5;
+const BOUNDARY_WAYPOINT_PROJECTION_LIMIT_PX = 8;
 
 const distance = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
 const projection = (point: Point, a: Point, b: Point): Point => {
@@ -34,10 +39,16 @@ export function findForeignRouteSnap(
     : { x: point.x, y: point.y };
   const candidates: { snap: ForeignRouteSnap; distance: number }[] = [];
   for (const route of geometry) for (const waypoint of route.waypoints) {
+    const markerScreen = flowToScreen(waypoint);
+    const zoom = distance(markerScreen, flowToScreen({ x: waypoint.x + 1, y: waypoint.y }));
+    const dx = Math.abs(pointerScreen.x - markerScreen.x), dy = Math.abs(pointerScreen.y - markerScreen.y);
+    const insideMarker = waypoint.anchor
+      ? dx + dy <= (FOREIGN_BOUNDARY_HALF_SIDE_FLOW + FOREIGN_BOUNDARY_STROKE_FLOW / 2) * Math.SQRT2 * zoom
+      : Math.hypot(dx, dy) <= (FOREIGN_WAYPOINT_RADIUS_FLOW + FOREIGN_WAYPOINT_STROKE_FLOW / 2) * zoom;
+    if (!insideMarker) continue;
     const point = asWaypoint(waypoint);
-    if (boundary && distance(flowToScreen(waypoint), flowToScreen(point)) > FOREIGN_ROUTE_CAPTURE_PX) continue;
-    const screenDistance = distance(pointerScreen, flowToScreen(point));
-    if (screenDistance <= FOREIGN_ROUTE_CAPTURE_PX) candidates.push({ snap: { kind: 'waypoint', point }, distance: screenDistance });
+    if (boundary && distance(markerScreen, flowToScreen(point)) > BOUNDARY_WAYPOINT_PROJECTION_LIMIT_PX) continue;
+    candidates.push({ snap: { kind: 'waypoint', point }, distance: distance(pointerScreen, markerScreen) });
   }
   if (candidates.length) return candidates.sort((a, b) => a.distance - b.distance)[0].snap;
 
@@ -64,7 +75,7 @@ export function findForeignRouteSnap(
       const point = boundary ? asWaypoint(raw) : raw;
       if (boundary && !onBoundary(raw)) continue;
       const screenDistance = distance(pointerScreen, flowToScreen(point));
-      if (screenDistance <= FOREIGN_ROUTE_CAPTURE_PX) candidates.push({ snap: { kind: 'segment', point, segment }, distance: screenDistance });
+      if (screenDistance <= FOREIGN_SEGMENT_CAPTURE_PX) candidates.push({ snap: { kind: 'segment', point, segment }, distance: screenDistance });
     }
   }
   return candidates.length ? candidates.sort((a, b) => a.distance - b.distance)[0].snap : null;

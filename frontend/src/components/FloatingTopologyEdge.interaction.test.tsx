@@ -126,6 +126,8 @@ describe('direct cable route edge interaction', () => {
     const editing = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'editing-node' } } };
     const foreign = { ...editing, id: 'foreign', data: { cableNode: { id: 'foreign-node' }, cableRoute: { waypoints: [{ x: 200, y: 100 }] } } };
     const view = render(<ForegroundCableRoutes edges={[foreign, editing] as any} />);
+    expect(view.container.querySelector('.cable-route-foreign-target-marker')).toHaveAttribute('r', '3.5');
+    expect(view.container.querySelector('.cable-route-foreign-target-marker')).toHaveAttribute('pointer-events', 'none');
     const handles = view.container.querySelectorAll('.cable-route-waypoint-hit');
     const handle = handles[0] as SVGCircleElement;
     Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
@@ -138,10 +140,10 @@ describe('direct cable route edge interaction', () => {
     expect(draft.onWaypointMove.mock.lastCall?.[1].y).toBeCloseTo(75.2);
     expect(view.container.querySelector('.cable-route-foreign-segment-feedback')).toHaveAttribute('pointer-events', 'none');
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: -500, clientY: -1800 });
-    expect(view.container.querySelector('[class*="cable-route-foreign-"]')).toBeNull();
+    expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback, .cable-route-foreign-segment-feedback')).toBeNull();
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1902 });
     fireEvent.pointerUp(handle, { pointerId: 1 });
-    expect(view.container.querySelector('[class*="cable-route-foreign-"]')).toBeNull();
+    expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback, .cable-route-foreign-segment-feedback')).toBeNull();
 
     const editorSegments = view.container.querySelector('[data-testid="foreground-cable-cable"]')!.querySelectorAll('.cable-route-segment-hit');
     fireEvent.pointerDown(editorSegments[1], { clientX: -800, clientY: -1899 });
@@ -150,6 +152,9 @@ describe('direct cable route edge interaction', () => {
     expect(draft.onWaypointInsert.mock.lastCall?.[0]).toBe(2);
     expect(draft.onWaypointInsert.mock.lastCall?.[1].x).toBeCloseTo(249.6);
     expect(draft.onWaypointInsert.mock.lastCall?.[1].y).toBeCloseTo(75.2);
+    const { cableRouteDraft: _draft, ...plainData } = editing.data;
+    view.rerender(<ForegroundCableRoutes edges={[foreign, { ...editing, data: plainData }] as any} />);
+    expect(view.container.querySelector('.cable-route-foreign-target-marker')).toBeNull();
   });
 
   it('excludes its own waypoints and uses straight foreign cables as segment targets', () => {
@@ -161,13 +166,13 @@ describe('direct cable route edge interaction', () => {
     Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
     fireEvent.pointerDown(handle, { pointerId: 1 });
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1900 });
-    expect(view.container.querySelector('[class*="cable-route-foreign-"]')).toBeNull();
+    expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback, .cable-route-foreign-segment-feedback')).toBeNull();
     view.rerender(<ForegroundCableRoutes edges={[editing, foreign] as any} />);
     fireEvent.pointerMove(handle, { pointerId: 1, clientX: -780, clientY: -1947 });
     expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 220, y: 50 });
     expect(view.container.querySelector('.cable-route-foreign-segment-feedback')).not.toBeNull();
     fireEvent.pointerCancel(handle, { pointerId: 1 });
-    expect(view.container.querySelector('[class*="cable-route-foreign-"]')).toBeNull();
+    expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback, .cable-route-foreign-segment-feedback')).toBeNull();
   });
 
   it('keeps the visible waypoint compact while its independent hit target is substantially larger', () => {
