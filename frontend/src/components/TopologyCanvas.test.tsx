@@ -91,6 +91,7 @@ vi.mock('@xyflow/react', () => ({
     screenToFlowPosition: (position: { x: number; y: number }) => ({ x: (position.x - screenTransform.offsetX) / screenTransform.scale, y: (position.y - screenTransform.offsetY) / screenTransform.scale }),
     flowToScreenPosition: (position: { x: number; y: number }) => ({ x: position.x * screenTransform.scale + screenTransform.offsetX, y: position.y * screenTransform.scale + screenTransform.offsetY }),
   }),
+  useViewport: () => ({ zoom: getZoomMock() }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 

@@ -6,10 +6,11 @@ import {
   useReactFlow,
   useInternalNode,
   useNodes,
+  useViewport,
   type EdgeProps,
   type InternalNode,
 } from '@xyflow/react';
-import { useState, type PointerEvent } from 'react';
+import { useState, type MouseEvent, type PointerEvent } from 'react';
 import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
@@ -207,7 +208,7 @@ export function FloatingTopologyEdge({
   const segmentPoints = [endpoints.source, ...(waypoints ?? []), endpoints.target];
   return (
     <>
-      <BaseEdge id={id} path={path} style={style} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={interactionWidth} />
+      <BaseEdge id={id} path={path} style={style} markerStart={markerStart} markerEnd={markerEnd} interactionWidth={data?.cableNode ? (draft ? 5 : Number(style?.strokeWidth) || 2) : interactionWidth} />
       {draft && !data?.renderRouteEditorInForeground && segmentPoints.slice(0, -1).map((point, index) => {
         const next = segmentPoints[index + 1];
         return <line
@@ -235,9 +236,10 @@ export function FloatingTopologyEdge({
   );
 }
 
-function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
-  const { screenToFlowPosition, flowToScreenPosition, getViewport } = useReactFlow();
-  const [feedback, setFeedback] = useState<readonly { start: MapCableRouteWaypoint; end: MapCableRouteWaypoint; assist: SegmentAssistResult }[]>([]);
+type GeometryFeedback = { start: MapCableRouteWaypoint; end: MapCableRouteWaypoint; assist: SegmentAssistResult };
+
+function ForegroundCableRoute({ edge, onCableClick, onFeedbackChange }: { edge: LogicalFlowEdge; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onFeedbackChange: (edgeId: string, feedback: readonly GeometryFeedback[]) => void }) {
+  const { screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const sourceNode = useInternalNode<DeviceFlowNode>(edge.source);
   const targetNode = useInternalNode<DeviceFlowNode>(edge.target);
   const data = edge.data;
@@ -255,6 +257,7 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
   const emphasis = draft ? 'editing' : edge.data?.cablePresentationEmphasis ?? (edge.selected ? 'selected' : 'normal');
   const style = draft ? { stroke: '#8d7aff', strokeWidth: 5, opacity: 1 } : edge.style;
   const segmentPoints = [endpoints.source, ...(waypoints ?? []), endpoints.target];
+  const setFeedback = (items: readonly GeometryFeedback[]) => onFeedbackChange(edge.id, items);
   const assistFrom = (anchor: MapCableRouteWaypoint, event: PointerEvent<SVGElement>) =>
     assistSegment({
       anchor,
@@ -309,7 +312,7 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
   };
 
   return <g data-testid={`foreground-cable-${edge.id}`} data-emphasis={emphasis}>
-    <path className={`cable-route-foreground cable-route-foreground--${emphasis}`} d={path} fill="none" style={{ ...style, pointerEvents: 'none' }} />
+    <path className={`cable-route-foreground cable-route-foreground--${emphasis}`} d={path} fill="none" style={{ ...style, pointerEvents: onCableClick ? 'stroke' : 'none' }} onClick={onCableClick ? (event) => { event.stopPropagation(); onCableClick(event, edge); } : undefined} />
     {draft && segmentPoints.slice(0, -1).map((point, index) => {
       const next = segmentPoints[index + 1];
       return <line key={`${edge.id}:foreground-segment:${index}`} className="cable-route-segment-hit" x1={point.x} y1={point.y} x2={next.x} y2={next.y} stroke="transparent" strokeWidth={22} pointerEvents="stroke" onPointerDown={(event) => { event.stopPropagation(); event.preventDefault(); const assist = assistFrom(point, event); draft.onWaypointInsert(index, assist.point); setFeedback([]); }} />;
@@ -322,7 +325,6 @@ function ForegroundCableRoute({ edge }: { edge: LogicalFlowEdge }) {
           : <circle className={`cable-route-waypoint${draft.selectedWaypointIndex === index ? ' cable-route-waypoint--selected' : ''}`} cx={waypoint.x} cy={waypoint.y} r={3.5} pointerEvents="none" />}
       </g>
     ))}
-    {feedback.map((item, index) => <text key={index} className="cable-route-geometry-feedback" x={(item.start.x + item.end.x) / 2} y={(item.start.y + item.end.y) / 2 - 10} textAnchor="middle" fontSize={12 / getViewport().zoom} strokeWidth={3 / getViewport().zoom}>{`${Math.round(segmentAngle(item.start, item.end))}° · ${Math.round(segmentLength(item.start, item.end))}`}</text>)}
   </g>;
 }
 
@@ -354,14 +356,42 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates }: { nodeId: str
   </g>;
 }
 
-/** Foreground-only cable rendering; only route-editor controls accept input. */
-export function ForegroundCableRoutes({ edges, physicalPortStates }: { edges: readonly LogicalFlowEdge[]; physicalPortStates?: Record<string, ForegroundPortState> }) {
+const cablePriority = (edge: LogicalFlowEdge) => edge.data?.cableRouteDraft ? 3
+  : edge.selected || edge.data?.cablePresentationEmphasis === 'selected' ? 2
+    : edge.data?.cablePresentationEmphasis === 'attached' || edge.data?.cablePresentationEmphasis === 'traced' ? 1 : 0;
+
+export function layoutGeometryFeedback(items: readonly GeometryFeedback[], zoom: number) {
+  const candidates = items.map((item, index) => {
+    const length = segmentLength(item.start, item.end);
+    const label = `${Math.round(segmentAngle(item.start, item.end))}° · ${Math.round(length)}`;
+    const x = (item.start.x + item.end.x) / 2;
+    const y = (item.start.y + item.end.y) / 2 - 10 / zoom;
+    return { index, length, label, x, y, width: label.length * 7.5 + 8 };
+  }).filter((item) => item.length * zoom >= Math.max(56, item.width + 12));
+  const accepted: typeof candidates = [];
+  for (const candidate of candidates.sort((a, b) => b.length - a.length || a.index - b.index)) {
+    if (accepted.some((other) => Math.abs(candidate.x - other.x) * zoom < (candidate.width + other.width) / 2 + 8 && Math.abs(candidate.y - other.y) * zoom < 20)) continue;
+    accepted.push(candidate);
+  }
+  return accepted.sort((a, b) => a.index - b.index);
+}
+
+/** Foreground cable selection and route editing share the same visual stack. */
+export function ForegroundCableRoutes({ edges, physicalPortStates, wiringRoute, onCableClick }: { edges: readonly LogicalFlowEdge[]; physicalPortStates?: Record<string, ForegroundPortState>; wiringRoute?: Parameters<typeof WiringRoute>[0]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void }) {
+  const { zoom } = useViewport();
+  const [feedbackByCable, setFeedbackByCable] = useState<Record<string, readonly GeometryFeedback[]>>({});
   const cables = edges.filter((edge) => Boolean(edge.data?.cableNode));
-  if (!cables.length) return null;
+  if (!cables.length && !wiringRoute) return null;
+  const ordered = cables.map((edge, index) => ({ edge, index })).sort((a, b) => cablePriority(a.edge) - cablePriority(b.edge) || a.index - b.index);
+  const feedback = layoutGeometryFeedback(ordered.flatMap(({ edge }) => edge.data?.cableRouteDraft ? feedbackByCable[edge.id] ?? [] : []), zoom);
   return <ViewportPortal>
     <svg className="cable-routes-foreground" aria-hidden="true">
-      {cables.map((edge) => <ForegroundCableRoute key={edge.id} edge={edge} />)}
+      {ordered.map(({ edge }) => <ForegroundCableRoute key={edge.id} edge={edge} onCableClick={onCableClick} onFeedbackChange={(edgeId, items) => setFeedbackByCable((current) => ({ ...current, [edgeId]: items }))} />)}
       <ForegroundPortMarkers physicalPortStates={physicalPortStates} />
+      {wiringRoute && <g data-testid="foreground-wiring-route"><WiringRoute {...wiringRoute} /></g>}
+      <g className="cable-route-feedback-layer" pointerEvents="none">
+        {feedback.map((item) => <text key={item.index} className="cable-route-geometry-feedback" x={item.x} y={item.y} textAnchor="middle" fontSize={12 / zoom} strokeWidth={3 / zoom}>{item.label}</text>)}
+      </g>
     </svg>
   </ViewportPortal>;
 }

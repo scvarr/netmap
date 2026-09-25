@@ -34,7 +34,7 @@ import {
   type TopologyLayoutStore,
 } from "../topology/layoutStore";
 import { DeviceNode } from "./DeviceNode";
-import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute, getFloatingEndpoints, getRenderedConnectionPoint } from "./FloatingTopologyEdge";
+import { FloatingTopologyEdge, ForegroundCableRoutes, getFloatingEndpoints, getRenderedConnectionPoint } from "./FloatingTopologyEdge";
 import { OffMapContinuationEdge } from "./OffMapContinuationEdge";
 import type { PhysicalTraceOverlay } from "../topology/interfacePhysicalTraceOverlay";
 import { physicalObjectIdForNode } from "../topology/projection";
@@ -808,8 +808,7 @@ export function TopologyCanvas({
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        {!annotationMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} />}
-        {!annotationMode && wiringRoute && <ViewportPortal><svg className="cable-routes-foreground cable-routes-foreground--wiring" aria-hidden="true"><WiringRoute {...wiringRoute} /></svg></ViewportPortal>}
+        {!annotationMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} wiringRoute={wiringRoute} onCableClick={(event, edge) => onEdgeClick(event, edge)} />}
       </ReactFlow>
     </div>
   );

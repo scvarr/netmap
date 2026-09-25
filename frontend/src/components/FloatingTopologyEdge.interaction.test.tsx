@@ -1,20 +1,22 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute } from './FloatingTopologyEdge';
+import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute, layoutGeometryFeedback } from './FloatingTopologyEdge';
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 
 const markerPoints = ['eligible', 'source', 'destination', 'unavailable'].map((id) => ({ connection_point_id: id, display_name: id, cardinality: 1, external_connection_count: 0 }));
 const source = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'source', kind: 'PHYSICAL_OBJECT', label: 'source', source_refs: [], attributes: { connection_points: markerPoints } } } };
 const target = { internals: { positionAbsolute: { x: 300, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'target', kind: 'PHYSICAL_OBJECT', label: 'target', source_refs: [], attributes: { connection_points: markerPoints } } } };
 let activeNodes: Record<string, any> = { source, target };
+let viewportZoom = 1;
 
 vi.mock('@xyflow/react', () => ({
-  BaseEdge: () => <path data-testid="base-edge" />,
+  BaseEdge: ({ interactionWidth, path, style }: any) => <path data-testid="base-edge" data-interaction-width={interactionWidth} d={path} style={style} />,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
   getStraightPath: () => ['straight'],
   useInternalNode: (id: string) => activeNodes[id],
   useNodes: () => Object.entries(activeNodes).map(([id, node]: [string, any]) => ({ id, data: node.data })),
-  useReactFlow: () => ({ screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x: x + 1000, y: y + 2000 }), flowToScreenPosition: ({ x, y }: { x: number; y: number }) => ({ x: x - 1000, y: y - 2000 }), getViewport: () => ({ zoom: 1 }) }),
+  useReactFlow: () => ({ screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x: x + 1000, y: y + 2000 }), flowToScreenPosition: ({ x, y }: { x: number; y: number }) => ({ x: x - 1000, y: y - 2000 }), getViewport: () => ({ zoom: viewportZoom }) }),
+  useViewport: () => ({ zoom: viewportZoom }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -221,5 +223,76 @@ describe('direct cable route edge interaction', () => {
       expect(container.querySelectorAll('.cable-route-segment-hit')).toHaveLength(2);
       expect(container.querySelectorAll('.cable-route-waypoint')).toHaveLength(1);
     });
+  });
+
+  it('keeps normal cable selection on its visible stroke while preserving editor targets', () => {
+    const bare = edgeProps(editor([]));
+    const { cableRouteDraft: _unused, ...data } = bare.data;
+    const normal = { ...bare, data: { ...data, cableNode: { id: 'normal' } }, style: { strokeWidth: 2 } };
+    const nearby = { ...normal, id: 'nearby', data: { ...normal.data, cableRoute: { waypoints: [{ x: 200, y: 54 }] } } };
+    const crossing = { ...normal, id: 'crossing', data: { ...normal.data, cableRoute: { waypoints: [{ x: 200, y: 90 }] } } };
+    const onCableClick = vi.fn();
+    const { container } = render(<ForegroundCableRoutes edges={[nearby, crossing, normal] as any} onCableClick={onCableClick} />);
+    const paths = [...container.querySelectorAll('.cable-route-foreground')] as SVGPathElement[];
+    expect(paths).toHaveLength(3);
+    expect(paths.every((path) => path.style.pointerEvents === 'stroke' && Number(path.style.strokeWidth) === 2)).toBe(true);
+    fireEvent.click(paths[0]);
+    fireEvent.click(paths[1]);
+    expect(onCableClick.mock.calls.map((call) => call[1].id)).toEqual(['nearby', 'crossing']);
+    const base = render(<svg><FloatingTopologyEdge {...normal as any} /></svg>);
+    expect(base.getByTestId('base-edge')).toHaveAttribute('data-interaction-width', '2');
+    base.unmount();
+    for (const width of [3, 4]) {
+      const emphasized = render(<svg><FloatingTopologyEdge {...{ ...normal, style: { strokeWidth: width } } as any} /></svg>);
+      expect(emphasized.getByTestId('base-edge')).toHaveAttribute('data-interaction-width', String(width));
+      emphasized.unmount();
+    }
+    const draft = editor([{ x: 200, y: 50 }]);
+    const editing = { ...normal, data: { ...normal.data, cableRouteDraft: draft } };
+    const editorView = render(<ForegroundCableRoutes edges={[editing] as any} />);
+    expect(editorView.container.querySelector('.cable-route-segment-hit')).toHaveAttribute('stroke-width', '22');
+    expect(editorView.container.querySelector('.cable-route-waypoint-hit')).toHaveAttribute('r', '18');
+  });
+
+  it('orders visual Cable states independently of edges order and follows selection changes', () => {
+    const bare = edgeProps(editor([]));
+    const { cableRouteDraft: _unused, ...data } = bare.data;
+    const make = (id: string, emphasis: string, selected = false) => ({ ...bare, id, selected, data: { ...data, cableNode: { id }, cablePresentationEmphasis: emphasis } });
+    const editing = { ...make('editing', 'editing'), data: { ...make('editing', 'editing').data, cableRouteDraft: editor([]) } };
+    const normal = make('normal', 'normal');
+    const selected = make('selected', 'selected', true);
+    const attached = make('attached', 'attached');
+    const traced = make('traced', 'traced');
+    const wiring = { source: { physicalObjectId: 'source-object', connectionPointId: 'source-port' }, waypoints: [], selectedWaypointIndex: null, onWaypointSelect: vi.fn(), onWaypointMove: vi.fn() };
+    const order = (root: HTMLElement) => [...root.querySelectorAll('[data-testid^="foreground-cable-"]')].map((node) => node.getAttribute('data-testid'));
+    const view = render(<ForegroundCableRoutes edges={[selected, editing, traced, normal, attached] as any} wiringRoute={wiring} />);
+    expect(order(view.container)).toEqual(['foreground-cable-normal', 'foreground-cable-traced', 'foreground-cable-attached', 'foreground-cable-selected', 'foreground-cable-editing']);
+    expect(view.container.querySelector('[data-testid="foreground-wiring-route"]')!.compareDocumentPosition(view.container.querySelector('.cable-route-feedback-layer')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    view.rerender(<ForegroundCableRoutes edges={[make('selected', 'normal'), editing, traced, make('normal', 'selected', true), attached] as any} wiringRoute={wiring} />);
+    expect(order(view.container).at(-2)).toBe('foreground-cable-normal');
+    expect(order(view.container).at(-1)).toBe('foreground-cable-editing');
+  });
+
+  it('keeps feedback size in screen pixels, suppresses short and overlapping labels, and paints it last', () => {
+    const feedback = (start: number, end: number) => ({ start: { x: start, y: 50 }, end: { x: end, y: 50 }, assist: {} as any });
+    expect(layoutGeometryFeedback([feedback(0, 20)], 1)).toHaveLength(0);
+    expect(layoutGeometryFeedback([feedback(0, 200), feedback(10, 190)], 1)).toHaveLength(1);
+    const draft = editor([{ x: 100, y: 50 }]);
+    const base = edgeProps(draft);
+    const edge = { ...base, data: { ...base.data, cableNode: { id: 'cable' } } };
+    const view = render(<ForegroundCableRoutes edges={[edge] as any} />);
+    const handle = view.container.querySelector('.cable-route-waypoint-hit') as SVGCircleElement;
+    Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
+    fireEvent.pointerDown(handle, { pointerId: 1 });
+    fireEvent(handle, new MouseEvent('pointermove', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true }));
+    const label = view.container.querySelector('.cable-route-geometry-feedback')!;
+    expect(label).toHaveAttribute('font-size', '12');
+    expect(label).toHaveAttribute('stroke-width', '3');
+    expect(view.container.querySelector('.cable-route-feedback-layer')?.previousElementSibling).toHaveClass('cable-route-port-markers');
+    viewportZoom = 4;
+    fireEvent(handle, new MouseEvent('pointermove', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true }));
+    expect(view.container.querySelector('.cable-route-geometry-feedback')).toHaveAttribute('font-size', '3');
+    expect(view.container.querySelector('.cable-route-geometry-feedback')).toHaveAttribute('stroke-width', '0.75');
+    viewportZoom = 1;
   });
 });
