@@ -14,7 +14,7 @@ vi.mock('@xyflow/react', () => ({
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
   getStraightPath: () => ['straight'],
   useInternalNode: (id: string) => activeNodes[id],
-  useNodes: () => Object.entries(activeNodes).map(([id, node]: [string, any]) => ({ id, data: node.data })),
+  useNodes: () => Object.entries(activeNodes).map(([id, node]: [string, any]) => ({ id, data: node.data, position: node.internals.positionAbsolute, measured: node.measured })),
   useReactFlow: () => ({ screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x: x + 1000, y: y + 2000 }), flowToScreenPosition: ({ x, y }: { x: number; y: number }) => ({ x: x - 1000, y: y - 2000 }), getViewport: () => ({ zoom: viewportZoom }) }),
   useViewport: () => ({ zoom: viewportZoom }),
   ViewportPortal: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -119,6 +119,55 @@ describe('direct cable route edge interaction', () => {
     expect(container.querySelector('.cable-route-geometry-feedback')).toHaveTextContent('0° · 100');
     fireEvent(handle, new MouseEvent('pointermove', { bubbles: true, clientX: -797, clientY: -1932, shiftKey: true, ctrlKey: true }));
     expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 203, y: 68 });
+  });
+
+  it('snaps drag and exact-index insertion to foreign geometry, then clears transient feedback', () => {
+    const draft = editor([{ x: 150, y: 50 }, { x: 170, y: 50 }]);
+    const editing = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'editing-node' } } };
+    const foreign = { ...editing, id: 'foreign', data: { cableNode: { id: 'foreign-node' }, cableRoute: { waypoints: [{ x: 200, y: 100 }] } } };
+    const view = render(<ForegroundCableRoutes edges={[foreign, editing] as any} />);
+    const handles = view.container.querySelectorAll('.cable-route-waypoint-hit');
+    const handle = handles[0] as SVGCircleElement;
+    Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
+    fireEvent.pointerDown(handle, { pointerId: 1 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1902 });
+    expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 200, y: 100 });
+    expect(view.container.querySelector('.cable-route-foreign-waypoint-feedback')).toHaveAttribute('pointer-events', 'none');
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -750, clientY: -1924 });
+    expect(draft.onWaypointMove.mock.lastCall?.[1].x).toBeCloseTo(249.6);
+    expect(draft.onWaypointMove.mock.lastCall?.[1].y).toBeCloseTo(75.2);
+    expect(view.container.querySelector('.cable-route-foreign-segment-feedback')).toHaveAttribute('pointer-events', 'none');
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -500, clientY: -1800 });
+    expect(view.container.querySelector('[class*="cable-route-foreign-"]')).toBeNull();
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1902 });
+    fireEvent.pointerUp(handle, { pointerId: 1 });
+    expect(view.container.querySelector('[class*="cable-route-foreign-"]')).toBeNull();
+
+    const editorSegments = view.container.querySelector('[data-testid="foreground-cable-cable"]')!.querySelectorAll('.cable-route-segment-hit');
+    fireEvent.pointerDown(editorSegments[1], { clientX: -800, clientY: -1899 });
+    expect(draft.onWaypointInsert).toHaveBeenLastCalledWith(1, { x: 200, y: 100 });
+    fireEvent.pointerDown(editorSegments[2], { clientX: -750, clientY: -1924 });
+    expect(draft.onWaypointInsert.mock.lastCall?.[0]).toBe(2);
+    expect(draft.onWaypointInsert.mock.lastCall?.[1].x).toBeCloseTo(249.6);
+    expect(draft.onWaypointInsert.mock.lastCall?.[1].y).toBeCloseTo(75.2);
+  });
+
+  it('excludes its own waypoints and uses straight foreign cables as segment targets', () => {
+    const draft = editor([{ x: 200, y: 100 }]);
+    const editing = { ...edgeProps(draft), data: { ...edgeProps(draft).data, cableNode: { id: 'editing-node' } } };
+    const foreign = { ...editing, id: 'straight', data: { cableNode: { id: 'foreign-node' } } };
+    const view = render(<ForegroundCableRoutes edges={[editing] as any} />);
+    const handle = view.container.querySelector('.cable-route-waypoint-hit') as SVGCircleElement;
+    Object.assign(handle, { setPointerCapture: vi.fn(), hasPointerCapture: vi.fn(() => true), releasePointerCapture: vi.fn() });
+    fireEvent.pointerDown(handle, { pointerId: 1 });
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -800, clientY: -1900 });
+    expect(view.container.querySelector('[class*="cable-route-foreign-"]')).toBeNull();
+    view.rerender(<ForegroundCableRoutes edges={[editing, foreign] as any} />);
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: -780, clientY: -1947 });
+    expect(draft.onWaypointMove).toHaveBeenLastCalledWith(0, { x: 220, y: 50 });
+    expect(view.container.querySelector('.cable-route-foreign-segment-feedback')).not.toBeNull();
+    fireEvent.pointerCancel(handle, { pointerId: 1 });
+    expect(view.container.querySelector('[class*="cable-route-foreign-"]')).toBeNull();
   });
 
   it('keeps the visible waypoint compact while its independent hit target is substantially larger', () => {

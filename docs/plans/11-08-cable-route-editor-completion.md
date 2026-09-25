@@ -29,28 +29,36 @@ relation.
 
 ### C-ROUTE-02 — Cross-route geometry snapping
 
-**OPEN — NEXT CONTRACT TO AGREE.** Обсудить и согласовать контракт после
-C-ROUTE-01 перед началом реализации.
+**IMPLEMENTED.**
 
-- Drag/insert waypoint текущего Cable может snap к waypoint или ближайшей
-  точке segment другого отображаемого Cable.
-- Capture threshold измеряется в screen pixels и сохраняет одинаковое
-  ощущение при изменении zoom; target geometry получает transient visual
-  feedback.
-- Save записывает только координаты route текущего Cable. Нет persisted
-  dependency/reference на другой Cable или waypoint; дальнейшее изменение
-  другого route не двигает текущий.
-- Location boundary anchor остаётся ограничен собственным frame и принимает
-  foreign-route snap только если итоговая точка лежит на этой boundary.
+- Drag/insert waypoint текущего Cable snap к waypoint или ближайшей projection
+  point видимого segment другого Cable, включая прямой Cable без saved route и
+  resolved Location boundary anchors маршрутизированного Cable.
+- Capture radius 8 screen pixels при любом zoom. Waypoint имеет приоритет над
+  segment; foreign geometry имеет приоритет над 45°/15° assist.
+- Foreground editor показывает transient marker на snapped point и подсветку
+  target segment. Feedback не принимает pointer events и очищается при release,
+  cancel и закрытии route editor.
+- Location boundary anchor принимает только допустимую точку собственной
+  boundary. Его `location_id`, `edge`, `offset` вычисляются для собственного
+  frame; metadata другого Cable не копируется.
+- Save записывает только собственные coordinates/anchor route текущего Cable.
+  Cross-Cable reference/dependency не сохраняется; последующее изменение
+  другого Cable не двигает текущий route.
+- Targeted validation: 73 geometry/editor tests and 14 route lifecycle tests
+  passed; frontend build and `git diff --check` passed.
 
-### C-ROUTE-03 — Route templates
+### C-ROUTE-03 — Numeric segment geometry
 
-**OPEN; contract required before implementation.**
+**OPEN.** Числовое задание длины segment меняет координаты waypoint; persistent
+constraint не создаётся.
 
-Направления editor action: Straight / «Прямая», Horizontal → Vertical,
-Vertical → Horizontal. Возможный Auto 90° остаётся OPEN. Template генерирует
-обычную route geometry и не является persisted route type. Алгоритм Auto 90°
-здесь не проектируется.
+### C-CABLE-01 — Bulk port pairing
+
+**OPEN; после C-ROUTE-03.** Выбор source ports → Enter → равное число
+destination ports → preview pairs → Enter → atomic batch Cable/Connection
+creation. Optional generated labels используют существующий
+`CableLabelTemplate`. Route generation в bulk operation не входит.
 
 ## Вне границы
 
