@@ -3,30 +3,24 @@ import { createPortBlockRequest, ensureLocalIds, generatePortBlock, hydratePortB
 import type { PortBlockVersionDocument } from '../topology/portBlockTypes';
 
 const ids = (() => { let index = 0; return () => `opaque-${++index}`; })();
-describe('Port Block authoring generation', () => {
-  it('generates the supported two-row schemes and visual direction as an explicit snapshot', () => {
-    const state = { ...newPortBlockEditorState(ids), rows: 2 as const, portsPerRow: 3, localIds: ensureLocalIds([], 6, ids), startingNumber: 1, displayPrefix: 'Gi', scheme: 'ODD_EVEN' as const, direction: 'RTL' as const };
+describe('Port Block structural authoring', () => {
+  it('generates neutral two-row positions and visual direction without endpoint names', () => {
+    const state = { ...newPortBlockEditorState(ids), name: 'Reusable', rows: 2 as const, portsPerRow: 3, localIds: ensureLocalIds([], 6, ids), direction: 'RTL' as const };
     const ports = generatePortBlock(state).ports;
-    expect(ports.map(({ display_label, row, column }) => [display_label, row, column])).toEqual([['Gi1', 1, 3], ['Gi3', 1, 2], ['Gi5', 1, 1], ['Gi2', 2, 3], ['Gi4', 2, 2], ['Gi6', 2, 1]]);
-    expect(generatePortBlock({ ...state, scheme: 'SEQUENTIAL' }).ports.map((port) => port.display_label)).toEqual(['Gi1', 'Gi2', 'Gi3', 'Gi4', 'Gi5', 'Gi6']);
-    expect(generatePortBlock({ ...state, scheme: 'EVEN_ODD' }).ports.map((port) => port.display_label)).toEqual(['Gi2', 'Gi4', 'Gi6', 'Gi1', 'Gi3', 'Gi5']);
+    expect(ports.map(({ row, column, layout_order }) => [row, column, layout_order])).toEqual([[1, 3, 1], [1, 2, 2], [1, 1, 3], [2, 3, 4], [2, 2, 5], [2, 1, 6]]);
+    expect(ports.every((port) => !('display_label' in port))).toBe(true);
   });
-  it('keeps opaque local identities independent of labels, direction and placement', () => {
+  it('keeps stable local ids when structural direction changes', () => {
     const state = { ...newPortBlockEditorState(ids), name: 'Block', localIds: ensureLocalIds([], 4, ids), portsPerRow: 4 };
     const original = createPortBlockRequest(state).request!.ports.map((port) => port.local_id);
-    const changed = createPortBlockRequest({ ...state, displayPrefix: 'xe-', direction: 'RTL', startingNumber: 11, labelOverrides: { [original[0]]: 'MGMT' } }).request!.ports;
+    const changed = createPortBlockRequest({ ...state, direction: 'RTL' }).request!.ports;
     expect(changed.map((port) => port.local_id)).toEqual(original);
-    expect(changed[0].display_label).toBe('MGMT');
     expect(changed.map((port) => port.column)).toEqual([4, 3, 2, 1]);
   });
-  it('round-trips an RTL snapshot exactly without inventing authoring settings', () => {
-    const version: PortBlockVersionDocument = { schema_version: '1.0', port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'block' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v1' }, name: 'RTL', version_number: 1, ports: [{ local_id: 'opaque-a', display_label: 'xe-11', kind: 'NETWORK_PORT', row: 1, column: 3, layout_order: 1 }, { local_id: 'opaque-b', display_label: 'xe-12', kind: 'CONNECTION_POINT', row: 1, column: 2, layout_order: 2 }, { local_id: 'opaque-c', display_label: 'xe-13', kind: 'NETWORK_PORT', row: 1, column: 1, layout_order: 3 }] };
+  it('hydrates the next version from the exact structural snapshot', () => {
+    const version: PortBlockVersionDocument = { schema_version: '1.0', port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'block' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v1' }, name: 'Mixed', version_number: 1, ports: [{ local_id: 'a', kind: 'NETWORK_PORT', row: 1, column: 2, layout_order: 1 }, { local_id: 'b', kind: 'CONNECTION_POINT', row: 1, column: 1, layout_order: 2 }] };
     const hydrated = hydratePortBlockEditorState(version);
-    expect([hydrated.direction, hydrated.scheme, hydrated.startingNumber, hydrated.displayPrefix, hydrated.kind]).toEqual([null, null, null, null, null]);
-    expect(createPortBlockRequest(hydrated).request).toEqual({ name: 'RTL', ports: version.ports });
-  });
-  it('round-trips mixed kinds and exceptional two-row labels exactly', () => {
-    const version: PortBlockVersionDocument = { schema_version: '1.0', port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'block' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v1' }, name: 'Patch panel', version_number: 3, ports: [{ local_id: 'a', display_label: 'MGMT', kind: 'NETWORK_PORT', row: 1, column: 2, layout_order: 1 }, { local_id: 'b', display_label: 'Uplink', kind: 'CONNECTION_POINT', row: 1, column: 1, layout_order: 2 }, { local_id: 'c', display_label: 'EX-01', kind: 'NETWORK_PORT', row: 2, column: 2, layout_order: 3 }, { local_id: 'd', display_label: 'EX-02', kind: 'CONNECTION_POINT', row: 2, column: 1, layout_order: 4 }] };
-    expect(createPortBlockRequest(hydratePortBlockEditorState(version)).request).toEqual({ name: 'Patch panel', ports: version.ports });
+    expect(hydrated.direction).toBe('RTL');
+    expect(createPortBlockRequest(hydrated).request).toEqual({ name: 'Mixed', ports: version.ports });
   });
 });

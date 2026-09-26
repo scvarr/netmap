@@ -4,6 +4,7 @@ import type {
   BlueprintSlot,
   BlueprintSlotKind,
   BlueprintFace,
+  BlueprintInstanceNaming,
   CreateObjectBlueprintRequest,
   CreateObjectBlueprintVersionRequest,
   LibraryRef,
@@ -57,7 +58,26 @@ const parseLink = (value: unknown, path: string): BlueprintInternalLink => {
 const parseComposition = (value: unknown, path: string) => {
   if (value == null) return value as null | undefined;
   const composition = requireObject(value, path); if (!Array.isArray(composition.instances)) malformed(`${path}.instances must be an array.`);
-  return { instances: (composition.instances as unknown[]).map((value, index) => { const item=requireObject(value, `${path}.instances[${index}]`); const block=requireObject(item.port_block_ref, `${path}.instances[${index}].port_block_ref`); const ref=requireObject(item.port_block_version_ref, `${path}.instances[${index}].port_block_version_ref`); if(block.ref_type !== 'LIBRARY_RECORD' || block.entity_type !== 'PortBlock' || ref.ref_type !== 'LIBRARY_RECORD' || ref.entity_type !== 'PortBlockVersion') malformed(`${path}.instances[${index}] has invalid Port Block refs.`); if (item.face !== 'FRONT' && item.face !== 'REAR') malformed(`${path}.instances[${index}].face is unsupported.`); let placement; if (item.placement != null) { const raw=requireObject(item.placement, `${path}.instances[${index}].placement`); const values=['x','y','width','height'].map((key) => raw[key]); if (!values.every((entry) => typeof entry === 'number' && Number.isFinite(entry))) malformed(`${path}.instances[${index}].placement is invalid.`); const [x,y,width,height]=values as number[]; if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1 || y + height > 1) malformed(`${path}.instances[${index}].placement must fit within 0..1.`); placement={x,y,width,height}; } return { instance_key:requireString(item.instance_key, `${path}.instances[${index}].instance_key`), port_block_ref:{ref_type:'LIBRARY_RECORD' as const,entity_type:'PortBlock' as const,entity_id:requireString(block.entity_id, `${path}.instances[${index}].port_block_ref.entity_id`)}, port_block_version_ref:{ref_type:'LIBRARY_RECORD' as const,entity_type:'PortBlockVersion' as const,entity_id:requireString(ref.entity_id, `${path}.instances[${index}].port_block_version_ref.entity_id`)}, face: item.face as BlueprintFace, placement }; }) };
+  return { instances: (composition.instances as unknown[]).map((value, index) => {
+    const item = requireObject(value, `${path}.instances[${index}]`);
+    const block = requireObject(item.port_block_ref, `${path}.instances[${index}].port_block_ref`);
+    const ref = requireObject(item.port_block_version_ref, `${path}.instances[${index}].port_block_version_ref`);
+    if (block.ref_type !== 'LIBRARY_RECORD' || block.entity_type !== 'PortBlock' || ref.ref_type !== 'LIBRARY_RECORD' || ref.entity_type !== 'PortBlockVersion') malformed(`${path}.instances[${index}] has invalid Port Block refs.`);
+    if (item.face !== 'FRONT' && item.face !== 'REAR') malformed(`${path}.instances[${index}].face is unsupported.`);
+    let placement;
+    if (item.placement != null) {
+      const raw = requireObject(item.placement, `${path}.instances[${index}].placement`);
+      const values = ['x', 'y', 'width', 'height'].map((key) => raw[key]);
+      if (!values.every((entry) => typeof entry === 'number' && Number.isFinite(entry))) malformed(`${path}.instances[${index}].placement is invalid.`);
+      const [x, y, width, height] = values as number[];
+      if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1 || y + height > 1) malformed(`${path}.instances[${index}].placement must fit within 0..1.`);
+      placement = { x, y, width, height };
+    }
+    const naming = requireObject(item.naming, `${path}.instances[${index}].naming`);
+    const overrides = requireObject(naming.overrides, `${path}.instances[${index}].naming.overrides`);
+    if (typeof naming.prefix !== 'string' || typeof naming.starting_number !== 'number' || !Number.isInteger(naming.starting_number) || naming.starting_number < 0 || !['SINGLE', 'SEQUENTIAL', 'ODD_EVEN', 'EVEN_ODD'].includes(String(naming.mode)) || Object.values(overrides).some((entry) => typeof entry !== 'string')) malformed(`${path}.instances[${index}].naming is invalid.`);
+    return { instance_key: requireString(item.instance_key, `${path}.instances[${index}].instance_key`), port_block_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: requireString(block.entity_id, `${path}.instances[${index}].port_block_ref.entity_id`) }, port_block_version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: requireString(ref.entity_id, `${path}.instances[${index}].port_block_version_ref.entity_id`) }, face: item.face as BlueprintFace, placement, naming: { prefix: naming.prefix as string, starting_number: naming.starting_number as number, mode: naming.mode as BlueprintInstanceNaming['mode'], overrides: overrides as Record<string, string> } };
+  }) };
 };
 
 export const parseObjectBlueprintListDocument = (value: unknown): ObjectBlueprintListDocument => {

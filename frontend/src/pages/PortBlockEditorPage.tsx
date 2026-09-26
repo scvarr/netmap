@@ -1,408 +1,57 @@
-import { useEffect, useState, type ReactNode } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
-import {
-  createPortBlockRequest,
-  ensureLocalIds,
-  generatePortBlock,
-  hydratePortBlockEditorState,
-  newPortBlockEditorState,
-  type PortBlockEditorState,
-  type PortBlockValidationError,
-} from "../portBlocks/editorModel";
-import { useI18n } from "../i18n";
-import type { PortBlockDataSource } from "../topology/portBlockTypes";
-import { ViewState } from "../components/ViewState";
-import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { createPortBlockRequest, generatePortBlock, hydratePortBlockEditorState, newPortBlockEditorState, type PortBlockEditorState } from '../portBlocks/editorModel';
+import { useI18n } from '../i18n';
+import type { PortBlockDataSource } from '../topology/portBlockTypes';
+import { ViewState } from '../components/ViewState';
+import { Breadcrumbs, PageHeader, PageShell } from '../components/PageChrome';
 
-const objectBlueprintCreationPath = "/library/object-blueprints/new";
-
-const errorKeys: Record<
-  PortBlockValidationError,
-  | "portBlock.validation.name"
-  | "portBlock.validation.count"
-  | "portBlock.validation.start"
-  | "portBlock.validation.prefix"
-  | "portBlock.validation.kind"
-  | "portBlock.validation.scheme"
-  | "portBlock.validation.direction"
-  | "portBlock.validation.identity"
-> = {
-  nameRequired: "portBlock.validation.name",
-  portsPerRow: "portBlock.validation.count",
-  startingNumber: "portBlock.validation.start",
-  displayPrefix: "portBlock.validation.prefix",
-  kind: "portBlock.validation.kind",
-  scheme: "portBlock.validation.scheme",
-  direction: "portBlock.validation.direction",
-  localIds: "portBlock.validation.identity",
-};
-export function PortBlockEditorPage({
-  dataSource,
-  mode,
-}: {
-  dataSource: PortBlockDataSource;
-  mode: "new" | "version";
-}) {
-  const { t } = useI18n();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { portBlockId, versionId } = useParams();
-  const [state, setState] = useState<PortBlockEditorState>(() =>
-    newPortBlockEditorState(),
-  );
-  const [loading, setLoading] = useState(mode === "version");
-  const [error, setError] = useState<string | null>(null);
-  const [attempted, setAttempted] = useState(false);
-  const [saving, setSaving] = useState(false);
+export function PortBlockEditorPage({ dataSource, mode }: { dataSource: PortBlockDataSource; mode: 'new' | 'version' }) {
+  const { t } = useI18n(); const navigate = useNavigate(); const location = useLocation(); const { portBlockId, versionId } = useParams();
+  const [state, setState] = useState<PortBlockEditorState>(() => newPortBlockEditorState());
+  const [loading, setLoading] = useState(mode === 'version'); const [error, setError] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false); const [saving, setSaving] = useState(false);
   useEffect(() => {
-    if (mode !== "version") return;
-    if (!portBlockId || !versionId) {
-      setError(t("portBlock.editor.invalidAddress"));
-      return;
-    }
-    void dataSource.loadPortBlockVersion(portBlockId, versionId).then(
-      (version) => {
-        setState(hydratePortBlockEditorState(version));
-        setLoading(false);
-      },
-      (reason) => {
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : t("portBlock.editor.loadFailed"),
-        );
-        setLoading(false);
-      },
-    );
+    if (mode !== 'version') return;
+    if (!portBlockId || !versionId) { setError(t('portBlock.editor.invalidAddress')); setLoading(false); return; }
+    void dataSource.loadPortBlockVersion(portBlockId, versionId).then((version) => { setState(hydratePortBlockEditorState(version)); setLoading(false); }, (reason) => { setError(reason instanceof Error ? reason.message : t('portBlock.editor.loadFailed')); setLoading(false); });
   }, [dataSource, mode, portBlockId, versionId, t]);
-  const breadcrumbs = (
-    <Breadcrumbs
-      label={t("portBlock.breadcrumb.library")}
-      items={[
-        { label: t("portBlock.library.section") },
-        {
-          label: t("portBlock.breadcrumb.library"),
-          to: "/library/port-blocks",
-        },
-        {
-          label:
-            mode === "new"
-              ? t("portBlock.breadcrumb.new")
-              : t("portBlock.breadcrumb.version"),
-        },
-      ]}
-    />
-  );
-  if (loading)
-    return (
-      <PageShell className="catalog-page port-block-editor-page">
-        {breadcrumbs}
-        <ViewState kind="loading" />
-      </PageShell>
-    );
-  if (error)
-    return (
-      <PageShell className="catalog-page port-block-editor-page">
-        {breadcrumbs}
-        <ViewState kind="error" message={error} />
-      </PageShell>
-    );
+  const breadcrumbs = <Breadcrumbs label={t('portBlock.breadcrumb.library')} items={[{ label: t('portBlock.library.section') }, { label: t('portBlock.breadcrumb.library'), to: '/library/port-blocks' }, { label: mode === 'new' ? t('portBlock.breadcrumb.new') : t('portBlock.breadcrumb.version') }]} />;
+  if (loading) return <PageShell className="catalog-page port-block-editor-page">{breadcrumbs}<ViewState kind="loading" /></PageShell>;
+  if (error && !attempted) return <PageShell className="catalog-page port-block-editor-page">{breadcrumbs}<ViewState kind="error" message={error} /></PageShell>;
+  const update = (patch: Partial<PortBlockEditorState>, regenerate = false) => setState((current) => {
+    const next = { ...current, ...patch }; const count = next.rows * next.portsPerRow;
+    const localIds = Number.isInteger(count) && count >= 1 && count <= 1000
+      ? Array.from({ length: count }, (_, position) => {
+          const row = Math.floor(position / next.portsPerRow); const column = position % next.portsPerRow;
+          return row < current.rows && column < current.portsPerRow ? current.localIds[row * current.portsPerRow + column] : `p-${crypto.randomUUID()}`;
+        }) : current.localIds;
+    return { ...next, localIds, preservedSnapshot: regenerate ? null : current.preservedSnapshot };
+  });
   const generated = generatePortBlock(state);
-  const validation = attempted ? generated.validationErrors : [];
-  const update = (patch: Partial<PortBlockEditorState>, regenerate = false) =>
-    setState((current) => {
-      const next = { ...current, ...patch };
-      const count = next.rows * next.portsPerRow;
-      const localIds =
-        Number.isInteger(count) && count >= 1
-          ? ensureLocalIds(current.localIds, count)
-          : current.localIds;
-      return {
-        ...next,
-        localIds,
-        preservedSnapshot: regenerate ? null : current.preservedSnapshot,
-        labelOverrides: Object.fromEntries(
-          Object.entries(current.labelOverrides).filter(([id]) =>
-            localIds.includes(id),
-          ),
-        ),
-      };
-    });
-  const updateLabel = (localId: string, displayLabel: string) =>
-    setState((current) =>
-      current.preservedSnapshot
-        ? {
-            ...current,
-            preservedSnapshot: current.preservedSnapshot.map((port) =>
-              port.local_id === localId
-                ? { ...port, display_label: displayLabel || port.display_label }
-                : port,
-            ),
-          }
-        : {
-            ...current,
-            labelOverrides: {
-              ...current.labelOverrides,
-              [localId]: displayLabel,
-            },
-          },
-    );
   const save = async () => {
-    setAttempted(true);
-    const result = createPortBlockRequest(state);
-    if (!result.request) return;
-    setSaving(true);
-    setError(null);
+    setAttempted(true); const result = createPortBlockRequest(state); if (!result.request) return;
+    setSaving(true); setError(null);
     try {
-      if (mode === "new") await dataSource.createPortBlock(result.request);
-      else if (portBlockId)
-        await dataSource.createPortBlockVersion(portBlockId, {
-          port_block_name: result.request.name,
-          ports: result.request.ports,
-        });
+      if (mode === 'new') await dataSource.createPortBlock(result.request);
+      else if (portBlockId) await dataSource.createPortBlockVersion(portBlockId, { port_block_name: result.request.name, ports: result.request.ports });
       await dataSource.loadPortBlocks();
-      navigate(
-        mode === "new" &&
-          location.state?.returnTo === objectBlueprintCreationPath
-          ? objectBlueprintCreationPath
-          : "/library/port-blocks",
-      );
-    } catch (reason) {
-      setError(
-        reason instanceof Error
-          ? reason.message
-          : t("portBlock.editor.saveFailed"),
-      );
-    } finally {
-      setSaving(false);
-    }
+      navigate(mode === 'new' && location.state?.returnTo === '/library/object-blueprints/new' ? '/library/object-blueprints/new' : '/library/port-blocks');
+    } catch (reason) { setError(reason instanceof Error ? reason.message : t('portBlock.editor.saveFailed')); } finally { setSaving(false); }
   };
-  const field = (label: string, control: ReactNode) => (
-    <label>
-      {label}
-      {control}
-    </label>
-  );
-  const missing = (
-    <option value="" disabled>
-      —
-    </option>
-  );
-  return (
-    <PageShell className="catalog-page port-block-editor-page">
-      {breadcrumbs}
-      <PageHeader
-        eyebrow={t("portBlock.library.section")}
-        title={
-          mode === "new"
-            ? t("portBlock.new.title")
-            : t("portBlock.version.title")
-        }
-        description={
-          mode === "new"
-            ? t("portBlock.new.description")
-            : t("portBlock.version.description")
-        }
-      />
-      <div className="port-block-editor">
-        <section className="port-block-editor__controls">
-          {field(
-            t("portBlock.editor.name"),
-            <input
-              value={state.name}
-              onChange={(event) => update({ name: event.target.value })}
-            />,
-          )}
-          <div className="blueprint-editor-controls__row">
-            {field(
-              t("portBlock.editor.rows"),
-              <select
-                value={state.rows}
-                onChange={(event) =>
-                  update(
-                    {
-                      rows: Number(event.target.value) as 1 | 2,
-                      scheme:
-                        Number(event.target.value) === 1
-                          ? "SINGLE"
-                          : state.scheme === "SINGLE"
-                            ? "SEQUENTIAL"
-                            : state.scheme,
-                    },
-                    true,
-                  )
-                }
-              >
-                <option value={1}>{t("portBlock.rows.one")}</option>
-                <option value={2}>{t("portBlock.rows.two")}</option>
-              </select>,
-            )}
-            {field(
-              t("portBlock.editor.count"),
-              <input
-                type="number"
-                min="1"
-                value={state.portsPerRow}
-                onChange={(event) =>
-                  update({ portsPerRow: Number(event.target.value) }, true)
-                }
-              />,
-            )}
-          </div>
-          <div className="blueprint-editor-controls__row">
-            {field(
-              t("portBlock.editor.scheme"),
-              <select
-                disabled={state.rows === 1}
-                value={state.scheme ?? ""}
-                onChange={(event) =>
-                  update(
-                    {
-                      scheme: event.target
-                        .value as PortBlockEditorState["scheme"],
-                    },
-                    true,
-                  )
-                }
-              >
-                {missing}
-                <option value="SINGLE">{t("portBlock.scheme.single")}</option>
-                <option value="SEQUENTIAL">
-                  {t("portBlock.scheme.sequential")}
-                </option>
-                <option value="ODD_EVEN">
-                  {t("portBlock.scheme.oddEven")}
-                </option>
-                <option value="EVEN_ODD">
-                  {t("portBlock.scheme.evenOdd")}
-                </option>
-              </select>,
-            )}
-            {field(
-              t("portBlock.editor.direction"),
-              <select
-                value={state.direction ?? ""}
-                onChange={(event) =>
-                  update(
-                    {
-                      direction: event.target
-                        .value as PortBlockEditorState["direction"],
-                    },
-                    true,
-                  )
-                }
-              >
-                {missing}
-                <option value="LTR">{t("portBlock.direction.ltr")}</option>
-                <option value="RTL">{t("portBlock.direction.rtl")}</option>
-              </select>,
-            )}
-          </div>
-          <div className="blueprint-editor-controls__row">
-            {field(
-              t("portBlock.editor.start"),
-              <input
-                type="number"
-                min="0"
-                value={state.startingNumber ?? ""}
-                onChange={(event) =>
-                  update(
-                    {
-                      startingNumber:
-                        event.target.value === ""
-                          ? null
-                          : Number(event.target.value),
-                    },
-                    true,
-                  )
-                }
-              />,
-            )}
-            {field(
-              t("portBlock.editor.prefix"),
-              <input
-                value={state.displayPrefix ?? ""}
-                onChange={(event) =>
-                  update({ displayPrefix: event.target.value }, true)
-                }
-              />,
-            )}
-          </div>
-          {field(
-            t("portBlock.editor.kind"),
-            <select
-              value={state.kind ?? ""}
-              onChange={(event) =>
-                update(
-                  { kind: event.target.value as PortBlockEditorState["kind"] },
-                  true,
-                )
-              }
-            >
-              {missing}
-              <option value="CONNECTION_POINT">
-                {t("portBlock.kind.connection")}
-              </option>
-              <option value="NETWORK_PORT">
-                {t("portBlock.kind.network")}
-              </option>
-            </select>,
-          )}
-          {validation.length > 0 && (
-            <div className="blueprint-editor__error">
-              {validation.map((entry) => (
-                <div key={entry}>{t(errorKeys[entry])}</div>
-              ))}
-            </div>
-          )}
-          {error && <div className="blueprint-editor__error">{error}</div>}
-          <button
-            type="button"
-            className="primary-action"
-            disabled={saving}
-            onClick={() => void save()}
-          >
-            {saving
-              ? t("portBlock.editor.saving")
-              : mode === "new"
-                ? t("portBlock.editor.create")
-                : t("portBlock.editor.createVersion")}
-          </button>
-        </section>
-        <section className="port-block-editor__preview">
-          <h2>{t("portBlock.editor.preview")}</h2>
-          <p>{t("portBlock.editor.previewHint")}</p>
-          <div className="port-block-preview">
-            {[1, 2].map(
-              (row) =>
-                row <= state.rows && (
-                  <div className="port-block-preview__row" key={row}>
-                    {generated.ports
-                      .filter((port) => port.row === row)
-                      .sort((a, b) => a.column - b.column)
-                      .map((port) => (
-                        <label key={port.local_id}>
-                          <span>{port.display_label}</span>
-                          <input
-                            aria-label={t("portBlock.editor.override", {
-                              label: port.display_label,
-                            })}
-                            value={state.labelOverrides[port.local_id] ?? ""}
-                            placeholder={t(
-                              "portBlock.editor.overridePlaceholder",
-                            )}
-                            onChange={(event) =>
-                              updateLabel(port.local_id, event.target.value)
-                            }
-                          />
-                        </label>
-                      ))}
-                  </div>
-                ),
-            )}
-          </div>
-        </section>
+  return <PageShell className="catalog-page port-block-editor-page">{breadcrumbs}
+    <PageHeader eyebrow={t('portBlock.library.section')} title={mode === 'new' ? t('portBlock.new.title') : t('portBlock.version.title')} description={mode === 'new' ? t('portBlock.new.description') : t('portBlock.version.description')} />
+    <div className="port-block-editor"><section className="port-block-editor__controls">
+      <label>{t('portBlock.editor.name')}<input value={state.name} onChange={(event) => update({ name: event.target.value })} /></label>
+      <div className="blueprint-editor-controls__row">
+        <label>{t('portBlock.editor.rows')}<select value={state.rows} onChange={(event) => update({ rows: Number(event.target.value) as 1 | 2 }, true)}><option value={1}>{t('portBlock.rows.one')}</option><option value={2}>{t('portBlock.rows.two')}</option></select></label>
+        <label>{t('portBlock.editor.count')}<input type="number" min="1" value={state.portsPerRow} onChange={(event) => update({ portsPerRow: Number(event.target.value) }, true)} /></label>
       </div>
-    </PageShell>
-  );
+      <label>{t('portBlock.editor.direction')}<select value={state.direction} onChange={(event) => update({ direction: event.target.value as PortBlockEditorState['direction'] }, true)}><option value="LTR">{t('portBlock.direction.ltr')}</option><option value="RTL">{t('portBlock.direction.rtl')}</option></select></label>
+      <label>{t('portBlock.editor.kind')}<select value={state.kind} onChange={(event) => update({ kind: event.target.value as PortBlockEditorState['kind'] }, true)}><option value="CONNECTION_POINT">{t('portBlock.kind.connection')}</option><option value="NETWORK_PORT">{t('portBlock.kind.network')}</option></select></label>
+      {attempted && generated.validationErrors.length > 0 && <div className="blueprint-editor__error">{generated.validationErrors.map((entry) => <div key={entry}>{t(entry === 'nameRequired' ? 'portBlock.validation.name' : entry === 'portsPerRow' ? 'portBlock.validation.count' : 'portBlock.validation.identity')}</div>)}</div>}
+      {error && <div className="blueprint-editor__error">{error}</div>}
+      <button type="button" className="primary-action" disabled={saving} onClick={() => void save()}>{saving ? t('portBlock.editor.saving') : mode === 'new' ? t('portBlock.editor.create') : t('portBlock.editor.createVersion')}</button>
+    </section><section className="port-block-editor__preview"><h2>{t('portBlock.editor.preview')}</h2><p>{t('portBlock.editor.previewHint')}</p><div className="port-block-preview">{[1, 2].map((row) => row <= state.rows && <div className="port-block-preview__row" key={row}>{generated.ports.filter((port) => port.row === row).sort((a, b) => a.column - b.column).map((port) => <span key={port.local_id}>P{port.layout_order}</span>)}</div>)}</div></section></div>
+  </PageShell>;
 }

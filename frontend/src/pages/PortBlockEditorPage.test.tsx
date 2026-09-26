@@ -11,7 +11,7 @@ const LocationProbe = () => {
 const source = () => ({
   loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0', port_blocks: [] }),
   loadPortBlockVersions: vi.fn(),
-  loadPortBlockVersion: vi.fn().mockResolvedValue({ schema_version: '1.0', port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'pb-1' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v-1' }, name: 'Panel', version_number: 1, ports: [{ local_id: 'p1', display_label: 'P1', kind: 'NETWORK_PORT', row: 1, column: 1, layout_order: 1 }] }),
+  loadPortBlockVersion: vi.fn().mockResolvedValue({ schema_version: '1.0', port_block_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlock', entity_id: 'pb-1' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'PortBlockVersion', entity_id: 'v-1' }, name: 'Panel', version_number: 1, ports: [{ local_id: 'p1', kind: 'NETWORK_PORT', row: 1, column: 1, layout_order: 1 }] }),
   createPortBlock: vi.fn().mockResolvedValue({}),
   createPortBlockVersion: vi.fn().mockResolvedValue({}),
 });
@@ -52,6 +52,8 @@ describe('PortBlockEditorPage return navigation', () => {
   it('does not change version creation navigation even with return intent', async () => {
     const dataSource = renderEditor('version', { returnTo: '/library/object-blueprints/new' });
     await screen.findByDisplayValue('Panel');
+    expect(screen.queryByLabelText('Префикс')).toBeNull();
+    expect(screen.queryByLabelText('Начальный номер')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Создать версию' }));
     await waitFor(() => expect(dataSource.createPortBlockVersion).toHaveBeenCalledOnce());
     expect(await screen.findByTestId('location')).toHaveTextContent('/library/port-blocks');

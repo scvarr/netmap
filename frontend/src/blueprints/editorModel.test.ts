@@ -1,12 +1,23 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addBulkInternalLinks, clampPlacement, composedSlotKey, createBlueprintRequest, faceLocalIndex, fallbackPlacement, generateBlueprint, hydrateBlueprintEditorState, removeBlueprintBlockInstance, removeInternalLinksBetweenInstances, type BlueprintBlockInstance } from './editorModel';
+import { addBulkInternalLinks, clampPlacement, composedSlotKey, createBlueprintRequest, faceLocalIndex, fallbackPlacement, generateBlueprint, hydrateBlueprintEditorState, removeBlueprintBlockInstance, removeInternalLinksBetweenInstances, resolvedNames, type BlueprintBlockInstance } from './editorModel';
 
 const blockRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlock' as const, entity_id: 'pb-1' };
 const versionRef = { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'PortBlockVersion' as const, entity_id: 'v-1' };
-const port = (local_id: string) => ({ local_id, display_label: `Port ${local_id}`, kind: 'CONNECTION_POINT' as const, row: 1 as const, column: 1, layout_order: 1 });
-const instance = (instanceKey: string, localIds: string[]): BlueprintBlockInstance => ({ instanceKey, portBlockRef: `${instanceKey}-block`, portBlockVersionRef: `${instanceKey}-version`, portBlockName: instanceKey, versionNumber: 1, ports: localIds.map((local_id, index) => ({ ...port(local_id), layout_order: index + 1 })), resolvedSlotKeys: Object.fromEntries(localIds.map((local_id) => [local_id, `${instanceKey}-${local_id}`])) });
+const port = (local_id: string) => ({ local_id, kind: 'CONNECTION_POINT' as const, row: 1 as const, column: 1, layout_order: 1 });
+const instance = (instanceKey: string, localIds: string[]): BlueprintBlockInstance => ({ instanceKey, portBlockRef: `${instanceKey}-block`, portBlockVersionRef: `${instanceKey}-version`, portBlockName: instanceKey, versionNumber: 1, ports: localIds.map((local_id, index) => ({ ...port(local_id), layout_order: index + 1 })), naming: { prefix: '', starting_number: 1, mode: 'SINGLE', overrides: {} }, resolvedSlotKeys: Object.fromEntries(localIds.map((local_id) => [local_id, `${instanceKey}-${local_id}`])) });
 
 describe('Object Blueprint composition editor model', () => {
+  it('keeps naming independent for two instances of one exact block version', () => {
+    const first = instance('data-a', ['p1', 'p2']); const second = instance('storage-a', ['p1', 'p2']);
+    second.portBlockVersionRef = first.portBlockVersionRef;
+    first.naming = { prefix: 'Ge1/0/', starting_number: 1, mode: 'SINGLE', overrides: {} };
+    second.naming = { prefix: 'fc', starting_number: 0, mode: 'SINGLE', overrides: { p2: 'MGMT-A' } };
+    expect(Object.values(resolvedNames(first))).toEqual(['Ge1/0/1', 'Ge1/0/2']);
+    expect(Object.values(resolvedNames(second))).toEqual(['fc0', 'MGMT-A']);
+    expect(second.portBlockVersionRef).toBe(first.portBlockVersionRef);
+    expect(Object.values(resolvedNames(first))).toEqual(['Ge1/0/1', 'Ge1/0/2']);
+    expect(Object.values(resolvedNames(second))).toEqual(['fc0', 'MGMT-A']);
+  });
   it.each([
     ['instance', 'p1', 'pb_04af1feabf6858e0d49366611928d2291c2c7f09ed0b0ca68e7f14aa99bf5ed5'],
     ['ключ', 'порт\0id', 'pb_0a79ce682faacc45597e2cb1bfd8272030671cd6a721b174fe5ed3f45182bdb7'],
@@ -18,11 +29,12 @@ describe('Object Blueprint composition editor model', () => {
 
   it('hydrates the persisted exact version rather than a library latest version and preserves request provenance', async () => {
     const source = { loadPortBlocks: vi.fn(), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn().mockResolvedValue({ schema_version: '1.0' as const, port_block_ref: blockRef, version_ref: versionRef, name: 'Panel', version_number: 1, ports: [port('p1')] }), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
-    const version = { schema_version: '1.0' as const, blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp-1' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'bp-v1' }, version_number: 1, name: 'Composed', body: { kind: 'RECTANGLE' as const, width: 120, height: 40, fill_color: '#123456' }, default_physical_object_class: 'patch_panel', slots: [], internal_links: [], composition: { instances: [{ instance_key: 'stable-instance', port_block_ref: blockRef, port_block_version_ref: versionRef }] } };
+    const version = { schema_version: '1.0' as const, blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp-1' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'bp-v1' }, version_number: 1, name: 'Composed', body: { kind: 'RECTANGLE' as const, width: 120, height: 40, fill_color: '#123456' }, default_physical_object_class: 'patch_panel', slots: [], internal_links: [], composition: { instances: [{ instance_key: 'stable-instance', port_block_ref: blockRef, port_block_version_ref: versionRef, naming: { prefix: 'Ge', starting_number: 0, mode: 'SINGLE' as const, overrides: { p1: 'MGMT' } } }] } };
     const state = await hydrateBlueprintEditorState(version, source);
     expect(source.loadPortBlockVersion).toHaveBeenCalledWith('pb-1', 'v-1');
     expect(state).toMatchObject({ defaultClass: 'patch_panel', width: 120, height: 40, fillColor: '#123456', instances: [{ instanceKey: 'stable-instance', portBlockRef: 'pb-1', portBlockVersionRef: 'v-1', ports: [port('p1')] }] });
     expect(state?.instances[0].resolvedSlotKeys.p1).toBe(await composedSlotKey('stable-instance', 'p1'));
+    expect(state?.instances[0].naming).toEqual(version.composition.instances[0].naming);
     expect(createBlueprintRequest(state!).request).toMatchObject({ composition: { instances: [{ instance_key: 'stable-instance', port_block_version_ref: versionRef }] } });
   });
 
@@ -41,7 +53,7 @@ describe('Object Blueprint composition editor model', () => {
 
   it('gives a pre-c.5 composition row a deterministic temporary rectangle and persists it on save', async () => {
     const source = { loadPortBlocks: vi.fn(), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn().mockResolvedValue({ schema_version: '1.0', port_block_ref: blockRef, version_ref: versionRef, name: 'Panel', version_number: 1, ports: [port('p1')] }), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
-    const version = { schema_version: '1.0' as const, blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v' }, version_number: 1, name: 'Historical composition', body: { kind: 'RECTANGLE' as const, width: 100, height: 40 }, slots: [], internal_links: [], composition: { instances: [{ instance_key: 'old', port_block_ref: blockRef, port_block_version_ref: versionRef, face: 'FRONT' as const, placement: null }] } };
+    const version = { schema_version: '1.0' as const, blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v' }, version_number: 1, name: 'Composition', body: { kind: 'RECTANGLE' as const, width: 100, height: 40 }, slots: [], internal_links: [], composition: { instances: [{ instance_key: 'old', port_block_ref: blockRef, port_block_version_ref: versionRef, face: 'FRONT' as const, placement: null, naming: { prefix: '', starting_number: 1, mode: 'SINGLE' as const, overrides: {} } }] } };
     const state = await hydrateBlueprintEditorState(version, source);
     expect(state?.instances[0].placement).toEqual(fallbackPlacement(0));
     expect(createBlueprintRequest(state!).request?.composition.instances[0].placement).toEqual(fallbackPlacement(0));

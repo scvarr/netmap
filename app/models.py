@@ -468,7 +468,6 @@ class PortBlockPort(Base):
     __tablename__ = "port_block_ports"
     __table_args__ = (
         CheckConstraint("char_length(btrim(local_id)) > 0", name="local_id_not_blank"),
-        CheckConstraint("char_length(btrim(display_label)) > 0", name="display_label_not_blank"),
         CheckConstraint("kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="kind_supported"),
         CheckConstraint("row >= 1 AND row <= 2", name="row_supported"),
         CheckConstraint("layout_column >= 1", name="column_positive"),
@@ -483,7 +482,6 @@ class PortBlockPort(Base):
         ForeignKey("port_block_versions.id", ondelete="RESTRICT"), nullable=False
     )
     local_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    display_label: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
     row: Mapped[int] = mapped_column(Integer, nullable=False)
     layout_column: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -522,12 +520,18 @@ class BlueprintPortBlockInstance(Base):
     __tablename__ = "blueprint_port_block_instances"
     __table_args__ = (
         CheckConstraint("char_length(btrim(instance_key)) > 0", name="instance_key_not_blank"),
+        CheckConstraint("naming_starting_number >= 0", name="naming_start_nonnegative"),
+        CheckConstraint("naming_mode IN ('SINGLE', 'SEQUENTIAL', 'ODD_EVEN', 'EVEN_ODD')", name="naming_mode_supported"),
         UniqueConstraint("blueprint_version_id", "instance_key", name="uq_blueprint_block_instance_key"),
     )
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     blueprint_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False)
     port_block_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("port_block_versions.id", ondelete="RESTRICT"), nullable=False)
     instance_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    naming_prefix: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    naming_starting_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    naming_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    naming_overrides: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     # NULL is immutable pre-face provenance. New composition authoring must set a face.
     face: Mapped[str | None] = mapped_column(String(8), nullable=True)
     # NULL is immutable pre-L1S.6c.5 provenance. This is face-local presentation

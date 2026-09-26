@@ -132,6 +132,10 @@ class ObjectBlueprintCatalog:
                 blueprint_version_id=version.id,
                 port_block_version_id=exact_version.id,
                 instance_key=item.instance_key,
+                naming_prefix=item.naming.prefix,
+                naming_starting_number=item.naming.starting_number,
+                naming_mode=item.naming.mode,
+                naming_overrides=item.naming.overrides,
                 face=item.face,
                 placement_x=item.placement.x,
                 placement_y=item.placement.y,
@@ -141,20 +145,22 @@ class ObjectBlueprintCatalog:
             self.session.add(instance)
             instances.append(instance)
         self.session.flush()
-        expanded_by_face: dict[str, list[tuple[BlueprintPortBlockInstance, PortBlockPort]]] = {"FRONT": [], "REAR": []}
+        expanded_by_face: dict[str, list[tuple[BlueprintPortBlockInstance, PortBlockPort, str]]] = {"FRONT": [], "REAR": []}
         for instance in instances:
-            expanded_by_face[instance.face].extend((instance, port) for port in self.session.scalars(
+            ports = tuple(self.session.scalars(
                 select(PortBlockPort).where(PortBlockPort.port_block_version_id == instance.port_block_version_id).order_by(PortBlockPort.layout_order)
             ))
+            names = self.resolve_instance_names(instance, ports)
+            expanded_by_face[instance.face].extend((instance, port, names[port.local_id]) for port in ports)
         for expanded in expanded_by_face.values():
-            for instance, port in expanded:
+            for instance, port, name in expanded:
                 slot_key = self.composed_slot_key(instance.instance_key, port.local_id)
                 if slot_key in slots_by_key:
                     raise ValidationError("Composed Blueprint slot identity collision")
                 slot = BlueprintEndpointSlot(
                     blueprint_version_id=version.id,
                     slot_key=slot_key,
-                    display_name=port.display_label,
+                    display_name=name,
                     kind=port.kind,
                     port_block_instance_id=instance.id,
                     port_block_local_id=port.local_id,
@@ -183,6 +189,37 @@ class ObjectBlueprintCatalog:
             ))
         self.session.flush()
         return version
+
+    @staticmethod
+    def resolve_instance_names(instance: BlueprintPortBlockInstance, ports: tuple[PortBlockPort, ...]) -> dict[str, str]:
+        overrides = instance.naming_overrides or {}
+        local_ids = {port.local_id for port in ports}
+        if set(overrides) - local_ids:
+            raise ValidationError("Naming override refers to an unknown Port Block local id")
+        rows = {port.row for port in ports}
+        if instance.naming_mode == "SINGLE" and rows != {1}:
+            raise ValidationError("SINGLE naming requires one Port Block row")
+        if instance.naming_mode != "SINGLE" and rows != {1, 2}:
+            raise ValidationError("Two-row naming requires two Port Block rows")
+        by_row = {row: sorted((port for port in ports if port.row == row), key=lambda port: port.layout_order) for row in rows}
+        if rows == {1, 2} and len(by_row[1]) != len(by_row[2]):
+            raise ValidationError("Two-row naming requires equal row lengths")
+        resolved: dict[str, str] = {}
+        for row, row_ports in by_row.items():
+            for index, port in enumerate(row_ports):
+                if instance.naming_mode == "SINGLE":
+                    number = instance.naming_starting_number + index
+                elif instance.naming_mode == "SEQUENTIAL":
+                    number = instance.naming_starting_number + (row - 1) * len(row_ports) + index
+                elif instance.naming_mode == "ODD_EVEN":
+                    number = instance.naming_starting_number + index * 2 + (row - 1)
+                else:
+                    number = instance.naming_starting_number + index * 2 + (1 if row == 1 else 0)
+                name = overrides.get(port.local_id, f"{instance.naming_prefix}{number}")
+                if not name.strip() or len(name) > 255:
+                    raise ValidationError("Resolved Blueprint endpoint name must be nonblank and at most 255 characters")
+                resolved[port.local_id] = name
+        return resolved
 
     @staticmethod
     def composed_slot_key(instance_key: str, local_id: str) -> str:

@@ -6,6 +6,8 @@ import {
   addBulkInternalLinks,
   clampPlacement,
   createBlueprintRequest,
+  defaultNaming,
+  resolvedNames,
   removeBlueprintBlockInstance,
   removeInternalLinksBetweenInstances,
   resolveSlotKeys,
@@ -62,6 +64,7 @@ const validationKey = {
   colorFormat: "blueprint.validation.colorFormat",
   duplicateInstanceKey: "blueprint.validation.duplicateInstanceKey",
   missingPortBlock: "blueprint.validation.missingPortBlock",
+  invalidNaming: "blueprint.validation.invalidNaming",
   individualSelfLink: "blueprint.validation.individualSelfLink",
   individualMissingPort: "blueprint.validation.individualMissingPort",
   duplicateIndividualLink: "blueprint.validation.duplicateIndividualLink",
@@ -187,6 +190,7 @@ export function ObjectBlueprintEditor({
         portBlockName: detail.name,
         versionNumber: detail.version_number,
         ports: detail.ports,
+        naming: defaultNaming(detail.ports),
         resolvedSlotKeys: {},
       };
       const next = { ...base, resolvedSlotKeys: await resolveSlotKeys(base) };
@@ -562,7 +566,20 @@ export function ObjectBlueprintEditor({
                     version: selectedItem.versionNumber,
                   })}
                 </span>
+                <span>{selectedItem.instanceKey}</span>
               </div>
+              <section className="blueprint-composer__naming">
+                <h3>{t('blueprint.naming.title')}</h3>
+                <label>{t('blueprint.naming.prefix')}<input value={selectedItem.naming.prefix} onChange={(event) => update(selectedItem.instanceKey, { naming: { ...selectedItem.naming, prefix: event.target.value } })} /></label>
+                <label>{t('blueprint.naming.start')}<input type="number" min="0" value={selectedItem.naming.starting_number} onChange={(event) => update(selectedItem.instanceKey, { naming: { ...selectedItem.naming, starting_number: Number(event.target.value) } })} /></label>
+                <label>{t('blueprint.naming.mode')}<select value={selectedItem.naming.mode} onChange={(event) => update(selectedItem.instanceKey, { naming: { ...selectedItem.naming, mode: event.target.value as typeof selectedItem.naming.mode } })}>
+                  {selectedItem.ports.some((port) => port.row === 2) ? <><option value="SEQUENTIAL">{t('blueprint.naming.mode.sequential')}</option><option value="ODD_EVEN">{t('blueprint.naming.mode.oddEven')}</option><option value="EVEN_ODD">{t('blueprint.naming.mode.evenOdd')}</option></> : <option value="SINGLE">{t('blueprint.naming.mode.single')}</option>}
+                </select></label>
+                <div className="blueprint-composer__naming-preview">{selectedItem.ports.map((port) => <label key={port.local_id}>
+                  <span>{resolvedNames(selectedItem)[port.local_id]}</span>
+                  <input aria-label={t('blueprint.naming.override', { position: port.layout_order })} placeholder={t('blueprint.naming.overridePlaceholder')} value={selectedItem.naming.overrides[port.local_id] ?? ''} onChange={(event) => { const overrides = { ...selectedItem.naming.overrides }; if (event.target.value) overrides[port.local_id] = event.target.value; else delete overrides[port.local_id]; update(selectedItem.instanceKey, { naming: { ...selectedItem.naming, overrides } }); }} />
+                </label>)}</div>
+              </section>
               <label>
                 {t("blueprint.composition.face")}
                 <select

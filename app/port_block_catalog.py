@@ -157,7 +157,6 @@ class PortBlockCatalog:
             PortBlockPort(
                 port_block_version_id=version.id,
                 local_id=port.local_id,
-                display_label=port.display_label,
                 kind=port.kind,
                 row=port.row,
                 layout_column=port.column,

@@ -912,7 +912,6 @@ def get_port_block_version(
         "ports": [
             {
                 "local_id": port.local_id,
-                "display_label": port.display_label,
                 "kind": port.kind,
                 "row": port.row,
                 "column": port.layout_column,
@@ -1028,6 +1027,8 @@ def get_object_blueprint_version(
              "port_block_ref": {"entity_type": "PortBlock", "entity_id": session.get(PortBlockVersion, item.port_block_version_id).port_block_id},
              "port_block_version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.port_block_version_id},
              "face": item.face or "FRONT",
+             "naming": {"prefix": item.naming_prefix, "starting_number": item.naming_starting_number,
+                        "mode": item.naming_mode, "overrides": item.naming_overrides},
              "placement": (
                  {"x": item.placement_x, "y": item.placement_y, "width": item.placement_width, "height": item.placement_height}
                  if None not in (item.placement_x, item.placement_y, item.placement_width, item.placement_height) else None

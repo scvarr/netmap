@@ -28,15 +28,18 @@ export interface BlueprintInternalLink {
   to_slot_key: string;
 }
 
+export type BlueprintNamingMode = 'SINGLE' | 'SEQUENTIAL' | 'ODD_EVEN' | 'EVEN_ODD';
+export interface BlueprintInstanceNaming { prefix: string; starting_number: number; mode: BlueprintNamingMode; overrides: Record<string, string>; }
+
 export interface PortBlockVersionLibraryRef { ref_type: 'LIBRARY_RECORD'; entity_type: 'PortBlockVersion'; entity_id: string; }
 export interface PortBlockLibraryRef { ref_type: 'LIBRARY_RECORD'; entity_type: 'PortBlock'; entity_id: string; }
-export interface BlueprintComposition { instances: Array<{ instance_key: string; port_block_ref: PortBlockLibraryRef; port_block_version_ref: PortBlockVersionLibraryRef; face?: BlueprintFace; placement?: BlueprintPortBlockPlacement | null }>; }
+export interface BlueprintComposition { instances: Array<{ instance_key: string; port_block_ref: PortBlockLibraryRef; port_block_version_ref: PortBlockVersionLibraryRef; face?: BlueprintFace; placement?: BlueprintPortBlockPlacement | null; naming: BlueprintInstanceNaming }>; }
 
 export interface CreateObjectBlueprintRequest {
   name: string;
   default_physical_object_class?: string;
   body: BlueprintBody;
-  composition: { instances: Array<{ instance_key: string; port_block_version_ref: PortBlockVersionLibraryRef; face: BlueprintFace; placement: BlueprintPortBlockPlacement }> };
+  composition: { instances: Array<{ instance_key: string; port_block_version_ref: PortBlockVersionLibraryRef; face: BlueprintFace; placement: BlueprintPortBlockPlacement; naming: BlueprintInstanceNaming }> };
   internal_links: BlueprintInternalLink[];
 }
 

@@ -737,6 +737,21 @@ class BlueprintCompositionInstanceRequest(BaseModel):
     port_block_version_ref: PortBlockVersionLibraryRef
     face: Literal["FRONT", "REAR"]
     placement: "BlueprintPortBlockPlacement"
+    naming: "BlueprintInstanceNaming"
+
+
+class BlueprintInstanceNaming(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    prefix: str = Field(max_length=255)
+    starting_number: int = Field(ge=0)
+    mode: Literal["SINGLE", "SEQUENTIAL", "ODD_EVEN", "EVEN_ODD"]
+    overrides: dict[str, str] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_overrides(self) -> "BlueprintInstanceNaming":
+        if any(not key.strip() or not value.strip() or len(value) > 255 for key, value in self.overrides.items()):
+            raise ValueError("Naming overrides require nonblank local ids and names of at most 255 characters")
+        return self
 
 
 class BlueprintPortBlockPlacement(BaseModel):
@@ -799,7 +814,6 @@ class PortBlockPortRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     local_id: str = Field(min_length=1, max_length=255)
-    display_label: str = Field(min_length=1, max_length=255)
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
     row: int = Field(ge=1, le=2)
     column: int = Field(ge=1)
@@ -976,6 +990,7 @@ class BlueprintCompositionInstanceDocument(BaseModel):
     port_block_version_ref: PortBlockVersionLibraryRef
     face: Literal["FRONT", "REAR"]
     placement: BlueprintPortBlockPlacement | None = None
+    naming: BlueprintInstanceNaming
 
 
 class BlueprintCompositionDocument(BaseModel):

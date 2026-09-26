@@ -2,7 +2,7 @@
 
 ## Status, authority and scope
 
-**FIXED architectural decisions. L1S.6c.1–L1S.6c.6 are IMPLEMENTED.**
+**FIXED architectural decisions. L1S.6c.1–L1S.6c.6 are IMPLEMENTED. C-CAP-02A naming boundary is implemented pending external review and manual recheck.**
 
 This note records the agreed next evolution of Object Blueprints for dense
 network equipment. It is an architecture/product boundary only: it does not
@@ -22,20 +22,20 @@ power supplies, decorative chassis modules, or non-network hardware.
 
 ### Library-owned, versioned Port Blocks
 
-A Port Block is a library-owned reusable template. A **Port Block version**
-describes an arrangement of network connection points, for example:
+A Port Block is a library-owned reusable structural/layout template. A **Port Block version**
+describes an arrangement of network connection point positions, for example:
 
-- 48 × RJ45;
-- 4 × SFP+;
-- management ports;
-- patch-panel rows.
+- one row of 48 endpoint positions;
+- two rows of 24 endpoint positions;
+- a compact two-position group.
 
 Port Block versions are immutable once created. Changing a Port Block creates a
 distinct version and must never silently alter an existing immutable Object
 Blueprint version that later references it. L1S.6c.1 persists the library-owned
 record, immutable version number, and an exact ordered/layout port snapshot.
-L1S.6c.2 adds a client authoring convenience which deterministically produces
-that same explicit snapshot; it is not persisted as a second source of truth.
+The editor deterministically produces that same explicit structural snapshot;
+neutral position markers such as `P1` are preview only. Device-specific names
+are not persisted in Port Block ports.
 L1S.6c.3 composes exact immutable Port Block versions into Object Blueprint
 versions; the server expands their slots and persists provenance.
 
@@ -73,8 +73,9 @@ a port identity must never be derived from visible port number, display label,
 row position, screen coordinate, or array/UI order. Renumbering a label alone
 must not change canonical port identity.
 
-Port numbering is a type-safe/common authoring convenience, not identity. The
-initial scope supports one or two rows and at least these automatic schemes:
+Endpoint numbering belongs to each exact Port Block instance inside an Object
+Blueprint version, not to the reusable Port Block. The initial scope supports
+one or two rows and these Blueprint-local schemes:
 
 ```text
 single row:           1 2 3 4 ...
@@ -83,10 +84,23 @@ two rows, odd/even:   top 1 3 5 ... 47; bottom 2 4 6 ... 48
 two rows, even/odd:   top 2 4 6 ... 48; bottom 1 3 5 ... 47
 ```
 
-Authoring also needs a configurable starting number, optional display prefix,
-left-to-right or right-to-left ordering where required, and manual display-label
-overrides for exceptional vendor layouts. This does not introduce a general
-numbering expression language or an arbitrary dense-grid system.
+Each Blueprint instance persists a free-form prefix, non-negative starting
+number, mode, and overrides keyed by stable Port Block `local_id`. The server
+resolves those values against the exact Port Block version and freezes the
+result in `BlueprintEndpointSlot.display_name`. Prefix, number, resolved name,
+override, row and layout order never enter slot identity. The same Port Block
+version can therefore name positions `Ge1/0/1..2` in one Blueprint and
+`fc0..1` in another. Structural left-to-right/right-to-left order remains a
+Port Block layout concern. No name implies Ethernet, Fibre Channel, speed,
+connector or other technology/capability.
+
+C-CAP-02A is a pre-production destructive transition: the obsolete Port Block
+`display_label` persisted contract is removed. Old development authoring
+records and workspace format v1 snapshots need not be converted or imported;
+recreate the testbed as needed. Immutable resolved Blueprint slot names and
+canonical identities remain their respective source of truth. Technology and
+physical compatibility stay OPEN for C-CAP-02B; C-CAP-02 as a whole is not
+closed.
 
 ### One Object Blueprint, multiple physical faces
 

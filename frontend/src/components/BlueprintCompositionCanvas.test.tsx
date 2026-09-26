@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BlueprintCompositionCanvas } from './BlueprintCompositionCanvas';
 import type { BlueprintBlockInstance } from '../blueprints/editorModel';
 
-const instance = (key: string, face: 'FRONT' | 'REAR', placement = { x: .1, y: .2, width: .3, height: .4 }): BlueprintBlockInstance => ({ instanceKey: key, portBlockRef: 'b', portBlockVersionRef: 'v', face, placement, portBlockName: key, versionNumber: 1, ports: [{ local_id: 'p1', display_label: 'P1', kind: 'CONNECTION_POINT', row: 1, column: 1, layout_order: 1 }, { local_id: 'p2', display_label: 'P2', kind: 'CONNECTION_POINT', row: 1, column: 2, layout_order: 2 }], resolvedSlotKeys: { p1: `${key}-1`, p2: `${key}-2` } });
+const instance = (key: string, face: 'FRONT' | 'REAR', placement = { x: .1, y: .2, width: .3, height: .4 }): BlueprintBlockInstance => ({ instanceKey: key, portBlockRef: 'b', portBlockVersionRef: 'v', face, placement, portBlockName: key, versionNumber: 1, ports: [{ local_id: 'p1', kind: 'CONNECTION_POINT', row: 1, column: 1, layout_order: 1 }, { local_id: 'p2', kind: 'CONNECTION_POINT', row: 1, column: 2, layout_order: 2 }], naming: { prefix: '', starting_number: 1, mode: 'SINGLE', overrides: {} }, resolvedSlotKeys: { p1: `${key}-1`, p2: `${key}-2` } });
 const body = { width: 520, height: 60, fillColor: '#123456' };
 
 describe('BlueprintCompositionCanvas', () => {

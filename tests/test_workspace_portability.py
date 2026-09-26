@@ -48,8 +48,8 @@ def create_graph():
     object_ids = [item['physical_object']['source_ref']['entity_id'] for item in objects]
     cable = create_endpoint_cable(client, point_ids[0], point_ids[1])
     block = client.post('/v1/library/port-blocks', json={'name': 'One port', 'ports': [
-        {'local_id': 'P1', 'display_label': 'P1', 'kind': 'CONNECTION_POINT', 'row': 1, 'column': 1, 'layout_order': 1},
-        {'local_id': 'N1', 'display_label': 'N1', 'kind': 'NETWORK_PORT', 'row': 1, 'column': 2, 'layout_order': 2},
+        {'local_id': 'P1', 'kind': 'CONNECTION_POINT', 'row': 1, 'column': 1, 'layout_order': 1},
+        {'local_id': 'N1', 'kind': 'NETWORK_PORT', 'row': 1, 'column': 2, 'layout_order': 2},
     ]})
     assert block.status_code == 201, block.text
     block_version_id = block.json()['version_ref']['entity_id']
@@ -57,7 +57,7 @@ def create_graph():
         'name': 'Test blueprint', 'body': {'kind': 'RECTANGLE', 'width': 100, 'height': 40},
         'composition': {'instances': [{'instance_key': 'main', 'port_block_version_ref': {
             'ref_type': 'LIBRARY_RECORD', 'entity_type': 'PortBlockVersion', 'entity_id': block_version_id,
-        }, 'face': 'FRONT', 'placement': {'x': .1, 'y': .1, 'width': .3, 'height': .2}}]},
+        }, 'face': 'FRONT', 'placement': {'x': .1, 'y': .1, 'width': .3, 'height': .2}, 'naming': {'prefix': 'Ge', 'starting_number': 0, 'mode': 'SINGLE', 'overrides': {'N1': 'MGMT'}}}]},
         'internal_links': [],
     })
     assert blueprint.status_code == 201, blueprint.text
@@ -89,7 +89,7 @@ def create_graph():
 def test_empty_export_and_roundtrip():
     empty = snapshot()
     assert empty['format'] == 'netmap-workspace'
-    assert empty['format_version'] == 1
+    assert empty['format_version'] == 2
     assert all(not rows for section in ('canonical', 'authoring', 'presentation') for rows in empty[section].values())
     assert empty['settings']['CableLabelSettings'] == [{'id': 1, 'unique_labels': False}]
     assert client.post('/v1/workspace/package', json=empty).status_code == 204
@@ -104,6 +104,7 @@ def test_graph_export_reset_import_restores_all_persisted_state():
     assert len(before['canonical']['InterfacePhysicalBinding']) >= 1
     assert len(before['authoring']['BlueprintInstance']) == 1
     assert len(before['authoring']['PortBlockVersion']) == 1
+    assert before['authoring']['BlueprintPortBlockInstance'][0]['naming_overrides'] == {'N1': 'MGMT'}
     assert len(before['presentation']['MapPlacement']) == 2
     assert before['presentation']['MapCableRoute'][0]['waypoints'] == [{'x': 120, 'y': 80}]
     assert before['presentation']['MapTextAnnotation'][0]['text'] == 'Rack note'
@@ -127,6 +128,9 @@ def test_nonempty_import_and_bad_packages_do_not_mutate():
     unsupported = copy.deepcopy(before)
     unsupported['format_version'] = 999
     assert client.post('/v1/workspace/package', json=unsupported).status_code == 422
+    old = copy.deepcopy(before)
+    old['format_version'] = 1
+    assert client.post('/v1/workspace/package', json=old).status_code == 422
     incomplete = copy.deepcopy(before)
     del incomplete['canonical']['Cable']
     assert client.post('/v1/workspace/package', json=incomplete).status_code == 422

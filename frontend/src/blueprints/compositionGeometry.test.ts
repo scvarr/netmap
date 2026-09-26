@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { compositionCanvas, initialPlacementForPorts, placementRect, portCenter, resizePlacement, resolvePlacement, screenToPlacementPoint } from './compositionGeometry';
 import type { BlueprintBlockInstance } from './editorModel';
 
-const item: BlueprintBlockInstance = { instanceKey: 'stable', portBlockRef: 'block', portBlockVersionRef: 'version', face: 'FRONT', placement: { x: .2, y: .25, width: .5, height: .5 }, portBlockName: 'Panel', versionNumber: 1, ports: [{ local_id: 'p1', display_label: 'P1', kind: 'CONNECTION_POINT', row: 1, column: 1, layout_order: 1 }, { local_id: 'p2', display_label: 'P2', kind: 'CONNECTION_POINT', row: 2, column: 2, layout_order: 2 }], resolvedSlotKeys: { p1: 'one', p2: 'two' } };
+const item: BlueprintBlockInstance = { instanceKey: 'stable', portBlockRef: 'block', portBlockVersionRef: 'version', face: 'FRONT', placement: { x: .2, y: .25, width: .5, height: .5 }, portBlockName: 'Panel', versionNumber: 1, ports: [{ local_id: 'p1', kind: 'CONNECTION_POINT', row: 1, column: 1, layout_order: 1 }, { local_id: 'p2', kind: 'CONNECTION_POINT', row: 2, column: 2, layout_order: 2 }], naming: { prefix: '', starting_number: 1, mode: 'SINGLE', overrides: {} }, resolvedSlotKeys: { p1: 'one', p2: 'two' } };
 
 describe('Blueprint composition geometry', () => {
   it('uses actual non-square canvas dimensions for rectangles and port centers', () => {

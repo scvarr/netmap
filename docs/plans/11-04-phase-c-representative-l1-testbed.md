@@ -28,6 +28,15 @@ finding, а не повод подменять факт фиктивной topol
 
 ## Rack-first service-path synthetic acceptance
 
+**Current pause — C-CAP-02A:** The rack-first walkthrough stopped before
+creating `HV-01` because device-specific endpoint names were authored in
+reusable Port Blocks. C-CAP-02A moves the naming recipe to each Port Block
+instance in an immutable Object Blueprint version and freezes resolved names
+in its endpoint slots. Implementation is pending external review and a manual
+recheck; do not continue the walkthrough yet. Existing development Port Block
+and Blueprint authoring data may be recreated. Technology/capability remains
+OPEN for C-CAP-02B; this naming milestone does not close C-CAP-02.
+
 This is the ACTIVE clean acceptance scenario for the current Phase C repeat.
 It is an intentionally synthetic but operationally understandable
 infrastructure, selected to expose real L1 capability gaps progressively. It

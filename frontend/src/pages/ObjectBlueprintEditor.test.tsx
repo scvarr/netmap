@@ -11,7 +11,6 @@ const ref = (
 ) => ({ ref_type: "LIBRARY_RECORD" as const, entity_type, entity_id });
 const p1 = {
   local_id: "p1",
-  display_label: "P1",
   kind: "CONNECTION_POINT" as const,
   row: 1 as const,
   column: 1,
@@ -19,7 +18,6 @@ const p1 = {
 };
 const p2 = {
   local_id: "p2",
-  display_label: "P2",
   kind: "CONNECTION_POINT" as const,
   row: 1 as const,
   column: 2,
@@ -28,6 +26,20 @@ const p2 = {
 
 describe("ObjectBlueprintEditor composition", () => {
   afterEach(() => localStorage.clear());
+  it('previews Blueprint-local names and edits one stable-position override', async () => {
+    const source = { loadPortBlocks: vi.fn().mockResolvedValue({ schema_version: '1.0', port_blocks: [] }), loadPortBlockVersions: vi.fn(), loadPortBlockVersion: vi.fn(), createPortBlock: vi.fn(), createPortBlockVersion: vi.fn() };
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(<ObjectBlueprintEditor portBlockDataSource={source} title="Editor" description="Description" saveLabel="Save" onSave={onSave} initialState={{ name: 'HV', defaultClass: '', width: 120, height: 60, fillColor: '#28565a', instances: [{ instanceKey: 'data-a', portBlockRef: 'pb', portBlockVersionRef: 'v1', portBlockName: 'Pair', versionNumber: 1, ports: [p1, p2], naming: { prefix: 'Ge', starting_number: 1, mode: 'SINGLE', overrides: {} }, resolvedSlotKeys: { p1: 'slot-1', p2: 'slot-2' } }], individualLinks: [] }} />);
+    const preview = document.querySelector('.blueprint-composer__naming-preview');
+    expect(preview).toHaveTextContent('Ge1'); expect(preview).toHaveTextContent('Ge2');
+    await userEvent.clear(screen.getByLabelText('Префикс'));
+    await userEvent.type(screen.getByLabelText('Префикс'), 'fc');
+    await userEvent.type(screen.getByLabelText('Имя позиции 2'), 'MGMT-A');
+    expect(preview).toHaveTextContent('fc1'); expect(preview).toHaveTextContent('MGMT-A');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0].instances[0].naming).toEqual({ prefix: 'fc', starting_number: 1, mode: 'SINGLE', overrides: { p2: 'MGMT-A' } });
+  });
   it("uses the same shared header structure for create and edit editor inputs", () => {
     const source = {
       loadPortBlocks: vi
@@ -85,6 +97,7 @@ describe("ObjectBlueprintEditor composition", () => {
       portBlockName: "Panel",
       versionNumber: 1,
       ports: [p1, p2],
+      naming: { prefix: '', starting_number: 1, mode: 'SINGLE' as const, overrides: {} },
       resolvedSlotKeys: { p1: "left-p1", p2: "left-p2" },
     };
     const right = {
@@ -94,6 +107,7 @@ describe("ObjectBlueprintEditor composition", () => {
       portBlockName: "Panel",
       versionNumber: 1,
       ports: [p1, p2],
+      naming: { prefix: '', starting_number: 1, mode: 'SINGLE' as const, overrides: {} },
       resolvedSlotKeys: { p1: "right-p1", p2: "right-p2" },
     };
     const source = {
@@ -176,6 +190,7 @@ describe("ObjectBlueprintEditor composition", () => {
               portBlockName: "Panel",
               versionNumber: 1,
               ports: [p1, p2],
+              naming: { prefix: '', starting_number: 1, mode: 'SINGLE', overrides: {} },
               resolvedSlotKeys: { p1: p1Key, p2: p2Key },
             },
             {
@@ -185,6 +200,7 @@ describe("ObjectBlueprintEditor composition", () => {
               portBlockName: "Panel",
               versionNumber: 2,
               ports: [p1, p2],
+              naming: { prefix: '', starting_number: 1, mode: 'SINGLE', overrides: {} },
               resolvedSlotKeys: { p1: retainedP1Key, p2: retainedP2Key },
             },
           ],
@@ -286,6 +302,7 @@ describe("ObjectBlueprintEditor composition", () => {
                 portBlockName: "Panel",
                 versionNumber: 1,
                 ports: [p1],
+                naming: { prefix: '', starting_number: 1, mode: 'SINGLE', overrides: {} },
                 resolvedSlotKeys: {},
               },
             ],

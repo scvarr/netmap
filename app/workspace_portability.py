@@ -1,4 +1,4 @@
-"""Version 1 exchange contract for the current implicit workspace dataset.
+"""Version 2 exchange contract for the current implicit workspace dataset.
 
 The public names and fields below are deliberately fixed independently of table
 names. A storage change must adapt this mapping or introduce a new format version.
@@ -19,7 +19,7 @@ from app import models
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -62,10 +62,10 @@ ENTITIES = (
     ("canonical", "PacketProcessingPlanAttachment", "PacketProcessingPlanAttachment", "id attachment_set_id plan_id scope"),
     ("authoring", "PortBlock", "PortBlock", "id name"),
     ("authoring", "PortBlockVersion", "PortBlockVersion", "id port_block_id version_number"),
-    ("authoring", "PortBlockPort", "PortBlockPort", "id port_block_version_id local_id display_label kind row layout_column layout_order"),
+    ("authoring", "PortBlockPort", "PortBlockPort", "id port_block_version_id local_id kind row layout_column layout_order"),
     ("authoring", "ObjectBlueprint", "ObjectBlueprint", "id name"),
     ("authoring", "ObjectBlueprintVersion", "ObjectBlueprintVersion", "id blueprint_id version_number default_physical_object_class body_kind width height fill_color authoring_recipe composition_kind"),
-    ("authoring", "BlueprintPortBlockInstance", "BlueprintPortBlockInstance", "id blueprint_version_id port_block_version_id instance_key face placement_x placement_y placement_width placement_height"),
+    ("authoring", "BlueprintPortBlockInstance", "BlueprintPortBlockInstance", "id blueprint_version_id port_block_version_id instance_key naming_prefix naming_starting_number naming_mode naming_overrides face placement_x placement_y placement_width placement_height"),
     ("authoring", "BlueprintEndpointSlot", "BlueprintEndpointSlot", "id blueprint_version_id slot_key display_name kind port_block_instance_id port_block_local_id"),
     ("authoring", "BlueprintInternalLink", "BlueprintInternalLink", "id blueprint_version_id slot_a_id slot_b_id"),
     ("authoring", "BlueprintInstance", "BlueprintInstance", "id blueprint_version_id physical_object_id"),
