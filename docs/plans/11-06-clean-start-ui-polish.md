@@ -94,7 +94,7 @@ optional `Location.type` и без автоматического SavedMap ил�
 ### P-UX-20 — управление раскрытием основного дерева Locations
 
 **Статус: IMPLEMENTED.** Targeted `LocationsPage` tests, frontend build и
-`git diff --check` пройдены. Ручная перепроверка после merge ещё ожидается.
+`git diff --check` пройдены. Ручная visual recheck после merge — **ПРОЙДЕНА**.
 
 **Замечание.** На первом шаге P-UX-03E manual acceptance основное дерево
 Locations открывалось полностью раскрытым и не давало быстрых действий для
@@ -109,6 +109,9 @@ Locations открывалось полностью раскрытым и не �
 списка после mutations. `LocationParentPicker` имеет отдельную модель и не
 входит в P-UX-20. P-UX-03E остаётся manual acceptance pending и продолжится
 после merge/recheck этого изменения.
+
+Manual visual recheck после merge проверила initial collapsed tree, global
+expand/collapse и subtree controls; поведение визуально принято пользователем.
 
 ### P-UX-04 — sidebar автоматически сворачивается на карте
 
@@ -409,13 +412,16 @@ UI. Canonical Location semantics/API/DB не менялись.
 
 ## Текущая точка clean-start прохода
 
-`P-UX-18` завершён и merged в `main`; `P-UX-19` реализован. Текущая точка —
-P-UX-03: milestones A/B/C/D реализованы, ручная перепроверка D пройдена,
-Cable route follow-up из 11-08 завершён. Следующий spatial шаг — P-UX-03E,
-который остаётся pending; весь P-UX-03 и spatial cutover незавершены до final
-acceptance.
-Synthetic representative stand продолжает использовать существующие
-Locations/objects: `PC1`, `O1`, `PP1`/`PP-301` role и `SW-301-ACCESS`.
+`P-UX-18` завершён и merged в `main`; `P-UX-19` реализован. Принято решение
+начать новый clean rack-first/service-path acceptance stand с пустой БД. Это
+новый active acceptance run, а не отмена прежних результатов и evidence;
+существующие `C-*` findings не закрываются автоматически. P-UX-03: milestones
+A/B/C/D реализованы, ручная перепроверка D пройдена, Cable route follow-up из
+11-08 завершён. P-UX-03E остаётся pending; весь P-UX-03 и spatial cutover
+незавершены до final acceptance.
 
-Правило прохода сохраняется: первый существенный defect → stop → bounded
-milestone → review → merge → продолжение того же стенда.
+Дальнейшее прохождение нового stand идёт небольшими user-visible шагами с
+остановкой на первом существенном finding; после bounded fix и merge
+повторяется тот же шаг. Active scenario описан в
+[[plans/11-04-phase-c-representative-l1-testbed|11.4 Phase C representative L1
+testbed]].

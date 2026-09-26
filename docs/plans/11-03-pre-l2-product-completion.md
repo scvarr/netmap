@@ -51,13 +51,16 @@ Current execution position: **Phase C — Representative real-world L1 semantic 
 acceptance он остаётся pending. Это не завершает spatial cutover или Phase C.
 
 Первоначальная representative Phase C discovery уже выполнена: `C-*` findings
-зафиксированы и остаются обязательным списком для контроля. Сейчас идёт
-clean-start повторный пользовательский проход: ручной шаг → первое
-существенное замечание → bounded fix → merge → продолжение того же стенда.
+зафиксированы и остаются обязательным списком для контроля. Текущий active
+clean repeat начинается с пустой тестовой БД и использует rack-first/service-path
+synthetic scenario из 11-04; пользовательский проход идёт небольшими UI-шагами
+с остановкой на первом существенном finding, bounded fix, review/merge и
+повтором того же шага на сохранённом стенде.
 `P-UX-01` ... `P-UX-19` — findings этого прохода; их реализация и ручная
 проверка ведутся в [[plans/11-06-clean-start-ui-polish|11.6 Clean-start UI
 polish]], а статус `C-*` — в [[plans/11-05-phase-c-acceptance-closure|11.5
-Phase C acceptance closure]].
+Phase C acceptance closure]]. P-UX-03E остаётся pending. Новый fixture не
+начинает Phase D и не закрывает `C-CAP-01`.
 
 Promoted semantic gaps, включая `C-CAP-01`, закрываются через Phase D. Это не
 означает, что Phase D целиком уже началась или завершена. Финальный clean

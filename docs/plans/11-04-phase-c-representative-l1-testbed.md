@@ -26,7 +26,134 @@ presentation, derived Location frames/routes, L1 trace и понятность U
 entity IDs. Если схема или capability не может быть выражена честно, это Phase C
 finding, а не повод подменять факт фиктивной topology.
 
-## CONFIRMED REAL-WORLD SKELETON
+## Rack-first service-path synthetic acceptance
+
+This is the ACTIVE clean acceptance scenario for the current Phase C repeat.
+It is an intentionally synthetic but operationally understandable
+infrastructure, selected to expose real L1 capability gaps progressively. It
+is not a reconstruction of a production network. Coverage follows distinct
+structural, physical, and service-path cases rather than a checklist of
+equipment names. Each object is introduced because it participates in an
+understandable service path. An unknown or currently inexpressible physical
+fact remains unknown; it is never replaced with fake topology.
+
+### Start from an empty database
+
+The active fixture starts from a fresh empty test database. Its initial
+geography is deliberately minimal:
+
+```text
+EMPTY DATABASE
+→ SITE-LAB
+→ SERVER-ROOM
+→ RACK-01
+```
+
+Do not create a floor/campus branch in advance. Extend beyond the server room
+only when the scenario reaches a service path that requires it.
+
+### Intended RACK-01 sequence
+
+The intended synthetic object set is introduced gradually, one or a few objects
+per user step; it is not a one-shot setup requirement:
+
+```text
+RACK-01
+├── HV-01
+├── HV-02
+├── STORAGE-01
+├── SAN-A
+├── SAN-B
+├── CORE-A
+├── CORE-B
+├── FPP-01
+└── PP-01
+```
+
+Names are generic and synthetic. Do not invent a vendor or model without a
+concrete need.
+
+### Representative device diversity
+
+The scenario applies capability pressure without prescribing an implementation
+schema:
+
+- `HV-01` eventually exercises management/BMC Ethernet, ordinary Ethernet, an
+  optical/network uplink case, and Fibre Channel storage interfaces.
+- `HV-02` exercises a different Ethernet-only set with a mixture of ordinary
+  management/data physical presentation; do not duplicate `HV-01` merely to
+  increase object count.
+- `STORAGE-01` has management connectivity, controller/storage-side
+  connectivity, and representative redundant A/B storage paths.
+- `SAN-A` and `SAN-B` are separate canonical `PhysicalObject`s with Fibre
+  Channel active ports and two independent L1 fabrics/physical paths. SAN
+  zoning/fabric logical semantics are not L1 acceptance requirements.
+- `CORE-A` and `CORE-B` are separate canonical `PhysicalObject`s. Test a
+  physical interconnect or StackWise-like case only if current L1 primitives
+  express it truthfully. Never create one canonical stack object. Logical
+  aggregation of boxes remains a separate future domain.
+- `FPP-01` is a passive optical path using `ConnectionPoint`/internal
+  continuity and no `NetworkInterface`; it does not become Ethernet or FC just
+  because of its current use.
+- `PP-01` is a passive copper path with dense ordinary 1:1 continuity and no
+  `NetworkInterface`.
+
+### Planned service-path families
+
+1. Storage: `HV-01 -> SAN-A -> STORAGE-01` and
+   `HV-01 -> SAN-B -> STORAGE-01`.
+2. Data network: `HV-01` / `HV-02` to `CORE-A` / `CORE-B`.
+3. Management: BMC/MGMT to switching infrastructure.
+4. Later campus/access extension: CORE → distribution → passive optical or
+   copper path → communication room → floor switch → patch panel → outlet →
+   endpoint. This extension begins only when the active user walkthrough
+   actually reaches beyond the server room.
+
+### OPEN architecture probe: port/interface characteristics
+
+This is an acceptance question, not a schema, API, or enum proposal. Do not
+assume one `port_type = ETH / FC / SFP` field. Check whether at least two
+independent fact classes are needed:
+
+A. Physical `ConnectionPoint` compatibility: connector/form or another
+   structured physical capability. Cardinality/member semantics remain a
+   separate existing axis.
+B. `NetworkInterface` technology/capability: Ethernet, Fibre Channel, and
+   potentially other technologies.
+
+The exact storage/API/taxonomy contract remains OPEN. Do not derive Ethernet or
+FC from a Port Block name, alias/name, or SFP indication; SFP alone does not
+identify transport technology. A passive `ConnectionPoint` need not have a
+`NetworkInterface`. The same passive path foundation remains protocol-neutral.
+Fibre Channel uses the existing `PhysicalObject`, `ConnectionPoint`,
+`Connection`, `ConnectionMember`, `NetworkInterface`, and
+`InterfacePhysicalBinding` foundations. SAN zoning, WWPN/fabric logical policy,
+and similar FC semantics are not L1 facts. Whether incompatible connections are
+hard-blocked, warned on, or allowed as observed evidence stays OPEN until
+concrete user workflow evidence supports a decision.
+
+### Cable and multichannel boundaries
+
+This acceptance does not require detailed Cable material inventory.
+`Cable`/`Connection` remain physical connectivity/evidence. If later capability
+validation proves that media/material characteristics across an entire path are
+needed, promote that as a separate finding. Cable details are not declared
+permanently unnecessary.
+
+Keep the historical `FANOUT-1x24` evidence and confirmed `C-CAP-01` gap. This
+rack scenario neither replaces nor closes that finding. If the new walkthrough
+naturally reaches a member-aware case, record it against the existing gap; do
+not invent a fake topology to continue.
+
+## Historical / previously executed synthetic coverage
+
+The `FLOOR-3` / `SERVER-ROOM-808` fixture, its production-inspired skeleton,
+execution results, traces, `XCONN-4` result, and `FANOUT-1x24` evidence below
+record the previously executed synthetic coverage. They remain historical
+evidence and are not deleted or declared incorrect. This fixture is superseded
+as the active clean-repeat scenario by the rack-first scenario that follows.
+
+## CONFIRMED REAL-WORLD SKELETON — historical context
 
 Подтверждены следующие реальные сведения; они не устанавливают точные модели,
 порты, fiber members или physical StackWise cabling:
@@ -53,7 +180,7 @@ fan-out, 24-port panel или другим конкретным типом бе�
 позднее оказаться multi-member trunk/breakout или другой конструкцией.
 Unknown real-world facts не являются canonical facts.
 
-## Synthetic fixture versus production network boundary
+## Historical synthetic fixture versus production network boundary
 
 Текущий `FLOOR-3` fixture — намеренно упрощённый synthetic best-practice
 representative example, а не reconstruction production topology. В нём
@@ -127,13 +254,11 @@ Intended fixture placement:
   остаётся открытой строкой, без special provider semantics.
 - `XCONN-4`: отдельная coverage branch, Location пока жёстко не фиксируется.
 
-### Clean-start progress marker
+### Historical clean-start progress marker
 
-Стенд заново строится через обычный пользовательский интерфейс. Текущий
-ручной проход уже дошёл примерно до representative objects `PC1`, `O1`,
-`PP1`/`PP-301` role и `SW-301-ACCESS`. Это только operational progress marker
-текущего прохода: он не создаёт новый canonical fixture state, не меняет
-target naming/topology и не заменяет зафиксированный synthetic fixture выше.
+Этот progress marker относится к ранее исполнявшемуся проходу и сохраняется как
+историческая запись. Он описывает объекты `PC1`, `O1`, `PP1`/`PP-301` role и
+`SW-301-ACCESS`; он не задаёт стартовую точку нового active rack-first run.
 
 Следующий spatial workflow проверяется относительно действующего target
 contract: canonical Location hierarchy → object Location assignments →
@@ -417,7 +542,11 @@ PC-to-server trace. End-to-end forwarding across active switches относит�
 - SRV1 dual links -> future bonding/LACP/teaming semantics;
 - default route `0.0.0.0/0` via `RTR1` -> future L3 acceptance seed.
 
-## Phase C execution procedure
+## Historical Phase C execution procedure
+
+The procedure and results in this historical section document the previous
+coverage run. The active operational protocol for the clean repeat is in 11-05;
+the coverage matrix and old results remain documentary control/evidence.
 
 MapComposite findings ниже сохранены как historical provenance старого
 workflow и superseded target architecture; они не являются active coverage или
