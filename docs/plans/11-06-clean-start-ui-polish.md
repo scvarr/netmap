@@ -144,7 +144,7 @@ expand/collapse и subtree controls; поведение визуально пр�
 блок не показывается. Не вводятся persisted onboarding state и изменения
 backend/API/DB; first-map CTA при `maps.length === 0` остаётся без изменений.
 
-### P-UX-06 — progressive discovery при отсутствии групп портов
+### P-UX-06 — progressive discovery при отсутствии групп портов (SUPERSEDED)
 
 **Статус: IMPLEMENTED.** Ручная перепроверка после merge — **ПРОЙДЕНА**.
 
@@ -166,6 +166,12 @@ editor. Loading и ошибка загрузки не считаются пус�
 **Согласованный контракт.** Пользовательские подписи и описания используют
 понятные названия объектов сети, подключений и схем. Имена типов, API-поля и
 английская локаль не переименовываются.
+
+**Target clarification for P-UX-06 / P-UX-10 (SUPERSEDED):** historical
+IMPLEMENTED status records the former Port Block prerequisite and its async
+library chrome only. Direct Blueprint endpoint authoring removes that
+prerequisite and the Port Block loading path. The useful general page-shell
+behavior remains: keep the shell stable and update only the content area.
 
 ### P-UX-08 — единая оболочка страниц и визуальная иерархия
 
@@ -195,7 +201,7 @@ Block editor использует тот же shared header.
 сохраняют одинаковый left origin на всех ordinary non-map pages; `/map`
 исключён.
 
-### P-UX-10 — стабильный page chrome при async loading библиотеки групп портов
+### P-UX-10 — стабильный page chrome при async loading библиотеки групп портов (SUPERSEDED)
 
 **Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
 
@@ -206,7 +212,7 @@ Block editor использует тот же shared header.
 - никакой full-page replacement во время `loadPortBlocks()`;
 - datasource/navigation semantics не меняются.
 
-### P-UX-11 — компактная рабочая область Object Blueprint composition editor
+### P-UX-11 — компактная рабочая область Object Blueprint endpoint editor
 
 **Статус: IMPLEMENTED.** Ручная перепроверка после merge — ожидается.
 
@@ -228,6 +234,14 @@ controls, bounded canvas и compact controls выбранного instance. Бо
 `PortBlockStructurePreview` внутри selected-instance editor UI отсутствует.
 На узком viewport layout сворачивается в одну колонку. Authoring semantics и
 persistence не меняются.
+
+**Target clarification for P-UX-11 / P-UX-12:** retain the compact bounded
+canvas, body aspect-ratio handling, left authoring rail, right workspace, and
+FRONT/REAR controls as useful editor workspace decisions. Apply them to direct
+endpoint slots and their exact face-local positions. The chooser and compact
+controls for a selected PortBlock instance describe the historical editor and
+are superseded; selection controls in the target editor operate on endpoint
+slots. See [direct endpoint authoring](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md).
 
 ### P-UX-13 — компактный выбор Object Blueprint при создании объекта
 

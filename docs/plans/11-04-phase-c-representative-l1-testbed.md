@@ -7,6 +7,15 @@
 
 ## Назначение и граница
 
+**Current acceptance status:** the rack-first walkthrough is **PAUSED at the
+Blueprint authoring redesign**. Resume at the same HV-01 authoring step after
+direct endpoint editor implementation and manual recheck. Acceptance expects
+endpoints authored directly on the Object Blueprint canvas; Port Block is not
+a prerequisite or target authoring entity. See the authoritative
+[direct endpoint contract](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md).
+Port Block workflows and fixtures below are historical evidence of the
+currently implemented, architecturally superseded model.
+
 Этот документ — living acceptance-scenario document для Phase C из
 [[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]]. Phase C
 testbed — прежде всего **SYNTHETIC L1 COVERAGE LAB**. Реальная сеть пользователя
@@ -20,7 +29,7 @@ archetype, который уже поддерживается или намер�
 Пользовательские `class` и labels остаются открытыми; этот документ не вводит
 закрытый enum device classes.
 
-Стенд проверяет truthful L1 modeling, Blueprint/PortBlock authoring,
+Стенд проверяет truthful L1 modeling, direct Blueprint endpoint authoring,
 PhysicalObject/ConnectionPoint/Cable workflows, Locations и racks, SavedMap
 presentation, derived Location frames/routes, L1 trace и понятность UI без знания внутренних
 entity IDs. Если схема или capability не может быть выражена честно, это Phase C
@@ -212,9 +221,14 @@ fake topology.
 выбраны для покрытия capability axes; vendor/model не выдумываются, кроме
 известной роли Cisco core switch.
 
-### Phase C Port Block naming convention
+### Historical Phase C Port Block naming convention (SUPERSEDED)
 
-Port Block — reusable library-owned layout/template primitive. В этом fixture
+Исторический fixture описывал Port Block как reusable library-owned
+layout/template primitive. Это описание superseded direct endpoint contract;
+его naming conventions не являются target requirement.
+
+**Historical superseded model:** Port Block был reusable library-owned
+layout/template primitive. В этом fixture
 его имя описывает reusable structure, а не topology role конкретного объекта:
 предпочтительны role-neutral names вроде `PB-24-CP-1R`, `PB-48-NET-2R` и
 `PB-2-NET-1R`. Если media/connector действительно известен в synthetic

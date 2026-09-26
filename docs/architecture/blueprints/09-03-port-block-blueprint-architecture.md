@@ -1,8 +1,17 @@
-# 09.3 Port Block Blueprint composition and multi-face physical presentation
+# 09.3 Port Block Blueprint composition and multi-face physical presentation — SUPERSEDED
 
 ## Status, authority and scope
 
-**FIXED architectural decisions. L1S.6c.1–L1S.6c.6 are IMPLEMENTED.**
+**Historical record only: CURRENTLY IMPLEMENTED BUT ARCHITECTURALLY SUPERSEDED.**
+The authoritative target is now [09.4 Direct Blueprint endpoint authoring](09-04-direct-blueprint-endpoint-authoring.md).
+The implemented L1S.6c Port Block family and this note's Port Block-specific
+identity, authoring, and geometry decisions do not define future target
+architecture. The direct-endpoint contract is FIXED / ACCEPTED and its
+implementation is PENDING.
+
+This document is retained to explain the implemented development-stage model
+and the history that led to its replacement. It must not be read as a second
+authoritative model.
 
 This note records the agreed next evolution of Object Blueprints for dense
 network equipment. It is an architecture/product boundary only: it does not

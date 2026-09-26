@@ -438,6 +438,11 @@ internal/external/boundary Cable при перемещении Location subtree,
 Новый operational protocol использует active `Rack-first service-path
 synthetic acceptance` из 11-04 и начинается с пустой тестовой БД:
 
+**Current status: PAUSED at the direct Blueprint endpoint authoring redesign.**
+После implementation и manual recheck продолжить с того же HV-01 шага. Старые
+Port Block authoring ожидания в historical findings не являются target
+prerequisite; authoritative replacement задан в 09-04.
+
 1. ChatGPT даёт пользователю только следующий небольшой участок — ориентир
    2–5 конкретных действий в обычном UI.
 2. Пользователь выполняет шаги и присылает screenshots и/или словесно описывает

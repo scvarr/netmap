@@ -33,7 +33,10 @@ Cable catalog navigation, Location assignment tree/search/inline-create,
 compact Port Block table и RU terminology «Группа портов / Группы портов».
 Компактная таблица Port Block и RU terminology могут быть
 одним cheap UI-polish slice, но остаются отдельными acceptance items. Это не
-общий design-system rewrite.
+общий design-system rewrite. Эти Port Block catalog items — исторически
+IMPLEMENTED Phase A work; Port Block authoring is now architecturally
+superseded by [direct Blueprint endpoint authoring](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md)
+and is not a future target prerequisite or library direction.
 
 - **A.1 — exact-evidence L1 trace highlighting — IMPLEMENTED.**
 - **A.2 — Cable catalog navigation fix — IMPLEMENTED.**
@@ -43,7 +46,9 @@ compact Port Block table и RU terminology «Группа портов / Гру�
   подключения» and «Сетевые порты» columns, and counts for the current
   immutable PortBlockVersion without one version-details load per row.
 
-Current execution position: **Phase C — Representative real-world L1 semantic acceptance.**
+Current execution position: **Phase C — PAUSED at Blueprint authoring redesign.**
+Resume the rack-first walkthrough at HV-01 after direct endpoint editor
+implementation and manual recheck; see 11-04.
 
 В spatial strand P-UX-03A/B/C/D реализованы, ручная проверка P-UX-03D
 пройдена. Bounded Cable route follow-up из 11-08 завершён. Следующий spatial
