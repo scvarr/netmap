@@ -7,6 +7,7 @@ import { createBlueprintRequest } from '../blueprints/editorModel';
 import { newBlueprintEditorState, ObjectBlueprintEditor } from './ObjectBlueprintEditor';
 
 describe('minimal direct endpoint editor', () => {
+  const renderEditor = () => render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
   it('adds, selects, renames, moves, links, and deletes slots without a library', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={save} /></MemoryRouter></I18nProvider>);
@@ -18,8 +19,10 @@ describe('minimal direct endpoint editor', () => {
     expect(new Set(keys).size).toBe(2);
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
     Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
-    fireEvent.pointerDown(document.querySelectorAll('[data-slot-key]')[0]);
+    fireEvent.pointerDown(document.querySelectorAll('[data-slot-key]')[0], { clientX: 25, clientY: 9.375 });
     fireEvent.pointerMove(canvas, { clientX: 500, clientY: 187.5 });
+    fireEvent.pointerUp(canvas);
+    fireEvent.pointerDown(document.querySelectorAll('[data-slot-key]')[0], { clientX: 500, clientY: 187.5 });
     fireEvent.pointerUp(canvas);
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Management' } });
     await userEvent.click(screen.getByRole('button', { name: 'Добавить связь' }));
@@ -44,5 +47,80 @@ describe('minimal direct endpoint editor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     const request = createBlueprintRequest(save.mock.calls[0][0]).request!;
     expect(request.slots).toEqual([expect.objectContaining({ kind: 'CONNECTION_POINT', face: 'REAR' })]);
+  });
+
+  it('selects the newly added set, toggles members, and exposes actions by count', async () => {
+    renderEditor();
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    expect(nodes.map((node) => node.getAttribute('data-selected'))).toEqual(['true', 'true', 'true']);
+    expect(screen.queryByLabelText('Название')).toBeNull();
+    expect(screen.getByText('Выбрано: 3')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'В два ряда' }).hasAttribute('disabled')).toBe(false);
+    fireEvent.pointerDown(nodes[0], { ctrlKey: true });
+    expect(nodes[0].getAttribute('data-selected')).toBe('false');
+    fireEvent.pointerDown(nodes[1], { metaKey: true });
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(1);
+    expect(screen.getByLabelText('Название')).toBeTruthy();
+    fireEvent.pointerDown(nodes[0]);
+    fireEvent.pointerUp(document.querySelector('.blueprint-composition-canvas')!);
+    expect(nodes.map((node) => node.getAttribute('data-selected'))).toEqual(['true', 'false', 'false']);
+    await userEvent.click(screen.getByRole('button', { name: 'Задняя' }));
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
+    expect(screen.queryByLabelText('Название')).toBeNull();
+  });
+
+  it('marquee selects centers, group drag preserves offsets, and multi-delete clears links', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={save} /></MemoryRouter></I18nProvider>);
+    await userEvent.type(screen.getByLabelText('Название шаблона'), 'Panel');
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить связь' }));
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
+    const body = document.querySelector('.blueprint-composition-canvas__body')!;
+    fireEvent.pointerDown(body, { clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(canvas, { clientX: 85, clientY: 30 });
+    expect(document.querySelector('.blueprint-composition-canvas__marquee')).toBeTruthy();
+    fireEvent.pointerUp(canvas);
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(2);
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    const before = nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    fireEvent.pointerDown(nodes[0], { clientX: 25, clientY: 9.375 });
+    expect(document.querySelector('.blueprint-composition-canvas__marquee')).toBeNull();
+    fireEvent.pointerMove(canvas, { clientX: 125, clientY: 9.375 });
+    fireEvent.pointerUp(canvas);
+    const after = nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    expect(after[0] - before[0]).toBeCloseTo(100);
+    expect(after[1] - before[1]).toBeCloseTo(100);
+    expect(after[2]).toBeCloseTo(before[2]);
+    await userEvent.click(screen.getByRole('button', { name: 'Удалить выбранные' }));
+    expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(1);
+    expect(screen.queryByRole('button', { name: 'Удалить выбранные' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].individualLinks).toEqual([]);
+  });
+
+  it('drags an unselected endpoint alone and enables three-point tools only at three', async () => {
+    renderEditor();
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    expect(screen.getByRole('button', { name: 'По левому краю' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Распределить по горизонтали' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('button', { name: 'В два ряда' }).hasAttribute('disabled')).toBe(true);
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    fireEvent.pointerDown(nodes[0], { clientX: 25, clientY: 9.375 });
+    fireEvent.pointerUp(canvas);
+    const before = nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    fireEvent.pointerDown(nodes[1], { clientX: 75, clientY: 9.375 });
+    expect(nodes.map((node) => node.getAttribute('data-selected'))).toEqual(['false', 'true']);
+    fireEvent.pointerMove(canvas, { clientX: 175, clientY: 9.375 });
+    fireEvent.pointerUp(canvas);
+    const after = nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    expect(after).toEqual([before[0], before[1] + 100]);
   });
 });

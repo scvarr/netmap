@@ -4,9 +4,12 @@ import { useI18n } from '../i18n';
 
 interface Props {
   body: { width: number; height: number; fillColor: string }; face: BlueprintFace;
-  slots: BlueprintSlot[]; links: BlueprintInternalLink[]; selectedKey?: string;
-  onSelect: (key: string) => void; onPosition: (key: string, position: { x: number; y: number }) => void;
+  slots: BlueprintSlot[]; links: BlueprintInternalLink[]; selectedKeys: ReadonlySet<string>;
+  onSelect: (key: string, toggle: boolean) => void; onMarquee: (keys: string[]) => void;
+  onTranslate: (keys: ReadonlySet<string>, dx: number, dy: number) => void;
 }
+type Point = { x: number; y: number };
+type Gesture = { kind: 'move'; key: string; keys: ReadonlySet<string>; last: Point; moved: boolean } | { kind: 'marquee'; start: Point; end: Point };
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const markerPixels = { regular: 5, selected: 6, hit: 11 };
 
@@ -18,10 +21,11 @@ export function endpointMarkerRadii(scale: number) {
   };
 }
 
-export function BlueprintCompositionCanvas({ body, face, slots, links, selectedKey, onSelect, onPosition }: Props) {
+export function BlueprintCompositionCanvas({ body, face, slots, links, selectedKeys, onSelect, onMarquee, onTranslate }: Props) {
   const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null);
-  const [dragging, setDragging] = useState<string>();
+  const gesture = useRef<Gesture | undefined>(undefined);
+  const [marquee, setMarquee] = useState<{ start: Point; end: Point }>();
   const height = 1000 * (body.height > 0 && body.width > 0 ? body.height / body.width : 1);
   const [canvasScale, setCanvasScale] = useState(1);
   useLayoutEffect(() => {
@@ -41,19 +45,52 @@ export function BlueprintCompositionCanvas({ body, face, slots, links, selectedK
   const marker = endpointMarkerRadii(canvasScale);
   const visible = slots.filter((slot) => slot.face === face);
   const points = new Map(visible.map((slot) => [slot.key, { x: slot.rendered_position.x * 1000, y: slot.rendered_position.y * height }]));
-  const position = (event: PointerEvent<SVGElement>) => {
+  const position = (event: PointerEvent<SVGElement>): Point => {
     const rect = svg.current!.getBoundingClientRect();
     const scale = Math.min(rect.width / 1000, rect.height / height);
     const left = rect.left + (rect.width - 1000 * scale) / 2;
     const top = rect.top + (rect.height - height * scale) / 2;
     return { x: clamp((event.clientX - left) / (1000 * scale)), y: clamp((event.clientY - top) / (height * scale)) };
   };
-  return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 1000 ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.composition.canvas', { face: t(face === 'FRONT' ? 'blueprint.face.front' : 'blueprint.face.rear') })} onPointerMove={(event) => { if (dragging) onPosition(dragging, position(event)); }} onPointerUp={() => setDragging(undefined)} onPointerCancel={() => setDragging(undefined)}>
-    <rect className="blueprint-composition-canvas__body" width="1000" height={height} fill={body.fillColor} />
+  const finish = (cancel = false) => {
+    const current = gesture.current;
+    if (!cancel && current?.kind === 'move' && !current.moved) onSelect(current.key, false);
+    if (!cancel && current?.kind === 'marquee') {
+      const { start, end } = current;
+      onMarquee(visible.filter((slot) => {
+        const { x, y } = slot.rendered_position;
+        return x >= Math.min(start.x, end.x) && x <= Math.max(start.x, end.x) && y >= Math.min(start.y, end.y) && y <= Math.max(start.y, end.y);
+      }).map((slot) => slot.key));
+    }
+    gesture.current = undefined;
+    setMarquee(undefined);
+  };
+  return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 1000 ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.composition.canvas', { face: t(face === 'FRONT' ? 'blueprint.face.front' : 'blueprint.face.rear') })} onPointerMove={(event) => {
+    const current = gesture.current;
+    if (!current) return;
+    const next = position(event);
+    if (current.kind === 'move') { if (next.x !== current.last.x || next.y !== current.last.y) current.moved = true; onTranslate(current.keys, next.x - current.last.x, next.y - current.last.y); current.last = next; }
+    else { current.end = next; setMarquee({ start: current.start, end: next }); }
+  }} onPointerUp={() => finish()} onPointerCancel={() => finish(true)}>
+    <rect className="blueprint-composition-canvas__body" width="1000" height={height} fill={body.fillColor} onPointerDown={(event) => {
+      if (event.button !== 0) return;
+      svg.current?.setPointerCapture?.(event.pointerId);
+      const start = position(event);
+      gesture.current = { kind: 'marquee', start, end: start };
+      setMarquee({ start, end: start });
+    }} />
     {links.map((link) => { const from = points.get(link.from_slot_key); const to = points.get(link.to_slot_key); return from && to ? <line key={`${link.from_slot_key}-${link.to_slot_key}`} className="blueprint-composition-canvas__link" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null; })}
-    {visible.map((slot) => { const point = points.get(slot.key)!; return <g key={slot.key} data-slot-key={slot.key} className="blueprint-composition-canvas__port" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); (event.currentTarget as SVGElement & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId); onSelect(slot.key); setDragging(slot.key); }}>
+    {visible.map((slot) => { const point = points.get(slot.key)!; const selected = selectedKeys.has(slot.key); return <g key={slot.key} data-slot-key={slot.key} data-selected={selected} className="blueprint-composition-canvas__port" onPointerDown={(event) => {
+      if (event.button !== 0) return;
+      event.preventDefault(); event.stopPropagation();
+      svg.current?.setPointerCapture?.(event.pointerId);
+      const toggle = event.ctrlKey || event.metaKey;
+      if (toggle || !selected) onSelect(slot.key, toggle);
+      gesture.current = toggle ? undefined : { kind: 'move', key: slot.key, keys: selected ? new Set(selectedKeys) : new Set([slot.key]), last: position(event), moved: false };
+    }}>
       <circle data-endpoint-hit-target cx={point.x} cy={point.y} r={marker.hit} fill="transparent" pointerEvents="all" />
-      <circle data-endpoint-marker cx={point.x} cy={point.y} r={slot.key === selectedKey ? marker.selected : marker.regular} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={slot.key === selectedKey ? '#fff' : '#1c3135'} strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{slot.display_name}</title></circle>
+      <circle data-endpoint-marker cx={point.x} cy={point.y} r={selected ? marker.selected : marker.regular} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={selected ? '#fff' : '#1c3135'} strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{slot.display_name}</title></circle>
     </g>; })}
+    {marquee && <rect className="blueprint-composition-canvas__marquee" x={Math.min(marquee.start.x, marquee.end.x) * 1000} y={Math.min(marquee.start.y, marquee.end.y) * height} width={Math.abs(marquee.end.x - marquee.start.x) * 1000} height={Math.abs(marquee.end.y - marquee.start.y) * height} />}
   </svg>;
 }

@@ -2,16 +2,18 @@
 
 ## Status and authority
 
-**FIXED / ACCEPTED TARGET CONTRACT. DIRECT-SLOT FOUNDATION IMPLEMENTED;
-RICH EDITOR UX PENDING.**
+**FIXED / ACCEPTED TARGET CONTRACT. DIRECT-SLOT FOUNDATION AND SPATIAL
+MULTI-SELECTION TOOLS IMPLEMENTED; REMAINING RICH EDITOR UX PENDING.**
 
 The destructive foundation cutover removed Port Block application models,
 tables, APIs, library and editor surfaces. Immutable Blueprint versions now
 own direct slots with exact names, kinds, faces, normalized positions, opaque
 stable keys, and individual internal links. The minimal editor supports bulk
 add, single selection, rename, kind/face edit, move, delete, and individual
-links. Multi-selection, alignment/distribution, ordered bulk naming, and
-pairwise bulk continuity remain **PENDING**. Endpoint technology/capability
+links. Transient multi-selection, marquee, group move, alignment/distribution,
+one/two-row layout, and multi-delete are **IMPLEMENTED**. Duplicate/copy,
+ordered selection, bulk naming, and pairwise bulk continuity remain **PENDING**.
+Endpoint technology/capability
 remains **OPEN**. Phase C remains **PAUSED** until the remaining editor slices
 and manual HV-01 recheck.
 
