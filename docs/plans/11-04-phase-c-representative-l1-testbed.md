@@ -86,7 +86,7 @@ schema:
 - `STORAGE-01` has management connectivity, controller/storage-side
   connectivity, and representative redundant A/B storage paths.
 - `SAN-A` and `SAN-B` are separate canonical `PhysicalObject`s with Fibre
-  Channel active ports and two independent L1 fabrics/physical paths. SAN
+  Channel active ports and two independent physical L1 paths. SAN
   zoning/fabric logical semantics are not L1 acceptance requirements.
 - `CORE-A` and `CORE-B` are separate canonical `PhysicalObject`s. Test a
   physical interconnect or StackWise-like case only if current L1 primitives

@@ -56,7 +56,7 @@ clean repeat начинается с пустой тестовой БД и ис�
 synthetic scenario из 11-04; пользовательский проход идёт небольшими UI-шагами
 с остановкой на первом существенном finding, bounded fix, review/merge и
 повтором того же шага на сохранённом стенде.
-`P-UX-01` ... `P-UX-19` — findings этого прохода; их реализация и ручная
+`P-UX-01` ... `P-UX-20` — findings этого прохода; их реализация и ручная
 проверка ведутся в [[plans/11-06-clean-start-ui-polish|11.6 Clean-start UI
 polish]], а статус `C-*` — в [[plans/11-05-phase-c-acceptance-closure|11.5
 Phase C acceptance closure]]. P-UX-03E остаётся pending. Новый fixture не

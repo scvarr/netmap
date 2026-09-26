@@ -107,8 +107,8 @@ Locations открывалось полностью раскрытым и не �
 узел и сохраняет состояния его descendants. Состояние раскрытия живёт только
 в React в пределах текущего открытия страницы и сохраняется при обновлении
 списка после mutations. `LocationParentPicker` имеет отдельную модель и не
-входит в P-UX-20. P-UX-03E остаётся manual acceptance pending и продолжится
-после merge/recheck этого изменения.
+входит в P-UX-20. Manual recheck P-UX-20 пройдена. P-UX-03E остаётся pending;
+его дальнейшая acceptance теперь может продолжаться.
 
 Manual visual recheck после merge проверила initial collapsed tree, global
 expand/collapse и subtree controls; поведение визуально принято пользователем.
