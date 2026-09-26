@@ -51,9 +51,11 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
 ## Архитектурные границы и зависимости
 
 - Каноническая топология остаётся источником физических фактов.
-- `Blueprint` и `Port Block` — библиотечные сущности для создания
-  `PhysicalObject` и задания их структуры; они не являются канонической
-  топологией.
+- `Object Blueprint` остаётся authoring/library provenance для создания
+  `PhysicalObject`; его target version напрямую владеет endpoint slots.
+  `Port Block` — только currently-implemented historical/superseded authoring
+  model, не target prerequisite или library entity. Ни Blueprint, ни прежняя
+  Port Block model не являются канонической топологией.
 - `SavedMap`, `MapCableRoute`, derived Location frames,
   подписи и будущие кабельные направляющие — состояние представления. Оно не
   является источником канонической истины и не доказывает физические факты.
@@ -339,9 +341,9 @@ L1 evidence/trace через конкретный канал. Каноничес
 вводится. Конкретные schema, DTO/API, migration и внутренняя реализация не
 фиксируются этим реестром.
 
-**Ручная проверка.** В пустой части заново создаваемого стенда через
-пользовательский интерфейс создать
-reusable `Blueprint`/`Port Block` для `FANOUT-1x24` с одним входным
+**Исторический способ проверки (superseded):** в пустой части заново
+создаваемого стенда через пользовательский интерфейс создать reusable
+`Blueprint`/`Port Block` для `FANOUT-1x24` с одним входным
 `ConnectionPoint` и 24 выходными позициями. В библиотечном описании задать
 cardinality/member count входного endpoint и связь канала N с соответствующим
 выходом. Создать один `PhysicalObject`, чтобы это описание материализовалось.
