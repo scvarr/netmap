@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent } from 'react';
+import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import type { BlueprintFace, BlueprintInternalLink, BlueprintSlot } from '../topology/objectBlueprintTypes';
 import { useI18n } from '../i18n';
 
@@ -8,13 +8,37 @@ interface Props {
   onSelect: (key: string) => void; onPosition: (key: string, position: { x: number; y: number }) => void;
 }
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
+const markerPixels = { regular: 5, selected: 6, hit: 11 };
+
+export function endpointMarkerRadii(scale: number) {
+  return {
+    regular: markerPixels.regular / scale,
+    selected: markerPixels.selected / scale,
+    hit: markerPixels.hit / scale,
+  };
+}
 
 export function BlueprintCompositionCanvas({ body, face, slots, links, selectedKey, onSelect, onPosition }: Props) {
   const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null);
   const [dragging, setDragging] = useState<string>();
   const height = 1000 * (body.height > 0 && body.width > 0 ? body.height / body.width : 1);
-  const radius = Math.min(13, height / 55);
+  const [canvasScale, setCanvasScale] = useState(1);
+  useLayoutEffect(() => {
+    const element = svg.current;
+    if (!element) return undefined;
+    const update = () => {
+      const rect = element.getBoundingClientRect();
+      const scale = Math.min(rect.width / 1000, rect.height / height);
+      if (Number.isFinite(scale) && scale > 0) setCanvasScale(scale);
+    };
+    update();
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update);
+    observer?.observe(element);
+    window.addEventListener('resize', update);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', update); };
+  }, [height]);
+  const marker = endpointMarkerRadii(canvasScale);
   const visible = slots.filter((slot) => slot.face === face);
   const points = new Map(visible.map((slot) => [slot.key, { x: slot.rendered_position.x * 1000, y: slot.rendered_position.y * height }]));
   const position = (event: PointerEvent<SVGElement>) => {
@@ -28,7 +52,8 @@ export function BlueprintCompositionCanvas({ body, face, slots, links, selectedK
     <rect className="blueprint-composition-canvas__body" width="1000" height={height} fill={body.fillColor} />
     {links.map((link) => { const from = points.get(link.from_slot_key); const to = points.get(link.to_slot_key); return from && to ? <line key={`${link.from_slot_key}-${link.to_slot_key}`} className="blueprint-composition-canvas__link" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null; })}
     {visible.map((slot) => { const point = points.get(slot.key)!; return <g key={slot.key} data-slot-key={slot.key} className="blueprint-composition-canvas__port" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); (event.currentTarget as SVGElement & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId); onSelect(slot.key); setDragging(slot.key); }}>
-      <circle cx={point.x} cy={point.y} r={slot.key === selectedKey ? radius * 1.25 : radius} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={slot.key === selectedKey ? '#fff' : '#1c3135'} strokeWidth="2"><title>{slot.display_name}</title></circle>
+      <circle data-endpoint-hit-target cx={point.x} cy={point.y} r={marker.hit} fill="transparent" pointerEvents="all" />
+      <circle data-endpoint-marker cx={point.x} cy={point.y} r={slot.key === selectedKey ? marker.selected : marker.regular} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={slot.key === selectedKey ? '#fff' : '#1c3135'} strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{slot.display_name}</title></circle>
     </g>; })}
   </svg>;
 }
