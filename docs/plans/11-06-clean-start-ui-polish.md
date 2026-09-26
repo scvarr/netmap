@@ -91,6 +91,25 @@ optional `Location.type` и без автоматического SavedMap ил�
 [[architecture/presentation/09-spatial-location-mapreference-contract|spatial contract]]
 и [[plans/11-07-hierarchical-location-presentation|11.7 plan]].
 
+### P-UX-20 — управление раскрытием основного дерева Locations
+
+**Статус: IMPLEMENTED.** Targeted `LocationsPage` tests, frontend build и
+`git diff --check` пройдены. Ручная перепроверка после merge ещё ожидается.
+
+**Замечание.** На первом шаге P-UX-03E manual acceptance основное дерево
+Locations открывалось полностью раскрытым и не давало быстрых действий для
+управления глубокой иерархией.
+
+**Согласованный контракт.** При открытии и reload страницы видны только
+корневые Locations; ветви по умолчанию свёрнуты. Над деревом доступны
+«Развернуть всё» и «Свернуть всё», а у каждой ветви — действия для раскрытия
+и сворачивания всего её поддерева. Обычный toggle меняет только выбранный
+узел и сохраняет состояния его descendants. Состояние раскрытия живёт только
+в React в пределах текущего открытия страницы и сохраняется при обновлении
+списка после mutations. `LocationParentPicker` имеет отдельную модель и не
+входит в P-UX-20. P-UX-03E остаётся manual acceptance pending и продолжится
+после merge/recheck этого изменения.
+
 ### P-UX-04 — sidebar автоматически сворачивается на карте
 
 **Статус: IMPLEMENTED.** Ручная перепроверка после merge — **ПРОЙДЕНА**.

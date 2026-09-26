@@ -469,6 +469,10 @@ a { color: inherit; }
 .location-series-dialog__controls, .location-series-dialog__preview { min-height: 0; min-width: 0; }
 .location-series-dialog__controls { display: flex; flex-direction: column; }
 .location-series-dialog__fields { flex: none; }
+.location-tree__toolbar { display: flex; gap: 6px; margin-top: 16px; }
+.location-tree__toolbar button { padding: 5px 8px; border: 1px solid #35575b; border-radius: 5px; color: #cfe1de; background: #102124; cursor: pointer; font-size: 11px; }
+.location-tree__toolbar + .location-tree { margin-top: 8px; }
+.location-tree__item .location-tree__branch-action { min-width: 24px; padding: 4px; font-size: 15px; line-height: 1; }
 .location-series-dialog__actions { flex: none; flex-wrap: wrap; margin-top: auto; padding-top: 12px; border-top: 1px solid #294145; }
 .location-series-dialog__preview { display: flex; flex-direction: column; max-height: min(720px, calc(100dvh - 84px)); padding: 12px; border: 1px solid #294145; border-radius: 8px; background: #081315; }
 .location-series-dialog__preview h3 { flex: none; margin: 0 0 12px; }

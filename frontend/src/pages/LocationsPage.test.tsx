@@ -16,7 +16,9 @@ describe('LocationsPage', () => {
   it('previews a child series, blocks conflicts, and refreshes after one atomic write', async () => {
     const newChild = { location_ref: { ...root.location_ref, entity_id: 'u01' }, name: 'U01', type: null, parent_location_ref: grandchild.location_ref };
     const dataSource = source({ loadLocations: vi.fn().mockResolvedValueOnce([root, child, grandchild, secondRoot]).mockResolvedValueOnce([root, child, grandchild, secondRoot, newChild]), previewLocationSeries: vi.fn().mockResolvedValueOnce({ names: ['U01', 'U02'], conflicts: ['U02'] }).mockResolvedValueOnce({ names: ['U01', 'U02'], conflicts: [] }) });
-    renderPage(dataSource); await screen.findByText('Стойка 01');
+    renderPage(dataSource); await screen.findByText('Москва');
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть всё' }));
+    await screen.findByText('Стойка 01');
     await userEvent.click(screen.getAllByRole('button', { name: 'Создать серию дочерних' })[2]);
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('radio', { name: 'Стойка 01' })).toHaveAttribute('aria-checked', 'true');
@@ -34,12 +36,16 @@ describe('LocationsPage', () => {
     await waitFor(() => expect(dataSource.createLocationSeries).toHaveBeenCalledTimes(1));
     expect(dataSource.createLocation).not.toHaveBeenCalled();
     await waitFor(() => expect(dataSource.loadLocations).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('U01')).toBeInTheDocument();
+    expect(screen.queryByText('U01')).not.toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Развернуть Стойка 01' }));
+    expect(screen.getByText('U01')).toBeInTheDocument();
   });
 
   it('keeps create disabled after a rejected pattern preview', async () => {
     const dataSource = source({ previewLocationSeries: vi.fn().mockRejectedValue(new Error('Pattern must contain exactly one continuous # group')) });
-    renderPage(dataSource); await screen.findByText('Стойка 01');
+    renderPage(dataSource); await screen.findByText('Москва');
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть всё' }));
+    await screen.findByText('Стойка 01');
     await userEvent.click(screen.getAllByRole('button', { name: 'Создать серию дочерних' })[2]);
     const dialog = screen.getByRole('dialog');
     await userEvent.type(within(dialog).getByLabelText('Шаблон'), '#-#');
@@ -49,21 +55,66 @@ describe('LocationsPage', () => {
     expect(within(dialog).getByRole('button', { name: 'Создать серию' })).toBeDisabled();
     expect(dataSource.createLocationSeries).not.toHaveBeenCalled();
   });
-  it('renders an arbitrary-depth tree, collapses branches, and preserves arbitrary user type through root creation', async () => {
-    const dataSource = source(); renderPage(dataSource);
-    expect(await screen.findByText('Стойка 01')).toBeInTheDocument();
-    expect(screen.getByText('my arbitrary type')).toBeInTheDocument();
+  it('starts with root rows, toggles only one node, and expands or collapses all depths', async () => {
+    const dataSource = source(); const { unmount } = renderPage(dataSource);
+    expect(await screen.findByText('Москва')).toBeInTheDocument();
+    expect(screen.getByText('Санкт-Петербург')).toBeInTheDocument();
+    expect(screen.queryByText('ЦОД-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Стойка 01')).not.toBeInTheDocument();
     expect(document.querySelectorAll('.location-tree--root')).toHaveLength(1);
-    expect(document.querySelectorAll('.location-tree:not(.location-tree--root)')).toHaveLength(2);
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть Москва' }));
+    expect(screen.getByText('ЦОД-1')).toBeInTheDocument();
+    expect(screen.getByText('my arbitrary type')).toBeInTheDocument();
+    expect(screen.queryByText('Стойка 01')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть ЦОД-1' }));
+    expect(screen.getByText('Стойка 01')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Свернуть Москва' }));
     expect(screen.queryByText('ЦОД-1')).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Развернуть Москва' }));
-    expect(await screen.findByText('Стойка 01')).toBeInTheDocument();
+    expect(screen.getByText('Стойка 01')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Свернуть всё' }));
+    expect(screen.queryByText('ЦОД-1')).not.toBeInTheDocument();
+    expect(screen.getByText('Москва')).toBeInTheDocument();
+    expect(screen.getByText('Санкт-Петербург')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть всё' }));
+    expect(screen.getByText('Стойка 01')).toBeInTheDocument();
+    expect(document.querySelectorAll('.location-tree:not(.location-tree--root)')).toHaveLength(2);
+    unmount();
+    renderPage(dataSource);
+    await screen.findByText('Москва');
+    expect(screen.queryByText('ЦОД-1')).not.toBeInTheDocument();
+  });
+
+  it('keeps unrelated branches unchanged when expanding and collapsing one subtree', async () => {
+    const secondChild = { ...child, location_ref: { ...child.location_ref, entity_id: 'spb-dc' }, name: 'ЦОД-2', parent_location_ref: secondRoot.location_ref };
+    const secondGrandchild = { ...grandchild, location_ref: { ...grandchild.location_ref, entity_id: 'spb-rack' }, name: 'Стойка 02', parent_location_ref: secondChild.location_ref };
+    renderPage(source({ loadLocations: vi.fn().mockResolvedValue([root, child, grandchild, secondRoot, secondChild, secondGrandchild]) }));
+    await screen.findByText('Москва');
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть ветку: Москва' }));
+    expect(screen.getByText('Стойка 01')).toBeInTheDocument();
+    expect(screen.queryByText('ЦОД-2')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть ветку: Санкт-Петербург' }));
+    expect(screen.getByText('Стойка 02')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Свернуть ветку: Москва' }));
+    expect(screen.queryByText('ЦОД-1')).not.toBeInTheDocument();
+    expect(screen.getByText('Стойка 02')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть Москва' }));
+    expect(screen.getByText('ЦОД-1')).toBeInTheDocument();
+    expect(screen.queryByText('Стойка 01')).not.toBeInTheDocument();
+  });
+
+  it('preserves expansion through a create and authoritative refresh', async () => {
+    const newChild = { ...grandchild, location_ref: { ...grandchild.location_ref, entity_id: 'new' }, name: 'Новый узел', parent_location_ref: child.location_ref };
+    const dataSource = source({ loadLocations: vi.fn().mockResolvedValueOnce([root, child, grandchild, secondRoot]).mockResolvedValueOnce([root, child, grandchild, secondRoot, newChild]) });
+    renderPage(dataSource); await screen.findByText('Москва');
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть ветку: Москва' }));
     await userEvent.click(screen.getByRole('button', { name: 'Создать местоположение' }));
     await userEvent.type(screen.getByLabelText('Название'), '  Независимое  ');
     await userEvent.type(screen.getByLabelText('Тип'), 'своя категория');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(dataSource.createLocation).toHaveBeenCalledWith({ name: 'Независимое', type: 'своя категория', parent_location_id: null }));
+    expect(await screen.findByText('Новый узел')).toBeInTheDocument();
+    expect(screen.getByText('Стойка 01')).toBeInTheDocument();
   });
 
   it('creates a child through the hierarchy picker, preselects its parent, and allows changing it before save', async () => {
@@ -85,7 +136,8 @@ describe('LocationsPage', () => {
   });
 
   it('edits and clears type, reparents and detaches only through explicit calls', async () => {
-    const dataSource = source(); renderPage(dataSource); await screen.findByText('ЦОД-1');
+    const dataSource = source(); renderPage(dataSource); await screen.findByText('Москва');
+    await userEvent.click(screen.getByRole('button', { name: 'Развернуть всё' }));
     await userEvent.click(screen.getAllByRole('button', { name: 'Изменить' })[1]);
     await userEvent.clear(screen.getByLabelText('Тип')); await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(dataSource.updateLocation).toHaveBeenCalledWith('dc', { name: 'ЦОД-1', type: null }));

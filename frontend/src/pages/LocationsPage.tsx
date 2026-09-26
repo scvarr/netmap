@@ -54,8 +54,10 @@ const descendants = (items: LocationDocument[], id: string) => {
 function LocationTree({
   items,
   parentId,
-  collapsed,
+  expanded,
   onToggle,
+  onExpandBranch,
+  onCollapseBranch,
   onEdit,
   onChild,
   onSeries,
@@ -64,8 +66,10 @@ function LocationTree({
 }: {
   items: LocationDocument[];
   parentId: string | null;
-  collapsed: Set<string>;
+  expanded: Set<string>;
   onToggle: (id: string) => void;
+  onExpandBranch: (id: string) => void;
+  onCollapseBranch: (id: string) => void;
   onEdit: (item: LocationDocument) => void;
   onChild: (item: LocationDocument) => void;
   onSeries: (item: LocationDocument) => void;
@@ -84,13 +88,13 @@ function LocationTree({
         const hasChildren = items.some(
           (child) => child.parent_location_ref?.entity_id === id,
         );
-        const isExpanded = !collapsed.has(id);
+        const isExpanded = expanded.has(id);
         return (
         <li key={id}>
           <div className="location-tree__item">
             <div className="location-tree__identity">
               {hasChildren ? (
-                <button type="button" className="location-tree__toggle" aria-label={isExpanded ? t("location.pickerCollapse", { name: item.name }) : t("location.pickerExpand", { name: item.name })} onClick={() => onToggle(id)}>
+                <button type="button" className="location-tree__toggle" aria-expanded={isExpanded} aria-label={isExpanded ? t("location.pickerCollapse", { name: item.name }) : t("location.pickerExpand", { name: item.name })} onClick={() => onToggle(id)}>
                   {isExpanded ? "−" : "+"}
                 </button>
               ) : <span className="location-tree__toggle-placeholder" aria-hidden="true" />}
@@ -100,6 +104,12 @@ function LocationTree({
               </span>
             </div>
             <div>
+              {hasChildren && (
+                <>
+                  <button type="button" className="location-tree__branch-action" title={t("location.expandBranch", { name: item.name })} aria-label={t("location.expandBranch", { name: item.name })} onClick={() => onExpandBranch(id)}>⊞</button>
+                  <button type="button" className="location-tree__branch-action" title={t("location.collapseBranch", { name: item.name })} aria-label={t("location.collapseBranch", { name: item.name })} onClick={() => onCollapseBranch(id)}>⊟</button>
+                </>
+              )}
               <button type="button" onClick={() => onChild(item)}>
                 {t("location.createChild")}
               </button>
@@ -124,8 +134,10 @@ function LocationTree({
           {hasChildren && isExpanded && <LocationTree
             items={items}
             parentId={id}
-            collapsed={collapsed}
+            expanded={expanded}
             onToggle={onToggle}
+            onExpandBranch={onExpandBranch}
+            onCollapseBranch={onCollapseBranch}
             onEdit={onEdit}
             onChild={onChild}
             onSeries={onSeries}
@@ -173,9 +185,7 @@ export function LocationsPage({
   const [revision, setRevision] = useState(0);
   const [form, setForm] = useState<Form | null>(null);
   const [seriesForm, setSeriesForm] = useState<SeriesForm | null>(null);
-  const [collapsedLocations, setCollapsedLocations] = useState<Set<string>>(
-    new Set(),
-  );
+  const [expandedLocations, setExpandedLocations] = useState<Set<string>>(() => new Set());
   const [deleting, setDeleting] = useState<LocationDocument | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -356,24 +366,34 @@ export function LocationsPage({
       ) : locations === null ? (
         <p>{t("location.loading")}</p>
       ) : sorted.length ? (
-        <LocationTree
-          items={sorted}
-          parentId={null}
-          collapsed={collapsedLocations}
-          onToggle={(id) =>
-            setCollapsedLocations((previous) => {
+        <>
+          <div className="location-tree__toolbar">
+            <button type="button" onClick={() => setExpandedLocations(new Set(sorted.filter((item) => sorted.some((child) => child.parent_location_ref?.entity_id === item.location_ref.entity_id)).map((item) => item.location_ref.entity_id)))}>{t("location.expandAll")}</button>
+            <button type="button" onClick={() => setExpandedLocations(new Set())}>{t("location.collapseAll")}</button>
+          </div>
+          <LocationTree
+            items={sorted}
+            parentId={null}
+            expanded={expandedLocations}
+            onToggle={(id) => setExpandedLocations((previous) => {
               const next = new Set(previous);
               if (next.has(id)) next.delete(id);
               else next.add(id);
               return next;
-            })
-          }
-          onEdit={openEdit}
-          onChild={(item) => openCreate(item.location_ref.entity_id)}
-          onSeries={openSeries}
-          onMove={openMove}
-          onDelete={setDeleting}
-        />
+            })}
+            onExpandBranch={(id) => setExpandedLocations((previous) => new Set([...previous, ...descendants(sorted, id)]))}
+            onCollapseBranch={(id) => setExpandedLocations((previous) => {
+              const next = new Set(previous);
+              descendants(sorted, id).forEach((branchId) => next.delete(branchId));
+              return next;
+            })}
+            onEdit={openEdit}
+            onChild={(item) => openCreate(item.location_ref.entity_id)}
+            onSeries={openSeries}
+            onMove={openMove}
+            onDelete={setDeleting}
+          />
+        </>
       ) : (
         <p>{t("location.empty")}</p>
       )}
