@@ -11,6 +11,11 @@ bounded milestone.
 
 ## Status/index layer
 
+Direct Blueprint endpoint slots are implemented as a foundation and Port Block
+application surfaces have been removed. Phase C remains PAUSED before the
+manual HV-01 recheck; richer editor operations remain pending. Technology and
+capability are still OPEN, and this cutover does not close `C-CAP-01`.
+
 Краткий индекс ниже добавляет текущий статус отслеживания. Все `C-*`
 identifiers/findings остаются в обязательном реестре, но accepted target
 architecture может явно supersede устаревший remediation или acceptance

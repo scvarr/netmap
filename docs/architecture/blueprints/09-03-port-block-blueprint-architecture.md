@@ -2,7 +2,7 @@
 
 ## Status, authority and scope
 
-**Historical record only: CURRENTLY IMPLEMENTED BUT ARCHITECTURALLY SUPERSEDED.**
+**Historical record only: ARCHITECTURALLY SUPERSEDED; APPLICATION IMPLEMENTATION REMOVED.**
 The authoritative target is now [09.4 Direct Blueprint endpoint authoring](09-04-direct-blueprint-endpoint-authoring.md).
 The implemented L1S.6c Port Block family and this note's Port Block-specific
 identity, authoring, and geometry decisions do not define future target

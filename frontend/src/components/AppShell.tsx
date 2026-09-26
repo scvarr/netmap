@@ -67,10 +67,6 @@ export function AppShell() {
               <span className="shell-nav__icon" aria-hidden="true">▤</span>
               <span className="shell-nav__label">{t('nav.blueprints')}</span>
             </NavLink>
-            <NavLink className={navClassName} to="/library/port-blocks" title={t('nav.portBlocks')} data-tooltip={t('nav.portBlocks')}>
-              <span className="shell-nav__icon" aria-hidden="true">▥</span>
-              <span className="shell-nav__label">{t('nav.portBlocks')}</span>
-            </NavLink>
           </div>
           <div className="shell-nav__group">
             <span className="shell-nav__group-label">{t('workspace.section')}</span>

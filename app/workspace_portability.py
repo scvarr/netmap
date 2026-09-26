@@ -19,7 +19,7 @@ from app import models
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -60,13 +60,9 @@ ENTITIES = (
     ("canonical", "ProcessingEntryPoint", "ProcessingEntryPoint", "id plan_id traffic_class stage_id"),
     ("canonical", "PacketProcessingPlanAttachmentSet", "PacketProcessingPlanAttachmentSet", "id routing_context_id traffic_class configured_completeness"),
     ("canonical", "PacketProcessingPlanAttachment", "PacketProcessingPlanAttachment", "id attachment_set_id plan_id scope"),
-    ("authoring", "PortBlock", "PortBlock", "id name"),
-    ("authoring", "PortBlockVersion", "PortBlockVersion", "id port_block_id version_number"),
-    ("authoring", "PortBlockPort", "PortBlockPort", "id port_block_version_id local_id display_label kind row layout_column layout_order"),
     ("authoring", "ObjectBlueprint", "ObjectBlueprint", "id name"),
-    ("authoring", "ObjectBlueprintVersion", "ObjectBlueprintVersion", "id blueprint_id version_number default_physical_object_class body_kind width height fill_color authoring_recipe composition_kind"),
-    ("authoring", "BlueprintPortBlockInstance", "BlueprintPortBlockInstance", "id blueprint_version_id port_block_version_id instance_key face placement_x placement_y placement_width placement_height"),
-    ("authoring", "BlueprintEndpointSlot", "BlueprintEndpointSlot", "id blueprint_version_id slot_key display_name kind port_block_instance_id port_block_local_id"),
+    ("authoring", "ObjectBlueprintVersion", "ObjectBlueprintVersion", "id blueprint_id version_number default_physical_object_class body_kind width height fill_color"),
+    ("authoring", "BlueprintEndpointSlot", "BlueprintEndpointSlot", "id blueprint_version_id slot_key display_name kind face position_x position_y"),
     ("authoring", "BlueprintInternalLink", "BlueprintInternalLink", "id blueprint_version_id slot_a_id slot_b_id"),
     ("authoring", "BlueprintInstance", "BlueprintInstance", "id blueprint_version_id physical_object_id"),
     ("authoring", "BlueprintInstanceSlot", "BlueprintInstanceSlot", "id blueprint_instance_id blueprint_slot_id connection_point_id network_interface_id"),

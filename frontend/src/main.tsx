@@ -21,7 +21,6 @@ import { ApiSavedMapDataSource } from './topology/apiSavedMapDataSource';
 import { ApiCatalogInventoryDataSource } from './topology/apiCatalogInventoryDataSource';
 import { ApiPhysicalObjectDisplayNameWriteDataSource } from './topology/apiPhysicalObjectDisplayNameWriteDataSource';
 import { ApiBlueprintUpgradeDataSource } from './topology/apiBlueprintUpgradeDataSource';
-import { ApiPortBlockDataSource } from './topology/apiPortBlockDataSource';
 import { ApiCableDeleteDataSource } from './topology/apiCableDeleteDataSource';
 import { ApiLocationDataSource } from './topology/apiLocationDataSource';
 import { ApiCableLabelDataSource } from './topology/apiCableLabelDataSource';
@@ -51,7 +50,6 @@ createRoot(document.getElementById('root')!).render(
         catalogInventoryDataSource={new ApiCatalogInventoryDataSource()}
         physicalObjectDisplayNameWriteDataSource={new ApiPhysicalObjectDisplayNameWriteDataSource()}
         blueprintUpgradeDataSource={new ApiBlueprintUpgradeDataSource()}
-        portBlockDataSource={new ApiPortBlockDataSource()}
         locationDataSource={new ApiLocationDataSource()}
         cableLabelDataSource={new ApiCableLabelDataSource()}
         topologyLayoutStore={new BrowserTopologyLayoutStore(window.localStorage)}

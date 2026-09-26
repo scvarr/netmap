@@ -2,6 +2,13 @@
 
 ## Цель и порядок работы
 
+Direct endpoint foundation реализована: Port Block library/editor/navigation
+удалены, Object Blueprint создаётся через минимальный direct-slot editor.
+P-UX-11/12 shell, bounded workspace, aspect ratio и FRONT/REAR controls
+сохранены. Multi-select, alignment/distribution, ordered bulk naming и
+pairwise bulk continuity остаются pending; Phase C и HV-01 manual recheck
+приостановлены до следующих editor slices.
+
 Этот журнал фиксирует замечания, найденные при последовательном ручном
 проходе продукта от первого экрана после авторизации до полностью собранного
 representative L1 стенда.

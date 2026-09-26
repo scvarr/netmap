@@ -11,7 +11,6 @@ from app.models import (
     ConnectionMember,
     ConnectionPoint,
     BlueprintEndpointSlot,
-    BlueprintPortBlockInstance,
     BlueprintInstance,
     BlueprintInstanceSlot,
     BlueprintInternalLink,
@@ -29,9 +28,6 @@ from app.models import (
     PacketProcessingPlanAttachmentSet,
     ObjectBlueprint,
     ObjectBlueprintVersion,
-    PortBlock,
-    PortBlockPort,
-    PortBlockVersion,
     MapCableRoute,
     MapPlacement,
     MapViewPosition,
@@ -101,12 +97,8 @@ def clean_database(request: pytest.FixtureRequest):
         session.execute(delete(BlueprintInstance))
         session.execute(delete(BlueprintInternalLink))
         session.execute(delete(BlueprintEndpointSlot))
-        session.execute(delete(BlueprintPortBlockInstance))
         session.execute(delete(ObjectBlueprintVersion))
         session.execute(delete(ObjectBlueprint))
-        session.execute(delete(PortBlockPort))
-        session.execute(delete(PortBlockVersion))
-        session.execute(delete(PortBlock))
         session.execute(delete(PacketProcessingPlanAttachment))
         session.execute(delete(PacketProcessingPlanAttachmentSet))
         session.execute(delete(ProcessingEntryPoint))

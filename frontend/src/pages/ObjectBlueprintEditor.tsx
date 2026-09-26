@@ -1,596 +1,80 @@
-import { useEffect, useMemo, useState } from "react";
-import { useI18n } from "../i18n";
-import { PageHeader } from "../components/PageChrome";
-import { BlueprintCompositionCanvas } from "../components/BlueprintCompositionCanvas";
-import {
-  addBulkInternalLinks,
-  clampPlacement,
-  createBlueprintRequest,
-  removeBlueprintBlockInstance,
-  removeInternalLinksBetweenInstances,
-  resolveSlotKeys,
-  slotsForInstance,
-  type BlueprintBlockInstance,
-  type BlueprintEditorState,
-  type BlueprintValidationError,
-} from "../blueprints/editorModel";
-import { initialPlacementForPorts } from "../blueprints/compositionGeometry";
-import type { BlueprintFace } from "../topology/objectBlueprintTypes";
-import type { PortBlockDataSource } from "../topology/portBlockTypes";
+import { useState } from 'react';
+import { useI18n } from '../i18n';
+import { PageHeader } from '../components/PageChrome';
+import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
+import { addEndpoints, createBlueprintRequest, internalLinkPairKey, removeEndpoint, type BlueprintEditorState, type BlueprintValidationError } from '../blueprints/editorModel';
+import type { BlueprintFace, BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
 
-interface Props {
-  title: string;
-  description: string;
-  saveLabel: string;
-  onSave: (state: BlueprintEditorState) => Promise<void>;
-  initialState: BlueprintEditorState;
-  portBlockDataSource: PortBlockDataSource;
-  initialPortBlocks?: Awaited<
-    ReturnType<PortBlockDataSource["loadPortBlocks"]>
-  >["port_blocks"];
-  versionNotice?: string;
-}
-type EditorError =
-  | BlueprintValidationError
-  | "compositionLoadFailed"
-  | "compositionNoSpace"
-  | "saveFailed";
-type LinkGroup = {
-  key: string;
-  first?: BlueprintBlockInstance;
-  second?: BlueprintBlockInstance;
-  indexes: number[];
-};
-const samePair = (
-  a: string,
-  b: string,
-  link: { from_slot_key: string; to_slot_key: string },
-) =>
-  [a, b].sort().join() === [link.from_slot_key, link.to_slot_key].sort().join();
-export const newBlueprintEditorState = (): BlueprintEditorState => ({
-  name: "",
-  defaultClass: "",
-  width: 160,
-  height: 60,
-  fillColor: "#28565a",
-  instances: [],
-  individualLinks: [],
-});
+interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
+export const newBlueprintEditorState = (): BlueprintEditorState => ({ name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', slots: [], individualLinks: [] });
 const validationKey = {
-  nameRequired: "blueprint.validation.nameRequired",
-  dimensionsPositive: "blueprint.validation.dimensionsPositive",
-  colorFormat: "blueprint.validation.colorFormat",
-  duplicateInstanceKey: "blueprint.validation.duplicateInstanceKey",
-  missingPortBlock: "blueprint.validation.missingPortBlock",
-  individualSelfLink: "blueprint.validation.individualSelfLink",
-  individualMissingPort: "blueprint.validation.individualMissingPort",
-  duplicateIndividualLink: "blueprint.validation.duplicateIndividualLink",
-  compositionLoadFailed: "blueprint.validation.compositionLoadFailed",
-  compositionNoSpace: "blueprint.validation.compositionNoSpace",
-  saveFailed: "blueprint.validation.saveFailed",
-} as const satisfies Record<EditorError, string>;
+  nameRequired: 'blueprint.validation.nameRequired', dimensionsPositive: 'blueprint.validation.dimensionsPositive', colorFormat: 'blueprint.validation.colorFormat',
+  duplicateSlotKeys: 'blueprint.validation.duplicateSlotKeys', individualSelfLink: 'blueprint.validation.individualSelfLink',
+  individualMissingPort: 'blueprint.validation.individualMissingPort', duplicateIndividualLink: 'blueprint.validation.duplicateIndividualLink',
+} as const satisfies Record<BlueprintValidationError, string>;
 
-export function ObjectBlueprintEditor({
-  title,
-  description,
-  saveLabel,
-  onSave,
-  initialState,
-  portBlockDataSource,
-  initialPortBlocks,
-  versionNotice,
-}: Props) {
+export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, initialState, versionNotice }: Props) {
   const { t } = useI18n();
   const [editor, setEditor] = useState(initialState);
-  const [blocks, setBlocks] = useState<
-    Awaited<ReturnType<PortBlockDataSource["loadPortBlocks"]>>["port_blocks"]
-  >(initialPortBlocks ?? []);
-  const [logical, setLogical] = useState("");
-  const [face, setFace] = useState<BlueprintFace>("FRONT");
-  const [selected, setSelected] = useState<string | undefined>(
-    initialState.instances[0]?.instanceKey,
-  );
-  const [bulkFirst, setBulkFirst] = useState(
-    initialState.instances[0]?.instanceKey ?? "",
-  );
-  const [bulkSecond, setBulkSecond] = useState(
-    initialState.instances[1]?.instanceKey ?? "",
-  );
-  const [error, setError] = useState<EditorError>();
-  const slots = useMemo(
-    () => editor.instances.flatMap(slotsForInstance),
-    [editor.instances],
-  );
-  const selectedItem = editor.instances.find(
-    (item) => item.instanceKey === selected,
-  );
-  const bulkFirstItem = editor.instances.find(
-    (item) => item.instanceKey === bulkFirst,
-  );
-  const bulkSecondItem = editor.instances.find(
-    (item) => item.instanceKey === bulkSecond,
-  );
-  const instanceLabel = (item: BlueprintBlockInstance) =>
-    `${item.portBlockName} · ${t("blueprint.composition.version", { version: item.versionNumber })} · ${editor.instances.indexOf(item) + 1}`;
-  const linkGroups = useMemo<LinkGroup[]>(() => {
-    const owners = new Map(
-      editor.instances.flatMap((item) =>
-        Object.values(item.resolvedSlotKeys).map(
-          (slot) => [slot, item] as const,
-        ),
-      ),
-    );
-    const groups = new Map<string, LinkGroup>();
-    editor.individualLinks.forEach((link, index) => {
-      const from = owners.get(link.from_slot_key);
-      const to = owners.get(link.to_slot_key);
-      const pair =
-        from && to && from.instanceKey !== to.instanceKey
-          ? [from, to].sort((first, second) =>
-              first.instanceKey.localeCompare(second.instanceKey),
-            )
-          : undefined;
-      const key = pair
-        ? `pair:${pair[0].instanceKey}\u0000${pair[1].instanceKey}`
-        : `individual:${index}`;
-      const group = groups.get(key) ?? {
-        key,
-        first: pair?.[0],
-        second: pair?.[1],
-        indexes: [],
-      };
-      group.indexes.push(index);
-      groups.set(key, group);
-    });
-    return [...groups.values()];
-  }, [editor.individualLinks, editor.instances]);
-  useEffect(() => {
-    if (initialPortBlocks) return;
-    void portBlockDataSource
-      .loadPortBlocks()
-      .then((data) => setBlocks(data.port_blocks))
-      .catch(() => setError("compositionLoadFailed"));
-  }, [initialPortBlocks, portBlockDataSource]);
-  const update = (key: string, patch: Partial<BlueprintBlockInstance>) =>
-    setEditor((old) => ({
-      ...old,
-      instances: old.instances.map((item) =>
-        item.instanceKey === key ? { ...item, ...patch } : item,
-      ),
-    }));
-  const add = async () => {
-    const block = blocks.find(
-      (item) => item.port_block_ref.entity_id === logical,
-    );
-    if (!block) return;
-    try {
-      const detail = await portBlockDataSource.loadPortBlockVersion(
-        block.port_block_ref.entity_id,
-        block.version_ref.entity_id,
-      );
-      const placement = initialPlacementForPorts(
-        detail.ports,
-        editor.instances
-          .filter((item) => (item.face ?? "FRONT") === face)
-          .flatMap((item) => (item.placement ? [item.placement] : [])),
-      );
-      if (!placement) {
-        setError("compositionNoSpace");
+  const [face, setFace] = useState<BlueprintFace>('FRONT');
+  const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
+  const [count, setCount] = useState(1);
+  const [selected, setSelected] = useState<string>();
+  const [error, setError] = useState<string>();
+  const selectedSlot = editor.slots.find((slot) => slot.key === selected);
+  const updateSlot = (key: string, patch: Partial<BlueprintSlot>) => setEditor((old) => ({ ...old, slots: old.slots.map((slot) => slot.key === key ? { ...slot, ...patch } : slot) }));
+  const addLink = () => {
+    const existing = new Set(editor.individualLinks.map((link) => internalLinkPairKey(link.from_slot_key, link.to_slot_key)));
+    for (const first of editor.slots) for (const second of editor.slots) {
+      if (first.key !== second.key && !existing.has(internalLinkPairKey(first.key, second.key))) {
+        setEditor((old) => ({ ...old, individualLinks: [...old.individualLinks, { from_slot_key: first.key, to_slot_key: second.key }] }));
         return;
       }
-      const base: BlueprintBlockInstance = {
-        instanceKey: crypto.randomUUID(),
-        portBlockRef: block.port_block_ref.entity_id,
-        portBlockVersionRef: block.version_ref.entity_id,
-        face,
-        placement,
-        portBlockName: detail.name,
-        versionNumber: detail.version_number,
-        ports: detail.ports,
-        resolvedSlotKeys: {},
-      };
-      const next = { ...base, resolvedSlotKeys: await resolveSlotKeys(base) };
-      setEditor((old) => ({ ...old, instances: [...old.instances, next] }));
-      setSelected(next.instanceKey);
-    } catch {
-      setError("compositionLoadFailed");
     }
   };
-  const remove = (item: BlueprintBlockInstance) => {
-    setEditor((old) => removeBlueprintBlockInstance(old, item.instanceKey));
-    setSelected(undefined);
-    setBulkFirst((key) => (key === item.instanceKey ? "" : key));
-    setBulkSecond((key) => (key === item.instanceKey ? "" : key));
-  };
-  const addLink = () => {
-    const first = slots.find((slot) =>
-      slots.some(
-        (other) =>
-          other.key !== slot.key &&
-          !editor.individualLinks.some((link) =>
-            samePair(slot.key, other.key, link),
-          ),
-      ),
-    );
-    const second =
-      first &&
-      slots.find(
-        (slot) =>
-          slot.key !== first.key &&
-          !editor.individualLinks.some((link) =>
-            samePair(first.key, slot.key, link),
-          ),
-      );
-    if (first && second)
-      setEditor((old) => ({
-        ...old,
-        individualLinks: [
-          ...old.individualLinks,
-          { from_slot_key: first.key, to_slot_key: second.key },
-        ],
-      }));
-  };
-  const updateLink = (
-    index: number,
-    patch: { from_slot_key?: string; to_slot_key?: string },
-  ) =>
-    setEditor((old) => ({
-      ...old,
-      individualLinks: old.individualLinks.map((link, itemIndex) =>
-        itemIndex === index ? { ...link, ...patch } : link,
-      ),
-    }));
   const save = async () => {
     const result = createBlueprintRequest(editor);
-    if (!result.request) {
-      setError(result.errors[0] ?? "saveFailed");
-      return;
-    }
-    try {
-      await onSave(editor);
-    } catch {
-      setError("saveFailed");
-    }
+    if (!result.request) { setError(t(validationKey[result.errors[0]])); return; }
+    try { await onSave(editor); } catch { setError(t('blueprint.validation.saveFailed')); }
   };
-  const renderLink = (index: number) => {
-    const link = editor.individualLinks[index];
-    return (
-      <div
-        className="blueprint-composer__link"
-        key={`${link.from_slot_key}-${link.to_slot_key}-${index}`}
-      >
-        <select
-          aria-label={t("blueprint.composition.firstLink", {
-            index: index + 1,
-          })}
-          value={link.from_slot_key}
-          onChange={(event) =>
-            updateLink(index, { from_slot_key: event.target.value })
-          }
-        >
-          {slots.map((slot) => (
-            <option key={slot.key} value={slot.key}>
-              {slot.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label={t("blueprint.composition.secondLink", {
-            index: index + 1,
-          })}
-          value={link.to_slot_key}
-          onChange={(event) =>
-            updateLink(index, { to_slot_key: event.target.value })
-          }
-        >
-          {slots.map((slot) => (
-            <option key={slot.key} value={slot.key}>
-              {slot.label}
-            </option>
-          ))}
-        </select>
-        <button
-          className="text-action"
-          type="button"
-          onClick={() =>
-            setEditor((old) => ({
-              ...old,
-              individualLinks: old.individualLinks.filter(
-                (_, itemIndex) => itemIndex !== index,
-              ),
-            }))
-          }
-        >
-          {t("blueprint.composition.remove")}
-        </button>
-      </div>
-    );
-  };
-  const bulkDisabled =
-    !bulkFirstItem || !bulkSecondItem || bulkFirst === bulkSecond;
-  return (
-    <>
-      <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
-      <div className="blueprint-composer">
-        <div className="blueprint-composer__workspace">
-          <section className="blueprint-editor-controls blueprint-composer__properties">
-            <div className="blueprint-editor-controls__row">
-              <label>
-                {t("blueprint.editor.name")}
-                <input
-                  value={editor.name}
-                  onChange={(event) =>
-                    setEditor({ ...editor, name: event.target.value })
-                  }
-                />
-              </label>
-              <label>
-                {t("blueprint.editor.class")}
-                <input
-                  value={editor.defaultClass}
-                  onChange={(event) =>
-                    setEditor({ ...editor, defaultClass: event.target.value })
-                  }
-                />
-              </label>
-            </div>
-            <div className="blueprint-editor-controls__row">
-              <label>
-                {t("blueprint.editor.width")}
-                <input
-                  type="number"
-                  min="1"
-                  value={editor.width}
-                  onChange={(event) =>
-                    setEditor({ ...editor, width: Number(event.target.value) })
-                  }
-                />
-              </label>
-              <label>
-                {t("blueprint.editor.height")}
-                <input
-                  type="number"
-                  min="1"
-                  value={editor.height}
-                  onChange={(event) =>
-                    setEditor({ ...editor, height: Number(event.target.value) })
-                  }
-                />
-              </label>
-            </div>
-            <label>
-              {t("blueprint.editor.color")}
-              <input
-                aria-label={t("blueprint.editor.color")}
-                type="color"
-                value={editor.fillColor}
-                onChange={(event) =>
-                  setEditor({ ...editor, fillColor: event.target.value })
-                }
-              />
-            </label>
-            <section className="blueprint-composer__section blueprint-composer__links">
-              <h2>{t("blueprint.composition.links")}</h2>
-              <div className="blueprint-composer__bulk-links">
-                <label>
-                  {t("blueprint.composition.bulkFirst")}
-                  <select
-                    aria-label={t("blueprint.composition.bulkFirst")}
-                    value={bulkFirst}
-                    onChange={(event) => setBulkFirst(event.target.value)}
-                  >
-                    <option value="">{t("blueprint.composition.choose")}</option>
-                    {editor.instances.map((item) => (
-                      <option key={item.instanceKey} value={item.instanceKey}>
-                        {instanceLabel(item)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  {t("blueprint.composition.bulkSecond")}
-                  <select
-                    aria-label={t("blueprint.composition.bulkSecond")}
-                    value={bulkSecond}
-                    onChange={(event) => setBulkSecond(event.target.value)}
-                  >
-                    <option value="">{t("blueprint.composition.choose")}</option>
-                    {editor.instances.map((item) => (
-                      <option key={item.instanceKey} value={item.instanceKey}>
-                        {instanceLabel(item)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  className="secondary-action"
-                  type="button"
-                  disabled={bulkDisabled}
-                  onClick={() =>
-                    setEditor((old) => ({
-                      ...old,
-                      individualLinks: addBulkInternalLinks(
-                        old.individualLinks,
-                        bulkFirstItem,
-                        bulkSecondItem,
-                        "SEQUENTIAL",
-                      ),
-                    }))
-                  }
-                >
-                  {t("blueprint.composition.bulkSequential")}
-                </button>
-                <button
-                  className="secondary-action"
-                  type="button"
-                  disabled={bulkDisabled}
-                  onClick={() =>
-                    setEditor((old) => ({
-                      ...old,
-                      individualLinks: addBulkInternalLinks(
-                        old.individualLinks,
-                        bulkFirstItem,
-                        bulkSecondItem,
-                        "REVERSE",
-                      ),
-                    }))
-                  }
-                >
-                  {t("blueprint.composition.bulkReverse")}
-                </button>
-                <button
-                  className="text-action"
-                  type="button"
-                  disabled={bulkDisabled}
-                  onClick={() =>
-                    setEditor((old) => ({
-                      ...old,
-                      individualLinks: removeInternalLinksBetweenInstances(
-                        old.individualLinks,
-                        bulkFirstItem,
-                        bulkSecondItem,
-                      ),
-                    }))
-                  }
-                >
-                  {t("blueprint.composition.bulkRemove")}
-                </button>
-              </div>
-              {linkGroups.map((group) => (
-                <details className="blueprint-composer__link-group" key={group.key}>
-                  <summary>
-                    {group.first && group.second
-                      ? t("blueprint.composition.linkGroupSummary", {
-                          first: instanceLabel(group.first),
-                          second: instanceLabel(group.second),
-                          count: group.indexes.length,
-                        })
-                      : t("blueprint.composition.individualLinkSummary", {
-                          count: group.indexes.length,
-                        })}
-                  </summary>
-                  {group.indexes.map(renderLink)}
-                </details>
-              ))}
-              <button
-                className="secondary-action"
-                type="button"
-                disabled={slots.length < 2}
-                onClick={addLink}
-              >
-                {t("blueprint.composition.addLink")}
-              </button>
-            </section>
-            {error && (
-              <p role="alert" className="blueprint-editor__error">
-                {t(validationKey[error])}
-              </p>
-            )}
-            <button
-              className="primary-action"
-              type="button"
-              onClick={() => void save()}
-            >
-              {saveLabel}
-            </button>
-          </section>
-          <section className="blueprint-composer__composition blueprint-composer__surface">
-          <div className="blueprint-composer__chooser">
-            <label>
-              {t("blueprint.composition.logical")}
-              <select
-                value={logical}
-                onChange={(event) => setLogical(event.target.value)}
-              >
-                <option value="">{t("blueprint.composition.choose")}</option>
-                {blocks.map((block) => (
-                  <option
-                    key={block.port_block_ref.entity_id}
-                    value={block.port_block_ref.entity_id}
-                  >
-                    {block.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              className="secondary-action"
-              type="button"
-              disabled={!logical}
-              onClick={() => void add()}
-            >
-              {t("blueprint.composition.add")}
-            </button>
-          </div>
-          <div className="blueprint-composer__faces">
-            <button
-              type="button"
-              aria-pressed={face === "FRONT"}
-              onClick={() => setFace("FRONT")}
-            >
-              {t("blueprint.face.front")}
-            </button>
-            <button
-              type="button"
-              aria-pressed={face === "REAR"}
-              onClick={() => setFace("REAR")}
-            >
-              {t("blueprint.face.rear")}
-            </button>
-          </div>
-          <BlueprintCompositionCanvas
-            body={{
-              width: editor.width,
-              height: editor.height,
-              fillColor: editor.fillColor,
-            }}
-            face={face}
-            instances={editor.instances}
-            links={editor.individualLinks}
-            selectedKey={selected}
-            onSelect={setSelected}
-            onPlacement={(key, placement) =>
-              update(key, { placement: clampPlacement(placement) })
-            }
-          />
-          {selectedItem && (
-            <aside className="blueprint-composer__selected">
-              <div className="blueprint-composer__selected-identity">
-                <strong>{selectedItem.portBlockName}</strong>
-                <span>
-                  {t("blueprint.composition.version", {
-                    version: selectedItem.versionNumber,
-                  })}
-                </span>
-              </div>
-              <label>
-                {t("blueprint.composition.face")}
-                <select
-                  aria-label={t("blueprint.composition.face")}
-                  value={selectedItem.face ?? "FRONT"}
-                  onChange={(event) =>
-                    update(selectedItem.instanceKey, {
-                      face: event.target.value as BlueprintFace,
-                    })
-                  }
-                >
-                  <option value="FRONT">{t("blueprint.face.front")}</option>
-                  <option value="REAR">{t("blueprint.face.rear")}</option>
-                </select>
-              </label>
-              <button
-                aria-label={t("blueprint.composition.removeInstance")}
-                className="text-action"
-                type="button"
-                onClick={() => remove(selectedItem)}
-              >
-                {t("blueprint.composition.remove")}
-              </button>
-            </aside>
-          )}
-          </section>
+  return <>
+    <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
+    <div className="blueprint-composer"><div className="blueprint-composer__workspace">
+      <section className="blueprint-editor-controls blueprint-composer__properties">
+        <div className="blueprint-editor-controls__row">
+          <label>{t('blueprint.editor.name')}<input value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} /></label>
+          <label>{t('blueprint.editor.class')}<input value={editor.defaultClass} onChange={(e) => setEditor({ ...editor, defaultClass: e.target.value })} /></label>
         </div>
-      </div>
-    </>
-  );
+        <div className="blueprint-editor-controls__row">
+          <label>{t('blueprint.editor.width')}<input type="number" min="1" value={editor.width} onChange={(e) => setEditor({ ...editor, width: Number(e.target.value) })} /></label>
+          <label>{t('blueprint.editor.height')}<input type="number" min="1" value={editor.height} onChange={(e) => setEditor({ ...editor, height: Number(e.target.value) })} /></label>
+        </div>
+        <label>{t('blueprint.editor.color')}<input type="color" value={editor.fillColor} onChange={(e) => setEditor({ ...editor, fillColor: e.target.value })} /></label>
+        <section className="blueprint-composer__section blueprint-composer__links"><h2>{t('blueprint.composition.links')}</h2>
+          {editor.individualLinks.map((link, index) => <div className="blueprint-composer__link" key={index}>
+            {(['from_slot_key', 'to_slot_key'] as const).map((field) => <select key={field} aria-label={t(field === 'from_slot_key' ? 'blueprint.composition.firstLink' : 'blueprint.composition.secondLink', { index: index + 1 })} value={link[field]} onChange={(e) => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.map((item, i) => i === index ? { ...item, [field]: e.target.value } : item) }))}>{editor.slots.map((slot) => <option key={slot.key} value={slot.key}>{slot.display_name}</option>)}</select>)}
+            <button type="button" className="text-action" onClick={() => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.filter((_, i) => i !== index) }))}>{t('blueprint.composition.remove')}</button>
+          </div>)}
+          <button type="button" className="secondary-action" disabled={editor.slots.length < 2} onClick={addLink}>{t('blueprint.composition.addLink')}</button>
+        </section>
+        {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
+        <button type="button" className="primary-action" onClick={() => void save()}>{saveLabel}</button>
+      </section>
+      <section className="blueprint-composer__composition blueprint-composer__surface">
+        <div className="blueprint-composer__chooser">
+          <label>{t('blueprint.endpoint.kind')}<select value={kind} onChange={(e) => setKind(e.target.value as BlueprintSlotKind)}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
+          <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
+          <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, face); setEditor(next); setSelected(next.slots.at(-1)?.key); }}>{t('blueprint.endpoint.add')}</button>
+        </div>
+        <div className="blueprint-composer__faces"><button type="button" aria-pressed={face === 'FRONT'} onClick={() => setFace('FRONT')}>{t('blueprint.face.front')}</button><button type="button" aria-pressed={face === 'REAR'} onClick={() => setFace('REAR')}>{t('blueprint.face.rear')}</button></div>
+        <BlueprintCompositionCanvas body={{ width: editor.width, height: editor.height, fillColor: editor.fillColor }} face={face} slots={editor.slots} links={editor.individualLinks} selectedKey={selected} onSelect={setSelected} onPosition={(key, rendered_position) => updateSlot(key, { rendered_position })} />
+        {selectedSlot && <aside className="blueprint-composer__selected">
+          <label>{t('blueprint.endpoint.name')}<input value={selectedSlot.display_name} onChange={(e) => updateSlot(selectedSlot.key, { display_name: e.target.value })} /></label>
+          <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
+          <label>{t('blueprint.composition.face')}<select value={selectedSlot.face} onChange={(e) => { updateSlot(selectedSlot.key, { face: e.target.value as BlueprintFace }); setFace(e.target.value as BlueprintFace); }}><option value="FRONT">{t('blueprint.face.front')}</option><option value="REAR">{t('blueprint.face.rear')}</option></select></label>
+          <button type="button" className="text-action" onClick={() => { setEditor((old) => removeEndpoint(old, selectedSlot.key)); setSelected(undefined); }}>{t('blueprint.composition.remove')}</button>
+        </aside>}
+      </section>
+    </div></div>
+  </>;
 }

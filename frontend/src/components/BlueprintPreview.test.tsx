@@ -19,7 +19,7 @@ describe('BlueprintPreview', () => {
 
   it('renders one or two directly joined face surfaces without face controls', () => {
     const { rerender } = render(<BlueprintPreview body={{ kind: 'RECTANGLE', width: 8, height: 1 }} slots={[
-      { key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', rendered_position: { x: .25, y: .5 } },
+      { key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', face: 'FRONT', rendered_position: { x: .25, y: .5 } },
       { key: 'rear', display_name: 'Rear', kind: 'CONNECTION_POINT', face: 'REAR', rendered_position: { x: .75, y: .5 } },
     ]} />);
     const thumbnail = screen.getByTestId('blueprint-thumbnail');
@@ -29,7 +29,7 @@ describe('BlueprintPreview', () => {
     expect(thumbnail).toHaveAttribute('data-preview-height', '30');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
     rerender(<BlueprintPreview body={{ kind: 'RECTANGLE', width: 8, height: 1 }} slots={[
-      { key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', rendered_position: { x: .25, y: .5 } },
+      { key: 'front', display_name: 'Front', kind: 'CONNECTION_POINT', face: 'FRONT', rendered_position: { x: .25, y: .5 } },
     ]} />);
     expect(screen.getAllByTestId(/blueprint-thumbnail-face-/)).toHaveLength(1);
     expect(screen.getByTestId('blueprint-thumbnail')).toHaveStyle({ width: '120px', height: '120px' });
@@ -37,10 +37,10 @@ describe('BlueprintPreview', () => {
 
   it('renders derived positions inside the intrinsic body', () => {
     render(<BlueprintPreview body={{ kind: 'RECTANGLE', width: 100, height: 4, fill_color: '#123456' }} slots={[
-      { key: 'left', display_name: 'A', kind: 'CONNECTION_POINT', rendered_position: { x: .2, y: .5 } },
-      { key: 'right', display_name: 'B', kind: 'NETWORK_PORT', rendered_position: { x: .8, y: .5 } },
-      { key: 'top', display_name: 'T', kind: 'CONNECTION_POINT', rendered_position: { x: .5, y: .2 } },
-      { key: 'bottom', display_name: 'D', kind: 'CONNECTION_POINT', rendered_position: { x: .5, y: .8 } },
+      { key: 'left', display_name: 'A', kind: 'CONNECTION_POINT', face: 'FRONT', rendered_position: { x: .2, y: .5 } },
+      { key: 'right', display_name: 'B', kind: 'NETWORK_PORT', face: 'FRONT', rendered_position: { x: .8, y: .5 } },
+      { key: 'top', display_name: 'T', kind: 'CONNECTION_POINT', face: 'FRONT', rendered_position: { x: .5, y: .2 } },
+      { key: 'bottom', display_name: 'D', kind: 'CONNECTION_POINT', face: 'FRONT', rendered_position: { x: .5, y: .8 } },
     ]} />);
     const preview = screen.getByRole('img'); expect(preview).toHaveAttribute('preserveAspectRatio', 'xMidYMid meet'); expect(preview).toHaveAttribute('data-ratio', '25');
     expect(preview.querySelector('rect')).toHaveAttribute('width', '100'); expect(preview.querySelector('rect')).toHaveAttribute('height', '4');

@@ -47,8 +47,10 @@ and is not a future target prerequisite or library direction.
   immutable PortBlockVersion without one version-details load per row.
 
 Current execution position: **Phase C — PAUSED at Blueprint authoring redesign.**
-Resume the rack-first walkthrough at HV-01 after direct endpoint editor
-implementation and manual recheck; see 11-04.
+The direct-slot foundation is implemented and Port Block application surfaces
+are removed. Resume the rack-first walkthrough at HV-01 only after the pending
+rich editor slices and manual recheck; see 11-04. Technology/capability remains
+open.
 
 В spatial strand P-UX-03A/B/C/D реализованы, ручная проверка P-UX-03D
 пройдена. Bounded Cable route follow-up из 11-08 завершён. Следующий spatial

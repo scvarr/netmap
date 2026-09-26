@@ -42,23 +42,6 @@ class BlueprintLibraryRef(BaseModel):
     entity_id: uuid.UUID
 
 
-class PortBlockLibraryRef(BaseModel):
-    """Library identity for a Port Block record or immutable version."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    ref_type: Literal["LIBRARY_RECORD"] = "LIBRARY_RECORD"
-    entity_type: Literal["PortBlock", "PortBlockVersion"]
-    entity_id: uuid.UUID
-
-
-class PortBlockVersionLibraryRef(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    ref_type: Literal["LIBRARY_RECORD"] = "LIBRARY_RECORD"
-    entity_type: Literal["PortBlockVersion"] = "PortBlockVersion"
-    entity_id: uuid.UUID
-
-
 class SavedMapRef(BaseModel):
     """Presentation identity; deliberately not a ProjectionSourceRef."""
 
@@ -699,13 +682,6 @@ class SetPhysicalObjectDisplayNameRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
 
 
-class BlueprintAnchor(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    side: Literal["LEFT", "RIGHT", "TOP", "BOTTOM"]
-    offset: float = Field(ge=0, le=1)
-
-
 class BlueprintBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -716,12 +692,19 @@ class BlueprintBody(BaseModel):
 
 
 class BlueprintEndpointSlotRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    model_config = ConfigDict(extra="forbid")
 
     key: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
-    anchor: BlueprintAnchor
+    face: Literal["FRONT", "REAR"]
+    rendered_position: "BlueprintPosition"
+
+
+class BlueprintPosition(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    x: FiniteFloat = Field(ge=0, le=1)
+    y: FiniteFloat = Field(ge=0, le=1)
 
 
 class BlueprintInternalLinkRequest(BaseModel):
@@ -731,49 +714,20 @@ class BlueprintInternalLinkRequest(BaseModel):
     to_slot_key: str = Field(min_length=1, max_length=255)
 
 
-class BlueprintCompositionInstanceRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    instance_key: str = Field(min_length=1, max_length=255)
-    port_block_version_ref: PortBlockVersionLibraryRef
-    face: Literal["FRONT", "REAR"]
-    placement: "BlueprintPortBlockPlacement"
-
-
-class BlueprintPortBlockPlacement(BaseModel):
-    """Face-local normalized composition rectangle, unrelated to topology anchors."""
-    model_config = ConfigDict(extra="forbid")
-    x: float = Field(ge=0, le=1)
-    y: float = Field(ge=0, le=1)
-    width: float = Field(gt=0, le=1)
-    height: float = Field(gt=0, le=1)
-
-    @model_validator(mode="after")
-    def validate_bounds(self) -> "BlueprintPortBlockPlacement":
-        if self.x + self.width > 1 or self.y + self.height > 1:
-            raise PydanticCustomError("blueprint_port_block_placement_out_of_bounds", "Blueprint Port Block placement must fit within the body")
-        return self
-
-
-class BlueprintCompositionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    instances: list[BlueprintCompositionInstanceRequest] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def validate_instance_keys(self) -> "BlueprintCompositionRequest":
-        keys = [item.instance_key for item in self.instances]
-        if len(keys) != len(set(keys)):
-            raise PydanticCustomError("blueprint_duplicate_block_instance_key", "Blueprint Port Block instance keys must be unique")
-        return self
-
-
 class CreateObjectBlueprintRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     name: str = Field(min_length=1, max_length=255)
     default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
     body: BlueprintBody
-    composition: BlueprintCompositionRequest
+    slots: list[BlueprintEndpointSlotRequest] = Field(default_factory=list)
     internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_slot_keys(self) -> "CreateObjectBlueprintRequest":
+        if len({slot.key for slot in self.slots}) != len(self.slots):
+            raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
+        return self
 
 
 
@@ -783,8 +737,14 @@ class CreateObjectBlueprintVersionRequest(BaseModel):
     default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
     blueprint_name: str | None = Field(default=None, min_length=1, max_length=255)
     body: BlueprintBody
-    composition: BlueprintCompositionRequest
+    slots: list[BlueprintEndpointSlotRequest] = Field(default_factory=list)
     internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_slot_keys(self) -> "CreateObjectBlueprintVersionRequest":
+        if len({slot.key for slot in self.slots}) != len(self.slots):
+            raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
+        return self
 
 
 
@@ -793,107 +753,6 @@ class InstantiateObjectBlueprintRequest(BaseModel):
 
     display_name: str = Field(min_length=1, max_length=255)
     location_id: uuid.UUID | None = None
-
-
-class PortBlockPortRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    local_id: str = Field(min_length=1, max_length=255)
-    display_label: str = Field(min_length=1, max_length=255)
-    kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
-    row: int = Field(ge=1, le=2)
-    column: int = Field(ge=1)
-    layout_order: int = Field(ge=1)
-
-
-class _PortBlockVersionSnapshotRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    ports: list[PortBlockPortRequest] = Field(min_length=1)
-
-    @model_validator(mode="after")
-    def validate_port_snapshot(self) -> "_PortBlockVersionSnapshotRequest":
-        local_ids = [port.local_id for port in self.ports]
-        positions = [(port.row, port.column) for port in self.ports]
-        orders = [port.layout_order for port in self.ports]
-        if len(local_ids) != len(set(local_ids)):
-            raise PydanticCustomError("port_block_duplicate_local_id", "Port Block local ids must be unique")
-        if len(positions) != len(set(positions)):
-            raise PydanticCustomError("port_block_duplicate_position", "Port Block port positions must be unique")
-        if len(orders) != len(set(orders)):
-            raise PydanticCustomError("port_block_duplicate_layout_order", "Port Block layout order values must be unique")
-        if sorted(orders) != list(range(1, len(orders) + 1)):
-            raise PydanticCustomError(
-                "port_block_non_contiguous_layout_order",
-                "Port Block layout order must be contiguous starting at 1",
-            )
-        rows = {port.row for port in self.ports}
-        if rows not in ({1}, {1, 2}):
-            raise PydanticCustomError("port_block_invalid_rows", "Port Block rows must be one row or rows 1 and 2")
-        return self
-
-
-class CreatePortBlockRequest(_PortBlockVersionSnapshotRequest):
-    name: str = Field(min_length=1, max_length=255)
-
-
-class CreatePortBlockVersionRequest(_PortBlockVersionSnapshotRequest):
-    port_block_name: str | None = Field(default=None, min_length=1, max_length=255)
-
-
-class PortBlockCreationDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    schema_version: Literal["1.0"] = "1.0"
-    port_block_ref: PortBlockLibraryRef
-    version_ref: PortBlockLibraryRef
-
-
-class PortBlockListItemDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    port_block_ref: PortBlockLibraryRef
-    name: str = Field(min_length=1)
-    version_ref: PortBlockLibraryRef
-    version_number: int = Field(ge=1)
-    port_count: int = Field(ge=1)
-    connection_point_count: int = Field(ge=0)
-    network_port_count: int = Field(ge=0)
-    version_count: int = Field(ge=1)
-
-
-class PortBlockListDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    schema_version: Literal["1.0"] = "1.0"
-    port_blocks: list[PortBlockListItemDocument]
-
-class PortBlockVersionSummaryDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    port_block_ref: PortBlockLibraryRef
-    version_ref: PortBlockVersionLibraryRef
-    version_number: int = Field(ge=1)
-    port_count: int = Field(ge=1)
-
-class PortBlockVersionListDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    schema_version: Literal["1.0"] = "1.0"
-    versions: list[PortBlockVersionSummaryDocument]
-
-
-class PortBlockPortDocument(PortBlockPortRequest):
-    pass
-
-
-class PortBlockVersionDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    schema_version: Literal["1.0"] = "1.0"
-    port_block_ref: PortBlockLibraryRef
-    name: str = Field(min_length=1)
-    version_ref: PortBlockLibraryRef
-    version_number: int = Field(ge=1)
-    ports: list[PortBlockPortDocument] = Field(min_length=1)
 
 
 class ObjectBlueprintCreationDocument(BaseModel):
@@ -969,20 +828,6 @@ class ObjectBlueprintInternalLinkDocument(BaseModel):
     to_slot_key: str = Field(min_length=1)
 
 
-class BlueprintCompositionInstanceDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    instance_key: str = Field(min_length=1)
-    port_block_ref: PortBlockLibraryRef
-    port_block_version_ref: PortBlockVersionLibraryRef
-    face: Literal["FRONT", "REAR"]
-    placement: BlueprintPortBlockPlacement | None = None
-
-
-class BlueprintCompositionDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    instances: list[BlueprintCompositionInstanceDocument]
-
-
 class ObjectBlueprintVersionDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -995,7 +840,6 @@ class ObjectBlueprintVersionDocument(BaseModel):
     body: ObjectBlueprintBodyDocument
     slots: list[ObjectBlueprintSlotDocument]
     internal_links: list[ObjectBlueprintInternalLinkDocument]
-    composition: BlueprintCompositionDocument | None = None
 
 
 class BlueprintUpgradeChange(BaseModel):

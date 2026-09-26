@@ -8,13 +8,15 @@
 ## Назначение и граница
 
 **Current acceptance status:** the rack-first walkthrough is **PAUSED at the
-Blueprint authoring redesign**. Resume at the same HV-01 authoring step after
-direct endpoint editor implementation and manual recheck. Acceptance expects
+Blueprint authoring redesign**. Direct-slot persistence and the minimal editor
+are implemented; multi-selection, alignment/distribution, ordered bulk naming,
+and pairwise bulk continuity remain pending. Resume at the same HV-01 authoring
+step after those slices and manual recheck. Acceptance expects
 endpoints authored directly on the Object Blueprint canvas; Port Block is not
 a prerequisite or target authoring entity. See the authoritative
 [direct endpoint contract](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md).
 Port Block workflows and fixtures below are historical evidence of the
-currently implemented, architecturally superseded model.
+removed, architecturally superseded model.
 
 Этот документ — living acceptance-scenario document для Phase C из
 [[plans/11-03-pre-l2-product-completion|11.3 Pre-L2 product completion]]. Phase C

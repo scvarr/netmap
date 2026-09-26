@@ -1,5 +1,4 @@
 import uuid
-import hashlib
 from dataclasses import dataclass
 
 from sqlalchemy import delete, func, select
@@ -12,16 +11,12 @@ from app.models import (
     BlueprintInstance,
     BlueprintInstanceSlot,
     BlueprintInternalLink,
-    BlueprintPortBlockInstance,
     ConnectionPoint,
     EntityMetadata,
     ObjectBlueprint,
     ObjectBlueprintVersion,
-    PortBlockPort,
-    PortBlockVersion,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from app.blueprint_presentation_geometry import PortGeometryInput, derive_port_geometry, fallback_placement
 
 
 @dataclass(frozen=True)
@@ -75,7 +70,6 @@ class BlueprintVersionDetail:
     fill_color: str | None
     slots: tuple[BlueprintEndpointSlot, ...]
     internal_links: tuple[tuple[str, str], ...]
-    composition: tuple[BlueprintPortBlockInstance, ...] | None
 
 
 class ObjectBlueprintCatalog:
@@ -116,51 +110,24 @@ class ObjectBlueprintCatalog:
             width=query.body.width,
             height=query.body.height,
             fill_color=query.body.fill_color,
-            authoring_recipe=None,
-            composition_kind="PORT_BLOCKS_V1",
         )
         self.session.add(version)
         self.session.flush()
         slots_by_key: dict[str, BlueprintEndpointSlot] = {}
-        instances: list[BlueprintPortBlockInstance] = []
-        for item in query.composition.instances:
-            port_block_version_id = item.port_block_version_ref.entity_id
-            exact_version = self.session.get(PortBlockVersion, port_block_version_id)
-            if exact_version is None:
-                raise ValidationError("PortBlockVersion was not found", {"port_block_version_id": str(port_block_version_id)})
-            instance = BlueprintPortBlockInstance(
+        for item in query.slots:
+            if item.key in slots_by_key:
+                raise ValidationError("Blueprint slot keys must be unique")
+            slot = BlueprintEndpointSlot(
                 blueprint_version_id=version.id,
-                port_block_version_id=exact_version.id,
-                instance_key=item.instance_key,
+                slot_key=item.key,
+                display_name=item.display_name,
+                kind=item.kind,
                 face=item.face,
-                placement_x=item.placement.x,
-                placement_y=item.placement.y,
-                placement_width=item.placement.width,
-                placement_height=item.placement.height,
+                position_x=item.rendered_position.x,
+                position_y=item.rendered_position.y,
             )
-            self.session.add(instance)
-            instances.append(instance)
-        self.session.flush()
-        expanded_by_face: dict[str, list[tuple[BlueprintPortBlockInstance, PortBlockPort]]] = {"FRONT": [], "REAR": []}
-        for instance in instances:
-            expanded_by_face[instance.face].extend((instance, port) for port in self.session.scalars(
-                select(PortBlockPort).where(PortBlockPort.port_block_version_id == instance.port_block_version_id).order_by(PortBlockPort.layout_order)
-            ))
-        for expanded in expanded_by_face.values():
-            for instance, port in expanded:
-                slot_key = self.composed_slot_key(instance.instance_key, port.local_id)
-                if slot_key in slots_by_key:
-                    raise ValidationError("Composed Blueprint slot identity collision")
-                slot = BlueprintEndpointSlot(
-                    blueprint_version_id=version.id,
-                    slot_key=slot_key,
-                    display_name=port.display_label,
-                    kind=port.kind,
-                    port_block_instance_id=instance.id,
-                    port_block_local_id=port.local_id,
-                )
-                self.session.add(slot)
-                slots_by_key[slot.slot_key] = slot
+            self.session.add(slot)
+            slots_by_key[item.key] = slot
         self.session.flush()
         link_pairs: set[tuple[str, str]] = set()
         for link_query in query.internal_links:
@@ -183,18 +150,6 @@ class ObjectBlueprintCatalog:
             ))
         self.session.flush()
         return version
-
-    @staticmethod
-    def composed_slot_key(instance_key: str, local_id: str) -> str:
-        """Bounded identity key: SHA-256 of length-prefixed UTF-8 pair bytes.
-
-        Labels, exact version and layout deliberately do not participate.
-        The caller detects the cryptographically-unlikely digest collision before persistence.
-        """
-        instance = instance_key.encode("utf-8")
-        local = local_id.encode("utf-8")
-        canonical = len(instance).to_bytes(4, "big") + instance + len(local).to_bytes(4, "big") + local
-        return "pb_" + hashlib.sha256(canonical).hexdigest()
 
     def list_blueprints(self) -> tuple[BlueprintListItem, ...]:
         blueprints = tuple(self.session.scalars(select(ObjectBlueprint).order_by(ObjectBlueprint.name, ObjectBlueprint.id)))
@@ -257,9 +212,6 @@ class ObjectBlueprintCatalog:
                 .order_by(BlueprintInternalLink.id)
             )
         )
-        composition = tuple(self.session.scalars(select(BlueprintPortBlockInstance).where(
-            BlueprintPortBlockInstance.blueprint_version_id == version.id
-        ).order_by(BlueprintPortBlockInstance.instance_key)))
         return BlueprintVersionDetail(
             blueprint_id=blueprint.id,
             name=blueprint.name,
@@ -272,24 +224,7 @@ class ObjectBlueprintCatalog:
             fill_color=version.fill_color,
             slots=slots,
             internal_links=links,
-            composition=composition if version.composition_kind == "PORT_BLOCKS_V1" else None,
         )
-
-    def slot_presentation_geometry(self, detail: BlueprintVersionDetail) -> dict[str, dict[str, object]]:
-        """Derived immutable-snapshot geometry; never stored on endpoint slots."""
-        blocks = {block.id: block for block in detail.composition or ()}
-        ports = {(port.port_block_version_id, port.local_id): port for port in self.session.scalars(select(PortBlockPort).where(PortBlockPort.port_block_version_id.in_([block.port_block_version_id for block in blocks.values()]))) } if blocks else {}
-        face_blocks: dict[str, list[BlueprintPortBlockInstance]] = {"FRONT": [], "REAR": []}
-        for block in sorted(blocks.values(), key=lambda value: value.instance_key):
-            face_blocks[block.face or "FRONT"].append(block)
-        fallback_indices = {block.id: index for values in face_blocks.values() for index, block in enumerate(values)}
-        inputs = []
-        for slot in detail.slots:
-            block = blocks.get(slot.port_block_instance_id)
-            port = ports.get((block.port_block_version_id, slot.port_block_local_id)) if block else None
-            placement = None if block is None else ((block.placement_x, block.placement_y, block.placement_width, block.placement_height) if None not in (block.placement_x, block.placement_y, block.placement_width, block.placement_height) else fallback_placement(fallback_indices[block.id]))
-            inputs.append(PortGeometryInput(slot.slot_key, block.id if block else None, slot.port_block_local_id or slot.slot_key, port.row if port else None, port.layout_column if port else None, port.layout_order if port else 0, block.face if block and block.face else "FRONT", placement))
-        return derive_port_geometry(inputs, (detail.width, detail.height))
 
     def delete_blueprint(self, blueprint_id: uuid.UUID) -> None:
         blueprint = self.session.scalar(
@@ -314,9 +249,6 @@ class ObjectBlueprintCatalog:
                 BlueprintInternalLink.blueprint_version_id.in_(version_ids)
             ))
             self.session.execute(delete(BlueprintEndpointSlot).where(BlueprintEndpointSlot.id.in_(slot_ids)))
-        self.session.execute(delete(BlueprintPortBlockInstance).where(
-            BlueprintPortBlockInstance.blueprint_version_id.in_(version_ids)
-        ))
         self.session.execute(delete(ObjectBlueprintVersion).where(ObjectBlueprintVersion.id.in_(version_ids)))
         self.session.delete(blueprint)
 

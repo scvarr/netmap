@@ -24,7 +24,7 @@ from app.interface_resolver import InterfacePhysicalResolver
 from app.l2_resolver import L2ReachabilityResolver
 from app.l2_catalog import L2Catalog, L2ForwardingContextBindingInput
 from app.l3_resolver import SelectedTableRouteDecisionResolver
-from app.models import MapViewKey, PortBlockVersion
+from app.models import MapViewKey
 from app.l3_reachability_resolver import ConfiguredL3ReachabilityResolver
 from app.location_catalog import LocationCatalog
 from app.next_hop_resolver import SelectedTableNextHopResolver
@@ -42,7 +42,6 @@ from app.physical_connections import (
 from app.physical_object_details_resolver import ConfiguredPhysicalObjectDetailsResolver
 from app.physical_object_l1_resolver import PhysicalObjectL1Resolver
 from app.physical_object_deletion import PhysicalObjectDeletionCatalog
-from app.port_block_catalog import PortBlockCatalog
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.saved_map_catalog import SavedMapCatalog
@@ -68,8 +67,6 @@ from app.schemas import (
     CreatePhysicalLinkRequest,
     CreateCableLabelTemplateRequest,
     CreatePhysicalObjectRequest,
-    CreatePortBlockRequest,
-    CreatePortBlockVersionRequest,
     CreateMapTextAnnotationRequest,
     CreateLocationRequest,
     CreateSavedMapRequest,
@@ -115,10 +112,6 @@ from app.schemas import (
     ObjectBlueprintInstantiationDocument,
     ObjectBlueprintListDocument,
     ObjectBlueprintVersionDocument,
-    PortBlockCreationDocument,
-    PortBlockListDocument,
-    PortBlockVersionDocument,
-    PortBlockVersionListDocument,
     BlueprintUpgradeAnalysisDocument,
     ApplyBlueprintUpgradeRequest,
     PhysicalConnectionCreationDocument,
@@ -819,111 +812,6 @@ def create_physical_object(
 
 
 @app.post(
-    "/v1/library/port-blocks",
-    response_model=PortBlockCreationDocument,
-    status_code=201,
-    responses={422: {"model": ErrorResponse}},
-)
-def create_port_block(
-    query: CreatePortBlockRequest,
-    session: Session = Depends(get_session),
-) -> PortBlockCreationDocument:
-    with session.begin():
-        created = PortBlockCatalog(session).create_initial_version(query)
-        return {
-            "port_block_ref": {"entity_type": "PortBlock", "entity_id": created.port_block_id},
-            "version_ref": {"entity_type": "PortBlockVersion", "entity_id": created.version_id},
-        }
-
-
-@app.get(
-    "/v1/library/port-blocks",
-    response_model=PortBlockListDocument,
-)
-def list_port_blocks(session: Session = Depends(get_session)) -> PortBlockListDocument:
-    port_blocks = PortBlockCatalog(session).list_port_blocks()
-    return {
-        "port_blocks": [
-            {
-                "port_block_ref": {"entity_type": "PortBlock", "entity_id": item.port_block_id},
-                "name": item.name,
-                "version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.version_id},
-                "version_number": item.version_number,
-                "port_count": item.port_count,
-                "connection_point_count": item.connection_point_count,
-                "network_port_count": item.network_port_count,
-                "version_count": item.version_count,
-            }
-            for item in port_blocks
-        ]
-    }
-
-
-@app.delete(
-    "/v1/library/port-blocks/{port_block_id}",
-    status_code=204,
-    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
-)
-def delete_port_block(port_block_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
-    with session.begin():
-        PortBlockCatalog(session).delete(port_block_id)
-
-
-@app.get("/v1/library/port-blocks/{port_block_id}/versions", response_model=PortBlockVersionListDocument)
-def list_port_block_versions(port_block_id: uuid.UUID, session: Session = Depends(get_session)) -> PortBlockVersionListDocument:
-    return {"versions": [{"port_block_ref": {"entity_type": "PortBlock", "entity_id": item.port_block_id}, "version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.version_id}, "version_number": item.version_number, "port_count": item.port_count} for item in PortBlockCatalog(session).list_versions(port_block_id)]}
-
-
-@app.post(
-    "/v1/library/port-blocks/{port_block_id}/versions",
-    response_model=PortBlockCreationDocument,
-    status_code=201,
-    responses={422: {"model": ErrorResponse}},
-)
-def create_port_block_version(
-    port_block_id: uuid.UUID,
-    query: CreatePortBlockVersionRequest,
-    session: Session = Depends(get_session),
-) -> PortBlockCreationDocument:
-    with session.begin():
-        created = PortBlockCatalog(session).create_next_version(port_block_id, query)
-        return {
-            "port_block_ref": {"entity_type": "PortBlock", "entity_id": created.port_block_id},
-            "version_ref": {"entity_type": "PortBlockVersion", "entity_id": created.version_id},
-        }
-
-
-@app.get(
-    "/v1/library/port-blocks/{port_block_id}/versions/{version_id}",
-    response_model=PortBlockVersionDocument,
-    responses={422: {"model": ErrorResponse}},
-)
-def get_port_block_version(
-    port_block_id: uuid.UUID,
-    version_id: uuid.UUID,
-    session: Session = Depends(get_session),
-) -> PortBlockVersionDocument:
-    version = PortBlockCatalog(session).get_version_detail(port_block_id, version_id)
-    return {
-        "port_block_ref": {"entity_type": "PortBlock", "entity_id": version.port_block_id},
-        "name": version.name,
-        "version_ref": {"entity_type": "PortBlockVersion", "entity_id": version.version_id},
-        "version_number": version.version_number,
-        "ports": [
-            {
-                "local_id": port.local_id,
-                "display_label": port.display_label,
-                "kind": port.kind,
-                "row": port.row,
-                "column": port.layout_column,
-                "layout_order": port.layout_order,
-            }
-            for port in version.ports
-        ],
-    }
-
-
-@app.post(
     "/v1/library/object-blueprints",
     response_model=ObjectBlueprintCreationDocument,
     status_code=201,
@@ -1000,7 +888,6 @@ def get_object_blueprint_version(
     session: Session = Depends(get_session),
 ) -> ObjectBlueprintVersionDocument:
     version = ObjectBlueprintCatalog(session).get_version_detail(blueprint_id, version_id)
-    faces_by_instance = {item.id: item.face or "FRONT" for item in (version.composition or ())}
     return {
         "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": version.blueprint_id},
         "name": version.name,
@@ -1014,8 +901,8 @@ def get_object_blueprint_version(
         "slots": [
             {
                 "key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind,
-                "face": faces_by_instance.get(slot.port_block_instance_id, "FRONT"),
-                "rendered_position": ObjectBlueprintCatalog(session).slot_presentation_geometry(version).get(slot.slot_key, {"rendered_position": {"x": .95, "y": .5}})["rendered_position"],
+                "face": slot.face,
+                "rendered_position": {"x": slot.position_x, "y": slot.position_y},
             }
             for slot in version.slots
         ],
@@ -1023,17 +910,6 @@ def get_object_blueprint_version(
             {"from_slot_key": left, "to_slot_key": right}
             for left, right in version.internal_links
         ],
-        "composition": None if version.composition is None else {"instances": [
-            {"instance_key": item.instance_key,
-             "port_block_ref": {"entity_type": "PortBlock", "entity_id": session.get(PortBlockVersion, item.port_block_version_id).port_block_id},
-             "port_block_version_ref": {"entity_type": "PortBlockVersion", "entity_id": item.port_block_version_id},
-             "face": item.face or "FRONT",
-             "placement": (
-                 {"x": item.placement_x, "y": item.placement_y, "width": item.placement_width, "height": item.placement_height}
-                 if None not in (item.placement_x, item.placement_y, item.placement_width, item.placement_height) else None
-             )}
-            for item in version.composition
-        ]},
     }
 
 

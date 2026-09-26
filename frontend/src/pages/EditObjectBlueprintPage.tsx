@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   createBlueprintRequest,
   hydrateBlueprintEditorState,
@@ -12,14 +12,11 @@ import type {
   ObjectBlueprintDataSource,
   ObjectBlueprintVersionDocument,
 } from "../topology/objectBlueprintTypes";
-import type { PortBlockDataSource } from "../topology/portBlockTypes";
 
 export function EditObjectBlueprintPage({
   dataSource,
-  portBlockDataSource,
 }: {
   dataSource: ObjectBlueprintDataSource;
-  portBlockDataSource: PortBlockDataSource;
 }) {
   const { blueprintId, versionId } = useParams();
   const navigate = useNavigate();
@@ -41,10 +38,7 @@ export function EditObjectBlueprintPage({
           blueprintId,
           versionId,
         );
-        const hydrated = await hydrateBlueprintEditorState(
-          document,
-          portBlockDataSource,
-        );
+        const hydrated = hydrateBlueprintEditorState(document);
         if (active) {
           setVersion(document);
           setInitial(hydrated);
@@ -62,7 +56,7 @@ export function EditObjectBlueprintPage({
     return () => {
       active = false;
     };
-  }, [blueprintId, versionId, dataSource, portBlockDataSource, t]);
+  }, [blueprintId, versionId, dataSource, t]);
   const breadcrumbs = (
     <Breadcrumbs
       label={t("blueprint.breadcrumbs")}
@@ -97,18 +91,10 @@ export function EditObjectBlueprintPage({
         <ViewState kind="loading" />
       </PageShell>
     );
-  if (!initial)
-    return (
-      <PageShell className="catalog-page blueprint-editor-page">
-        {breadcrumbs}
-        <ViewState kind="empty" message={t("blueprint.edit.unavailable")} />
-      </PageShell>
-    );
   return (
     <PageShell className="catalog-page blueprint-editor-page">
       {breadcrumbs}
       <ObjectBlueprintEditor
-        portBlockDataSource={portBlockDataSource}
         key={version.version_ref.entity_id}
         initialState={initial}
         title={t("blueprint.edit.title")}

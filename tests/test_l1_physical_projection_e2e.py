@@ -199,16 +199,17 @@ def test_internal_links_keep_all_branched_members_and_respect_object_scope():
 
 
 def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
-    blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01")], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Panel", body={"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"})
+    blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01", face="REAR", x=.8, y=.7)], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Panel", body={"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"})
     instance = instantiate(blueprint_id, version_id, "PP1")
-    exact_ref = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}").json()["composition"]["instances"][0]["port_block_version_ref"]
-    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "composition": {"instances": [{"instance_key": "instance", "port_block_version_ref": exact_ref, "face": "FRONT", "placement": {"x": .1, "y": .1, "width": .3, "height": .2}}]}, "internal_links": []}).status_code == 201
+    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "slots": [slot("Front01", x=.8, y=.7)], "internal_links": []}).status_code == 201
     node = node_by_object(client.post("/v1/topology/projection", json=projection_query()).json(), instance["physical_object_ref"]["entity_id"])
     presentation = node["attributes"]["blueprint_presentation"]
     assert presentation["version_ref"]["entity_id"] == version_id
     assert presentation["body"] == {"kind": "RECTANGLE", "width": 480.0, "height": 70.0, "fill_color": "#123456"}
     assert all("anchor" not in slot for slot in presentation["slots"])
     assert all(0 <= slot["rendered_position"][axis] <= 1 for slot in presentation["slots"] for axis in ("x", "y"))
+    assert {slot["slot_key"]: slot["rendered_position"] for slot in presentation["slots"]} == {"Front01": {"x": .2, "y": .3}, "Rear01": {"x": .8, "y": .7}}
+    assert {slot["slot_key"]: slot["external_attachment"]["side"] for slot in presentation["slots"]} == {"Front01": "TOP", "Rear01": "BOTTOM"}
     assert all(slot["external_attachment"]["side"] in {"LEFT", "RIGHT", "TOP", "BOTTOM"} for slot in presentation["slots"])
     assert {slot["connection_point_id"] for slot in presentation["slots"]} == {slot["connection_point_ref"]["entity_id"] for slot in instance["slots"]}
     assert all(ref["ref_type"] == "CANONICAL_FACT" for ref in node["source_refs"])

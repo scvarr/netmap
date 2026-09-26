@@ -44,7 +44,7 @@ const parseBody = (value: unknown, path: string): BlueprintBody => {
 const parseSlot = (value: unknown, path: string): BlueprintSlot => {
   const slot = requireObject(value, path); const rendered = requireObject(slot.rendered_position, `${path}.rendered_position`);
   if (slot.kind !== 'CONNECTION_POINT' && slot.kind !== 'NETWORK_PORT') malformed(`${path}.kind is unsupported.`);
-  if (typeof rendered.x !== 'number' || typeof rendered.y !== 'number' || rendered.x < 0 || rendered.x > 1 || rendered.y < 0 || rendered.y > 1) malformed(`${path}.rendered_position is invalid.`);
+  if (typeof rendered.x !== 'number' || typeof rendered.y !== 'number' || !Number.isFinite(rendered.x) || !Number.isFinite(rendered.y) || rendered.x < 0 || rendered.x > 1 || rendered.y < 0 || rendered.y > 1) malformed(`${path}.rendered_position is invalid.`);
   if (slot.face !== 'FRONT' && slot.face !== 'REAR') malformed(`${path}.face is unsupported.`);
   return { key: requireString(slot.key, `${path}.key`), display_name: requireString(slot.display_name, `${path}.display_name`), kind: slot.kind as BlueprintSlotKind, face: slot.face as BlueprintFace, rendered_position: { x: rendered.x as number, y: rendered.y as number } };
 };
@@ -52,12 +52,6 @@ const parseSlot = (value: unknown, path: string): BlueprintSlot => {
 const parseLink = (value: unknown, path: string): BlueprintInternalLink => {
   const link = requireObject(value, path);
   return { from_slot_key: requireString(link.from_slot_key, `${path}.from_slot_key`), to_slot_key: requireString(link.to_slot_key, `${path}.to_slot_key`) };
-};
-
-const parseComposition = (value: unknown, path: string) => {
-  if (value == null) return value as null | undefined;
-  const composition = requireObject(value, path); if (!Array.isArray(composition.instances)) malformed(`${path}.instances must be an array.`);
-  return { instances: (composition.instances as unknown[]).map((value, index) => { const item=requireObject(value, `${path}.instances[${index}]`); const block=requireObject(item.port_block_ref, `${path}.instances[${index}].port_block_ref`); const ref=requireObject(item.port_block_version_ref, `${path}.instances[${index}].port_block_version_ref`); if(block.ref_type !== 'LIBRARY_RECORD' || block.entity_type !== 'PortBlock' || ref.ref_type !== 'LIBRARY_RECORD' || ref.entity_type !== 'PortBlockVersion') malformed(`${path}.instances[${index}] has invalid Port Block refs.`); if (item.face !== 'FRONT' && item.face !== 'REAR') malformed(`${path}.instances[${index}].face is unsupported.`); let placement; if (item.placement != null) { const raw=requireObject(item.placement, `${path}.instances[${index}].placement`); const values=['x','y','width','height'].map((key) => raw[key]); if (!values.every((entry) => typeof entry === 'number' && Number.isFinite(entry))) malformed(`${path}.instances[${index}].placement is invalid.`); const [x,y,width,height]=values as number[]; if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1 || y + height > 1) malformed(`${path}.instances[${index}].placement must fit within 0..1.`); placement={x,y,width,height}; } return { instance_key:requireString(item.instance_key, `${path}.instances[${index}].instance_key`), port_block_ref:{ref_type:'LIBRARY_RECORD' as const,entity_type:'PortBlock' as const,entity_id:requireString(block.entity_id, `${path}.instances[${index}].port_block_ref.entity_id`)}, port_block_version_ref:{ref_type:'LIBRARY_RECORD' as const,entity_type:'PortBlockVersion' as const,entity_id:requireString(ref.entity_id, `${path}.instances[${index}].port_block_version_ref.entity_id`)}, face: item.face as BlueprintFace, placement }; }) };
 };
 
 export const parseObjectBlueprintListDocument = (value: unknown): ObjectBlueprintListDocument => {
@@ -75,7 +69,7 @@ export const parseObjectBlueprintVersionDocument = (value: unknown): ObjectBluep
   const document = requireObject(value, 'document');
   if (document.schema_version !== '1.0' || !Array.isArray(document.slots) || !Array.isArray(document.internal_links)) malformed('version document has invalid shape.');
   if (typeof document.version_number !== 'number' || document.version_number < 1) malformed('version_number must be positive.');
-  return { schema_version: '1.0', blueprint_ref: parseRef(document.blueprint_ref, 'blueprint_ref', 'ObjectBlueprint'), name: requireString(document.name, 'name'), version_ref: parseRef(document.version_ref, 'version_ref', 'ObjectBlueprintVersion'), version_number: document.version_number as number, default_physical_object_class: document.default_physical_object_class as string | null | undefined, body: parseBody(document.body, 'body'), slots: (document.slots as unknown[]).map((slot, index) => parseSlot(slot, `slots[${index}]`)), internal_links: (document.internal_links as unknown[]).map((link, index) => parseLink(link, `internal_links[${index}]`)), composition: parseComposition(document.composition, 'composition') };
+  return { schema_version: '1.0', blueprint_ref: parseRef(document.blueprint_ref, 'blueprint_ref', 'ObjectBlueprint'), name: requireString(document.name, 'name'), version_ref: parseRef(document.version_ref, 'version_ref', 'ObjectBlueprintVersion'), version_number: document.version_number as number, default_physical_object_class: document.default_physical_object_class as string | null | undefined, body: parseBody(document.body, 'body'), slots: (document.slots as unknown[]).map((slot, index) => parseSlot(slot, `slots[${index}]`)), internal_links: (document.internal_links as unknown[]).map((link, index) => parseLink(link, `internal_links[${index}]`)) };
 };
 
 export const parseObjectBlueprintCreationDocument = (value: unknown): ObjectBlueprintCreationDocument => {

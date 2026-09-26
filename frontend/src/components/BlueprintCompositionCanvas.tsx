@@ -1,26 +1,34 @@
 import { useRef, useState, type PointerEvent } from 'react';
-import type { BlueprintFace, BlueprintInternalLink, BlueprintPortBlockPlacement } from '../topology/objectBlueprintTypes';
-import { fallbackPlacement, type BlueprintBlockInstance } from '../blueprints/editorModel';
-import { compositionCanvas, placementRect, portCenter, resizePlacement, resolvePlacement, screenToPlacementPoint, type AlignmentGuide, type ResizeHandle } from '../blueprints/compositionGeometry';
+import type { BlueprintFace, BlueprintInternalLink, BlueprintSlot } from '../topology/objectBlueprintTypes';
 import { useI18n } from '../i18n';
 
-interface Props { body: { width: number; height: number; fillColor: string }; face: BlueprintFace; instances: BlueprintBlockInstance[]; links: BlueprintInternalLink[]; selectedKey?: string; onSelect: (key: string) => void; onPlacement: (key: string, placement: BlueprintPortBlockPlacement) => void; }
+interface Props {
+  body: { width: number; height: number; fillColor: string }; face: BlueprintFace;
+  slots: BlueprintSlot[]; links: BlueprintInternalLink[]; selectedKey?: string;
+  onSelect: (key: string) => void; onPosition: (key: string, position: { x: number; y: number }) => void;
+}
+const clamp = (value: number) => Math.max(0, Math.min(1, value));
 
-export function BlueprintCompositionCanvas({ body, face, instances, links, selectedKey, onSelect, onPlacement }: Props) {
+export function BlueprintCompositionCanvas({ body, face, slots, links, selectedKey, onSelect, onPosition }: Props) {
   const { t } = useI18n();
-  const svg = useRef<SVGSVGElement>(null); const canvas = compositionCanvas(body);
-  const [gesture, setGesture] = useState<{ key: string; mode: 'drag' | 'resize'; handle?: ResizeHandle; start: BlueprintPortBlockPlacement; pointer: { x: number; y: number } }>();
-  const [guides, setGuides] = useState<AlignmentGuide[]>([]);
-  const visible = instances.map((item, index) => ({ item, index })).filter(({ item }) => (item.face ?? 'FRONT') === face);
-  const pointer = (event: PointerEvent<SVGElement>) => { const rect = svg.current!.getBoundingClientRect(); return screenToPlacementPoint(event.clientX, event.clientY, rect, canvas); };
-  const update = (event: PointerEvent<SVGElement>) => { if (!gesture) return; const point = pointer(event); const dx = point.x - gesture.pointer.x; const dy = point.y - gesture.pointer.y; const requested = gesture.mode === 'drag' ? { ...gesture.start, x: gesture.start.x + dx, y: gesture.start.y + dy } : resizePlacement(gesture.start, gesture.handle!, dx, dy); const occupied = visible.filter(({ item }) => item.instanceKey !== gesture.key).map(({ item, index }) => item.placement ?? fallbackPlacement(index)); const result = resolvePlacement(requested, gesture.start, occupied, gesture.mode); setGuides(result.guides); onPlacement(gesture.key, result.placement); };
-  const points = new Map<string, { x: number; y: number }>();
-  visible.forEach(({ item, index }) => { const placement = item.placement ?? fallbackPlacement(index); item.ports.forEach((port) => { const key = item.resolvedSlotKeys[port.local_id]; const point = portCenter(item, port.local_id, placement, canvas); if (key && point) points.set(key, point); }); });
-  const endGesture = () => { setGesture(undefined); setGuides([]); };
-  return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 ${canvas.width} ${canvas.height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.composition.canvas', { face: t(face === 'FRONT' ? 'blueprint.face.front' : 'blueprint.face.rear') })} onPointerMove={update} onPointerUp={endGesture} onPointerCancel={endGesture}>
-    <rect className="blueprint-composition-canvas__body" width={canvas.width} height={canvas.height} fill={body.fillColor} />
+  const svg = useRef<SVGSVGElement>(null);
+  const [dragging, setDragging] = useState<string>();
+  const height = 1000 * (body.height > 0 && body.width > 0 ? body.height / body.width : 1);
+  const radius = Math.min(13, height / 55);
+  const visible = slots.filter((slot) => slot.face === face);
+  const points = new Map(visible.map((slot) => [slot.key, { x: slot.rendered_position.x * 1000, y: slot.rendered_position.y * height }]));
+  const position = (event: PointerEvent<SVGElement>) => {
+    const rect = svg.current!.getBoundingClientRect();
+    const scale = Math.min(rect.width / 1000, rect.height / height);
+    const left = rect.left + (rect.width - 1000 * scale) / 2;
+    const top = rect.top + (rect.height - height * scale) / 2;
+    return { x: clamp((event.clientX - left) / (1000 * scale)), y: clamp((event.clientY - top) / (height * scale)) };
+  };
+  return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 1000 ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.composition.canvas', { face: t(face === 'FRONT' ? 'blueprint.face.front' : 'blueprint.face.rear') })} onPointerMove={(event) => { if (dragging) onPosition(dragging, position(event)); }} onPointerUp={() => setDragging(undefined)} onPointerCancel={() => setDragging(undefined)}>
+    <rect className="blueprint-composition-canvas__body" width="1000" height={height} fill={body.fillColor} />
     {links.map((link) => { const from = points.get(link.from_slot_key); const to = points.get(link.to_slot_key); return from && to ? <line key={`${link.from_slot_key}-${link.to_slot_key}`} className="blueprint-composition-canvas__link" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null; })}
-    {guides.map((guide, index) => guide.axis === 'x' ? <line key={`guide-${index}`} className="blueprint-composition-canvas__guide" x1={guide.position * canvas.width} x2={guide.position * canvas.width} y1="0" y2={canvas.height} /> : <line key={`guide-${index}`} className="blueprint-composition-canvas__guide" x1="0" x2={canvas.width} y1={guide.position * canvas.height} y2={guide.position * canvas.height} />)}
-    {visible.map(({ item, index }) => { const placement = item.placement ?? fallbackPlacement(index); const rect = placementRect(placement, canvas); const selected = item.instanceKey === selectedKey; const begin = (event: PointerEvent<SVGElement>, mode: 'drag' | 'resize', handle?: ResizeHandle) => { event.stopPropagation(); (event.currentTarget as SVGElement & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId); onSelect(item.instanceKey); setGesture({ key: item.instanceKey, mode, handle, start: placement, pointer: pointer(event) }); }; const handles: Array<[ResizeHandle, number, number, number, number]> = [['nw', rect.x - 18, rect.y - 18, 36, 36], ['n', rect.x + rect.width / 2 - 18, rect.y - 18, 36, 36], ['ne', rect.x + rect.width - 18, rect.y - 18, 36, 36], ['e', rect.x + rect.width - 18, rect.y + rect.height / 2 - 18, 36, 36], ['se', rect.x + rect.width - 18, rect.y + rect.height - 18, 36, 36], ['s', rect.x + rect.width / 2 - 18, rect.y + rect.height - 18, 36, 36], ['sw', rect.x - 18, rect.y + rect.height - 18, 36, 36], ['w', rect.x - 18, rect.y + rect.height / 2 - 18, 36, 36]]; return <g key={item.instanceKey} data-instance-key={item.instanceKey} className={selected ? 'blueprint-composition-canvas__block is-selected' : 'blueprint-composition-canvas__block'} onPointerDown={(event) => begin(event, 'drag')}><rect x={rect.x} y={rect.y} width={rect.width} height={rect.height} rx="8" />{item.ports.map((port) => { const point = portCenter(item, port.local_id, placement, canvas)!; return <g key={port.local_id} className="blueprint-composition-canvas__port"><circle cx={point.x} cy={point.y} r="9"><title>{port.display_label}</title></circle></g>; })}{selected && handles.map(([handle, x, y, width, height]) => <rect key={handle} data-resize-handle={`${item.instanceKey}-${handle}`} className={`blueprint-composition-canvas__resize blueprint-composition-canvas__resize--${handle}`} x={x} y={y} width={width} height={height} onPointerDown={(event) => begin(event, 'resize', handle)} />)}</g>; })}
+    {visible.map((slot) => { const point = points.get(slot.key)!; return <g key={slot.key} data-slot-key={slot.key} className="blueprint-composition-canvas__port" onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); (event.currentTarget as SVGElement & { setPointerCapture?: (id: number) => void }).setPointerCapture?.(event.pointerId); onSelect(slot.key); setDragging(slot.key); }}>
+      <circle cx={point.x} cy={point.y} r={slot.key === selectedKey ? radius * 1.25 : radius} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={slot.key === selectedKey ? '#fff' : '#1c3135'} strokeWidth="2"><title>{slot.display_name}</title></circle>
+    </g>; })}
   </svg>;
 }

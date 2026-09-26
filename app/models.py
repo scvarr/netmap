@@ -436,60 +436,6 @@ class ObjectBlueprint(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
-class PortBlock(Base):
-    """Library-owned authoring record; never a canonical topology fact."""
-
-    __tablename__ = "port_blocks"
-    __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),)
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-
-
-class PortBlockVersion(Base):
-    """Immutable ordered/layout snapshot of one PortBlock's network ports."""
-
-    __tablename__ = "port_block_versions"
-    __table_args__ = (
-        CheckConstraint("version_number >= 1", name="version_number_positive"),
-        UniqueConstraint("port_block_id", "version_number", name="uq_port_block_versions_number"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    port_block_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("port_blocks.id", ondelete="RESTRICT"), nullable=False
-    )
-    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
-
-
-class PortBlockPort(Base):
-    """One exact port in an immutable PortBlockVersion snapshot."""
-
-    __tablename__ = "port_block_ports"
-    __table_args__ = (
-        CheckConstraint("char_length(btrim(local_id)) > 0", name="local_id_not_blank"),
-        CheckConstraint("char_length(btrim(display_label)) > 0", name="display_label_not_blank"),
-        CheckConstraint("kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="kind_supported"),
-        CheckConstraint("row >= 1 AND row <= 2", name="row_supported"),
-        CheckConstraint("layout_column >= 1", name="column_positive"),
-        CheckConstraint("layout_order >= 1", name="layout_order_positive"),
-        UniqueConstraint("port_block_version_id", "local_id", name="uq_port_block_ports_local_id"),
-        UniqueConstraint("port_block_version_id", "row", "layout_column", name="uq_port_block_ports_position"),
-        UniqueConstraint("port_block_version_id", "layout_order", name="uq_port_block_ports_layout_order"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    port_block_version_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("port_block_versions.id", ondelete="RESTRICT"), nullable=False
-    )
-    local_id: Mapped[str] = mapped_column(String(255), nullable=False)
-    display_label: Mapped[str] = mapped_column(String(255), nullable=False)
-    kind: Mapped[str] = mapped_column(String(32), nullable=False)
-    row: Mapped[int] = mapped_column(Integer, nullable=False)
-    layout_column: Mapped[int] = mapped_column(Integer, nullable=False)
-    layout_order: Mapped[int] = mapped_column(Integer, nullable=False)
-
-
 class ObjectBlueprintVersion(Base):
     __tablename__ = "object_blueprint_versions"
     __table_args__ = (
@@ -511,31 +457,6 @@ class ObjectBlueprintVersion(Base):
     width: Mapped[float] = mapped_column(Float, nullable=False)
     height: Mapped[float] = mapped_column(Float, nullable=False)
     fill_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
-    authoring_recipe: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    # NULL identifies pre-composition immutable snapshots. New authoring always
-    # writes PORT_BLOCKS_V1, even when its composition contains no instances.
-    composition_kind: Mapped[str | None] = mapped_column(String(32), nullable=True)
-
-
-class BlueprintPortBlockInstance(Base):
-    """Exact Port Block version provenance for one composed Blueprint instance."""
-    __tablename__ = "blueprint_port_block_instances"
-    __table_args__ = (
-        CheckConstraint("char_length(btrim(instance_key)) > 0", name="instance_key_not_blank"),
-        UniqueConstraint("blueprint_version_id", "instance_key", name="uq_blueprint_block_instance_key"),
-    )
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False)
-    port_block_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("port_block_versions.id", ondelete="RESTRICT"), nullable=False)
-    instance_key: Mapped[str] = mapped_column(String(255), nullable=False)
-    # NULL is immutable pre-face provenance. New composition authoring must set a face.
-    face: Mapped[str | None] = mapped_column(String(8), nullable=True)
-    # NULL is immutable pre-L1S.6c.5 provenance. This is face-local presentation
-    # geometry only: it must never affect slot identity or runtime attachment anchors.
-    placement_x: Mapped[float | None] = mapped_column(Float, nullable=True)
-    placement_y: Mapped[float | None] = mapped_column(Float, nullable=True)
-    placement_width: Mapped[float | None] = mapped_column(Float, nullable=True)
-    placement_height: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class BlueprintEndpointSlot(Base):
@@ -545,7 +466,8 @@ class BlueprintEndpointSlot(Base):
         CheckConstraint("char_length(btrim(display_name)) > 0", name="display_name_not_blank"),
         CheckConstraint("kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="kind_supported"),
         UniqueConstraint("blueprint_version_id", "slot_key", name="uq_blueprint_endpoint_slots_key"),
-        UniqueConstraint("port_block_instance_id", "port_block_local_id", name="uq_blueprint_slot_block_local_id"),
+        CheckConstraint("face IN ('FRONT', 'REAR')", name="face_supported"),
+        CheckConstraint("position_x >= 0 AND position_x <= 1 AND position_y >= 0 AND position_y <= 1", name="position_bounds"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -555,8 +477,9 @@ class BlueprintEndpointSlot(Base):
     slot_key: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
-    port_block_instance_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("blueprint_port_block_instances.id", ondelete="RESTRICT"), nullable=True)
-    port_block_local_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    face: Mapped[str] = mapped_column(String(8), nullable=False)
+    position_x: Mapped[float] = mapped_column(Float, nullable=False)
+    position_y: Mapped[float] = mapped_column(Float, nullable=False)
 
 
 class BlueprintInternalLink(Base):

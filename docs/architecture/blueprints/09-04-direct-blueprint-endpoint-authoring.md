@@ -2,13 +2,24 @@
 
 ## Status and authority
 
-**FIXED / ACCEPTED TARGET CONTRACT. IMPLEMENTATION PENDING.**
+**FIXED / ACCEPTED TARGET CONTRACT. DIRECT-SLOT FOUNDATION IMPLEMENTED;
+RICH EDITOR UX PENDING.**
+
+The destructive foundation cutover removed Port Block application models,
+tables, APIs, library and editor surfaces. Immutable Blueprint versions now
+own direct slots with exact names, kinds, faces, normalized positions, opaque
+stable keys, and individual internal links. The minimal editor supports bulk
+add, single selection, rename, kind/face edit, move, delete, and individual
+links. Multi-selection, alignment/distribution, ordered bulk naming, and
+pairwise bulk continuity remain **PENDING**. Endpoint technology/capability
+remains **OPEN**. Phase C remains **PAUSED** until the remaining editor slices
+and manual HV-01 recheck.
 
 This document is the authoritative target for Object Blueprint endpoint
 authoring, identity, immutable snapshots, and endpoint presentation. The
-implemented L1S.6c Port Block model in
-[09.3](09-03-port-block-blueprint-architecture.md) is **CURRENTLY IMPLEMENTED
-BUT ARCHITECTURALLY SUPERSEDED**. It remains historical context only.
+former L1S.6c Port Block model in
+[09.3](09-03-port-block-blueprint-architecture.md) has been removed from the
+application. It remains historical context only.
 
 The Phase C HV-01 authoring walkthrough exposed the cost of the intermediate
 `PortBlock -> PortBlockVersion -> PortBlockPort ->
@@ -143,13 +154,12 @@ they are not introduced here.
 
 ## Pre-production data policy
 
-A future implementation may destructively remove `PortBlock`,
+The foundation cutover destructively removed `PortBlock`,
 `PortBlockVersion`, `PortBlockPort`, `BlueprintPortBlockInstance`, associated
 API/DTO/UI/routes, library/editor pages, and obsolete persisted provenance.
 Preserving the development database and old Port Block authoring records is
-not required; no compatibility migration for them is required. An incompatible
-workspace exchange format may be version-bumped. This architecture milestone
-implements none of these removals.
+not required; no compatibility migration for them is provided. Workspace
+exchange format version 2 carries direct slots and rejects version 1.
 
 ## Bounded implementation sequence
 
