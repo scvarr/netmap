@@ -415,6 +415,11 @@ UI. Canonical Location semantics/API/DB не менялись.
 `P-UX-18` завершён и merged в `main`; `P-UX-19` реализован. Принято решение
 начать новый clean rack-first/service-path acceptance stand с пустой БД. Это
 новый active acceptance run, а не отмена прежних результатов и evidence;
+Найденный при clean acceptance product blocker требует пользовательского
+export/reset/import lifecycle текущего implicit workspace: без него нельзя
+сохранить stand перед полной очисткой и восстановить его для повторной проверки.
+Этот bounded Phase C fix не закрывает future workspace selector, sharing,
+ACL/fork или общий import в новый `NetworkWorkspace`.
 существующие `C-*` findings не закрываются автоматически. P-UX-03: milestones
 A/B/C/D реализованы, ручная перепроверка D пройдена, Cable route follow-up из
 11-08 завершён. P-UX-03E остаётся pending; весь P-UX-03 и spatial cutover

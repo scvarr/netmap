@@ -603,3 +603,8 @@ a { color: inherit; }
 .map-text-annotation-layer { position: absolute; z-index: 1002; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
 .map-text-annotation-layer text { pointer-events: all; cursor: pointer; paint-order: stroke; stroke: rgb(7 16 18 / .7); stroke-width: 2px; }
 .map-text-annotation-layer text.map-text-annotation--selected { filter: drop-shadow(0 0 3px #ffe08a); }
+.workspace-data-actions { display: grid; gap: 1.5rem; padding: 1.5rem; }
+.workspace-data-actions > div + div { border-top: 1px solid var(--border, #d5dbe3); padding-top: 1.5rem; }
+.workspace-data-actions h2 { margin: 0 0 .5rem; font-size: 1rem; }
+.workspace-data-actions p { margin: 0 0 .75rem; }
+.workspace-data-upload { display: inline-grid; gap: .5rem; }

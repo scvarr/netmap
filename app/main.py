@@ -1,12 +1,13 @@
 import logging
+import json
 import uuid
 from typing import Literal
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
@@ -45,6 +46,7 @@ from app.port_block_catalog import PortBlockCatalog
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.saved_map_catalog import SavedMapCatalog
+from app.workspace_portability import PackageError, export_package, import_package, reset_dataset
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
 from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolver
@@ -165,6 +167,43 @@ logger = logging.getLogger("netmap")
 app = FastAPI(title="NetMap", version="0.1.0")
 install_listener(engine)
 app.middleware("http")(instrument_request)
+
+
+@app.get("/v1/workspace/package")
+def export_current_workspace(session: Session = Depends(get_session)) -> Response:
+    with session.begin():
+        session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
+        package = export_package(session)
+    return Response(
+        content=json.dumps(package, ensure_ascii=False, allow_nan=False),
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="netmap-workspace.json"'},
+    )
+
+
+@app.delete("/v1/workspace/dataset", status_code=204)
+def reset_current_workspace(session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        reset_dataset(session)
+
+
+@app.post("/v1/workspace/package", status_code=204)
+async def import_current_workspace(request: Request, session: Session = Depends(get_session)) -> None:
+    body = await request.body()
+    if len(body) > 50_000_000:
+        raise HTTPException(413, "NetMap package exceeds the 50 MB limit")
+    try:
+        package = json.loads(body)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise HTTPException(422, "Malformed NetMap package JSON") from exc
+    try:
+        with session.begin():
+            import_package(session, package)
+    except PackageError as exc:
+        status = 409 if str(exc) == "Import requires a completely empty dataset" else 422
+        raise HTTPException(status, str(exc)) from exc
+    except (DataError, IntegrityError) as exc:
+        raise HTTPException(422, "NetMap package violates dataset constraints") from exc
 
 
 @app.get(

@@ -42,6 +42,11 @@ fact remains unknown; it is never replaced with fake topology.
 The active fixture starts from a fresh empty test database. Its initial
 geography is deliberately minimal:
 
+Phase C portability/reset позволяет получить эквивалентное пустое состояние
+через подтверждённую полную очистку в UI, предварительно экспортировав текущий
+stand, и затем восстановить snapshot только в пустой dataset. Это обслуживает
+текущий implicit workspace; multi-workspace productization остаётся вне scope.
+
 ```text
 EMPTY DATABASE
 → SITE-LAB

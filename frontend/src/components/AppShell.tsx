@@ -72,6 +72,13 @@ export function AppShell() {
               <span className="shell-nav__label">{t('nav.portBlocks')}</span>
             </NavLink>
           </div>
+          <div className="shell-nav__group">
+            <span className="shell-nav__group-label">{t('workspace.section')}</span>
+            <NavLink className={navClassName} to="/settings/data" title={t('workspace.title')} data-tooltip={t('workspace.title')}>
+              <span className="shell-nav__icon" aria-hidden="true">⚙</span>
+              <span className="shell-nav__label">{t('workspace.title')}</span>
+            </NavLink>
+          </div>
         </nav>
         <div className="sidebar__health"><HealthIndicator /></div>
       </aside>

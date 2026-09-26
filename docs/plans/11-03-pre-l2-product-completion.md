@@ -123,6 +123,11 @@ SavedMap relationship между routes. Bundle/shared-route entity остаёт
 постепенно (rack -> room/server room -> floor -> building/site при необходимости)
 с реальными equipment, ports, Locations, wiring, Cable, SavedMaps,
 hierarchical Location presentation, routes, internal continuity и L1 trace.
+Clean acceptance обнаружила product blocker: стенд нельзя было штатно сохранить,
+восстановить и полностью очистить через продукт. Поэтому минимальный
+export/reset/import lifecycle текущего implicit default workspace стал
+обязательной bounded capability этого Phase C прохода. Это не означает
+реализацию persisted `NetworkWorkspace` или общей portability family Phase F.
 Expanded derived Location frames отражают текущую presentation scene и
 реализованы в P-UX-03B.
 Task-based workflow: найти, создать,

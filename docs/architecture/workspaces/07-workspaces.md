@@ -363,6 +363,18 @@ operations. Это не означает проектирование event sour
 
 **FIXED direction; format details OPEN**
 
+Phase C clean acceptance выявила обязательную для текущего implicit default
+workspace возможность: экспортировать persisted dataset, полностью очистить его
+через UI и восстановить package в пустой dataset. Первый bounded implementation
+использует JSON package `netmap-workspace` версии 1 с отдельными разделами
+canonical facts, authoring/provenance, presentation и settings. IDs сохраняются;
+import в непустой dataset отклоняется, reset не удаляет schema/migrations.
+Это lifecycle текущего single-workspace dataset, а не persisted
+`NetworkWorkspace`, workspace selector, ACL или общий workspace import.
+Application service принимает выбранную repository/session boundary; будущий
+workspace scope будет определяться до вызова этого service. Exact future
+archive/container semantics остаются OPEN.
+
 Workspace export/import — не database dump и не сериализация текущих ORM
 tables, а отдельный versioned public exchange model. Conceptual manifest:
 
@@ -384,7 +396,8 @@ Observed/runtime telemetry не обязана входить в обычный 
 Совпадение UUID не даёт права overwrite существующий workspace. Первый
 безопасный product direction — import self-contained package как новый
 isolated workspace; restore/merge semantics проектируются отдельно, automatic
-merge не требуется.
+merge не требуется. Текущий Phase C restore является отдельным узким случаем:
+только в полностью пустой implicit default workspace.
 
 ## Blueprint library packages
 
