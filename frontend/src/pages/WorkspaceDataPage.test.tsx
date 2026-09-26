@@ -19,7 +19,7 @@ it('requires destructive confirmation and reports reset success', async () => {
   confirm.mockReturnValue(true);
   fireEvent.click(screen.getByRole('button', { name: 'Полностью удалить данные' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Все данные удалены.'));
-  expect(fetchMock).toHaveBeenCalledWith('/v1/workspace/dataset', { method: 'DELETE' });
+  expect(fetchMock).toHaveBeenCalledWith('/api/v1/workspace/dataset', { method: 'DELETE' });
 });
 
 it('uploads the selected file and explains the nonempty dataset error', async () => {
@@ -29,7 +29,7 @@ it('uploads the selected file and explains the nonempty dataset error', async ()
   const file = new File(['{}'], 'snapshot.json', { type: 'application/json' });
   fireEvent.change(screen.getByLabelText('Выбрать файл NetMap JSON'), { target: { files: [file] } });
   await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Импорт возможен только после полной очистки данных.'));
-  expect(fetchMock).toHaveBeenCalledWith('/v1/workspace/package', {
+  expect(fetchMock).toHaveBeenCalledWith('/api/v1/workspace/package', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: file,
   });
 });
@@ -44,7 +44,8 @@ it('shows an import validation error from the server', async () => {
 });
 
 it('downloads the exported package', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['{}']) }));
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, headers: new Headers({ 'Content-Type': 'application/json' }), blob: async () => new Blob(['{}']) });
+  vi.stubGlobal('fetch', fetchMock);
   const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:netmap');
   const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
@@ -52,6 +53,16 @@ it('downloads the exported package', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Экспортировать данные' }));
   await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Файл экспорта подготовлен.'));
   expect(create).toHaveBeenCalledOnce();
+  expect(fetchMock).toHaveBeenCalledWith('/api/v1/workspace/package');
   expect(click).toHaveBeenCalledOnce();
   expect(revoke).toHaveBeenCalledWith('blob:netmap');
+});
+
+it('does not download an HTML fallback returned with status 200', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, headers: new Headers({ 'Content-Type': 'text/html' }) }));
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+  renderPage();
+  fireEvent.click(screen.getByRole('button', { name: 'Экспортировать данные' }));
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Не удалось экспортировать данные.'));
+  expect(click).not.toHaveBeenCalled();
 });

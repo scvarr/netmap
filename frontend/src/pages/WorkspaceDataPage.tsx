@@ -27,8 +27,10 @@ export function WorkspaceDataPage() {
   };
 
   const exportData = () => run(async () => {
-    const response = await fetch('/v1/workspace/package');
-    if (!response.ok) throw new Error(await errorMessage(response, t('workspace.exportFailed')));
+    const response = await fetch('/api/v1/workspace/package');
+    if (!response.ok || !response.headers.get('Content-Type')?.includes('application/json')) {
+      throw new Error(t('workspace.exportFailed'));
+    }
     const url = URL.createObjectURL(await response.blob());
     try {
       const link = document.createElement('a');
@@ -46,10 +48,10 @@ export function WorkspaceDataPage() {
     event.target.value = '';
     if (!file) return;
     void run(async () => {
-      const response = await fetch('/v1/workspace/package', {
+      const response = await fetch('/api/v1/workspace/package', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: file,
       });
-      if (!response.ok) {
+      if (response.status !== 204) {
         if (response.status === 409) throw new Error(t('workspace.nonempty'));
         if (response.status === 422) throw new Error(t('workspace.invalidPackage'));
         if (response.status === 413) throw new Error(t('workspace.tooLarge'));
@@ -62,8 +64,8 @@ export function WorkspaceDataPage() {
   const resetData = () => {
     if (!window.confirm(t('workspace.resetConfirm'))) return;
     void run(async () => {
-      const response = await fetch('/v1/workspace/dataset', { method: 'DELETE' });
-      if (!response.ok) throw new Error(await errorMessage(response, t('workspace.resetFailed')));
+      const response = await fetch('/api/v1/workspace/dataset', { method: 'DELETE' });
+      if (response.status !== 204) throw new Error(await errorMessage(response, t('workspace.resetFailed')));
       return t('workspace.resetDone');
     });
   };
