@@ -89,12 +89,18 @@ export const snapSelectionTranslation = (visible: BlueprintSlot[], keys: Readonl
     ...(y.guide !== undefined && Math.abs(constrained.dy - y.delta) < 1e-9 ? { guideY: y.guide } : {}),
   };
 };
-export const distributeSelection = (state: BlueprintEditorState, keys: ReadonlySet<string>, axis: Axis): BlueprintEditorState => {
+export type DistributionRange = { mode: 'percent'; percent: number } | { mode: 'full' };
+export const distributeSelection = (state: BlueprintEditorState, keys: ReadonlySet<string>, axis: Axis, range: DistributionRange, inset: number): BlueprintEditorState => {
   const slots = selectedSlots(state, keys).sort((a, b) => a.rendered_position[axis] - b.rendered_position[axis] || a.key.localeCompare(b.key));
   if (slots.length < 3) return state;
-  const min = slots[0].rendered_position[axis];
-  const step = (slots.at(-1)!.rendered_position[axis] - min) / (slots.length - 1);
-  return reposition(state, new Map(slots.map((slot, index) => [slot.key, { ...slot.rendered_position, [axis]: min + step * index }])));
+  if (range.mode === 'percent' && (!Number.isFinite(range.percent) || range.percent < 1 || range.percent > 100)) return state;
+  const safeInset = Math.max(0, Math.min(.49, inset));
+  const available = 1 - 2 * safeInset;
+  const span = range.mode === 'full' ? available : Math.min(available, range.percent / 100);
+  const values = slots.map((slot) => slot.rendered_position[axis]);
+  const center = (Math.min(...values) + Math.max(...values)) / 2;
+  const start = Math.max(safeInset, Math.min(center - span / 2, 1 - safeInset - span));
+  return reposition(state, new Map(slots.map((slot, index) => [slot.key, { ...slot.rendered_position, [axis]: start + span * index / (slots.length - 1) }])));
 };
 interface LayoutMetrics { minGapX: number; minGapY: number; insetX: number; insetY: number }
 const defaultLayoutMetrics: LayoutMetrics = { minGapX: 0, minGapY: 0, insetX: 0, insetY: 0 };

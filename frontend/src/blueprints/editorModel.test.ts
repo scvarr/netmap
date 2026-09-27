@@ -110,12 +110,41 @@ describe('endpoint selection geometry', () => {
     expect(values[2] - values[0]).toBeCloseTo(coordinates(start)[2][axis] - coordinates(start)[0][axis]);
     expect(next.slots[3]).toEqual(start.slots[3]);
   });
-  it('distributes by current coordinate order on each axis', () => {
+  it('distributes across an explicit percentage on either axis without changing the other coordinate or endpoint facts', () => {
     const start = base();
-    expect(coordinates(distributeSelection(start, all, 'x')).map((point) => point.x)).toEqual([.1, .5, .9]);
-    expect(coordinates(distributeSelection(start, all, 'x')).map((point) => point.y)).toEqual(coordinates(start).map((point) => point.y));
-    expect(coordinates(distributeSelection(start, all, 'y')).map((point) => point.y)).toEqual([.2, .5, .8]);
-    expect(coordinates(distributeSelection(start, all, 'y')).map((point) => point.x)).toEqual(coordinates(start).map((point) => point.x));
+    const horizontal = distributeSelection(start, all, 'x', { mode: 'percent', percent: 50 }, .02);
+    expect(coordinates(horizontal).map((point) => point.x)).toEqual([.25, .5, .75]);
+    expect(coordinates(horizontal).map((point) => point.y)).toEqual(coordinates(start).map((point) => point.y));
+    const vertical = distributeSelection(start, all, 'y', { mode: 'percent', percent: 40 }, .02);
+    expect(coordinates(vertical).map((point) => point.y)).toEqual([.3, .5, .7]);
+    expect(coordinates(vertical).map((point) => point.x)).toEqual(coordinates(start).map((point) => point.x));
+    for (const next of [horizontal, vertical]) {
+      expect(metadata(next)).toEqual(metadata(start));
+      expect(next.individualLinks).toEqual(start.individualLinks);
+      expect(next.slots[3]).toEqual(start.slots[3]);
+    }
+  });
+  it('distributes across the full safe body range on either axis', () => {
+    const start = base();
+    for (const axis of ['x', 'y'] as const) {
+      const values = coordinates(distributeSelection(start, all, axis, { mode: 'full' }, .02)).map((point) => point[axis]);
+      values.forEach((value, index) => expect(value).toBeCloseTo([.02, .5, .98][index]));
+    }
+  });
+  it('clamps the requested distribution range around a local selection center', () => {
+    const start = base();
+    start.slots = start.slots.map((slot) => ({ ...slot, rendered_position: { ...slot.rendered_position, x: slot.rendered_position.x * .2 } }));
+    const points = coordinates(distributeSelection(start, all, 'x', { mode: 'percent', percent: 50 }, .02));
+    expect(points.map((point) => point.x)).toEqual([.02, .27, .52]);
+    expect(distributeSelection(start, all, 'x', { mode: 'percent', percent: 0 }, .02)).toBe(start);
+  });
+  it('spreads endpoints even when all selected centers begin at the same coordinate', () => {
+    const start = base();
+    start.slots = start.slots.map((slot) => ({ ...slot, rendered_position: { x: .5, y: .5 } }));
+    for (const axis of ['x', 'y'] as const) {
+      const values = coordinates(distributeSelection(start, all, axis, { mode: 'percent', percent: 30 }, .02)).map((point) => point[axis]);
+      values.forEach((value, index) => expect(value).toBeCloseTo([.35, .5, .65][index]));
+    }
   });
   it('lays out one or two bounded rows deterministically without changing endpoint facts', () => {
     const start = base();

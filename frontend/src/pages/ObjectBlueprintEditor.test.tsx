@@ -247,4 +247,36 @@ describe('minimal direct endpoint editor', () => {
     expect(ys).toHaveLength(2);
     expect((ys[1] - ys[0]) * .85).toBeGreaterThanOrEqual(18 - 1e-9);
   });
+
+  it('offers an explicit horizontal or vertical distribution range and a full-body option', async () => {
+    const state = { ...newBlueprintEditorState(), slots: [0, 1, 2, 3].map((index) => ({
+      key: `slot-${index}`, display_name: `Port ${index}`, kind: 'NETWORK_PORT' as const, face: 'FRONT' as const,
+      rendered_position: { x: .2 + index * .1, y: .3 + index * .05 },
+    })) };
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    const values = (axis: 'cx' | 'cy') => nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute(axis)));
+    fireEvent.pointerDown(nodes[0]);
+    fireEvent.pointerUp(canvas);
+    for (const node of nodes.slice(1)) fireEvent.pointerDown(node, { ctrlKey: true });
+    const originalY = values('cy');
+    fireEvent.contextMenu(nodes[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'По горизонтали' }));
+    expect(screen.getByRole('group', { name: 'Диапазон распределения' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Ширина, % корпуса'), { target: { value: '60' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Распределить' }));
+    expect(values('cx').at(-1)! - values('cx')[0]).toBeCloseTo(600);
+    expect(values('cy')).toEqual(originalY);
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.contextMenu(nodes[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'По вертикали' }));
+    await userEvent.click(screen.getByLabelText('На всю высоту'));
+    expect(screen.getByLabelText('Высота, % корпуса').hasAttribute('disabled')).toBe(true);
+    const originalX = values('cx');
+    await userEvent.click(screen.getByRole('button', { name: 'Распределить' }));
+    expect(values('cy').at(-1)! - values('cy')[0]).toBeCloseTo(359);
+    expect(values('cx')).toEqual(originalX);
+  });
 });

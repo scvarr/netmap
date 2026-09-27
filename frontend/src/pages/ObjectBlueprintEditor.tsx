@@ -29,6 +29,9 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const [count, setCount] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<{ x: number; y: number }>();
+  const [distributionAxis, setDistributionAxis] = useState<'x' | 'y'>();
+  const [distributionPercent, setDistributionPercent] = useState('50');
+  const [distributionFull, setDistributionFull] = useState(false);
   const canvasWrap = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string>();
   const selectedSlot = selected.size === 1 ? editor.slots.find((slot) => selected.has(slot.key) && slot.face === face) : undefined;
@@ -64,13 +67,17 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     insetX: presentationInset('x'), insetY: presentationInset('y'),
   });
   const runMenuAction = (action: MenuAction) => {
+    if (action === 'distributeX' || action === 'distributeY') {
+      setDistributionAxis(action === 'distributeX' ? 'x' : 'y');
+      setDistributionPercent('50');
+      setDistributionFull(false);
+      return;
+    }
     if (action === 'deleteSelected') deleteSelected();
     else setEditor((old) => {
       switch (action) {
         case 'horizontalLine': return alignSelectionLine(old, selected, 'horizontal', presentationInset('x'));
         case 'verticalLine': return alignSelectionLine(old, selected, 'vertical', presentationInset('y'));
-        case 'distributeX': return distributeSelection(old, selected, 'x');
-        case 'distributeY': return distributeSelection(old, selected, 'y');
         case 'left': return positionSelection(old, selected, 'x', 'start', presentationInset('x'));
         case 'centerX': return positionSelection(old, selected, 'x', 'center', presentationInset('x'));
         case 'right': return positionSelection(old, selected, 'x', 'end', presentationInset('x'));
@@ -82,6 +89,14 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
       }
     });
     setMenu(undefined);
+  };
+  const applyDistribution = () => {
+    if (!distributionAxis) return;
+    const percent = Number(distributionPercent);
+    if (!distributionFull && (!Number.isFinite(percent) || percent < 1 || percent > 100)) return;
+    setEditor((old) => distributeSelection(old, selected, distributionAxis, distributionFull ? { mode: 'full' } : { mode: 'percent', percent }, presentationInset(distributionAxis)));
+    setMenu(undefined);
+    setDistributionAxis(undefined);
   };
   const selectSlot = (key: string, toggle: boolean) => setSelected((old) => {
     if (!toggle) return new Set([key]);
@@ -139,12 +154,18 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
             if (key && !selected.has(key)) setSelected(new Set([key]));
             if (!key && selected.size === 0) { setMenu(undefined); return; }
             const rect = canvasWrap.current!.getBoundingClientRect();
+            setDistributionAxis(undefined);
             setMenu({ x: Math.max(0, Math.min(clientX - rect.left, rect.width - 320)), y: Math.max(0, Math.min(clientY - rect.top, rect.height - 280)) });
           }} />
           {menu && <div className="blueprint-composer__context-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
             {menuSections.map((section) => <div key={section.label} className={`blueprint-composer__context-section blueprint-composer__context-section--${section.label}`}>
               <strong>{t(`blueprint.layout.section.${section.label}`)}</strong>
               {section.actions.map((action) => <button key={action} type="button" role="menuitem" disabled={selected.size < (action === 'distributeX' || action === 'distributeY' || action === 'twoRows' ? 3 : action === 'horizontalLine' || action === 'verticalLine' || action === 'oneRow' ? 2 : 1)} onClick={() => runMenuAction(action)}>{t(`blueprint.layout.${action}`)}</button>)}
+              {section.label === 'distribute' && distributionAxis && <div className="blueprint-composer__distribution-settings" role="group" aria-label={t('blueprint.layout.distributionSettings')}>
+                <label>{t(distributionAxis === 'x' ? 'blueprint.layout.rangeWidth' : 'blueprint.layout.rangeHeight')}<input type="number" min="1" max="100" step="1" value={distributionPercent} disabled={distributionFull} onChange={(event) => setDistributionPercent(event.target.value)} /></label>
+                <label className="blueprint-composer__distribution-full"><input type="checkbox" checked={distributionFull} onChange={(event) => setDistributionFull(event.target.checked)} />{t(distributionAxis === 'x' ? 'blueprint.layout.fullWidth' : 'blueprint.layout.fullHeight')}</label>
+                <button type="button" className="blueprint-composer__distribution-apply" disabled={!distributionFull && (!Number.isFinite(Number(distributionPercent)) || Number(distributionPercent) < 1 || Number(distributionPercent) > 100)} onClick={applyDistribution}>{t('blueprint.layout.applyDistribution')}</button>
+              </div>}
             </div>)}
           </div>}
         </div>
