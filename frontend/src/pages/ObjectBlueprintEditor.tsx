@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
-import { addEndpoints, alignSelection, createBlueprintRequest, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, removeEndpoints, translateSelection, type BlueprintEditorState, type BlueprintValidationError } from '../blueprints/editorModel';
+import { addEndpoints, alignSelectionLine, createBlueprintRequest, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, translateSelection, type BlueprintEditorState, type BlueprintValidationError } from '../blueprints/editorModel';
 import type { BlueprintFace, BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
@@ -12,6 +12,14 @@ const validationKey = {
   duplicateSlotKeys: 'blueprint.validation.duplicateSlotKeys', individualSelfLink: 'blueprint.validation.individualSelfLink',
   individualMissingPort: 'blueprint.validation.individualMissingPort', duplicateIndividualLink: 'blueprint.validation.duplicateIndividualLink',
 } as const satisfies Record<BlueprintValidationError, string>;
+const menuSections = [
+  { label: 'align', actions: ['horizontalLine', 'verticalLine'] },
+  { label: 'distribute', actions: ['distributeX', 'distributeY'] },
+  { label: 'position', actions: ['left', 'centerX', 'right', 'top', 'centerY', 'bottom'] },
+  { label: 'layout', actions: ['oneRow', 'twoRows'] },
+  { label: 'delete', actions: ['deleteSelected'] },
+] as const;
+type MenuAction = (typeof menuSections)[number]['actions'][number];
 
 export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, initialState, versionNotice }: Props) {
   const { t } = useI18n();
@@ -20,9 +28,56 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
   const [count, setCount] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [menu, setMenu] = useState<{ x: number; y: number }>();
+  const canvasWrap = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string>();
   const selectedSlot = selected.size === 1 ? editor.slots.find((slot) => selected.has(slot.key) && slot.face === face) : undefined;
-  const deleteSelected = () => { setEditor((old) => removeEndpoints(old, selected)); setSelected(new Set()); };
+  const deleteSelected = () => { setEditor((old) => removeEndpoints(old, selected)); setSelected(new Set()); setMenu(undefined); };
+  useEffect(() => {
+    const onPointerDown = (event: globalThis.PointerEvent) => {
+      if (menu && (!(event.target instanceof Element) || !event.target.closest('.blueprint-composer__context-menu'))) setMenu(undefined);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (menu) setMenu(undefined);
+        else setSelected(new Set());
+      }
+      if (event.key !== 'Delete' || selected.size === 0) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)) return;
+      event.preventDefault();
+      deleteSelected();
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
+  }, [menu, selected]);
+  const presentationInset = (axis: 'x' | 'y') => {
+    const rect = canvasWrap.current?.querySelector('svg')?.getBoundingClientRect();
+    const viewHeight = 1000 * (editor.height > 0 && editor.width > 0 ? editor.height / editor.width : 1);
+    const scale = rect && Math.min(rect.width / 1000, rect.height / viewHeight);
+    return scale && Number.isFinite(scale) && scale > 0 ? Math.min(.49, 8 / (scale * (axis === 'x' ? 1000 : viewHeight))) : .02;
+  };
+  const runMenuAction = (action: MenuAction) => {
+    if (action === 'deleteSelected') deleteSelected();
+    else setEditor((old) => {
+      switch (action) {
+        case 'horizontalLine': return alignSelectionLine(old, selected, 'horizontal');
+        case 'verticalLine': return alignSelectionLine(old, selected, 'vertical');
+        case 'distributeX': return distributeSelection(old, selected, 'x');
+        case 'distributeY': return distributeSelection(old, selected, 'y');
+        case 'left': return positionSelection(old, selected, 'x', 'start', presentationInset('x'));
+        case 'centerX': return positionSelection(old, selected, 'x', 'center', presentationInset('x'));
+        case 'right': return positionSelection(old, selected, 'x', 'end', presentationInset('x'));
+        case 'top': return positionSelection(old, selected, 'y', 'start', presentationInset('y'));
+        case 'centerY': return positionSelection(old, selected, 'y', 'center', presentationInset('y'));
+        case 'bottom': return positionSelection(old, selected, 'y', 'end', presentationInset('y'));
+        case 'oneRow': return layoutSelectionRow(old, selected);
+        case 'twoRows': return layoutSelectionTwoRows(old, selected);
+      }
+    });
+    setMenu(undefined);
+  };
   const selectSlot = (key: string, toggle: boolean) => setSelected((old) => {
     if (!toggle) return new Set([key]);
     const next = new Set(old);
@@ -71,22 +126,24 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         <div className="blueprint-composer__chooser">
           <label>{t('blueprint.endpoint.kind')}<select value={kind} onChange={(e) => setKind(e.target.value as BlueprintSlotKind)}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
-          <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, face); if (next === editor) return; setEditor(next); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); }}>{t('blueprint.endpoint.add')}</button>
+          <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, face); if (next === editor) return; setEditor(next); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
         </div>
-        <div className="blueprint-composer__faces"><button type="button" aria-pressed={face === 'FRONT'} onClick={() => { setFace('FRONT'); setSelected(new Set()); }}>{t('blueprint.face.front')}</button><button type="button" aria-pressed={face === 'REAR'} onClick={() => { setFace('REAR'); setSelected(new Set()); }}>{t('blueprint.face.rear')}</button></div>
-        <BlueprintCompositionCanvas body={{ width: editor.width, height: editor.height, fillColor: editor.fillColor }} face={face} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onSelect={selectSlot} onMarquee={(keys) => setSelected(new Set(keys))} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} />
-        {selected.size > 1 && <aside className="blueprint-composer__selected blueprint-composer__selected--multi">
-          <strong>{t('blueprint.layout.selected', { count: selected.size })}</strong>
-          <div className="blueprint-composer__layout-tools">
-            {([
-              ['left', () => alignSelection(editor, selected, 'x', 'min')], ['centerX', () => alignSelection(editor, selected, 'x', 'center')], ['right', () => alignSelection(editor, selected, 'x', 'max')],
-              ['top', () => alignSelection(editor, selected, 'y', 'min')], ['centerY', () => alignSelection(editor, selected, 'y', 'center')], ['bottom', () => alignSelection(editor, selected, 'y', 'max')],
-              ['distributeX', () => distributeSelection(editor, selected, 'x')], ['distributeY', () => distributeSelection(editor, selected, 'y')],
-              ['oneRow', () => layoutSelectionRow(editor, selected)], ['twoRows', () => layoutSelectionTwoRows(editor, selected)],
-            ] as const).map(([action, run]) => <button key={action} type="button" className="secondary-action" disabled={(action === 'distributeX' || action === 'distributeY' || action === 'twoRows') && selected.size < 3} onClick={() => setEditor(run())}>{t(`blueprint.layout.${action}`)}</button>)}
-          </div>
-          <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.layout.deleteSelected')}</button>
-        </aside>}
+        <div className="blueprint-composer__faces"><button type="button" aria-pressed={face === 'FRONT'} onClick={() => { setFace('FRONT'); setSelected(new Set()); setMenu(undefined); }}>{t('blueprint.face.front')}</button><button type="button" aria-pressed={face === 'REAR'} onClick={() => { setFace('REAR'); setSelected(new Set()); setMenu(undefined); }}>{t('blueprint.face.rear')}</button></div>
+        <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
+          <BlueprintCompositionCanvas body={{ width: editor.width, height: editor.height, fillColor: editor.fillColor }} face={face} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onSelect={selectSlot} onMarquee={(keys) => setSelected(new Set(keys))} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onContextMenu={(key, clientX, clientY) => {
+            if (key && !selected.has(key)) setSelected(new Set([key]));
+            if (!key && selected.size === 0) { setMenu(undefined); return; }
+            const rect = canvasWrap.current!.getBoundingClientRect();
+            setMenu({ x: Math.max(0, Math.min(clientX - rect.left, rect.width - 250)), y: Math.max(0, Math.min(clientY - rect.top, rect.height - 280)) });
+          }} />
+          {menu && <div className="blueprint-composer__context-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
+            {menuSections.map((section) => <div key={section.label} className="blueprint-composer__context-section">
+              <strong>{t(`blueprint.layout.section.${section.label}`)}</strong>
+              {section.actions.map((action) => <button key={action} type="button" role="menuitem" disabled={selected.size < (action === 'distributeX' || action === 'distributeY' || action === 'twoRows' ? 3 : action === 'horizontalLine' || action === 'verticalLine' || action === 'oneRow' ? 2 : 1)} onClick={() => runMenuAction(action)}>{t(`blueprint.layout.${action}`)}</button>)}
+            </div>)}
+          </div>}
+        </div>
+        {selected.size > 1 && <span className="blueprint-composer__selection-count">{t('blueprint.layout.selected', { count: selected.size })}</span>}
         {selectedSlot && <aside className="blueprint-composer__selected">
           <label>{t('blueprint.endpoint.name')}<input value={selectedSlot.display_name} onChange={(e) => updateSlot(selectedSlot.key, { display_name: e.target.value })} /></label>
           <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>

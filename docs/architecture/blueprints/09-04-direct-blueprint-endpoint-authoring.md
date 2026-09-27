@@ -10,8 +10,9 @@ tables, APIs, library and editor surfaces. Immutable Blueprint versions now
 own direct slots with exact names, kinds, faces, normalized positions, opaque
 stable keys, and individual internal links. The minimal editor supports bulk
 add, single selection, rename, kind/face edit, move, delete, and individual
-links. Transient multi-selection, marquee, group move, alignment/distribution,
-one/two-row layout, and multi-delete are **IMPLEMENTED**. Duplicate/copy,
+links. Transient multi-selection, marquee, group move, spatial alignment,
+distribution, one/two-row layout, multi-delete, and temporary drag alignment
+guides with snapping are **IMPLEMENTED**. Duplicate/copy,
 ordered selection, bulk naming, and pairwise bulk continuity remain **PENDING**.
 Endpoint technology/capability
 remains **OPEN**. Phase C remains **PAUSED** until the remaining editor slices

@@ -49,7 +49,7 @@ describe('minimal direct endpoint editor', () => {
     expect(request.slots).toEqual([expect.objectContaining({ kind: 'CONNECTION_POINT', face: 'REAR' })]);
   });
 
-  it('selects the newly added set, toggles members, and exposes actions by count', async () => {
+  it('selects the newly added set, toggles members, and keeps layout actions off the permanent surface', async () => {
     renderEditor();
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
@@ -57,7 +57,11 @@ describe('minimal direct endpoint editor', () => {
     expect(nodes.map((node) => node.getAttribute('data-selected'))).toEqual(['true', 'true', 'true']);
     expect(screen.queryByLabelText('Название')).toBeNull();
     expect(screen.getByText('Выбрано: 3')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'В два ряда' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'В два ряда' })).toBeNull();
+    fireEvent.contextMenu(nodes[0]);
+    expect(screen.getByRole('menuitem', { name: 'В два ряда' }).hasAttribute('disabled')).toBe(false);
+    fireEvent.keyDown(document, { key: 'Escape' });
     fireEvent.pointerDown(nodes[0], { ctrlKey: true });
     expect(nodes[0].getAttribute('data-selected')).toBe('false');
     fireEvent.pointerDown(nodes[1], { metaKey: true });
@@ -96,9 +100,10 @@ describe('minimal direct endpoint editor', () => {
     expect(after[0] - before[0]).toBeCloseTo(100);
     expect(after[1] - before[1]).toBeCloseTo(100);
     expect(after[2]).toBeCloseTo(before[2]);
-    await userEvent.click(screen.getByRole('button', { name: 'Удалить выбранные' }));
+    fireEvent.contextMenu(nodes[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Удалить выбранные' }));
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(1);
-    expect(screen.queryByRole('button', { name: 'Удалить выбранные' })).toBeNull();
+    expect(screen.queryByRole('menu')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(save.mock.calls[0][0].individualLinks).toEqual([]);
   });
@@ -107,9 +112,11 @@ describe('minimal direct endpoint editor', () => {
     renderEditor();
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
-    expect(screen.getByRole('button', { name: 'По левому краю' }).hasAttribute('disabled')).toBe(false);
-    expect(screen.getByRole('button', { name: 'Распределить по горизонтали' }).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByRole('button', { name: 'В два ряда' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.contextMenu(document.querySelector('[data-slot-key]')!);
+    expect(screen.getByRole('menuitem', { name: 'В одну горизонтальную линию' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('menuitem', { name: 'По горизонтали' }).hasAttribute('disabled')).toBe(true);
+    expect(screen.getByRole('menuitem', { name: 'В два ряда' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.keyDown(document, { key: 'Escape' });
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
     Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
@@ -122,5 +129,90 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.pointerUp(canvas);
     const after = nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
     expect(after).toEqual([before[0], before[1] + 100]);
+  });
+
+  it('right-clicks the current selection, replaces it for an unselected endpoint, and positions without collapse', async () => {
+    renderEditor();
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    fireEvent.contextMenu(nodes[0]);
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(3);
+    expect(screen.getByRole('menu')).toBeTruthy();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.pointerDown(nodes[0]);
+    fireEvent.pointerUp(document.querySelector('.blueprint-composition-canvas')!);
+    fireEvent.contextMenu(nodes[1]);
+    expect(nodes.map((node) => node.getAttribute('data-selected'))).toEqual(['false', 'true', 'false']);
+    expect(screen.getByRole('menuitem', { name: 'Слева' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('menuitem', { name: 'В одну горизонтальную линию' }).hasAttribute('disabled')).toBe(true);
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.pointerDown(nodes[0], { ctrlKey: true });
+    fireEvent.contextMenu(nodes[0]);
+    const before = nodes.slice(0, 2).map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'По центру горизонтали' }));
+    const after = nodes.slice(0, 2).map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    expect((after[0] + after[1]) / 2).toBeCloseTo(500);
+    expect(after[1] - after[0]).toBeCloseTo(before[1] - before[0]);
+    expect(screen.queryByRole('menu')).toBeNull();
+    fireEvent.contextMenu(nodes[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'В одну вертикальную линию' }));
+    expect(Number(nodes[0].querySelector('[data-endpoint-marker]')!.getAttribute('cx'))).toBeCloseTo(Number(nodes[1].querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+  });
+
+  it('clears selection on empty click and Escape, and Delete respects form focus', async () => {
+    renderEditor();
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
+    const body = document.querySelector('.blueprint-composition-canvas__body')!;
+    fireEvent.pointerDown(body, { clientX: 400, clientY: 180 });
+    fireEvent.pointerUp(canvas);
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
+    fireEvent.pointerDown(nodes[0], { clientX: 25, clientY: 9.375 });
+    fireEvent.pointerUp(canvas);
+    fireEvent.keyDown(screen.getByLabelText('Название'), { key: 'Delete' });
+    fireEvent.keyDown(screen.getByLabelText('Панель'), { key: 'Delete' });
+    expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(2);
+    fireEvent.contextMenu(nodes[0]);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(1);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
+    fireEvent.pointerDown(nodes[0], { clientX: 25, clientY: 9.375 });
+    fireEvent.pointerUp(canvas);
+    fireEvent.keyDown(document, { key: 'Delete' });
+    expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(1);
+  });
+
+  it('shows only active snap guides during group drag and clears them on finish or cancel', () => {
+    const state = { ...newBlueprintEditorState(), slots: [
+      { key: 'a', display_name: 'A', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .1, y: .2 } },
+      { key: 'b', display_name: 'B', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .2, y: .2 } },
+      { key: 'c', display_name: 'C', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .6, y: .4 } },
+    ] };
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    fireEvent.pointerDown(nodes[0], { clientX: 100, clientY: 75 });
+    fireEvent.pointerUp(canvas);
+    fireEvent.pointerDown(nodes[1], { ctrlKey: true });
+    fireEvent.pointerDown(nodes[0], { clientX: 100, clientY: 75 });
+    fireEvent.pointerMove(canvas, { clientX: 100, clientY: 148.125 });
+    expect(document.querySelector('[data-guide-y]')).toBeTruthy();
+    expect(document.querySelector('[data-guide-x]')).toBeNull();
+    fireEvent.pointerUp(canvas);
+    expect(document.querySelector('[data-guide-y]')).toBeNull();
+    fireEvent.pointerDown(nodes[0], { clientX: 100, clientY: 150 });
+    fireEvent.pointerMove(canvas, { clientX: 450, clientY: 187.5 });
+    expect(document.querySelector('[data-guide-x]')).toBeTruthy();
+    fireEvent.pointerCancel(canvas);
+    expect(document.querySelector('[data-guide-x]')).toBeNull();
   });
 });

@@ -19,7 +19,7 @@ describe('Blueprint endpoint screen-space markers', () => {
     const { container } = render(<I18nProvider><BlueprintCompositionCanvas
       body={{ width: ratio, height: 1, fillColor: '#123' }} face="FRONT"
       slots={[slot(1), slot(2, .75, .5)]} links={[]} selectedKeys={new Set(['slot-2'])}
-      onSelect={vi.fn()} onMarquee={vi.fn()} onTranslate={vi.fn()}
+      onSelect={vi.fn()} onMarquee={vi.fn()} onTranslate={vi.fn()} onContextMenu={vi.fn()}
     /></I18nProvider>);
     const canvas = container.querySelector('svg')!;
     const viewHeight = 1000 / ratio;
@@ -42,7 +42,7 @@ describe('Blueprint endpoint screen-space markers', () => {
     const slots = Array.from({ length: 52 }, (_, index) => slot(index, (index % 13 + .5) / 13, (Math.floor(index / 13) + .5) / 4));
     const { container } = render(<I18nProvider><BlueprintCompositionCanvas
       body={{ width: 10, height: 1, fillColor: '#123' }} face="FRONT"
-      slots={slots} links={[]} selectedKeys={new Set()} onSelect={vi.fn()} onMarquee={vi.fn()} onTranslate={vi.fn()}
+      slots={slots} links={[]} selectedKeys={new Set()} onSelect={vi.fn()} onMarquee={vi.fn()} onTranslate={vi.fn()} onContextMenu={vi.fn()}
     /></I18nProvider>);
     const markers = container.querySelectorAll('[data-endpoint-marker]');
     expect(markers).toHaveLength(52);

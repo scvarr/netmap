@@ -12,7 +12,7 @@ export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<s
 });
 
 type Axis = 'x' | 'y';
-type Alignment = 'min' | 'center' | 'max';
+type Edge = 'start' | 'center' | 'end';
 const selectedSlots = (state: BlueprintEditorState, keys: ReadonlySet<string>) => state.slots.filter((slot) => keys.has(slot.key));
 const reposition = (state: BlueprintEditorState, positions: Map<string, { x: number; y: number }>): BlueprintEditorState => ({
   ...state, slots: state.slots.map((slot) => positions.has(slot.key) ? { ...slot, rendered_position: positions.get(slot.key)! } : slot),
@@ -29,16 +29,55 @@ const boundedSpan = (min: number, max: number, minimum: number) => {
 export const translateSelection = (state: BlueprintEditorState, keys: ReadonlySet<string>, dx: number, dy: number): BlueprintEditorState => {
   const slots = selectedSlots(state, keys);
   if (!slots.length) return state;
-  const deltaX = Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.x)), Math.min(dx, 1 - Math.max(...slots.map((slot) => slot.rendered_position.x))));
-  const deltaY = Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.y)), Math.min(dy, 1 - Math.max(...slots.map((slot) => slot.rendered_position.y))));
+  const { dx: deltaX, dy: deltaY } = constrainTranslation(slots, dx, dy);
   return reposition(state, new Map(slots.map((slot) => [slot.key, { x: slot.rendered_position.x + deltaX, y: slot.rendered_position.y + deltaY }])));
 };
-export const alignSelection = (state: BlueprintEditorState, keys: ReadonlySet<string>, axis: Axis, alignment: Alignment): BlueprintEditorState => {
+const constrainTranslation = (slots: BlueprintSlot[], dx: number, dy: number) => ({
+  dx: Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.x)), Math.min(dx, 1 - Math.max(...slots.map((slot) => slot.rendered_position.x)))),
+  dy: Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.y)), Math.min(dy, 1 - Math.max(...slots.map((slot) => slot.rendered_position.y)))),
+});
+export const alignSelectionLine = (state: BlueprintEditorState, keys: ReadonlySet<string>, line: 'horizontal' | 'vertical'): BlueprintEditorState => {
   const slots = selectedSlots(state, keys);
   if (slots.length < 2) return state;
+  const axis: Axis = line === 'horizontal' ? 'y' : 'x';
   const values = slots.map((slot) => slot.rendered_position[axis]);
-  const value = alignment === 'min' ? Math.min(...values) : alignment === 'max' ? Math.max(...values) : (Math.min(...values) + Math.max(...values)) / 2;
+  const value = (Math.min(...values) + Math.max(...values)) / 2;
   return reposition(state, new Map(slots.map((slot) => [slot.key, { ...slot.rendered_position, [axis]: value }])));
+};
+export const positionSelection = (state: BlueprintEditorState, keys: ReadonlySet<string>, axis: Axis, edge: Edge, inset = .02): BlueprintEditorState => {
+  const slots = selectedSlots(state, keys);
+  if (!slots.length) return state;
+  const values = slots.map((slot) => slot.rendered_position[axis]);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const delta = edge === 'start' ? inset - min : edge === 'end' ? 1 - inset - max : .5 - (min + max) / 2;
+  return translateSelection(state, keys, axis === 'x' ? delta : 0, axis === 'y' ? delta : 0);
+};
+
+export interface SnapTranslation { dx: number; dy: number; guideX?: number; guideY?: number }
+/** Snap the moving bbox center to stationary centers or the body center, then clamp once for the group. */
+export const snapSelectionTranslation = (visible: BlueprintSlot[], keys: ReadonlySet<string>, rawDx: number, rawDy: number, thresholdX: number, thresholdY: number): SnapTranslation => {
+  const moving = visible.filter((slot) => keys.has(slot.key));
+  if (!moving.length) return { dx: 0, dy: 0 };
+  const stationary = visible.filter((slot) => !keys.has(slot.key));
+  const snapAxis = (axis: Axis, delta: number, threshold: number) => {
+    const values = moving.map((slot) => slot.rendered_position[axis]);
+    const center = (Math.min(...values) + Math.max(...values)) / 2;
+    const candidates = [...new Set([.5, ...stationary.map((slot) => slot.rendered_position[axis])])].sort((a, b) => a - b);
+    const nearest = candidates.reduce<{ target?: number; distance: number }>((best, target) => {
+      const distance = Math.abs(target - center - delta);
+      return distance < best.distance ? { target, distance } : best;
+    }, { distance: threshold + Number.EPSILON });
+    return nearest.target === undefined || nearest.distance > threshold ? { delta } : { delta: nearest.target - center, guide: nearest.target };
+  };
+  const x = snapAxis('x', rawDx, thresholdX);
+  const y = snapAxis('y', rawDy, thresholdY);
+  const constrained = constrainTranslation(moving, x.delta, y.delta);
+  return {
+    ...constrained,
+    ...(x.guide !== undefined && Math.abs(constrained.dx - x.delta) < 1e-9 ? { guideX: x.guide } : {}),
+    ...(y.guide !== undefined && Math.abs(constrained.dy - y.delta) < 1e-9 ? { guideY: y.guide } : {}),
+  };
 };
 export const distributeSelection = (state: BlueprintEditorState, keys: ReadonlySet<string>, axis: Axis): BlueprintEditorState => {
   const slots = selectedSlots(state, keys).sort((a, b) => a.rendered_position[axis] - b.rendered_position[axis] || a.key.localeCompare(b.key));

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addEndpoints, alignSelection, createBlueprintRequest, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, removeEndpoints, translateSelection, type BlueprintEditorState } from './editorModel';
+import { addEndpoints, alignSelectionLine, createBlueprintRequest, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, snapSelectionTranslation, translateSelection, type BlueprintEditorState } from './editorModel';
 import { newBlueprintEditorState } from '../pages/ObjectBlueprintEditor';
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 
@@ -63,17 +63,33 @@ describe('endpoint selection geometry', () => {
     expect(next.slots[2].rendered_position.x - next.slots[0].rendered_position.x).toBeCloseTo(.8);
     expect(next.slots[1].rendered_position.y - next.slots[0].rendered_position.y).toBeCloseTo(.4);
   });
+  it.each(['horizontal', 'vertical'] as const)('aligns into one %s line without changing the other axis', (line) => {
+    const start = base();
+    const next = alignSelectionLine(start, all, line);
+    const axis = line === 'horizontal' ? 'y' : 'x';
+    const other = line === 'horizontal' ? 'x' : 'y';
+    expect(new Set(coordinates(next).map((point) => point[axis])).size).toBe(1);
+    expect(coordinates(next).map((point) => point[other])).toEqual(coordinates(start).map((point) => point[other]));
+    expect(next.slots[3]).toEqual(start.slots[3]);
+  });
   it.each([
-    ['x', 'min', .1], ['x', 'center', .5], ['x', 'max', .9],
-    ['y', 'min', .2], ['y', 'center', .5], ['y', 'max', .8],
-  ] as const)('aligns %s at %s', (axis, mode, expected) => {
-    const next = alignSelection(base(), all, axis, mode);
-    expect(coordinates(next).map((point) => point[axis])).toEqual([expected, expected, expected]);
-    expect(next.slots[3]).toEqual(base().slots[3]);
+    ['x', 'start', .02], ['x', 'center', .5], ['x', 'end', .98],
+    ['y', 'start', .02], ['y', 'center', .5], ['y', 'end', .98],
+  ] as const)('positions group %s %s without collapsing it', (axis, edge, target) => {
+    const start = base();
+    const next = positionSelection(start, all, axis, edge);
+    const values = coordinates(next).map((point) => point[axis]);
+    const anchor = edge === 'start' ? Math.min(...values) : edge === 'end' ? Math.max(...values) : (Math.min(...values) + Math.max(...values)) / 2;
+    expect(anchor).toBeCloseTo(target);
+    expect(values[2] - values[0]).toBeCloseTo(coordinates(start)[2][axis] - coordinates(start)[0][axis]);
+    expect(next.slots[3]).toEqual(start.slots[3]);
   });
   it('distributes by current coordinate order on each axis', () => {
-    expect(coordinates(distributeSelection(base(), all, 'x')).map((point) => point.x)).toEqual([.1, .5, .9]);
-    expect(coordinates(distributeSelection(base(), all, 'y')).map((point) => point.y)).toEqual([.2, .5, .8]);
+    const start = base();
+    expect(coordinates(distributeSelection(start, all, 'x')).map((point) => point.x)).toEqual([.1, .5, .9]);
+    expect(coordinates(distributeSelection(start, all, 'x')).map((point) => point.y)).toEqual(coordinates(start).map((point) => point.y));
+    expect(coordinates(distributeSelection(start, all, 'y')).map((point) => point.y)).toEqual([.2, .5, .8]);
+    expect(coordinates(distributeSelection(start, all, 'y')).map((point) => point.x)).toEqual(coordinates(start).map((point) => point.x));
   });
   it('lays out one or two bounded rows deterministically without changing endpoint facts', () => {
     const start = base();
@@ -90,5 +106,35 @@ describe('endpoint selection geometry', () => {
     expect(new Set(row.map((point) => point.y)).size).toBe(1);
     const two = coordinates(layoutSelectionTwoRows(start, all));
     expect(new Set(two.map((point) => point.y)).size).toBe(2);
+  });
+});
+
+describe('endpoint drag snapping', () => {
+  const slots = [
+    { key: 'moving-a', display_name: 'A', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .15, y: .1 } },
+    { key: 'moving-b', display_name: 'B', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .25, y: .1 } },
+    { key: 'stationary', display_name: 'C', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .7, y: .4 } },
+  ];
+  const moving = new Set(['moving-a', 'moving-b']);
+  it('snaps to nearest stationary Y within a screen-derived threshold', () => {
+    const result = snapSelectionTranslation(slots, moving, 0, .295, .007, .007);
+    expect(result.dy).toBeCloseTo(.3);
+    expect(result.guideY).toBe(.4);
+    expect(result.guideX).toBeUndefined();
+  });
+  it('does not snap outside threshold or to moving endpoints', () => {
+    const result = snapSelectionTranslation(slots, moving, 0, .27, .007, .007);
+    expect(result.dy).toBeCloseTo(.27);
+    expect(result.guideY).toBeUndefined();
+    expect(snapSelectionTranslation(slots, moving, 0, .003, .007, .007).guideY).toBeUndefined();
+  });
+  it('snaps X and Y independently to centerlines and preserves group offsets', () => {
+    const result = snapSelectionTranslation(slots, moving, .296, .397, .007, .007);
+    expect(result).toEqual({ dx: .3, dy: .4, guideX: .5, guideY: .5 });
+    const state: BlueprintEditorState = { ...newBlueprintEditorState(), slots, individualLinks: [] };
+    const next = translateSelection(state, moving, result.dx, result.dy);
+    expect(next.slots[1].rendered_position.x - next.slots[0].rendered_position.x).toBeCloseTo(.1);
+    expect(next.slots[0].rendered_position.y).toBeCloseTo(.5);
+    expect(next.slots[1].rendered_position.y).toBeCloseTo(.5);
   });
 });
