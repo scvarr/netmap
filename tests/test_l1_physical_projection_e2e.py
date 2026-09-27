@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app.database import SessionLocal
 from app.main import app
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from tests.test_object_blueprints_e2e import create_blueprint, instantiate, slot
+from tests.test_object_blueprints_e2e import create_blueprint, instantiate, panel, slot
 
 
 client = TestClient(app)
@@ -199,13 +199,14 @@ def test_internal_links_keep_all_branched_members_and_respect_object_scope():
 
 
 def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
-    blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01", face="REAR", x=.8, y=.7)], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Panel", body={"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"})
+    blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01", x=.8, y=.7)], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Panel", body={"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"})
     instance = instantiate(blueprint_id, version_id, "PP1")
-    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "slots": [slot("Front01", x=.8, y=.7)], "internal_links": []}).status_code == 201
+    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "panels": [panel(width=10, height=10)], "slots": [slot("Front01", x=.8, y=.7)], "internal_links": []}).status_code == 201
     node = node_by_object(client.post("/v1/topology/projection", json=projection_query()).json(), instance["physical_object_ref"]["entity_id"])
     presentation = node["attributes"]["blueprint_presentation"]
     assert presentation["version_ref"]["entity_id"] == version_id
     assert presentation["body"] == {"kind": "RECTANGLE", "width": 480.0, "height": 70.0, "fill_color": "#123456"}
+    assert presentation["panels"] == [panel(width=480, height=70)]
     assert all("anchor" not in slot for slot in presentation["slots"])
     assert all(0 <= slot["rendered_position"][axis] <= 1 for slot in presentation["slots"] for axis in ("x", "y"))
     assert {slot["slot_key"]: slot["rendered_position"] for slot in presentation["slots"]} == {"Front01": {"x": .2, "y": .3}, "Rear01": {"x": .8, "y": .7}}

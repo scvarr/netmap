@@ -10,7 +10,7 @@ from app.device_catalog import (
 )
 from app.errors import ModelError, ValidationError
 from app.cable_labels import resolved_cable_label
-from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, Cable, ObjectBlueprint, ObjectBlueprintVersion
+from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, Cable, ObjectBlueprint, ObjectBlueprintVersion, PresentationPanel
 from app.blueprint_presentation_geometry import derive_port_geometry
 from app.repository import (
     CanonicalRepository,
@@ -565,11 +565,12 @@ class ConfiguredTopologyProjectionResolver:
         ).all()
         for instance, version, blueprint in by_instance.values():
             instance_rows = [(mapping, slot) for mapping, slot in mappings if mapping.blueprint_instance_id == instance.id]
-            geometry = derive_port_geometry([slot for _, slot in instance_rows], (version.width, version.height))
+            panels = tuple(self.repository.session.scalars(select(PresentationPanel).where(PresentationPanel.blueprint_version_id == version.id).order_by(PresentationPanel.panel_number)))
+            geometry = derive_port_geometry([slot for _, slot in instance_rows], panels)
             for mapping, slot in instance_rows:
-                item = {"slot_key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "face": slot.face, "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None, **geometry[slot.slot_key]}
+                item = {"slot_key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "panel_key": slot.panel_key, "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None, **geometry[slot.slot_key]}
                 slots_by_instance[instance.id].append(item)
-        return {instance.physical_object_id: {"blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprint", "entity_id": str(blueprint.id)}, "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprintVersion", "entity_id": str(version.id)}, "body": {"kind": version.body_kind, "width": version.width, "height": version.height, "fill_color": version.fill_color}, "slots": slots_by_instance[instance.id]} for instance, version, blueprint in by_instance.values()}
+        return {instance.physical_object_id: {"blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprint", "entity_id": str(blueprint.id)}, "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprintVersion", "entity_id": str(version.id)}, "body": {"kind": version.body_kind, "width": version.width, "height": version.height, "fill_color": version.fill_color}, "panels": [{"panel_key": panel.panel_key, "panel_number": panel.panel_number, "display_name": panel.display_name, "x": panel.x, "y": panel.y, "width": panel.width, "height": panel.height} for panel in self.repository.session.scalars(select(PresentationPanel).where(PresentationPanel.blueprint_version_id == version.id).order_by(PresentationPanel.panel_number))], "slots": slots_by_instance[instance.id]} for instance, version, blueprint in by_instance.values()}
     def _physical_candidates(
         self, owner: NetworkInterfacePhysicalOwnerRecord
     ) -> tuple[_PhysicalCandidate, ...]:

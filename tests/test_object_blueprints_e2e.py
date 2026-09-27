@@ -1,8 +1,10 @@
 """Targeted direct-slot Blueprint API and materialization contracts."""
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import insert, select
+from sqlalchemy.exc import IntegrityError
 
 from app.database import SessionLocal
 from app.main import app
@@ -11,12 +13,17 @@ from app.models import BlueprintEndpointSlot, BlueprintInstanceSlot, EntityMetad
 client = TestClient(app, raise_server_exceptions=False)
 
 
-def slot(key: str, kind: str = "CONNECTION_POINT", face: str = "FRONT", x: float = .2, y: float = .3, name: str | None = None) -> dict:
-    return {"key": key, "display_name": name or key, "kind": kind, "face": face, "rendered_position": {"x": x, "y": y}}
+def panel(key: str = "panel-1", number: int = 1, name: str = "Панель 1", x: float = 0, y: float = 0, width: float = 100, height: float = 40) -> dict:
+    return {"panel_key": key, "panel_number": number, "display_name": name, "x": x, "y": y, "width": width, "height": height}
+
+
+def slot(key: str, kind: str = "CONNECTION_POINT", panel_key: str = "panel-1", x: float = .2, y: float = .3, name: str | None = None) -> dict:
+    return {"key": key, "display_name": name or key, "kind": kind, "panel_key": panel_key, "rendered_position": {"x": x, "y": y}}
 
 
 def create_blueprint(slots: list[dict], links: list[dict] | None = None, *, name: str = "Blueprint", body: dict | None = None, **_: object) -> tuple[str, str]:
-    response = client.post("/v1/library/object-blueprints", json={"name": name, "body": body or {"kind": "RECTANGLE", "width": 100, "height": 40}, "slots": slots, "internal_links": links or []})
+    dimensions = body or {"kind": "RECTANGLE", "width": 100, "height": 40}
+    response = client.post("/v1/library/object-blueprints", json={"name": name, "body": dimensions, "panels": [panel(width=dimensions["width"], height=dimensions["height"])], "slots": slots, "internal_links": links or []})
     assert response.status_code == 201, response.text
     return response.json()["blueprint_ref"]["entity_id"], response.json()["version_ref"]["entity_id"]
 
@@ -28,11 +35,12 @@ def instantiate(blueprint_id: str, version_id: str, name: str = "Object") -> dic
 
 
 def test_direct_slots_snapshot_and_materialization():
-    slots = [slot("opaque-a", face="REAR", x=.77, y=.61, name="rear point"), slot("opaque-b", "NETWORK_PORT", name="eth-custom")]
+    slots = [slot("opaque-a", x=.77, y=.61, name="second point"), slot("opaque-b", "NETWORK_PORT", name="eth-custom")]
     blueprint_id, version_id = create_blueprint(slots, [{"from_slot_key": "opaque-a", "to_slot_key": "opaque-b"}])
     detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}")
     assert detail.status_code == 200, detail.text
     assert sorted(detail.json()["slots"], key=lambda item: item["key"]) == slots
+    assert detail.json()["panels"] == [panel()]
     assert "composition" not in detail.json()
     assert detail.json()["internal_links"] == [{"from_slot_key": "opaque-a", "to_slot_key": "opaque-b"}]
     created = instantiate(blueprint_id, version_id)
@@ -43,7 +51,7 @@ def test_direct_slots_snapshot_and_materialization():
         assert len(mappings) == 2
         assert session.scalars(select(InterfacePhysicalBinding)).first() is not None
         aliases = {item.value for item in session.scalars(select(EntityMetadata).where(EntityMetadata.key == "alias.display"))}
-        assert {"rear point", "eth-custom"}.issubset(aliases)
+        assert {"second point", "eth-custom"}.issubset(aliases)
         network_slot = next(item for item in created["slots"] if item["slot_key"] == "opaque-b")
         interface_id = uuid.UUID(network_slot["network_interface_ref"]["entity_id"])
         point_id = uuid.UUID(network_slot["connection_point_ref"]["entity_id"])
@@ -52,9 +60,9 @@ def test_direct_slots_snapshot_and_materialization():
 
 
 def test_invalid_direct_slots_and_links_rejected():
-    base = {"name": "Invalid", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "slots": [slot("a"), slot("b")], "internal_links": []}
+    base = {"name": "Invalid", "body": {"kind": "RECTANGLE", "width": 1, "height": 1}, "panels": [panel(width=1, height=1)], "slots": [slot("a"), slot("b")], "internal_links": []}
     for payload in (
-        {**base, "slots": [slot("a", face="SIDE")]},
+        {**base, "slots": [slot("a", panel_key="unknown")]},
         {**base, "slots": [slot("a", x=1.1)]},
         {**base, "slots": [slot("a"), slot("a")]},
         {**base, "internal_links": [{"from_slot_key": "a", "to_slot_key": "missing"}]},
@@ -72,11 +80,15 @@ def test_version_preserves_key_and_additive_upgrade():
     object_id = initial["physical_object_ref"]["entity_id"]
     response = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={
         "body": {"kind": "RECTANGLE", "width": 100, "height": 40},
-        "slots": [slot("stable", "NETWORK_PORT", face="REAR", x=.8, name="renamed"), slot("new", name="added")],
+        "panels": [panel(name="Control", x=5), panel(key="panel-2", number=2, name="Panel 2", x=105)],
+        "slots": [slot("stable", "NETWORK_PORT", panel_key="panel-2", x=.8, name="renamed"), slot("new", name="added")],
         "internal_links": [],
     })
     assert response.status_code == 201, response.text
     second_id = response.json()["version_ref"]["entity_id"]
+    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{second_id}")
+    assert [item["panel_key"] for item in detail.json()["panels"]] == ["panel-1", "panel-2"]
+    assert next(item for item in detail.json()["slots"] if item["key"] == "stable")["panel_key"] == "panel-2"
     with SessionLocal() as session:
         exact = session.scalars(select(BlueprintEndpointSlot).where(BlueprintEndpointSlot.blueprint_version_id == uuid.UUID(second_id))).all()
         assert {item.slot_key for item in exact} == {"stable", "new"}
@@ -90,3 +102,30 @@ def test_version_preserves_key_and_additive_upgrade():
     assert after["stable"]["connection_point_ref"] == before["stable"]["connection_point_ref"]
     assert after["stable"]["network_interface_ref"] == before["stable"]["network_interface_ref"]
     assert "new" in after
+
+
+def test_slot_cannot_reference_a_panel_from_another_blueprint_version():
+    blueprint_id, first_id = create_blueprint([])
+    response = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={
+        "body": {"kind": "RECTANGLE", "width": 100, "height": 40},
+        "panels": [panel(key="panel-2", number=2, name="Second")],
+        "slots": [], "internal_links": [],
+    })
+    assert response.status_code == 201, response.text
+    second_id = response.json()["version_ref"]["entity_id"]
+    with pytest.raises(IntegrityError), SessionLocal.begin() as session:
+        session.execute(insert(BlueprintEndpointSlot).values(
+            id=uuid.uuid4(), blueprint_version_id=uuid.UUID(second_id),
+            slot_key="foreign-panel", display_name="Foreign", kind="CONNECTION_POINT",
+            panel_key="panel-1", position_x=.5, position_y=.5,
+        ))
+    assert first_id != second_id
+
+
+def test_reused_panel_key_keeps_its_number_across_versions():
+    blueprint_id, _ = create_blueprint([])
+    response = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={
+        "body": {"kind": "RECTANGLE", "width": 100, "height": 40},
+        "panels": [panel(number=2)], "slots": [], "internal_links": [],
+    })
+    assert response.status_code == 422, response.text

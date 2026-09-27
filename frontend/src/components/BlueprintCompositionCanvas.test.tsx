@@ -5,7 +5,7 @@ import type { BlueprintSlot } from '../topology/objectBlueprintTypes';
 import { BlueprintCompositionCanvas } from './BlueprintCompositionCanvas';
 
 const slot = (index: number, x = .5, y = .5): BlueprintSlot => ({
-  key: `slot-${index}`, display_name: `Port ${index}`, kind: 'NETWORK_PORT', face: 'FRONT',
+  key: `slot-${index}`, display_name: `Port ${index}`, kind: 'NETWORK_PORT', panel_key: 'panel-1',
   rendered_position: { x, y },
 });
 
@@ -17,7 +17,7 @@ describe('Blueprint endpoint screen-space markers', () => {
       left: 0, top: 0, width: 700, height: 280,
     } as DOMRect);
     const { container } = render(<I18nProvider><BlueprintCompositionCanvas
-      body={{ width: ratio, height: 1, fillColor: '#123' }} face="FRONT"
+      body={{ width: ratio, height: 1, fillColor: '#123' }} panelKey="panel-1"
       slots={[slot(1), slot(2, .75, .5)]} links={[]} selectedKeys={new Set(['slot-2'])}
       onSelect={vi.fn()} onMarquee={vi.fn()} onTranslate={vi.fn()} onContextMenu={vi.fn()}
     /></I18nProvider>);
@@ -41,7 +41,7 @@ describe('Blueprint endpoint screen-space markers', () => {
     } as DOMRect);
     const slots = Array.from({ length: 52 }, (_, index) => slot(index, (index % 13 + .5) / 13, (Math.floor(index / 13) + .5) / 4));
     const { container } = render(<I18nProvider><BlueprintCompositionCanvas
-      body={{ width: 10, height: 1, fillColor: '#123' }} face="FRONT"
+      body={{ width: 10, height: 1, fillColor: '#123' }} panelKey="panel-1"
       slots={slots} links={[]} selectedKeys={new Set()} onSelect={vi.fn()} onMarquee={vi.fn()} onTranslate={vi.fn()} onContextMenu={vi.fn()}
     /></I18nProvider>);
     const markers = container.querySelectorAll('[data-endpoint-marker]');

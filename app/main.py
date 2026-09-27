@@ -898,10 +898,16 @@ def get_object_blueprint_version(
             "kind": version.body_kind, "width": version.width,
             "height": version.height, "fill_color": version.fill_color,
         },
+        "panels": [
+            {"panel_key": panel.panel_key, "panel_number": panel.panel_number,
+             "display_name": panel.display_name, "x": panel.x, "y": panel.y,
+             "width": panel.width, "height": panel.height}
+            for panel in version.panels
+        ],
         "slots": [
             {
                 "key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind,
-                "face": slot.face,
+                "panel_key": slot.panel_key,
                 "rendered_position": {"x": slot.position_x, "y": slot.position_y},
             }
             for slot in version.slots

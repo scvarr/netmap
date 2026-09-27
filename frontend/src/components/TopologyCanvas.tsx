@@ -381,9 +381,9 @@ export function TopologyCanvas({
       const rectangle = nodeFootprint(node);
       if (blueprint) {
         const width = node.width ?? rectangle.width;
-        const face = blueprintNodeDisplayDimensions(blueprint, width);
+        const composition = blueprintNodeDisplayDimensions(blueprint, width);
         rectangle.width = width;
-        rectangle.height = face.height + blueprintMapNameplateHeight(blueprint, width);
+        rectangle.height = composition.height + blueprintMapNameplateHeight(blueprint, width);
       }
       return [{ physicalObjectId, rectangle }];
     }) : [];

@@ -26,7 +26,45 @@ const requireString = (value: unknown, path: string): void => {
 };
 const requirePositiveNumber = (value: unknown, path: string): void => { if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) malformed(`${path} must be positive.`); };
 const validateLibraryRef = (value: unknown, path: string, type: string): void => { requireObject(value, path); if (value.ref_type !== 'LIBRARY_RECORD' || value.entity_type !== type) malformed(`${path} must be a LIBRARY_RECORD ${type} ref.`); requireString(value.entity_id, `${path}.entity_id`); };
-const validateBlueprintPresentation = (value: unknown, path: string): void => { requireObject(value, path); validateLibraryRef(value.blueprint_ref, `${path}.blueprint_ref`, 'ObjectBlueprint'); validateLibraryRef(value.version_ref, `${path}.version_ref`, 'ObjectBlueprintVersion'); requireObject(value.body, `${path}.body`); if (value.body.kind !== 'RECTANGLE') malformed(`${path}.body.kind must be RECTANGLE.`); requirePositiveNumber(value.body.width, `${path}.body.width`); requirePositiveNumber(value.body.height, `${path}.body.height`); if (value.body.fill_color != null && (typeof value.body.fill_color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(value.body.fill_color))) malformed(`${path}.body.fill_color is invalid.`); if (!Array.isArray(value.slots)) malformed(`${path}.slots must be an array.`); for (const [index, item] of (value.slots as unknown[]).entries()) { requireObject(item, `${path}.slots[${index}]`); requireString(item.slot_key, `${path}.slots[${index}].slot_key`); requireString(item.display_name, `${path}.slots[${index}].display_name`); if (item.kind !== 'CONNECTION_POINT' && item.kind !== 'NETWORK_PORT') malformed(`${path}.slots[${index}].kind is invalid.`); if (item.face !== 'FRONT' && item.face !== 'REAR') malformed(`${path}.slots[${index}].face is invalid.`); requireObject(item.rendered_position, `${path}.slots[${index}].rendered_position`); requireObject(item.external_attachment, `${path}.slots[${index}].external_attachment`); if (typeof item.rendered_position.x !== 'number' || typeof item.rendered_position.y !== 'number' || typeof item.external_attachment.x !== 'number' || typeof item.external_attachment.y !== 'number' || !['LEFT', 'RIGHT', 'TOP', 'BOTTOM'].includes(String(item.external_attachment.side))) malformed(`${path}.slots[${index}].geometry is invalid.`); requireString(item.connection_point_id, `${path}.slots[${index}].connection_point_id`); if (item.network_interface_id != null) requireString(item.network_interface_id, `${path}.slots[${index}].network_interface_id`); } };
+const validateBlueprintPresentation = (value: unknown, path: string): void => {
+  requireObject(value, path);
+  validateLibraryRef(value.blueprint_ref, `${path}.blueprint_ref`, 'ObjectBlueprint');
+  validateLibraryRef(value.version_ref, `${path}.version_ref`, 'ObjectBlueprintVersion');
+  requireObject(value.body, `${path}.body`);
+  if (value.body.kind !== 'RECTANGLE') malformed(`${path}.body.kind must be RECTANGLE.`);
+  requirePositiveNumber(value.body.width, `${path}.body.width`);
+  requirePositiveNumber(value.body.height, `${path}.body.height`);
+  if (value.body.fill_color != null && (typeof value.body.fill_color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(value.body.fill_color))) malformed(`${path}.body.fill_color is invalid.`);
+  if (!Array.isArray(value.panels) || !value.panels.length) malformed(`${path}.panels must be a nonempty array.`);
+  const keys = new Set<string>();
+  const numbers = new Set<number>();
+  for (const [index, panel] of (value.panels as unknown[]).entries()) {
+    requireObject(panel, `${path}.panels[${index}]`);
+    requireString(panel.panel_key, `${path}.panels[${index}].panel_key`);
+    requireString(panel.display_name, `${path}.panels[${index}].display_name`);
+    if (!Number.isInteger(panel.panel_number) || (panel.panel_number as number) < 1 || keys.has(panel.panel_key as string) || numbers.has(panel.panel_number as number)) malformed(`${path}.panels[${index}] identity is invalid.`);
+    keys.add(panel.panel_key as string); numbers.add(panel.panel_number as number);
+    for (const field of ['x', 'y', 'width', 'height'] as const) if (typeof panel[field] !== 'number' || !Number.isFinite(panel[field])) malformed(`${path}.panels[${index}].${field} is invalid.`);
+    if ((panel.width as number) <= 0 || (panel.height as number) <= 0) malformed(`${path}.panels[${index}] dimensions are invalid.`);
+  }
+  if (!Array.isArray(value.slots)) malformed(`${path}.slots must be an array.`);
+  for (const [index, item] of (value.slots as unknown[]).entries()) {
+    requireObject(item, `${path}.slots[${index}]`);
+    requireString(item.slot_key, `${path}.slots[${index}].slot_key`);
+    requireString(item.display_name, `${path}.slots[${index}].display_name`);
+    requireString(item.panel_key, `${path}.slots[${index}].panel_key`);
+    if (!keys.has(item.panel_key as string) || (item.kind !== 'CONNECTION_POINT' && item.kind !== 'NETWORK_PORT')) malformed(`${path}.slots[${index}] membership or kind is invalid.`);
+    requireObject(item.panel_local_position, `${path}.slots[${index}].panel_local_position`);
+    requireObject(item.rendered_position, `${path}.slots[${index}].rendered_position`);
+    requireObject(item.external_attachment, `${path}.slots[${index}].external_attachment`);
+    for (const position of [item.panel_local_position, item.rendered_position, item.external_attachment]) {
+      if (typeof position.x !== 'number' || typeof position.y !== 'number' || !Number.isFinite(position.x) || !Number.isFinite(position.y)) malformed(`${path}.slots[${index}].geometry is invalid.`);
+    }
+    if (!['LEFT', 'RIGHT', 'TOP', 'BOTTOM'].includes(String(item.external_attachment.side))) malformed(`${path}.slots[${index}].external_attachment.side is invalid.`);
+    requireString(item.connection_point_id, `${path}.slots[${index}].connection_point_id`);
+    if (item.network_interface_id != null) requireString(item.network_interface_id, `${path}.slots[${index}].network_interface_id`);
+  }
+};
 const validateEndpointPairs = (value: unknown, path: string): void => { if (!Array.isArray(value)) malformed(`${path} must be an array.`); for (const [index, pair] of (value as unknown[]).entries()) { requireObject(pair, `${path}[${index}]`); for (const key of ['from_connection_point_id', 'to_connection_point_id', 'connection_id', 'connection_member_id']) requireString(pair[key], `${path}[${index}].${key}`); for (const key of ['from_member_index', 'to_member_index']) if (!Number.isInteger(pair[key]) || (pair[key] as number) < 1) malformed(`${path}[${index}].${key} must be positive integer.`); if (pair.cable_ref !== undefined) { validateCanonicalRef(pair.cable_ref, `${path}[${index}].cable_ref`, 'Cable'); requireString(pair.cable_display_name, `${path}[${index}].cable_display_name`); } } };
 const validateConnectionPoints = (value: unknown, path: string): void => { if (!Array.isArray(value)) malformed(`${path} must be an array.`); for (const [index, point] of (value as unknown[]).entries()) { requireObject(point, `${path}[${index}]`); requireString(point.connection_point_id, `${path}[${index}].connection_point_id`); requireString(point.display_name, `${path}[${index}].display_name`); for (const key of ['cardinality', 'external_connection_count']) if (!Number.isInteger(point[key]) || (point[key] as number) < (key === 'cardinality' ? 1 : 0)) malformed(`${path}[${index}].${key} is invalid.`); } };
 

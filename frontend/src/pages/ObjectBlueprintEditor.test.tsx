@@ -8,6 +8,16 @@ import { newBlueprintEditorState, ObjectBlueprintEditor } from './ObjectBlueprin
 
 describe('minimal direct endpoint editor', () => {
   const renderEditor = () => render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
+  it('blocks unsafe editing and saving when a multi-panel version is loaded', () => {
+    const initial = newBlueprintEditorState();
+    initial.panels.push({ ...initial.panels[0], panel_key: 'second', panel_number: 2, display_name: 'Second', x: 160 });
+    const save = vi.fn();
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
+    expect(screen.getByRole('status')).toHaveTextContent('с несколькими панелями');
+    expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
+    expect(createBlueprintRequest(initial).errors).toContain('multiPanelReadOnly');
+    expect(save).not.toHaveBeenCalled();
+  });
   it('adds, selects, renames, moves, links, and deletes slots without a library', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={save} /></MemoryRouter></I18nProvider>);
@@ -37,16 +47,16 @@ describe('minimal direct endpoint editor', () => {
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(1);
   });
 
-  it('places new points on the active rear face and saves their exact snapshot', async () => {
+  it('places new points on initial panel and saves their exact snapshot', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={save} /></MemoryRouter></I18nProvider>);
-    await userEvent.type(screen.getByLabelText('Название шаблона'), 'Rear panel');
-    await userEvent.click(screen.getByRole('button', { name: 'Задняя' }));
+    await userEvent.type(screen.getByLabelText('Название шаблона'), 'Panel');
     await userEvent.selectOptions(screen.getByLabelText('Тип'), 'CONNECTION_POINT');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     const request = createBlueprintRequest(save.mock.calls[0][0]).request!;
-    expect(request.slots).toEqual([expect.objectContaining({ kind: 'CONNECTION_POINT', face: 'REAR' })]);
+    expect(request.slots).toEqual([expect.objectContaining({ kind: 'CONNECTION_POINT', panel_key: request.panels[0].panel_key, display_name: '1-1' })]);
+    expect(screen.queryByRole('button', { name: 'Задняя' })).not.toBeInTheDocument();
   });
 
   it('selects the newly added set, toggles members, and keeps layout actions off the permanent surface', async () => {
@@ -70,9 +80,7 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.pointerDown(nodes[0]);
     fireEvent.pointerUp(document.querySelector('.blueprint-composition-canvas')!);
     expect(nodes.map((node) => node.getAttribute('data-selected'))).toEqual(['true', 'false', 'false']);
-    await userEvent.click(screen.getByRole('button', { name: 'Задняя' }));
-    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
-    expect(screen.queryByLabelText('Название')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Задняя' })).not.toBeInTheDocument();
   });
 
   it('marquee selects centers, group drag preserves offsets, and multi-delete clears links', async () => {
@@ -176,7 +184,6 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.pointerDown(nodes[0], { clientX: 25, clientY: 9.375 });
     fireEvent.pointerUp(canvas);
     fireEvent.keyDown(screen.getByLabelText('Название'), { key: 'Delete' });
-    fireEvent.keyDown(screen.getByLabelText('Панель'), { key: 'Delete' });
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(2);
     fireEvent.contextMenu(nodes[0]);
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -192,10 +199,11 @@ describe('minimal direct endpoint editor', () => {
 
   it('shows only active snap guides during group drag and clears them on finish or cancel', () => {
     const state = { ...newBlueprintEditorState(), slots: [
-      { key: 'a', display_name: 'A', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .1, y: .2 } },
-      { key: 'b', display_name: 'B', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .2, y: .2 } },
-      { key: 'c', display_name: 'C', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .6, y: .4 } },
+      { key: 'a', display_name: 'A', kind: 'NETWORK_PORT' as const, panel_key: 'one', rendered_position: { x: .1, y: .2 } },
+      { key: 'b', display_name: 'B', kind: 'NETWORK_PORT' as const, panel_key: 'one', rendered_position: { x: .2, y: .2 } },
+      { key: 'c', display_name: 'C', kind: 'NETWORK_PORT' as const, panel_key: 'one', rendered_position: { x: .6, y: .4 } },
     ] };
+    state.panels[0].panel_key = 'one';
     render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
     Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
@@ -233,10 +241,9 @@ describe('minimal direct endpoint editor', () => {
     expect(new Set(centers()).size).toBe(14);
   });
 
-  it('uses screen-space row spacing for four ports on a 10:1 rear body', async () => {
+  it('uses screen-space row spacing for four ports on a 10:1 panel', async () => {
     const state = { ...newBlueprintEditorState(), width: 10, height: 1 };
     render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
-    await userEvent.click(screen.getByRole('button', { name: 'Задняя' }));
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '4' } });
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
@@ -250,9 +257,10 @@ describe('minimal direct endpoint editor', () => {
 
   it('offers an explicit horizontal or vertical distribution range and a full-body option', async () => {
     const state = { ...newBlueprintEditorState(), slots: [0, 1, 2, 3].map((index) => ({
-      key: `slot-${index}`, display_name: `Port ${index}`, kind: 'NETWORK_PORT' as const, face: 'FRONT' as const,
+      key: `slot-${index}`, display_name: `Port ${index}`, kind: 'NETWORK_PORT' as const, panel_key: 'one',
       rendered_position: { x: .2 + index * .1, y: .3 + index * .05 },
     })) };
+    state.panels[0].panel_key = 'one';
     render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
     Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });

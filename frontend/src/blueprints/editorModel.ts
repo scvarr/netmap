@@ -1,10 +1,11 @@
-import type { BlueprintFace, BlueprintInternalLink, BlueprintSlot, BlueprintSlotKind, CreateObjectBlueprintRequest, ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
+import type { BlueprintInternalLink, BlueprintSlot, BlueprintSlotKind, CreateObjectBlueprintRequest, ObjectBlueprintVersionDocument, PresentationPanel } from '../topology/objectBlueprintTypes';
 
 export interface BlueprintEditorState {
   name: string; defaultClass: string; width: number; height: number; fillColor: string;
-  slots: BlueprintSlot[]; individualLinks: BlueprintInternalLink[];
+  panels: PresentationPanel[]; slots: BlueprintSlot[]; individualLinks: BlueprintInternalLink[];
+  nextLocalNumber?: number;
 }
-export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateSlotKeys' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
+export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateSlotKeys' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink' | 'multiPanelReadOnly';
 export const internalLinkPairKey = (first: string, second: string) => [first, second].sort().join('\u0000');
 export const cleanupLinks = (links: BlueprintInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
 export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState => ({
@@ -129,30 +130,36 @@ export const layoutSelectionTwoRows = (state: BlueprintEditorState, keys: Readon
   })));
 };
 
-/** UUIDs are opaque and independent of names, position, face, and selection. */
-export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKind, count: number, face: BlueprintFace): BlueprintEditorState => {
-  if (!Number.isInteger(count) || count < 1 || count > 256 || state.slots.filter((slot) => slot.face === face).length + count > 400) return state;
-  const existing = state.slots.filter((slot) => slot.face === face).length;
+/** UUIDs are opaque and independent of names, position, panel, and selection. */
+export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKind, count: number, panelKey: string): BlueprintEditorState => {
+  if (state.panels.length !== 1 || !Number.isInteger(count) || count < 1 || count > 256 || state.slots.filter((slot) => slot.panel_key === panelKey).length + count > 400) return state;
+  const panel = state.panels.find((item) => item.panel_key === panelKey);
+  if (!panel) return state;
+  const existing = state.slots.filter((slot) => slot.panel_key === panelKey).length;
+  const maximum = Math.max(0, ...state.slots.filter((slot) => slot.panel_key === panelKey).map((slot) => new RegExp(`^${panel.panel_number}-(\\d+)$`).exec(slot.display_name)).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => Number(match[1])));
+  const next = Math.max(state.nextLocalNumber ?? 1, maximum + 1);
   const slots = Array.from({ length: count }, (_, index): BlueprintSlot => {
     const ordinal = existing + index;
     const column = ordinal % 20;
     const row = Math.floor(ordinal / 20);
     return {
-      key: crypto.randomUUID(), kind, face,
-      display_name: kind === 'NETWORK_PORT' ? `Port ${ordinal + 1}` : `Point ${ordinal + 1}`,
+      key: crypto.randomUUID(), kind, panel_key: panelKey,
+      display_name: `${panel.panel_number}-${next + index}`,
       rendered_position: { x: (column + .5) / 20, y: (row + .5) / 20 },
     };
   });
-  return { ...state, slots: [...state.slots, ...slots] };
+  return { ...state, nextLocalNumber: next + count, slots: [...state.slots, ...slots] };
 };
 export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocument): BlueprintEditorState => ({
   name: version.name, defaultClass: version.default_physical_object_class ?? '', width: version.body.width,
   height: version.body.height, fillColor: version.body.fill_color ?? '#28565a',
+  panels: version.panels.map((panel) => ({ ...panel })),
   slots: version.slots.map((slot) => ({ ...slot, rendered_position: { ...slot.rendered_position } })),
   individualLinks: version.internal_links.map((link) => ({ ...link })),
 });
 export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateObjectBlueprintRequest; errors: BlueprintValidationError[] } => {
   const errors: BlueprintValidationError[] = [];
+  if (state.panels.length !== 1) errors.push('multiPanelReadOnly');
   if (!state.name.trim()) errors.push('nameRequired');
   if (!Number.isFinite(state.width) || state.width <= 0 || !Number.isFinite(state.height) || state.height <= 0) errors.push('dimensionsPositive');
   if (state.fillColor && !/^#[0-9A-Fa-f]{6}$/.test(state.fillColor)) errors.push('colorFormat');
@@ -168,6 +175,7 @@ export const createBlueprintRequest = (state: BlueprintEditorState): { request?:
   return { errors, request: {
     name: state.name.trim(), ...(state.defaultClass.trim() ? { default_physical_object_class: state.defaultClass.trim() } : {}),
     body: { kind: 'RECTANGLE', width: state.width, height: state.height, fill_color: state.fillColor },
+    panels: state.panels.map((panel) => ({ ...panel, width: state.width, height: state.height })),
     slots: state.slots.map((slot) => ({ ...slot, rendered_position: { ...slot.rendered_position } })),
     internal_links: state.individualLinks,
   } };

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import CIDR, INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -459,6 +459,27 @@ class ObjectBlueprintVersion(Base):
     fill_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
 
 
+class PresentationPanel(Base):
+    __tablename__ = "presentation_panels"
+    __table_args__ = (
+        CheckConstraint("char_length(btrim(panel_key)) > 0", name="panel_key_not_blank"),
+        CheckConstraint("panel_number > 0", name="panel_number_positive"),
+        CheckConstraint("width > 0 AND height > 0", name="size_positive"),
+        UniqueConstraint("blueprint_version_id", "panel_key", name="uq_presentation_panels_version_key"),
+        UniqueConstraint("blueprint_version_id", "panel_number", name="uq_presentation_panels_version_number"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False)
+    panel_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    panel_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    x: Mapped[float] = mapped_column(Float, nullable=False)
+    y: Mapped[float] = mapped_column(Float, nullable=False)
+    width: Mapped[float] = mapped_column(Float, nullable=False)
+    height: Mapped[float] = mapped_column(Float, nullable=False)
+
+
 class BlueprintEndpointSlot(Base):
     __tablename__ = "blueprint_endpoint_slots"
     __table_args__ = (
@@ -466,7 +487,11 @@ class BlueprintEndpointSlot(Base):
         CheckConstraint("char_length(btrim(display_name)) > 0", name="display_name_not_blank"),
         CheckConstraint("kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="kind_supported"),
         UniqueConstraint("blueprint_version_id", "slot_key", name="uq_blueprint_endpoint_slots_key"),
-        CheckConstraint("face IN ('FRONT', 'REAR')", name="face_supported"),
+        ForeignKeyConstraint(
+            ["blueprint_version_id", "panel_key"],
+            ["presentation_panels.blueprint_version_id", "presentation_panels.panel_key"],
+            name="fk_blueprint_endpoint_slots_panel_version", ondelete="RESTRICT",
+        ),
         CheckConstraint("position_x >= 0 AND position_x <= 1 AND position_y >= 0 AND position_y <= 1", name="position_bounds"),
     )
 
@@ -477,7 +502,7 @@ class BlueprintEndpointSlot(Base):
     slot_key: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
-    face: Mapped[str] = mapped_column(String(8), nullable=False)
+    panel_key: Mapped[str] = mapped_column(String(255), nullable=False)
     position_x: Mapped[float] = mapped_column(Float, nullable=False)
     position_y: Mapped[float] = mapped_column(Float, nullable=False)
 

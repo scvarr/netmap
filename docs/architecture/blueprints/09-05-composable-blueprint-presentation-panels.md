@@ -2,13 +2,14 @@
 
 ## Status and authority
 
-**FIXED / ACCEPTED TARGET CONTRACT. IMPLEMENTATION PENDING.**
+**FIXED / ACCEPTED TARGET CONTRACT. SLICE A IMPLEMENTED; SLICES B/C/D PENDING.**
 
 This document supersedes only the binary `FRONT | REAR` presentation model in
 [09.4](09-04-direct-blueprint-endpoint-authoring.md). Direct endpoint slots
-remain the primary Blueprint-version authoring entities. The current
-implementation still uses faces; this target is not implemented. Phase C
-remains **PAUSED** pending this redesign and its bounded editor work. Port
+remain the primary Blueprint-version authoring entities. Persistence, API,
+workspace v3, projection, runtime geometry, preview, and the current
+single-panel editor use panel composition. Full multi-panel authoring remains
+pending in Slice B. Phase C remains **PAUSED** pending bounded editor work. Port
 Block remains removed and is not a prerequisite.
 
 An immutable `ObjectBlueprintVersion` owns body/overall presentation,
@@ -158,12 +159,12 @@ they do not imply separate canonical controllers.
 The following 09.4 target assumptions are superseded: fixed `FRONT | REAR`
 enum; exactly two faces; separate FRONT/REAR authoring toggle as target UX;
 endpoint `face` as target representation; cable geometry tied specifically to
-two faces. These remain historical/current implementation facts until cutover;
-they are not implemented as multi-panel behavior.
+two faces. These are now historical facts, not application presentation
+contracts.
 
 Bounded implementation slices:
 
-1. **Persistence, API, and operability cutover:** persist `PresentationPanel`
+1. **IMPLEMENTED — Persistence, API, and operability cutover:** persist `PresentationPanel`
    on `ObjectBlueprintVersion` with stable opaque `panel_key`, stable positive
    `panel_number`, exact open `display_name`, and composition-space rectangle;
    assign every endpoint exactly one `panel_key`, retain normalized panel-local
@@ -189,15 +190,15 @@ Bounded implementation slices:
    before full panel editing exists, the editor must not silently flatten,
    discard, remap, or overwrite its panels. Slice A does not deliver the
    multi-panel authoring workspace.
-2. **Multi-panel canvas:** show all panels, active-panel state, add in four
+2. **PENDING — Multi-panel canvas:** show all panels, active-panel state, add in four
    directions, rename/move/resize, author endpoints inside panels, and scope
    existing spatial selection/layout tools to a panel. This includes the
    simultaneous multi-panel authoring workspace, active-panel UX, add
    above/right/below/left, panel rename/move/resize/delete, and general panel
    management UI.
-3. **Copy to panel:** selected-slot copy with new keys, destination defaults,
+3. **PENDING — Copy to panel:** selected-slot copy with new keys, destination defaults,
    local geometry, and optional 1:1 links.
-4. **Ordered bulk authoring:** ordered selection, bulk naming, and general
+4. **PENDING — Ordered bulk authoring:** ordered selection, bulk naming, and general
    pairwise continuity.
 
 Technology/capability remains **OPEN**, separate from these slices. Phase C

@@ -1,5 +1,14 @@
 export type BlueprintSlotKind = 'CONNECTION_POINT' | 'NETWORK_PORT';
-export type BlueprintFace = 'FRONT' | 'REAR';
+
+export interface PresentationPanel {
+  panel_key: string;
+  panel_number: number;
+  display_name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 export interface LibraryRef {
   ref_type: 'LIBRARY_RECORD';
@@ -18,7 +27,7 @@ export interface BlueprintSlot {
   key: string;
   display_name: string;
   kind: BlueprintSlotKind;
-  face: BlueprintFace;
+  panel_key: string;
   rendered_position: { x: number; y: number };
 }
 
@@ -31,6 +40,7 @@ export interface CreateObjectBlueprintRequest {
   name: string;
   default_physical_object_class?: string;
   body: BlueprintBody;
+  panels: PresentationPanel[];
   slots: BlueprintSlot[];
   internal_links: BlueprintInternalLink[];
 }
@@ -52,24 +62,25 @@ export interface ObjectBlueprintListItem {
 }
 
 export interface ObjectBlueprintListDocument {
-  schema_version: '1.0';
+  schema_version: '2.0';
   blueprints: ObjectBlueprintListItem[];
 }
 
 export interface ObjectBlueprintVersionDocument {
-  schema_version: '1.0';
+  schema_version: '2.0';
   blueprint_ref: LibraryRef;
   name: string;
   version_ref: LibraryRef;
   version_number: number;
   default_physical_object_class?: string | null;
   body: BlueprintBody;
+  panels: PresentationPanel[];
   slots: BlueprintSlot[];
   internal_links: BlueprintInternalLink[];
 }
 
 export interface ObjectBlueprintCreationDocument {
-  schema_version: '1.0';
+  schema_version: '2.0';
   blueprint_ref: LibraryRef;
   version_ref: LibraryRef;
 }
@@ -81,7 +92,7 @@ export interface CanonicalBlueprintInstanceRef {
 }
 
 export interface ObjectBlueprintInstantiationDocument {
-  schema_version: '1.0';
+  schema_version: '2.0';
   blueprint_ref: LibraryRef;
   version_ref: LibraryRef;
   physical_object_ref: CanonicalBlueprintInstanceRef & { entity_type: 'PhysicalObject' };

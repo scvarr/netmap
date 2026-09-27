@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ViewState } from "../components/ViewState";
+import { BlueprintPreview } from "../components/BlueprintPreview";
 import { useI18n } from "../i18n";
 import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
 import type {
@@ -141,7 +142,7 @@ export function ObjectBlueprintLibraryPage({
                     : "—";
                   return (
                     <tr key={blueprint.blueprint_ref.entity_id}>
-                      <th scope="row">{blueprint.name}</th>
+                      <th scope="row">{blueprint.name}{version && <BlueprintPreview body={version.body} panels={version.panels} slots={version.slots} internalLinks={version.internal_links} label={`${blueprint.name} · ${t('blueprint.editor.preview')}`} viewportWidth={120} viewportHeight={60} />}</th>
                       <td>
                         {blueprint.default_physical_object_class ||
                           t("blueprint.library.notSpecified")}

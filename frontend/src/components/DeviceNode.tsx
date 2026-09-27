@@ -5,7 +5,7 @@ import { displayNodeLabel, physicalClassPresentation } from '../topology/present
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import { internalL1Segments } from '../topology/internalL1Presentation';
 import { InternalL1Continuity } from './InternalL1Continuity';
-import { blueprintDisplayDimensions, blueprintMapNameplateHeight, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
+import { blueprintMapNameplateHeight, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
@@ -23,8 +23,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
     const displayWidth = width ?? blueprintNodeDisplayDimensions(blueprint, undefined).width;
     const displayHeight = blueprintNodeDisplayDimensions(blueprint, displayWidth).height;
     const nameplateHeight = blueprintMapNameplateHeight(blueprint, displayWidth);
-    const faceDimensions = blueprintDisplayDimensions(blueprint.body, displayWidth);
-    const faces = visibleBlueprintFaces(blueprint);
+    const bounds = panelCompositionBounds(blueprint.panels);
     const traceHighlightedConnectionPointIds = new Set(
       (projection.attributes.internal_l1_links ?? [])
         .filter((link) => data.traceHighlightedConnectionMemberIds?.has(link.connection_member_id))
@@ -49,10 +48,10 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
     </strong>
     <div className="blueprint-map-node__body" style={{ height: displayHeight }}>
     <div className="blueprint-map-node__panels">
-      {faces.map((face) => {
-        return <section key={face} className="blueprint-map-node__face" data-testid={`blueprint-face-${face}`}>
-          <div className="blueprint-map-node__face-surface" style={{ height: faceDimensions.height, background: blueprint.body.fill_color ?? '#18383a' }}>
-            {blueprint.slots.filter((slot) => (slot.face ?? 'FRONT') === face).map((slot) => { const style = { left: `${slot.rendered_position.x * 100}%`, top: `${slot.rendered_position.y * 100}%`, transform: 'translate(-50%, -50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
+      {blueprint.panels.map((panel) => {
+        return <section key={panel.panel_key} className="blueprint-map-node__panel" data-testid={`blueprint-panel-${panel.panel_key}`} style={{ left: `${(panel.x - bounds.x) / bounds.width * 100}%`, top: `${(panel.y - bounds.y) / bounds.height * 100}%`, width: `${panel.width / bounds.width * 100}%`, height: `${panel.height / bounds.height * 100}%`, background: blueprint.body.fill_color ?? '#18383a' }}>
+          <div className="blueprint-map-node__panel-surface" title={panel.display_name}>
+            {blueprint.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => { const style = { left: `${slot.panel_local_position.x * 100}%`, top: `${slot.panel_local_position.y * 100}%`, transform: 'translate(-50%, -50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
           </div>
         </section>;
       })}

@@ -1,4 +1,4 @@
-"""Version 1 exchange contract for the current implicit workspace dataset.
+"""Version 3 exchange contract for the current implicit workspace dataset.
 
 The public names and fields below are deliberately fixed independently of table
 names. A storage change must adapt this mapping or introduce a new format version.
@@ -19,7 +19,7 @@ from app import models
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -62,7 +62,8 @@ ENTITIES = (
     ("canonical", "PacketProcessingPlanAttachment", "PacketProcessingPlanAttachment", "id attachment_set_id plan_id scope"),
     ("authoring", "ObjectBlueprint", "ObjectBlueprint", "id name"),
     ("authoring", "ObjectBlueprintVersion", "ObjectBlueprintVersion", "id blueprint_id version_number default_physical_object_class body_kind width height fill_color"),
-    ("authoring", "BlueprintEndpointSlot", "BlueprintEndpointSlot", "id blueprint_version_id slot_key display_name kind face position_x position_y"),
+    ("authoring", "PresentationPanel", "PresentationPanel", "id blueprint_version_id panel_key panel_number display_name x y width height"),
+    ("authoring", "BlueprintEndpointSlot", "BlueprintEndpointSlot", "id blueprint_version_id slot_key display_name kind panel_key position_x position_y"),
     ("authoring", "BlueprintInternalLink", "BlueprintInternalLink", "id blueprint_version_id slot_a_id slot_b_id"),
     ("authoring", "BlueprintInstance", "BlueprintInstance", "id blueprint_version_id physical_object_id"),
     ("authoring", "BlueprintInstanceSlot", "BlueprintInstanceSlot", "id blueprint_instance_id blueprint_slot_id connection_point_id network_interface_id"),
@@ -183,13 +184,19 @@ def validate_package(package: object) -> dict:
         raise PackageError("CableLabelSettings singleton is missing")
     # Check all references before issuing a single write. FK constraints remain
     # the final authority and the transaction rolls back on any violation.
-    ids_by_table = {table: {row["id"] for row in rows} for table, rows in result.items()}
+    referenced_columns = {(fk.column.table.name, fk.column.key)
+                          for _, _, model, _ in specs for column in model.__table__.columns for fk in column.foreign_keys}
+    values_by_column = {(table, column): {row[column] for row in result[table]}
+                        for table, column in referenced_columns}
     for _, name, model, _ in specs:
         for row in result[model.__table__.name]:
             for column in model.__table__.columns:
                 for fk in column.foreign_keys:
-                    if row[column.key] is not None and row[column.key] not in ids_by_table[fk.column.table.name]:
+                    if row[column.key] is not None and row[column.key] not in values_by_column[(fk.column.table.name, fk.column.key)]:
                         raise PackageError(f"{name}.{column.key} refers to a missing entity")
+    panel_memberships = {(row["blueprint_version_id"], row["panel_key"]) for row in result["presentation_panels"]}
+    if any((row["blueprint_version_id"], row["panel_key"]) not in panel_memberships for row in result["blueprint_endpoint_slots"]):
+        raise PackageError("BlueprintEndpointSlot.panel_key refers to a panel in another version")
     locations = {row["id"]: row["parent_location_id"] for row in result["locations"]}
     for location_id in locations:
         seen = set()

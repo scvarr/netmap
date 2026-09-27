@@ -1,10 +1,10 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
-import type { BlueprintFace, BlueprintInternalLink, BlueprintSlot } from '../topology/objectBlueprintTypes';
+import type { BlueprintInternalLink, BlueprintSlot } from '../topology/objectBlueprintTypes';
 import { useI18n } from '../i18n';
 import { snapSelectionTranslation } from '../blueprints/editorModel';
 
 interface Props {
-  body: { width: number; height: number; fillColor: string }; face: BlueprintFace;
+  body: { width: number; height: number; fillColor: string }; panelKey: string;
   slots: BlueprintSlot[]; links: BlueprintInternalLink[]; selectedKeys: ReadonlySet<string>;
   onSelect: (key: string, toggle: boolean) => void; onMarquee: (keys: string[]) => void;
   onTranslate: (keys: ReadonlySet<string>, dx: number, dy: number) => void;
@@ -23,7 +23,7 @@ export function endpointMarkerRadii(scale: number) {
   };
 }
 
-export function BlueprintCompositionCanvas({ body, face, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu }: Props) {
+export function BlueprintCompositionCanvas({ body, panelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu }: Props) {
   const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null);
   const gesture = useRef<Gesture | undefined>(undefined);
@@ -46,7 +46,7 @@ export function BlueprintCompositionCanvas({ body, face, slots, links, selectedK
     return () => { observer?.disconnect(); window.removeEventListener('resize', update); };
   }, [height]);
   const marker = endpointMarkerRadii(canvasScale);
-  const visible = slots.filter((slot) => slot.face === face);
+  const visible = slots.filter((slot) => slot.panel_key === panelKey);
   const points = new Map(visible.map((slot) => [slot.key, { x: slot.rendered_position.x * 1000, y: slot.rendered_position.y * height }]));
   const position = (event: PointerEvent<SVGElement>): Point => {
     const rect = svg.current!.getBoundingClientRect();
@@ -69,7 +69,7 @@ export function BlueprintCompositionCanvas({ body, face, slots, links, selectedK
     setMarquee(undefined);
     setGuides({});
   };
-  return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 1000 ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.composition.canvas', { face: t(face === 'FRONT' ? 'blueprint.face.front' : 'blueprint.face.rear') })} onPointerMove={(event) => {
+  return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 1000 ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.editor.preview')} onPointerMove={(event) => {
     const current = gesture.current;
     if (!current) return;
     const next = position(event);

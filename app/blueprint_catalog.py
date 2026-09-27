@@ -15,6 +15,7 @@ from app.models import (
     EntityMetadata,
     ObjectBlueprint,
     ObjectBlueprintVersion,
+    PresentationPanel,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
 
@@ -68,6 +69,7 @@ class BlueprintVersionDetail:
     width: float
     height: float
     fill_color: str | None
+    panels: tuple[PresentationPanel, ...]
     slots: tuple[BlueprintEndpointSlot, ...]
     internal_links: tuple[tuple[str, str], ...]
 
@@ -102,6 +104,11 @@ class ObjectBlueprintCatalog:
         return CreatedBlueprint(blueprint_id, version.id)
 
     def _create_version(self, blueprint_id: uuid.UUID, version_number: int, query: object) -> ObjectBlueprintVersion:
+        prior_numbers = dict(self.session.execute(
+            select(PresentationPanel.panel_key, PresentationPanel.panel_number)
+            .join(ObjectBlueprintVersion, PresentationPanel.blueprint_version_id == ObjectBlueprintVersion.id)
+            .where(ObjectBlueprintVersion.blueprint_id == blueprint_id)
+        ).all())
         version = ObjectBlueprintVersion(
             blueprint_id=blueprint_id,
             version_number=version_number,
@@ -113,16 +120,33 @@ class ObjectBlueprintCatalog:
         )
         self.session.add(version)
         self.session.flush()
+        panel_keys: set[str] = set()
+        panel_numbers: set[int] = set()
+        for panel in query.panels:
+            if panel.panel_key in panel_keys or panel.panel_number in panel_numbers:
+                raise ValidationError("Blueprint panels must have unique keys and numbers")
+            if panel.panel_key in prior_numbers and prior_numbers[panel.panel_key] != panel.panel_number:
+                raise ValidationError("A Blueprint panel number must remain stable across versions")
+            panel_keys.add(panel.panel_key)
+            panel_numbers.add(panel.panel_number)
+            self.session.add(PresentationPanel(
+                blueprint_version_id=version.id, panel_key=panel.panel_key,
+                panel_number=panel.panel_number, display_name=panel.display_name,
+                x=panel.x, y=panel.y, width=panel.width, height=panel.height,
+            ))
+        self.session.flush()
         slots_by_key: dict[str, BlueprintEndpointSlot] = {}
         for item in query.slots:
             if item.key in slots_by_key:
                 raise ValidationError("Blueprint slot keys must be unique")
+            if item.panel_key not in panel_keys:
+                raise ValidationError("Blueprint slot refers to an unknown panel")
             slot = BlueprintEndpointSlot(
                 blueprint_version_id=version.id,
                 slot_key=item.key,
                 display_name=item.display_name,
                 kind=item.kind,
-                face=item.face,
+                panel_key=item.panel_key,
                 position_x=item.rendered_position.x,
                 position_y=item.rendered_position.y,
             )
@@ -203,6 +227,10 @@ class ObjectBlueprintCatalog:
             .where(BlueprintEndpointSlot.blueprint_version_id == version.id)
             .order_by(BlueprintEndpointSlot.slot_key)
         ))
+        panels = tuple(self.session.scalars(
+            select(PresentationPanel).where(PresentationPanel.blueprint_version_id == version.id)
+            .order_by(PresentationPanel.panel_number)
+        ))
         keys_by_id = {slot.id: slot.slot_key for slot in slots}
         links = tuple(
             (keys_by_id[link.slot_a_id], keys_by_id[link.slot_b_id])
@@ -222,6 +250,7 @@ class ObjectBlueprintCatalog:
             width=version.width,
             height=version.height,
             fill_color=version.fill_color,
+            panels=panels,
             slots=slots,
             internal_links=links,
         )
@@ -249,6 +278,7 @@ class ObjectBlueprintCatalog:
                 BlueprintInternalLink.blueprint_version_id.in_(version_ids)
             ))
             self.session.execute(delete(BlueprintEndpointSlot).where(BlueprintEndpointSlot.id.in_(slot_ids)))
+        self.session.execute(delete(PresentationPanel).where(PresentationPanel.blueprint_version_id.in_(version_ids)))
         self.session.execute(delete(ObjectBlueprintVersion).where(ObjectBlueprintVersion.id.in_(version_ids)))
         self.session.delete(blueprint)
 

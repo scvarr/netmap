@@ -5,11 +5,12 @@ import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprint
 
 describe('direct Blueprint slots', () => {
   it('adds distinct opaque identities and bounded deterministic positions on each face', () => {
+    const initial = newBlueprintEditorState();
     vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValueOnce('a').mockReturnValueOnce('b').mockReturnValueOnce('c') });
-    const front = addEndpoints(newBlueprintEditorState(), 'NETWORK_PORT', 2, 'FRONT');
-    const both = addEndpoints(front, 'CONNECTION_POINT', 1, 'REAR');
+    const front = addEndpoints(initial, 'NETWORK_PORT', 2, initial.panels[0].panel_key);
+    const both = addEndpoints(front, 'CONNECTION_POINT', 1, initial.panels[0].panel_key);
     expect(both.slots.map((slot) => slot.key)).toEqual(['a', 'b', 'c']);
-    expect(both.slots.map((slot) => slot.face)).toEqual(['FRONT', 'FRONT', 'REAR']);
+    expect(both.slots.map((slot) => slot.display_name)).toEqual(['1-1', '1-2', '1-3']);
     expect(both.slots[0].rendered_position).not.toEqual(both.slots[1].rendered_position);
     expect(both.slots.every((slot) => Object.values(slot.rendered_position).every((value) => value >= 0 && value <= 1))).toBe(true);
     vi.unstubAllGlobals();
@@ -17,16 +18,16 @@ describe('direct Blueprint slots', () => {
 
   it('preserves identity through exact edit, hydration, link and deletion', () => {
     const document: ObjectBlueprintVersionDocument = {
-      schema_version: '1.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
+      schema_version: '2.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
       version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' },
-      version_number: 1, name: 'Panel', body: { kind: 'RECTANGLE', width: 100, height: 40 },
+      version_number: 1, name: 'Panel', body: { kind: 'RECTANGLE', width: 100, height: 40 }, panels: [{ panel_key: 'panel-1', panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 100, height: 40 }],
       slots: [
-        { key: 'opaque-a', display_name: 'P1', kind: 'CONNECTION_POINT', face: 'FRONT', rendered_position: { x: .2, y: .3 } },
-        { key: 'opaque-b', display_name: 'N1', kind: 'NETWORK_PORT', face: 'REAR', rendered_position: { x: .8, y: .7 } },
+        { key: 'opaque-a', display_name: 'P1', kind: 'CONNECTION_POINT', panel_key: 'panel-1', rendered_position: { x: .2, y: .3 } },
+        { key: 'opaque-b', display_name: 'N1', kind: 'NETWORK_PORT', panel_key: 'panel-1', rendered_position: { x: .8, y: .7 } },
       ], internal_links: [{ from_slot_key: 'opaque-a', to_slot_key: 'opaque-b' }],
     };
     const state = hydrateBlueprintEditorState(document);
-    state.slots[0] = { ...state.slots[0], display_name: 'renamed', face: 'REAR', rendered_position: { x: .6, y: .5 } };
+    state.slots[0] = { ...state.slots[0], display_name: 'renamed', panel_key: 'panel-1', rendered_position: { x: .6, y: .5 } };
     const request = createBlueprintRequest(state).request!;
     expect(request.slots[0]).toEqual(state.slots[0]);
     expect(request.internal_links).toEqual(document.internal_links);
@@ -34,18 +35,28 @@ describe('direct Blueprint slots', () => {
     expect(removed.slots.map((slot) => slot.key)).toEqual(['opaque-b']);
     expect(removed.individualLinks).toEqual([]);
   });
+
+  it('allocates monotonic panel defaults without renumbering after deletion', () => {
+    const initial = newBlueprintEditorState();
+    const key = initial.panels[0].panel_key;
+    const two = addEndpoints(initial, 'NETWORK_PORT', 2, key);
+    const removed = removeEndpoints(two, new Set([two.slots[1].key]));
+    const next = addEndpoints(removed, 'CONNECTION_POINT', 1, key);
+    expect(next.slots.map((slot) => slot.display_name)).toEqual(['1-1', '1-3']);
+    expect(next.slots[0].key).toBe(two.slots[0].key);
+  });
 });
 
 describe('endpoint selection geometry', () => {
   const base = (): BlueprintEditorState => ({ ...newBlueprintEditorState(), slots: [
-    { key: 'a', display_name: 'Alpha', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .1, y: .2 } },
-    { key: 'b', display_name: 'Beta', kind: 'CONNECTION_POINT' as const, face: 'FRONT' as const, rendered_position: { x: .4, y: .6 } },
-    { key: 'c', display_name: 'Gamma', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .9, y: .8 } },
-    { key: 'rear', display_name: 'Rear', kind: 'NETWORK_PORT' as const, face: 'REAR' as const, rendered_position: { x: .3, y: .3 } },
+    { key: 'a', display_name: 'Alpha', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .1, y: .2 } },
+    { key: 'b', display_name: 'Beta', kind: 'CONNECTION_POINT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .4, y: .6 } },
+    { key: 'c', display_name: 'Gamma', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .9, y: .8 } },
+    { key: 'rear', display_name: 'Rear', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .3, y: .3 } },
   ], individualLinks: [{ from_slot_key: 'a', to_slot_key: 'rear' }, { from_slot_key: 'b', to_slot_key: 'c' }] });
   const all = new Set(['a', 'b', 'c']);
   const coordinates = (state: BlueprintEditorState) => state.slots.slice(0, 3).map((slot) => slot.rendered_position);
-  const metadata = (state: BlueprintEditorState) => state.slots.map(({ key, display_name, kind, face }) => ({ key, display_name, kind, face }));
+  const metadata = (state: BlueprintEditorState) => state.slots.map(({ key, display_name, kind, panel_key }) => ({ key, display_name, kind, panel_key }));
 
   it('removes multiple slots and every incident individual link', () => {
     const next = removeEndpoints(base(), new Set(['a', 'c']));
@@ -73,7 +84,8 @@ describe('endpoint selection geometry', () => {
     expect(next.slots[3]).toEqual(start.slots[3]);
   });
   it('keeps 14 newly added endpoints distinct when a horizontal row becomes a vertical line', () => {
-    const start = addEndpoints(newBlueprintEditorState(), 'NETWORK_PORT', 14, 'FRONT');
+    const initial = newBlueprintEditorState();
+    const start = addEndpoints(initial, 'NETWORK_PORT', 14, initial.panels[0].panel_key);
     const keys = new Set(start.slots.map((slot) => slot.key));
     expect(new Set(start.slots.map((slot) => slot.rendered_position.y)).size).toBe(1);
     const vertical = alignSelectionLine(start, keys, 'vertical');
@@ -163,7 +175,8 @@ describe('endpoint selection geometry', () => {
     expect(new Set(two.map((point) => point.y)).size).toBe(2);
   });
   it('keeps two rows visibly separate on a 10:1 body', () => {
-    const start = addEndpoints(newBlueprintEditorState(), 'NETWORK_PORT', 4, 'REAR');
+    const initial = newBlueprintEditorState();
+    const start = addEndpoints(initial, 'NETWORK_PORT', 4, initial.panels[0].panel_key);
     const keys = new Set(start.slots.map((slot) => slot.key));
     const metrics = { minGapX: 18 / 850, minGapY: 18 / 85, insetX: 8 / 850, insetY: 8 / 85 };
     const result = layoutSelectionTwoRows(start, keys, metrics);
@@ -178,9 +191,9 @@ describe('endpoint selection geometry', () => {
 
 describe('endpoint drag snapping', () => {
   const slots = [
-    { key: 'moving-a', display_name: 'A', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .15, y: .1 } },
-    { key: 'moving-b', display_name: 'B', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .25, y: .1 } },
-    { key: 'stationary', display_name: 'C', kind: 'NETWORK_PORT' as const, face: 'FRONT' as const, rendered_position: { x: .7, y: .4 } },
+    { key: 'moving-a', display_name: 'A', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .15, y: .1 } },
+    { key: 'moving-b', display_name: 'B', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .25, y: .1 } },
+    { key: 'stationary', display_name: 'C', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .7, y: .4 } },
   ];
   const moving = new Set(['moving-a', 'moving-b']);
   it('snaps to nearest stationary Y within a screen-derived threshold', () => {

@@ -3,14 +3,15 @@ import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
 import { addEndpoints, alignSelectionLine, createBlueprintRequest, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, translateSelection, type BlueprintEditorState, type BlueprintValidationError } from '../blueprints/editorModel';
-import type { BlueprintFace, BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
+import type { BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
-export const newBlueprintEditorState = (): BlueprintEditorState => ({ name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', slots: [], individualLinks: [] });
+export const newBlueprintEditorState = (): BlueprintEditorState => ({ name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', panels: [{ panel_key: crypto.randomUUID(), panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 160, height: 60 }], slots: [], individualLinks: [] });
 const validationKey = {
   nameRequired: 'blueprint.validation.nameRequired', dimensionsPositive: 'blueprint.validation.dimensionsPositive', colorFormat: 'blueprint.validation.colorFormat',
   duplicateSlotKeys: 'blueprint.validation.duplicateSlotKeys', individualSelfLink: 'blueprint.validation.individualSelfLink',
   individualMissingPort: 'blueprint.validation.individualMissingPort', duplicateIndividualLink: 'blueprint.validation.duplicateIndividualLink',
+  multiPanelReadOnly: 'blueprint.validation.multiPanelReadOnly',
 } as const satisfies Record<BlueprintValidationError, string>;
 const menuSections = [
   { label: 'align', actions: ['horizontalLine', 'verticalLine'] },
@@ -24,7 +25,7 @@ type MenuAction = (typeof menuSections)[number]['actions'][number];
 export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, initialState, versionNotice }: Props) {
   const { t } = useI18n();
   const [editor, setEditor] = useState(initialState);
-  const [face, setFace] = useState<BlueprintFace>('FRONT');
+  const panelKey = editor.panels[0]?.panel_key ?? '';
   const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
   const [count, setCount] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -34,7 +35,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const [distributionFull, setDistributionFull] = useState(false);
   const canvasWrap = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string>();
-  const selectedSlot = selected.size === 1 ? editor.slots.find((slot) => selected.has(slot.key) && slot.face === face) : undefined;
+  const selectedSlot = selected.size === 1 ? editor.slots.find((slot) => selected.has(slot.key) && slot.panel_key === panelKey) : undefined;
   const deleteSelected = () => { setEditor((old) => removeEndpoints(old, selected)); setSelected(new Set()); setMenu(undefined); };
   useEffect(() => {
     const onPointerDown = (event: globalThis.PointerEvent) => {
@@ -119,6 +120,10 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     if (!result.request) { setError(t(validationKey[result.errors[0]])); return; }
     try { await onSave(editor); } catch { setError(t('blueprint.validation.saveFailed')); }
   };
+  if (editor.panels.length !== 1) return <>
+    <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
+    <p role="status" className="blueprint-editor__notice">{t('blueprint.validation.multiPanelReadOnly')}</p>
+  </>;
   return <>
     <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
     <div className="blueprint-composer"><div className="blueprint-composer__workspace">
@@ -146,11 +151,11 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         <div className="blueprint-composer__chooser">
           <label>{t('blueprint.endpoint.kind')}<select value={kind} onChange={(e) => setKind(e.target.value as BlueprintSlotKind)}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
-          <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, face); if (next === editor) return; setEditor(next); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
+          <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, panelKey); if (next === editor) return; setEditor(next); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
         </div>
-        <div className="blueprint-composer__faces"><button type="button" aria-pressed={face === 'FRONT'} onClick={() => { setFace('FRONT'); setSelected(new Set()); setMenu(undefined); }}>{t('blueprint.face.front')}</button><button type="button" aria-pressed={face === 'REAR'} onClick={() => { setFace('REAR'); setSelected(new Set()); setMenu(undefined); }}>{t('blueprint.face.rear')}</button></div>
+        <div className="blueprint-composer__panels">{editor.panels[0].display_name}</div>
         <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
-          <BlueprintCompositionCanvas body={{ width: editor.width, height: editor.height, fillColor: editor.fillColor }} face={face} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onSelect={selectSlot} onMarquee={(keys) => setSelected(new Set(keys))} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onContextMenu={(key, clientX, clientY) => {
+          <BlueprintCompositionCanvas body={{ width: editor.width, height: editor.height, fillColor: editor.fillColor }} panelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onSelect={selectSlot} onMarquee={(keys) => setSelected(new Set(keys))} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onContextMenu={(key, clientX, clientY) => {
             if (key && !selected.has(key)) setSelected(new Set([key]));
             if (!key && selected.size === 0) { setMenu(undefined); return; }
             const rect = canvasWrap.current!.getBoundingClientRect();
@@ -173,7 +178,6 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         {selectedSlot && <aside className="blueprint-composer__selected">
           <label>{t('blueprint.endpoint.name')}<input value={selectedSlot.display_name} onChange={(e) => updateSlot(selectedSlot.key, { display_name: e.target.value })} /></label>
           <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
-          <label>{t('blueprint.composition.face')}<select value={selectedSlot.face} onChange={(e) => { updateSlot(selectedSlot.key, { face: e.target.value as BlueprintFace }); setFace(e.target.value as BlueprintFace); }}><option value="FRONT">{t('blueprint.face.front')}</option><option value="REAR">{t('blueprint.face.rear')}</option></select></label>
           <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>
         </aside>}
       </section>

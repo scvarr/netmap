@@ -697,8 +697,20 @@ class BlueprintEndpointSlotRequest(BaseModel):
     key: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
-    face: Literal["FRONT", "REAR"]
+    panel_key: str = Field(min_length=1, max_length=255)
     rendered_position: "BlueprintPosition"
+
+
+class PresentationPanelRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    panel_key: str = Field(min_length=1, max_length=255)
+    panel_number: int = Field(ge=1)
+    display_name: str = Field(min_length=1, max_length=255)
+    x: FiniteFloat
+    y: FiniteFloat
+    width: FiniteFloat = Field(gt=0)
+    height: FiniteFloat = Field(gt=0)
 
 
 class BlueprintPosition(BaseModel):
@@ -720,6 +732,7 @@ class CreateObjectBlueprintRequest(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
     body: BlueprintBody
+    panels: list[PresentationPanelRequest] = Field(min_length=1)
     slots: list[BlueprintEndpointSlotRequest] = Field(default_factory=list)
     internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
 
@@ -727,6 +740,10 @@ class CreateObjectBlueprintRequest(BaseModel):
     def validate_slot_keys(self) -> "CreateObjectBlueprintRequest":
         if len({slot.key for slot in self.slots}) != len(self.slots):
             raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
+        if len(self.panels) != 1 or self.panels[0].panel_number != 1 or self.panels[0].display_name != "Панель 1" or (self.panels[0].x, self.panels[0].y, self.panels[0].width, self.panels[0].height) != (0, 0, self.body.width, self.body.height):
+            raise PydanticCustomError("blueprint_initial_panel", "A new Blueprint must start with neutral panel 1")
+        if any(slot.panel_key != self.panels[0].panel_key for slot in self.slots):
+            raise PydanticCustomError("blueprint_unknown_panel", "Blueprint slot refers to an unknown panel")
         return self
 
 
@@ -737,6 +754,7 @@ class CreateObjectBlueprintVersionRequest(BaseModel):
     default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
     blueprint_name: str | None = Field(default=None, min_length=1, max_length=255)
     body: BlueprintBody
+    panels: list[PresentationPanelRequest] = Field(min_length=1)
     slots: list[BlueprintEndpointSlotRequest] = Field(default_factory=list)
     internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
 
@@ -744,6 +762,11 @@ class CreateObjectBlueprintVersionRequest(BaseModel):
     def validate_slot_keys(self) -> "CreateObjectBlueprintVersionRequest":
         if len({slot.key for slot in self.slots}) != len(self.slots):
             raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
+        keys = {panel.panel_key for panel in self.panels}
+        if len(keys) != len(self.panels) or len({panel.panel_number for panel in self.panels}) != len(self.panels):
+            raise PydanticCustomError("blueprint_duplicate_panel", "Blueprint panels must have unique keys and numbers")
+        if any(slot.panel_key not in keys for slot in self.slots):
+            raise PydanticCustomError("blueprint_unknown_panel", "Blueprint slot refers to an unknown panel")
         return self
 
 
@@ -758,7 +781,7 @@ class InstantiateObjectBlueprintRequest(BaseModel):
 class ObjectBlueprintCreationDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["2.0"] = "2.0"
     blueprint_ref: BlueprintLibraryRef
     version_ref: BlueprintLibraryRef
 
@@ -774,7 +797,7 @@ class ObjectBlueprintInstantiationSlot(BaseModel):
 class ObjectBlueprintInstantiationDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["2.0"] = "2.0"
     blueprint_ref: BlueprintLibraryRef
     version_ref: BlueprintLibraryRef
     physical_object_ref: ProjectionSourceRef
@@ -807,7 +830,7 @@ class ObjectBlueprintListItemDocument(BaseModel):
 class ObjectBlueprintListDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["2.0"] = "2.0"
     blueprints: list[ObjectBlueprintListItemDocument]
 
 
@@ -817,8 +840,12 @@ class ObjectBlueprintSlotDocument(BaseModel):
     key: str = Field(min_length=1)
     display_name: str = Field(min_length=1)
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
-    face: Literal["FRONT", "REAR"]
+    panel_key: str = Field(min_length=1)
     rendered_position: dict[str, float]
+
+
+class PresentationPanelDocument(PresentationPanelRequest):
+    pass
 
 
 class ObjectBlueprintInternalLinkDocument(BaseModel):
@@ -831,13 +858,14 @@ class ObjectBlueprintInternalLinkDocument(BaseModel):
 class ObjectBlueprintVersionDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["2.0"] = "2.0"
     blueprint_ref: BlueprintLibraryRef
     name: str = Field(min_length=1)
     version_ref: BlueprintLibraryRef
     version_number: int = Field(ge=1)
     default_physical_object_class: str | None = None
     body: ObjectBlueprintBodyDocument
+    panels: list[PresentationPanelDocument]
     slots: list[ObjectBlueprintSlotDocument]
     internal_links: list[ObjectBlueprintInternalLinkDocument]
 

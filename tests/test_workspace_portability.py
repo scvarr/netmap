@@ -49,9 +49,10 @@ def create_graph():
     cable = create_endpoint_cable(client, point_ids[0], point_ids[1])
     blueprint = client.post('/v1/library/object-blueprints', json={
         'name': 'Test blueprint', 'body': {'kind': 'RECTANGLE', 'width': 100, 'height': 40},
+        'panels': [{'panel_key': 'panel-1', 'panel_number': 1, 'display_name': 'Панель 1', 'x': 0, 'y': 0, 'width': 100, 'height': 40}],
         'slots': [
-            {'key': 'point-1', 'display_name': 'P1', 'kind': 'CONNECTION_POINT', 'face': 'FRONT', 'rendered_position': {'x': .2, 'y': .3}},
-            {'key': 'port-1', 'display_name': 'N1', 'kind': 'NETWORK_PORT', 'face': 'REAR', 'rendered_position': {'x': .7, 'y': .8}},
+            {'key': 'point-1', 'display_name': 'P1', 'kind': 'CONNECTION_POINT', 'panel_key': 'panel-1', 'rendered_position': {'x': .2, 'y': .3}},
+            {'key': 'port-1', 'display_name': 'N1', 'kind': 'NETWORK_PORT', 'panel_key': 'panel-1', 'rendered_position': {'x': .7, 'y': .8}},
         ],
         'internal_links': [],
     })
@@ -84,7 +85,7 @@ def create_graph():
 def test_empty_export_and_roundtrip():
     empty = snapshot()
     assert empty['format'] == 'netmap-workspace'
-    assert empty['format_version'] == 2
+    assert empty['format_version'] == 3
     assert all(not rows for section in ('canonical', 'authoring', 'presentation') for rows in empty[section].values())
     assert empty['settings']['CableLabelSettings'] == [{'id': 1, 'unique_labels': False}]
     assert client.post('/v1/workspace/package', json=empty).status_code == 204
@@ -99,6 +100,7 @@ def test_graph_export_reset_import_restores_all_persisted_state():
     assert len(before['canonical']['InterfacePhysicalBinding']) >= 1
     assert len(before['authoring']['BlueprintInstance']) == 1
     assert len(before['authoring']['BlueprintEndpointSlot']) == 2
+    assert before['authoring']['PresentationPanel'][0]['panel_key'] == 'panel-1'
     assert 'PortBlockVersion' not in before['authoring']
     assert len(before['presentation']['MapPlacement']) == 2
     assert before['presentation']['MapCableRoute'][0]['waypoints'] == [{'x': 120, 'y': 80}]
@@ -124,6 +126,8 @@ def test_nonempty_import_and_bad_packages_do_not_mutate():
     unsupported['format_version'] = 999
     assert client.post('/v1/workspace/package', json=unsupported).status_code == 422
     unsupported['format_version'] = 1
+    assert client.post('/v1/workspace/package', json=unsupported).status_code == 422
+    unsupported['format_version'] = 2
     assert client.post('/v1/workspace/package', json=unsupported).status_code == 422
     incomplete = copy.deepcopy(before)
     del incomplete['canonical']['Cable']

@@ -19,7 +19,7 @@ import {
 } from '../topology/layout';
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
-import { blueprintDisplayDimensions, blueprintMapNameplateHeight, visibleBlueprintFaces } from '../topology/blueprintDisplaySize';
+import { blueprintMapNameplateHeight, blueprintNodeDisplayDimensions } from '../topology/blueprintDisplaySize';
 import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } from '../topology/geometryAssist';
 import { assistBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
 import { findForeignRouteSnap, FOREIGN_BOUNDARY_HALF_SIDE_FLOW, FOREIGN_BOUNDARY_STROKE_FLOW, FOREIGN_WAYPOINT_RADIUS_FLOW, FOREIGN_WAYPOINT_STROKE_FLOW, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
@@ -105,13 +105,10 @@ export const getConnectionPointEndpoint = (
   const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId);
   if (slot && presentation) {
     const side = slot.external_attachment.side;
-    const faces = visibleBlueprintFaces(presentation);
-    const faceIndex = faces.indexOf(slot.face ?? 'FRONT');
-    const face = blueprintDisplayDimensions(presentation.body, box.width);
-    const panelTop = faceIndex * face.height;
+    const composition = blueprintNodeDisplayDimensions(presentation, box.width);
     return {
       x: box.x + box.width * slot.external_attachment.x,
-      y: box.y + blueprintMapNameplateHeight(presentation, box.width) + panelTop + face.height * slot.external_attachment.y,
+      y: box.y + blueprintMapNameplateHeight(presentation, box.width) + composition.height * slot.external_attachment.y,
       side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
     };
   }
@@ -128,14 +125,11 @@ export const getRenderedConnectionPoint = (
   const presentation = projection.attributes.blueprint_presentation;
   const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId);
   if (!slot || !presentation) return getConnectionPointEndpoint(projection, box, connectionPointId);
-  const faces = visibleBlueprintFaces(presentation);
-  const faceIndex = faces.indexOf(slot.face ?? 'FRONT');
-  const face = blueprintDisplayDimensions(presentation.body, box.width);
-  const panelTop = faceIndex * face.height;
+  const composition = blueprintNodeDisplayDimensions(presentation, box.width);
   const side = slot.external_attachment.side;
   return {
     x: box.x + box.width * slot.rendered_position.x,
-    y: box.y + blueprintMapNameplateHeight(presentation, box.width) + panelTop + face.height * slot.rendered_position.y,
+    y: box.y + blueprintMapNameplateHeight(presentation, box.width) + composition.height * slot.rendered_position.y,
     side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
   };
 };

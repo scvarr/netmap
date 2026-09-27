@@ -55,6 +55,6 @@ describe('RU/EN localization integration', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add ports / points' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save blueprint' }));
 
-    expect(createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({ name: 'Карта', slots: [expect.objectContaining({ kind: 'NETWORK_PORT', face: 'FRONT' })] }));
+    expect(createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({ name: 'Карта', panels: [expect.objectContaining({ panel_number: 1, display_name: 'Панель 1' })], slots: [expect.objectContaining({ kind: 'NETWORK_PORT', display_name: '1-1', panel_key: expect.any(String) })] }));
   });
 });

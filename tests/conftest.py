@@ -28,6 +28,7 @@ from app.models import (
     PacketProcessingPlanAttachmentSet,
     ObjectBlueprint,
     ObjectBlueprintVersion,
+    PresentationPanel,
     MapCableRoute,
     MapPlacement,
     MapViewPosition,
@@ -97,6 +98,7 @@ def clean_database(request: pytest.FixtureRequest):
         session.execute(delete(BlueprintInstance))
         session.execute(delete(BlueprintInternalLink))
         session.execute(delete(BlueprintEndpointSlot))
+        session.execute(delete(PresentationPanel))
         session.execute(delete(ObjectBlueprintVersion))
         session.execute(delete(ObjectBlueprint))
         session.execute(delete(PacketProcessingPlanAttachment))

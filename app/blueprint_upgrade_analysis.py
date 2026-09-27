@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintInternalLink, Connection, ConnectionMember, ConnectionPoint, InterfacePhysicalBinding, NetworkInterfacePhysicalOwner, ObjectBlueprintVersion
+from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, BlueprintInternalLink, Connection, ConnectionMember, ConnectionPoint, InterfacePhysicalBinding, NetworkInterfacePhysicalOwner, ObjectBlueprintVersion, PresentationPanel
 
 
 @dataclass(frozen=True)
@@ -53,9 +53,9 @@ class BlueprintUpgradeAnalyzer:
                 else: compatible.append({"code": "SLOT_PRESERVED", "slot_key": key})
             for key in sorted(set(target_slots) - set(current_slots)):
                 compatible.append({"code": "SLOT_ADDED", "slot_key": key, "kind": target_slots[key].kind})
-            if (current.body_kind, current.width, current.height, current.fill_color) != (target.body_kind, target.width, target.height, target.fill_color) or any(
-                (current_slots[key].display_name, current_slots[key].face, current_slots[key].position_x, current_slots[key].position_y)
-                != (target_slots[key].display_name, target_slots[key].face, target_slots[key].position_x, target_slots[key].position_y)
+            if (current.body_kind, current.width, current.height, current.fill_color) != (target.body_kind, target.width, target.height, target.fill_color) or self._panels(current.id) != self._panels(target.id) or any(
+                (current_slots[key].display_name, current_slots[key].panel_key, current_slots[key].position_x, current_slots[key].position_y)
+                != (target_slots[key].display_name, target_slots[key].panel_key, target_slots[key].position_x, target_slots[key].position_y)
                 for key in set(current_slots) & set(target_slots)
             ):
                 compatible.append({"code": "PRESENTATION_CHANGED"})
@@ -73,6 +73,9 @@ class BlueprintUpgradeAnalyzer:
 
     def _slots(self, version_id: uuid.UUID) -> dict[str, BlueprintEndpointSlot]:
         return {slot.slot_key: slot for slot in self.session.scalars(select(BlueprintEndpointSlot).where(BlueprintEndpointSlot.blueprint_version_id == version_id))}
+
+    def _panels(self, version_id: uuid.UUID) -> dict[str, tuple]:
+        return {panel.panel_key: (panel.panel_number, panel.display_name, panel.x, panel.y, panel.width, panel.height) for panel in self.session.scalars(select(PresentationPanel).where(PresentationPanel.blueprint_version_id == version_id))}
 
     def _links(self, version_id: uuid.UUID, slots: dict[str, BlueprintEndpointSlot]) -> set[tuple[str, str]]:
         by_id = {slot.id: key for key, slot in slots.items()}

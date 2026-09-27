@@ -1,4 +1,4 @@
-import { visibleBlueprintFaces } from './blueprintDisplaySize';
+import { panelCompositionBounds } from './blueprintDisplaySize';
 import type {
   BlueprintPresentation,
   PhysicalInternalL1Link,
@@ -21,12 +21,13 @@ const renderedPoint = (
   slot: BlueprintPresentation['slots'][number],
   displayWidth?: number,
 ): { x: number; y: number } => {
-  const width = displayWidth ?? blueprint.body.width;
-  const height = width * blueprint.body.height / blueprint.body.width;
-  const stackedFaces = visibleBlueprintFaces(blueprint).length === 2;
+  const bounds = panelCompositionBounds(blueprint.panels);
+  const width = displayWidth ?? bounds.width;
+  const panel = blueprint.panels.find((item) => item.panel_key === slot.panel_key);
+  if (!panel) throw new Error(`Unknown Blueprint panel ${slot.panel_key}`);
   return {
-    x: width * slot.rendered_position.x,
-    y: height * slot.rendered_position.y + (stackedFaces && slot.face === 'REAR' ? height : 0),
+    x: width * (panel.x + panel.width * slot.panel_local_position.x - bounds.x) / bounds.width,
+    y: width * (panel.y + panel.height * slot.panel_local_position.y - bounds.y) / bounds.width,
   };
 };
 

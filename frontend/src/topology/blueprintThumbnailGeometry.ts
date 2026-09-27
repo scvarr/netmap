@@ -1,9 +1,8 @@
-import type { BlueprintBody, BlueprintSlot } from './objectBlueprintTypes';
-
-export type BlueprintThumbnailFace = 'FRONT' | 'REAR';
+import type { PresentationPanel } from './objectBlueprintTypes';
 
 export interface BlueprintThumbnailGeometry {
-  faces: BlueprintThumbnailFace[];
+  originX: number;
+  originY: number;
   intrinsicWidth: number;
   intrinsicHeight: number;
   width: number;
@@ -11,19 +10,14 @@ export interface BlueprintThumbnailGeometry {
   scale: number;
 }
 
-export const visibleBlueprintThumbnailFaces = (slots: readonly Pick<BlueprintSlot, 'face'>[]): BlueprintThumbnailFace[] => {
-  const faces = new Set(slots.map((slot) => slot.face ?? 'FRONT'));
-  return faces.size === 0 ? ['FRONT'] : (['FRONT', 'REAR'] as const).filter((face) => faces.has(face));
-};
-
 export const blueprintThumbnailGeometry = (
-  body: Pick<BlueprintBody, 'width' | 'height'>,
-  slots: readonly Pick<BlueprintSlot, 'face'>[],
+  panels: readonly PresentationPanel[],
   viewport: { width: number; height: number },
 ): BlueprintThumbnailGeometry => {
-  const faces = visibleBlueprintThumbnailFaces(slots);
-  const intrinsicWidth = body.width;
-  const intrinsicHeight = body.height * faces.length;
+  const originX = Math.min(...panels.map((panel) => panel.x));
+  const originY = Math.min(...panels.map((panel) => panel.y));
+  const intrinsicWidth = Math.max(...panels.map((panel) => panel.x + panel.width)) - originX;
+  const intrinsicHeight = Math.max(...panels.map((panel) => panel.y + panel.height)) - originY;
   const scale = Math.min(viewport.width / intrinsicWidth, viewport.height / intrinsicHeight);
-  return { faces, intrinsicWidth, intrinsicHeight, width: intrinsicWidth * scale, height: intrinsicHeight * scale, scale };
+  return { originX, originY, intrinsicWidth, intrinsicHeight, width: intrinsicWidth * scale, height: intrinsicHeight * scale, scale };
 };
