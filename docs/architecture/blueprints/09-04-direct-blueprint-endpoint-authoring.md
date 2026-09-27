@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**FIXED / ACCEPTED TARGET CONTRACT. DIRECT-SLOT FOUNDATION AND SPATIAL
+**FIXED / ACCEPTED DIRECT-SLOT FOUNDATION AND SPATIAL
 MULTI-SELECTION TOOLS IMPLEMENTED; REMAINING RICH EDITOR UX PENDING.**
 
 The destructive foundation cutover removed Port Block application models,
@@ -18,8 +18,11 @@ Endpoint technology/capability
 remains **OPEN**. Phase C remains **PAUSED** until the remaining editor slices
 and manual HV-01 recheck.
 
-This document is the authoritative target for Object Blueprint endpoint
-authoring, identity, immutable snapshots, and endpoint presentation. The
+The direct-slot authoring foundation, identity, immutable snapshots, and
+materialization in this document remain authoritative. Its binary
+FRONT/REAR-specific presentation contract is superseded by [09.5 Composable
+Blueprint presentation panels](09-05-composable-blueprint-presentation-panels.md).
+The
 former L1S.6c Port Block model in
 [09.3](09-03-port-block-blueprint-architecture.md) has been removed from the
 application. It remains historical context only.
@@ -36,20 +39,24 @@ preserving development Port Block records is not a target requirement.
 ## Direct endpoint snapshot
 
 An immutable `ObjectBlueprintVersion` directly owns the complete device
-snapshot: body geometry, endpoint slots, physical faces, exact names and
-rendered positions, presentation facts needed for truthful rendering, and
-explicit internal links. Port Block is absent from the target model.
+snapshot: body geometry, endpoint slots, exact names and rendered positions,
+presentation facts needed for truthful rendering, and explicit internal
+links. The current physical-face representation is superseded by panels in
+09.5. Port Block is absent from the target model.
 
-Each endpoint slot has a stable opaque `slot_key`, kind
-(`CONNECTION_POINT` or `NETWORK_PORT`), face (`FRONT` or `REAR`), exact
-user-facing `display_name`, and intrinsic face-local normalized rendered
-position. Future endpoint-specific semantic properties may be added under a
-separate contract. The version stores exact final names; a naming recipe is
-not needed to reproduce the snapshot.
+In the current implementation each endpoint slot has a stable opaque
+`slot_key`, kind (`CONNECTION_POINT` or `NETWORK_PORT`), face (`FRONT` or
+`REAR`), exact user-facing `display_name`, and intrinsic face-local normalized
+rendered position. This binary face representation is historical/current
+implementation state; the accepted target representation is panel ownership
+and panel-local coordinates in 09.5. Future endpoint-specific semantic
+properties remain a separate contract. The version stores exact final names;
+a naming recipe is not needed to reproduce the snapshot.
 
 Workspace portability must round-trip the complete immutable Blueprint
-snapshot, including direct endpoint keys, exact names, kinds, faces, rendered
-positions, and internal links. Port Block library records and composition
+snapshot, including direct endpoint keys, exact names, kinds, rendered
+positions, and internal links. The target panel fields are defined in 09.5;
+the current face field is implementation state. Port Block library records and composition
 provenance are not required authoring payloads in the target exchange format;
 an incompatible format may be version-bumped.
 
@@ -58,8 +65,9 @@ position, face, selection order, or UI index. When making a new Blueprint
 version, preserve the key for an unchanged logical endpoint across rename,
 reposition, or property edits. Delete removes the endpoint from the new
 version; additions and duplicate/copy operations create independent new keys.
-Position is intrinsic face-local normalized presentation, immutable within a
-saved version, and never participates in identity.
+Position is immutable presentation geometry within a saved version and never
+participates in identity. The current face-local coordinate contract is
+superseded by panel-local coordinates in 09.5.
 
 This identity preserves the existing additive Blueprint upgrade meaning:
 same-key/same-kind endpoints match and retain their canonical endpoint
@@ -84,8 +92,10 @@ remains the target behavior.
 
 ## Canvas authoring contract
 
-The Blueprint canvas is the primary authoring surface. On the current FRONT or
-REAR surface, the user can add `N` network ports or connection points. The
+The Blueprint canvas is the primary authoring surface. The current
+implementation adds slots on a FRONT or REAR surface; the target canvas and
+panel-scoped endpoint authoring are defined in 09.5. The user can add `N`
+network ports or connection points. The
 slots appear with new keys at deterministic temporary/default positions and
 are immediately editable. Bulk creation creates no persisted group.
 
@@ -126,11 +136,11 @@ an optional editor convenience where useful.
 
 ## Endpoint and cable presentation geometry
 
-The endpoint's rendered position is its direct intrinsic face-local position.
-External cable attachment remains a derived presentation value, computed
-deterministically from that endpoint position and the outer boundary of the
-complete `PhysicalObject` presentation. The shared FRONT/REAR divider is not
-an external boundary. Attachment geometry affects neither identity nor
+The current endpoint rendered position is direct and face-local. The target
+derivation from panel rectangle and panel-local position, plus external
+attachment at the outer boundary of the complete multi-panel object, is
+defined in 09.5. The shared FRONT/REAR divider in the current implementation
+is not an external boundary. Attachment geometry affects neither identity nor
 canonical topology. No full cable-routing algorithm is specified here, and
 there is no Port Block geometry dependency.
 
@@ -171,8 +181,8 @@ exchange format version 2 carries direct slots and rejects version 1.
    persistence, composition provenance, and associated API/library surfaces.
    This first establishes the new storage and write contract.
 2. **Direct endpoint visual editor:** add, select, move, delete, duplicate,
-   align, distribute, and place endpoints on FRONT/REAR surfaces using direct
-   slot identity and positions.
+   align, distribute, and place endpoints using direct slot identity and
+   positions. Its current FRONT/REAR surfaces are superseded by 09.5.
 3. **Ordered bulk authoring:** add transient ordered selection, naming preview
    and apply, plus pairwise internal continuity authoring.
 4. **Runtime/projection geometry adaptation:** read direct slot rendered

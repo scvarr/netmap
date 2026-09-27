@@ -14,7 +14,11 @@ and pairwise bulk continuity remain pending. Resume at the same HV-01 authoring
 step after those slices and manual recheck. Acceptance expects
 endpoints authored directly on the Object Blueprint canvas; Port Block is not
 a prerequisite or target authoring entity. See the authoritative
-[direct endpoint contract](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md).
+[direct endpoint foundation](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md)
+and [composable panel target](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md).
+Multi-panel redesign is a prerequisite before patch-panel/internal-link
+acceptance; the existing FRONT/REAR editor is implementation state, not the
+accepted target. No multi-panel implementation is claimed here.
 Port Block workflows and fixtures below are historical evidence of the
 removed, architecturally superseded model.
 
@@ -480,7 +484,7 @@ capability axes, а не закрытый список device classes.
 | 9 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
 | 10 | router | RTR1 |
 | 11 | dual-homed server | SRV1 — PASSED / VERIFIED: independent traces to CORE-A / CORE-B |
-| 12 | FRONT/REAR presentation | PP-301, FPP-811, SRV1 |
+| 12 | Historical FRONT/REAR presentation scenario; target multi-panel presentation is pending per 09.5 | PP-301, FPP-811, SRV1 |
 | 13 | несколько Port Blocks в одном Blueprint | SW-301-ACCESS |
 | 14 | ConnectionPoint port kind | O1 / PP-301 |
 | 15 | `NETWORK_PORT` port kind | PC1 / SW-301-ACCESS, если поддерживается |
@@ -581,7 +585,8 @@ Acceptance выполняется вокруг coverage matrix:
 3. Проверить endpoints и internal continuity.
 4. Создать physical connections и Cables.
 5. Разместить объекты и связи на SavedMap.
-6. Проверить relevant presentation: FRONT/REAR, derived Location frames,
+6. Проверить relevant presentation (historical FRONT/REAR implementation;
+   multi-panel target remains pending), derived Location frames,
    nested hierarchy, collapse state, group move, exact boundary evidence,
    route semantics и variants.
 7. Выполнить L1 trace там, где он семантически применим — по отдельным

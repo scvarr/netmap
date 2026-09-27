@@ -4,10 +4,13 @@
 
 Direct endpoint foundation реализована: Port Block library/editor/navigation
 удалены, Object Blueprint создаётся через минимальный direct-slot editor.
-P-UX-11/12 shell, bounded workspace, aspect ratio и FRONT/REAR controls
-сохранены. Multi-select, alignment/distribution, ordered bulk naming и
+P-UX-11/12 shell, bounded workspace и aspect ratio сохранены; FRONT/REAR
+controls описывают текущую реализацию и superseded target UX. По принятому
+[09.5 panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
+multi-panel redesign предшествует patch-panel/internal-link acceptance и пока
+не реализован. Multi-select, alignment/distribution, ordered bulk naming и
 pairwise bulk continuity остаются pending; Phase C и HV-01 manual recheck
-приостановлены до следующих editor slices.
+приостановлены.
 
 Этот журнал фиксирует замечания, найденные при последовательном ручном
 проходе продукта от первого экрана после авторизации до полностью собранного
@@ -244,8 +247,9 @@ persistence не меняются.
 
 **Target clarification for P-UX-11 / P-UX-12:** retain the compact bounded
 canvas, body aspect-ratio handling, left authoring rail, right workspace, and
-FRONT/REAR controls as useful editor workspace decisions. Apply them to direct
-endpoint slots and their exact face-local positions. The chooser and compact
+FRONT/REAR controls as current implementation workspace decisions, superseded
+as target UX by 09.5. Apply them to direct endpoint slots and their exact
+face-local positions in the current implementation. The chooser and compact
 controls for a selected PortBlock instance describe the historical editor and
 are superseded; selection controls in the target editor operate on endpoint
 slots. See [direct endpoint authoring](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md).

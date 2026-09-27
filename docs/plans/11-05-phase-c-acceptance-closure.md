@@ -13,8 +13,12 @@ bounded milestone.
 
 Direct Blueprint endpoint slots are implemented as a foundation and Port Block
 application surfaces have been removed. Phase C remains PAUSED before the
-manual HV-01 recheck; richer editor operations remain pending. Technology and
-capability are still OPEN, and this cutover does not close `C-CAP-01`.
+manual HV-01 recheck; richer editor operations remain pending. The accepted
+[composable panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
+makes multi-panel redesign a prerequisite before patch-panel/internal-link
+acceptance. The current binary FRONT/REAR editor remains implementation state;
+multi-panel behavior is not implemented. Technology and capability are still
+OPEN, and this cutover does not close `C-CAP-01`.
 
 Краткий индекс ниже добавляет текущий статус отслеживания. Все `C-*`
 identifiers/findings остаются в обязательном реестре, но accepted target

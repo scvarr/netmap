@@ -48,8 +48,11 @@ and is not a future target prerequisite or library direction.
 
 Current execution position: **Phase C — PAUSED at Blueprint authoring redesign.**
 The direct-slot foundation is implemented and Port Block application surfaces
-are removed. Resume the rack-first walkthrough at HV-01 only after the pending
-rich editor slices and manual recheck; see 11-04. Technology/capability remains
+are removed. The accepted [composable presentation panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
+supersedes the binary FRONT/REAR presentation target. Multi-panel redesign is
+now a prerequisite before patch-panel/internal-link acceptance; it is not
+implemented. Resume the rack-first walkthrough at HV-01 only after the required
+editor slices and manual recheck; see 11-04. Technology/capability remains
 open.
 
 В spatial strand P-UX-03A/B/C/D реализованы, ручная проверка P-UX-03D
