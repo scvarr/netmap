@@ -133,6 +133,18 @@ describe('endpoint selection geometry', () => {
     const two = coordinates(layoutSelectionTwoRows(start, all));
     expect(new Set(two.map((point) => point.y)).size).toBe(2);
   });
+  it('keeps two rows visibly separate on a 10:1 body', () => {
+    const start = addEndpoints(newBlueprintEditorState(), 'NETWORK_PORT', 4, 'REAR');
+    const keys = new Set(start.slots.map((slot) => slot.key));
+    const metrics = { minGapX: 18 / 850, minGapY: 18 / 85, insetX: 8 / 850, insetY: 8 / 85 };
+    const result = layoutSelectionTwoRows(start, keys, metrics);
+    const ys = [...new Set(result.slots.map((slot) => slot.rendered_position.y))].sort((a, b) => a - b);
+    expect(ys).toHaveLength(2);
+    expect((ys[1] - ys[0]) * 85).toBeGreaterThanOrEqual(18 - 1e-9);
+    expect(ys[0] * 85).toBeGreaterThanOrEqual(8 - 1e-9);
+    expect(result.slots.map((slot) => slot.key)).toEqual(start.slots.map((slot) => slot.key));
+    expect(result.slots.map((slot) => slot.display_name)).toEqual(start.slots.map((slot) => slot.display_name));
+  });
 });
 
 describe('endpoint drag snapping', () => {

@@ -52,12 +52,17 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     document.addEventListener('keydown', onKeyDown);
     return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
   }, [menu, selected]);
-  const presentationInset = (axis: 'x' | 'y') => {
+  const normalizedPixels = (axis: 'x' | 'y', pixels: number) => {
     const rect = canvasWrap.current?.querySelector('svg')?.getBoundingClientRect();
     const viewHeight = 1000 * (editor.height > 0 && editor.width > 0 ? editor.height / editor.width : 1);
     const scale = rect && Math.min(rect.width / 1000, rect.height / viewHeight);
-    return scale && Number.isFinite(scale) && scale > 0 ? Math.min(.49, 8 / (scale * (axis === 'x' ? 1000 : viewHeight))) : .02;
+    return scale && Number.isFinite(scale) && scale > 0 ? pixels / (scale * (axis === 'x' ? 1000 : viewHeight)) : undefined;
   };
+  const presentationInset = (axis: 'x' | 'y') => Math.min(.49, normalizedPixels(axis, 8) ?? .02);
+  const layoutMetrics = () => ({
+    minGapX: normalizedPixels('x', 18) ?? .06, minGapY: normalizedPixels('y', 18) ?? .08,
+    insetX: presentationInset('x'), insetY: presentationInset('y'),
+  });
   const runMenuAction = (action: MenuAction) => {
     if (action === 'deleteSelected') deleteSelected();
     else setEditor((old) => {
@@ -72,8 +77,8 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         case 'top': return positionSelection(old, selected, 'y', 'start', presentationInset('y'));
         case 'centerY': return positionSelection(old, selected, 'y', 'center', presentationInset('y'));
         case 'bottom': return positionSelection(old, selected, 'y', 'end', presentationInset('y'));
-        case 'oneRow': return layoutSelectionRow(old, selected);
-        case 'twoRows': return layoutSelectionTwoRows(old, selected);
+        case 'oneRow': return layoutSelectionRow(old, selected, layoutMetrics());
+        case 'twoRows': return layoutSelectionTwoRows(old, selected, layoutMetrics());
       }
     });
     setMenu(undefined);

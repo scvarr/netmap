@@ -232,4 +232,19 @@ describe('minimal direct endpoint editor', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'В одну горизонтальную линию' }));
     expect(new Set(centers()).size).toBe(14);
   });
+
+  it('uses screen-space row spacing for four ports on a 10:1 rear body', async () => {
+    const state = { ...newBlueprintEditorState(), width: 10, height: 1 };
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
+    await userEvent.click(screen.getByRole('button', { name: 'Задняя' }));
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '4' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 850, height: 550 }) });
+    fireEvent.contextMenu(document.querySelector('[data-slot-key]')!);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'В два ряда' }));
+    const ys = [...new Set([...document.querySelectorAll('[data-endpoint-marker]')].map((marker) => Number(marker.getAttribute('cy'))))].sort((a, b) => a - b);
+    expect(ys).toHaveLength(2);
+    expect((ys[1] - ys[0]) * .85).toBeGreaterThanOrEqual(18 - 1e-9);
+  });
 });
