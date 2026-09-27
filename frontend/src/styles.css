@@ -499,11 +499,13 @@ a { color: inherit; }
 .blueprint-composition-canvas__guide { vector-effect: non-scaling-stroke; }
 .blueprint-composer__canvas-wrap { position: relative; min-width: 0; }
 .blueprint-composer__selection-count { justify-self: start; color: #b6dfd3; font-size: 12px; }
-.blueprint-composer__context-menu { position: absolute; z-index: 10; width: 240px; max-height: min(300px, 80vh); overflow-y: auto; padding: 5px; border: 1px solid #496b68; border-radius: 8px; background: #0d2022; box-shadow: 0 12px 30px #0009; }
-.blueprint-composer__context-section { display: grid; gap: 1px; padding: 4px 0; border-bottom: 1px solid #2a4448; }
+.blueprint-composer__context-menu { position: absolute; z-index: 10; box-sizing: border-box; width: 320px; max-width: calc(100vw - 24px); max-height: min(320px, 80vh); overflow-y: auto; padding: 4px; border: 1px solid #496b68; border-radius: 8px; background: #0d2022; box-shadow: 0 12px 30px #0009; scrollbar-color: #496b68 #102326; scrollbar-width: thin; }
+.blueprint-composer__context-section { display: grid; gap: 0; padding: 1px 0; border-bottom: 1px solid #2a4448; }
+.blueprint-composer__context-section--distribute, .blueprint-composer__context-section--layout { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.blueprint-composer__context-section--distribute strong, .blueprint-composer__context-section--layout strong { grid-column: 1 / -1; }
 .blueprint-composer__context-section:last-child { border-bottom: 0; }
-.blueprint-composer__context-section strong { padding: 3px 8px; color: #91a5a5; font-size: 11px; font-weight: 600; }
-.blueprint-composer__context-section button { width: 100%; padding: 5px 8px; border: 0; border-radius: 4px; background: transparent; color: #e7f4f1; text-align: left; cursor: pointer; }
+.blueprint-composer__context-section strong { padding: 1px 8px; color: #91a5a5; font-size: 10px; font-weight: 600; }
+.blueprint-composer__context-section button { width: 100%; padding: 2px 8px; border: 0; border-radius: 4px; background: transparent; color: #e7f4f1; font-size: 12px; font-weight: 500; line-height: 1.2; text-align: left; white-space: nowrap; cursor: pointer; }
 .blueprint-composer__context-section button:hover:not(:disabled) { background: #1c5550; }
 .blueprint-composer__context-section button:disabled { color: #657b7b; cursor: default; }
 .blueprint-composer__chooser { padding: 12px; border: 1px solid #294145; border-radius: 9px; background: #0b191b; }.blueprint-composer__chooser label { display: grid; gap: 5px; min-width: 0; color: #91a5a5; font-size: 10px; }.blueprint-composer__chooser select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 34px; padding: 7px 9px; color: #e7f4f1; background: #081315; border: 1px solid #2a4448; border-radius: 6px; }.blueprint-composer__chooser button { min-height: 34px; margin: 0; align-self: end; }
