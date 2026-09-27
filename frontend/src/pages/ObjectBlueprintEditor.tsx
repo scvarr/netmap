@@ -62,8 +62,8 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     if (action === 'deleteSelected') deleteSelected();
     else setEditor((old) => {
       switch (action) {
-        case 'horizontalLine': return alignSelectionLine(old, selected, 'horizontal');
-        case 'verticalLine': return alignSelectionLine(old, selected, 'vertical');
+        case 'horizontalLine': return alignSelectionLine(old, selected, 'horizontal', presentationInset('x'));
+        case 'verticalLine': return alignSelectionLine(old, selected, 'vertical', presentationInset('y'));
         case 'distributeX': return distributeSelection(old, selected, 'x');
         case 'distributeY': return distributeSelection(old, selected, 'y');
         case 'left': return positionSelection(old, selected, 'x', 'start', presentationInset('x'));

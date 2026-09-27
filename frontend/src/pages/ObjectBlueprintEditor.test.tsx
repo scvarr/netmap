@@ -215,4 +215,21 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.pointerCancel(canvas);
     expect(document.querySelector('[data-guide-x]')).toBeNull();
   });
+
+  it('does not stack 14 new ports when aligning them into either line from the context menu', async () => {
+    renderEditor();
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '14' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    const centers = () => nodes.map((node) => {
+      const marker = node.querySelector('[data-endpoint-marker]')!;
+      return `${marker.getAttribute('cx')},${marker.getAttribute('cy')}`;
+    });
+    fireEvent.contextMenu(nodes[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'В одну вертикальную линию' }));
+    expect(new Set(centers()).size).toBe(14);
+    fireEvent.contextMenu(nodes[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'В одну горизонтальную линию' }));
+    expect(new Set(centers()).size).toBe(14);
+  });
 });

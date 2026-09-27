@@ -72,6 +72,32 @@ describe('endpoint selection geometry', () => {
     expect(coordinates(next).map((point) => point[other])).toEqual(coordinates(start).map((point) => point[other]));
     expect(next.slots[3]).toEqual(start.slots[3]);
   });
+  it('keeps 14 newly added endpoints distinct when a horizontal row becomes a vertical line', () => {
+    const start = addEndpoints(newBlueprintEditorState(), 'NETWORK_PORT', 14, 'FRONT');
+    const keys = new Set(start.slots.map((slot) => slot.key));
+    expect(new Set(start.slots.map((slot) => slot.rendered_position.y)).size).toBe(1);
+    const vertical = alignSelectionLine(start, keys, 'vertical');
+    expect(new Set(vertical.slots.map((slot) => slot.rendered_position.x)).size).toBe(1);
+    expect(new Set(vertical.slots.map((slot) => slot.rendered_position.y)).size).toBe(14);
+    expect(Math.min(...vertical.slots.map((slot) => slot.rendered_position.y))).toBeGreaterThanOrEqual(.02);
+    expect(vertical.slots.map((slot) => slot.key)).toEqual(start.slots.map((slot) => slot.key));
+    const centered = positionSelection(vertical, keys, 'x', 'center');
+    expect(new Set(centered.slots.map((slot) => `${slot.rendered_position.x},${slot.rendered_position.y}`)).size).toBe(14);
+    const horizontal = alignSelectionLine(vertical, keys, 'horizontal');
+    expect(new Set(horizontal.slots.map((slot) => slot.rendered_position.y)).size).toBe(1);
+    expect(new Set(horizontal.slots.map((slot) => slot.rendered_position.x)).size).toBe(14);
+    expect(horizontal.slots.every((slot) => Object.values(slot.rendered_position).every((value) => value >= 0 && value <= 1))).toBe(true);
+  });
+  it('recovers a fully stacked selection into either line deterministically', () => {
+    const start = base();
+    start.slots = start.slots.slice(0, 3).map((slot) => ({ ...slot, rendered_position: { x: .5, y: .5 } }));
+    for (const line of ['horizontal', 'vertical'] as const) {
+      const result = alignSelectionLine(start, all, line);
+      expect(alignSelectionLine(start, all, line).slots).toEqual(result.slots);
+      const along = line === 'horizontal' ? 'x' : 'y';
+      expect(new Set(result.slots.map((slot) => slot.rendered_position[along])).size).toBe(3);
+    }
+  });
   it.each([
     ['x', 'start', .02], ['x', 'center', .5], ['x', 'end', .98],
     ['y', 'start', .02], ['y', 'center', .5], ['y', 'end', .98],

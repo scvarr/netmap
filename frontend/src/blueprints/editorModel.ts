@@ -36,13 +36,25 @@ const constrainTranslation = (slots: BlueprintSlot[], dx: number, dy: number) =>
   dx: Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.x)), Math.min(dx, 1 - Math.max(...slots.map((slot) => slot.rendered_position.x)))),
   dy: Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.y)), Math.min(dy, 1 - Math.max(...slots.map((slot) => slot.rendered_position.y)))),
 });
-export const alignSelectionLine = (state: BlueprintEditorState, keys: ReadonlySet<string>, line: 'horizontal' | 'vertical'): BlueprintEditorState => {
+export const alignSelectionLine = (state: BlueprintEditorState, keys: ReadonlySet<string>, line: 'horizontal' | 'vertical', inset = .02): BlueprintEditorState => {
   const slots = selectedSlots(state, keys);
   if (slots.length < 2) return state;
   const axis: Axis = line === 'horizontal' ? 'y' : 'x';
+  const along: Axis = line === 'horizontal' ? 'x' : 'y';
   const values = slots.map((slot) => slot.rendered_position[axis]);
   const value = (Math.min(...values) + Math.max(...values)) / 2;
-  return reposition(state, new Map(slots.map((slot) => [slot.key, { ...slot.rendered_position, [axis]: value }])));
+  const alongValues = slots.map((slot) => slot.rendered_position[along]);
+  if (Math.max(...alongValues) - Math.min(...alongValues) > 1e-9) {
+    return reposition(state, new Map(slots.map((slot) => [slot.key, { ...slot.rendered_position, [axis]: value }])));
+  }
+  // A row turned vertical (or a column turned horizontal) otherwise stacks every center.
+  const ordered = [...slots].sort((first, second) =>
+    first.rendered_position[axis] - second.rendered_position[axis] || first.key.localeCompare(second.key));
+  const span = Math.min(1 - 2 * inset, .8, .06 * (slots.length - 1));
+  const start = Math.max(inset, Math.min(alongValues[0] - span / 2, 1 - inset - span));
+  return reposition(state, new Map(ordered.map((slot, index) => [slot.key, {
+    ...slot.rendered_position, [axis]: value, [along]: start + span * index / (slots.length - 1),
+  }])));
 };
 export const positionSelection = (state: BlueprintEditorState, keys: ReadonlySet<string>, axis: Axis, edge: Edge, inset = .02): BlueprintEditorState => {
   const slots = selectedSlots(state, keys);
