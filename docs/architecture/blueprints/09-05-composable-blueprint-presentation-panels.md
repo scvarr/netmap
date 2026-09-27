@@ -12,7 +12,7 @@ remains **PAUSED** pending this redesign and its bounded editor work. Port
 Block remains removed and is not a prerequisite.
 
 An immutable `ObjectBlueprintVersion` owns body/overall presentation,
-`PresentationPanels`, direct `BlueprintEndpointSlots`, and
+`PresentationPanel` records, direct `BlueprintEndpointSlots`, and
 `BlueprintInternalLinks`. A panel is authoring, provenance, and presentation
 inside that immutable snapshot. It is not canonical topology, a
 `PhysicalObject` component, a `SavedMap` entity/view, or a reusable library
@@ -20,9 +20,10 @@ entity. Canonical topology remains the runtime source of truth.
 
 ## Panel identity, number, and name
 
-Each panel has an opaque stable `panel_key`, a stable positive integer
-`panel_number`, an exact open-string `display_name`, and rectangle `x`, `y`,
-`width`, `height`. The key is stable within the Blueprint lineage and is never
+Each persisted `PresentationPanel` has an opaque stable `panel_key`, a stable
+positive integer `panel_number`, an exact open-string `display_name`, and
+rectangle `x`, `y`, `width`, `height` in composition coordinate space. The key
+is stable within the Blueprint lineage and is never
 derived from name, number, geometry, ordering, or layout. An unchanged logical
 panel preserves its key across versions and rename/move/resize; deletion removes
 it; a new or later duplicated panel gets an independent key. No panel key
@@ -36,8 +37,9 @@ such as `Передняя`, `Задняя`, `Контроллер A`, `Верх�
 there is no persisted fixed panel taxonomy. “Add above/below/left/right” is an
 editor placement operation, not panel meaning.
 
-A new Blueprint starts with exactly one neutrally named panel (for example,
-`Панель 1`), not an implicit semantic FRONT panel. The user can rename it.
+A new Blueprint starts with exactly one neutral initial panel, with
+`panel_number = 1` and a neutral exact name such as `Панель 1`, not an implicit
+semantic FRONT panel. The user can rename it.
 
 ## Composition geometry and editor
 
@@ -58,18 +60,20 @@ not the placement operation or a relation to another panel.
 
 ## Endpoint slots and default names
 
-Each direct endpoint slot has an opaque stable `slot_key`, exactly one
-`panel_key`, exact open-string `display_name`, kind, and panel-local normalized
-`x`/`y` in `[0,1]`. Future semantic endpoint properties remain a separate
+Each direct endpoint slot has an opaque stable `slot_key`, belongs to exactly
+one panel through `panel_key`, has exact open-string `display_name`, kind, and
+panel-local normalized `x`/`y` in `[0,1]`. Persisted endpoint `face` is
+removed. Future semantic endpoint properties remain a separate
 contract. Moving a slot within a panel changes only local position. Moving it
 between panels requires an explicit editor operation; geometry does not infer
 ownership. Identity is independent of name, panel number, and geometry.
 
-For a newly created slot, the convenient exact initial name is
+For a newly created slot, the exact initial name is
 `<panel_number>-<local_number>` (`1-1`, `1-2`; `2-1`, `2-2`). Local number is a
 positive per-panel authoring helper, not identity. Allocate the next available
 number and avoid immediate duplicate defaults; do not compact or renumber after
-deletion (for example, after `1-1`, `1-2`, `1-4`, the next may be `1-5`).
+deletion (for example, after `1-1`, `1-2`, `1-4`, the next may be `1-5`). This
+is individual default naming only; ordered bulk naming remains a later slice.
 `slot_key` is identity and `display_name` is the exact persisted name. This is
 not a live formula: renaming a panel or changing its number in a future
 explicit operation never rewrites an existing name such as `MGMT`. No naming
@@ -108,21 +112,26 @@ a canonical controller component. Separate lifecycle, identity, serial number,
 replaceability, relationships, or nested ownership would require a distinct
 future component/domain contract and are outside this one.
 
-Runtime Blueprint presentation eventually renders all panels together using
+Runtime Blueprint projection renders all panels together using
 their rectangles. Absolute endpoint position is derived from panel rectangle
 and panel-local position. External cable attachment derives from the outer
 boundary of the complete multi-panel `PhysicalObject` presentation; boundaries
 between adjacent panels are internal and are not external attachment edges. No
-new complete cable-routing algorithm is defined.
+new cable-routing algorithm is defined. Map runtime Blueprint geometry,
+internal L1 continuity geometry, and library/thumbnail preview must all consume
+the panel composition; fixed-face geometry cannot remain as an operating
+dependency after face removal.
 
-Panel identity is `panel_key`; endpoint upgrade matching remains
-`slot_key`-based. Panel changes are presentation changes. Moving a same-key
-endpoint to another panel does not create a canonical endpoint; a copied slot
-has a new key and materializes as a new endpoint. Do not broaden upgrade
-semantics. Workspace snapshots eventually include each panel key, number,
-name, and rectangle, and each slot's panel key, local position, and existing
-exact fields. A necessary incompatible format change may bump the format
-version; current development snapshots need no compatibility support.
+Panel identity is `panel_key`; endpoint upgrade matching and materialization
+remain `slot_key`-based. Panel membership/name/geometry and local endpoint
+geometry are presentation changes. Moving a same-key endpoint to another
+panel does not create a canonical endpoint; a copied slot later has a new key
+and materializes as a new endpoint. Panels never become canonical topology or
+`PhysicalObject` components. Do not broaden upgrade semantics. Workspace
+exchange format must incompatibly bump from current v2 to v3 and include each
+panel's key, number, name, and rectangle, and each slot's panel key,
+panel-local position, and existing exact fields. Compatibility with old v2
+development snapshots is not required.
 
 ## Representative cases
 
@@ -154,15 +163,38 @@ they are not implemented as multi-panel behavior.
 
 Bounded implementation slices:
 
-1. **Persistence/API cutover:** persist panels on Blueprint versions; replace
-   endpoint face with `panel_key` and panel-local `x`/`y`; use a destructive
-   pre-production migration; update workspace format; preserve endpoint
-   materialization and upgrade semantics. If discovery shows storage and
-   projection must move together to keep the editor operable, document that
-   bounded dependency; do not add FRONT/REAR compatibility machinery.
+1. **Persistence, API, and operability cutover:** persist `PresentationPanel`
+   on `ObjectBlueprintVersion` with stable opaque `panel_key`, stable positive
+   `panel_number`, exact open `display_name`, and composition-space rectangle;
+   assign every endpoint exactly one `panel_key`, retain normalized panel-local
+   `x`/`y`, and remove persisted endpoint face. The version API includes
+   panels and endpoint API uses `panel_key`; target API schemas expose no
+   FRONT/REAR compatibility taxonomy. This incompatible pre-production
+   cutover may destructively reset current development data: no FRONT/REAR
+   compatibility layer, dual representation, or legacy backfill/fallback is
+   required. Bump workspace exchange v2 to v3 with panel and endpoint
+   composition state. Keep materialization and upgrade matching
+   `slot_key`-based. To leave the application operable, this slice also cuts
+   over Blueprint projection to panel-aware geometry, derives absolute
+   endpoints from panel rectangles and local positions, derives external
+   attachment from the complete composition's outer boundary (adjacent-panel
+   boundaries are internal), and updates Map Blueprint geometry, internal L1
+   continuity geometry, library/thumbnail preview, and the minimal frontend
+   editor state/API consumers from face to `panel_key`. This is a bounded
+   representation and geometry cutover; it defines no new cable-routing
+   algorithm. Initial authoring uses exactly the neutral panel 1 and defaults
+   endpoint names individually to `1-1`, `1-2`, and so on; names are exact,
+   are not live formulas, and are not compacted after deletion. Before Slice B,
+   FRONT/REAR selector UX is removed. If a multi-panel snapshot is encountered
+   before full panel editing exists, the editor must not silently flatten,
+   discard, remap, or overwrite its panels. Slice A does not deliver the
+   multi-panel authoring workspace.
 2. **Multi-panel canvas:** show all panels, active-panel state, add in four
    directions, rename/move/resize, author endpoints inside panels, and scope
-   existing spatial selection/layout tools to a panel.
+   existing spatial selection/layout tools to a panel. This includes the
+   simultaneous multi-panel authoring workspace, active-panel UX, add
+   above/right/below/left, panel rename/move/resize/delete, and general panel
+   management UI.
 3. **Copy to panel:** selected-slot copy with new keys, destination defaults,
    local geometry, and optional 1:1 links.
 4. **Ordered bulk authoring:** ordered selection, bulk naming, and general
