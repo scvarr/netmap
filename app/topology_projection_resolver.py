@@ -556,6 +556,15 @@ class ConfiguredTopologyProjectionResolver:
         by_instance = {instance.id: (instance, version, blueprint) for instance, version, blueprint in rows}
         if not by_instance:
             return {}
+        version_ids = {version.id for _, version, _ in by_instance.values()}
+        panels_by_version: dict[uuid.UUID, list[PresentationPanel]] = {version_id: [] for version_id in version_ids}
+        panels = self.repository.session.scalars(
+            select(PresentationPanel)
+            .where(PresentationPanel.blueprint_version_id.in_(version_ids))
+            .order_by(PresentationPanel.blueprint_version_id, PresentationPanel.panel_number)
+        )
+        for panel in panels:
+            panels_by_version[panel.blueprint_version_id].append(panel)
         slots_by_instance: dict[uuid.UUID, list[dict]] = {instance_id: [] for instance_id in by_instance}
         mappings = self.repository.session.execute(
             select(BlueprintInstanceSlot, BlueprintEndpointSlot)
@@ -565,12 +574,11 @@ class ConfiguredTopologyProjectionResolver:
         ).all()
         for instance, version, blueprint in by_instance.values():
             instance_rows = [(mapping, slot) for mapping, slot in mappings if mapping.blueprint_instance_id == instance.id]
-            panels = tuple(self.repository.session.scalars(select(PresentationPanel).where(PresentationPanel.blueprint_version_id == version.id).order_by(PresentationPanel.panel_number)))
-            geometry = derive_port_geometry([slot for _, slot in instance_rows], panels)
+            geometry = derive_port_geometry([slot for _, slot in instance_rows], panels_by_version[version.id])
             for mapping, slot in instance_rows:
                 item = {"slot_key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "panel_key": slot.panel_key, "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None, **geometry[slot.slot_key]}
                 slots_by_instance[instance.id].append(item)
-        return {instance.physical_object_id: {"blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprint", "entity_id": str(blueprint.id)}, "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprintVersion", "entity_id": str(version.id)}, "body": {"kind": version.body_kind, "width": version.width, "height": version.height, "fill_color": version.fill_color}, "panels": [{"panel_key": panel.panel_key, "panel_number": panel.panel_number, "display_name": panel.display_name, "x": panel.x, "y": panel.y, "width": panel.width, "height": panel.height} for panel in self.repository.session.scalars(select(PresentationPanel).where(PresentationPanel.blueprint_version_id == version.id).order_by(PresentationPanel.panel_number))], "slots": slots_by_instance[instance.id]} for instance, version, blueprint in by_instance.values()}
+        return {instance.physical_object_id: {"blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprint", "entity_id": str(blueprint.id)}, "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "ObjectBlueprintVersion", "entity_id": str(version.id)}, "body": {"kind": version.body_kind, "width": version.width, "height": version.height, "fill_color": version.fill_color}, "panels": [{"panel_key": panel.panel_key, "panel_number": panel.panel_number, "display_name": panel.display_name, "x": panel.x, "y": panel.y, "width": panel.width, "height": panel.height} for panel in panels_by_version[version.id]], "slots": slots_by_instance[instance.id]} for instance, version, blueprint in by_instance.values()}
     def _physical_candidates(
         self, owner: NetworkInterfacePhysicalOwnerRecord
     ) -> tuple[_PhysicalCandidate, ...]:

@@ -201,8 +201,20 @@ def test_internal_links_keep_all_branched_members_and_respect_object_scope():
 def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
     blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01", x=.8, y=.7)], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Panel", body={"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"})
     instance = instantiate(blueprint_id, version_id, "PP1")
-    assert client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "panels": [panel(width=10, height=10)], "slots": [slot("Front01", x=.8, y=.7)], "internal_links": []}).status_code == 201
-    node = node_by_object(client.post("/v1/topology/projection", json=projection_query()).json(), instance["physical_object_ref"]["entity_id"])
+    same_version_instance = instantiate(blueprint_id, version_id, "PP2")
+    created_version = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "panels": [panel(width=10, height=10)], "slots": [slot("Front01", x=.8, y=.7)], "internal_links": []})
+    assert created_version.status_code == 201, created_version.text
+    second_version_id = created_version.json()["version_ref"]["entity_id"]
+    second_version_instance = instantiate(blueprint_id, second_version_id, "PP3")
+    instance_ids = [item["physical_object_ref"]["entity_id"] for item in (instance, same_version_instance, second_version_instance)]
+    document = client.post("/v1/topology/projection", json=projection_query(instance_ids)).json()
+    node = node_by_object(document, instance_ids[0])
+    same_version = node_by_object(document, instance_ids[1])["attributes"]["blueprint_presentation"]
+    second_version = node_by_object(document, instance_ids[2])["attributes"]["blueprint_presentation"]
+    assert same_version["version_ref"]["entity_id"] == version_id
+    assert same_version["panels"] == [panel(width=480, height=70)]
+    assert second_version["version_ref"]["entity_id"] == second_version_id
+    assert second_version["panels"] == [panel(width=10, height=10)]
     presentation = node["attributes"]["blueprint_presentation"]
     assert presentation["version_ref"]["entity_id"] == version_id
     assert presentation["body"] == {"kind": "RECTANGLE", "width": 480.0, "height": 70.0, "fill_color": "#123456"}

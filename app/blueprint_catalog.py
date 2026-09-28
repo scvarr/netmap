@@ -104,11 +104,14 @@ class ObjectBlueprintCatalog:
         return CreatedBlueprint(blueprint_id, version.id)
 
     def _create_version(self, blueprint_id: uuid.UUID, version_number: int, query: object) -> ObjectBlueprintVersion:
-        prior_numbers = dict(self.session.execute(
-            select(PresentationPanel.panel_key, PresentationPanel.panel_number)
+        history = self.session.execute(
+            select(PresentationPanel.panel_key, PresentationPanel.panel_number, ObjectBlueprintVersion.version_number)
             .join(ObjectBlueprintVersion, PresentationPanel.blueprint_version_id == ObjectBlueprintVersion.id)
             .where(ObjectBlueprintVersion.blueprint_id == blueprint_id)
-        ).all())
+        ).all()
+        historical_keys = {key for key, _, _ in history}
+        latest_numbers = {key: number for key, number, number_of_version in history if number_of_version == version_number - 1}
+        max_historical_number = max((number for _, number, _ in history), default=0)
         version = ObjectBlueprintVersion(
             blueprint_id=blueprint_id,
             version_number=version_number,
@@ -122,11 +125,17 @@ class ObjectBlueprintCatalog:
         self.session.flush()
         panel_keys: set[str] = set()
         panel_numbers: set[int] = set()
+        new_panel_numbers: set[int] = set()
         for panel in query.panels:
             if panel.panel_key in panel_keys or panel.panel_number in panel_numbers:
                 raise ValidationError("Blueprint panels must have unique keys and numbers")
-            if panel.panel_key in prior_numbers and prior_numbers[panel.panel_key] != panel.panel_number:
-                raise ValidationError("A Blueprint panel number must remain stable across versions")
+            if panel.panel_key in latest_numbers:
+                if latest_numbers[panel.panel_key] != panel.panel_number:
+                    raise ValidationError("A Blueprint panel number must remain stable across versions")
+            elif panel.panel_key in historical_keys:
+                raise ValidationError("A deleted Blueprint panel key cannot be reused")
+            else:
+                new_panel_numbers.add(panel.panel_number)
             panel_keys.add(panel.panel_key)
             panel_numbers.add(panel.panel_number)
             self.session.add(PresentationPanel(
@@ -134,6 +143,8 @@ class ObjectBlueprintCatalog:
                 panel_number=panel.panel_number, display_name=panel.display_name,
                 x=panel.x, y=panel.y, width=panel.width, height=panel.height,
             ))
+        if sorted(new_panel_numbers) != list(range(max_historical_number + 1, max_historical_number + 1 + len(new_panel_numbers))):
+            raise ValidationError("New Blueprint panel numbers must continue the historical sequence")
         self.session.flush()
         slots_by_key: dict[str, BlueprintEndpointSlot] = {}
         for item in query.slots:

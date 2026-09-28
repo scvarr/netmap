@@ -129,3 +129,30 @@ def test_reused_panel_key_keeps_its_number_across_versions():
         "panels": [panel(number=2)], "slots": [], "internal_links": [],
     })
     assert response.status_code == 422, response.text
+
+
+def test_deleted_panel_key_and_number_are_not_reused():
+    blueprint_id, _ = create_blueprint([])
+
+    def next_version(panels: list[dict]):
+        return client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={
+            "body": {"kind": "RECTANGLE", "width": 100, "height": 40},
+            "panels": panels, "slots": [], "internal_links": [],
+        })
+
+    original = panel()
+    removed = panel(key="panel-b", number=2, name="Panel B", x=100)
+    assert next_version([original, removed]).status_code == 201
+    assert next_version([original]).status_code == 201
+
+    resurrected = next_version([original, removed])
+    assert resurrected.status_code == 422, resurrected.text
+    reused_number = next_version([original, panel(key="panel-c", number=2, name="Panel C", x=100)])
+    assert reused_number.status_code == 422, reused_number.text
+
+    next_panel = panel(key="panel-c", number=3, name="Panel C", x=100)
+    assert next_version([original, next_panel]).status_code == 201
+    skipped_number = next_version([original, next_panel, panel(key="panel-d", number=4), panel(key="panel-e", number=6)])
+    assert skipped_number.status_code == 422, skipped_number.text
+    consecutive = next_version([original, next_panel, panel(key="panel-d", number=4), panel(key="panel-e", number=5)])
+    assert consecutive.status_code == 201, consecutive.text
