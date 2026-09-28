@@ -110,8 +110,7 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
         const start = position(event);
         gesture.current = { kind: 'marquee', start, end: start };
         setMarquee({ start, end: start });
-      }} />
-      <text className="blueprint-composition-canvas__panel-name" x={rect.x + 12} y={rect.y + 28} onPointerDown={() => onActivatePanel(panel.panel_key)}>{panel.display_name}</text>
+      }}><title>{panel.display_name}</title></rect>
     </g>; })}
     {links.map((link) => { const from = points.get(link.from_slot_key); const to = points.get(link.to_slot_key); return from && to ? <line key={`${link.from_slot_key}-${link.to_slot_key}`} className="blueprint-composition-canvas__link" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null; })}
     {slots.map((slot) => { const point = points.get(slot.key)!; const selected = selectedKeys.has(slot.key); return <g key={slot.key} data-slot-key={slot.key} data-selected={selected} className="blueprint-composition-canvas__port" onPointerDown={(event) => {

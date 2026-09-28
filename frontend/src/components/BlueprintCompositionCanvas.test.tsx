@@ -26,9 +26,12 @@ describe('Blueprint endpoint screen-space markers', () => {
     /></I18nProvider>);
     expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 1000 400');
     expect([...container.querySelectorAll('.blueprint-composition-canvas__body')].map((node) => node.getAttribute('x'))).toEqual(['500', '0']);
+    expect(container.querySelector('.blueprint-composition-canvas text')).toBeNull();
     expect(container.querySelector('.blueprint-composition-canvas__link')).toHaveAttribute('x1', '750');
-    fireEvent.pointerDown(container.querySelector('[data-slot-key="slot-2"]')!);
+    fireEvent.pointerDown(container.querySelector('[data-panel-key="panel-2"] .blueprint-composition-canvas__body')!);
     expect(onActivatePanel).toHaveBeenCalledWith('panel-2');
+    fireEvent.pointerDown(container.querySelector('[data-slot-key="slot-2"]')!);
+    expect(onActivatePanel).toHaveBeenCalledTimes(2);
     expect(onSelect).not.toHaveBeenCalled();
   });
   it.each([10, 4, 2])('keeps markers readable and selected markers distinct at %s:1 body ratio', (ratio) => {

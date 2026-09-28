@@ -31,6 +31,7 @@ describe('minimal direct endpoint editor', () => {
     expect(document.querySelectorAll('[data-panel-key]')).toHaveLength(2);
     expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Панель 2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(document.querySelector('.blueprint-composition-canvas text')).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     expect(screen.getByRole('button', { name: 'Удалить пустую панель' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: 'Добавить связь' }));
