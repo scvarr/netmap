@@ -8,9 +8,13 @@ export interface BlueprintEditorState {
 export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateSlotKeys' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink' | 'multiPanelReadOnly';
 export const internalLinkPairKey = (first: string, second: string) => [first, second].sort().join('\u0000');
 export const cleanupLinks = (links: BlueprintInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
-export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState => ({
-  ...state, slots: state.slots.filter((slot) => !keys.has(slot.key)), individualLinks: cleanupLinks(state.individualLinks, new Set(keys)),
-});
+export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState => {
+  const slots = state.slots.filter((slot) => !keys.has(slot.key));
+  return {
+    ...state, slots, nextLocalNumber: slots.length === 0 ? 1 : state.nextLocalNumber,
+    individualLinks: cleanupLinks(state.individualLinks, new Set(keys)),
+  };
+};
 
 type Axis = 'x' | 'y';
 type Edge = 'start' | 'center' | 'end';

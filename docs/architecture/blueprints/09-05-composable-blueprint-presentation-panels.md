@@ -72,9 +72,12 @@ ownership. Identity is independent of name, panel number, and geometry.
 For a newly created slot, the exact initial name is
 `<panel_number>-<local_number>` (`1-1`, `1-2`; `2-1`, `2-2`). Local number is a
 positive per-panel authoring helper, not identity. Allocate the next available
-number and avoid immediate duplicate defaults; do not compact or renumber after
-deletion (for example, after `1-1`, `1-2`, `1-4`, the next may be `1-5`). This
-is individual default naming only; ordered bulk naming remains a later slice.
+number and avoid immediate duplicate defaults. Partial deletion does not
+compact numbering or rename remaining endpoints (for example, after `1-1`,
+`1-2`, `1-4`, the next may be `1-5`). Once a panel has zero endpoints of either
+kind, its local default-name helper resets to 1; the next new endpoint starts
+at `<panel_number>-1`. This is individual default naming only; ordered bulk
+naming remains a later slice.
 `slot_key` is identity and `display_name` is the exact persisted name. This is
 not a live formula: renaming a panel or changing its number in a future
 explicit operation never rewrites an existing name such as `MGMT`. No naming

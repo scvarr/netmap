@@ -4,7 +4,7 @@ import { newBlueprintEditorState } from '../pages/ObjectBlueprintEditor';
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 
 describe('direct Blueprint slots', () => {
-  it('adds distinct opaque identities and bounded deterministic positions on each face', () => {
+  it('adds distinct opaque identities and bounded deterministic positions on the panel', () => {
     const initial = newBlueprintEditorState();
     vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValueOnce('a').mockReturnValueOnce('b').mockReturnValueOnce('c') });
     const front = addEndpoints(initial, 'NETWORK_PORT', 2, initial.panels[0].panel_key);
@@ -36,14 +36,25 @@ describe('direct Blueprint slots', () => {
     expect(removed.individualLinks).toEqual([]);
   });
 
-  it('allocates monotonic panel defaults without renumbering after deletion', () => {
+  it('keeps the sequence and existing names after partial deletion across endpoint kinds', () => {
     const initial = newBlueprintEditorState();
     const key = initial.panels[0].panel_key;
-    const two = addEndpoints(initial, 'NETWORK_PORT', 2, key);
-    const removed = removeEndpoints(two, new Set([two.slots[1].key]));
+    const three = addEndpoints(initial, 'NETWORK_PORT', 3, key);
+    const removed = removeEndpoints(three, new Set([three.slots[1].key]));
     const next = addEndpoints(removed, 'CONNECTION_POINT', 1, key);
-    expect(next.slots.map((slot) => slot.display_name)).toEqual(['1-1', '1-3']);
-    expect(next.slots[0].key).toBe(two.slots[0].key);
+    expect(next.slots.map((slot) => slot.display_name)).toEqual(['1-1', '1-3', '1-4']);
+    expect(next.slots.slice(0, 2).map((slot) => slot.key)).toEqual([three.slots[0].key, three.slots[2].key]);
+  });
+
+  it('restarts default names after the last endpoint is deleted with new slot identity', () => {
+    const initial = newBlueprintEditorState();
+    const key = initial.panels[0].panel_key;
+    const created = addEndpoints(addEndpoints(initial, 'NETWORK_PORT', 2, key), 'CONNECTION_POINT', 1, key);
+    const cleared = removeEndpoints(created, new Set(created.slots.map((slot) => slot.key)));
+    expect(cleared.slots).toEqual([]);
+    const next = addEndpoints(cleared, 'NETWORK_PORT', 2, key);
+    expect(next.slots.map((slot) => slot.display_name)).toEqual(['1-1', '1-2']);
+    expect(created.slots.every((slot) => !next.slots.some((newSlot) => newSlot.key === slot.key))).toBe(true);
   });
 });
 
