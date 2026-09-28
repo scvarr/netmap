@@ -1,14 +1,15 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
-import type { BlueprintInternalLink, BlueprintSlot } from '../topology/objectBlueprintTypes';
+import type { BlueprintInternalLink, BlueprintSlot, PresentationPanel } from '../topology/objectBlueprintTypes';
 import { useI18n } from '../i18n';
 import { snapSelectionTranslation } from '../blueprints/editorModel';
 
 interface Props {
-  body: { width: number; height: number; fillColor: string }; panelKey: string;
+  body: { width: number; height: number; fillColor: string }; panels: PresentationPanel[]; activePanelKey: string;
   slots: BlueprintSlot[]; links: BlueprintInternalLink[]; selectedKeys: ReadonlySet<string>;
   onSelect: (key: string, toggle: boolean) => void; onMarquee: (keys: string[]) => void;
   onTranslate: (keys: ReadonlySet<string>, dx: number, dy: number) => void;
   onContextMenu: (key: string | undefined, clientX: number, clientY: number) => void;
+  onActivatePanel: (key: string) => void;
 }
 type Point = { x: number; y: number };
 type Gesture = { kind: 'move'; key: string; keys: ReadonlySet<string>; start: Point; applied: Point; slots: BlueprintSlot[]; moved: boolean } | { kind: 'marquee'; start: Point; end: Point };
@@ -23,13 +24,21 @@ export function endpointMarkerRadii(scale: number) {
   };
 }
 
-export function BlueprintCompositionCanvas({ body, panelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu }: Props) {
+export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel }: Props) {
   const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null);
   const gesture = useRef<Gesture | undefined>(undefined);
   const [marquee, setMarquee] = useState<{ start: Point; end: Point }>();
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
-  const height = 1000 * (body.height > 0 && body.width > 0 ? body.height / body.width : 1);
+  const minX = Math.min(...panels.map((panel) => panel.x));
+  const minY = Math.min(...panels.map((panel) => panel.y));
+  const width = Math.max(...panels.map((panel) => panel.x + panel.width)) - minX;
+  const compositionHeight = Math.max(...panels.map((panel) => panel.y + panel.height)) - minY;
+  const unit = 1000 / Math.max(width, 1);
+  const height = Math.max(compositionHeight, 1) * unit;
+  const activePanel = panels.find((panel) => panel.panel_key === activePanelKey)!;
+  const panelRect = (panel: PresentationPanel) => ({ x: (panel.x - minX) * unit, y: (panel.y - minY) * unit, width: panel.width * unit, height: panel.height * unit });
+  const activeRect = panelRect(activePanel);
   const [canvasScale, setCanvasScale] = useState(1);
   useLayoutEffect(() => {
     const element = svg.current;
@@ -46,14 +55,14 @@ export function BlueprintCompositionCanvas({ body, panelKey, slots, links, selec
     return () => { observer?.disconnect(); window.removeEventListener('resize', update); };
   }, [height]);
   const marker = endpointMarkerRadii(canvasScale);
-  const visible = slots.filter((slot) => slot.panel_key === panelKey);
-  const points = new Map(visible.map((slot) => [slot.key, { x: slot.rendered_position.x * 1000, y: slot.rendered_position.y * height }]));
+  const visible = slots.filter((slot) => slot.panel_key === activePanelKey);
+  const points = new Map(slots.map((slot) => { const panel = panels.find((item) => item.panel_key === slot.panel_key)!; const rect = panelRect(panel); return [slot.key, { x: rect.x + slot.rendered_position.x * rect.width, y: rect.y + slot.rendered_position.y * rect.height }] as const; }));
   const position = (event: PointerEvent<SVGElement>): Point => {
     const rect = svg.current!.getBoundingClientRect();
     const scale = Math.min(rect.width / 1000, rect.height / height);
     const left = rect.left + (rect.width - 1000 * scale) / 2;
     const top = rect.top + (rect.height - height * scale) / 2;
-    return { x: clamp((event.clientX - left) / (1000 * scale)), y: clamp((event.clientY - top) / (height * scale)) };
+    return { x: clamp(((event.clientX - left) / scale - activeRect.x) / Math.max(activeRect.width, 1)), y: clamp(((event.clientY - top) / scale - activeRect.y) / Math.max(activeRect.height, 1)) };
   };
   const finish = (cancel = false) => {
     const current = gesture.current;
@@ -78,9 +87,9 @@ export function BlueprintCompositionCanvas({ body, panelKey, slots, links, selec
       const rawDy = next.y - current.start.y;
       const rect = svg.current!.getBoundingClientRect();
       const scale = Math.min(rect.width / 1000, rect.height / height);
-      if (Math.hypot(rawDx * scale * 1000, rawDy * scale * height) > 3) current.moved = true;
+      if (Math.hypot(rawDx * scale * activeRect.width, rawDy * scale * activeRect.height) > 3) current.moved = true;
       if (!current.moved) return;
-      const snapped = snapSelectionTranslation(current.slots, current.keys, rawDx, rawDy, 7 / (scale * 1000), 7 / (scale * height));
+      const snapped = snapSelectionTranslation(current.slots, current.keys, rawDx, rawDy, 7 / (scale * activeRect.width), 7 / (scale * activeRect.height));
       onTranslate(current.keys, snapped.dx - current.applied.x, snapped.dy - current.applied.y);
       current.applied = { x: snapped.dx, y: snapped.dy };
       setGuides({ x: snapped.guideX, y: snapped.guideY });
@@ -89,19 +98,26 @@ export function BlueprintCompositionCanvas({ body, panelKey, slots, links, selec
   }} onPointerUp={() => finish()} onPointerCancel={() => finish(true)} onContextMenu={(event) => {
     event.preventDefault();
     const key = (event.target as Element).closest('[data-slot-key]')?.getAttribute('data-slot-key') ?? undefined;
+    const panel = (event.target as Element).closest('[data-panel-key]')?.getAttribute('data-panel-key') ?? slots.find((slot) => slot.key === key)?.panel_key;
+    if (panel && panel !== activePanelKey) { onActivatePanel(panel); return; }
     onContextMenu(key, event.clientX, event.clientY);
   }}>
-    <rect className="blueprint-composition-canvas__body" width="1000" height={height} fill={body.fillColor} onPointerDown={(event) => {
-      if (event.button !== 0) return;
-      svg.current?.setPointerCapture?.(event.pointerId);
-      const start = position(event);
-      gesture.current = { kind: 'marquee', start, end: start };
-      setMarquee({ start, end: start });
-    }} />
+    {panels.map((panel) => { const rect = panelRect(panel); const active = panel.panel_key === activePanelKey; return <g key={panel.panel_key} data-panel-key={panel.panel_key} data-active={active}>
+      <rect className="blueprint-composition-canvas__body" x={rect.x} y={rect.y} width={rect.width} height={rect.height} fill={body.fillColor} onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        if (!active) { onActivatePanel(panel.panel_key); return; }
+        svg.current?.setPointerCapture?.(event.pointerId);
+        const start = position(event);
+        gesture.current = { kind: 'marquee', start, end: start };
+        setMarquee({ start, end: start });
+      }} />
+      <text className="blueprint-composition-canvas__panel-name" x={rect.x + 12} y={rect.y + 28} onPointerDown={() => onActivatePanel(panel.panel_key)}>{panel.display_name}</text>
+    </g>; })}
     {links.map((link) => { const from = points.get(link.from_slot_key); const to = points.get(link.to_slot_key); return from && to ? <line key={`${link.from_slot_key}-${link.to_slot_key}`} className="blueprint-composition-canvas__link" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null; })}
-    {visible.map((slot) => { const point = points.get(slot.key)!; const selected = selectedKeys.has(slot.key); return <g key={slot.key} data-slot-key={slot.key} data-selected={selected} className="blueprint-composition-canvas__port" onPointerDown={(event) => {
+    {slots.map((slot) => { const point = points.get(slot.key)!; const selected = selectedKeys.has(slot.key); return <g key={slot.key} data-slot-key={slot.key} data-selected={selected} className="blueprint-composition-canvas__port" onPointerDown={(event) => {
       if (event.button !== 0) return;
       event.preventDefault(); event.stopPropagation();
+      if (slot.panel_key !== activePanelKey) { onActivatePanel(slot.panel_key); return; }
       svg.current?.setPointerCapture?.(event.pointerId);
       const toggle = event.ctrlKey || event.metaKey;
       if (toggle || !selected) onSelect(slot.key, toggle);
@@ -110,8 +126,8 @@ export function BlueprintCompositionCanvas({ body, panelKey, slots, links, selec
       <circle data-endpoint-hit-target cx={point.x} cy={point.y} r={marker.hit} fill="transparent" pointerEvents="all" />
       <circle data-endpoint-marker cx={point.x} cy={point.y} r={selected ? marker.selected : marker.regular} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={selected ? '#fff' : '#1c3135'} strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{slot.display_name}</title></circle>
     </g>; })}
-    {guides.y !== undefined && <line data-guide-y className="blueprint-composition-canvas__guide" x1="0" x2="1000" y1={guides.y * height} y2={guides.y * height} />}
-    {guides.x !== undefined && <line data-guide-x className="blueprint-composition-canvas__guide" x1={guides.x * 1000} x2={guides.x * 1000} y1="0" y2={height} />}
-    {marquee && <rect className="blueprint-composition-canvas__marquee" x={Math.min(marquee.start.x, marquee.end.x) * 1000} y={Math.min(marquee.start.y, marquee.end.y) * height} width={Math.abs(marquee.end.x - marquee.start.x) * 1000} height={Math.abs(marquee.end.y - marquee.start.y) * height} />}
+    {guides.y !== undefined && <line data-guide-y className="blueprint-composition-canvas__guide" x1={activeRect.x} x2={activeRect.x + activeRect.width} y1={activeRect.y + guides.y * activeRect.height} y2={activeRect.y + guides.y * activeRect.height} />}
+    {guides.x !== undefined && <line data-guide-x className="blueprint-composition-canvas__guide" x1={activeRect.x + guides.x * activeRect.width} x2={activeRect.x + guides.x * activeRect.width} y1={activeRect.y} y2={activeRect.y + activeRect.height} />}
+    {marquee && <rect className="blueprint-composition-canvas__marquee" x={activeRect.x + Math.min(marquee.start.x, marquee.end.x) * activeRect.width} y={activeRect.y + Math.min(marquee.start.y, marquee.end.y) * activeRect.height} width={Math.abs(marquee.end.x - marquee.start.x) * activeRect.width} height={Math.abs(marquee.end.y - marquee.start.y) * activeRect.height} />}
   </svg>;
 }

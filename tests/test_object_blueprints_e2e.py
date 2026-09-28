@@ -41,6 +41,7 @@ def test_direct_slots_snapshot_and_materialization():
     assert detail.status_code == 200, detail.text
     assert sorted(detail.json()["slots"], key=lambda item: item["key"]) == slots
     assert detail.json()["panels"] == [panel()]
+    assert detail.json()["next_panel_number"] == 2
     assert "composition" not in detail.json()
     assert detail.json()["internal_links"] == [{"from_slot_key": "opaque-a", "to_slot_key": "opaque-b"}]
     created = instantiate(blueprint_id, version_id)
@@ -72,6 +73,21 @@ def test_invalid_direct_slots_and_links_rejected():
         response = client.post("/v1/library/object-blueprints", json=payload)
         assert response.status_code == 422, response.text
     assert client.get("/v1/library/port-blocks").status_code == 404
+
+
+def test_initial_authoring_can_save_adjacent_panels_and_local_slots():
+    response = client.post("/v1/library/object-blueprints", json={
+        "name": "Two panels", "body": {"kind": "RECTANGLE", "width": 200, "height": 40},
+        "panels": [panel(), panel(key="panel-2", number=2, name="Rear", x=100)],
+        "slots": [slot("first"), slot("second", panel_key="panel-2", x=.8, y=.7)],
+        "internal_links": [{"from_slot_key": "first", "to_slot_key": "second"}],
+    })
+    assert response.status_code == 201, response.text
+    detail = client.get(f"/v1/library/object-blueprints/{response.json()['blueprint_ref']['entity_id']}/versions/{response.json()['version_ref']['entity_id']}")
+    assert detail.status_code == 200
+    assert detail.json()["next_panel_number"] == 3
+    assert detail.json()["panels"][1]["display_name"] == "Rear"
+    assert detail.json()["slots"][1]["rendered_position"] == {"x": .8, "y": .7}
 
 
 def test_version_preserves_key_and_additive_upgrade():
@@ -142,8 +158,12 @@ def test_deleted_panel_key_and_number_are_not_reused():
 
     original = panel()
     removed = panel(key="panel-b", number=2, name="Panel B", x=100)
-    assert next_version([original, removed]).status_code == 201
-    assert next_version([original]).status_code == 201
+    added = next_version([original, removed])
+    assert added.status_code == 201
+    deleted = next_version([original])
+    assert deleted.status_code == 201
+    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{deleted.json()['version_ref']['entity_id']}")
+    assert detail.json()["next_panel_number"] == 3
 
     resurrected = next_version([original, removed])
     assert resurrected.status_code == 422, resurrected.text
@@ -152,7 +172,8 @@ def test_deleted_panel_key_and_number_are_not_reused():
 
     next_panel = panel(key="panel-c", number=3, name="Panel C", x=100)
     assert next_version([original, next_panel]).status_code == 201
-    skipped_number = next_version([original, next_panel, panel(key="panel-d", number=4), panel(key="panel-e", number=6)])
-    assert skipped_number.status_code == 422, skipped_number.text
-    consecutive = next_version([original, next_panel, panel(key="panel-d", number=4), panel(key="panel-e", number=5)])
-    assert consecutive.status_code == 201, consecutive.text
+    skipped_number = next_version([original, next_panel, panel(key="panel-e", number=5)])
+    assert skipped_number.status_code == 201, skipped_number.text
+    assert next_version([original, next_panel, panel(key="panel-d", number=4), panel(key="panel-e", number=5)]).status_code == 422
+    detail = client.get(f"/v1/library/object-blueprints/{blueprint_id}/versions/{skipped_number.json()['version_ref']['entity_id']}")
+    assert detail.json()["next_panel_number"] == 6

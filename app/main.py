@@ -893,6 +893,7 @@ def get_object_blueprint_version(
         "name": version.name,
         "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": version.version_id},
         "version_number": version.version_number,
+        "next_panel_number": version.next_panel_number,
         "default_physical_object_class": version.default_physical_object_class,
         "body": {
             "kind": version.body_kind, "width": version.width,

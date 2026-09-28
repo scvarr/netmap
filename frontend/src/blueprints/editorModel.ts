@@ -3,17 +3,47 @@ import type { BlueprintInternalLink, BlueprintSlot, BlueprintSlotKind, CreateObj
 export interface BlueprintEditorState {
   name: string; defaultClass: string; width: number; height: number; fillColor: string;
   panels: PresentationPanel[]; slots: BlueprintSlot[]; individualLinks: BlueprintInternalLink[];
-  nextLocalNumber?: number;
+  activePanelKey: string; nextPanelNumber: number; nextLocalNumberByPanel: Record<string, number>;
 }
-export type BlueprintValidationError = 'nameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateSlotKeys' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink' | 'multiPanelReadOnly';
+export type BlueprintValidationError = 'nameRequired' | 'panelNameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateSlotKeys' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
 export const internalLinkPairKey = (first: string, second: string) => [first, second].sort().join('\u0000');
 export const cleanupLinks = (links: BlueprintInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
 export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState => {
   const slots = state.slots.filter((slot) => !keys.has(slot.key));
+  const nextLocalNumberByPanel = { ...state.nextLocalNumberByPanel };
+  for (const panel of state.panels) if (!slots.some((slot) => slot.panel_key === panel.panel_key)) nextLocalNumberByPanel[panel.panel_key] = 1;
   return {
-    ...state, slots, nextLocalNumber: slots.length === 0 ? 1 : state.nextLocalNumber,
+    ...state, slots, nextLocalNumberByPanel,
     individualLinks: cleanupLinks(state.individualLinks, new Set(keys)),
   };
+};
+export type PanelDirection = 'above' | 'right' | 'below' | 'left';
+export const compositionBounds = (panels: PresentationPanel[]) => ({
+  x: Math.min(...panels.map((panel) => panel.x)), y: Math.min(...panels.map((panel) => panel.y)),
+  width: Math.max(...panels.map((panel) => panel.x + panel.width)) - Math.min(...panels.map((panel) => panel.x)),
+  height: Math.max(...panels.map((panel) => panel.y + panel.height)) - Math.min(...panels.map((panel) => panel.y)),
+});
+export const addPanel = (state: BlueprintEditorState, direction: PanelDirection): BlueprintEditorState => {
+  const active = state.panels.find((panel) => panel.panel_key === state.activePanelKey);
+  if (!active) return state;
+  const number = state.nextPanelNumber;
+  const panel: PresentationPanel = {
+    panel_key: crypto.randomUUID(), panel_number: number, display_name: `Панель ${number}`,
+    x: active.x + (direction === 'right' ? active.width : direction === 'left' ? -active.width : 0),
+    y: active.y + (direction === 'below' ? active.height : direction === 'above' ? -active.height : 0),
+    width: active.width, height: active.height,
+  };
+  return { ...state, panels: [...state.panels, panel], activePanelKey: panel.panel_key, nextPanelNumber: number + 1, nextLocalNumberByPanel: { ...state.nextLocalNumberByPanel, [panel.panel_key]: 1 } };
+};
+export const renameActivePanel = (state: BlueprintEditorState, name: string): BlueprintEditorState => ({
+  ...state, panels: state.panels.map((panel) => panel.panel_key === state.activePanelKey ? { ...panel, display_name: name } : panel),
+});
+export const deleteActivePanel = (state: BlueprintEditorState): BlueprintEditorState => {
+  if (state.panels.length <= 1 || state.slots.some((slot) => slot.panel_key === state.activePanelKey)) return state;
+  const panels = state.panels.filter((panel) => panel.panel_key !== state.activePanelKey);
+  const nextLocalNumberByPanel = { ...state.nextLocalNumberByPanel };
+  delete nextLocalNumberByPanel[state.activePanelKey];
+  return { ...state, panels, activePanelKey: [...panels].sort((a, b) => a.panel_number - b.panel_number)[0].panel_key, nextLocalNumberByPanel };
 };
 
 type Axis = 'x' | 'y';
@@ -136,12 +166,12 @@ export const layoutSelectionTwoRows = (state: BlueprintEditorState, keys: Readon
 
 /** UUIDs are opaque and independent of names, position, panel, and selection. */
 export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKind, count: number, panelKey: string): BlueprintEditorState => {
-  if (state.panels.length !== 1 || !Number.isInteger(count) || count < 1 || count > 256 || state.slots.filter((slot) => slot.panel_key === panelKey).length + count > 400) return state;
+  if (panelKey !== state.activePanelKey || !Number.isInteger(count) || count < 1 || count > 256 || state.slots.filter((slot) => slot.panel_key === panelKey).length + count > 400) return state;
   const panel = state.panels.find((item) => item.panel_key === panelKey);
   if (!panel) return state;
   const existing = state.slots.filter((slot) => slot.panel_key === panelKey).length;
   const maximum = Math.max(0, ...state.slots.filter((slot) => slot.panel_key === panelKey).map((slot) => new RegExp(`^${panel.panel_number}-(\\d+)$`).exec(slot.display_name)).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => Number(match[1])));
-  const next = Math.max(state.nextLocalNumber ?? 1, maximum + 1);
+  const next = Math.max(state.nextLocalNumberByPanel[panelKey] ?? 1, maximum + 1);
   const slots = Array.from({ length: count }, (_, index): BlueprintSlot => {
     const ordinal = existing + index;
     const column = ordinal % 20;
@@ -152,7 +182,7 @@ export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKin
       rendered_position: { x: (column + .5) / 20, y: (row + .5) / 20 },
     };
   });
-  return { ...state, nextLocalNumber: next + count, slots: [...state.slots, ...slots] };
+  return { ...state, nextLocalNumberByPanel: { ...state.nextLocalNumberByPanel, [panelKey]: next + count }, slots: [...state.slots, ...slots] };
 };
 export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocument): BlueprintEditorState => ({
   name: version.name, defaultClass: version.default_physical_object_class ?? '', width: version.body.width,
@@ -160,12 +190,16 @@ export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocum
   panels: version.panels.map((panel) => ({ ...panel })),
   slots: version.slots.map((slot) => ({ ...slot, rendered_position: { ...slot.rendered_position } })),
   individualLinks: version.internal_links.map((link) => ({ ...link })),
+  activePanelKey: [...version.panels].sort((a, b) => a.panel_number - b.panel_number)[0].panel_key,
+  nextPanelNumber: version.next_panel_number,
+  nextLocalNumberByPanel: Object.fromEntries(version.panels.map((panel) => [panel.panel_key, Math.max(1, ...version.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => new RegExp(`^${panel.panel_number}-(\\d+)$`).exec(slot.display_name)).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => Number(match[1]) + 1))])),
 });
 export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateObjectBlueprintRequest; errors: BlueprintValidationError[] } => {
   const errors: BlueprintValidationError[] = [];
-  if (state.panels.length !== 1) errors.push('multiPanelReadOnly');
   if (!state.name.trim()) errors.push('nameRequired');
-  if (!Number.isFinite(state.width) || state.width <= 0 || !Number.isFinite(state.height) || state.height <= 0) errors.push('dimensionsPositive');
+  if (state.panels.some((panel) => !panel.display_name.trim())) errors.push('panelNameRequired');
+  const bounds = compositionBounds(state.panels);
+  if (!state.panels.length || state.panels.some((panel) => !Number.isFinite(panel.width) || panel.width <= 0 || !Number.isFinite(panel.height) || panel.height <= 0) || !Number.isFinite(bounds.width) || !Number.isFinite(bounds.height) || bounds.width <= 0 || bounds.height <= 0) errors.push('dimensionsPositive');
   if (state.fillColor && !/^#[0-9A-Fa-f]{6}$/.test(state.fillColor)) errors.push('colorFormat');
   const keys = new Set(state.slots.map((slot) => slot.key));
   if (keys.size !== state.slots.length) errors.push('duplicateSlotKeys');
@@ -178,8 +212,8 @@ export const createBlueprintRequest = (state: BlueprintEditorState): { request?:
   if (errors.length) return { errors };
   return { errors, request: {
     name: state.name.trim(), ...(state.defaultClass.trim() ? { default_physical_object_class: state.defaultClass.trim() } : {}),
-    body: { kind: 'RECTANGLE', width: state.width, height: state.height, fill_color: state.fillColor },
-    panels: state.panels.map((panel) => ({ ...panel, width: state.width, height: state.height })),
+    body: { kind: 'RECTANGLE', width: bounds.width, height: bounds.height, fill_color: state.fillColor },
+    panels: state.panels.map((panel) => ({ ...panel })),
     slots: state.slots.map((slot) => ({ ...slot, rendered_position: { ...slot.rendered_position } })),
     internal_links: state.individualLinks,
   } };

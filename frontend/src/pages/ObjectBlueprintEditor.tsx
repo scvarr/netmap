@@ -2,16 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
-import { addEndpoints, alignSelectionLine, createBlueprintRequest, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, translateSelection, type BlueprintEditorState, type BlueprintValidationError } from '../blueprints/editorModel';
+import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, renameActivePanel, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
-export const newBlueprintEditorState = (): BlueprintEditorState => ({ name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', panels: [{ panel_key: crypto.randomUUID(), panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 160, height: 60 }], slots: [], individualLinks: [] });
+export const newBlueprintEditorState = (): BlueprintEditorState => { const key = crypto.randomUUID(); return { name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', panels: [{ panel_key: key, panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 160, height: 60 }], slots: [], individualLinks: [], activePanelKey: key, nextPanelNumber: 2, nextLocalNumberByPanel: { [key]: 1 } }; };
 const validationKey = {
-  nameRequired: 'blueprint.validation.nameRequired', dimensionsPositive: 'blueprint.validation.dimensionsPositive', colorFormat: 'blueprint.validation.colorFormat',
+  nameRequired: 'blueprint.validation.nameRequired', panelNameRequired: 'blueprint.validation.panelNameRequired', dimensionsPositive: 'blueprint.validation.dimensionsPositive', colorFormat: 'blueprint.validation.colorFormat',
   duplicateSlotKeys: 'blueprint.validation.duplicateSlotKeys', individualSelfLink: 'blueprint.validation.individualSelfLink',
   individualMissingPort: 'blueprint.validation.individualMissingPort', duplicateIndividualLink: 'blueprint.validation.duplicateIndividualLink',
-  multiPanelReadOnly: 'blueprint.validation.multiPanelReadOnly',
 } as const satisfies Record<BlueprintValidationError, string>;
 const menuSections = [
   { label: 'align', actions: ['horizontalLine', 'verticalLine'] },
@@ -25,7 +24,9 @@ type MenuAction = (typeof menuSections)[number]['actions'][number];
 export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, initialState, versionNotice }: Props) {
   const { t } = useI18n();
   const [editor, setEditor] = useState(initialState);
-  const panelKey = editor.panels[0]?.panel_key ?? '';
+  const panelKey = editor.activePanelKey;
+  const activePanel = editor.panels.find((panel) => panel.panel_key === panelKey)!;
+  const bounds = compositionBounds(editor.panels);
   const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
   const [count, setCount] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -37,6 +38,10 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const [error, setError] = useState<string>();
   const selectedSlot = selected.size === 1 ? editor.slots.find((slot) => selected.has(slot.key) && slot.panel_key === panelKey) : undefined;
   const deleteSelected = () => { setEditor((old) => removeEndpoints(old, selected)); setSelected(new Set()); setMenu(undefined); };
+  const clearPanelUi = () => { setSelected(new Set()); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); };
+  const activatePanel = (key: string) => { if (key === panelKey) return; setEditor((old) => ({ ...old, activePanelKey: key })); clearPanelUi(); };
+  const createPanel = (direction: PanelDirection) => { setEditor((old) => addPanel(old, direction)); clearPanelUi(); };
+  const removePanel = () => { setEditor((old) => deleteActivePanel(old)); clearPanelUi(); };
   useEffect(() => {
     const onPointerDown = (event: globalThis.PointerEvent) => {
       if (menu && (!(event.target instanceof Element) || !event.target.closest('.blueprint-composer__context-menu'))) setMenu(undefined);
@@ -58,9 +63,9 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   }, [menu, selected]);
   const normalizedPixels = (axis: 'x' | 'y', pixels: number) => {
     const rect = canvasWrap.current?.querySelector('svg')?.getBoundingClientRect();
-    const viewHeight = 1000 * (editor.height > 0 && editor.width > 0 ? editor.height / editor.width : 1);
+    const viewHeight = 1000 * bounds.height / bounds.width;
     const scale = rect && Math.min(rect.width / 1000, rect.height / viewHeight);
-    return scale && Number.isFinite(scale) && scale > 0 ? pixels / (scale * (axis === 'x' ? 1000 : viewHeight)) : undefined;
+    return scale && Number.isFinite(scale) && scale > 0 ? pixels / (scale * (axis === 'x' ? activePanel.width : activePanel.height) * 1000 / bounds.width) : undefined;
   };
   const presentationInset = (axis: 'x' | 'y') => Math.min(.49, normalizedPixels(axis, 8) ?? .02);
   const layoutMetrics = () => ({
@@ -120,10 +125,6 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     if (!result.request) { setError(t(validationKey[result.errors[0]])); return; }
     try { await onSave(editor); } catch { setError(t('blueprint.validation.saveFailed')); }
   };
-  if (editor.panels.length !== 1) return <>
-    <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
-    <p role="status" className="blueprint-editor__notice">{t('blueprint.validation.multiPanelReadOnly')}</p>
-  </>;
   return <>
     <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
     <div className="blueprint-composer"><div className="blueprint-composer__workspace">
@@ -133,13 +134,13 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           <label>{t('blueprint.editor.class')}<input value={editor.defaultClass} onChange={(e) => setEditor({ ...editor, defaultClass: e.target.value })} /></label>
         </div>
         <div className="blueprint-editor-controls__row">
-          <label>{t('blueprint.editor.width')}<input type="number" min="1" value={editor.width} onChange={(e) => setEditor({ ...editor, width: Number(e.target.value) })} /></label>
-          <label>{t('blueprint.editor.height')}<input type="number" min="1" value={editor.height} onChange={(e) => setEditor({ ...editor, height: Number(e.target.value) })} /></label>
+          <label>{t('blueprint.editor.width')}<input type="number" min="1" value={editor.panels.length === 1 ? activePanel.width : bounds.width} disabled={editor.panels.length > 1} onChange={(e) => setEditor((old) => ({ ...old, width: Number(e.target.value), panels: old.panels.map((panel) => ({ ...panel, width: Number(e.target.value) })) }))} /></label>
+          <label>{t('blueprint.editor.height')}<input type="number" min="1" value={editor.panels.length === 1 ? activePanel.height : bounds.height} disabled={editor.panels.length > 1} onChange={(e) => setEditor((old) => ({ ...old, height: Number(e.target.value), panels: old.panels.map((panel) => ({ ...panel, height: Number(e.target.value) })) }))} /></label>
         </div>
         <label>{t('blueprint.editor.color')}<input type="color" value={editor.fillColor} onChange={(e) => setEditor({ ...editor, fillColor: e.target.value })} /></label>
         <section className="blueprint-composer__section blueprint-composer__links"><h2>{t('blueprint.composition.links')}</h2>
           {editor.individualLinks.map((link, index) => <div className="blueprint-composer__link" key={index}>
-            {(['from_slot_key', 'to_slot_key'] as const).map((field) => <select key={field} aria-label={t(field === 'from_slot_key' ? 'blueprint.composition.firstLink' : 'blueprint.composition.secondLink', { index: index + 1 })} value={link[field]} onChange={(e) => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.map((item, i) => i === index ? { ...item, [field]: e.target.value } : item) }))}>{editor.slots.map((slot) => <option key={slot.key} value={slot.key}>{slot.display_name}</option>)}</select>)}
+            {(['from_slot_key', 'to_slot_key'] as const).map((field) => <select key={field} aria-label={t(field === 'from_slot_key' ? 'blueprint.composition.firstLink' : 'blueprint.composition.secondLink', { index: index + 1 })} value={link[field]} onChange={(e) => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.map((item, i) => i === index ? { ...item, [field]: e.target.value } : item) }))}>{editor.slots.map((slot) => <option key={slot.key} value={slot.key}>{slot.display_name} · {editor.panels.find((panel) => panel.panel_key === slot.panel_key)?.display_name}</option>)}</select>)}
             <button type="button" className="text-action" onClick={() => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.filter((_, i) => i !== index) }))}>{t('blueprint.composition.remove')}</button>
           </div>)}
           <button type="button" className="secondary-action" disabled={editor.slots.length < 2} onClick={addLink}>{t('blueprint.composition.addLink')}</button>
@@ -153,9 +154,14 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
           <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, panelKey); if (next === editor) return; setEditor(next); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
         </div>
-        <div className="blueprint-composer__panels">{editor.panels[0].display_name}</div>
+        <div className="blueprint-composer__panels" role="group" aria-label={t('blueprint.panel.list')}>{[...editor.panels].sort((a, b) => a.panel_number - b.panel_number).map((panel) => <button key={panel.panel_key} type="button" aria-pressed={panel.panel_key === panelKey} onClick={() => activatePanel(panel.panel_key)}>{panel.display_name}</button>)}</div>
+        <div className="blueprint-composer__panel-actions">
+          <label>{t('blueprint.panel.name')}<input value={activePanel.display_name} onChange={(event) => setEditor((old) => renameActivePanel(old, event.target.value))} /></label>
+          {(['above', 'right', 'below', 'left'] as const).map((direction) => <button key={direction} type="button" className="secondary-action" onClick={() => createPanel(direction)}>{t(`blueprint.panel.add.${direction}`)}</button>)}
+          <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
+        </div>
         <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
-          <BlueprintCompositionCanvas body={{ width: editor.width, height: editor.height, fillColor: editor.fillColor }} panelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onSelect={selectSlot} onMarquee={(keys) => setSelected(new Set(keys))} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onContextMenu={(key, clientX, clientY) => {
+          <BlueprintCompositionCanvas key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => setSelected(new Set(keys))} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onContextMenu={(key, clientX, clientY) => {
             if (key && !selected.has(key)) setSelected(new Set([key]));
             if (!key && selected.size === 0) { setMenu(undefined); return; }
             const rect = canvasWrap.current!.getBoundingClientRect();

@@ -72,6 +72,7 @@ export interface ObjectBlueprintVersionDocument {
   name: string;
   version_ref: LibraryRef;
   version_number: number;
+  next_panel_number: number;
   default_physical_object_class?: string | null;
   body: BlueprintBody;
   panels: PresentationPanel[];

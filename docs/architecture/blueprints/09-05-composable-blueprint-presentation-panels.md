@@ -2,14 +2,14 @@
 
 ## Status and authority
 
-**FIXED / ACCEPTED TARGET CONTRACT. SLICE A IMPLEMENTED; SLICES B/C/D PENDING.**
+**FIXED / ACCEPTED TARGET CONTRACT. SLICE A AND B1 IMPLEMENTED; B2/C/D PENDING.**
 
 This document supersedes only the binary `FRONT | REAR` presentation model in
 [09.4](09-04-direct-blueprint-endpoint-authoring.md). Direct endpoint slots
 remain the primary Blueprint-version authoring entities. Persistence, API,
 workspace v3, projection, runtime geometry, preview, and the current
-single-panel editor use panel composition. Full multi-panel authoring remains
-pending in Slice B. Phase C remains **PAUSED** pending bounded editor work. Port
+multi-panel editor use panel composition. Panel move and resize remain
+pending in Slice B2. Phase C remains **PAUSED** pending bounded editor work. Port
 Block remains removed and is not a prerequisite.
 
 An immutable `ObjectBlueprintVersion` owns body/overall presentation,
@@ -193,19 +193,23 @@ Bounded implementation slices:
    before full panel editing exists, the editor must not silently flatten,
    discard, remap, or overwrite its panels. Slice A does not deliver the
    multi-panel authoring workspace.
-2. **PENDING — Multi-panel canvas:** show all panels, active-panel state, add in four
-   directions, rename/move/resize, author endpoints inside panels, and scope
-   existing spatial selection/layout tools to a panel. This includes the
-   simultaneous multi-panel authoring workspace, active-panel UX, add
-   above/right/below/left, panel rename/move/resize/delete, and general panel
-   management UI.
+2. **B1 IMPLEMENTED — Multi-panel lifecycle and active-panel authoring:** show all
+   panels simultaneously in composition coordinates; select one transient active
+   panel; add adjacent panels above/right/below/left with zero gap; rename and
+   delete empty panels; author endpoints and use spatial selection/layout tools
+   only within the active panel. The version detail supplies a derived
+   `next_panel_number` from the lineage history. The editor keeps transient
+   panel and per-panel endpoint name allocators, and save derives body dimensions
+   from the composition bounding box while preserving exact panel rectangles.
+   **B2 PENDING — Panel geometry editing:** drag/move panels, resize panels, and
+   provide the corresponding geometry manipulation UX.
 3. **PENDING — Copy to panel:** selected-slot copy with new keys, destination defaults,
    local geometry, and optional 1:1 links.
 4. **PENDING — Ordered bulk authoring:** ordered selection, bulk naming, and general
    pairwise continuity.
 
 Technology/capability remains **OPEN**, separate from these slices. Phase C
-remains **PAUSED**; multi-panel redesign is a prerequisite before patch-panel
-and internal-link acceptance. Multi-panel implementation, ordered bulk naming,
+remains **PAUSED**; remaining editor slices are prerequisites before patch-panel
+and internal-link acceptance. Panel move/resize, ordered bulk naming,
 and general pairwise continuity are **PENDING**. Port Block does not return as
 a prerequisite.

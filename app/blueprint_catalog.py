@@ -69,6 +69,7 @@ class BlueprintVersionDetail:
     width: float
     height: float
     fill_color: str | None
+    next_panel_number: int
     panels: tuple[PresentationPanel, ...]
     slots: tuple[BlueprintEndpointSlot, ...]
     internal_links: tuple[tuple[str, str], ...]
@@ -143,8 +144,8 @@ class ObjectBlueprintCatalog:
                 panel_number=panel.panel_number, display_name=panel.display_name,
                 x=panel.x, y=panel.y, width=panel.width, height=panel.height,
             ))
-        if sorted(new_panel_numbers) != list(range(max_historical_number + 1, max_historical_number + 1 + len(new_panel_numbers))):
-            raise ValidationError("New Blueprint panel numbers must continue the historical sequence")
+        if any(number <= max_historical_number for number in new_panel_numbers):
+            raise ValidationError("New Blueprint panel numbers must exceed the historical maximum")
         self.session.flush()
         slots_by_key: dict[str, BlueprintEndpointSlot] = {}
         for item in query.slots:
@@ -261,6 +262,11 @@ class ObjectBlueprintCatalog:
             width=version.width,
             height=version.height,
             fill_color=version.fill_color,
+            next_panel_number=(self.session.scalar(
+                select(func.max(PresentationPanel.panel_number))
+                .join(ObjectBlueprintVersion, PresentationPanel.blueprint_version_id == ObjectBlueprintVersion.id)
+                .where(ObjectBlueprintVersion.blueprint_id == blueprint_id)
+            ) or 0) + 1,
             panels=panels,
             slots=slots,
             internal_links=links,

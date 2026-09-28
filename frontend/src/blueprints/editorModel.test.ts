@@ -1,9 +1,44 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addEndpoints, alignSelectionLine, createBlueprintRequest, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, snapSelectionTranslation, translateSelection, type BlueprintEditorState } from './editorModel';
+import { addEndpoints, addPanel, alignSelectionLine, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, renameActivePanel, snapSelectionTranslation, translateSelection, type BlueprintEditorState } from './editorModel';
 import { newBlueprintEditorState } from '../pages/ObjectBlueprintEditor';
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 
 describe('direct Blueprint slots', () => {
+  it('places panels in all four directions and derives composition dimensions', () => {
+    const initial = newBlueprintEditorState();
+    const placements = [
+      ['above', 0, -60], ['right', 160, 0], ['below', 0, 60], ['left', -160, 0],
+    ] as const;
+    for (const [direction, x, y] of placements) {
+      const next = addPanel(initial, direction);
+      expect(next.panels[1]).toMatchObject({ panel_number: 2, display_name: 'Панель 2', x, y, width: 160, height: 60 });
+      expect(next.activePanelKey).toBe(next.panels[1].panel_key);
+      expect(next.panels[1].panel_key).not.toBe(initial.panels[0].panel_key);
+      expect(createBlueprintRequest({ ...next, name: 'Device' }).request?.body).toMatchObject({ width: direction === 'left' || direction === 'right' ? 320 : 160, height: direction === 'above' || direction === 'below' ? 120 : 60 });
+    }
+  });
+
+  it('keeps panel numbers monotonic after deletion and scopes endpoint naming', () => {
+    const initial = newBlueprintEditorState();
+    const second = addPanel(initial, 'right');
+    const renamed = renameActivePanel(second, 'Контроллер A');
+    expect(renamed.panels[1]).toMatchObject({ panel_key: second.activePanelKey, panel_number: 2, display_name: 'Контроллер A' });
+    expect(deleteActivePanel(initial)).toBe(initial);
+    const third = addPanel(deleteActivePanel(renamed), 'below');
+    expect(third.panels[1].panel_number).toBe(3);
+    expect(third.nextPanelNumber).toBe(4);
+    expect(createBlueprintRequest({ ...third, name: 'Device' }).request?.panels.map((panel) => panel.panel_number)).toEqual([1, 3]);
+    const withThird = addEndpoints(third, 'NETWORK_PORT', 2, third.activePanelKey);
+    expect(withThird.slots.map((slot) => slot.display_name)).toEqual(['3-1', '3-2']);
+    expect(deleteActivePanel(withThird)).toBe(withThird);
+    const firstKey = initial.activePanelKey;
+    const withFirst = addEndpoints({ ...withThird, activePanelKey: firstKey }, 'NETWORK_PORT', 1, firstKey);
+    expect(withFirst.slots.at(-1)?.display_name).toBe('1-1');
+    const clearedThird = removeEndpoints(withFirst, new Set(withThird.slots.map((slot) => slot.key)));
+    const nextThird = addEndpoints({ ...clearedThird, activePanelKey: third.activePanelKey }, 'NETWORK_PORT', 1, third.activePanelKey);
+    expect(nextThird.slots.at(-1)?.display_name).toBe('3-1');
+    expect(nextThird.nextLocalNumberByPanel[firstKey]).toBe(2);
+  });
   it('adds distinct opaque identities and bounded deterministic positions on the panel', () => {
     const initial = newBlueprintEditorState();
     vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValueOnce('a').mockReturnValueOnce('b').mockReturnValueOnce('c') });
@@ -20,7 +55,7 @@ describe('direct Blueprint slots', () => {
     const document: ObjectBlueprintVersionDocument = {
       schema_version: '2.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
       version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' },
-      version_number: 1, name: 'Panel', body: { kind: 'RECTANGLE', width: 100, height: 40 }, panels: [{ panel_key: 'panel-1', panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 100, height: 40 }],
+      version_number: 1, next_panel_number: 2, name: 'Panel', body: { kind: 'RECTANGLE', width: 100, height: 40 }, panels: [{ panel_key: 'panel-1', panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 100, height: 40 }],
       slots: [
         { key: 'opaque-a', display_name: 'P1', kind: 'CONNECTION_POINT', panel_key: 'panel-1', rendered_position: { x: .2, y: .3 } },
         { key: 'opaque-b', display_name: 'N1', kind: 'NETWORK_PORT', panel_key: 'panel-1', rendered_position: { x: .8, y: .7 } },
@@ -34,6 +69,21 @@ describe('direct Blueprint slots', () => {
     const removed = removeEndpoints(state, new Set(['opaque-a']));
     expect(removed.slots.map((slot) => slot.key)).toEqual(['opaque-b']);
     expect(removed.individualLinks).toEqual([]);
+  });
+  it('hydrates the lowest numbered panel as active and preserves distinct rectangles', () => {
+    const initial = newBlueprintEditorState();
+    const first = initial.panels[0];
+    const second = { ...first, panel_key: 'second', panel_number: 2, display_name: 'Rear', x: -70, y: -20, width: 70, height: 30 };
+    const state = hydrateBlueprintEditorState({
+      schema_version: '2.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
+      version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v' },
+      version_number: 2, next_panel_number: 5, name: 'Device', body: { kind: 'RECTANGLE', width: 230, height: 80 },
+      panels: [second, first], slots: [{ key: 's', display_name: '2-4', kind: 'NETWORK_PORT', panel_key: 'second', rendered_position: { x: .2, y: .3 } }], internal_links: [],
+    });
+    expect(state.activePanelKey).toBe(first.panel_key);
+    expect(state.nextPanelNumber).toBe(5);
+    expect(state.nextLocalNumberByPanel.second).toBe(5);
+    expect(createBlueprintRequest(state).request).toMatchObject({ body: { width: 230, height: 80 }, panels: [second, first] });
   });
 
   it('keeps the sequence and existing names after partial deletion across endpoint kinds', () => {

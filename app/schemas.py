@@ -740,9 +740,9 @@ class CreateObjectBlueprintRequest(BaseModel):
     def validate_slot_keys(self) -> "CreateObjectBlueprintRequest":
         if len({slot.key for slot in self.slots}) != len(self.slots):
             raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
-        if len(self.panels) != 1 or self.panels[0].panel_number != 1 or self.panels[0].display_name != "Панель 1" or (self.panels[0].x, self.panels[0].y, self.panels[0].width, self.panels[0].height) != (0, 0, self.body.width, self.body.height):
-            raise PydanticCustomError("blueprint_initial_panel", "A new Blueprint must start with neutral panel 1")
-        if any(slot.panel_key != self.panels[0].panel_key for slot in self.slots):
+        if not any(panel.panel_number == 1 for panel in self.panels):
+            raise PydanticCustomError("blueprint_initial_panel", "A new Blueprint must include panel 1")
+        if any(slot.panel_key not in {panel.panel_key for panel in self.panels} for slot in self.slots):
             raise PydanticCustomError("blueprint_unknown_panel", "Blueprint slot refers to an unknown panel")
         return self
 
@@ -863,6 +863,7 @@ class ObjectBlueprintVersionDocument(BaseModel):
     name: str = Field(min_length=1)
     version_ref: BlueprintLibraryRef
     version_number: int = Field(ge=1)
+    next_panel_number: int = Field(ge=1)
     default_physical_object_class: str | None = None
     body: ObjectBlueprintBodyDocument
     panels: list[PresentationPanelDocument]

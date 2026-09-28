@@ -76,10 +76,11 @@ export const parseObjectBlueprintVersionDocument = (value: unknown): ObjectBluep
   const document = requireObject(value, 'document');
   if (document.schema_version !== '2.0' || !Array.isArray(document.panels) || !Array.isArray(document.slots) || !Array.isArray(document.internal_links)) malformed('version document has invalid shape.');
   if (typeof document.version_number !== 'number' || document.version_number < 1) malformed('version_number must be positive.');
+  if (!Number.isInteger(document.next_panel_number) || (document.next_panel_number as number) <= 0) malformed('next_panel_number must be positive.');
   const panels = (document.panels as unknown[]).map((panel, index) => parsePanel(panel, `panels[${index}]`));
   const slots = (document.slots as unknown[]).map((slot, index) => parseSlot(slot, `slots[${index}]`));
   if (!panels.length || new Set(panels.map((panel) => panel.panel_key)).size !== panels.length || new Set(panels.map((panel) => panel.panel_number)).size !== panels.length || slots.some((slot) => !panels.some((panel) => panel.panel_key === slot.panel_key))) malformed('version panel membership is invalid.');
-  return { schema_version: '2.0', blueprint_ref: parseRef(document.blueprint_ref, 'blueprint_ref', 'ObjectBlueprint'), name: requireString(document.name, 'name'), version_ref: parseRef(document.version_ref, 'version_ref', 'ObjectBlueprintVersion'), version_number: document.version_number as number, default_physical_object_class: document.default_physical_object_class as string | null | undefined, body: parseBody(document.body, 'body'), panels, slots, internal_links: (document.internal_links as unknown[]).map((link, index) => parseLink(link, `internal_links[${index}]`)) };
+  return { schema_version: '2.0', blueprint_ref: parseRef(document.blueprint_ref, 'blueprint_ref', 'ObjectBlueprint'), name: requireString(document.name, 'name'), version_ref: parseRef(document.version_ref, 'version_ref', 'ObjectBlueprintVersion'), version_number: document.version_number as number, next_panel_number: document.next_panel_number as number, default_physical_object_class: document.default_physical_object_class as string | null | undefined, body: parseBody(document.body, 'body'), panels, slots, internal_links: (document.internal_links as unknown[]).map((link, index) => parseLink(link, `internal_links[${index}]`)) };
 };
 
 export const parseObjectBlueprintCreationDocument = (value: unknown): ObjectBlueprintCreationDocument => {
