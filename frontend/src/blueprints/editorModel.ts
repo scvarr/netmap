@@ -18,6 +18,51 @@ export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<s
   };
 };
 export type PanelDirection = 'above' | 'right' | 'below' | 'left';
+export type PanelHandle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
+export type PanelRectangle = Pick<PresentationPanel, 'x' | 'y' | 'width' | 'height'>;
+export interface PanelGeometryResult { rectangle: PanelRectangle; guides: { x?: number; y?: number } }
+const nearestSnap = (edges: number[], targets: number[], threshold: number) => {
+  let best: { delta: number; guide: number } | undefined;
+  for (const edge of edges) for (const target of targets) {
+    const delta = target - edge;
+    if (Math.abs(delta) <= threshold && (!best || Math.abs(delta) < Math.abs(best.delta))) best = { delta, guide: target };
+  }
+  return best;
+};
+export const panelGestureGeometry = (
+  panel: PresentationPanel, others: PresentationPanel[], kind: 'move' | PanelHandle,
+  dx: number, dy: number, snapThreshold: number, minimum: number,
+): PanelGeometryResult => {
+  const horizontal = others.flatMap((item) => [item.x, item.x + item.width]);
+  const vertical = others.flatMap((item) => [item.y, item.y + item.height]);
+  if (kind === 'move') {
+    const x = panel.x + dx; const y = panel.y + dy;
+    const sx = nearestSnap([x, x + panel.width], horizontal, snapThreshold);
+    const sy = nearestSnap([y, y + panel.height], vertical, snapThreshold);
+    return { rectangle: { x: x + (sx?.delta ?? 0), y: y + (sy?.delta ?? 0), width: panel.width, height: panel.height }, guides: { x: sx?.guide, y: sy?.guide } };
+  }
+  const west = kind.includes('w'); const east = kind.includes('e');
+  const north = kind.includes('n'); const south = kind.includes('s');
+  const minWidth = Math.min(panel.width, minimum); const minHeight = Math.min(panel.height, minimum);
+  let left = panel.x + (west ? Math.min(dx, panel.width - minWidth) : 0);
+  let right = panel.x + panel.width + (east ? Math.max(dx, minWidth - panel.width) : 0);
+  let top = panel.y + (north ? Math.min(dy, panel.height - minHeight) : 0);
+  let bottom = panel.y + panel.height + (south ? Math.max(dy, minHeight - panel.height) : 0);
+  const sx = west || east ? nearestSnap([west ? left : right], horizontal, snapThreshold) : undefined;
+  const sy = north || south ? nearestSnap([north ? top : bottom], vertical, snapThreshold) : undefined;
+  if (sx && (west ? right - (left + sx.delta) >= minWidth : right + sx.delta - left >= minWidth)) {
+    if (west) left += sx.delta; else right += sx.delta;
+  }
+  if (sy && (north ? bottom - (top + sy.delta) >= minHeight : bottom + sy.delta - top >= minHeight)) {
+    if (north) top += sy.delta; else bottom += sy.delta;
+  }
+  const snappedX = sx && (west ? left === sx.guide : right === sx.guide) ? sx.guide : undefined;
+  const snappedY = sy && (north ? top === sy.guide : bottom === sy.guide) ? sy.guide : undefined;
+  return { rectangle: { x: left, y: top, width: right - left, height: bottom - top }, guides: { x: snappedX, y: snappedY } };
+};
+export const setPanelRectangle = (state: BlueprintEditorState, key: string, rectangle: PanelRectangle): BlueprintEditorState => ({
+  ...state, panels: state.panels.map((panel) => panel.panel_key === key ? { ...panel, ...rectangle } : panel),
+});
 export const compositionBounds = (panels: PresentationPanel[]) => ({
   x: Math.min(...panels.map((panel) => panel.x)), y: Math.min(...panels.map((panel) => panel.y)),
   width: Math.max(...panels.map((panel) => panel.x + panel.width)) - Math.min(...panels.map((panel) => panel.x)),

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
-import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, renameActivePanel, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
+import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, renameActivePanel, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
@@ -161,7 +161,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
         </div>
         <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
-          <BlueprintCompositionCanvas key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => setSelected(new Set(keys))} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onContextMenu={(key, clientX, clientY) => {
+          <BlueprintCompositionCanvas key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => setSelected(new Set(keys))} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle) => setEditor((old) => setPanelRectangle(old, key, rectangle))} onContextMenu={(key, clientX, clientY) => {
             if (key && !selected.has(key)) setSelected(new Set([key]));
             if (!key && selected.size === 0) { setMenu(undefined); return; }
             const rect = canvasWrap.current!.getBoundingClientRect();

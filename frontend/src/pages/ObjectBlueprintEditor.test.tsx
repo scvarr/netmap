@@ -8,6 +8,26 @@ import { newBlueprintEditorState, ObjectBlueprintEditor } from './ObjectBlueprin
 
 describe('minimal direct endpoint editor', () => {
   const renderEditor = () => render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
+  it('uses moved and resized geometry for adjacent creation and saves exact negative rectangles', async () => {
+    const initial = newBlueprintEditorState(); initial.name = 'Device';
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
+    fireEvent.pointerDown(document.querySelector('[data-panel-resize="e"]')!, { button: 0, clientX: 1000, clientY: 180 });
+    fireEvent.pointerMove(canvas, { clientX: 1500, clientY: 180 });
+    fireEvent.pointerUp(canvas);
+    expect(screen.getByLabelText('Пропорция ширины корпуса')).toHaveValue(240);
+    fireEvent.pointerDown(document.querySelector('[data-panel-move-border]')!, { button: 0, clientX: 500, clientY: 180 });
+    fireEvent.pointerMove(canvas, { clientX: 400, clientY: 80 });
+    fireEvent.pointerUp(canvas);
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить сверху' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const request = createBlueprintRequest(save.mock.calls[0][0]).request!;
+    expect(request.panels[0]).toMatchObject({ x: -24, y: -24, width: 240, height: 60 });
+    expect(request.panels[1]).toMatchObject({ x: -24, y: -84, width: 240, height: 60, panel_number: 2 });
+    expect(request.body).toMatchObject({ width: 240, height: 120 });
+  });
   it('edits and saves a loaded multi-panel version without flattening panels', async () => {
     const initial = newBlueprintEditorState();
     initial.panels.push({ ...initial.panels[0], panel_key: 'second', panel_number: 2, display_name: 'Second', x: 160 });

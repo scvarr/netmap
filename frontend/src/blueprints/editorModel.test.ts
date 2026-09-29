@@ -1,9 +1,50 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addEndpoints, addPanel, alignSelectionLine, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, renameActivePanel, snapSelectionTranslation, translateSelection, type BlueprintEditorState } from './editorModel';
+import { addEndpoints, addPanel, alignSelectionLine, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, removeEndpoints, renameActivePanel, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
 import { newBlueprintEditorState } from '../pages/ObjectBlueprintEditor';
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 
 describe('direct Blueprint slots', () => {
+  it('moves only panel origin, preserving identity and local endpoints, and adds from edited geometry', () => {
+    const initial = newBlueprintEditorState();
+    const withSlot = { ...initial, slots: [{ key: 'a', display_name: '1-1', kind: 'NETWORK_PORT' as const, panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .7 } }] };
+    const moved = setPanelRectangle(withSlot, initial.activePanelKey, panelGestureGeometry(initial.panels[0], [], 'move', -30, -45, 7, 40).rectangle);
+    expect(moved.panels[0]).toEqual({ ...initial.panels[0], x: -30, y: -45 });
+    expect(moved.slots).toEqual(withSlot.slots);
+    const resized = setPanelRectangle(moved, initial.activePanelKey, { x: -30, y: -45, width: 240, height: 80 });
+    expect(addPanel(resized, 'above').panels[1]).toMatchObject({ x: -30, y: -125, width: 240, height: 80 });
+    expect(addPanel(resized, 'right').panels[1]).toMatchObject({ x: 210, y: -45, width: 240, height: 80 });
+    const request = createBlueprintRequest({ ...resized, name: 'Device' }).request!;
+    expect(request.panels[0]).toMatchObject({ x: -30, y: -45, width: 240, height: 80 });
+    expect(request.body).toMatchObject({ width: 240, height: 80 });
+    expect(request.slots[0].rendered_position).toEqual({ x: .2, y: .7 });
+  });
+
+  it.each([
+    ['n', 0, 10, 100, 40], ['ne', 0, 10, 115, 40], ['e', 0, 0, 115, 50],
+    ['se', 0, 0, 115, 60], ['s', 0, 0, 100, 60], ['sw', 15, 0, 85, 60],
+    ['w', 15, 0, 85, 50], ['nw', 15, 10, 85, 40],
+  ] as const)('resizes %s from the corresponding edges', (handle, x, y, width, height) => {
+    const panel = { ...newBlueprintEditorState().panels[0], width: 100, height: 50 };
+    expect(panelGestureGeometry(panel, [], handle as PanelHandle, 15, 10, 0, 20).rectangle).toEqual({ x, y, width, height });
+  });
+
+  it('clamps resize to an authoring minimum without changing loaded small rectangles', () => {
+    const panel = { ...newBlueprintEditorState().panels[0], width: 100, height: 50 };
+    expect(panelGestureGeometry(panel, [], 'nw', 99, 49, 0, 40).rectangle).toEqual({ x: 60, y: 10, width: 40, height: 40 });
+    expect(panelGestureGeometry({ ...panel, width: 10 }, [], 'move', 5, 0, 0, 40).rectangle.width).toBe(10);
+    expect(panelGestureGeometry({ ...panel, width: 10 }, [], 'w', 0, 0, 0, 40).rectangle).toEqual({ x: 0, y: 0, width: 10, height: 50 });
+  });
+
+  it('snaps move alignment and adjacency and resize moving edges with actual guides', () => {
+    const panel = { ...newBlueprintEditorState().panels[0], x: 0, y: 0, width: 100, height: 50 };
+    const other = { ...panel, panel_key: 'other', x: 200, y: 100 };
+    const aligned = panelGestureGeometry(panel, [other], 'move', 198, 98, 5, 30);
+    expect(aligned).toEqual({ rectangle: { x: 200, y: 100, width: 100, height: 50 }, guides: { x: 200, y: 100 } });
+    const adjacent = panelGestureGeometry(panel, [other], 'move', 98, 48, 5, 30);
+    expect(adjacent).toEqual({ rectangle: { x: 100, y: 50, width: 100, height: 50 }, guides: { x: 200, y: 100 } });
+    expect(panelGestureGeometry(panel, [other], 'e', 98, 0, 5, 30)).toEqual({ rectangle: { x: 0, y: 0, width: 200, height: 50 }, guides: { x: 200, y: undefined } });
+    expect(panelGestureGeometry(panel, [other], 'move', 20, 0, 5, 30).guides).toEqual({ x: undefined, y: undefined });
+  });
   it('places panels in all four directions and derives composition dimensions', () => {
     const initial = newBlueprintEditorState();
     const placements = [

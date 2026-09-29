@@ -1,4 +1,5 @@
 import { fireEvent, render } from '@testing-library/react';
+import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import type { BlueprintSlot } from '../topology/objectBlueprintTypes';
@@ -12,6 +13,74 @@ const slot = (index: number, x = .5, y = .5): BlueprintSlot => ({
 afterEach(() => vi.restoreAllMocks());
 
 describe('Blueprint endpoint screen-space markers', () => {
+  it('keeps the gesture view stable while an outer panel moves and derives link endpoints', () => {
+    vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 400 } as DOMRect);
+    const initial = [
+      { panel_key: 'panel-1', panel_number: 1, display_name: 'One', x: 0, y: 0, width: 100, height: 80 },
+      { panel_key: 'panel-2', panel_number: 2, display_name: 'Two', x: 100, y: 0, width: 100, height: 80 },
+    ];
+    const onMarquee = vi.fn();
+    function Harness() {
+      const [panels, setPanels] = useState(initial);
+      return <I18nProvider><BlueprintCompositionCanvas body={{ width: 200, height: 80, fillColor: '#123456' }} panels={panels} activePanelKey="panel-2"
+        slots={[slot(1), { ...slot(2), panel_key: 'panel-2' }]} links={[{ from_slot_key: 'slot-1', to_slot_key: 'slot-2' }]}
+        selectedKeys={new Set()} onActivatePanel={vi.fn()} onSelect={vi.fn()} onMarquee={onMarquee} onTranslate={vi.fn()} onContextMenu={vi.fn()}
+        onPanelGeometry={(key, rectangle) => setPanels((old) => old.map((panel) => panel.panel_key === key ? { ...panel, ...rectangle } : panel))} /></I18nProvider>;
+    }
+    const { container } = render(<Harness />);
+    const canvas = container.querySelector('svg')!;
+    const border = container.querySelector('[data-panel-move-border]')!;
+    fireEvent.pointerDown(border, { button: 0, clientX: 900, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 950, clientY: 100 });
+    expect(canvas.getAttribute('viewBox')).toBe('0 0 1000 400');
+    expect(container.querySelector('[data-panel-key="panel-2"] .blueprint-composition-canvas__body')).toHaveAttribute('x', '550');
+    fireEvent.pointerMove(canvas, { clientX: 1000, clientY: 100 });
+    expect(container.querySelector('[data-panel-key="panel-2"] .blueprint-composition-canvas__body')).toHaveAttribute('x', '600');
+    expect(container.querySelector('.blueprint-composition-canvas__link')).toHaveAttribute('x2', '850');
+    expect(onMarquee).not.toHaveBeenCalled();
+    fireEvent.pointerUp(canvas);
+    expect(container.querySelector('[data-panel-guide-x]')).toBeNull();
+    expect(Number(container.querySelector('svg')?.getAttribute('viewBox')?.split(' ')[3])).toBeCloseTo(1000 * 80 / 220);
+  });
+
+  it('shows eight screen-space handles and keeps interior marquee available', () => {
+    vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 400 } as DOMRect);
+    const onMarquee = vi.fn(); const onPanelGeometry = vi.fn();
+    const { container } = render(<I18nProvider><BlueprintCompositionCanvas body={{ width: 100, height: 40, fillColor: '#123456' }}
+      panels={[{ panel_key: 'panel-1', panel_number: 1, display_name: 'One', x: 0, y: 0, width: 100, height: 40 }]}
+      activePanelKey="panel-1" slots={[slot(1)]} links={[]} selectedKeys={new Set()} onActivatePanel={vi.fn()} onSelect={vi.fn()}
+      onMarquee={onMarquee} onTranslate={vi.fn()} onContextMenu={vi.fn()} onPanelGeometry={onPanelGeometry} /></I18nProvider>);
+    const canvas = container.querySelector('svg')!;
+    expect(container.querySelectorAll('[data-panel-resize]')).toHaveLength(8);
+    for (const handle of container.querySelectorAll('[data-panel-resize]')) expect(Number(handle.getAttribute('r')) * 2).toBeCloseTo(14);
+    fireEvent.pointerDown(container.querySelector('.blueprint-composition-canvas__body')!, { button: 0, clientX: 50, clientY: 50 });
+    fireEvent.pointerMove(canvas, { clientX: 100, clientY: 100 });
+    fireEvent.pointerUp(canvas);
+    expect(onMarquee).toHaveBeenCalled();
+    expect(onPanelGeometry).not.toHaveBeenCalled();
+  });
+
+  it('renders panel guides only at snapped coordinates and clears them on cancel', () => {
+    vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 400 } as DOMRect);
+    const panels = [
+      { panel_key: 'panel-1', panel_number: 1, display_name: 'One', x: 0, y: 0, width: 100, height: 80 },
+      { panel_key: 'panel-2', panel_number: 2, display_name: 'Two', x: 100, y: 0, width: 100, height: 80 },
+    ];
+    const onPanelGeometry = vi.fn();
+    const { container } = render(<I18nProvider><BlueprintCompositionCanvas body={{ width: 200, height: 80, fillColor: '#123456' }}
+      panels={panels} activePanelKey="panel-2" slots={[]} links={[]} selectedKeys={new Set()} onActivatePanel={vi.fn()} onSelect={vi.fn()}
+      onMarquee={vi.fn()} onTranslate={vi.fn()} onContextMenu={vi.fn()} onPanelGeometry={onPanelGeometry} /></I18nProvider>);
+    const canvas = container.querySelector('svg')!;
+    fireEvent.pointerDown(container.querySelector('[data-panel-move-border]')!, { button: 0, clientX: 700, clientY: 100 });
+    fireEvent.pointerMove(canvas, { clientX: 740, clientY: 150 });
+    expect(container.querySelector('[data-panel-guide-x]')).toBeNull();
+    expect(container.querySelector('[data-panel-guide-y]')).toBeNull();
+    fireEvent.pointerMove(canvas, { clientX: 205, clientY: 150 });
+    expect(onPanelGeometry).toHaveBeenLastCalledWith('panel-2', { x: 0, y: 10, width: 100, height: 80 });
+    expect(container.querySelector('[data-panel-guide-x]')).toHaveAttribute('x1', '0');
+    fireEvent.pointerCancel(canvas);
+    expect(container.querySelector('[data-panel-guide-x]')).toBeNull();
+  });
   it('renders negative-origin panels together and activates only the clicked panel', () => {
     const onActivatePanel = vi.fn();
     const onSelect = vi.fn();

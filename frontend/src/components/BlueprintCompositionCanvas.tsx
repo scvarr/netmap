@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import type { BlueprintInternalLink, BlueprintSlot, PresentationPanel } from '../topology/objectBlueprintTypes';
 import { useI18n } from '../i18n';
-import { snapSelectionTranslation } from '../blueprints/editorModel';
+import { panelGestureGeometry, snapSelectionTranslation, type PanelHandle, type PanelRectangle } from '../blueprints/editorModel';
 
 interface Props {
   body: { width: number; height: number; fillColor: string }; panels: PresentationPanel[]; activePanelKey: string;
@@ -10,9 +10,10 @@ interface Props {
   onTranslate: (keys: ReadonlySet<string>, dx: number, dy: number) => void;
   onContextMenu: (key: string | undefined, clientX: number, clientY: number) => void;
   onActivatePanel: (key: string) => void;
+  onPanelGeometry?: (key: string, rectangle: PanelRectangle) => void;
 }
 type Point = { x: number; y: number };
-type Gesture = { kind: 'move'; key: string; keys: ReadonlySet<string>; start: Point; applied: Point; slots: BlueprintSlot[]; moved: boolean } | { kind: 'marquee'; start: Point; end: Point };
+type Gesture = { kind: 'move'; key: string; keys: ReadonlySet<string>; start: Point; applied: Point; slots: BlueprintSlot[]; moved: boolean } | { kind: 'marquee'; start: Point; end: Point } | { kind: 'panel'; handle: 'move' | PanelHandle; panel: PresentationPanel; start: Point; pixelsPerUnit: number };
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const markerPixels = { regular: 5, selected: 6, hit: 11 };
 
@@ -24,18 +25,21 @@ export function endpointMarkerRadii(scale: number) {
   };
 }
 
-export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel }: Props) {
+export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel, onPanelGeometry }: Props) {
   const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null);
   const gesture = useRef<Gesture | undefined>(undefined);
   const [marquee, setMarquee] = useState<{ start: Point; end: Point }>();
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
-  const minX = Math.min(...panels.map((panel) => panel.x));
-  const minY = Math.min(...panels.map((panel) => panel.y));
-  const width = Math.max(...panels.map((panel) => panel.x + panel.width)) - minX;
-  const compositionHeight = Math.max(...panels.map((panel) => panel.y + panel.height)) - minY;
-  const unit = 1000 / Math.max(width, 1);
-  const height = Math.max(compositionHeight, 1) * unit;
+  const [panelGuides, setPanelGuides] = useState<{ x?: number; y?: number }>({});
+  const [frozenView, setFrozenView] = useState<{ minX: number; minY: number; unit: number; height: number }>();
+  const liveMinX = Math.min(...panels.map((panel) => panel.x));
+  const liveMinY = Math.min(...panels.map((panel) => panel.y));
+  const width = Math.max(...panels.map((panel) => panel.x + panel.width)) - liveMinX;
+  const compositionHeight = Math.max(...panels.map((panel) => panel.y + panel.height)) - liveMinY;
+  const liveUnit = 1000 / Math.max(width, 1);
+  const liveHeight = Math.max(compositionHeight, 1) * liveUnit;
+  const { minX, minY, unit, height } = frozenView ?? { minX: liveMinX, minY: liveMinY, unit: liveUnit, height: liveHeight };
   const activePanel = panels.find((panel) => panel.panel_key === activePanelKey)!;
   const panelRect = (panel: PresentationPanel) => ({ x: (panel.x - minX) * unit, y: (panel.y - minY) * unit, width: panel.width * unit, height: panel.height * unit });
   const activeRect = panelRect(activePanel);
@@ -75,12 +79,31 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
       }).map((slot) => slot.key));
     }
     gesture.current = undefined;
+    setFrozenView(undefined);
+    setPanelGuides({});
     setMarquee(undefined);
     setGuides({});
+  };
+  const startPanelGesture = (event: PointerEvent<SVGElement>, panel: PresentationPanel, handle: 'move' | PanelHandle) => {
+    if (event.button !== 0 || panel.panel_key !== activePanelKey) return;
+    event.preventDefault(); event.stopPropagation();
+    svg.current?.setPointerCapture?.(event.pointerId);
+    const rect = svg.current!.getBoundingClientRect();
+    const scale = Math.min(rect.width / 1000, rect.height / height);
+    gesture.current = { kind: 'panel', handle, panel, start: { x: event.clientX, y: event.clientY }, pixelsPerUnit: unit * scale };
+    setFrozenView({ minX, minY, unit, height });
   };
   return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 1000 ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.editor.preview')} onPointerMove={(event) => {
     const current = gesture.current;
     if (!current) return;
+    if (current.kind === 'panel') {
+      const { rectangle, guides: snappedGuides } = panelGestureGeometry(current.panel, panels.filter((panel) => panel.panel_key !== current.panel.panel_key), current.handle,
+        (event.clientX - current.start.x) / current.pixelsPerUnit, (event.clientY - current.start.y) / current.pixelsPerUnit,
+        7 / current.pixelsPerUnit, 40 / current.pixelsPerUnit);
+      onPanelGeometry?.(current.panel.panel_key, rectangle);
+      setPanelGuides(snappedGuides);
+      return;
+    }
     const next = position(event);
     if (current.kind === 'move') {
       const rawDx = next.x - current.start.x;
@@ -112,6 +135,7 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
         setMarquee({ start, end: start });
       }}><title>{panel.display_name}</title></rect>
     </g>; })}
+    <rect data-panel-move-border={activePanelKey} className="blueprint-composition-canvas__move-border" x={activeRect.x} y={activeRect.y} width={activeRect.width} height={activeRect.height} strokeWidth={10 / canvasScale} onPointerDown={(event) => startPanelGesture(event, activePanel, 'move')} />
     {links.map((link) => { const from = points.get(link.from_slot_key); const to = points.get(link.to_slot_key); return from && to ? <line key={`${link.from_slot_key}-${link.to_slot_key}`} className="blueprint-composition-canvas__link" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null; })}
     {slots.map((slot) => { const point = points.get(slot.key)!; const selected = selectedKeys.has(slot.key); return <g key={slot.key} data-slot-key={slot.key} data-selected={selected} className="blueprint-composition-canvas__port" onPointerDown={(event) => {
       if (event.button !== 0) return;
@@ -125,6 +149,13 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
       <circle data-endpoint-hit-target cx={point.x} cy={point.y} r={marker.hit} fill="transparent" pointerEvents="all" />
       <circle data-endpoint-marker cx={point.x} cy={point.y} r={selected ? marker.selected : marker.regular} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={selected ? '#fff' : '#1c3135'} strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{slot.display_name}</title></circle>
     </g>; })}
+    {(['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as const).map((handle) => {
+      const x = activeRect.x + activeRect.width * (handle.includes('w') ? 0 : handle.includes('e') ? 1 : .5);
+      const y = activeRect.y + activeRect.height * (handle.includes('n') ? 0 : handle.includes('s') ? 1 : .5);
+      return <circle key={handle} data-panel-resize={handle} className={`blueprint-composition-canvas__resize blueprint-composition-canvas__resize--${handle}`} cx={x} cy={y} r={7 / canvasScale} stroke="#071315" strokeWidth={3 / canvasScale} onPointerDown={(event) => startPanelGesture(event, activePanel, handle)} />;
+    })}
+    {panelGuides.x !== undefined && <line data-panel-guide-x className="blueprint-composition-canvas__guide" x1={(panelGuides.x - minX) * unit} x2={(panelGuides.x - minX) * unit} y1={0} y2={height} />}
+    {panelGuides.y !== undefined && <line data-panel-guide-y className="blueprint-composition-canvas__guide" x1={0} x2={1000} y1={(panelGuides.y - minY) * unit} y2={(panelGuides.y - minY) * unit} />}
     {guides.y !== undefined && <line data-guide-y className="blueprint-composition-canvas__guide" x1={activeRect.x} x2={activeRect.x + activeRect.width} y1={activeRect.y + guides.y * activeRect.height} y2={activeRect.y + guides.y * activeRect.height} />}
     {guides.x !== undefined && <line data-guide-x className="blueprint-composition-canvas__guide" x1={activeRect.x + guides.x * activeRect.width} x2={activeRect.x + guides.x * activeRect.width} y1={activeRect.y} y2={activeRect.y + activeRect.height} />}
     {marquee && <rect className="blueprint-composition-canvas__marquee" x={activeRect.x + Math.min(marquee.start.x, marquee.end.x) * activeRect.width} y={activeRect.y + Math.min(marquee.start.y, marquee.end.y) * activeRect.height} width={Math.abs(marquee.end.x - marquee.start.x) * activeRect.width} height={Math.abs(marquee.end.y - marquee.start.y) * activeRect.height} />}
