@@ -58,6 +58,9 @@ or left placement relative to the active panel. Above/below initially inherit
 its width and are adjacent; left/right inherit its height and are adjacent.
 Any reasonable gap is an editor concern. Persist only the resulting rectangle,
 not the placement operation or a relation to another panel.
+Spatial endpoint authoring also accepts exact numeric panel-local X/Y positioning:
+one selected endpoint uses its local coordinate; a multi-selection uses the
+bounding-box center and translates the group while preserving its layout.
 
 ## Endpoint slots and default names
 

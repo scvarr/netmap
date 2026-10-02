@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
-import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, removeEndpoints, renameActivePanel, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
+import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
@@ -30,6 +30,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
   const [count, setCount] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [positionDraft, setPositionDraft] = useState<{ axis: 'x' | 'y'; value: string }>();
   const [menu, setMenu] = useState<{ x: number; y: number }>();
   const [distributionAxis, setDistributionAxis] = useState<'x' | 'y'>();
   const [distributionPercent, setDistributionPercent] = useState('50');
@@ -37,8 +38,17 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const canvasWrap = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string>();
   const selectedSlot = selected.size === 1 ? editor.slots.find((slot) => selected.has(slot.key) && slot.panel_key === panelKey) : undefined;
-  const deleteSelected = () => { setEditor((old) => removeEndpoints(old, selected)); setSelected(new Set()); setMenu(undefined); };
-  const clearPanelUi = () => { setSelected(new Set()); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); };
+  const selectedPosition = selectionPosition(editor, selected);
+  const shownPosition = (value: number) => String(Number(value.toFixed(4)));
+  const applyPosition = (axis: 'x' | 'y', raw: string) => {
+    const requested = Number(raw);
+    if (raw.trim() && Number.isFinite(requested) && raw !== shownPosition(selectedPosition?.[axis] ?? 0)) {
+      setEditor((old) => positionSelectionAt(old, selected, axis, requested));
+    }
+    setPositionDraft(undefined);
+  };
+  const deleteSelected = () => { setEditor((old) => removeEndpoints(old, selected)); setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); };
+  const clearPanelUi = () => { setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); };
   const activatePanel = (key: string) => { if (key === panelKey) return; setEditor((old) => ({ ...old, activePanelKey: key })); clearPanelUi(); };
   const createPanel = (direction: PanelDirection) => { setEditor((old) => addPanel(old, direction)); clearPanelUi(); };
   const removePanel = () => { setEditor((old) => deleteActivePanel(old)); clearPanelUi(); };
@@ -104,12 +114,15 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     setMenu(undefined);
     setDistributionAxis(undefined);
   };
-  const selectSlot = (key: string, toggle: boolean) => setSelected((old) => {
-    if (!toggle) return new Set([key]);
-    const next = new Set(old);
-    if (next.has(key)) next.delete(key); else next.add(key);
-    return next;
-  });
+  const selectSlot = (key: string, toggle: boolean) => {
+    setPositionDraft(undefined);
+    setSelected((old) => {
+      if (!toggle) return new Set([key]);
+      const next = new Set(old);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   const updateSlot = (key: string, patch: Partial<BlueprintSlot>) => setEditor((old) => ({ ...old, slots: old.slots.map((slot) => slot.key === key ? { ...slot, ...patch } : slot) }));
   const addLink = () => {
     const existing = new Set(editor.individualLinks.map((link) => internalLinkPairKey(link.from_slot_key, link.to_slot_key)));
@@ -161,7 +174,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
         </div>
         <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
-          <BlueprintCompositionCanvas key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => setSelected(new Set(keys))} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle) => setEditor((old) => setPanelRectangle(old, key, rectangle))} onContextMenu={(key, clientX, clientY) => {
+          <BlueprintCompositionCanvas key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle) => setEditor((old) => setPanelRectangle(old, key, rectangle))} onContextMenu={(key, clientX, clientY) => {
             if (key && !selected.has(key)) setSelected(new Set([key]));
             if (!key && selected.size === 0) { setMenu(undefined); return; }
             const rect = canvasWrap.current!.getBoundingClientRect();
@@ -181,6 +194,10 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           </div>}
         </div>
         {selected.size > 1 && <span className="blueprint-composer__selection-count">{t('blueprint.layout.selected', { count: selected.size })}</span>}
+        {selectedPosition && <section className="blueprint-composer__position" role="group" aria-label={t('blueprint.position.title')}>
+          <strong>{t('blueprint.position.title')}</strong>
+          {(['x', 'y'] as const).map((axis) => <label key={axis}>{axis.toUpperCase()}<input type="number" min="0" max="1" step="0.001" value={positionDraft?.axis === axis ? positionDraft.value : shownPosition(selectedPosition[axis])} onFocus={() => setPositionDraft({ axis, value: shownPosition(selectedPosition[axis]) })} onChange={(event) => setPositionDraft({ axis, value: event.target.value })} onBlur={(event) => applyPosition(axis, event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label>)}
+        </section>}
         {selectedSlot && <aside className="blueprint-composer__selected">
           <label>{t('blueprint.endpoint.name')}<input value={selectedSlot.display_name} onChange={(e) => updateSlot(selectedSlot.key, { display_name: e.target.value })} /></label>
           <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>

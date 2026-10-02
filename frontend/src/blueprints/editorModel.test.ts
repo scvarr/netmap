@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addEndpoints, addPanel, alignSelectionLine, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, removeEndpoints, renameActivePanel, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
+import { addEndpoints, addPanel, alignSelectionLine, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
 import { newBlueprintEditorState } from '../pages/ObjectBlueprintEditor';
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 
@@ -159,6 +159,54 @@ describe('endpoint selection geometry', () => {
   const all = new Set(['a', 'b', 'c']);
   const coordinates = (state: BlueprintEditorState) => state.slots.slice(0, 3).map((slot) => slot.rendered_position);
   const metadata = (state: BlueprintEditorState) => state.slots.map(({ key, display_name, kind, panel_key }) => ({ key, display_name, kind, panel_key }));
+
+  it('reports and sets exact local X/Y for a single endpoint', () => {
+    const start = { ...base(), activePanelKey: 'panel-1' };
+    expect(selectionPosition(start, new Set(['a']))).toEqual({ x: .1, y: .2 });
+    const movedX = positionSelectionAt(start, new Set(['a']), 'x', .7254);
+    expect(movedX.slots[0].rendered_position).toEqual({ x: .7254, y: .2 });
+    const movedY = positionSelectionAt(movedX, new Set(['a']), 'y', .3157);
+    expect(movedY.slots[0].rendered_position.x).toBe(.7254);
+    expect(movedY.slots[0].rendered_position.y).toBeCloseTo(.3157);
+    expect(movedY.slots.slice(1)).toEqual(start.slots.slice(1));
+    expect(movedY.individualLinks).toEqual(start.individualLinks);
+  });
+
+  it('positions a multi-selection by bbox center without changing spacing or the other axis', () => {
+    const start = { ...base(), activePanelKey: 'panel-1' };
+    const keys = new Set(['a', 'b']);
+    expect(selectionPosition(start, keys)).toEqual({ x: .25, y: .4 });
+    const next = positionSelectionAt(start, keys, 'x', .55);
+    expect(selectionPosition(next, keys)?.x).toBeCloseTo(.55);
+    expect(next.slots[0].rendered_position.x - start.slots[0].rendered_position.x).toBeCloseTo(.3);
+    expect(next.slots[1].rendered_position.x - start.slots[1].rendered_position.x).toBeCloseTo(.3);
+    expect(next.slots[1].rendered_position.x - next.slots[0].rendered_position.x).toBeCloseTo(.3);
+    expect(next.slots.slice(0, 2).map((slot) => slot.rendered_position.y)).toEqual([.2, .6]);
+    expect(next.slots.slice(2)).toEqual(start.slots.slice(2));
+    const movedY = positionSelectionAt(next, keys, 'y', .6);
+    expect(selectionPosition(movedY, keys)?.y).toBeCloseTo(.6);
+    expect(movedY.slots.slice(0, 2).map((slot) => slot.rendered_position.x)).toEqual(next.slots.slice(0, 2).map((slot) => slot.rendered_position.x));
+    expect(movedY.slots[1].rendered_position.y - movedY.slots[0].rendered_position.y).toBeCloseTo(.4);
+  });
+
+  it('clamps the requested center through group translation and reports the actual center', () => {
+    const start = { ...base(), activePanelKey: 'panel-1' };
+    const keys = new Set(['a', 'b']);
+    const right = positionSelectionAt(start, keys, 'x', 1);
+    expect(right.slots.slice(0, 2).map((slot) => slot.rendered_position.x)).toEqual([.7, 1]);
+    expect(selectionPosition(right, keys)?.x).toBeCloseTo(.85);
+    const top = positionSelectionAt(right, keys, 'y', -1);
+    expect(top.slots.slice(0, 2).map((slot) => slot.rendered_position.y)).toEqual([0, .39999999999999997]);
+    expect(selectionPosition(top, keys)?.y).toBeCloseTo(.2);
+    expect(positionSelectionAt(start, keys, 'x', Number.NaN)).toBe(start);
+  });
+
+  it('ignores selected keys from other panels', () => {
+    const start = { ...base(), activePanelKey: 'panel-1', slots: [...base().slots, { ...base().slots[0], key: 'other', panel_key: 'panel-2' }] };
+    const next = positionSelectionAt(start, new Set(['a', 'other']), 'x', .5);
+    expect(next.slots[0].rendered_position.x).toBe(.5);
+    expect(next.slots.at(-1)).toEqual(start.slots.at(-1));
+  });
 
   it('removes multiple slots and every incident individual link', () => {
     const next = removeEndpoints(base(), new Set(['a', 'c']));

@@ -110,6 +110,21 @@ export const translateSelection = (state: BlueprintEditorState, keys: ReadonlySe
   const { dx: deltaX, dy: deltaY } = constrainTranslation(slots, dx, dy);
   return reposition(state, new Map(slots.map((slot) => [slot.key, { x: slot.rendered_position.x + deltaX, y: slot.rendered_position.y + deltaY }])));
 };
+export const selectionPosition = (state: BlueprintEditorState, keys: ReadonlySet<string>): { x: number; y: number } | undefined => {
+  const slots = selectedSlots(state, keys).filter((slot) => slot.panel_key === state.activePanelKey);
+  if (!slots.length) return undefined;
+  const values = (axis: Axis) => slots.map((slot) => slot.rendered_position[axis]);
+  const xs = values('x'); const ys = values('y');
+  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+};
+export const positionSelectionAt = (state: BlueprintEditorState, keys: ReadonlySet<string>, axis: Axis, requested: number): BlueprintEditorState => {
+  if (!Number.isFinite(requested)) return state;
+  const current = selectionPosition(state, keys);
+  if (!current) return state;
+  const activeKeys = new Set(selectedSlots(state, keys).filter((slot) => slot.panel_key === state.activePanelKey).map((slot) => slot.key));
+  const delta = requested - current[axis];
+  return translateSelection(state, activeKeys, axis === 'x' ? delta : 0, axis === 'y' ? delta : 0);
+};
 const constrainTranslation = (slots: BlueprintSlot[], dx: number, dy: number) => ({
   dx: Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.x)), Math.min(dx, 1 - Math.max(...slots.map((slot) => slot.rendered_position.x)))),
   dy: Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.y)), Math.min(dy, 1 - Math.max(...slots.map((slot) => slot.rendered_position.y)))),

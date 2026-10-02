@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,74 @@ import { newBlueprintEditorState, ObjectBlueprintEditor } from './ObjectBlueprin
 
 describe('minimal direct endpoint editor', () => {
   const renderEditor = () => render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
+  it('shows exact local X/Y for one endpoint and refreshes them after drag and layout', async () => {
+    const initial = newBlueprintEditorState(); initial.name = 'Device';
+    initial.slots = [{ key: 'a', display_name: 'A', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .3 } }];
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
+    expect(screen.queryByRole('group', { name: 'Положение выделения' })).toBeNull();
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
+    const marker = document.querySelector('[data-slot-key="a"]')!;
+    fireEvent.pointerDown(marker, { clientX: 200, clientY: 112.5 }); fireEvent.pointerUp(canvas);
+    const position = within(screen.getByRole('group', { name: 'Положение выделения' }));
+    const x = position.getByLabelText('X') as HTMLInputElement; const y = position.getByLabelText('Y') as HTMLInputElement;
+    expect([x.value, y.value]).toEqual(['0.2', '0.3']);
+    fireEvent.change(x, { target: { value: '0.6254' } }); fireEvent.blur(x);
+    await userEvent.click(y);
+    fireEvent.change(y, { target: { value: '0.45' } }); fireEvent.keyDown(y, { key: 'Enter' });
+    expect([x.value, y.value]).toEqual(['0.6254', '0.45']);
+    fireEvent.pointerDown(marker, { clientX: 625.4, clientY: 168.75 });
+    fireEvent.pointerMove(canvas, { clientX: 725.4, clientY: 168.75 }); fireEvent.pointerUp(canvas);
+    expect(x.value).toBe('0.7254');
+    fireEvent.contextMenu(marker);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Слева' }));
+    expect(x.value).toBe('0.008');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(createBlueprintRequest(save.mock.calls[0][0]).request?.slots[0].rendered_position).toMatchObject({ y: .45 });
+  });
+
+  it('does not round stored local coordinates when a displayed numeric value is left unchanged', async () => {
+    const initial = newBlueprintEditorState(); initial.name = 'Device';
+    initial.slots = [{ key: 'a', display_name: 'A', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .1234567, y: .7654321 } }];
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
+    fireEvent.pointerDown(document.querySelector('[data-slot-key="a"]')!);
+    fireEvent.pointerUp(document.querySelector('.blueprint-composition-canvas')!);
+    const position = within(screen.getByRole('group', { name: 'Положение выделения' }));
+    const x = position.getByLabelText('X') as HTMLInputElement;
+    expect(x.value).toBe('0.1235');
+    fireEvent.focus(x); fireEvent.blur(x);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(createBlueprintRequest(save.mock.calls[0][0]).request?.slots[0].rendered_position).toEqual({ x: .1234567, y: .7654321 });
+  });
+
+  it('edits multi-selection center, clamps it, and clears controls on panel change', async () => {
+    const initial = newBlueprintEditorState(); initial.name = 'Device';
+    initial.slots = [
+      { key: 'a', display_name: 'A', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .2 } },
+      { key: 'b', display_name: 'B', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .4, y: .6 } },
+      { key: 'c', display_name: 'C', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .8, y: .8 } },
+    ];
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    fireEvent.pointerDown(nodes[0]); fireEvent.pointerUp(document.querySelector('.blueprint-composition-canvas')!);
+    fireEvent.pointerDown(nodes[1], { ctrlKey: true });
+    const position = within(screen.getByRole('group', { name: 'Положение выделения' }));
+    const x = position.getByLabelText('X') as HTMLInputElement; const y = position.getByLabelText('Y') as HTMLInputElement;
+    expect([x.value, y.value]).toEqual(['0.3', '0.4']);
+    fireEvent.change(x, { target: { value: '0.5' } }); fireEvent.blur(x);
+    expect([x.value, y.value]).toEqual(['0.5', '0.4']);
+    fireEvent.change(x, { target: { value: '1' } }); fireEvent.blur(x);
+    expect(x.value).toBe('0.9');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const slots = createBlueprintRequest(save.mock.calls[0][0]).request!.slots;
+    expect(slots.map((slot) => slot.rendered_position.x)).toEqual([.8, 1, .8]);
+    expect(slots.map((slot) => slot.rendered_position.y)).toEqual([.2, .6, .8]);
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить справа' }));
+    expect(screen.queryByRole('group', { name: 'Положение выделения' })).toBeNull();
+  });
   it('uses moved and resized geometry for adjacent creation and saves exact negative rectangles', async () => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
     const save = vi.fn().mockResolvedValue(undefined);
