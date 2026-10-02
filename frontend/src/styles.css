@@ -668,3 +668,36 @@ a { color: inherit; }
   .blueprint-links-dialog__separator { display: none; }
   .blueprint-links-dialog .text-action { justify-self: start; }
 }
+
+/* Selection tools share one compact region; no space is reserved without selection. */
+.blueprint-composer__contextual { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; min-width: 0; padding: 10px; border: 1px solid #496b68; border-radius: 8px; background: #0d2022; }
+.blueprint-composer__contextual > .blueprint-composer__position,
+.blueprint-composer__contextual > .blueprint-composer__copy,
+.blueprint-composer__contextual > .blueprint-composer__selected { min-width: 0; max-width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.blueprint-composer__contextual .blueprint-composer__position strong,
+.blueprint-composer__contextual .blueprint-composer__copy strong { flex-basis: auto; align-self: center; }
+.blueprint-composer__contextual .blueprint-composer__selected { display: flex; flex-wrap: wrap; gap: 8px; }
+.blueprint-composer__contextual .blueprint-composer__selected label { min-width: 0; width: 160px; max-width: 100%; }
+.blueprint-composer__contextual .blueprint-composer__selected input { box-sizing: border-box; }
+.blueprint-composer__contextual .blueprint-composer__selected select { margin-top: 0; min-height: 34px; }
+.blueprint-composer__contextual .blueprint-composer__selected .text-action { align-self: end; min-height: 34px; }
+@media (min-width: 761px) {
+  /* route-content is the shell's full-height content area beside the sidebar. */
+  .route-content:has(> .blueprint-editor-page) { height: 100dvh; min-height: 0; }
+  .page-shell.blueprint-editor-page { height: 100%; max-height: 100dvh; min-height: 0; display: flex; flex-direction: column; padding-top: 24px; padding-bottom: 24px; }
+  .blueprint-editor-page > .page-breadcrumbs { flex: none; margin-bottom: 12px; }
+  .blueprint-editor-page > .page-header { flex: none; }
+  .blueprint-editor-page > .blueprint-composer--authoring-workspace { flex: 1; min-height: 0; margin-top: 16px; }
+  .blueprint-editor-page .blueprint-composer__workspace { height: 100%; min-height: 0; align-items: stretch; }
+  .blueprint-editor-page .blueprint-composer__properties { min-height: 0; overflow-y: auto; }
+  .blueprint-editor-page .blueprint-composer__composition { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; gap: 8px; }
+  .blueprint-editor-page .blueprint-composer__composition > :not(.blueprint-composer__canvas-wrap):not(.blueprint-composer__contextual) { flex: none; }
+  .blueprint-editor-page .blueprint-composer__canvas-wrap { flex: 1 0 160px; min-height: 160px; display: flex; padding: 8px; }
+  .blueprint-editor-page .blueprint-composer__canvas-wrap > .blueprint-composition-canvas { flex: 1; width: 100%; height: 100%; min-height: 0; }
+  .blueprint-editor-page .blueprint-composer__contextual { flex: 0 1 auto; min-height: 48px; overflow-y: auto; }
+  .blueprint-editor-page .blueprint-composer__contextual > .blueprint-composer__position,
+  .blueprint-editor-page .blueprint-composer__contextual > .blueprint-composer__copy { display: contents; }
+  .blueprint-editor-page .blueprint-composer__contextual .blueprint-composer__position input { width: 80px; }
+  .blueprint-editor-page .blueprint-composer__contextual .blueprint-composer__position strong,
+  .blueprint-editor-page .blueprint-composer__contextual .blueprint-composer__copy strong { display: none; }
+}

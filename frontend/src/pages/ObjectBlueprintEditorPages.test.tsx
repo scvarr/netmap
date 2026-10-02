@@ -25,6 +25,7 @@ describe('Blueprint authoring page shell', () => {
   it('uses the editor-specific shell on create', () => {
     const { container } = render(<I18nProvider><MemoryRouter><NewObjectBlueprintPage dataSource={dataSource} /></MemoryRouter></I18nProvider>);
     expect(container.querySelector('main.page-shell.blueprint-editor-page')).toBeInTheDocument();
+    expect(container.querySelector('.blueprint-composer--authoring-workspace .blueprint-composer__workspace')).toBeInTheDocument();
   });
 
   it('uses the same shell on edit after loading the authoring canvas', async () => {
@@ -33,5 +34,6 @@ describe('Blueprint authoring page shell', () => {
     </MemoryRouter></I18nProvider>);
     await screen.findByRole('img', { name: 'Предпросмотр схемы' });
     expect(container.querySelector('main.page-shell.blueprint-editor-page')).toBeInTheDocument();
+    expect(container.querySelector('.blueprint-composer--authoring-workspace .blueprint-composer__workspace')).toBeInTheDocument();
   });
 });

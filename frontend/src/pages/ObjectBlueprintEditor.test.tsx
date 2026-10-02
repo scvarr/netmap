@@ -7,6 +7,39 @@ import { addEndpoints, addPanel, createBlueprintRequest, hydrateBlueprintEditorS
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 import { newBlueprintEditorState, ObjectBlueprintEditor } from './ObjectBlueprintEditor';
 
+describe('authoring workspace contextual region', () => {
+  it('shrinks away without selection and groups only the applicable tools for single/multiple selections', async () => {
+    const initial = newBlueprintEditorState();
+    const source = addEndpoints(initial, 'NETWORK_PORT', 2, initial.activePanelKey);
+    const next = addPanel(source, 'right');
+    const state = { ...next, activePanelKey: source.activePanelKey };
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
+    expect(document.querySelector('.blueprint-composer--authoring-workspace')).toBeInTheDocument();
+    expect(document.querySelector('.blueprint-composer__contextual')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Положение выделения' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Копировать выделение' })).toBeNull();
+    expect(document.querySelector('.blueprint-composer__selected')).toBeNull();
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    fireEvent.pointerDown(nodes[0]); fireEvent.pointerUp(document.querySelector('svg')!);
+    const contextual = document.querySelector('.blueprint-composer__contextual')!;
+    expect(contextual).toContainElement(screen.getByRole('group', { name: 'Положение выделения' }));
+    expect(contextual).toContainElement(screen.getByRole('group', { name: 'Копировать выделение' }));
+    expect(contextual).toContainElement(document.querySelector('.blueprint-composer__selected'));
+    expect(within(contextual as HTMLElement).getByLabelText('Название')).toHaveValue('1-1');
+    fireEvent.pointerDown(nodes[1], { ctrlKey: true }); fireEvent.pointerUp(document.querySelector('svg')!);
+    expect(contextual).toHaveTextContent('Выбрано: 2');
+    expect(document.querySelector('.blueprint-composer__selected')).toBeNull();
+    expect(contextual).toContainElement(screen.getByRole('group', { name: 'Положение выделения' }));
+    expect(contextual).toContainElement(screen.getByRole('group', { name: 'Копировать выделение' }));
+    expect(document.querySelector('.blueprint-composer__properties')).toContainElement(screen.getByRole('button', { name: 'Редактировать связи · 0' }));
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(document.querySelector('.blueprint-composer__contextual')).toBeNull();
+    fireEvent.pointerDown(nodes[0]); fireEvent.pointerUp(document.querySelector('svg')!);
+    await userEvent.click(screen.getByRole('button', { name: 'Панель 2' }));
+    expect(document.querySelector('.blueprint-composer__contextual')).toBeNull();
+  });
+});
+
 describe('internal links on demand', () => {
   const fixture = (count: number) => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
