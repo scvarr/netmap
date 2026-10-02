@@ -211,7 +211,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
             </div>)}
           </div>}
         </div>
-        {selected.size > 0 && <div className="blueprint-composer__contextual">
+        <div className="blueprint-composer__contextual">
         {selected.size > 1 && <span className="blueprint-composer__selection-count">{t('blueprint.layout.selected', { count: selected.size })}</span>}
         {selectedPosition && <section className="blueprint-composer__position" role="group" aria-label={t('blueprint.position.title')}>
           <strong>{t('blueprint.position.title')}</strong>
@@ -229,7 +229,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>
         </aside>}
-        </div>}
+        </div>
       </section>
     </div></div>
     {linksOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-links-title">

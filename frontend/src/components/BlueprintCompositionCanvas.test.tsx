@@ -99,9 +99,10 @@ describe('Blueprint endpoint screen-space markers', () => {
     expect(container.querySelector('.blueprint-composition-canvas__link')).toHaveAttribute('x1', '750');
     fireEvent.pointerDown(container.querySelector('[data-panel-key="panel-2"] .blueprint-composition-canvas__body')!);
     expect(onActivatePanel).toHaveBeenCalledWith('panel-2');
+    expect(onSelect).not.toHaveBeenCalled();
     fireEvent.pointerDown(container.querySelector('[data-slot-key="slot-2"]')!);
     expect(onActivatePanel).toHaveBeenCalledTimes(2);
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith('slot-2', false);
   });
   it.each([10, 4, 2])('keeps markers readable and selected markers distinct at %s:1 body ratio', (ratio) => {
     vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockReturnValue({

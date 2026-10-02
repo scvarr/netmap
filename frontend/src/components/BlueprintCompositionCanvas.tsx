@@ -140,7 +140,7 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
     {slots.map((slot) => { const point = points.get(slot.key)!; const selected = selectedKeys.has(slot.key); return <g key={slot.key} data-slot-key={slot.key} data-selected={selected} className="blueprint-composition-canvas__port" onPointerDown={(event) => {
       if (event.button !== 0) return;
       event.preventDefault(); event.stopPropagation();
-      if (slot.panel_key !== activePanelKey) { onActivatePanel(slot.panel_key); return; }
+      if (slot.panel_key !== activePanelKey) { onActivatePanel(slot.panel_key); onSelect(slot.key, false); return; }
       svg.current?.setPointerCapture?.(event.pointerId);
       const toggle = event.ctrlKey || event.metaKey;
       if (toggle || !selected) onSelect(slot.key, toggle);
