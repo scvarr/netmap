@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
+import { applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
 import { newBlueprintEditorState } from '../pages/ObjectBlueprintEditor';
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 
@@ -436,5 +436,37 @@ describe('endpoint drag snapping', () => {
     expect(next.slots[1].rendered_position.x - next.slots[0].rendered_position.x).toBeCloseTo(.1);
     expect(next.slots[0].rendered_position.y).toBeCloseTo(.5);
     expect(next.slots[1].rendered_position.y).toBeCloseTo(.5);
+  });
+});
+
+
+describe('ordered bulk naming pure operations', () => {
+  const fixture = () => { const initial = newBlueprintEditorState(); initial.name = 'Device'; const state = addEndpoints(initial, 'NETWORK_PORT', 4, initial.activePanelKey); return { ...state, individualLinks: [{ from_slot_key: state.slots[0].key, to_slot_key: state.slots[1].key }] }; };
+  it('toggles and reorders without holes or crossing boundaries', () => {
+    let keys: string[] = []; for (const key of ['a', 'b', 'c']) keys = toggleOrderedKey(keys, key);
+    expect(keys).toEqual(['a', 'b', 'c']); expect(toggleOrderedKey(keys, 'b')).toEqual(['a', 'c']);
+    expect(reorderOrderedKeys(keys, 1, -1)).toEqual(['b', 'a', 'c']); expect(reorderOrderedKeys(keys, 1, 1)).toEqual(['a', 'c', 'b']);
+    expect(reorderOrderedKeys(keys, 0, -1)).toEqual(keys); expect(reorderOrderedKeys(keys, 2, 1)).toEqual(keys);
+  });
+  it.each([['Ge0/', '1', '1', ['Ge0/1', 'Ge0/2']], ['', '1', '1', ['1', '2']], ['Port-', '1', '2', ['Port-1', 'Port-3']], ['', '24', '-1', ['24', '23']]])('uses exact user order for prefix %s, start %s, step %s', (prefix, start, step, expected) => {
+    const state = fixture(); state.slots[0].display_name = 'MGMT'; const before = structuredClone(state);
+    const keys = [state.slots[2].key, state.slots[0].key]; const parameters = { prefix, start, step };
+    const preview = bulkNamePreview(state, keys, parameters)!; expect(preview.map((item) => item.display_name)).toEqual(expected);
+    const result = applyBulkNames(state, keys, parameters); expect(state).toEqual(before);
+    expect(keys.map((key) => result.slots.find((slot) => slot.key === key)!.display_name)).toEqual(expected);
+    expect(result.slots.map(({ display_name: _, ...slot }) => slot)).toEqual(state.slots.map(({ display_name: _, ...slot }) => slot));
+    expect(result.slots[1]).toBe(state.slots[1]); expect(result.slots[3]).toBe(state.slots[3]);
+    expect(result.individualLinks).toBe(state.individualLinks); expect(result.panels).toBe(state.panels); expect(result.nextLocalNumberByPanel).toBe(state.nextLocalNumberByPanel);
+    expect(addEndpoints(result, 'NETWORK_PORT', 1, state.activePanelKey).slots.at(-1)!.display_name).toBe('1-5');
+    const request = createBlueprintRequest(result).request!; expect(request.slots.map((slot) => slot.display_name)).toEqual(result.slots.map((slot) => slot.display_name));
+    expect(Object.keys(result).sort()).toEqual(Object.keys(state).sort()); expect(JSON.stringify(request)).not.toMatch(/ordered|prefix|start|step|recipe/);
+  });
+  it.each([['1', '0'], ['1.5', '1'], ['1', '2.5'], ['', '1'], ['1', ''], ['Infinity', '1'], ['1', 'NaN']])('rejects invalid inputs atomically (%s, %s)', (start, step) => {
+    const state = fixture(); const keys = state.slots.map((slot) => slot.key); const parameters = { prefix: 'x', start, step };
+    expect(bulkNamePreview(state, keys, parameters)).toBeUndefined(); expect(applyBulkNames(state, keys, parameters)).toBe(state);
+  });
+  it('rejects unknown, duplicate and cross-panel keys atomically', () => {
+    const state = fixture(); const other = addPanel(state, 'right'); const both = addEndpoints(other, 'NETWORK_PORT', 1, other.activePanelKey);
+    for (const keys of [['missing'], [both.slots.at(-1)!.key, state.slots[0].key], [both.slots.at(-1)!.key, both.slots.at(-1)!.key]]) expect(applyBulkNames(both, keys, { prefix: '', start: '1', step: '1' })).toBe(both);
   });
 });

@@ -142,3 +142,24 @@ describe('Blueprint endpoint screen-space markers', () => {
     expect(Number(markers[0].getAttribute('r')) * .7 * 2).toBeCloseTo(10);
   });
 });
+
+
+describe('ordered canvas gestures', () => {
+  it('renders screen-space badges and prevents endpoint drag and marquee, retaining panel gestures', () => {
+    vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 500, height: 200 } as DOMRect);
+    const onSelect = vi.fn(), onMarquee = vi.fn(), onTranslate = vi.fn(), onPanelGeometry = vi.fn();
+    const props = { body: { width: 100, height: 40, fillColor: '#123456' }, panels: [{ panel_key: 'panel-1', panel_number: 1, display_name: 'One', x: 0, y: 0, width: 100, height: 40 }], activePanelKey: 'panel-1', slots: [slot(1), slot(2)], links: [], selectedKeys: new Set<string>(), onActivatePanel: vi.fn(), onSelect, onMarquee, onTranslate, onContextMenu: vi.fn(), onPanelGeometry };
+    const { container, rerender } = render(<I18nProvider><BlueprintCompositionCanvas {...props} orderedKeys={['slot-2', 'slot-1']} /></I18nProvider>);
+    const canvas = container.querySelector('svg')!;
+    expect(container.querySelector('[data-slot-key="slot-1"] [data-endpoint-sequence]')).toHaveTextContent('2');
+    const badge = container.querySelector('[data-endpoint-sequence]')!; expect(badge).toHaveAttribute('pointer-events', 'none'); expect(badge.getAttribute('transform')).toContain('scale(2)');
+    fireEvent.pointerDown(container.querySelector('[data-slot-key="slot-1"]')!, { button: 0, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(canvas, { clientX: 300, clientY: 150 }); fireEvent.pointerUp(canvas);
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith('slot-1', false); expect(onTranslate).not.toHaveBeenCalled();
+    fireEvent.pointerDown(container.querySelector('.blueprint-composition-canvas__body')!, { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(canvas, { clientX: 500, clientY: 200 }); fireEvent.pointerUp(canvas); expect(onMarquee).not.toHaveBeenCalled();
+    fireEvent.pointerDown(container.querySelector('[data-panel-resize="e"]')!, { button: 0, clientX: 500, clientY: 100 });
+    fireEvent.pointerMove(canvas, { clientX: 550, clientY: 100 }); fireEvent.pointerUp(canvas); expect(onPanelGeometry).toHaveBeenCalled();
+    rerender(<I18nProvider><BlueprintCompositionCanvas {...props} /></I18nProvider>); expect(container.querySelector('[data-endpoint-sequence]')).toBeNull();
+  });
+});

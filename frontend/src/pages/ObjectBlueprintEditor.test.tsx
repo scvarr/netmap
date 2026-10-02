@@ -30,7 +30,7 @@ describe('authoring workspace contextual region', () => {
     fireEvent.pointerUp(document.querySelector('svg')!);
     expect(screen.getByRole('button', { name: 'Панель 1' })).toHaveAttribute('aria-pressed', 'true');
     expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
-    expect(document.querySelector('.blueprint-composer__contextual')).toBeEmptyDOMElement();
+    expect(document.querySelector('.blueprint-composer__contextual')).toContainElement(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
   });
   it('retains the contextual rail and groups only the applicable tools for single/multiple selections', async () => {
     const initial = newBlueprintEditorState();
@@ -39,7 +39,7 @@ describe('authoring workspace contextual region', () => {
     const state = { ...next, activePanelKey: source.activePanelKey };
     render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
     expect(document.querySelector('.blueprint-composer--authoring-workspace')).toBeInTheDocument();
-    expect(document.querySelector('.blueprint-composer__contextual')).toBeEmptyDOMElement();
+    expect(document.querySelector('.blueprint-composer__contextual')).toContainElement(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
     expect(screen.queryByRole('group', { name: 'Положение выделения' })).toBeNull();
     expect(screen.queryByRole('group', { name: 'Копировать выделение' })).toBeNull();
     expect(document.querySelector('.blueprint-composer__selected')).toBeNull();
@@ -58,11 +58,11 @@ describe('authoring workspace contextual region', () => {
     expect(contextual).toContainElement(screen.getByRole('group', { name: 'Копировать выделение' }));
     expect(document.querySelector('.blueprint-composer__properties')).toContainElement(screen.getByRole('button', { name: 'Редактировать связи · 0' }));
     fireEvent.keyDown(document, { key: 'Escape' });
-    expect(document.querySelector('.blueprint-composer__contextual')).toBeEmptyDOMElement();
+    expect(document.querySelector('.blueprint-composer__contextual')).toContainElement(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
     expect(document.querySelector('.blueprint-composer__contextual')).toBe(contextual);
     fireEvent.pointerDown(nodes[0]); fireEvent.pointerUp(document.querySelector('svg')!);
     await userEvent.click(screen.getByRole('button', { name: 'Панель 2' }));
-    expect(document.querySelector('.blueprint-composer__contextual')).toBeEmptyDOMElement();
+    expect(document.querySelector('.blueprint-composer__contextual')).toContainElement(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
   });
 });
 
@@ -663,5 +663,94 @@ describe('minimal direct endpoint editor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Распределить' }));
     expect(values('cy').at(-1)! - values('cy')[0]).toBeCloseTo(359);
     expect(values('cx')).toEqual(originalX);
+  });
+});
+
+
+describe('transient ordered selection and naming', () => {
+  const setup = (count = 3) => {
+    const initial = newBlueprintEditorState(); initial.name = 'Device';
+    const source = addEndpoints(initial, 'NETWORK_PORT', count, initial.activePanelKey);
+    const second = addPanel(source, 'right');
+    const both = addEndpoints(second, 'CONNECTION_POINT', 1, second.activePanelKey);
+    const state = { ...both, activePanelKey: source.activePanelKey }; const save = vi.fn().mockResolvedValue(undefined);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={state} onSave={save} /></MemoryRouter></I18nProvider>);
+    return { state, save };
+  };
+  const click = (key: string, flags = {}) => { fireEvent.pointerDown(document.querySelector(`[data-slot-key="${key}"]`)!, { button: 0, ...flags }); fireEvent.pointerUp(document.querySelector('svg')!); };
+  const order = () => [...document.querySelectorAll('[data-endpoint-sequence]')].sort((a, b) => Number(a.getAttribute('data-endpoint-sequence')) - Number(b.getAttribute('data-endpoint-sequence'))).map((badge) => badge.parentElement!.getAttribute('data-slot-key'));
+  it('starts empty, toggles A/B/C, compacts badges, reorders/removes and returns to spatial tools', async () => {
+    const { state, save } = setup(); const [a, b, c] = state.slots;
+    click(a.key); expect(document.querySelector('.blueprint-composer__position')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
+    expect(order()).toEqual([]); expect(document.querySelector('.blueprint-composer__position')).toBeNull();
+    for (const slot of [a, b, c]) click(slot.key);
+    expect(order()).toEqual([a.key, b.key, c.key]); click(b.key);
+    expect(order()).toEqual([a.key, c.key]);
+    expect([...document.querySelectorAll('[data-endpoint-sequence]')].map((node) => node.textContent)).toEqual(['1', '2']);
+    await userEvent.click(screen.getByRole('button', { name: 'Порядок и имена' }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Выше: 1' })).toBeDisabled();
+    expect(within(dialog).getByRole('button', { name: 'Ниже: 2' })).toBeDisabled();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Выше: 2' })); expect(order()).toEqual([c.key, a.key]);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Ниже: 1' })); expect(order()).toEqual([a.key, c.key]);
+    await userEvent.click(within(dialog).getAllByRole('button', { name: 'Удалить' })[0]); expect(order()).toEqual([c.key]);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Закрыть' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Завершить порядок' })); expect(order()).toEqual([]);
+    click(a.key); click(b.key, { ctrlKey: true }); expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(2);
+    expect(screen.getByRole('group', { name: 'Копировать выделение' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' })); expect(save.mock.calls[0][0].slots).toEqual(state.slots);
+  });
+  it.each([{}, { ctrlKey: true }, { metaKey: true }])('activates an inactive endpoint as #1 in one click (%j)', async (flags) => {
+    const { state } = setup();
+    await userEvent.click(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
+    click(state.slots[0].key); click(state.slots[1].key);
+    const target = state.slots.at(-1)!; click(target.key, flags);
+    expect(order()).toEqual([target.key]); expect(screen.getByRole('button', { name: 'Панель 2' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.pointerDown(document.querySelector(`[data-panel-key="${state.activePanelKey}"] .blueprint-composition-canvas__body`)!, { button: 0 });
+    expect(order()).toEqual([]); expect(screen.getByText('Порядок: 0')).toBeInTheDocument();
+    click(state.slots[0].key); await userEvent.click(screen.getByRole('button', { name: 'Панель 2' })); expect(order()).toEqual([]);
+    click(target.key); await userEvent.click(screen.getByRole('button', { name: 'Очистить порядок' })); expect(order()).toEqual([]);
+  });
+  it('clears position draft and distribution menu on entry, ignores ordered context menus and keeps Add spatially unselected', async () => {
+    const { state } = setup();
+    for (const slot of state.slots.slice(0, 3)) click(slot.key, { ctrlKey: true });
+    const x = within(screen.getByRole('group', { name: 'Положение выделения' })).getByLabelText('X');
+    fireEvent.focus(x); fireEvent.change(x, { target: { value: '' } });
+    fireEvent.contextMenu(document.querySelector(`[data-slot-key="${state.slots[0].key}"]`)!, { clientX: 100, clientY: 100 });
+    const distribute = screen.getAllByRole('menuitem').find((button) => button.textContent === 'По горизонтали')!;
+    fireEvent.click(distribute); expect(document.querySelector('.blueprint-composer__distribution-settings')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
+    expect(document.querySelector('[role="menu"]')).toBeNull(); expect(document.querySelector('.blueprint-composer__position')).toBeNull(); expect(order()).toEqual([]);
+    fireEvent.contextMenu(document.querySelector(`[data-slot-key="${state.slots[0].key}"]`)!); expect(document.querySelector('[role="menu"]')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0); expect(order()).toEqual([]);
+    await userEvent.click(screen.getByRole('button', { name: 'Порядок и имена' }));
+    fireEvent.keyDown(document, { key: 'Escape' }); expect(screen.queryByRole('dialog')).toBeNull(); expect(screen.getByRole('button', { name: 'Порядок и имена' })).toHaveFocus();
+  });
+  it.each([24, 48])('keeps %i entries in the dialog and applies the exact preview, retaining order', async (count) => {
+    const { state, save } = setup(count);
+    const rail = document.querySelector('.blueprint-composer__contextual');
+    await userEvent.click(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
+    for (const slot of state.slots.slice(0, count).reverse()) click(slot.key);
+    expect(order()).toHaveLength(count); expect(document.querySelector('.blueprint-composer__contextual')).toBe(rail);
+    expect(document.querySelectorAll('.blueprint-composer__workspace [data-ordered-key]')).toHaveLength(0);
+    await userEvent.click(screen.getByRole('button', { name: 'Порядок и имена' }));
+    const dialog = screen.getByRole('dialog'); expect(dialog.querySelector('.blueprint-order-dialog__list')).toBeInTheDocument();
+    expect(dialog.querySelectorAll('[data-ordered-key]')).toHaveLength(count);
+    fireEvent.change(screen.getByLabelText('Префикс'), { target: { value: 'Ge0/' } });
+    fireEvent.change(screen.getByLabelText('Начальный номер'), { target: { value: '24' } });
+    fireEvent.change(screen.getByLabelText('Шаг'), { target: { value: '-1' } });
+    const previews = [...dialog.querySelectorAll('[data-name-preview]')].map((node) => node.textContent!.replace('→ ', ''));
+    expect(previews.slice(0, 3)).toEqual(['Ge0/24', 'Ge0/23', 'Ge0/22']);
+    fireEvent.change(screen.getByLabelText('Шаг'), { target: { value: '0' } }); expect(screen.getByRole('button', { name: 'Применить имена' })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Шаг'), { target: { value: '-1' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Применить имена' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Закрыть' })); expect(order()).toHaveLength(count);
+    expect([...document.querySelectorAll('[data-endpoint-marker] title')].slice(0, count).map((node) => node.textContent).reverse()).toEqual(previews);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' })); const saved = save.mock.calls[0][0];
+    expect(saved.nextLocalNumberByPanel).toEqual(state.nextLocalNumberByPanel);
+    expect(Object.keys(saved).sort()).toEqual(Object.keys(state).sort());
+    expect(createBlueprintRequest(saved).request!.slots.slice(0, count).map((slot) => slot.display_name).reverse()).toEqual(previews);
   });
 });

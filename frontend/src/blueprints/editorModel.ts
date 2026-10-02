@@ -315,3 +315,29 @@ export const createBlueprintRequest = (state: BlueprintEditorState): { request?:
     internal_links: state.individualLinks,
   } };
 };
+
+// These operations consume transient ordered keys; they never add an authoring recipe to state.
+export const toggleOrderedKey = (keys: readonly string[], key: string): string[] =>
+  keys.includes(key) ? keys.filter((item) => item !== key) : [...keys, key];
+export const reorderOrderedKeys = (keys: readonly string[], index: number, direction: -1 | 1): string[] => {
+  const next = [...keys]; const destination = index + direction;
+  if (index < 0 || index >= next.length || destination < 0 || destination >= next.length) return next;
+  [next[index], next[destination]] = [next[destination], next[index]];
+  return next;
+};
+export interface BulkNameParameters { prefix: string; start: string; step: string }
+export const bulkNamePreview = (state: BlueprintEditorState, keys: readonly string[], parameters: BulkNameParameters) => {
+  const { prefix, start, step } = parameters;
+  const first = Number(start); const increment = Number(step);
+  if (!start.trim() || !step.trim() || !Number.isSafeInteger(first) || !Number.isSafeInteger(increment) || increment === 0 || new Set(keys).size !== keys.length) return undefined;
+  const slots = new Map(state.slots.map((slot) => [slot.key, slot]));
+  if (keys.some((key) => slots.get(key)?.panel_key !== state.activePanelKey || !slots.has(key))) return undefined;
+  if (keys.some((_, index) => !Number.isSafeInteger(first + index * increment))) return undefined;
+  return keys.map((key, index) => ({ key, currentName: slots.get(key)!.display_name, display_name: prefix + (first + index * increment) }));
+};
+export const applyBulkNames = (state: BlueprintEditorState, keys: readonly string[], parameters: BulkNameParameters): BlueprintEditorState => {
+  const preview = bulkNamePreview(state, keys, parameters);
+  if (!preview?.length) return state;
+  const names = new Map(preview.map((item) => [item.key, item.display_name]));
+  return { ...state, slots: state.slots.map((slot) => names.has(slot.key) ? { ...slot, display_name: names.get(slot.key)! } : slot) };
+};

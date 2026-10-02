@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
-import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
+import { applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
@@ -30,6 +30,13 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
   const [count, setCount] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [orderedMode, setOrderedMode] = useState(false);
+  const [orderedKeys, setOrderedKeys] = useState<string[]>([]);
+  const [orderOpen, setOrderOpen] = useState(false);
+  const [naming, setNaming] = useState({ prefix: '', start: '1', step: '1' });
+  const orderEntry = useRef<HTMLButtonElement>(null);
+  const preview = bulkNamePreview(editor, orderedKeys, naming);
+  useEffect(() => { if (orderOpen) return () => orderEntry.current?.focus(); }, [orderOpen]);
   const [copyDestination, setCopyDestination] = useState('');
   const [createContinuity, setCreateContinuity] = useState(false);
   const destinationPanels = editor.panels.filter((panel) => panel.panel_key !== panelKey);
@@ -59,7 +66,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     setPositionDraft(undefined);
   };
   const deleteSelected = () => { setEditor((old) => removeEndpoints(old, selected)); setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); };
-  const clearPanelUi = () => { setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); setCopyDestination(''); setCreateContinuity(false); };
+  const clearPanelUi = () => { setOrderedKeys([]); setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); setCopyDestination(''); setCreateContinuity(false); };
   const copySelected = () => {
     const result = copySelectionToPanel(editor, selected, destinationKey, createContinuity);
     if (result.error) return;
@@ -75,6 +82,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
       if (menu && (!(event.target instanceof Element) || !event.target.closest('.blueprint-composer__context-menu'))) setMenu(undefined);
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (orderOpen) { if (event.key === 'Escape') { event.preventDefault(); setOrderOpen(false); } return; }
       if (linksOpen) {
         if (event.key === 'Escape') { event.preventDefault(); closeLinks(); }
         return;
@@ -92,7 +100,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
-  }, [menu, selected, linksOpen]);
+  }, [menu, selected, linksOpen, orderOpen]);
   const normalizedPixels = (axis: 'x' | 'y', pixels: number) => {
     const rect = canvasWrap.current?.querySelector('svg')?.getBoundingClientRect();
     const viewHeight = 1000 * bounds.height / bounds.width;
@@ -137,6 +145,11 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     setDistributionAxis(undefined);
   };
   const selectSlot = (key: string, toggle: boolean) => {
+    if (orderedMode) {
+      const owningPanel = editor.slots.find((slot) => slot.key === key)?.panel_key;
+      setOrderedKeys((old) => toggleOrderedKey(owningPanel === panelKey ? old : [], key));
+      return;
+    }
     setPositionDraft(undefined);
     setSelected((old) => {
       if (!toggle) return new Set([key]);
@@ -162,7 +175,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   };
   return <>
     <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
-    <div className="blueprint-composer blueprint-composer--authoring-workspace"><div className="blueprint-composer__workspace" inert={linksOpen}>
+    <div className="blueprint-composer blueprint-composer--authoring-workspace"><div className="blueprint-composer__workspace" inert={linksOpen || orderOpen}>
       <section className="blueprint-editor-controls blueprint-composer__properties">
         <div className="blueprint-editor-controls__row">
           <label>{t('blueprint.editor.name')}<input value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} /></label>
@@ -183,7 +196,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         <div className="blueprint-composer__chooser">
           <label>{t('blueprint.endpoint.kind')}<select value={kind} onChange={(e) => setKind(e.target.value as BlueprintSlotKind)}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
-          <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, panelKey); if (next === editor) return; setEditor(next); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
+          <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, panelKey); if (next === editor) return; setEditor(next); if (!orderedMode) setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
         </div>
         <div className="blueprint-composer__panels" role="group" aria-label={t('blueprint.panel.list')}>{[...editor.panels].sort((a, b) => a.panel_number - b.panel_number).map((panel) => <button key={panel.panel_key} type="button" aria-pressed={panel.panel_key === panelKey} onClick={() => activatePanel(panel.panel_key)}>{panel.display_name}</button>)}</div>
         <div className="blueprint-composer__panel-actions">
@@ -192,7 +205,8 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
         </div>
         <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
-          <BlueprintCompositionCanvas key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle) => setEditor((old) => setPanelRectangle(old, key, rectangle))} onContextMenu={(key, clientX, clientY) => {
+          <BlueprintCompositionCanvas key={`${panelKey}:${orderedMode}`} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} orderedKeys={orderedMode ? orderedKeys : undefined} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle) => setEditor((old) => setPanelRectangle(old, key, rectangle))} onContextMenu={(key, clientX, clientY) => {
+            if (orderedMode) return;
             if (key && !selected.has(key)) setSelected(new Set([key]));
             if (!key && selected.size === 0) { setMenu(undefined); return; }
             const rect = canvasWrap.current!.getBoundingClientRect();
@@ -212,6 +226,12 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           </div>}
         </div>
         <div className="blueprint-composer__contextual">
+          {!orderedMode ? <button type="button" className="secondary-action" onClick={() => { clearPanelUi(); setOrderedMode(true); }}>{t('blueprint.order.enter')}</button> : <>
+            <span>{t('blueprint.order.count', { count: orderedKeys.length })}</span>
+            <button ref={orderEntry} type="button" className="secondary-action" onClick={() => setOrderOpen(true)}>{t('blueprint.order.edit')}</button>
+            <button type="button" className="text-action" onClick={() => setOrderedKeys([])}>{t('blueprint.order.clear')}</button>
+            <button type="button" className="text-action" onClick={() => { clearPanelUi(); setOrderedMode(false); }}>{t('blueprint.order.exit')}</button>
+          </>}
         {selected.size > 1 && <span className="blueprint-composer__selection-count">{t('blueprint.layout.selected', { count: selected.size })}</span>}
         {selectedPosition && <section className="blueprint-composer__position" role="group" aria-label={t('blueprint.position.title')}>
           <strong>{t('blueprint.position.title')}</strong>
@@ -232,6 +252,28 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         </div>
       </section>
     </div></div>
+    {orderOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-order-title">
+      <div className="catalog-dialog__surface blueprint-order-dialog">
+        <h2 id="blueprint-order-title">{t('blueprint.order.edit')}</h2>
+        <div className="blueprint-order-dialog__parameters">
+          {(['prefix', 'start', 'step'] as const).map((field) => <label key={field}>{t(`blueprint.naming.${field}`)}<input type={field === 'prefix' ? 'text' : 'number'} step={field === 'prefix' ? undefined : '1'} value={naming[field]} onChange={(event) => setNaming((old) => ({ ...old, [field]: event.target.value }))} /></label>)}
+        </div>
+        {!preview && <p role="alert">{t('blueprint.naming.invalid')}</p>}
+        <div className="blueprint-order-dialog__list">
+          {orderedKeys.map((key, index) => { const slot = editor.slots.find((item) => item.key === key)!; return <div key={key} className="blueprint-order-dialog__row" data-ordered-key={key}>
+            <span>{index + 1}</span><span>{slot.display_name} · {activePanel.display_name}</span>
+            <span data-name-preview>{preview && `→ ${preview[index].display_name}`}</span>
+            <button type="button" aria-label={t('blueprint.order.up', { index: index + 1 })} disabled={index === 0} onClick={() => setOrderedKeys((old) => reorderOrderedKeys(old, index, -1))}>↑</button>
+            <button type="button" aria-label={t('blueprint.order.down', { index: index + 1 })} disabled={index === orderedKeys.length - 1} onClick={() => setOrderedKeys((old) => reorderOrderedKeys(old, index, 1))}>↓</button>
+            <button type="button" className="text-action" onClick={() => setOrderedKeys((old) => old.filter((item) => item !== key))}>{t('blueprint.composition.remove')}</button>
+          </div>; })}
+        </div>
+        <div className="catalog-dialog__actions">
+          <button type="button" disabled={!preview?.length} onClick={() => setEditor((old) => applyBulkNames(old, orderedKeys, naming))}>{t('blueprint.naming.apply')}</button>
+          <button type="button" autoFocus onClick={() => setOrderOpen(false)}>{t('action.close')}</button>
+        </div>
+      </div>
+    </section>}
     {linksOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-links-title">
       <div className="catalog-dialog__surface blueprint-links-dialog">
         <h2 id="blueprint-links-title">{t('blueprint.composition.links')}</h2>

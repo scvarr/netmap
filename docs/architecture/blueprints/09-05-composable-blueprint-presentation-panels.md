@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**FIXED / ACCEPTED TARGET CONTRACT. SLICE A, B AND C IMPLEMENTED; D PENDING.**
+**FIXED / ACCEPTED TARGET CONTRACT. SLICE A, B, C AND D1 IMPLEMENTED; D2 PENDING.**
 
 This document supersedes only the binary `FRONT | REAR` presentation model in
 [09.4](09-04-direct-blueprint-endpoint-authoring.md). Direct endpoint slots
@@ -79,8 +79,8 @@ number and avoid immediate duplicate defaults. Partial deletion does not
 compact numbering or rename remaining endpoints (for example, after `1-1`,
 `1-2`, `1-4`, the next may be `1-5`). Once a panel has zero endpoints of either
 kind, its local default-name helper resets to 1; the next new endpoint starts
-at `<panel_number>-1`. This is individual default naming only; ordered bulk
-naming remains a later slice.
+at `<panel_number>-1`. Bulk naming preserves the current per-panel high-water allocator; renaming
+existing endpoints does not compact or reset default numbering.
 `slot_key` is identity and `display_name` is the exact persisted name. This is
 not a live formula: renaming a panel or changing its number in a future
 explicit operation never rewrites an existing name such as `MGMT`. No naming
@@ -238,11 +238,21 @@ Bounded implementation slices:
    state unchanged. Successful copy activates the destination and selects the copies,
    without auto-layout. The compact copy controls sit below the canvas beside
    selection tools.
-4. **Slice D PENDING — Ordered bulk authoring:** ordered selection, bulk naming, and general
-   pairwise continuity.
+4. **Slice D1 IMPLEMENTED — Ordered selection and bulk naming:** explicit transient,
+   active-panel-scoped click order with compact screen-space sequence badges;
+   clicking an existing member removes it and compacts numbering. A one-click
+   inactive endpoint activates its panel and starts a fresh order at 1. Panel
+   switches clear the order; endpoint drag and marquee do not form or move it.
+   A bounded dialog supports up/down/remove and exact naming preview from an
+   open prefix, integer start, and nonzero integer step. Apply atomically changes
+   only selected exact `display_name` values, retaining order for verification.
+   No order, group, or naming recipe is persisted; geometry, keys, kinds,
+   internal links, and the default-name allocator are unchanged.
+5. **Slice D2 PENDING — General pairwise continuity:** ordered sets A/B and
+   pairwise internal-link preview/apply remain a separate future slice.
 
 Technology/capability remains **OPEN**, separate from these slices. Phase C
 remains **PAUSED**; remaining editor slices are prerequisites before patch-panel
-and internal-link acceptance. Slice C copy-to-panel is **IMPLEMENTED**; Slice D ordered bulk
-authoring remains **PENDING**. Port Block does not return as
+and internal-link acceptance. Slice C copy-to-panel and D1 ordered selection / bulk naming are **IMPLEMENTED**;
+D2 general pairwise continuity remains **PENDING**. Port Block does not return as
 a prerequisite.

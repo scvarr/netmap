@@ -12,8 +12,9 @@ stable keys, and individual internal links. The minimal editor supports bulk
 add, single selection, rename, kind/face edit, move, delete, and individual
 links. Transient multi-selection, marquee, group move, spatial alignment,
 distribution, one/two-row layout, multi-delete, and temporary drag alignment
-guides with snapping are **IMPLEMENTED**. Duplicate/copy,
-ordered selection, bulk naming, and pairwise bulk continuity remain **PENDING**.
+guides with snapping are **IMPLEMENTED**. Panel copy is **IMPLEMENTED** in 09.5 Slice C. Ordered selection and bulk
+naming are **IMPLEMENTED** in Slice D1; pairwise bulk continuity remains **PENDING**
+for Slice D2.
 Endpoint technology/capability
 remains **OPEN**. Phase C remains **PAUSED** until the remaining editor slices
 and manual HV-01 recheck.
@@ -107,7 +108,7 @@ equal horizontal/vertical distribution. A convenient row layout may be offered
 for dense authoring. These operations change exact endpoint positions or
 endpoint records; they do not create persisted groups or recipes.
 
-For order-dependent bulk actions, users explicitly form an ordered selection.
+**IMPLEMENTED (D1)** — For order-dependent bulk actions, users explicitly form an ordered selection.
 The editor shows transient sequence numbers and provides a clear way to set or
 reorder processing order. Those numbers are neither identity nor persisted
 grouping. Bulk naming supports a prefix, starting number, step, exact-name
@@ -128,7 +129,7 @@ technology/capability. That question remains **OPEN**.
 ## Internal links and dense authoring
 
 The editor retains individual endpoint-to-endpoint internal links. For dense
-one-to-one continuity, it supports selecting ordered sets A and B, previewing
+one-to-one continuity, the **PENDING (D2)** target supports selecting ordered sets A and B, previewing
 pairing, and applying the links. A patch panel can pair FRONT 1..24 with REAR
 1..24. Persist only the resulting exact Blueprint internal links; temporary
 pairing sets and named link groups are not domain entities. Reverse pairing is
@@ -183,8 +184,9 @@ exchange format version 2 carries direct slots and rejects version 1.
 2. **Direct endpoint visual editor:** add, select, move, delete, duplicate,
    align, distribute, and place endpoints using direct slot identity and
    positions. Its current FRONT/REAR surfaces are superseded by 09.5.
-3. **Ordered bulk authoring:** add transient ordered selection, naming preview
-   and apply, plus pairwise internal continuity authoring.
+3. **Ordered bulk authoring:** transient ordered selection, naming preview
+   and apply are **IMPLEMENTED (D1)**; pairwise internal continuity authoring
+   remains **PENDING (D2)**.
 4. **Runtime/projection geometry adaptation:** read direct slot rendered
    positions and derive external cable attachment from the complete object
    boundary without Port Block geometry; preserve canonical topology,

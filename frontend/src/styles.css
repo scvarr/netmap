@@ -696,7 +696,7 @@ a { color: inherit; }
   .blueprint-editor-page .blueprint-composer__canvas-wrap { flex: 1 0 160px; min-height: 160px; display: flex; padding: 8px; }
   .blueprint-editor-page .blueprint-composer__canvas-wrap > .blueprint-composition-canvas { flex: 1; width: 100%; height: 100%; min-height: 0; }
   /* Space for the current compact two-row single-endpoint tools, even when empty. */
-  .blueprint-editor-page .blueprint-composer__contextual { flex: 0 0 auto; min-height: 130px; overflow-y: auto; }
+  .blueprint-editor-page .blueprint-composer__contextual { box-sizing: border-box; flex: 0 0 130px; height: 130px; min-height: 130px; overflow-y: auto; }
   .blueprint-editor-page .blueprint-composer__contextual:empty { display: flex; padding: 0; border: 0; background: transparent; }
   .blueprint-editor-page .blueprint-composer__contextual > .blueprint-composer__position,
   .blueprint-editor-page .blueprint-composer__contextual > .blueprint-composer__copy { display: contents; }
@@ -704,3 +704,14 @@ a { color: inherit; }
   .blueprint-editor-page .blueprint-composer__contextual .blueprint-composer__position strong,
   .blueprint-editor-page .blueprint-composer__contextual .blueprint-composer__copy strong { display: none; }
 }
+
+.blueprint-order-dialog { box-sizing: border-box; width: min(100%, 860px); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.blueprint-order-dialog h2 { margin: 0; }
+.blueprint-order-dialog__parameters { display: flex; flex-wrap: wrap; gap: 8px; }
+.blueprint-order-dialog__parameters label { flex: 1; min-width: 100px; }
+.blueprint-order-dialog__parameters input { box-sizing: border-box; width: 100%; }
+.blueprint-order-dialog__list { min-height: 0; overflow-y: auto; display: grid; gap: 6px; }
+.blueprint-order-dialog__row { display: grid; grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px; }
+.blueprint-order-dialog__row span { overflow-wrap: anywhere; }
+.blueprint-order-dialog .catalog-dialog__actions { flex: none; margin: 0; }
+@media (max-width: 760px) { .blueprint-order-dialog__row { grid-template-columns: 24px minmax(0, 1fr) auto auto auto; } .blueprint-order-dialog__row [data-name-preview] { grid-column: 2; grid-row: 2; } }
