@@ -11,14 +11,13 @@ bounded milestone.
 
 ## Status/index layer
 
-Direct Blueprint endpoint slots are implemented as a foundation and Port Block
-application surfaces have been removed. Phase C remains PAUSED before the
-manual HV-01 recheck; richer editor operations remain pending. The accepted
+Direct Blueprint endpoint authoring, multi-panel editing, spatial tools, panel
+copy, ordered naming, and pairwise continuity (D2) are implemented. Port Block
+application surfaces remain removed. Editor prerequisites from the accepted
 [composable panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
-makes multi-panel redesign a prerequisite before patch-panel/internal-link
-acceptance. The current binary FRONT/REAR editor remains implementation state;
-multi-panel behavior is not implemented. Technology and capability are still
-OPEN, and this cutover does not close `C-CAP-01`.
+are complete. Phase C is **READY TO RESUME** at HV-01 with manual recheck / acceptance
+next; this does not mark Phase C complete or PASSED. Technology/capability and
+dense runtime Map presentation remain OPEN; D2 does not close `C-CAP-01`.
 
 Краткий индекс ниже добавляет текущий статус отслеживания. Все `C-*`
 identifiers/findings остаются в обязательном реестре, но accepted target
@@ -449,8 +448,8 @@ internal/external/boundary Cable при перемещении Location subtree,
 Новый operational protocol использует active `Rack-first service-path
 synthetic acceptance` из 11-04 и начинается с пустой тестовой БД:
 
-**Current status: PAUSED at the direct Blueprint endpoint authoring redesign.**
-После implementation и manual recheck продолжить с того же HV-01 шага. Старые
+**Current status: READY TO RESUME — editor prerequisites implemented.**
+Следующий шаг — manual HV-01 recheck / Phase C acceptance с того же места. Старые
 Port Block authoring ожидания в historical findings не являются target
 prerequisite; authoritative replacement задан в 09-04.
 

@@ -7,18 +7,15 @@
 
 ## Назначение и граница
 
-**Current acceptance status:** the rack-first walkthrough is **PAUSED at the
-Blueprint authoring redesign**. Direct-slot persistence and the minimal editor
-are implemented; multi-selection, alignment/distribution, ordered bulk naming,
-and pairwise bulk continuity remain pending. Resume at the same HV-01 authoring
-step after those slices and manual recheck. Acceptance expects
-endpoints authored directly on the Object Blueprint canvas; Port Block is not
-a prerequisite or target authoring entity. See the authoritative
+**Current acceptance status:** **READY TO RESUME** at the same HV-01 authoring
+step with manual recheck / Phase C acceptance next. Direct-slot persistence,
+multi-panel editing, multi-selection, alignment/distribution, panel copy,
+ordered bulk naming, and pairwise continuity (D2) are implemented. Editor
+prerequisites are complete; Phase C is not complete or PASSED. Acceptance
+expects endpoints authored directly on the Object Blueprint canvas; Port Block
+is not a prerequisite or target authoring entity. See the authoritative
 [direct endpoint foundation](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md)
 and [composable panel target](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md).
-Multi-panel redesign is a prerequisite before patch-panel/internal-link
-acceptance; the existing FRONT/REAR editor is implementation state, not the
-accepted target. No multi-panel implementation is claimed here.
 Port Block workflows and fixtures below are historical evidence of the
 removed, architecturally superseded model.
 

@@ -3,7 +3,7 @@
 ## Status and authority
 
 **FIXED / ACCEPTED DIRECT-SLOT FOUNDATION AND SPATIAL
-MULTI-SELECTION TOOLS IMPLEMENTED; REMAINING RICH EDITOR UX PENDING.**
+MULTI-SELECTION AND ORDERED BULK AUTHORING IMPLEMENTED.**
 
 The destructive foundation cutover removed Port Block application models,
 tables, APIs, library and editor surfaces. Immutable Blueprint versions now
@@ -13,11 +13,11 @@ add, single selection, rename, kind/face edit, move, delete, and individual
 links. Transient multi-selection, marquee, group move, spatial alignment,
 distribution, one/two-row layout, multi-delete, and temporary drag alignment
 guides with snapping are **IMPLEMENTED**. Panel copy is **IMPLEMENTED** in 09.5 Slice C. Ordered selection and bulk
-naming are **IMPLEMENTED** in Slice D1; pairwise bulk continuity remains **PENDING**
-for Slice D2.
+naming are **IMPLEMENTED** in Slice D1; pairwise bulk continuity is **IMPLEMENTED**
+in Slice D2. The ordered bulk authoring slice is complete.
 Endpoint technology/capability
-remains **OPEN**. Phase C remains **PAUSED** until the remaining editor slices
-and manual HV-01 recheck.
+remains **OPEN**. Editor prerequisites are implemented; Phase C is **READY TO
+RESUME** with manual HV-01 recheck / Phase C acceptance next, not complete or PASSED.
 
 The direct-slot authoring foundation, identity, immutable snapshots, and
 materialization in this document remain authoritative. Its binary
@@ -129,11 +129,13 @@ technology/capability. That question remains **OPEN**.
 ## Internal links and dense authoring
 
 The editor retains individual endpoint-to-endpoint internal links. For dense
-one-to-one continuity, the **PENDING (D2)** target supports selecting ordered sets A and B, previewing
+one-to-one continuity, the **IMPLEMENTED (D2)** editor supports capturing ordered sets A and B, previewing
 pairing, and applying the links. A patch panel can pair FRONT 1..24 with REAR
 1..24. Persist only the resulting exact Blueprint internal links; temporary
 pairing sets and named link groups are not domain entities. Reverse pairing is
-an optional editor convenience where useful.
+a transient editor convenience. Captures copy slot-key snapshots; apply is atomic
+and rejects self-links, missing endpoints, duplicate undirected pairs, and existing
+link conflicts. Only ordinary `BlueprintInternalLink` records persist.
 
 ## Endpoint and cable presentation geometry
 
@@ -186,7 +188,7 @@ exchange format version 2 carries direct slots and rejects version 1.
    positions. Its current FRONT/REAR surfaces are superseded by 09.5.
 3. **Ordered bulk authoring:** transient ordered selection, naming preview
    and apply are **IMPLEMENTED (D1)**; pairwise internal continuity authoring
-   remains **PENDING (D2)**.
+   is **IMPLEMENTED (D2)**. Ordered bulk authoring is complete.
 4. **Runtime/projection geometry adaptation:** read direct slot rendered
    positions and derive external cable attachment from the complete object
    boundary without Port Block geometry; preserve canonical topology,

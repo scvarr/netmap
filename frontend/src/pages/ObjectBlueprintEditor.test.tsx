@@ -1,3 +1,4 @@
+import styles from '../styles.css?raw';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
@@ -752,5 +753,102 @@ describe('transient ordered selection and naming', () => {
     expect(saved.nextLocalNumberByPanel).toEqual(state.nextLocalNumberByPanel);
     expect(Object.keys(saved).sort()).toEqual(Object.keys(state).sort());
     expect(createBlueprintRequest(saved).request!.slots.slice(0, count).map((slot) => slot.display_name).reverse()).toEqual(previews);
+  });
+});
+
+
+describe('transient pairwise continuity', () => {
+  const setup = (count = 2, existing = false) => {
+    const initial = newBlueprintEditorState(); initial.name = 'Patch';
+    const source = addEndpoints(initial, 'CONNECTION_POINT', count, initial.activePanelKey);
+    const second = addPanel(source, 'below');
+    const both = addEndpoints(second, 'CONNECTION_POINT', count, second.activePanelKey);
+    const state = { ...both, activePanelKey: source.activePanelKey };
+    state.panels[0].display_name = 'Передняя'; state.panels[1].display_name = 'Задняя';
+    if (existing) state.individualLinks = [{ from_slot_key: both.slots[count].key, to_slot_key: source.slots[0].key }];
+    const save = vi.fn().mockResolvedValue(undefined);
+    const view = render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={state} onSave={save} /></MemoryRouter></I18nProvider>);
+    return { state, save, view, a: state.slots.slice(0, count), b: state.slots.slice(count) };
+  };
+  const button = (name: string) => screen.getByRole('button', { name });
+  const click = (key: string) => { fireEvent.pointerDown(document.querySelector(`[data-slot-key="${key}"]`)!, { button: 0 }); fireEvent.pointerUp(document.querySelector('svg')!); };
+  const capture = (set: 'A' | 'B') => {
+    fireEvent.click(button('Порядок и имена')); fireEvent.click(button(`Использовать порядок как ${set}`)); fireEvent.click(button('Закрыть'));
+  };
+  const openPairs = () => { fireEvent.click(screen.getByRole('button', { name: /^Попарные связи/ })); return screen.getByRole('dialog', { name: 'Попарные связи' }); };
+  const rows = () => [...document.querySelectorAll('[data-pairwise-row]')].map((row) => row.textContent);
+  it('copies snapshots, preserves them across reorder/clear/panel/mode/dialog changes, replaces B and supports clear', () => {
+    const { a, b } = setup();
+    fireEvent.click(button('Упорядоченное выделение'));
+    fireEvent.click(button('Порядок и имена')); expect(button('Использовать порядок как A')).toBeDisabled(); fireEvent.click(button('Закрыть'));
+    click(a[1].key); click(a[0].key); capture('A');
+    fireEvent.click(button('Порядок и имена')); expect(screen.getByText('A: 2 · Передняя')).toBeInTheDocument();
+    fireEvent.click(button('Ниже: 1')); fireEvent.click(button('Закрыть'));
+    fireEvent.click(button('Очистить порядок')); fireEvent.click(button('Завершить порядок')); fireEvent.click(button('Упорядоченное выделение'));
+    fireEvent.click(button('Задняя')); expect(screen.getByText('Порядок: 0')).toBeInTheDocument();
+    click(b[0].key); capture('B'); expect(button('Попарные связи · A: 2 · B: 1')).toBeInTheDocument();
+    click(b[1].key); capture('B');
+    const dialog = openPairs(); expect(rows()).toEqual(['11-2 · Передняя↔2-1 · Задняя', '21-1 · Передняя↔2-2 · Задняя']);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Очистить A' })); expect(within(dialog).getByRole('alert')).toHaveTextContent('Задайте непустые A и B');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Очистить B' })); fireEvent.keyDown(document, { key: 'Escape' });
+    expect(button('Попарные связи · A: 0 · B: 0')).toHaveFocus();
+  });
+  it('explicitly recaptures A and derives current endpoint and panel names', () => {
+    const { a, b } = setup();
+    fireEvent.click(button('Упорядоченное выделение')); click(a[1].key); capture('A');
+    click(a[0].key); capture('A'); fireEvent.click(button('Задняя')); for (const slot of b) click(slot.key); capture('B');
+    fireEvent.click(button('Завершить порядок')); fireEvent.click(button('Передняя'));
+    fireEvent.change(screen.getByLabelText('Название панели'), { target: { value: 'Новая передняя' } });
+    click(a[1].key); fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Exact name' } });
+    const dialog = openPairs(); expect(screen.getByText('A: 2 · Новая передняя')).toBeInTheDocument();
+    expect(rows()[0]).toBe('1Exact name · Новая передняя↔2-1 · Задняя');
+    fireEvent.click(screen.getByLabelText('Обратный порядок B')); expect(rows()[0]).toBe('1Exact name · Новая передняя↔2-2 · Задняя');
+    fireEvent.click(screen.getByLabelText('Обратный порядок B')); expect(rows()[0]).toBe('1Exact name · Новая передняя↔2-1 · Задняя');
+    expect(within(dialog).getByRole('button', { name: 'Создать связи' })).toBeEnabled();
+  });
+  it.each([2, 24])('previews %i rows on demand, reverses B, applies ordinary links and resets session controls', (count) => {
+    const { state, save, view, a, b } = setup(count); const rail = document.querySelector('.blueprint-composer__contextual');
+    fireEvent.click(button('Упорядоченное выделение')); for (const slot of [...a].reverse()) click(slot.key); capture('A');
+    fireEvent.click(button('Задняя')); for (const slot of b) click(slot.key); capture('B');
+    expect(document.querySelector('.blueprint-composer__contextual')).toBe(rail);
+    expect(document.querySelectorAll('.blueprint-composer__workspace [data-pairwise-row]')).toHaveLength(0);
+    const dialog = openPairs(); expect(dialog.querySelector('.blueprint-pairwise-dialog')).toBeInTheDocument();
+    expect(dialog.querySelector('.blueprint-pairwise-dialog__list')).toBeInTheDocument(); expect(rows()).toHaveLength(count);
+    expect(styles).toMatch(/\.blueprint-pairwise-dialog \{[^}]*max-height: calc\(100dvh - 40px\)[^}]*overflow: hidden/);
+    expect(styles).toMatch(/\.blueprint-pairwise-dialog__list \{[^}]*overflow-y: auto/);
+    expect(styles).toMatch(/\.blueprint-editor-page \.blueprint-composer__contextual \{[^}]*height: 130px/);
+    expect(rows()[0]).toBe(`11-${count} · Передняя↔2-1 · Задняя`);
+    fireEvent.click(screen.getByLabelText('Обратный порядок B')); expect(rows()[0]).toBe(`11-${count} · Передняя↔2-${count} · Задняя`);
+    fireEvent.click(button('Создать связи')); expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.querySelectorAll('.blueprint-composition-canvas__link')).toHaveLength(count);
+    expect(button('Попарные связи · A: 0 · B: 0')).toBeInTheDocument(); expect(screen.getByText(`Порядок: ${count}`)).toBeInTheDocument();
+    openPairs(); expect(screen.getByLabelText('Обратный порядок B')).not.toBeChecked(); fireEvent.click(button('Закрыть'));
+    fireEvent.click(button(`Редактировать связи · ${count}`));
+    const links = screen.getByRole('dialog', { name: 'Внутренние связи' }); expect(links.querySelectorAll('.blueprint-composer__link')).toHaveLength(count);
+    expect(within(links).getByLabelText('Первый порт внутренней связи 1')).toHaveValue(a[count - 1].key);
+    expect(within(links).getByLabelText('Второй порт внутренней связи 1')).toHaveValue(b[count - 1].key);
+    fireEvent.click(button('Закрыть')); fireEvent.click(button('Save'));
+    const saved = save.mock.calls[0][0]; const expected = [...a].reverse().map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: b[count - 1 - index].key }));
+    expect(saved.individualLinks).toEqual(expected); expect(Object.keys(saved).sort()).toEqual(Object.keys(state).sort());
+    const request = createBlueprintRequest(saved).request!; expect(request.internal_links).toEqual(expected);
+    expect(Object.keys(request).sort()).toEqual(['body', 'internal_links', 'name', 'panels', 'slots']);
+    view.unmount(); render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={saved} onSave={save} /></MemoryRouter></I18nProvider>);
+    expect(button('Попарные связи · A: 0 · B: 0')).toBeInTheDocument(); openPairs(); expect(screen.getByLabelText('Обратный порядок B')).not.toBeChecked();
+  });
+  it.each(['mismatch', 'existing', 'stale', 'self', 'duplicate'] as const)('disables Apply with visible %s reason and preserves links', (failure) => {
+    const { state, save, a, b } = setup(2, failure === 'existing');
+    fireEvent.click(button('Упорядоченное выделение')); for (const slot of a) click(slot.key); capture('A');
+    if (failure === 'self') capture('B');
+    else if (failure === 'duplicate') {
+      fireEvent.click(button('Порядок и имена')); fireEvent.click(button('Ниже: 1')); fireEvent.click(button('Использовать порядок как B')); fireEvent.click(button('Закрыть'));
+    } else {
+      fireEvent.click(button('Задняя')); click(b[0].key); if (failure !== 'mismatch') click(b[1].key); capture('B');
+    }
+    if (failure === 'stale') { fireEvent.click(button('Завершить порядок')); click(a[0].key); fireEvent.keyDown(document, { key: 'Delete' }); }
+    const dialog = openPairs(); expect(button('Создать связи')).toBeDisabled();
+    const reasons = { mismatch: 'Количество endpoints', existing: 'уже имеет внутреннюю связь', stale: 'Endpoint удалён', self: 'самим собой', duplicate: 'неориентированная пара' };
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(reasons[failure]);
+    fireEvent.click(button('Создать связи')); expect(screen.getByRole('dialog')).toBeInTheDocument();
+    fireEvent.click(button('Закрыть')); fireEvent.click(button('Save')); expect(save.mock.calls[0][0].individualLinks).toEqual(state.individualLinks);
   });
 });

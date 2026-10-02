@@ -7,6 +7,27 @@ export interface BlueprintEditorState {
 }
 export type BlueprintValidationError = 'nameRequired' | 'panelNameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateSlotKeys' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
 export const internalLinkPairKey = (first: string, second: string) => [first, second].sort().join('\u0000');
+export type PairwiseContinuityError = 'empty' | 'countMismatch' | 'missingEndpoint' | 'duplicateKey' | 'selfLink' | 'duplicatePair' | 'existingLink';
+export interface PairwiseContinuityPreview { pairs: BlueprintInternalLink[]; error?: PairwiseContinuityError }
+/** Captured order is authoritative; preflight validates the entire undirected batch. */
+export const pairwiseContinuityPreview = (state: BlueprintEditorState, a: readonly string[], b: readonly string[], reverseB: boolean): PairwiseContinuityPreview => {
+  if (!a.length || !b.length) return { pairs: [], error: 'empty' };
+  if (a.length !== b.length) return { pairs: [], error: 'countMismatch' };
+  const keys = new Set(state.slots.map((slot) => slot.key));
+  if ([...a, ...b].some((key) => !keys.has(key))) return { pairs: [], error: 'missingEndpoint' };
+  if (new Set(a).size !== a.length || new Set(b).size !== b.length) return { pairs: [], error: 'duplicateKey' };
+  const pairs = a.map((key, index) => ({ from_slot_key: key, to_slot_key: b[reverseB ? b.length - 1 - index : index] }));
+  if (pairs.some((pair) => pair.from_slot_key === pair.to_slot_key)) return { pairs, error: 'selfLink' };
+  const pairKeys = pairs.map((pair) => internalLinkPairKey(pair.from_slot_key, pair.to_slot_key));
+  if (new Set(pairKeys).size !== pairKeys.length) return { pairs, error: 'duplicatePair' };
+  const existing = new Set(state.individualLinks.map((link) => internalLinkPairKey(link.from_slot_key, link.to_slot_key)));
+  if (pairKeys.some((key) => existing.has(key))) return { pairs, error: 'existingLink' };
+  return { pairs };
+};
+export const applyPairwiseContinuity = (state: BlueprintEditorState, a: readonly string[], b: readonly string[], reverseB: boolean): BlueprintEditorState => {
+  const preview = pairwiseContinuityPreview(state, a, b, reverseB);
+  return preview.error ? state : { ...state, individualLinks: [...state.individualLinks, ...preview.pairs] };
+};
 export const cleanupLinks = (links: BlueprintInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
 export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState => {
   const slots = state.slots.filter((slot) => !keys.has(slot.key));

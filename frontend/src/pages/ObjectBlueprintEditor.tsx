@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
-import { applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
+import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
@@ -33,6 +33,29 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const [orderedMode, setOrderedMode] = useState(false);
   const [orderedKeys, setOrderedKeys] = useState<string[]>([]);
   const [orderOpen, setOrderOpen] = useState(false);
+  const [capturedA, setCapturedA] = useState<string[]>([]);
+  const [capturedB, setCapturedB] = useState<string[]>([]);
+  const [reverseB, setReverseB] = useState(false);
+  const [pairwiseOpen, setPairwiseOpen] = useState(false);
+  const pairwiseEntry = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (pairwiseOpen) return () => pairwiseEntry.current?.focus(); }, [pairwiseOpen]);
+  const pairwise = pairwiseContinuityPreview(editor, capturedA, capturedB, reverseB);
+  const canCapture = orderedMode && orderedKeys.length > 0 && new Set(orderedKeys).size === orderedKeys.length && orderedKeys.every((key) => editor.slots.some((slot) => slot.key === key && slot.panel_key === panelKey));
+  const captureStatus = (keys: readonly string[]) => {
+    if (!keys.length) return '0';
+    const slots = keys.map((key) => editor.slots.find((slot) => slot.key === key));
+    const panel = editor.panels.find((item) => item.panel_key === slots[0]?.panel_key);
+    return `${keys.length} · ${slots.some((slot) => !slot) || !panel ? t('blueprint.pairwise.invalidSet') : panel.display_name}`;
+  };
+  const endpointLabel = (key: string) => {
+    const slot = editor.slots.find((item) => item.key === key)!;
+    return `${slot.display_name} · ${editor.panels.find((panel) => panel.panel_key === slot.panel_key)?.display_name}`;
+  };
+  const applyPairwise = () => {
+    const next = applyPairwiseContinuity(editor, capturedA, capturedB, reverseB);
+    if (next === editor) return;
+    setEditor(next); setCapturedA([]); setCapturedB([]); setReverseB(false); setPairwiseOpen(false);
+  };
   const [naming, setNaming] = useState({ prefix: '', start: '1', step: '1' });
   const orderEntry = useRef<HTMLButtonElement>(null);
   const preview = bulkNamePreview(editor, orderedKeys, naming);
@@ -82,6 +105,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
       if (menu && (!(event.target instanceof Element) || !event.target.closest('.blueprint-composer__context-menu'))) setMenu(undefined);
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (pairwiseOpen) { if (event.key === 'Escape') { event.preventDefault(); setPairwiseOpen(false); } return; }
       if (orderOpen) { if (event.key === 'Escape') { event.preventDefault(); setOrderOpen(false); } return; }
       if (linksOpen) {
         if (event.key === 'Escape') { event.preventDefault(); closeLinks(); }
@@ -100,7 +124,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
-  }, [menu, selected, linksOpen, orderOpen]);
+  }, [menu, selected, linksOpen, orderOpen, pairwiseOpen]);
   const normalizedPixels = (axis: 'x' | 'y', pixels: number) => {
     const rect = canvasWrap.current?.querySelector('svg')?.getBoundingClientRect();
     const viewHeight = 1000 * bounds.height / bounds.width;
@@ -175,7 +199,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   };
   return <>
     <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
-    <div className="blueprint-composer blueprint-composer--authoring-workspace"><div className="blueprint-composer__workspace" inert={linksOpen || orderOpen}>
+    <div className="blueprint-composer blueprint-composer--authoring-workspace"><div className="blueprint-composer__workspace" inert={linksOpen || orderOpen || pairwiseOpen}>
       <section className="blueprint-editor-controls blueprint-composer__properties">
         <div className="blueprint-editor-controls__row">
           <label>{t('blueprint.editor.name')}<input value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} /></label>
@@ -226,6 +250,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           </div>}
         </div>
         <div className="blueprint-composer__contextual">
+          <button ref={pairwiseEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setPairwiseOpen(true); }}>{t('blueprint.pairwise.open')} · A: {capturedA.length} · B: {capturedB.length}</button>
           {!orderedMode ? <button type="button" className="secondary-action" onClick={() => { clearPanelUi(); setOrderedMode(true); }}>{t('blueprint.order.enter')}</button> : <>
             <span>{t('blueprint.order.count', { count: orderedKeys.length })}</span>
             <button ref={orderEntry} type="button" className="secondary-action" onClick={() => setOrderOpen(true)}>{t('blueprint.order.edit')}</button>
@@ -255,6 +280,14 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     {orderOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-order-title">
       <div className="catalog-dialog__surface blueprint-order-dialog">
         <h2 id="blueprint-order-title">{t('blueprint.order.edit')}</h2>
+        <div className="blueprint-pairwise__captures">
+          <span role="status">A: {captureStatus(capturedA)}</span>
+          <button type="button" disabled={!canCapture} onClick={() => setCapturedA([...orderedKeys])}>{t('blueprint.pairwise.captureA')}</button>
+          <button type="button" disabled={!capturedA.length} onClick={() => setCapturedA([])}>{t('blueprint.pairwise.clearA')}</button>
+          <span role="status">B: {captureStatus(capturedB)}</span>
+          <button type="button" disabled={!canCapture} onClick={() => setCapturedB([...orderedKeys])}>{t('blueprint.pairwise.captureB')}</button>
+          <button type="button" disabled={!capturedB.length} onClick={() => setCapturedB([])}>{t('blueprint.pairwise.clearB')}</button>
+        </div>
         <div className="blueprint-order-dialog__parameters">
           {(['prefix', 'start', 'step'] as const).map((field) => <label key={field}>{t(`blueprint.naming.${field}`)}<input type={field === 'prefix' ? 'text' : 'number'} step={field === 'prefix' ? undefined : '1'} value={naming[field]} onChange={(event) => setNaming((old) => ({ ...old, [field]: event.target.value }))} /></label>)}
         </div>
@@ -271,6 +304,28 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         <div className="catalog-dialog__actions">
           <button type="button" disabled={!preview?.length} onClick={() => setEditor((old) => applyBulkNames(old, orderedKeys, naming))}>{t('blueprint.naming.apply')}</button>
           <button type="button" autoFocus onClick={() => setOrderOpen(false)}>{t('action.close')}</button>
+        </div>
+      </div>
+    </section>}
+    {pairwiseOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-pairwise-title">
+      <div className="catalog-dialog__surface blueprint-pairwise-dialog">
+        <h2 id="blueprint-pairwise-title">{t('blueprint.pairwise.open')}</h2>
+        <div className="blueprint-pairwise__captures">
+          <span role="status">A: {captureStatus(capturedA)}</span>
+          <button type="button" disabled={!capturedA.length} onClick={() => setCapturedA([])}>{t('blueprint.pairwise.clearA')}</button>
+          <span role="status">B: {captureStatus(capturedB)}</span>
+          <button type="button" disabled={!capturedB.length} onClick={() => setCapturedB([])}>{t('blueprint.pairwise.clearB')}</button>
+        </div>
+        <label><input type="checkbox" checked={reverseB} onChange={(event) => setReverseB(event.target.checked)} />{t('blueprint.pairwise.reverseB')}</label>
+        {pairwise.error && <p role="alert">{t(`blueprint.pairwise.error.${pairwise.error}`)}</p>}
+        <div className="blueprint-pairwise-dialog__list">
+          {pairwise.pairs.map((pair, index) => <div key={index} className="blueprint-pairwise-dialog__row" data-pairwise-row>
+            <span>{index + 1}</span><span>{endpointLabel(pair.from_slot_key)}</span><span>↔</span><span>{endpointLabel(pair.to_slot_key)}</span>
+          </div>)}
+        </div>
+        <div className="catalog-dialog__actions">
+          <button type="button" disabled={Boolean(pairwise.error)} onClick={applyPairwise}>{t('blueprint.pairwise.apply')}</button>
+          <button type="button" autoFocus onClick={() => setPairwiseOpen(false)}>{t('action.close')}</button>
         </div>
       </div>
     </section>}

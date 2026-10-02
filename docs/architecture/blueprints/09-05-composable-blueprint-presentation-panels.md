@@ -2,14 +2,14 @@
 
 ## Status and authority
 
-**FIXED / ACCEPTED TARGET CONTRACT. SLICE A, B, C AND D1 IMPLEMENTED; D2 PENDING.**
+**FIXED / ACCEPTED TARGET CONTRACT. SLICES A, B, C AND D IMPLEMENTED; D2 IMPLEMENTED.**
 
 This document supersedes only the binary `FRONT | REAR` presentation model in
 [09.4](09-04-direct-blueprint-endpoint-authoring.md). Direct endpoint slots
 remain the primary Blueprint-version authoring entities. Persistence, API,
 workspace v3, projection, runtime geometry, preview, and the current
 multi-panel editor use panel composition. Slice B2 adds panel move and resize
-with transient screen-space snapping and guides. Phase C remains **PAUSED** pending bounded editor work. Port
+with transient screen-space snapping and guides. Phase C is **READY TO RESUME** with manual HV-01 / Phase C acceptance next. Port
 Block remains removed and is not a prerequisite.
 
 An immutable `ObjectBlueprintVersion` owns body/overall presentation,
@@ -248,11 +248,20 @@ Bounded implementation slices:
    only selected exact `display_name` values, retaining order for verification.
    No order, group, or naming recipe is persisted; geometry, keys, kinds,
    internal links, and the default-name allocator are unchanged.
-5. **Slice D2 PENDING — General pairwise continuity:** ordered sets A/B and
-   pairwise internal-link preview/apply remain a separate future slice.
+5. **Slice D2 IMPLEMENTED — General pairwise continuity:** capture copies the
+   current ordered slot keys as transient session snapshots A/B. They survive
+   order clearing, panel switches, dialog close/reopen, and ordered-mode exit;
+   explicit clear/recapture replaces them, while reload/navigation discards them.
+   A bounded on-demand dialog previews exact endpoint names with panel context.
+   Default pairing uses A[i] and B[i]; transient reverse B changes only derived
+   preview/apply order, never the snapshots. Shared preflight rejects empty or
+   unequal sets, missing/duplicate keys, self-links, duplicate undirected batch
+   pairs, and any existing ordinary link conflict. Apply is atomic and persists
+   only ordinary `BlueprintInternalLink` records, then clears A/B and reverse.
+   No pairing recipe, group, or new entity is introduced. Slice D is complete.
 
-Technology/capability remains **OPEN**, separate from these slices. Phase C
-remains **PAUSED**; remaining editor slices are prerequisites before patch-panel
-and internal-link acceptance. Slice C copy-to-panel and D1 ordered selection / bulk naming are **IMPLEMENTED**;
-D2 general pairwise continuity remains **PENDING**. Port Block does not return as
-a prerequisite.
+Technology/capability remains **OPEN**, separate from these slices. Dense runtime
+Map presentation remains **OPEN / DEFERRED**. Editor prerequisites are implemented;
+Phase C is **READY TO RESUME** at the same HV-01 step with manual acceptance next.
+This does not mark Phase C complete or PASSED. Port Block does not return as a
+prerequisite.

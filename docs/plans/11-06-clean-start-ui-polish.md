@@ -2,15 +2,15 @@
 
 ## Цель и порядок работы
 
-Direct endpoint foundation реализована: Port Block library/editor/navigation
-удалены, Object Blueprint создаётся через минимальный direct-slot editor.
-P-UX-11/12 shell, bounded workspace и aspect ratio сохранены; FRONT/REAR
-controls описывают текущую реализацию и superseded target UX. По принятому
+Direct endpoint foundation и multi-panel editor реализованы; Port Block
+library/editor/navigation удалены. P-UX-11/12 shell, bounded workspace и aspect
+ratio сохранены. По принятому
 [09.5 panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
-multi-panel redesign предшествует patch-panel/internal-link acceptance и пока
-не реализован. Multi-select, alignment/distribution, ordered bulk naming и
-pairwise bulk continuity остаются pending; Phase C и HV-01 manual recheck
-приостановлены.
+editor prerequisites завершены: multi-select, alignment/distribution, panel copy,
+ordered bulk naming и pairwise continuity (D2) реализованы. Phase C — **READY TO
+RESUME**; следующий шаг — manual HV-01 recheck / Phase C acceptance. Это не
+означает Phase C complete/PASSED; technology/capability и dense runtime Map
+presentation остаются OPEN / DEFERRED.
 
 Этот журнал фиксирует замечания, найденные при последовательном ручном
 проходе продукта от первого экрана после авторизации до полностью собранного

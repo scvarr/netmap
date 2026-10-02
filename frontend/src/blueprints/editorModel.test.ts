@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
+import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
 import { newBlueprintEditorState } from '../pages/ObjectBlueprintEditor';
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 
@@ -468,5 +468,49 @@ describe('ordered bulk naming pure operations', () => {
   it('rejects unknown, duplicate and cross-panel keys atomically', () => {
     const state = fixture(); const other = addPanel(state, 'right'); const both = addEndpoints(other, 'NETWORK_PORT', 1, other.activePanelKey);
     for (const keys of [['missing'], [both.slots.at(-1)!.key, state.slots[0].key], [both.slots.at(-1)!.key, both.slots.at(-1)!.key]]) expect(applyBulkNames(both, keys, { prefix: '', start: '1', step: '1' })).toBe(both);
+  });
+});
+
+
+describe('general pairwise continuity', () => {
+  const fixture = () => {
+    const initial = newBlueprintEditorState(); initial.name = 'Patch';
+    return { ...initial, slots: ['a', 'b', 'c', 'd'].map((key) => ({ key, display_name: key, kind: 'CONNECTION_POINT' as const, panel_key: initial.activePanelKey, rendered_position: { x: .5, y: .5 } })) };
+  };
+  it.each([false, true])('uses exact captured order, reverse B=%s, preserving everything except links', (reverse) => {
+    const state = fixture(); state.individualLinks = [{ from_slot_key: 'a', to_slot_key: 'b' }];
+    const before = structuredClone(state); const a = ['b', 'a']; const b = ['d', 'c'];
+    const expected = reverse ? [{ from_slot_key: 'b', to_slot_key: 'c' }, { from_slot_key: 'a', to_slot_key: 'd' }] : [{ from_slot_key: 'b', to_slot_key: 'd' }, { from_slot_key: 'a', to_slot_key: 'c' }];
+    expect(pairwiseContinuityPreview(state, a, b, reverse)).toEqual({ pairs: expected });
+    const next = applyPairwiseContinuity(state, a, b, reverse);
+    expect(next.individualLinks).toEqual([...state.individualLinks, ...expected]);
+    expect(next.individualLinks).toHaveLength(3);
+    for (const key of Object.keys(state) as (keyof BlueprintEditorState)[]) if (key !== 'individualLinks') expect(next[key]).toBe(state[key]);
+    expect(state).toEqual(before); expect(a).toEqual(['b', 'a']); expect(b).toEqual(['d', 'c']);
+    expect(Object.keys(next).sort()).toEqual(Object.keys(state).sort());
+    expect(createBlueprintRequest(next).request!.internal_links).toEqual(next.individualLinks);
+  });
+  it('pairs A=[a,b], B=[c,d] and permits overlap when generated pairs are valid', () => {
+    const state = fixture();
+    expect(pairwiseContinuityPreview(state, ['a', 'b'], ['c', 'd'], false).pairs).toEqual([{ from_slot_key: 'a', to_slot_key: 'c' }, { from_slot_key: 'b', to_slot_key: 'd' }]);
+    expect(applyPairwiseContinuity(state, ['a', 'b'], ['b', 'c'], false).individualLinks).toEqual([{ from_slot_key: 'a', to_slot_key: 'b' }, { from_slot_key: 'b', to_slot_key: 'c' }]);
+  });
+  it.each([
+    [[], ['c'], 'empty'], [['a'], [], 'empty'], [['a', 'b'], ['c'], 'countMismatch'],
+    [['missing', 'b'], ['c', 'd'], 'missingEndpoint'], [['a', 'b'], ['c', 'missing'], 'missingEndpoint'],
+    [['a', 'a'], ['c', 'd'], 'duplicateKey'], [['a', 'b'], ['c', 'c'], 'duplicateKey'],
+    [['a', 'b'], ['a', 'c'], 'selfLink'], [['a', 'b'], ['b', 'a'], 'duplicatePair'],
+  ] as const)('rejects A=%j B=%j: %s without partial changes', (a, b, error) => {
+    const state = fixture(); const before = structuredClone(state);
+    expect(pairwiseContinuityPreview(state, a, b, false).error).toBe(error);
+    expect(applyPairwiseContinuity(state, a, b, false)).toBe(state);
+    expect(state).toEqual(before);
+  });
+  it('rejects the whole batch when any link already exists in opposite direction', () => {
+    const state = fixture(); state.individualLinks = [{ from_slot_key: 'd', to_slot_key: 'b' }];
+    const links = state.individualLinks;
+    expect(pairwiseContinuityPreview(state, ['a', 'b'], ['c', 'd'], false).error).toBe('existingLink');
+    expect(applyPairwiseContinuity(state, ['a', 'b'], ['c', 'd'], false)).toBe(state);
+    expect(state.individualLinks).toBe(links); expect(links).toHaveLength(1);
   });
 });
