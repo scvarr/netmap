@@ -41,6 +41,12 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const [distributionPercent, setDistributionPercent] = useState('50');
   const [distributionFull, setDistributionFull] = useState(false);
   const canvasWrap = useRef<HTMLDivElement>(null);
+  const [linksOpen, setLinksOpen] = useState(false);
+  const linksEntry = useRef<HTMLButtonElement>(null);
+  const closeLinks = () => setLinksOpen(false);
+  useEffect(() => {
+    if (linksOpen) return () => linksEntry.current?.focus();
+  }, [linksOpen]);
   const [error, setError] = useState<string>();
   const selectedSlot = selected.size === 1 ? editor.slots.find((slot) => selected.has(slot.key) && slot.panel_key === panelKey) : undefined;
   const selectedPosition = selectionPosition(editor, selected);
@@ -69,6 +75,10 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
       if (menu && (!(event.target instanceof Element) || !event.target.closest('.blueprint-composer__context-menu'))) setMenu(undefined);
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      if (linksOpen) {
+        if (event.key === 'Escape') { event.preventDefault(); closeLinks(); }
+        return;
+      }
       if (event.key === 'Escape') {
         if (menu) setMenu(undefined);
         else setSelected(new Set());
@@ -82,7 +92,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
-  }, [menu, selected]);
+  }, [menu, selected, linksOpen]);
   const normalizedPixels = (axis: 'x' | 'y', pixels: number) => {
     const rect = canvasWrap.current?.querySelector('svg')?.getBoundingClientRect();
     const viewHeight = 1000 * bounds.height / bounds.width;
@@ -152,7 +162,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   };
   return <>
     <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
-    <div className="blueprint-composer"><div className="blueprint-composer__workspace">
+    <div className="blueprint-composer"><div className="blueprint-composer__workspace" inert={linksOpen}>
       <section className="blueprint-editor-controls blueprint-composer__properties">
         <div className="blueprint-editor-controls__row">
           <label>{t('blueprint.editor.name')}<input value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} /></label>
@@ -164,11 +174,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         </div>
         <label>{t('blueprint.editor.color')}<input type="color" value={editor.fillColor} onChange={(e) => setEditor({ ...editor, fillColor: e.target.value })} /></label>
         <section className="blueprint-composer__section blueprint-composer__links"><h2>{t('blueprint.composition.links')}</h2>
-          {editor.individualLinks.map((link, index) => <div className="blueprint-composer__link" key={index}>
-            {(['from_slot_key', 'to_slot_key'] as const).map((field) => <select key={field} aria-label={t(field === 'from_slot_key' ? 'blueprint.composition.firstLink' : 'blueprint.composition.secondLink', { index: index + 1 })} value={link[field]} onChange={(e) => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.map((item, i) => i === index ? { ...item, [field]: e.target.value } : item) }))}>{editor.slots.map((slot) => <option key={slot.key} value={slot.key}>{slot.display_name} · {editor.panels.find((panel) => panel.panel_key === slot.panel_key)?.display_name}</option>)}</select>)}
-            <button type="button" className="text-action" onClick={() => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.filter((_, i) => i !== index) }))}>{t('blueprint.composition.remove')}</button>
-          </div>)}
-          <button type="button" className="secondary-action" disabled={editor.slots.length < 2} onClick={addLink}>{t('blueprint.composition.addLink')}</button>
+          <button ref={linksEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setLinksOpen(true); }}>{t('blueprint.composition.editLinks', { count: editor.individualLinks.length })}</button>
         </section>
         {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
         <button type="button" className="primary-action" onClick={() => void save()}>{saveLabel}</button>
@@ -224,5 +230,21 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         </aside>}
       </section>
     </div></div>
+    {linksOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-links-title">
+      <div className="catalog-dialog__surface blueprint-links-dialog">
+        <h2 id="blueprint-links-title">{t('blueprint.composition.links')}</h2>
+        <div className="blueprint-links-dialog__list">
+          {editor.individualLinks.map((link, index) => <div className="blueprint-composer__link" key={index}>
+            {(['from_slot_key', 'to_slot_key'] as const).map((field) => <label key={field} className="blueprint-links-dialog__endpoint">{field === 'to_slot_key' && <span aria-hidden="true" className="blueprint-links-dialog__separator">↔</span>}<select key={field} aria-label={t(field === 'from_slot_key' ? 'blueprint.composition.firstLink' : 'blueprint.composition.secondLink', { index: index + 1 })} value={link[field]} onChange={(e) => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.map((item, i) => i === index ? { ...item, [field]: e.target.value } : item) }))}>{editor.slots.map((slot) => <option key={slot.key} value={slot.key}>{slot.display_name} · {editor.panels.find((panel) => panel.panel_key === slot.panel_key)?.display_name}</option>)}</select></label>)}
+            <button type="button" className="text-action" onClick={() => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.filter((_, i) => i !== index) }))}>{t('blueprint.composition.remove')}</button>
+          </div>)}
+        </div>
+        <div className="catalog-dialog__actions">
+          <button type="button" disabled={editor.slots.length < 2} onClick={addLink}>{t('blueprint.composition.addLink')}</button>
+          <button type="button" autoFocus onClick={closeLinks}>{t('action.close')}</button>
+        </div>
+      </div>
+    </section>}
+
   </>;
 }
