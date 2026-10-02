@@ -224,14 +224,51 @@ export const layoutSelectionTwoRows = (state: BlueprintEditorState, keys: Readon
   })));
 };
 
+const panelEndpointLimit = 400;
+const hasEndpointCapacity = (state: BlueprintEditorState, panelKey: string, count: number) =>
+  state.slots.filter((slot) => slot.panel_key === panelKey).length + count <= panelEndpointLimit;
+const nextEndpointNumber = (state: BlueprintEditorState, panel: PresentationPanel) => {
+  const maximum = Math.max(0, ...state.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => new RegExp(`^${panel.panel_number}-(\\d+)$`).exec(slot.display_name)).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => Number(match[1])));
+  return Math.max(state.nextLocalNumberByPanel[panel.panel_key] ?? 1, maximum + 1);
+};
+
+export type CopySelectionError = 'invalidSelection' | 'invalidDestination' | 'capacity';
+export const copySelectionError = (state: BlueprintEditorState, keys: ReadonlySet<string>, destinationPanelKey: string): CopySelectionError | undefined => {
+  if (destinationPanelKey === state.activePanelKey || !state.panels.some((panel) => panel.panel_key === destinationPanelKey)) return 'invalidDestination';
+  const sources = state.slots.filter((slot) => keys.has(slot.key) && slot.panel_key === state.activePanelKey);
+  if (!sources.length || sources.length !== keys.size) return 'invalidSelection';
+  if (!hasEndpointCapacity(state, destinationPanelKey, sources.length)) return 'capacity';
+};
+export interface CopySelectionResult { state: BlueprintEditorState; copiedKeys: string[]; error?: CopySelectionError }
+/** Correspondence exists only in this operation; the result contains ordinary slots and links. */
+export const copySelectionToPanel = (state: BlueprintEditorState, keys: ReadonlySet<string>, destinationPanelKey: string, createContinuity: boolean): CopySelectionResult => {
+  const error = copySelectionError(state, keys, destinationPanelKey);
+  if (error) return { state, copiedKeys: [], error };
+  const panel = state.panels.find((item) => item.panel_key === destinationPanelKey)!;
+  const next = nextEndpointNumber(state, panel);
+  const sources = state.slots.filter((slot) => keys.has(slot.key));
+  const copies = sources.map((source, index): BlueprintSlot => ({
+    key: crypto.randomUUID(), kind: source.kind, panel_key: destinationPanelKey,
+    display_name: `${panel.panel_number}-${next + index}`,
+    rendered_position: { ...source.rendered_position },
+  }));
+  return {
+    copiedKeys: copies.map((slot) => slot.key),
+    state: {
+      ...state, activePanelKey: destinationPanelKey, slots: [...state.slots, ...copies],
+      nextLocalNumberByPanel: { ...state.nextLocalNumberByPanel, [destinationPanelKey]: next + copies.length },
+      individualLinks: createContinuity ? [...state.individualLinks, ...sources.map((source, index) => ({ from_slot_key: source.key, to_slot_key: copies[index].key }))] : state.individualLinks,
+    },
+  };
+};
+
 /** UUIDs are opaque and independent of names, position, panel, and selection. */
 export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKind, count: number, panelKey: string): BlueprintEditorState => {
-  if (panelKey !== state.activePanelKey || !Number.isInteger(count) || count < 1 || count > 256 || state.slots.filter((slot) => slot.panel_key === panelKey).length + count > 400) return state;
+  if (panelKey !== state.activePanelKey || !Number.isInteger(count) || count < 1 || count > 256 || !hasEndpointCapacity(state, panelKey, count)) return state;
   const panel = state.panels.find((item) => item.panel_key === panelKey);
   if (!panel) return state;
   const existing = state.slots.filter((slot) => slot.panel_key === panelKey).length;
-  const maximum = Math.max(0, ...state.slots.filter((slot) => slot.panel_key === panelKey).map((slot) => new RegExp(`^${panel.panel_number}-(\\d+)$`).exec(slot.display_name)).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => Number(match[1])));
-  const next = Math.max(state.nextLocalNumberByPanel[panelKey] ?? 1, maximum + 1);
+  const next = nextEndpointNumber(state, panel);
   const slots = Array.from({ length: count }, (_, index): BlueprintSlot => {
     const ordinal = existing + index;
     const column = ordinal % 20;

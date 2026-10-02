@@ -3,8 +3,126 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
-import { createBlueprintRequest } from '../blueprints/editorModel';
+import { addEndpoints, addPanel, createBlueprintRequest, hydrateBlueprintEditorState } from '../blueprints/editorModel';
+import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 import { newBlueprintEditorState, ObjectBlueprintEditor } from './ObjectBlueprintEditor';
+
+describe('copy selection controls', () => {
+  const fixture = (count = 3) => {
+    const initial = newBlueprintEditorState(); initial.name = 'Device';
+    const source = addEndpoints(initial, 'NETWORK_PORT', count, initial.activePanelKey);
+    source.slots[0] = { ...source.slots[0], display_name: 'MGMT', rendered_position: { x: .25, y: .75 } };
+    const panels = addPanel(source, 'right');
+    return { ...panels, activePanelKey: source.activePanelKey };
+  };
+  it.each([false, true])('copies, selects destination slots and saves/reopens ordinary data (continuity %s)', async (continuity) => {
+    const initial = fixture(); const save = vi.fn().mockResolvedValue(undefined);
+    const view = render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
+    expect(screen.queryByRole('group', { name: 'Копировать выделение' })).toBeNull();
+    const nodes = [...document.querySelectorAll('[data-slot-key]')];
+    fireEvent.pointerDown(nodes[0]); fireEvent.pointerUp(document.querySelector('svg')!);
+    for (const node of nodes.slice(1)) { fireEvent.pointerDown(node, { ctrlKey: true }); fireEvent.pointerUp(document.querySelector('svg')!); }
+    const copy = within(screen.getByRole('group', { name: 'Копировать выделение' }));
+    expect(copy.getAllByRole('option').map((option) => (option as HTMLOptionElement).value)).toEqual([initial.panels[1].panel_key]);
+    expect(copy.getByRole('option')).toHaveTextContent('2 · Панель 2');
+    expect(copy.getByLabelText('Создать связи 1:1')).not.toBeChecked();
+    if (continuity) await userEvent.click(copy.getByLabelText('Создать связи 1:1'));
+    fireEvent.contextMenu(nodes[0]);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'По горизонтали' }));
+    expect(screen.getByRole('group', { name: 'Диапазон распределения' })).toBeInTheDocument();
+    // Keep the stale transient menu open to exercise copy's panel-switch cleanup.
+    fireEvent.click(copy.getByRole('button', { name: 'Копировать' }));
+    expect(screen.getByRole('button', { name: 'Панель 2' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Диапазон распределения' })).toBeNull();
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(3);
+    expect(document.querySelector('[data-slot-key="' + initial.slots[0].key + '"]')).not.toHaveAttribute('data-selected', 'true');
+    expect(screen.getByLabelText('Создать связи 1:1')).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const request = createBlueprintRequest(save.mock.calls[0][0]).request!;
+    const copies = request.slots.filter((slot) => slot.panel_key === initial.panels[1].panel_key);
+    expect(copies.map((slot) => slot.display_name)).toEqual(['2-1', '2-2', '2-3']);
+    expect(copies[0].rendered_position).toEqual({ x: .25, y: .75 });
+    expect(request.slots.slice(0, 3)).toEqual(initial.slots);
+    expect(request.internal_links).toEqual(continuity ? initial.slots.map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: copies[index].key })) : []);
+    if (continuity) {
+      expect(screen.getByLabelText('Первый порт внутренней связи 1')).toHaveValue(initial.slots[0].key);
+      expect(screen.getByLabelText('Второй порт внутренней связи 1')).toHaveValue(copies[0].key);
+      expect(screen.getAllByRole('option', { name: '2-1 · Панель 2' })).toHaveLength(6);
+    }
+    // Existing numeric, layout, drag, individual rename and deletion tools act on copies.
+    const position = within(screen.getByRole('group', { name: 'Положение выделения' }));
+    fireEvent.change(position.getByLabelText('X'), { target: { value: '.5' } }); fireEvent.blur(position.getByLabelText('X'));
+    const copiedNode = document.querySelector(`[data-slot-key="${copies[0].key}"]`)!;
+    fireEvent.contextMenu(copiedNode); await userEvent.click(screen.getByRole('menuitem', { name: 'В один ряд' }));
+    const canvas = document.querySelector('svg')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
+    fireEvent.pointerDown(copiedNode, { clientX: 600, clientY: 100 }); fireEvent.pointerMove(canvas, { clientX: 650, clientY: 130 }); fireEvent.pointerUp(canvas);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const changed = createBlueprintRequest(save.mock.calls[1][0]).request!;
+    expect(changed.slots.slice(0, 3)).toEqual(initial.slots);
+    expect(changed.slots.at(-1)?.rendered_position).not.toEqual(copies.at(-1)?.rendered_position);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.pointerDown(copiedNode); fireEvent.pointerUp(canvas);
+    fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Renamed copy' } });
+    fireEvent.keyDown(document, { key: 'Delete' });
+    expect(document.querySelector(`[data-slot-key="${copies[0].key}"]`)).toBeNull();
+    view.unmount();
+    const reopened = hydrateBlueprintEditorState({ ...request, schema_version: '2.0', next_panel_number: 3, version_number: 1,
+      blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
+      version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' },
+    } satisfies ObjectBlueprintVersionDocument);
+    expect(reopened.slots).toEqual(request.slots); expect(reopened.individualLinks).toEqual(request.internal_links);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={reopened} onSave={save} /></MemoryRouter></I18nProvider>);
+    expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(6);
+    await userEvent.click(screen.getByRole('button', { name: 'Панель 2' }));
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
+    expect(screen.queryByRole('group', { name: 'Копировать выделение' })).toBeNull();
+  });
+  it('hides copy for a single panel and disables the entire operation on capacity overflow', async () => {
+    const initial = newBlueprintEditorState();
+    const view = render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={initial} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    expect(screen.queryByRole('group', { name: 'Копировать выделение' })).toBeNull(); view.unmount();
+    const state = fixture(2); const destination = state.panels[1].panel_key;
+    const populated = addEndpoints({ ...state, activePanelKey: destination }, 'NETWORK_PORT', 256, destination);
+    const full = addEndpoints(populated, 'NETWORK_PORT', 143, destination);
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={{ ...full, activePanelKey: state.activePanelKey }} onSave={save} /></MemoryRouter></I18nProvider>);
+    for (const slot of state.slots) { fireEvent.pointerDown(document.querySelector(`[data-slot-key="${slot.key}"]`)!, { ctrlKey: true }); fireEvent.pointerUp(document.querySelector('svg')!); }
+    expect(screen.getByRole('button', { name: 'Копировать' })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent('недостаточно места');
+    fireEvent.click(screen.getByRole('button', { name: 'Копировать' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].slots).toEqual(full.slots);
+    expect(save.mock.calls[0][0].individualLinks).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Панель 1' })).toHaveAttribute('aria-pressed', 'true');
+  });
+  it('uses the chosen destination and clears copy settings and spatial UI on ordinary panel switch', async () => {
+    const source = fixture(1); const third = addPanel({ ...source, activePanelKey: source.panels[1].panel_key }, 'below');
+    const initial = { ...third, activePanelKey: source.activePanelKey }; const save = vi.fn().mockResolvedValue(undefined);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
+    const selectSource = () => { fireEvent.pointerDown(document.querySelector(`[data-slot-key="${source.slots[0].key}"]`)!); fireEvent.pointerUp(document.querySelector('svg')!); };
+    selectSource();
+    expect(screen.getByLabelText('Панель назначения').querySelectorAll('option')).toHaveLength(2);
+    await userEvent.click(screen.getByLabelText('Создать связи 1:1'));
+    fireEvent.contextMenu(document.querySelector('[data-selected="true"]')!);
+    fireEvent.click(screen.getByRole('button', { name: 'Панель 2' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Положение выделения' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Панель 1' })); selectSource();
+    expect(screen.getByLabelText('Создать связи 1:1')).not.toBeChecked();
+    await userEvent.selectOptions(screen.getByLabelText('Панель назначения'), third.activePanelKey);
+    await userEvent.click(screen.getByRole('button', { name: 'Копировать' }));
+    expect(screen.getByRole('button', { name: 'Панель 3' })).toHaveAttribute('aria-pressed', 'true');
+    expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(1);
+    expect(screen.getByLabelText('Название')).toHaveValue('3-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const request = createBlueprintRequest(save.mock.calls[0][0]).request!;
+    expect(request.slots.at(-1)?.panel_key).toBe(third.activePanelKey);
+    expect(Object.keys(request).sort()).toEqual(['body', 'internal_links', 'name', 'panels', 'slots']);
+  });
+});
 
 describe('minimal direct endpoint editor', () => {
   const renderEditor = () => render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);

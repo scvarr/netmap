@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**FIXED / ACCEPTED TARGET CONTRACT. SLICE A AND B IMPLEMENTED; C/D PENDING.**
+**FIXED / ACCEPTED TARGET CONTRACT. SLICE A, B AND C IMPLEMENTED; D PENDING.**
 
 This document supersedes only the binary `FRONT | REAR` presentation model in
 [09.4](09-04-direct-blueprint-endpoint-authoring.md). Direct endpoint slots
@@ -90,11 +90,10 @@ recipe or semantic inference from names is persisted.
 
 The editor supports explicit “Копировать в панель → <target panel>” for
 selected endpoints. Each copy is a new slot with a new independent `slot_key`,
-the source kind, destination `panel_key`, and copied local normalized geometry
-when meaningful. Use destination-panel-aware defaults (`1-1` copied to panel 2
-becomes `2-1`) rather than blindly reusing source names. For custom source
-names, copy behavior must remain explicit and predictable and avoid accidental
-duplicate authoring names; no naming DSL is introduced.
+the source kind, destination `panel_key`, and exactly preserved panel-local
+normalized geometry, regardless of destination size or aspect ratio. Use destination-panel-aware defaults (`1-1` copied to panel 2
+becomes `2-1`) rather than blindly reusing source names. Custom source names
+are not inherited: every copy uses the ordinary destination endpoint-name allocator. No existing endpoint is renamed or renumbered.
 
 During the operation the editor may hold transient
 `source_slot_key -> copied_slot_key` correspondence. Do not persist copy
@@ -231,13 +230,19 @@ Bounded implementation slices:
    border and resize it with eight transient handles. Pointer geometry remains
    stable during a gesture; snapping to other panel edges and visual guides are
    transient. Endpoint local coordinates remain unchanged. Slice B is complete.
-3. **Slice C PENDING — Copy to panel:** selected-slot copy with new keys, destination defaults,
-   local geometry, and optional 1:1 links.
+3. **Slice C IMPLEMENTED — Copy to panel:** selected-slot copy from the active panel
+   to another existing panel, with new opaque slot keys, destination panel membership,
+   destination-aware default naming, exactly preserved local normalized geometry,
+   and optional ordinary 1:1 internal links. No copy relation is persisted.
+   Capacity is checked for the entire selection before changes; overflow leaves
+   state unchanged. Successful copy activates the destination and selects the copies,
+   without auto-layout. The compact copy controls sit below the canvas beside
+   selection tools.
 4. **Slice D PENDING — Ordered bulk authoring:** ordered selection, bulk naming, and general
    pairwise continuity.
 
 Technology/capability remains **OPEN**, separate from these slices. Phase C
 remains **PAUSED**; remaining editor slices are prerequisites before patch-panel
-and internal-link acceptance. Slice C copy-to-panel and Slice D ordered bulk
-authoring remain **PENDING**. Port Block does not return as
+and internal-link acceptance. Slice C copy-to-panel is **IMPLEMENTED**; Slice D ordered bulk
+authoring remains **PENDING**. Port Block does not return as
 a prerequisite.

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
-import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
+import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/objectBlueprintTypes';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
@@ -30,6 +30,11 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
   const [count, setCount] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [copyDestination, setCopyDestination] = useState('');
+  const [createContinuity, setCreateContinuity] = useState(false);
+  const destinationPanels = editor.panels.filter((panel) => panel.panel_key !== panelKey);
+  const destinationKey = destinationPanels.some((panel) => panel.panel_key === copyDestination) ? copyDestination : destinationPanels[0]?.panel_key ?? '';
+  const copyError = copySelectionError(editor, selected, destinationKey);
   const [positionDraft, setPositionDraft] = useState<{ axis: 'x' | 'y'; value: string }>();
   const [menu, setMenu] = useState<{ x: number; y: number }>();
   const [distributionAxis, setDistributionAxis] = useState<'x' | 'y'>();
@@ -48,7 +53,14 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     setPositionDraft(undefined);
   };
   const deleteSelected = () => { setEditor((old) => removeEndpoints(old, selected)); setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); };
-  const clearPanelUi = () => { setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); };
+  const clearPanelUi = () => { setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); setCopyDestination(''); setCreateContinuity(false); };
+  const copySelected = () => {
+    const result = copySelectionToPanel(editor, selected, destinationKey, createContinuity);
+    if (result.error) return;
+    setEditor(result.state);
+    clearPanelUi();
+    setSelected(new Set(result.copiedKeys));
+  };
   const activatePanel = (key: string) => { if (key === panelKey) return; setEditor((old) => ({ ...old, activePanelKey: key })); clearPanelUi(); };
   const createPanel = (direction: PanelDirection) => { setEditor((old) => addPanel(old, direction)); clearPanelUi(); };
   const removePanel = () => { setEditor((old) => deleteActivePanel(old)); clearPanelUi(); };
@@ -197,6 +209,13 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         {selectedPosition && <section className="blueprint-composer__position" role="group" aria-label={t('blueprint.position.title')}>
           <strong>{t('blueprint.position.title')}</strong>
           {(['x', 'y'] as const).map((axis) => <label key={axis}>{axis.toUpperCase()}<input type="number" min="0" max="1" step="0.001" value={positionDraft?.axis === axis ? positionDraft.value : shownPosition(selectedPosition[axis])} onFocus={() => setPositionDraft({ axis, value: shownPosition(selectedPosition[axis]) })} onChange={(event) => setPositionDraft({ axis, value: event.target.value })} onBlur={(event) => applyPosition(axis, event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label>)}
+        </section>}
+        {selected.size >= 1 && editor.panels.length > 1 && <section className="blueprint-composer__copy" role="group" aria-label={t('blueprint.copy.title')}>
+          <strong>{t('blueprint.copy.title')}</strong>
+          <label>{t('blueprint.copy.destination')}<select value={destinationKey} onChange={(event) => setCopyDestination(event.target.value)}>{destinationPanels.map((panel) => <option key={panel.panel_key} value={panel.panel_key}>{panel.panel_number} · {panel.display_name}</option>)}</select></label>
+          <label className="blueprint-composer__copy-continuity"><input type="checkbox" checked={createContinuity} onChange={(event) => setCreateContinuity(event.target.checked)} />{t('blueprint.copy.continuity')}</label>
+          <button type="button" className="secondary-action" disabled={Boolean(copyError)} onClick={copySelected}>{t('blueprint.copy.action')}</button>
+          {copyError === 'capacity' && <p role="status" className="blueprint-editor__error">{t('blueprint.copy.capacity')}</p>}
         </section>}
         {selectedSlot && <aside className="blueprint-composer__selected">
           <label>{t('blueprint.endpoint.name')}<input value={selectedSlot.display_name} onChange={(e) => updateSlot(selectedSlot.key, { display_name: e.target.value })} /></label>

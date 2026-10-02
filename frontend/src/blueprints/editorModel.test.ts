@@ -1,7 +1,77 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addEndpoints, addPanel, alignSelectionLine, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
+import { addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
 import { newBlueprintEditorState } from '../pages/ObjectBlueprintEditor';
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
+
+describe('selected-slot copy to panel', () => {
+  const fixture = () => {
+    const initial = newBlueprintEditorState();
+    const source = addEndpoints(initial, 'NETWORK_PORT', 3, initial.activePanelKey);
+    source.name = 'Copy device';
+    source.slots[0] = { ...source.slots[0], display_name: 'MGMT', rendered_position: { x: .25, y: .75 } };
+    source.slots[1] = { ...source.slots[1], kind: 'CONNECTION_POINT', display_name: 'UPLINK-A', rendered_position: { x: .1234567, y: .7654321 } };
+    const destination = addPanel(source, 'right');
+    destination.panels[1] = { ...destination.panels[1], width: 25, height: 190 };
+    const populated = addEndpoints(destination, 'CONNECTION_POINT', 2, destination.activePanelKey);
+    return { ...populated, activePanelKey: source.activePanelKey, individualLinks: [{ from_slot_key: source.slots[0].key, to_slot_key: source.slots[2].key }] };
+  };
+  it.each([1, 3])('copies %i sources with independent keys, destination defaults and exact geometry', (count) => {
+    const state = fixture(); const before = structuredClone(state);
+    const sources = state.slots.slice(0, count); const destination = state.panels[1].panel_key;
+    const result = copySelectionToPanel(state, new Set([...sources].reverse().map((slot) => slot.key)), destination, false);
+    expect(result.error).toBeUndefined();
+    expect(state).toEqual(before);
+    expect(result.state.slots.slice(0, state.slots.length)).toEqual(state.slots);
+    expect(result.state.panels).toBe(state.panels);
+    expect(result.state.activePanelKey).toBe(destination);
+    const copies = result.copiedKeys.map((key) => result.state.slots.find((slot) => slot.key === key)!);
+    expect(copies).toHaveLength(count);
+    expect(new Set(result.state.slots.map((slot) => slot.key)).size).toBe(state.slots.length + count);
+    copies.forEach((copy, index) => {
+      expect(copy.key).not.toBe(sources[index].key);
+      expect(copy).toEqual({ key: result.copiedKeys[index], display_name: `2-${3 + index}`, kind: sources[index].kind, panel_key: destination, rendered_position: sources[index].rendered_position });
+      expect(copy.rendered_position).not.toBe(sources[index].rendered_position);
+    });
+    expect(result.state.nextLocalNumberByPanel[destination]).toBe(3 + count);
+    expect(result.state.nextLocalNumberByPanel[state.activePanelKey]).toBe(state.nextLocalNumberByPanel[state.activePanelKey]);
+    expect(result.state.individualLinks).toBe(state.individualLinks);
+    expect(addEndpoints(result.state, 'NETWORK_PORT', 1, destination).slots.at(-1)?.display_name).toBe(`2-${3 + count}`);
+  });
+  it('uses the transient destination allocator without compacting existing names, and resets when empty', () => {
+    const state = fixture(); const destination = state.panels[1].panel_key; const keys = new Set([state.slots[0].key]);
+    state.nextLocalNumberByPanel[destination] = 10;
+    expect(copySelectionToPanel(state, keys, destination, false).state.slots.at(-1)?.display_name).toBe('2-10');
+    const cleared = removeEndpoints(state, new Set(state.slots.filter((slot) => slot.panel_key === destination).map((slot) => slot.key)));
+    const result = copySelectionToPanel(cleared, keys, destination, false);
+    expect(result.state.slots.at(-1)?.display_name).toBe('2-1');
+    expect(result.state.nextLocalNumberByPanel[destination]).toBe(2);
+  });
+  it('adds exactly one ordinary source-to-copy link per source and preserves unrelated links', () => {
+    const state = fixture(); const sources = state.slots.slice(0, 3);
+    const result = copySelectionToPanel(state, new Set(sources.map((slot) => slot.key)), state.panels[1].panel_key, true);
+    expect(result.state.individualLinks).toEqual([...state.individualLinks, ...sources.map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: result.copiedKeys[index] }))]);
+    expect(createBlueprintRequest(result.state).errors).toEqual([]);
+  });
+  it.each([false, true])('leaves the entire state unchanged on overflow (continuity %s)', (continuity) => {
+    const state = fixture(); const destination = state.panels[1].panel_key;
+    const filler = addEndpoints({ ...state, activePanelKey: destination }, 'NETWORK_PORT', 256, destination);
+    const full = addEndpoints(filler, 'NETWORK_PORT', 141, destination);
+    const source = { ...full, activePanelKey: state.activePanelKey }; const before = structuredClone(source);
+    const result = copySelectionToPanel(source, new Set(state.slots.slice(0, 3).map((slot) => slot.key)), destination, continuity);
+    expect(result).toEqual({ state: source, copiedKeys: [], error: 'capacity' });
+    expect(result.state).toBe(source); expect(source).toEqual(before);
+    const fits = copySelectionToPanel(source, new Set([state.slots[0].key]), destination, continuity);
+    expect(fits.state.slots.filter((slot) => slot.panel_key === destination)).toHaveLength(400);
+  });
+  it('rejects same/missing destinations, empty, stale and cross-panel selections atomically', () => {
+    const state = fixture(); const destination = state.panels[1].panel_key;
+    for (const [keys, target] of [
+      [new Set([state.slots[0].key]), state.activePanelKey], [new Set([state.slots[0].key]), 'missing'],
+      [new Set<string>(), destination], [new Set(['stale']), destination],
+      [new Set([state.slots[0].key, state.slots[3].key]), destination],
+    ] as const) expect(copySelectionToPanel(state, keys, target, true).state).toBe(state);
+  });
+});
 
 describe('direct Blueprint slots', () => {
   it('moves only panel origin, preserving identity and local endpoints, and adds from edited geometry', () => {
