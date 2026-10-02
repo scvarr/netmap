@@ -119,7 +119,8 @@ a canonical controller component. Separate lifecycle, identity, serial number,
 replaceability, relationships, or nested ownership would require a distinct
 future component/domain contract and are outside this one.
 
-Runtime Blueprint projection renders all panels together using
+**IMPLEMENTED — runtime semantic/geometry contract.** Runtime Blueprint
+projection renders all panels together using
 their rectangles. Absolute endpoint position is derived from panel rectangle
 and panel-local position. External cable attachment derives from the outer
 boundary of the complete multi-panel `PhysicalObject` presentation; boundaries
@@ -128,6 +129,28 @@ new cable-routing algorithm is defined. Map runtime Blueprint geometry,
 internal L1 continuity geometry, and library/thumbnail preview must all consume
 the panel composition; fixed-face geometry cannot remain as an operating
 dependency after face removal.
+
+**OPEN / DEFERRED — dense runtime Map presentation follow-up.** Manual B2
+inspection found that generic Map endpoint glyphs can dominate a dense 24/48-port
+Blueprint-derived `PhysicalObject`: authored panel/device silhouette becomes
+less readable than in the Blueprint editor, and endpoint marker density is
+disproportionate to object scale. This is a runtime Map presentation/object UX
+finding; Blueprint persistence, materialization, canonical endpoints, and
+topology semantics remain correct.
+
+Map representation need not literally reuse editor endpoint glyphs. A dense
+Blueprint-derived object should preserve a readable overall equipment silhouette
+and recognizable panel composition without endpoint glyphs visually suppressing
+the object. Exact runtime treatment remains **OPEN** until object creation and
+manual acceptance. Acceptance concerns include smaller or screen-space endpoint
+markers, zoom-dependent detail / LOD, hover/selection emphasis instead of
+permanently heavy glyphs, distinguishable `NETWORK_PORT` and `CONNECTION_POINT`
+without excessive size, and readable object nameplate and panel silhouette.
+These are solution dimensions for acceptance, not a selected implementation:
+no concrete CSS size or final design is fixed, and visual correction must not
+change canonical endpoint topology. The deferred check belongs to the
+[Phase C rack-first walkthrough](../../plans/11-04-phase-c-representative-l1-testbed.md)
+and does not block completion of the B2 editor milestone.
 
 Panel identity is `panel_key`; endpoint upgrade matching and materialization
 remain `slot_key`-based. Panel membership/name/geometry and local endpoint

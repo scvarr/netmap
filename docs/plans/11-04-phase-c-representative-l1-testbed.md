@@ -118,6 +118,32 @@ schema:
 - `PP-01` is a passive copper path with dense ordinary 1:1 continuity and no
   `NetworkInterface`.
 
+### DEFERRED manual acceptance: Blueprint-derived object Map presentation
+
+When Phase C resumes and the rack-first walkthrough moves from Blueprint
+authoring to creation of the first representative `PhysicalObject` (`HV-01`
+and subsequent equipment), separately inspect its runtime Map presentation.
+Manual B2 inspection found that generic endpoint glyphs can dominate dense
+24/48-port equipment even when authored panel geometry and materialization
+semantics are correct. See the
+[OPEN runtime presentation follow-up](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md#materialization-runtime-presentation-and-upgrades).
+
+Acceptance questions:
+
+1. Is the authored panel composition still recognizable?
+2. Does the object read as equipment rather than a collection of endpoint glyphs?
+3. Do dense 24/48 endpoint markers avoid obscuring the body/panel silhouette?
+4. Are `NetworkPort` and `ConnectionPoint` still distinguishable?
+5. Is presentation readable at ordinary working zoom?
+6. Does Map presentation need separate LOD or screen-space marker treatment?
+7. Is canonical endpoint topology preserved through any visual correction?
+
+This is a **DEFERRED manual acceptance item**, not **IMPLEMENTED** work. Assign
+no new P-UX identifier now; determine the identifier and bounded fix scope when
+Phase C actually reaches the object creation/runtime Map step. It does not
+block completion of the current B2 editor milestone and does not change Phase C
+status or prescribe an implementation milestone.
+
 ### Planned service-path families
 
 1. Storage: `HV-01 -> SAN-A -> STORAGE-01` and
