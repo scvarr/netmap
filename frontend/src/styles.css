@@ -656,9 +656,11 @@ a { color: inherit; }
 .blueprint-composer__chooser input, .blueprint-composer__selected input { width: 100%; min-height: 34px; padding: 7px 9px; color: #e7f4f1; background: #081315; border: 1px solid #2a4448; border-radius: 6px; }
 
 .blueprint-links-dialog { box-sizing: border-box; width: min(100%, 760px); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.blueprint-links-dialog__bulk { display: flex; flex-wrap: wrap; gap: 6px; flex: none; }
 .blueprint-links-dialog h2 { flex: none; margin: 0; }
 .blueprint-links-dialog__list { min-height: 0; overflow-y: auto; display: grid; gap: 6px; }
-.blueprint-links-dialog .blueprint-composer__link { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.blueprint-links-dialog .blueprint-composer__link { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.blueprint-links-dialog .blueprint-composer__link > input[type="checkbox"] { width: 16px; height: 16px; margin: 0; padding: 0; cursor: pointer; }
 .blueprint-links-dialog .blueprint-links-dialog__endpoint { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .blueprint-links-dialog__separator { flex: none; }
 .blueprint-links-dialog .blueprint-composer__link select { box-sizing: border-box; min-width: 0; min-height: 34px; padding: 7px 9px; font-size: 11px; }

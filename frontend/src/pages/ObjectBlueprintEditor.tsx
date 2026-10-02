@@ -73,7 +73,8 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const canvasWrap = useRef<HTMLDivElement>(null);
   const [linksOpen, setLinksOpen] = useState(false);
   const linksEntry = useRef<HTMLButtonElement>(null);
-  const closeLinks = () => setLinksOpen(false);
+  const [selectedLinks, setSelectedLinks] = useState<Set<number>>(new Set());
+  const closeLinks = () => { setSelectedLinks(new Set()); setLinksOpen(false); };
   useEffect(() => {
     if (linksOpen) return () => linksEntry.current?.focus();
   }, [linksOpen]);
@@ -184,6 +185,7 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   };
   const updateSlot = (key: string, patch: Partial<BlueprintSlot>) => setEditor((old) => ({ ...old, slots: old.slots.map((slot) => slot.key === key ? { ...slot, ...patch } : slot) }));
   const addLink = () => {
+    setSelectedLinks(new Set());
     const existing = new Set(editor.individualLinks.map((link) => internalLinkPairKey(link.from_slot_key, link.to_slot_key)));
     for (const first of editor.slots) for (const second of editor.slots) {
       if (first.key !== second.key && !existing.has(internalLinkPairKey(first.key, second.key))) {
@@ -332,10 +334,16 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
     {linksOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-links-title">
       <div className="catalog-dialog__surface blueprint-links-dialog">
         <h2 id="blueprint-links-title">{t('blueprint.composition.links')}</h2>
+        <div className="blueprint-links-dialog__bulk">
+          <button type="button" disabled={!editor.individualLinks.length} onClick={() => setSelectedLinks(new Set(editor.individualLinks.map((_, index) => index)))}>{t('blueprint.links.selectAll')}</button>
+          <button type="button" disabled={!selectedLinks.size} onClick={() => setSelectedLinks(new Set())}>{t('blueprint.links.clearSelection')}</button>
+          <button type="button" disabled={!selectedLinks.size} onClick={() => { setEditor((old) => ({ ...old, individualLinks: old.individualLinks.filter((_, index) => !selectedLinks.has(index)) })); setSelectedLinks(new Set()); }}>{t('blueprint.links.deleteSelected', { count: selectedLinks.size })}</button>
+        </div>
         <div className="blueprint-links-dialog__list">
           {editor.individualLinks.map((link, index) => <div className="blueprint-composer__link" key={index}>
-            {(['from_slot_key', 'to_slot_key'] as const).map((field) => <label key={field} className="blueprint-links-dialog__endpoint">{field === 'to_slot_key' && <span aria-hidden="true" className="blueprint-links-dialog__separator">↔</span>}<select key={field} aria-label={t(field === 'from_slot_key' ? 'blueprint.composition.firstLink' : 'blueprint.composition.secondLink', { index: index + 1 })} value={link[field]} onChange={(e) => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.map((item, i) => i === index ? { ...item, [field]: e.target.value } : item) }))}>{editor.slots.map((slot) => <option key={slot.key} value={slot.key}>{slot.display_name} · {editor.panels.find((panel) => panel.panel_key === slot.panel_key)?.display_name}</option>)}</select></label>)}
-            <button type="button" className="text-action" onClick={() => setEditor((old) => ({ ...old, individualLinks: old.individualLinks.filter((_, i) => i !== index) }))}>{t('blueprint.composition.remove')}</button>
+            <input type="checkbox" aria-label={t('blueprint.links.selectRow', { index: index + 1 })} checked={selectedLinks.has(index)} onChange={(event) => { const next = new Set(selectedLinks); if (event.target.checked) next.add(index); else next.delete(index); setSelectedLinks(next); }} />
+            {(['from_slot_key', 'to_slot_key'] as const).map((field) => <label key={field} className="blueprint-links-dialog__endpoint">{field === 'to_slot_key' && <span aria-hidden="true" className="blueprint-links-dialog__separator">↔</span>}<select key={field} aria-label={t(field === 'from_slot_key' ? 'blueprint.composition.firstLink' : 'blueprint.composition.secondLink', { index: index + 1 })} value={link[field]} onChange={(e) => { setSelectedLinks(new Set()); setEditor((old) => ({ ...old, individualLinks: old.individualLinks.map((item, i) => i === index ? { ...item, [field]: e.target.value } : item) })); }}>{editor.slots.map((slot) => <option key={slot.key} value={slot.key}>{slot.display_name} · {editor.panels.find((panel) => panel.panel_key === slot.panel_key)?.display_name}</option>)}</select></label>)}
+            <button type="button" className="text-action" onClick={() => { setSelectedLinks(new Set()); setEditor((old) => ({ ...old, individualLinks: old.individualLinks.filter((_, i) => i !== index) })); }}>{t('blueprint.composition.remove')}</button>
           </div>)}
         </div>
         <div className="catalog-dialog__actions">
