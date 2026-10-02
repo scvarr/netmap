@@ -505,6 +505,7 @@ a { color: inherit; }
 .blueprint-composition-canvas__move-border:active { cursor: grabbing; }
 .blueprint-composition-canvas__resize { pointer-events: all; }
 .blueprint-composer__canvas-wrap { position: relative; min-width: 0; padding: 12px; border: 1px solid #35575b; border-radius: 10px; background: #071315; }
+.blueprint-composer__canvas-wrap > .blueprint-composition-canvas { overflow: visible; }
 .blueprint-composer__panels, .blueprint-composer__panel-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .blueprint-composer__panels { justify-self: start; width: fit-content; max-width: 100%; }
 .blueprint-composer__panels button { border: 1px solid #496b68; border-radius: 6px; color: #dceee9; background: #102628; padding: 7px 12px; cursor: pointer; }
