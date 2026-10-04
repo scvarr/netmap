@@ -227,7 +227,9 @@ Bounded implementation slices:
    panel and per-panel endpoint name allocators, and save derives body dimensions
    from the composition bounding box while preserving exact panel rectangles.
    **B2 IMPLEMENTED — Panel geometry editing:** move the active panel from its
-   border and resize it with eight transient handles. Pointer geometry remains
+   border and resize it with eight transient handles. Multi-panel compositions
+   also support exact numeric width/height editing of the active panel, keeping
+   its top-left corner fixed. Pointer geometry remains
    stable during a gesture; snapping to other panel edges and visual guides are
    transient. Endpoint local coordinates remain unchanged. Slice B is complete.
 3. **Slice C IMPLEMENTED — Copy to panel:** selected-slot copy from the active panel

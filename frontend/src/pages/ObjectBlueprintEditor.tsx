@@ -27,6 +27,19 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const panelKey = editor.activePanelKey;
   const activePanel = editor.panels.find((panel) => panel.panel_key === panelKey)!;
   const bounds = compositionBounds(editor.panels);
+  const [panelSizeDraft, setPanelSizeDraft] = useState<{ panelKey: string; width: number; height: number; axis: 'width' | 'height'; value: string }>();
+  useEffect(() => { setPanelSizeDraft(undefined); }, [panelKey, activePanel.width, activePanel.height]);
+  const shownPanelSize = (axis: 'width' | 'height') => panelSizeDraft?.panelKey === panelKey && panelSizeDraft.width === activePanel.width && panelSizeDraft.height === activePanel.height && panelSizeDraft.axis === axis ? panelSizeDraft.value : String(activePanel[axis]);
+  const commitPanelSize = (axis: 'width' | 'height', raw: string) => {
+    const value = Number(raw);
+    if (raw.trim() && Number.isFinite(value) && value > 0) {
+      setEditor((old) => {
+        const panel = old.panels.find((item) => item.panel_key === panelKey)!;
+        return setPanelRectangle(old, panelKey, { x: panel.x, y: panel.y, width: panel.width, height: panel.height, [axis]: value });
+      });
+    }
+    setPanelSizeDraft(undefined);
+  };
   const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
   const [count, setCount] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -227,6 +240,11 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         <div className="blueprint-composer__panels" role="group" aria-label={t('blueprint.panel.list')}>{[...editor.panels].sort((a, b) => a.panel_number - b.panel_number).map((panel) => <button key={panel.panel_key} type="button" aria-pressed={panel.panel_key === panelKey} onClick={() => activatePanel(panel.panel_key)}>{panel.display_name}</button>)}</div>
         <div className="blueprint-composer__panel-actions">
           <label>{t('blueprint.panel.name')}<input value={activePanel.display_name} onChange={(event) => setEditor((old) => renameActivePanel(old, event.target.value))} /></label>
+          {editor.panels.length > 1 && (['width', 'height'] as const).map((axis) => <label key={`${panelKey}:${axis}`}>{t(`blueprint.panel.${axis}`)}<input type="number" step="any" value={shownPanelSize(axis)}
+            onChange={(event) => setPanelSizeDraft({ panelKey, width: activePanel.width, height: activePanel.height, axis, value: event.target.value })}
+            onBlur={(event) => commitPanelSize(axis, event.currentTarget.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitPanelSize(axis, event.currentTarget.value); } }}
+          /></label>)}
           {(['above', 'right', 'below', 'left'] as const).map((direction) => <button key={direction} type="button" className="secondary-action" onClick={() => createPanel(direction)}>{t(`blueprint.panel.add.${direction}`)}</button>)}
           <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
         </div>

@@ -8,6 +8,99 @@ import { addEndpoints, addPanel, createBlueprintRequest, hydrateBlueprintEditorS
 import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
 import { newBlueprintEditorState, ObjectBlueprintEditor } from './ObjectBlueprintEditor';
 
+describe('numeric active-panel size', () => {
+  const setup = (multi = true) => {
+    const source = newBlueprintEditorState(); source.name = 'Device';
+    const endpoints = addEndpoints(source, 'NETWORK_PORT', 1, source.activePanelKey);
+    const state = multi ? { ...addPanel(endpoints, 'right'), activePanelKey: source.activePanelKey } : endpoints;
+    state.panels[0] = { ...state.panels[0], x: -10, y: -20 };
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={state} onSave={save} /></MemoryRouter></I18nProvider>);
+    return { state, save };
+  };
+  const size = (axis: 'width' | 'height') => screen.getByRole('spinbutton', { name: axis === 'width' ? 'Ширина панели' : 'Высота панели' });
+  const body = (axis: 'width' | 'height') => screen.getByRole('spinbutton', { name: axis === 'width' ? 'Пропорция ширины корпуса' : 'Пропорция высоты корпуса' });
+
+  it.each(['width', 'height'] as const)('commits decimal %s on Enter with only that active-panel dimension changed and derives save bounds', async (axis) => {
+    const { state, save } = setup();
+    expect(size('width')).toHaveValue(160); expect(size('height')).toHaveValue(60);
+    expect(body('width')).toBeDisabled(); expect(body('height')).toBeDisabled();
+    const panelBody = document.querySelector(`[data-panel-key="${state.activePanelKey}"] .blueprint-composition-canvas__body`)!;
+    const originalDimension = panelBody.getAttribute(axis);
+    const input = size(axis); await userEvent.click(input); await userEvent.clear(input);
+    expect(input).toHaveValue(null);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].panels).toEqual(state.panels);
+    await userEvent.type(input, '400.125'); expect(input).toHaveValue(400.125);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[1][0].panels).toEqual(state.panels);
+    await userEvent.keyboard('{Enter}');
+    expect(input).toHaveValue(400.125);
+    expect(panelBody.getAttribute(axis)).not.toBe(originalDimension);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const saved = save.mock.calls[2][0];
+    expect(saved.panels).toEqual([{ ...state.panels[0], [axis]: 400.125 }, state.panels[1]]);
+    expect(saved.slots).toEqual(state.slots); expect(saved.individualLinks).toEqual(state.individualLinks);
+    const request = createBlueprintRequest(saved).request!;
+    expect(request.panels).toEqual(saved.panels); expect(request.slots[0].rendered_position).toEqual(state.slots[0].rendered_position);
+    expect(request.body).toMatchObject(axis === 'width' ? { width: 400.125, height: 80 } : { width: 330, height: 400.125 });
+    expect(body(axis)).toHaveValue(400.125);
+  });
+
+  it.each(['width', 'height'] as const)('accepts positive %s below one on blur without snapping or an arbitrary minimum', async (axis) => {
+    const { state, save } = setup(); const input = size(axis);
+    await userEvent.clear(input); await userEvent.type(input, '0.125'); await userEvent.tab();
+    expect(input).toHaveValue(.125);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], [axis]: .125 }, state.panels[1]]);
+  });
+
+  it.each(['', 'NaN', 'Infinity', '1e', '0', '-2'])('rejects invalid input %j on Enter and blur and restores the last valid dimension', (raw) => {
+    const { state, save } = setup(); const input = size('width');
+    fireEvent.change(input, { target: { value: '170.5' } }); fireEvent.keyDown(input, { key: 'Enter' });
+    for (const commit of ['Enter', 'blur']) {
+      fireEvent.change(input, { target: { value: raw } });
+      if (commit === 'Enter') fireEvent.keyDown(input, { key: 'Enter' }); else fireEvent.blur(input);
+      expect(input).toHaveValue(170.5);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], width: 170.5 }, state.panels[1]]);
+  });
+
+  it('drops stale drafts on panel switch and synchronizes both controls during pointer resize after numeric editing', () => {
+    const { state, save } = setup();
+    fireEvent.change(size('width'), { target: { value: '200.5' } }); fireEvent.keyDown(size('width'), { key: 'Enter' });
+    fireEvent.change(size('height'), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: state.panels[1].display_name }));
+    expect(size('width')).toHaveValue(160); expect(size('height')).toHaveValue(60);
+    fireEvent.click(screen.getByRole('button', { name: state.panels[0].display_name }));
+    expect(size('width')).toHaveValue(200.5); expect(size('height')).toHaveValue(60);
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 1000 }) });
+    fireEvent.change(size('width'), { target: { value: '' } });
+    fireEvent.pointerDown(document.querySelector('[data-panel-resize="se"]')!, { button: 0, clientX: 500, clientY: 500 });
+    fireEvent.pointerMove(canvas, { clientX: 600, clientY: 600 });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const resized = save.mock.calls[0][0].panels[0];
+    expect(resized.width).toBeGreaterThan(200.5); expect(resized.height).toBeGreaterThan(60);
+    expect(size('width')).toHaveValue(resized.width); expect(size('height')).toHaveValue(resized.height);
+    fireEvent.pointerUp(canvas);
+    expect(size('width')).toHaveValue(resized.width); expect(size('height')).toHaveValue(resized.height);
+    expect(save.mock.calls[0][0].slots).toEqual(state.slots);
+  });
+
+  it('hides panel size controls for a single panel and keeps body dimension editing', () => {
+    const { state, save } = setup(false);
+    expect(screen.queryByRole('spinbutton', { name: 'Ширина панели' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: 'Высота панели' })).not.toBeInTheDocument();
+    expect(body('width')).toBeEnabled(); expect(body('height')).toBeEnabled();
+    fireEvent.change(body('width'), { target: { value: '190' } }); fireEvent.change(body('height'), { target: { value: '75' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], width: 190, height: 75 }]);
+    expect(createBlueprintRequest(save.mock.calls[0][0]).request!.body).toMatchObject({ width: 190, height: 75 });
+  });
+});
+
 describe('authoring workspace contextual region', () => {
   it.each([{}, { ctrlKey: true }, { metaKey: true }])('selects an inactive endpoint in one primary gesture, replacing the old panel selection (%j)', async (modifiers) => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
