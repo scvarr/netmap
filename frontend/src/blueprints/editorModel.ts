@@ -43,7 +43,7 @@ export type PanelDirection = 'above' | 'right' | 'below' | 'left';
 export type PanelHandle = 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w' | 'nw';
 export type PanelRectangle = Pick<PresentationPanel, 'x' | 'y' | 'width' | 'height'>;
 export interface PanelGeometryResult { rectangle: PanelRectangle; guides: { x?: number; y?: number } }
-const nearestSnap = (edges: number[], targets: number[], threshold: number) => {
+export const nearestSnap = (edges: number[], targets: number[], threshold: number) => {
   let best: { delta: number; guide: number } | undefined;
   for (const edge of edges) for (const target of targets) {
     const delta = target - edge;

@@ -17,7 +17,7 @@ export function ModuleBaysEditor({ bay, panels, onChange, onRemove, onDuplicate 
     <label>{t('hardware.compatibility')}<input value={bay.compatibility} onChange={e => onChange({ compatibility: e.target.value })} /></label>
     <label>{t('hardware.panel')}<select value={bay.panel_key} onChange={e => onChange({ panel_key: e.target.value })}>{panels.map(p => <option key={p.panel_key} value={p.panel_key}>{p.display_name}</option>)}</select></label>
     {(['x', 'y', 'width', 'height'] as const).map(axis => <label key={axis}>{axis}<input type="number" step="0.01" min={axis === 'width' || axis === 'height' ? minimumBaySize : 0} max={1}
-      value={draft?.axis === axis && draft.geometry === signature(bay) ? draft.raw : Number(bay[axis].toFixed(4))}
+      value={draft?.axis === axis && draft.geometry === signature(bay) ? draft.raw : bay[axis]}
       onChange={e => {
         const raw = e.target.value, value = Number(raw);
         const geometry = raw.trim() && Number.isFinite(value) ? bayNumericGeometry(bay, axis, value) : bay;

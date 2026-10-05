@@ -6,7 +6,7 @@ import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCa
 import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateTypes';
 import type { ModuleBay } from '../topology/hardwareModules';
-import { duplicateModuleBay } from '../blueprints/moduleBayGeometry';
+import { duplicateModuleBay, normalizeBayGeometry } from '../blueprints/moduleBayGeometry';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
 export const newBlueprintEditorState = (): BlueprintEditorState => { const key = crypto.randomUUID(); return { name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', panels: [{ panel_key: key, panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 160, height: 60 }], slots: [], individualLinks: [], activePanelKey: key, nextPanelNumber: 2, nextLocalNumberByPanel: { [key]: 1 } }; };
@@ -27,7 +27,7 @@ const formatGeometryNumber = (value: number) => Number(value.toFixed(1));
 
 export function BaseTemplateEditor({ title, description, saveLabel, onSave, initialState, versionNotice }: Props) {
   const { t } = useI18n();
-  const [editor, setEditor] = useState(initialState);
+  const [editor, setEditor] = useState(() => initialState.bays ? { ...initialState, bays: initialState.bays.map(bay => ({ ...bay, ...normalizeBayGeometry(bay) })) } : initialState);
   const [selectedBayKey, setSelectedBayKey] = useState<string>();
   const selectedBay = editor.bays?.find(bay => bay.bay_key === selectedBayKey);
   const changeBay = (key: string, patch: Partial<ModuleBay>) => setEditor(old => ({ ...old, bays: old.bays?.map(bay => bay.bay_key === key ? { ...bay, ...patch } : bay) }));
@@ -137,7 +137,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     activatePanel(bay.panel_key); setSelectedBayKey(key); setSelected(new Set()); setOrderedMode(false); setMenu(undefined); setPositionDraft(undefined);
   };
   const addBay = () => {
-    const bay = { bay_key: crypto.randomUUID(), display_name: t('hardware.bay'), compatibility: '', panel_key: panelKey, x: .25, y: .25, width: .3, height: .3 };
+    const bay = { bay_key: crypto.randomUUID(), display_name: t('hardware.bay'), compatibility: '', panel_key: panelKey, ...normalizeBayGeometry({ x: .25, y: .25, width: .3, height: .3 }) };
     setEditor(old => ({ ...old, bays: [...old.bays ?? [], bay] }));
     setSelectedBayKey(bay.bay_key); setSelected(new Set()); setOrderedMode(false); setMenu(undefined);
   };

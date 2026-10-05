@@ -116,8 +116,12 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
     const current = gesture.current;
     if (!current) return;
     if (current.kind === 'bay') {
-      onBayGeometry?.(current.bay.bay_key, bayGestureGeometry(current.bay, current.handle,
-        (event.clientX - current.start.x) / current.pixels.x, (event.clientY - current.start.y) / current.pixels.y));
+      const snapped = bayGestureGeometry(current.bay, current.handle,
+        (event.clientX - current.start.x) / current.pixels.x, (event.clientY - current.start.y) / current.pixels.y,
+        bays.filter(bay => bay.bay_key !== current.bay.bay_key && bay.panel_key === current.bay.panel_key),
+        { x: 7 / current.pixels.x, y: 7 / current.pixels.y });
+      onBayGeometry?.(current.bay.bay_key, snapped.rectangle);
+      setGuides(snapped.guides);
       return;
     }
     if (current.kind === 'panel') {
