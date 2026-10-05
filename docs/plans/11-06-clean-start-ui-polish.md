@@ -7,8 +7,12 @@ library/editor/navigation удалены. P-UX-11/12 shell, bounded workspace и
 ratio сохранены. По принятому
 [09.5 panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
 editor prerequisites завершены: multi-select, alignment/distribution, panel copy,
-ordered bulk naming и pairwise continuity (D2) реализованы. Phase C — **READY TO
-RESUME**; следующий шаг — manual HV-01 recheck / Phase C acceptance. Это не
+ordered bulk naming и pairwise continuity (D2) реализованы. Phase C — **PAUSED**:
+manual HV-01 выявил необходимость нового
+[09.6 template/module target](../architecture/blueprints/09-06-hardware-template-module-contract.md).
+Один базовый сервер с небольшими отличиями между экземплярами не должен
+требовать отдельного полного шаблона для каждой комплектации. Следующий шаг —
+bounded implementation принятого redesign и manual HV-01 recheck. Это не
 означает Phase C complete/PASSED; technology/capability и dense runtime Map
 presentation остаются OPEN / DEFERRED.
 
@@ -118,7 +122,8 @@ Locations открывалось полностью раскрытым и не �
 в React в пределах текущего открытия страницы и сохраняется при обновлении
 списка после mutations. `LocationParentPicker` имеет отдельную модель и не
 входит в P-UX-20. Manual recheck P-UX-20 пройдена. P-UX-03E остаётся pending;
-его дальнейшая acceptance теперь может продолжаться.
+его spatial acceptance остаётся pending; общий Phase C проход приостановлен
+на HV-01 до implementation и manual recheck 09.6.
 
 Manual visual recheck после merge проверила initial collapsed tree, global
 expand/collapse и subtree controls; поведение визуально принято пользователем.
@@ -450,7 +455,15 @@ A/B/C/D реализованы, ручная перепроверка D прой
 11-08 завершён. P-UX-03E остаётся pending; весь P-UX-03 и spatial cutover
 незавершены до final acceptance.
 
-Дальнейшее прохождение нового stand идёт небольшими user-visible шагами с
+**Текущий gate: Phase C PAUSED на HV-01** до bounded implementation 09.6,
+external review/acceptance и manual recheck. Допустимый destructive development
+cutover/reset не требует сохранения старых Blueprint records; historical
+evidence и `C-*` findings сохраняются. P-UX-13/14/15 остаются IMPLEMENTED;
+их complete-configuration Blueprint и version-centric update descriptions
+фиксируют прежнюю реализацию, superseded target-wise template/module workflow
+из 09.6. Новый redesign не закрывает их ожидающие ручные проверки автоматически.
+
+После снятия этого gate дальнейшее прохождение stand идёт небольшими user-visible шагами с
 остановкой на первом существенном finding; после bounded fix и merge
 повторяется тот же шаг. Active scenario описан в
 [[plans/11-04-phase-c-representative-l1-testbed|11.4 Phase C representative L1

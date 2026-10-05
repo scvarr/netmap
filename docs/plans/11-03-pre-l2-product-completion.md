@@ -46,14 +46,17 @@ and is not a future target prerequisite or library direction.
   подключения» and «Сетевые порты» columns, and counts for the current
   immutable PortBlockVersion without one version-details load per row.
 
-Current execution position: **Phase C — PAUSED at Blueprint authoring redesign.**
-The direct-slot foundation is implemented and Port Block application surfaces
-are removed. The accepted [composable presentation panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
-supersedes the binary FRONT/REAR presentation target. Multi-panel redesign is
-now a prerequisite before patch-panel/internal-link acceptance; it is not
-implemented. Resume the rack-first walkthrough at HV-01 only after the required
-editor slices and manual recheck; see 11-04. Technology/capability remains
-open.
+Current execution position: **Phase C — PAUSED at hardware template/module redesign.**
+Direct-slot foundation, multi-panel editing, spatial tools, panel copy, ordered
+naming, and pairwise continuity (D2) are implemented; Port Block application
+surfaces are removed. Manual HV-01 revealed that small differences between
+instances of one base server must not require separate complete templates.
+The authoritative [09.6 hardware template/module contract](../architecture/blueprints/09-06-hardware-template-module-contract.md)
+therefore supersedes the complete-configuration target of 09.4/09.5. Bounded
+base-template/module/update implementation, external review/acceptance, and
+manual HV-01 recheck are required before resuming; see 11-04. This adds no
+roadmap scope beyond that accepted redesign. Technology/capability and dense
+runtime Map presentation remain **OPEN**; Phase C is not complete or PASSED.
 
 В spatial strand P-UX-03A/B/C/D реализованы, ручная проверка P-UX-03D
 пройдена. Bounded Cable route follow-up из 11-08 завершён. Следующий spatial

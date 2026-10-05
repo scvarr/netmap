@@ -7,13 +7,19 @@
 
 ## Назначение и граница
 
-**Current acceptance status:** **READY TO RESUME** at the same HV-01 authoring
-step with manual recheck / Phase C acceptance next. Direct-slot persistence,
+**Current acceptance status:** **PAUSED** at the same HV-01 authoring
+step until bounded template/module implementation and manual recheck. Direct-slot persistence,
 multi-panel editing, multi-selection, alignment/distribution, panel copy,
 ordered bulk naming, and pairwise continuity (D2) are implemented. Editor
-prerequisites are complete; Phase C is not complete or PASSED. Acceptance
-expects endpoints authored directly on the Object Blueprint canvas; Port Block
-is not a prerequisite or target authoring entity. See the authoritative
+prerequisites for the earlier panel slices are complete; Phase C is not complete
+or PASSED. Manual HV-01 exposed a new architectural requirement: small
+differences between instances of one base server must not require a full
+template for every configuration. The authoritative target is now
+[09.6 hardware templates and object module installations](../architecture/blueprints/09-06-hardware-template-module-contract.md):
+one mandatory base template and modules installed in each concrete object.
+Technology/capability and dense runtime Map presentation remain **OPEN**;
+existing `C-*` findings are not closed automatically. Port Block
+is not a prerequisite or target authoring entity. See the implemented
 [direct endpoint foundation](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md)
 and [composable panel target](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md).
 Port Block workflows and fixtures below are historical evidence of the
@@ -507,7 +513,7 @@ capability axes, а не закрытый список device classes.
 | 9 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
 | 10 | router | RTR1 |
 | 11 | dual-homed server | SRV1 — PASSED / VERIFIED: independent traces to CORE-A / CORE-B |
-| 12 | Historical FRONT/REAR presentation scenario; target multi-panel presentation is pending per 09.5 | PP-301, FPP-811, SRV1 |
+| 12 | Historical FRONT/REAR scenario; 09.5 multi-panel slices implemented, manual acceptance pending; 09.6 template/module implementation pending | PP-301, FPP-811, SRV1 |
 | 13 | несколько Port Blocks в одном Blueprint | SW-301-ACCESS |
 | 14 | ConnectionPoint port kind | O1 / PP-301 |
 | 15 | `NETWORK_PORT` port kind | PC1 / SW-301-ACCESS, если поддерживается |
@@ -609,7 +615,7 @@ Acceptance выполняется вокруг coverage matrix:
 4. Создать physical connections и Cables.
 5. Разместить объекты и связи на SavedMap.
 6. Проверить relevant presentation (historical FRONT/REAR implementation;
-   multi-panel target remains pending), derived Location frames,
+   multi-panel slices are implemented, manual acceptance remains pending), derived Location frames,
    nested hierarchy, collapse state, group move, exact boundary evidence,
    route semantics и variants.
 7. Выполнить L1 trace там, где он семантически применим — по отдельным

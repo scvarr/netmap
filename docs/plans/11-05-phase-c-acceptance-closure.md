@@ -15,8 +15,11 @@ Direct Blueprint endpoint authoring, multi-panel editing, spatial tools, panel
 copy, ordered naming, and pairwise continuity (D2) are implemented. Port Block
 application surfaces remain removed. Editor prerequisites from the accepted
 [composable panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
-are complete. Phase C is **READY TO RESUME** at HV-01 with manual recheck / acceptance
-next; this does not mark Phase C complete or PASSED. Technology/capability and
+are complete for those implemented slices. Manual HV-01 showed that small
+configuration differences between instances of one base server must not require
+separate complete templates. Phase C is **PAUSED** until bounded implementation
+of the authoritative [09.6 hardware template/module target](../architecture/blueprints/09-06-hardware-template-module-contract.md)
+and manual HV-01 recheck; it is not complete or PASSED. Technology/capability and
 dense runtime Map presentation remain OPEN; D2 does not close `C-CAP-01`.
 
 Краткий индекс ниже добавляет текущий статус отслеживания. Все `C-*`
@@ -59,9 +62,11 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
 ## Архитектурные границы и зависимости
 
 - Каноническая топология остаётся источником физических фактов.
-- `Object Blueprint` остаётся authoring/library provenance для создания
-  `PhysicalObject`; его target version напрямую владеет endpoint slots.
-  `Port Block` — только currently-implemented historical/superseded authoring
+- По authoritative 09.6 `PhysicalObject` создаётся из обязательного базового
+  шаблона; его комплектация дополняется module installations внутри объекта.
+  Complete immutable `ObjectBlueprint` configuration superseded target-wise;
+  immutable revisions и canonical materialization сохраняются.
+  `Port Block` — только removed historical/superseded authoring
   model, не target prerequisite или library entity. Ни Blueprint, ни прежняя
   Port Block model не являются канонической топологией.
 - `SavedMap`, `MapCableRoute`, derived Location frames,
@@ -128,6 +133,14 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
 одноразовый `Blueprint`; существующие, импортированные и созданные через API
 объекты без `Blueprint` остаются поддержанными, возможность серверной части
 через API этим замечанием не удаляется.
+
+**Target supersession (09.6).** Требование обязательного шаблона теперь означает
+базовый шаблон оборудования; модули устанавливаются в конкретный объект.
+Прежние complete-configuration Blueprint, API creation без базового шаблона и
+обязательное сохранение development records не являются target требованиями.
+Ниже сохранён прежний acceptance workflow как historical evidence; replacement
+recheck проверяет обязательный base template и instance configuration по 09.6.
+Finding остаётся **OPEN**; legacy compatibility для тестовых данных не вводится.
 
 **Граница `11-04`.** Канонический `PhysicalObject` не зависит от происхождения
 `Blueprint`; это ограничение обычного сценария создания, не удаление модели и не
@@ -300,6 +313,10 @@ canonical Location hierarchy и `PhysicalObject -> Location`; оно не зад
 
 ### C-UX-09 — Компактное окно выбора Blueprint
 
+**Target clarification (09.6).** Picker выбирает базовый шаблон; version number
+не становится основным пользовательским workflow. Требование компактного
+сравнения и derived preview остаётся, finding остаётся **OPEN**.
+
 **Исправить.** В основном окне выбора при создании `PhysicalObject` заменить
 крупные карточки плотным списком или таблицей с компактным производным
 предпросмотром, именем, версией, классом, количеством endpoints/ports,
@@ -448,10 +465,11 @@ internal/external/boundary Cable при перемещении Location subtree,
 Новый operational protocol использует active `Rack-first service-path
 synthetic acceptance` из 11-04 и начинается с пустой тестовой БД:
 
-**Current status: READY TO RESUME — editor prerequisites implemented.**
-Следующий шаг — manual HV-01 recheck / Phase C acceptance с того же места. Старые
+**Current status: PAUSED — template/module implementation pending.**
+Следующий шаг — bounded implementation 09.6, external review/acceptance и
+manual HV-01 recheck с того же места. Предыдущие editor slices реализованы. Старые
 Port Block authoring ожидания в historical findings не являются target
-prerequisite; authoritative replacement задан в 09-04.
+prerequisite; authoritative target задан в 09-06.
 
 1. ChatGPT даёт пользователю только следующий небольшой участок — ориентир
    2–5 конкретных действий в обычном UI.
@@ -464,8 +482,10 @@ prerequisite; authoritative replacement задан в 09-04.
    milestone: новая ветка → implementation → external review → merge.
 5. На сохранённом clean stand повторяется тот же пользовательский шаг. Только
    после успешной recheck выдаётся следующий небольшой участок.
-6. Уже построенный стенд не уничтожается из-за corrective milestone; сценарий
-   продолжается с места остановки.
+6. Обычный corrective milestone сохраняет стенд и продолжает сценарий с места
+   остановки. Для destructive representation cutover по 09.6 допустим reset
+   development DB и пересоздание fixture; перенос старых Blueprint records
+   ради тестовых данных не требуется. Historical evidence сохраняется.
 7. Отсутствующую capability нельзя обходить прямым API/DB write или fake
    topology ради продолжения сценария.
 8. `C-*` registry и coverage matrix остаются большим контрольным списком на

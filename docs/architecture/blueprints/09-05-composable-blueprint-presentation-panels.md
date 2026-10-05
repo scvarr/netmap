@@ -2,17 +2,27 @@
 
 ## Status and authority
 
-**FIXED / ACCEPTED TARGET CONTRACT. SLICES A, B, C AND D IMPLEMENTED; D2 IMPLEMENTED.**
+**SLICES A, B, C AND D IMPLEMENTED; D2 IMPLEMENTED. COMPLETE-CONFIGURATION
+TARGET SUPERSEDED BY 09.6.**
 
 This document supersedes only the binary `FRONT | REAR` presentation model in
 [09.4](09-04-direct-blueprint-endpoint-authoring.md). Direct endpoint slots
 remain the primary Blueprint-version authoring entities. Persistence, API,
 workspace v3, projection, runtime geometry, preview, and the current
 multi-panel editor use panel composition. Slice B2 adds panel move and resize
-with transient screen-space snapping and guides. Phase C is **READY TO RESUME** with manual HV-01 / Phase C acceptance next. Port
+with transient screen-space snapping and guides. Phase C is **PAUSED** pending
+bounded [09.6](09-06-hardware-template-module-contract.md) implementation and
+manual HV-01 recheck. Port
 Block remains removed and is not a prerequisite.
 
-An immutable `ObjectBlueprintVersion` owns body/overall presentation,
+The authoritative [09.6 hardware template/module contract](09-06-hardware-template-module-contract.md)
+supersedes the complete immutable equipment-configuration concept and the
+restricted upgrade workflow below. Manual HV-01 showed that small differences
+between instances of one base server must not require separate full templates.
+Panel identity, composition geometry, and presentation-only semantics remain
+foundations; implemented slices are not reclassified as unimplemented.
+
+In the implemented model, an immutable `ObjectBlueprintVersion` owns body/overall presentation,
 `PresentationPanel` records, direct `BlueprintEndpointSlots`, and
 `BlueprintInternalLinks`. A panel is authoring, provenance, and presentation
 inside that immutable snapshot. It is not canonical topology, a
@@ -156,7 +166,8 @@ remain `slot_key`-based. Panel membership/name/geometry and local endpoint
 geometry are presentation changes. Moving a same-key endpoint to another
 panel does not create a canonical endpoint; a copied slot later has a new key
 and materializes as a new endpoint. Panels never become canonical topology or
-`PhysicalObject` components. Do not broaden upgrade semantics. Workspace
+`PhysicalObject` components. The current restricted upgrade semantics are
+superseded by 09.6 safe updates and deterministic module relocation. Workspace
 exchange format must incompatibly bump from current v2 to v3 and include each
 panel's key, number, name, and rectangle, and each slot's panel key,
 panel-local position, and existing exact fields. Compatibility with old v2
@@ -264,6 +275,6 @@ Bounded implementation slices:
 
 Technology/capability remains **OPEN**, separate from these slices. Dense runtime
 Map presentation remains **OPEN / DEFERRED**. Editor prerequisites are implemented;
-Phase C is **READY TO RESUME** at the same HV-01 step with manual acceptance next.
+Phase C is **PAUSED** at HV-01 pending bounded 09.6 implementation and manual recheck.
 This does not mark Phase C complete or PASSED. Port Block does not return as a
 prerequisite.

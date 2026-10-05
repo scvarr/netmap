@@ -16,11 +16,18 @@ guides with snapping are **IMPLEMENTED**. Panel copy is **IMPLEMENTED** in 09.5 
 naming are **IMPLEMENTED** in Slice D1; pairwise bulk continuity is **IMPLEMENTED**
 in Slice D2. The ordered bulk authoring slice is complete.
 Endpoint technology/capability
-remains **OPEN**. Editor prerequisites are implemented; Phase C is **READY TO
-RESUME** with manual HV-01 recheck / Phase C acceptance next, not complete or PASSED.
+remains **OPEN**. These editor slices are implemented; Phase C is **PAUSED**
+after manual HV-01 exposed the need for the base-template/module target in
+[09.6](09-06-hardware-template-module-contract.md), until bounded implementation
+and manual recheck; it is not complete or PASSED.
 
-The direct-slot authoring foundation, identity, immutable snapshots, and
-materialization in this document remain authoritative. Its binary
+The complete immutable `ObjectBlueprint` configuration and additive-only
+upgrade workflow below describe implemented/current architecture,
+**superseded target-wise by authoritative 09.6**. Direct endpoint identity,
+immutable revisions, and canonical materialization remain foundations where
+consistent with that target. Small differences between instances of one base
+server must not require a separate full template for each configuration.
+Its binary
 FRONT/REAR-specific presentation contract is superseded by [09.5 Composable
 Blueprint presentation panels](09-05-composable-blueprint-presentation-panels.md).
 The
@@ -39,7 +46,7 @@ preserving development Port Block records is not a target requirement.
 
 ## Direct endpoint snapshot
 
-An immutable `ObjectBlueprintVersion` directly owns the complete device
+In the implemented model, an immutable `ObjectBlueprintVersion` owns the complete device
 snapshot: body geometry, endpoint slots, exact names and rendered positions,
 presentation facts needed for truthful rendering, and explicit internal
 links. The current physical-face representation is superseded by panels in
