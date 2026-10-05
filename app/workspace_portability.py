@@ -1,4 +1,4 @@
-"""Version 3 exchange contract for the current implicit workspace dataset.
+"""Version 4 exchange contract for the current implicit workspace dataset.
 
 The public names and fields below are deliberately fixed independently of table
 names. A storage change must adapt this mapping or introduce a new format version.
@@ -19,7 +19,7 @@ from app import models
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 3
+FORMAT_VERSION = 4
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -60,13 +60,19 @@ ENTITIES = (
     ("canonical", "ProcessingEntryPoint", "ProcessingEntryPoint", "id plan_id traffic_class stage_id"),
     ("canonical", "PacketProcessingPlanAttachmentSet", "PacketProcessingPlanAttachmentSet", "id routing_context_id traffic_class configured_completeness"),
     ("canonical", "PacketProcessingPlanAttachment", "PacketProcessingPlanAttachment", "id attachment_set_id plan_id scope"),
-    ("authoring", "ObjectBlueprint", "ObjectBlueprint", "id name"),
-    ("authoring", "ObjectBlueprintVersion", "ObjectBlueprintVersion", "id blueprint_id version_number default_physical_object_class body_kind width height fill_color"),
-    ("authoring", "PresentationPanel", "PresentationPanel", "id blueprint_version_id panel_key panel_number display_name x y width height"),
-    ("authoring", "BlueprintEndpointSlot", "BlueprintEndpointSlot", "id blueprint_version_id slot_key display_name kind panel_key position_x position_y"),
-    ("authoring", "BlueprintInternalLink", "BlueprintInternalLink", "id blueprint_version_id slot_a_id slot_b_id"),
-    ("authoring", "BlueprintInstance", "BlueprintInstance", "id blueprint_version_id physical_object_id"),
-    ("authoring", "BlueprintInstanceSlot", "BlueprintInstanceSlot", "id blueprint_instance_id blueprint_slot_id connection_point_id network_interface_id"),
+    ("authoring", "BaseTemplate", "BaseTemplate", "id name"),
+    ("authoring", "BaseTemplateRevision", "BaseTemplateRevision", "id template_id version_number default_physical_object_class body_kind width height fill_color"),
+    ("authoring", "PresentationPanel", "PresentationPanel", "id base_revision_id panel_key panel_number display_name x y width height"),
+    ("authoring", "BuiltInEndpointDefinition", "BuiltInEndpointDefinition", "id base_revision_id slot_key display_name kind panel_key position_x position_y"),
+    ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id"),
+    ("authoring", "ObjectConfiguration", "ObjectConfiguration", "id base_revision_id physical_object_id"),
+    ("authoring", "BuiltInEndpointMapping", "BuiltInEndpointMapping", "id configuration_id definition_id connection_point_id network_interface_id"),
+    ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name compatibility panel_key x y width height"),
+    ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
+    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number compatibility"),
+    ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind"),
+    ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id module_revision_id bay_key orientation"),
+    ("authoring", "ModuleEndpointMapping", "ModuleEndpointMapping", "id installation_id definition_id connection_point_id network_interface_id"),
     ("presentation", "SavedMap", "SavedMap", "id name created_at updated_at"),
     ("presentation", "MapPresentationVariant", "MapPresentationVariant", "id map_id name"),
     ("presentation", "MapPlacement", "MapPlacement", "id map_id physical_object_id"),
@@ -194,9 +200,9 @@ def validate_package(package: object) -> dict:
                 for fk in column.foreign_keys:
                     if row[column.key] is not None and row[column.key] not in values_by_column[(fk.column.table.name, fk.column.key)]:
                         raise PackageError(f"{name}.{column.key} refers to a missing entity")
-    panel_memberships = {(row["blueprint_version_id"], row["panel_key"]) for row in result["presentation_panels"]}
-    if any((row["blueprint_version_id"], row["panel_key"]) not in panel_memberships for row in result["blueprint_endpoint_slots"]):
-        raise PackageError("BlueprintEndpointSlot.panel_key refers to a panel in another version")
+    panel_memberships = {(row["base_revision_id"], row["panel_key"]) for row in result["presentation_panels"]}
+    if any((row["base_revision_id"], row["panel_key"]) not in panel_memberships for row in result["built_in_endpoint_definitions"]):
+        raise PackageError("BuiltInEndpointDefinition.panel_key refers to a panel in another version")
     locations = {row["id"]: row["parent_location_id"] for row in result["locations"]}
     for location_id in locations:
         seen = set()
@@ -206,7 +212,63 @@ def validate_package(package: object) -> dict:
                 raise PackageError("Location hierarchy contains a cycle")
             seen.add(current)
             current = locations[current]
+    _validate_hardware_configuration(result)
     return result
+
+
+def _validate_hardware_configuration(rows):
+    """Cross-record provenance must describe the materialized canonical facts."""
+    configs = {r["id"]: r for r in rows["object_configurations"]}
+    bays = {(r["base_revision_id"], r["bay_key"]): r for r in rows["module_bays"]}
+    revisions = {r["id"]: r for r in rows["module_template_revisions"]}
+    installations = {r["id"]: r for r in rows["module_installations"]}
+    definitions = {r["id"]: r for r in rows["built_in_endpoint_definitions"]}
+    module_definitions = {r["id"]: r for r in rows["module_endpoint_definitions"]}
+    points = {r["id"]: r for r in rows["connection_points"]}
+    owners = {(r["interface_id"], r["physical_object_id"]) for r in rows["network_interface_physical_owners"]}
+    bindings = {(r["interface_id"], r["point_id"], r["point_member"]) for r in rows["interface_physical_bindings"]}
+    panel_keys = {(r["base_revision_id"], r["panel_key"]) for r in rows["presentation_panels"]}
+    if any((r["base_revision_id"], r["panel_key"]) not in panel_keys for r in bays.values()):
+        raise PackageError("Bay refers to a panel in another base revision")
+    for link in rows["base_internal_links"]:
+        if any(definitions[link[k]]["base_revision_id"] != link["base_revision_id"] for k in ("slot_a_id", "slot_b_id")):
+            raise PackageError("Internal link definitions belong to another revision")
+    for installation in installations.values():
+        config = configs[installation["configuration_id"]]
+        bay = bays.get((config["base_revision_id"], installation["bay_key"]))
+        if bay is None or bay["compatibility"] != revisions[installation["module_revision_id"]]["compatibility"]:
+            raise PackageError("Installation has no compatible bay in its owning configuration")
+    seen_points, seen_interfaces = set(), set()
+    def validate_mapping(mapping, definition, object_id):
+        point_id, interface_id = mapping["connection_point_id"], mapping["network_interface_id"]
+        if point_id in seen_points or points[point_id]["physical_object_id"] != object_id:
+            raise PackageError("Endpoint mapping has duplicate or foreign canonical point")
+        seen_points.add(point_id)
+        if definition["kind"] == "NETWORK_PORT":
+            if interface_id is None or interface_id in seen_interfaces or (interface_id, object_id) not in owners or (interface_id, point_id, 1) not in bindings:
+                raise PackageError("Network port mapping has invalid canonical ownership/binding")
+            seen_interfaces.add(interface_id)
+        elif interface_id is not None:
+            raise PackageError("Connection point definition cannot map to a network interface")
+    built_pairs, module_pairs = set(), set()
+    for mapping in rows["built_in_endpoint_mappings"]:
+        config = configs[mapping["configuration_id"]]
+        definition = definitions[mapping["definition_id"]]
+        if definition["base_revision_id"] != config["base_revision_id"]:
+            raise PackageError("Built-in mapping belongs to another base revision")
+        validate_mapping(mapping, definition, config["physical_object_id"])
+        built_pairs.add((config["id"], definition["id"]))
+    for mapping in rows["module_endpoint_mappings"]:
+        installation = installations[mapping["installation_id"]]
+        definition = module_definitions[mapping["definition_id"]]
+        if definition["module_revision_id"] != installation["module_revision_id"]:
+            raise PackageError("Module mapping belongs to another module revision")
+        validate_mapping(mapping, definition, configs[installation["configuration_id"]]["physical_object_id"])
+        module_pairs.add((installation["id"], definition["id"]))
+    if any((c["id"], d["id"]) not in built_pairs for c in configs.values() for d in definitions.values() if c["base_revision_id"] == d["base_revision_id"]):
+        raise PackageError("Configuration is missing a built-in endpoint mapping")
+    if any((i["id"], d["id"]) not in module_pairs for i in installations.values() for d in module_definitions.values() if i["module_revision_id"] == d["module_revision_id"]):
+        raise PackageError("Installation is missing a module endpoint mapping")
 
 
 def _tables_in_dependency_order():

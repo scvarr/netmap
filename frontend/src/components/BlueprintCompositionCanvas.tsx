@@ -1,11 +1,11 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
-import type { BlueprintInternalLink, BlueprintSlot, PresentationPanel } from '../topology/objectBlueprintTypes';
+import type { BaseInternalLink, BlueprintSlot, PresentationPanel } from '../topology/baseTemplateTypes';
 import { useI18n } from '../i18n';
 import { panelGestureGeometry, snapSelectionTranslation, type PanelHandle, type PanelRectangle } from '../blueprints/editorModel';
 
 interface Props {
   body: { width: number; height: number; fillColor: string }; panels: PresentationPanel[]; activePanelKey: string;
-  slots: BlueprintSlot[]; links: BlueprintInternalLink[]; selectedKeys: ReadonlySet<string>;
+  slots: BlueprintSlot[]; links: BaseInternalLink[]; selectedKeys: ReadonlySet<string>;
   orderedKeys?: readonly string[];
   onSelect: (key: string, toggle: boolean) => void; onMarquee: (keys: string[]) => void;
   onTranslate: (keys: ReadonlySet<string>, dx: number, dy: number) => void;

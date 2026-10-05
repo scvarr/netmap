@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { I18nProvider, useI18n } from './i18n';
 import { MapPage } from './pages/MapPage';
 import { InfrastructureObjectsPage } from './pages/InfrastructureObjectsPage';
-import { NewObjectBlueprintPage } from './pages/NewObjectBlueprintPage';
+import { NewBaseTemplatePage } from './pages/NewBaseTemplatePage';
 
 function LocaleControls() {
   const { setLocale } = useI18n();
@@ -46,8 +46,8 @@ describe('RU/EN localization integration', () => {
   });
 
   it('localizes the composition editor while submitting canonical Blueprint values', async () => {
-    const createObjectBlueprint = vi.fn().mockResolvedValue({});
-    renderLocalized(<MemoryRouter><NewObjectBlueprintPage dataSource={{ loadObjectBlueprints: vi.fn(), loadObjectBlueprintVersion: vi.fn(), createObjectBlueprint }} /></MemoryRouter>);
+    const createBaseTemplate = vi.fn().mockResolvedValue({});
+    renderLocalized(<MemoryRouter><NewBaseTemplatePage dataSource={{ loadBaseTemplates: vi.fn(), loadBaseTemplateRevision: vi.fn(), createBaseTemplate }} /></MemoryRouter>);
 
     await userEvent.click(screen.getByRole('button', { name: 'English' }));
     expect(screen.getByRole('heading', { name: 'Create object blueprint' })).toBeInTheDocument();
@@ -55,6 +55,6 @@ describe('RU/EN localization integration', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add ports / points' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save blueprint' }));
 
-    expect(createObjectBlueprint).toHaveBeenCalledWith(expect.objectContaining({ name: 'Карта', panels: [expect.objectContaining({ panel_number: 1, display_name: 'Панель 1' })], slots: [expect.objectContaining({ kind: 'NETWORK_PORT', display_name: '1-1', panel_key: expect.any(String) })] }));
+    expect(createBaseTemplate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Карта', panels: [expect.objectContaining({ panel_number: 1, display_name: 'Панель 1' })], slots: [expect.objectContaining({ kind: 'NETWORK_PORT', display_name: '1-1', panel_key: expect.any(String) })] }));
   });
 });

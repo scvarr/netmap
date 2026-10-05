@@ -8,8 +8,8 @@ const link = (member: string, from: string, to: string) => ({ from_connection_po
 const node = (links: TopologyProjectionNode['attributes']['internal_l1_links'] = []): TopologyProjectionNode => ({
   id: 'panel', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [], attributes: {
     blueprint_presentation: {
-      blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
-      version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' },
+      blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' },
+      version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v1' },
       body: { kind: 'RECTANGLE', width: 100, height: 50 },
       panels: [panel('left', 0), panel('right', 100)],
       slots: [slot('a', 'left', .2, .5), slot('b', 'right', .8, .5)],

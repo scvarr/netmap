@@ -1,5 +1,5 @@
 import type { ProjectionSourceRef } from './types';
-import type { LibraryRef, BlueprintSlotKind } from './objectBlueprintTypes';
+import type { LibraryRef, BlueprintSlotKind } from './baseTemplateTypes';
 
 export interface PhysicalObjectDetails {
   source_ref: ProjectionSourceRef;

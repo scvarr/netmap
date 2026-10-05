@@ -1,13 +1,13 @@
 from fastapi.testclient import TestClient
+from app.database import SessionLocal
+from app.device_catalog import DeviceCatalog
 
 
-def create_device(client: TestClient, name: str) -> dict:
-    response = client.post(
-        "/v1/topology/devices",
-        json={"display_name": name, "initial_interface": {"display_name": "eth0"}},
-    )
-    assert response.status_code == 201, response.text
-    return response.json()
+def create_device(client: TestClient, name: str, interface_name: str = "eth0") -> dict:
+    with SessionLocal.begin() as session:
+        created = DeviceCatalog(session).create_network_device(name, interface_name)
+        object_id = created.physical_object_id
+    return client.get(f"/v1/topology/devices/{object_id}").json()
 
 
 def interface_id(device: dict) -> str:
@@ -15,16 +15,8 @@ def interface_id(device: dict) -> str:
 
 
 def create_object_with_point(client: TestClient, name: str) -> tuple[str, str]:
-    response = client.post(
-        "/v1/topology/physical-objects",
-        json={"display_name": name, "initial_connection_point": {"display_name": "p1"}},
-    )
-    assert response.status_code == 201, response.text
-    body = response.json()
-    return (
-        body["physical_object"]["source_ref"]["entity_id"],
-        body["connection_points"][0]["connection_point_ref"]["entity_id"],
-    )
+    document = create_object_details(client, name)
+    return document["physical_object"]["source_ref"]["entity_id"], document["connection_points"][0]["connection_point_ref"]["entity_id"]
 
 
 def point_endpoint(point_id: str) -> dict[str, str | int]:
@@ -68,3 +60,11 @@ def put_cable_route(client: TestClient, map_id: str, cable_id: str, waypoints: l
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def create_object_details(client, name, point_name="p1", class_=None):
+    # Low-level canonical fixtures remain allowed; product creation is tested separately.
+    with SessionLocal.begin() as session:
+        created = DeviceCatalog(session).create_physical_object(name, point_name, class_)
+        object_id = created.physical_object_id
+    return client.get(f"/v1/topology/physical-objects/{object_id}").json()

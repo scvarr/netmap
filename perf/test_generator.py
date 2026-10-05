@@ -19,12 +19,12 @@ def test_small_materialization_matches_network_port_runtime_shape():
     if os.environ.get("NETMAP_PERF_DATABASE") != "1":
         pytest.skip("requires the isolated netmap_perf database")
     from app.database import SessionLocal
-    from app.models import BlueprintInstanceSlot, Connection, ConnectionPoint, InterfacePhysicalBinding, NetworkInterfacePhysicalOwner
+    from app.models import BuiltInEndpointMapping, Connection, ConnectionPoint, InterfacePhysicalBinding, NetworkInterfacePhysicalOwner
     from perf.generate import generate
 
     result = generate("small", 20260826)
     with SessionLocal() as session:
-        network_slots = list(session.scalars(select(BlueprintInstanceSlot).where(BlueprintInstanceSlot.network_interface_id.is_not(None))))
+        network_slots = list(session.scalars(select(BuiltInEndpointMapping).where(BuiltInEndpointMapping.network_interface_id.is_not(None))))
         assert network_slots
         interface_ids = {row.network_interface_id for row in network_slots}
         assert session.query(NetworkInterfacePhysicalOwner).filter(NetworkInterfacePhysicalOwner.interface_id.in_(interface_ids)).count() == len(interface_ids)

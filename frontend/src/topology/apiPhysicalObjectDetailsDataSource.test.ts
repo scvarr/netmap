@@ -52,8 +52,8 @@ describe('ApiPhysicalObjectDetailsDataSource', () => {
     const result = parsePhysicalObjectDetailsDocument({
       ...physicalObjectDocument,
       blueprint_provenance: {
-        blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
-        version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'version' },
+        blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' },
+        version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'version' },
         version_number: 2,
       },
       connection_points: [{ ...physicalObjectDocument.connection_points[0], ordering_key: 'A01', blueprint_slot: { slot_key: 'A01', kind: 'NETWORK_PORT' }, direct_interface_bindings: [{ interface_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'NetworkInterface', entity_id: 'ni' }, label: 'A01', evidence_refs: [] }], internal_physical_counterparts: [], external_physical_attachments: [{ kind: 'CABLE', connection_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Connection', entity_id: 'c1' }, evidence_refs: [], cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable' }, cable_label: 'Cable 1', remote_physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'remote' }, remote_physical_object_label: 'PP1', remote_connection_point_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'ConnectionPoint', entity_id: 'remote-cp' }, remote_connection_point_label: 'B01' }] }],

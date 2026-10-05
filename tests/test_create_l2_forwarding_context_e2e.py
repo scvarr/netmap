@@ -1,3 +1,4 @@
+from tests.l1_builders import create_device as build_device, create_object_details
 import uuid
 
 from fastapi.testclient import TestClient
@@ -12,10 +13,9 @@ client = TestClient(app)
 
 
 def create_two_public_interfaces() -> tuple[str, str]:
-    created = client.post("/v1/topology/devices", json={"display_name": "L2-TEST", "initial_interface": {"display_name": "eth0"}})
-    assert created.status_code == 201
-    device_id = created.json()["device"]["source_ref"]["entity_id"]
-    source_id = created.json()["interfaces"][0]["interface_ref"]["entity_id"]
+    created = build_device(client, "L2-TEST")
+    device_id = created["device"]["source_ref"]["entity_id"]
+    source_id = created["interfaces"][0]["interface_ref"]["entity_id"]
     added = client.post(f"/v1/topology/devices/{device_id}/interfaces", json={"display_name": "eth1"})
     assert added.status_code == 201
     target_id = next(

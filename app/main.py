@@ -11,8 +11,7 @@ from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
-from app.blueprint_catalog import ObjectBlueprintCatalog
-from app.blueprint_upgrade_analysis import BlueprintUpgradeAnalyzer
+from app.hardware_catalog import HardwareCatalog
 from app.catalog_inventory_resolver import CatalogInventoryResolver
 from app.cable_labels import CableLabelCatalog
 from app.database import engine, get_session
@@ -54,10 +53,9 @@ from app.schemas import (
     AdjacencyCandidatesQuery,
     CreateConnectionPointRequest,
     CreateMapPlacementRequest, CreateMapPresentationVariantRequest,
-    CreateObjectBlueprintRequest,
-    CreateObjectBlueprintVersionRequest,
+    CreateBaseTemplateRequest,
+    CreateModuleTemplateRequest, InstallModuleRequest,
     CreateDeviceInterfaceRequest,
-    CreateNetworkDeviceRequest,
     CreatePhysicalEndpointConnectionRequest,
     CreateBulkPhysicalConnectionsRequest,
     BulkCableLabelPreviewDocument,
@@ -80,7 +78,6 @@ from app.schemas import (
     EvaluationView,
     InterfacePhysicalTraceArtifact,
     InterfacePhysicalTraceQuery,
-    InstantiateObjectBlueprintRequest,
     L1TraceQuery,
     PhysicalObjectL1TraceArtifact,
     PhysicalObjectL1TraceQuery,
@@ -108,12 +105,10 @@ from app.schemas import (
     PacketProcessingEvaluationQuery,
     PacketFlowEvaluationArtifact,
     PacketFlowEvaluationQuery,
-    ObjectBlueprintCreationDocument,
-    ObjectBlueprintInstantiationDocument,
-    ObjectBlueprintListDocument,
-    ObjectBlueprintVersionDocument,
-    BlueprintUpgradeAnalysisDocument,
-    ApplyBlueprintUpgradeRequest,
+    BaseTemplateCreationDocument,
+    BaseTemplateInstantiationDocument,
+    BaseTemplateListDocument,
+    BaseTemplateRevisionDocument,
     PhysicalConnectionCreationDocument,
     PhysicalEndpointConnectionCreationDocument,
     PhysicalEndpointMaterialization,
@@ -689,53 +684,6 @@ def get_physical_object_details(
     )
 
 
-@app.get(
-    "/v1/topology/physical-objects/{physical_object_id}/blueprint-upgrade-analysis",
-    response_model=BlueprintUpgradeAnalysisDocument,
-    response_model_exclude_none=True,
-    responses={422: {"model": ErrorResponse}},
-)
-def analyze_physical_object_blueprint_upgrade(
-    physical_object_id: uuid.UUID,
-    session: Session = Depends(get_session),
-) -> BlueprintUpgradeAnalysisDocument:
-    CanonicalRepository(session).require_physical_objects([physical_object_id])
-    analysis = BlueprintUpgradeAnalyzer(session).analyze(physical_object_id)
-    return {
-        "status": analysis.status,
-        **({"blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": analysis.blueprint_id}} if analysis.blueprint_id else {}),
-        **({"current_version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": analysis.current_version_id}, "current_version_number": analysis.current_version_number} if analysis.current_version_id else {}),
-        **({"target_version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": analysis.target_version_id}, "target_version_number": analysis.target_version_number} if analysis.target_version_id else {}),
-        "compatible_changes": list(analysis.compatible_changes),
-        "blockers": list(analysis.blockers),
-    }
-
-
-@app.post(
-    "/v1/topology/physical-objects/{physical_object_id}/blueprint-upgrade",
-    response_model=ObjectBlueprintInstantiationDocument,
-    response_model_exclude_none=True,
-    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
-)
-def apply_physical_object_blueprint_upgrade(
-    physical_object_id: uuid.UUID,
-    query: ApplyBlueprintUpgradeRequest,
-    session: Session = Depends(get_session),
-) -> ObjectBlueprintInstantiationDocument:
-    with session.begin():
-        created = ObjectBlueprintCatalog(session).apply_upgrade(physical_object_id, query.target_version_id)
-        return {
-            "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
-            "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},
-            "physical_object_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": created.physical_object_id},
-            "slots": [{
-                "slot_key": slot.slot_key,
-                "connection_point_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "ConnectionPoint", "entity_id": slot.connection_point_id},
-                **({"network_interface_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "NetworkInterface", "entity_id": slot.network_interface_id}} if slot.network_interface_id else {}),
-            } for slot in created.slots],
-        }
-
-
 @app.delete(
     "/v1/topology/physical-objects/{physical_object_id}",
     status_code=204,
@@ -790,59 +738,37 @@ def set_physical_object_class(
 
 
 @app.post(
-    "/v1/topology/physical-objects",
-    response_model=PhysicalObjectDetailsDocument,
-    response_model_exclude_none=True,
-    status_code=201,
-    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
-)
-def create_physical_object(
-    query: CreatePhysicalObjectRequest,
-    session: Session = Depends(get_session),
-) -> PhysicalObjectDetailsDocument:
-    with session.begin():
-        created = DeviceCatalog(session).create_physical_object(
-            query.display_name,
-            query.initial_connection_point.display_name,
-            query.class_,
-        )
-        return ConfiguredPhysicalObjectDetailsResolver(
-            CanonicalRepository(session)
-        ).resolve(created.physical_object_id)
-
-
-@app.post(
-    "/v1/library/object-blueprints",
-    response_model=ObjectBlueprintCreationDocument,
+    "/v1/library/base-templates",
+    response_model=BaseTemplateCreationDocument,
     status_code=201,
     responses={422: {"model": ErrorResponse}},
 )
 def create_object_blueprint(
-    query: CreateObjectBlueprintRequest,
+    query: CreateBaseTemplateRequest,
     session: Session = Depends(get_session),
-) -> ObjectBlueprintCreationDocument:
+) -> BaseTemplateCreationDocument:
     with session.begin():
-        created = ObjectBlueprintCatalog(session).create_initial_version(query)
+        created = HardwareCatalog(session).create_initial_version(query)
         return {
-            "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
-            "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},
+            "blueprint_ref": {"entity_type": "BaseTemplate", "entity_id": created.template_id},
+            "version_ref": {"entity_type": "BaseTemplateRevision", "entity_id": created.version_id},
         }
 
 
 @app.get(
-    "/v1/library/object-blueprints",
-    response_model=ObjectBlueprintListDocument,
+    "/v1/library/base-templates",
+    response_model=BaseTemplateListDocument,
 )
-def list_object_blueprints(
+def list_base_templates(
     session: Session = Depends(get_session),
-) -> ObjectBlueprintListDocument:
-    blueprints = ObjectBlueprintCatalog(session).list_blueprints()
+) -> BaseTemplateListDocument:
+    blueprints = HardwareCatalog(session).list_blueprints()
     return {
         "blueprints": [
             {
-                "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": item.blueprint_id},
+                "blueprint_ref": {"entity_type": "BaseTemplate", "entity_id": item.template_id},
                 "name": item.name,
-                "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": item.version_id},
+                "version_ref": {"entity_type": "BaseTemplateRevision", "entity_id": item.version_id},
                 "version_number": item.version_number,
                 "default_physical_object_class": item.default_physical_object_class,
                 "body": {
@@ -858,40 +784,21 @@ def list_object_blueprints(
     }
 
 
-@app.post(
-    "/v1/library/object-blueprints/{blueprint_id}/versions",
-    response_model=ObjectBlueprintCreationDocument,
-    status_code=201,
-    responses={422: {"model": ErrorResponse}},
-)
-def create_object_blueprint_version(
-    blueprint_id: uuid.UUID,
-    query: CreateObjectBlueprintVersionRequest,
-    session: Session = Depends(get_session),
-) -> ObjectBlueprintCreationDocument:
-    with session.begin():
-        created = ObjectBlueprintCatalog(session).create_next_version(blueprint_id, query)
-        return {
-            "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
-            "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},
-        }
-
-
 @app.get(
-    "/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}",
-    response_model=ObjectBlueprintVersionDocument,
+    "/v1/library/base-templates/{template_id}/versions/{version_id}",
+    response_model=BaseTemplateRevisionDocument,
     responses={422: {"model": ErrorResponse}},
 )
 def get_object_blueprint_version(
-    blueprint_id: uuid.UUID,
+    template_id: uuid.UUID,
     version_id: uuid.UUID,
     session: Session = Depends(get_session),
-) -> ObjectBlueprintVersionDocument:
-    version = ObjectBlueprintCatalog(session).get_version_detail(blueprint_id, version_id)
+) -> BaseTemplateRevisionDocument:
+    version = HardwareCatalog(session).get_version_detail(template_id, version_id)
     return {
-        "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": version.blueprint_id},
+        "blueprint_ref": {"entity_type": "BaseTemplate", "entity_id": version.template_id},
         "name": version.name,
-        "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": version.version_id},
+        "version_ref": {"entity_type": "BaseTemplateRevision", "entity_id": version.version_id},
         "version_number": version.version_number,
         "next_panel_number": version.next_panel_number,
         "default_physical_object_class": version.default_physical_object_class,
@@ -913,6 +820,7 @@ def get_object_blueprint_version(
             }
             for slot in version.slots
         ],
+        "bays": [{key: getattr(bay, key) for key in ("bay_key", "display_name", "compatibility", "panel_key", "x", "y", "width", "height")} for bay in version.bays],
         "internal_links": [
             {"from_slot_key": left, "to_slot_key": right}
             for left, right in version.internal_links
@@ -921,40 +829,38 @@ def get_object_blueprint_version(
 
 
 @app.delete(
-    "/v1/library/object-blueprints/{blueprint_id}",
+    "/v1/library/base-templates/{template_id}",
     status_code=204,
     responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
 )
 def delete_object_blueprint(
-    blueprint_id: uuid.UUID,
+    template_id: uuid.UUID,
     session: Session = Depends(get_session),
 ) -> None:
     with session.begin():
-        ObjectBlueprintCatalog(session).delete_blueprint(blueprint_id)
+        HardwareCatalog(session).delete_blueprint(template_id)
 
 
 @app.post(
-    "/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}/instantiate",
-    response_model=ObjectBlueprintInstantiationDocument,
+    "/v1/topology/physical-objects",
+    response_model=BaseTemplateInstantiationDocument,
     response_model_exclude_none=True,
     status_code=201,
     responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
 )
-def instantiate_object_blueprint(
-    blueprint_id: uuid.UUID,
-    version_id: uuid.UUID,
-    query: InstantiateObjectBlueprintRequest,
+def create_physical_object(
+    query: CreatePhysicalObjectRequest,
     session: Session = Depends(get_session),
-) -> ObjectBlueprintInstantiationDocument:
+) -> BaseTemplateInstantiationDocument:
     with session.begin():
-        created = ObjectBlueprintCatalog(session).instantiate(blueprint_id, version_id, query.display_name)
+        created = HardwareCatalog(session).create_object(query.base_template_id, query.display_name, query.class_)
         if query.location_id is not None:
             LocationCatalog(session).set_physical_object_location(
                 created.physical_object_id, query.location_id
             )
         return {
-            "blueprint_ref": {"entity_type": "ObjectBlueprint", "entity_id": created.blueprint_id},
-            "version_ref": {"entity_type": "ObjectBlueprintVersion", "entity_id": created.version_id},
+            "blueprint_ref": {"entity_type": "BaseTemplate", "entity_id": created.template_id},
+            "version_ref": {"entity_type": "BaseTemplateRevision", "entity_id": created.version_id},
             "physical_object_ref": {
                 "ref_type": "CANONICAL_FACT", "entity_type": "PhysicalObject", "entity_id": created.physical_object_id,
             },
@@ -993,27 +899,6 @@ def create_connection_point(
         return ConfiguredPhysicalObjectDetailsResolver(
             CanonicalRepository(session)
         ).resolve(physical_object_id)
-
-
-@app.post(
-    "/v1/topology/devices",
-    response_model=DeviceDetailsDocument,
-    response_model_exclude_none=True,
-    status_code=201,
-    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
-)
-def create_network_device(
-    query: CreateNetworkDeviceRequest,
-    session: Session = Depends(get_session),
-) -> DeviceDetailsDocument:
-    with session.begin():
-        created = DeviceCatalog(session).create_network_device(
-            query.display_name,
-            query.initial_interface.display_name,
-        )
-        return ConfiguredDeviceDetailsResolver(CanonicalRepository(session)).resolve(
-            created.physical_object_id
-        )
 
 
 @app.post(
@@ -1611,3 +1496,25 @@ def evaluate_nat_stages(
     return ConfiguredNATEvaluationResolver(repository).resolve(
         query, EvaluationView()
     )
+
+
+@app.post("/v1/library/module-templates", status_code=201)
+def create_module_template(query: CreateModuleTemplateRequest, session: Session = Depends(get_session)):
+    with session.begin():
+        return HardwareCatalog(session).create_module(query)
+
+
+@app.get("/v1/library/module-templates")
+def list_module_templates(session: Session = Depends(get_session)):
+    return HardwareCatalog(session).list_modules()
+
+
+@app.get("/v1/topology/physical-objects/{physical_object_id}/configuration")
+def get_object_configuration(physical_object_id: uuid.UUID, session: Session = Depends(get_session)):
+    return HardwareCatalog(session).configuration_document(physical_object_id)
+
+
+@app.post("/v1/topology/physical-objects/{physical_object_id}/module-installations", status_code=201)
+def install_module(physical_object_id: uuid.UUID, query: InstallModuleRequest, session: Session = Depends(get_session)):
+    with session.begin():
+        return HardwareCatalog(session).install_module(physical_object_id, query)

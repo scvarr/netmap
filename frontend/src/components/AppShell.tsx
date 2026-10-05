@@ -63,7 +63,7 @@ export function AppShell() {
           </div>
           <div className="shell-nav__group">
             <span className="shell-nav__group-label">{t('nav.library')}</span>
-            <NavLink className={navClassName} to="/library/object-blueprints" title={t('nav.blueprints')} data-tooltip={t('nav.blueprints')}>
+            <NavLink className={navClassName} to="/library/base-templates" title={t('nav.blueprints')} data-tooltip={t('nav.blueprints')}>
               <span className="shell-nav__icon" aria-hidden="true">▤</span>
               <span className="shell-nav__label">{t('nav.blueprints')}</span>
             </NavLink>

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.errors import ModelError, ValidationError
 from app.models import (
-    BlueprintInstance, BlueprintInstanceSlot, Connection, ConnectionMember,
+    ModuleInstallation, ModuleEndpointMapping, ObjectConfiguration, BuiltInEndpointMapping, Connection, ConnectionMember,
     ConnectionPoint, EntityMetadata, InterfacePhysicalBinding, L2Binding,
     L2EgressRule, L2ForwardingContext, L2IngressRule,
     L3Binding, NetworkInterface, NetworkInterfacePhysicalOwner,
@@ -63,7 +63,7 @@ class PhysicalObjectDeletionCatalog:
         for binding in bindings:
             if binding.interface_id not in interface_ids or binding.point_id not in point_ids:
                 blockers["EXTERNAL_INTERFACE_PHYSICAL_BINDING"] += 1
-        for slot in self.session.scalars(select(BlueprintInstanceSlot).join(BlueprintInstance).where(BlueprintInstance.physical_object_id == self._object_id_from_points(point_ids))):
+        for slot in self.session.scalars(select(BuiltInEndpointMapping).join(ObjectConfiguration).where(ObjectConfiguration.physical_object_id == self._object_id_from_points(point_ids))):
             if slot.connection_point_id not in point_ids or (slot.network_interface_id is not None and slot.network_interface_id not in interface_ids):
                 blockers["EXTERNAL_BLUEPRINT_INSTANCE_SLOT"] += 1
         return dict(sorted(blockers.items()))
@@ -95,15 +95,20 @@ class PhysicalObjectDeletionCatalog:
                 self.session.delete(context)
 
     def _delete_aggregate(self, object_: PhysicalObject, point_ids: tuple[uuid.UUID, ...], interface_ids: tuple[uuid.UUID, ...], connection_ids: tuple[uuid.UUID, ...]) -> None:
-        instance_ids = self._ids(BlueprintInstance.id, BlueprintInstance.physical_object_id == object_.id)
+        instance_ids = self._ids(ObjectConfiguration.id, ObjectConfiguration.physical_object_id == object_.id)
         for placement in self.session.scalars(select(MapPlacement).where(MapPlacement.physical_object_id == object_.id)):
             self.session.delete(placement)
         if connection_ids:
             for member in self.session.scalars(select(ConnectionMember).where(ConnectionMember.connection_id.in_(connection_ids))): self.session.delete(member)
             for connection in self.session.scalars(select(Connection).where(Connection.id.in_(connection_ids))): self.session.delete(connection)
+        installation_ids = self._ids(ModuleInstallation.id, ModuleInstallation.configuration_id.in_(instance_ids))
+        for mapping in self.session.scalars(select(ModuleEndpointMapping).where(ModuleEndpointMapping.installation_id.in_(installation_ids))): self.session.delete(mapping)
+        self.session.flush()
+        for installation in self.session.scalars(select(ModuleInstallation).where(ModuleInstallation.id.in_(installation_ids))): self.session.delete(installation)
+        self.session.flush()
         if instance_ids:
-            for slot in self.session.scalars(select(BlueprintInstanceSlot).where(BlueprintInstanceSlot.blueprint_instance_id.in_(instance_ids))): self.session.delete(slot)
-            for instance in self.session.scalars(select(BlueprintInstance).where(BlueprintInstance.id.in_(instance_ids))): self.session.delete(instance)
+            for slot in self.session.scalars(select(BuiltInEndpointMapping).where(BuiltInEndpointMapping.configuration_id.in_(instance_ids))): self.session.delete(slot)
+            for instance in self.session.scalars(select(ObjectConfiguration).where(ObjectConfiguration.id.in_(instance_ids))): self.session.delete(instance)
         for binding in self.session.scalars(select(InterfacePhysicalBinding).where(or_(InterfacePhysicalBinding.interface_id.in_(interface_ids), InterfacePhysicalBinding.point_id.in_(point_ids)))): self.session.delete(binding)
         for owner in self.session.scalars(select(NetworkInterfacePhysicalOwner).where(NetworkInterfacePhysicalOwner.physical_object_id == object_.id)): self.session.delete(owner)
         for metadata in self.session.scalars(select(EntityMetadata).where(or_(EntityMetadata.physical_object_id == object_.id, EntityMetadata.connection_point_id.in_(point_ids), EntityMetadata.network_interface_id.in_(interface_ids)))): self.session.delete(metadata)

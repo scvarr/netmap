@@ -1,4 +1,4 @@
-import type { PresentationPanel } from './objectBlueprintTypes';
+import type { PresentationPanel } from './baseTemplateTypes';
 
 export interface BlueprintThumbnailGeometry {
   originX: number;

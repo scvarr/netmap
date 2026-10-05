@@ -2,7 +2,8 @@
 
 ## Status and authority
 
-**ACCEPTED / AUTHORITATIVE TARGET CONTRACT; IMPLEMENTATION PENDING.**
+**ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A IMPLEMENTED, AWAITING
+EXTERNAL INSPECTION. 09.6-C/D/E REMAIN OPEN.**
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -19,7 +20,62 @@ differences must not require a separate complete assembled template for every
 configuration. The accepted answer is a base equipment template plus modules
 installed in each concrete object. Phase C is **PAUSED** until bounded
 implementation and manual recheck of the same HV-01 step. This document records
-the redesign only; it neither implements it nor closes existing `C-*` findings.
+the accepted redesign. The bounded implementation below does not close existing
+`C-*` findings or replace manual HV-01 rechecking.
+
+## Implemented boundary: 09.6-A
+
+- The library distinguishes `BaseTemplate` / `BaseTemplateRevision` and
+  `ModuleTemplate` / `ModuleTemplateRevision`. Creation publishes only their
+  first immutable revision. No subsequent published editing API is available.
+- Base revisions own presentation panels, built-in endpoint definitions,
+  explicit internal links and `ModuleBay` records. Bays have opaque keys and
+  numeric panel-local normalized rectangles contained within `[0,1] × [0,1]`.
+- `POST /v1/topology/physical-objects` requires a root `base_template_id`;
+  the server pins its current published revision. Canonical object, metadata,
+  built-in endpoints, ownership/binding and internal L1 Connections are created
+  atomically. `ObjectConfiguration` records provenance; it does not make the
+  PhysicalObject a child canonical entity of the template.
+- Module revisions have exact compatibility and ordered endpoint definitions
+  without a canvas. Installation uses a root `module_template_id` and pins its
+  current revision. Object/configuration locks and unique
+  `(configuration_id, bay_key)` enforce at most one installation per bay.
+  Object/bay existence, occupancy and exact case/whitespace-sensitive
+  compatibility are checked before any canonical materialization.
+- `ModuleInstallation.id` is independent of bay. `ModuleEndpointMapping`
+  associates each definition with its canonical endpoints through that ID.
+  Two installations have different endpoints; a module is never another
+  PhysicalObject. NETWORK_PORT retains point, interface, ownership and binding.
+- Horizontal endpoint coordinates are `x = bay.x + bay.width * (i+1)/(N+1)`,
+  `y = bay.y + bay.height/2`. Vertical coordinates use centered x and evenly
+  spaced y. These are derived for configuration and panel-aware L1/Map
+  presentation and never persisted as endpoint identity.
+- The existing panel/endpoint/internal-link editor creates bases and edits bay
+  geometry numerically. A separate module form creates ordered definitions.
+  Object creation selects the root base without a revision picker. `/physical`
+  shows free/occupied bays, filters compatible modules and installs the chosen
+  module with horizontal/vertical orientation, refreshing canonical details.
+- Old ObjectBlueprint/BlueprintInstance persistence, instantiate, additive
+  upgrades, published-edit actions and template-less equipment creation API/UI
+  are removed. Low-level canonical test builders remain permitted.
+
+Workspace exchange is **v4 only**, explicitly including base templates and
+revisions, panels, built-in definitions and internal links, bays, module
+templates and revisions, ordered module definitions, configurations,
+installations and both endpoint mapping tables. Canonical,
+authoring/configuration and map-presentation sections remain separate. v3
+import is rejected; v4 round-trip preserves pinned revisions and canonical IDs.
+
+Migration history is replaced by **0001 current schema initialization**,
+including the CableLabelSettings singleton. Development databases must be
+destroyed and recreated. No old records or revision IDs are translated; this
+authorized destructive cutover does not modify an applied historical revision.
+
+**OPEN:** persisted drafts, frozen candidates, impact review, later publication,
+safe object/module updates, update-required state and module relocation/movement
+remain outside 09.6-A. Dense Map LOD and endpoint technology semantics remain
+open. External branch inspection and manual HV-01 acceptance are still required;
+this implementation does not accept or resume Phase C.
 
 ## Library roles and base equipment template
 
@@ -185,8 +241,8 @@ database deployment state permits it**. This does not authorize editing an
 applied Alembic revision and expecting a persistent database to replay it.
 Databases that must be retained still require immutable applied revisions and
 new forward migrations. Determine that boundary from actual repository state
-in the implementation milestone. **This documentation branch changes no
-application code, database, or migrations.**
+in the implementation milestone. The implemented 09.6-A boundary uses that
+authorized destructive cutover and fresh initialization, as described above.
 
 ## OPEN and outside this contract
 

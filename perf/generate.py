@@ -9,10 +9,10 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.database import Base, SessionLocal
-from app.models import (BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot,
-    BlueprintInternalLink, Connection, ConnectionMember, ConnectionPoint, EntityMetadata,
+from app.models import (BuiltInEndpointDefinition, ObjectConfiguration, BuiltInEndpointMapping,
+    BaseInternalLink, Connection, ConnectionMember, ConnectionPoint, EntityMetadata,
     InterfacePhysicalBinding, MapPlacement, MapViewKey, MapViewPosition, NetworkInterface,
-    NetworkInterfacePhysicalOwner, ObjectBlueprint, ObjectBlueprintVersion, PhysicalObject, SavedMap)
+    NetworkInterfacePhysicalOwner, BaseTemplate, BaseTemplateRevision, PhysicalObject, SavedMap)
 from perf.safety import require_confirmed_perf_database
 
 NAMESPACE = uuid.UUID("703fcd59-f55a-4ddc-8593-902761a8f1a2")
@@ -44,19 +44,19 @@ def reset(session: Session) -> None:
     # Migrations are applied by compose; TRUNCATE is deliberately guarded above.
     session.execute(text("TRUNCATE TABLE " + ", ".join(table.name for table in reversed(Base.metadata.sorted_tables)) + " RESTART IDENTITY CASCADE"))
 
-def create_blueprint(session: Session, seed: int, ports: int, patch: bool = False) -> tuple[ObjectBlueprintVersion, list[BlueprintEndpointSlot]]:
+def create_blueprint(session: Session, seed: int, ports: int, patch: bool = False) -> tuple[BaseTemplateRevision, list[BuiltInEndpointDefinition]]:
     name = ("patch-panel" if patch else "switch") + f"-{ports}" if ports else "blank-0"
-    blueprint = ObjectBlueprint(id=stable_id(seed, "blueprint", name), name=name)
-    version = ObjectBlueprintVersion(id=stable_id(seed, "version", name), blueprint_id=blueprint.id, version_number=1,
+    blueprint = BaseTemplate(id=stable_id(seed, "blueprint", name), name=name)
+    version = BaseTemplateRevision(id=stable_id(seed, "version", name), template_id=blueprint.id, version_number=1,
         default_physical_object_class="patch_panel" if patch else "switch", body_kind="RECTANGLE", width=212, height=144, fill_color="#365B8C", authoring_recipe={"perf": True})
     session.add_all([blueprint, version])
     session.flush()
-    slots = [BlueprintEndpointSlot(id=stable_id(seed, "slot", name, i), blueprint_version_id=version.id,
+    slots = [BuiltInEndpointDefinition(id=stable_id(seed, "slot", name, i), base_revision_id=version.id,
         slot_key=f"port:{i:02d}", display_name=f"{i:02d}", kind="CONNECTION_POINT" if patch else "NETWORK_PORT",
         anchor_side="LEFT" if i % 2 else "RIGHT", anchor_offset=(i + 1) / (ports + 1)) for i in range(ports)]
     session.add_all(slots); session.flush()
     if patch:
-        session.add_all(BlueprintInternalLink(id=stable_id(seed, "internal", name, i), blueprint_version_id=version.id, slot_a_id=slots[i].id, slot_b_id=slots[i + 1].id) for i in range(0, ports, 2))
+        session.add_all(BaseInternalLink(id=stable_id(seed, "internal", name, i), base_revision_id=version.id, slot_a_id=slots[i].id, slot_b_id=slots[i + 1].id) for i in range(0, ports, 2))
     return version, slots
 
 def generate(profile_name: str, seed: int) -> dict[str, object]:
@@ -71,10 +71,10 @@ def generate(profile_name: str, seed: int) -> dict[str, object]:
         patch_version, patch_slots = create_blueprint(session, seed, 24, patch=True)
         objects: list[PhysicalObject] = []; connections: list[Connection] = []; connection_members: list[ConnectionMember] = []
         points_by_object: dict[uuid.UUID, list[ConnectionPoint]] = {}
-        object_metadata: list[EntityMetadata] = []; instances: list[BlueprintInstance] = []
+        object_metadata: list[EntityMetadata] = []; instances: list[ObjectConfiguration] = []
         points: list[ConnectionPoint] = []; interfaces: list[NetworkInterface] = []
         owners: list[NetworkInterfacePhysicalOwner] = []; bindings: list[InterfacePhysicalBinding] = []
-        point_and_interface_metadata: list[EntityMetadata] = []; instance_slots: list[BlueprintInstanceSlot] = []
+        point_and_interface_metadata: list[EntityMetadata] = []; instance_slots: list[BuiltInEndpointMapping] = []
         for index, port_count in enumerate(plan):
             obj = PhysicalObject(id=stable_id(seed, "object", index)); objects.append(obj)
             version, slots = (patch_version, patch_slots) if index < patch_count else blueprints[port_count]
@@ -82,7 +82,7 @@ def generate(profile_name: str, seed: int) -> dict[str, object]:
                 EntityMetadata(id=stable_id(seed, "metadata", index, "alias"), physical_object_id=obj.id, key="alias.display", value=f"PERF-{index:04d}"),
                 EntityMetadata(id=stable_id(seed, "metadata", index, "class"), physical_object_id=obj.id, key="class", value=version.default_physical_object_class or "switch"),
             ])
-            instance = BlueprintInstance(id=stable_id(seed, "instance", index), blueprint_version_id=version.id, physical_object_id=obj.id)
+            instance = ObjectConfiguration(id=stable_id(seed, "instance", index), base_revision_id=version.id, physical_object_id=obj.id)
             instances.append(instance)
             local_cps = []
             for port_index, slot in enumerate(slots):
@@ -106,7 +106,7 @@ def generate(profile_name: str, seed: int) -> dict[str, object]:
                     point_and_interface_metadata.append(
                         EntityMetadata(id=stable_id(seed, "metadata", index, "ni", port_index), network_interface_id=interface.id, key="alias.display", value=slot.display_name),
                     )
-                instance_slots.append(BlueprintInstanceSlot(id=stable_id(seed, "instance-slot", index, port_index), blueprint_instance_id=instance.id, blueprint_slot_id=slot.id, connection_point_id=cp.id, network_interface_id=interface_id))
+                instance_slots.append(BuiltInEndpointMapping(id=stable_id(seed, "instance-slot", index, port_index), configuration_id=instance.id, definition_id=slot.id, connection_point_id=cp.id, network_interface_id=interface_id))
             if index < patch_count:
                 for pair in range(0, len(local_cps), 2):
                     conn = Connection(id=stable_id(seed, "connection", "internal", index, pair), point_a_id=local_cps[pair].id, point_b_id=local_cps[pair+1].id, cardinality=1)

@@ -335,7 +335,7 @@ describe('TopologyCanvas async layout boundary', () => {
     const projection: TopologyProjectionNode = {
       id: 'physical-framed', kind: 'PHYSICAL_OBJECT', label: 'Server',
       source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'PhysicalObject', entity_id: 'server' }],
-      attributes: { blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint', entity_id: 'blueprint' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion', entity_id: 'version' }, body: { kind: 'RECTANGLE' as const, width: 100, height: 50 }, panels: [{ panel_key: 'one', panel_number: 1, display_name: 'Panel 1', x: 0, y: 0, width: 100, height: 50 }], slots: [] } },
+      attributes: { blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'BaseTemplate', entity_id: 'blueprint' }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'BaseTemplateRevision', entity_id: 'version' }, body: { kind: 'RECTANGLE' as const, width: 100, height: 50 }, panels: [{ panel_key: 'one', panel_number: 1, display_name: 'Panel 1', x: 0, y: 0, width: 100, height: 50 }], slots: [] } },
     };
     const peer: TopologyProjectionNode = { id: 'physical-peer', kind: 'PHYSICAL_OBJECT', label: 'Peer', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'peer' }], attributes: {} };
     const document: TopologyProjectionDocument = { ...documentFor('physical-framed'), nodes: [projection, peer] };
@@ -443,7 +443,7 @@ describe('TopologyCanvas async layout boundary', () => {
   ])('renders an SVG path for %s', async (_, collapsedCable, genericTarget) => {
     const blueprint = (id: string, point: string) => ({
       id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [], attributes: {
-        blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint', entity_id: `${id}-bp` }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion', entity_id: `${id}-v` }, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, panels: [{ panel_key: 'one', panel_number: 1, display_name: 'Panel 1', x: 0, y: 0, width: 120, height: 40 }], slots: [{ slot_key: 'port', display_name: 'port', kind: 'CONNECTION_POINT' as const, panel_key: 'one', panel_local_position: { x: .5, y: .5 }, rendered_position: { x: .5, y: .5 }, external_attachment: { x: 1, y: .5, side: 'RIGHT' as const }, connection_point_id: point }] },
+        blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'BaseTemplate', entity_id: `${id}-bp` }, version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'BaseTemplateRevision', entity_id: `${id}-v` }, body: { kind: 'RECTANGLE' as const, width: 120, height: 40 }, panels: [{ panel_key: 'one', panel_number: 1, display_name: 'Panel 1', x: 0, y: 0, width: 120, height: 40 }], slots: [{ slot_key: 'port', display_name: 'port', kind: 'CONNECTION_POINT' as const, panel_key: 'one', panel_local_position: { x: .5, y: .5 }, rendered_position: { x: .5, y: .5 }, external_attachment: { x: 1, y: .5, side: 'RIGHT' as const }, connection_point_id: point }] },
       },
     });
     const left = blueprint('left', 'left-cp');

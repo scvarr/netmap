@@ -1,3 +1,4 @@
+from tests.l1_builders import create_object_details
 import uuid
 
 from fastapi.testclient import TestClient
@@ -14,16 +15,7 @@ client = TestClient(app)
 
 
 def create_object(display_name: str, class_value: str | None = None) -> str:
-    response = client.post(
-        "/v1/topology/physical-objects",
-        json={
-            "display_name": display_name,
-            "initial_connection_point": {"display_name": "A01"},
-            **({"class": class_value} if class_value is not None else {}),
-        },
-    )
-    assert response.status_code == 201
-    return response.json()["physical_object"]["source_ref"]["entity_id"]
+    return create_object_details(client, display_name, "A01", class_value)["physical_object"]["source_ref"]["entity_id"]
 
 
 def test_display_name_updates_alias_metadata_without_changing_topology_identity():

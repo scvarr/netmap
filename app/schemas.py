@@ -38,7 +38,7 @@ class BlueprintLibraryRef(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     ref_type: Literal["LIBRARY_RECORD"] = "LIBRARY_RECORD"
-    entity_type: Literal["ObjectBlueprint", "ObjectBlueprintVersion"]
+    entity_type: Literal["BaseTemplate", "BaseTemplateRevision"]
     entity_id: uuid.UUID
 
 
@@ -551,7 +551,7 @@ class PhysicalObjectDetails(BaseModel):
     class_: str | None = Field(default=None, alias="class", min_length=1, max_length=255)
 
 
-class BlueprintInstanceProvenance(BaseModel):
+class ObjectConfigurationProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     blueprint_ref: BlueprintLibraryRef
@@ -622,7 +622,7 @@ class PhysicalObjectDetailsDocument(BaseModel):
 
     schema_version: Literal["1.0"] = "1.0"
     physical_object: PhysicalObjectDetails
-    blueprint_provenance: BlueprintInstanceProvenance | None = None
+    blueprint_provenance: ObjectConfigurationProvenance | None = None
     connection_points: list[ConnectionPointDetails]
     owned_interface_count: int = Field(ge=0)
     gaps: list[str]
@@ -635,11 +635,6 @@ class CreateNetworkInterfaceRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
 
 
-class CreateNetworkDeviceRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    display_name: str = Field(min_length=1, max_length=255)
-    initial_interface: CreateNetworkInterfaceRequest
 
 
 class CreateDeviceInterfaceRequest(BaseModel):
@@ -648,10 +643,6 @@ class CreateDeviceInterfaceRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
 
 
-class CreatePhysicalObjectConnectionPointRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    display_name: str = Field(min_length=1, max_length=255)
 
 
 class CreateConnectionPointRequest(BaseModel):
@@ -666,7 +657,8 @@ class CreatePhysicalObjectRequest(BaseModel):
     )
 
     display_name: str = Field(min_length=1, max_length=255)
-    initial_connection_point: CreatePhysicalObjectConnectionPointRequest
+    base_template_id: uuid.UUID
+    location_id: uuid.UUID | None = None
     class_: str | None = Field(default=None, alias="class", min_length=1, max_length=255)
 
 
@@ -691,7 +683,7 @@ class BlueprintBody(BaseModel):
     fill_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
-class BlueprintEndpointSlotRequest(BaseModel):
+class BuiltInEndpointDefinitionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: str = Field(min_length=1, max_length=255)
@@ -719,25 +711,82 @@ class BlueprintPosition(BaseModel):
     y: FiniteFloat = Field(ge=0, le=1)
 
 
-class BlueprintInternalLinkRequest(BaseModel):
+class BaseInternalLinkRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     from_slot_key: str = Field(min_length=1, max_length=255)
     to_slot_key: str = Field(min_length=1, max_length=255)
 
 
-class CreateObjectBlueprintRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+class ModuleBayRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    bay_key: str = Field(min_length=1, max_length=255)
+    display_name: str = Field(min_length=1, max_length=255)
+    compatibility: str = Field(min_length=1, max_length=255)
+    panel_key: str = Field(min_length=1, max_length=255)
+    x: FiniteFloat = Field(ge=0, le=1)
+    y: FiniteFloat = Field(ge=0, le=1)
+    width: FiniteFloat = Field(gt=0, le=1)
+    height: FiniteFloat = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def rectangle_inside_panel(self):
+        if self.x + self.width > 1 or self.y + self.height > 1:
+            raise PydanticCustomError("hardware_validation", "Bay rectangle must be entirely inside its panel")
+        if any(not v.strip() for v in (self.bay_key, self.display_name, self.compatibility, self.panel_key)):
+            raise PydanticCustomError("hardware_validation", "Bay strings must not be blank")
+        return self
+
+
+class ModuleEndpointRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    key: str = Field(min_length=1, max_length=255)
+    display_name: str = Field(min_length=1, max_length=255)
+    kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
+
+
+class CreateModuleTemplateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1, max_length=255)
+    compatibility: str = Field(min_length=1, max_length=255)
+    endpoints: list[ModuleEndpointRequest]
+
+    @model_validator(mode="after")
+    def valid_definitions(self):
+        if not self.name.strip() or not self.compatibility.strip() or any(not e.key.strip() or not e.display_name.strip() for e in self.endpoints):
+            raise PydanticCustomError("hardware_validation", "Module strings must not be blank")
+        if len({e.key for e in self.endpoints}) != len(self.endpoints):
+            raise PydanticCustomError("hardware_validation", "Module definition keys must be unique")
+        return self
+
+
+class InstallModuleRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    module_template_id: uuid.UUID
+    bay_key: str = Field(min_length=1, max_length=255)
+    orientation: Literal["HORIZONTAL", "VERTICAL"]
+
+
+class CreateBaseTemplateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=255)
     default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
     body: BlueprintBody
     panels: list[PresentationPanelRequest] = Field(min_length=1)
-    slots: list[BlueprintEndpointSlotRequest] = Field(default_factory=list)
-    internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
+    slots: list[BuiltInEndpointDefinitionRequest] = Field(default_factory=list)
+    internal_links: list[BaseInternalLinkRequest] = Field(default_factory=list)
+    bays: list[ModuleBayRequest] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def validate_slot_keys(self) -> "CreateObjectBlueprintRequest":
+    def validate_slot_keys(self) -> "CreateBaseTemplateRequest":
+        if not self.name.strip():
+            raise PydanticCustomError("hardware_validation", "Template name must not be blank")
+        panel_keys = {p.panel_key for p in self.panels}
+        if len(panel_keys) != len(self.panels) or len({p.panel_number for p in self.panels}) != len(self.panels):
+            raise PydanticCustomError("hardware_validation", "Panel keys and numbers must be unique")
+        if len({b.bay_key for b in self.bays}) != len(self.bays) or any(b.panel_key not in panel_keys for b in self.bays):
+            raise PydanticCustomError("hardware_validation", "Bay keys must be unique and reference a template panel")
         if len({slot.key for slot in self.slots}) != len(self.slots):
             raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
         if not any(panel.panel_number == 1 for panel in self.panels):
@@ -748,37 +797,9 @@ class CreateObjectBlueprintRequest(BaseModel):
 
 
 
-class CreateObjectBlueprintVersionRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    default_physical_object_class: str | None = Field(default=None, min_length=1, max_length=255)
-    blueprint_name: str | None = Field(default=None, min_length=1, max_length=255)
-    body: BlueprintBody
-    panels: list[PresentationPanelRequest] = Field(min_length=1)
-    slots: list[BlueprintEndpointSlotRequest] = Field(default_factory=list)
-    internal_links: list[BlueprintInternalLinkRequest] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def validate_slot_keys(self) -> "CreateObjectBlueprintVersionRequest":
-        if len({slot.key for slot in self.slots}) != len(self.slots):
-            raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
-        keys = {panel.panel_key for panel in self.panels}
-        if len(keys) != len(self.panels) or len({panel.panel_number for panel in self.panels}) != len(self.panels):
-            raise PydanticCustomError("blueprint_duplicate_panel", "Blueprint panels must have unique keys and numbers")
-        if any(slot.panel_key not in keys for slot in self.slots):
-            raise PydanticCustomError("blueprint_unknown_panel", "Blueprint slot refers to an unknown panel")
-        return self
 
 
-
-class InstantiateObjectBlueprintRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-
-    display_name: str = Field(min_length=1, max_length=255)
-    location_id: uuid.UUID | None = None
-
-
-class ObjectBlueprintCreationDocument(BaseModel):
+class BaseTemplateCreationDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal["2.0"] = "2.0"
@@ -786,7 +807,7 @@ class ObjectBlueprintCreationDocument(BaseModel):
     version_ref: BlueprintLibraryRef
 
 
-class ObjectBlueprintInstantiationSlot(BaseModel):
+class BaseTemplateInstantiationSlot(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     slot_key: str = Field(min_length=1)
@@ -794,17 +815,17 @@ class ObjectBlueprintInstantiationSlot(BaseModel):
     network_interface_ref: ProjectionSourceRef | None = None
 
 
-class ObjectBlueprintInstantiationDocument(BaseModel):
+class BaseTemplateInstantiationDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal["2.0"] = "2.0"
     blueprint_ref: BlueprintLibraryRef
     version_ref: BlueprintLibraryRef
     physical_object_ref: ProjectionSourceRef
-    slots: list[ObjectBlueprintInstantiationSlot]
+    slots: list[BaseTemplateInstantiationSlot]
 
 
-class ObjectBlueprintBodyDocument(BaseModel):
+class BaseTemplateBodyDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["RECTANGLE"]
@@ -813,7 +834,7 @@ class ObjectBlueprintBodyDocument(BaseModel):
     fill_color: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
 
 
-class ObjectBlueprintListItemDocument(BaseModel):
+class BaseTemplateListItemDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     blueprint_ref: BlueprintLibraryRef
@@ -821,20 +842,20 @@ class ObjectBlueprintListItemDocument(BaseModel):
     version_ref: BlueprintLibraryRef
     version_number: int = Field(ge=1)
     default_physical_object_class: str | None = None
-    body: ObjectBlueprintBodyDocument
+    body: BaseTemplateBodyDocument
     slot_count: int = Field(ge=0)
     internal_link_count: int = Field(ge=0)
     version_count: int = Field(ge=1)
 
 
-class ObjectBlueprintListDocument(BaseModel):
+class BaseTemplateListDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal["2.0"] = "2.0"
-    blueprints: list[ObjectBlueprintListItemDocument]
+    blueprints: list[BaseTemplateListItemDocument]
 
 
-class ObjectBlueprintSlotDocument(BaseModel):
+class BaseTemplateSlotDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     key: str = Field(min_length=1)
@@ -848,14 +869,14 @@ class PresentationPanelDocument(PresentationPanelRequest):
     pass
 
 
-class ObjectBlueprintInternalLinkDocument(BaseModel):
+class BaseTemplateInternalLinkDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     from_slot_key: str = Field(min_length=1)
     to_slot_key: str = Field(min_length=1)
 
 
-class ObjectBlueprintVersionDocument(BaseModel):
+class BaseTemplateRevisionDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal["2.0"] = "2.0"
@@ -865,39 +886,11 @@ class ObjectBlueprintVersionDocument(BaseModel):
     version_number: int = Field(ge=1)
     next_panel_number: int = Field(ge=1)
     default_physical_object_class: str | None = None
-    body: ObjectBlueprintBodyDocument
+    body: BaseTemplateBodyDocument
     panels: list[PresentationPanelDocument]
-    slots: list[ObjectBlueprintSlotDocument]
-    internal_links: list[ObjectBlueprintInternalLinkDocument]
-
-
-class BlueprintUpgradeChange(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    code: str
-    slot_key: str | None = None
-    slot_keys: list[str] | None = None
-    kind: str | None = None
-    current_kind: str | None = None
-    target_kind: str | None = None
-    details: str | None = None
-
-
-class BlueprintUpgradeAnalysisDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    schema_version: Literal["1.0"] = "1.0"
-    status: Literal["NOT_APPLICABLE", "UP_TO_DATE", "OUTDATED", "MODEL_INCONSISTENT"]
-    blueprint_ref: BlueprintLibraryRef | None = None
-    current_version_ref: BlueprintLibraryRef | None = None
-    current_version_number: int | None = Field(default=None, ge=1)
-    target_version_ref: BlueprintLibraryRef | None = None
-    target_version_number: int | None = Field(default=None, ge=1)
-    compatible_changes: list[BlueprintUpgradeChange]
-    blockers: list[BlueprintUpgradeChange]
-
-
-class ApplyBlueprintUpgradeRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    target_version_id: uuid.UUID
+    slots: list[BaseTemplateSlotDocument]
+    internal_links: list[BaseTemplateInternalLinkDocument]
+    bays: list[ModuleBayRequest]
 
 
 class CreatePhysicalLinkRequest(BaseModel):

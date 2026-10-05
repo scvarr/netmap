@@ -1,3 +1,4 @@
+from tests.l1_builders import create_object_details
 import uuid
 
 from fastapi.testclient import TestClient
@@ -39,18 +40,9 @@ def node_for(document: dict, object_id: str) -> dict:
 
 
 def test_create_and_idempotently_update_arbitrary_physical_object_class():
-    created = client.post(
-        "/v1/topology/physical-objects",
-        json={
-            "display_name": "Outlet1",
-            "class": "outlet",
-            "initial_connection_point": {"display_name": "Port"},
-        },
-    )
-
-    assert created.status_code == 201
-    object_id = created.json()["physical_object"]["source_ref"]["entity_id"]
-    assert created.json()["physical_object"]["class"] == "outlet"
+    created = create_object_details(client, "Outlet1", "Port", "outlet")
+    object_id = created["physical_object"]["source_ref"]["entity_id"]
+    assert created["physical_object"]["class"] == "outlet"
     assert node_for(physical_projection(), object_id)["attributes"]["class"] == "outlet"
 
     for value in ("custom-appliance", "custom-appliance"):
@@ -81,17 +73,9 @@ def test_create_and_idempotently_update_arbitrary_physical_object_class():
 
 
 def test_missing_class_remains_valid_and_is_not_inferred():
-    created = client.post(
-        "/v1/topology/physical-objects",
-        json={
-            "display_name": "Looks like a cable",
-            "initial_connection_point": {"display_name": "Port"},
-        },
-    )
-
-    assert created.status_code == 201
-    object_id = created.json()["physical_object"]["source_ref"]["entity_id"]
-    assert "class" not in created.json()["physical_object"]
+    created = create_object_details(client, "Looks like a cable", "Port")
+    object_id = created["physical_object"]["source_ref"]["entity_id"]
+    assert "class" not in created["physical_object"]
     assert "class" not in node_for(physical_projection(), object_id)["attributes"]
 
 

@@ -1,3 +1,4 @@
+from tests.l1_builders import create_object_details, create_device as build_device
 import uuid
 
 from fastapi.testclient import TestClient
@@ -6,24 +7,20 @@ from sqlalchemy import func, select
 from app.database import SessionLocal
 from app.main import app
 from app.models import (
-    BlueprintInstance, BlueprintInstanceSlot, Connection, ConnectionMember,
+    ObjectConfiguration, BuiltInEndpointMapping, Connection, ConnectionMember,
     ConnectionPoint, L2Binding, L2EgressRule,
     L2ForwardingContext, L2IngressRule, L3Binding, NetworkInterface,
     PhysicalObject, RoutingContext,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from tests.test_object_blueprints_e2e import create_blueprint, instantiate, slot
+from tests.test_base_templates_e2e import create_blueprint, instantiate, slot
 
 
 client = TestClient(app)
 
 
 def manual_object(name: str) -> dict:
-    response = client.post('/v1/topology/physical-objects', json={
-        'display_name': name, 'initial_connection_point': {'display_name': 'p1'},
-    })
-    assert response.status_code == 201
-    return response.json()
+    return create_object_details(client, name)
 
 
 def object_id(document: dict) -> uuid.UUID:
@@ -31,9 +28,7 @@ def object_id(document: dict) -> uuid.UUID:
 
 
 def create_device(name: str) -> dict:
-    response = client.post('/v1/topology/devices', json={'display_name': name, 'initial_interface': {'display_name': 'eth0'}})
-    assert response.status_code == 201
-    return response.json()
+    return build_device(client, name)
 
 
 def test_deletes_standalone_manual_object_and_owned_point():
@@ -45,13 +40,13 @@ def test_deletes_standalone_manual_object_and_owned_point():
         assert session.scalar(select(func.count()).select_from(ConnectionPoint)) == 0
 
 
-def test_deletes_blueprint_instance_slots_provenance_and_internal_connections():
-    blueprint_id, version_id = create_blueprint([slot('front'), slot('rear')], [{'from_slot_key': 'front', 'to_slot_key': 'rear'}], name='Patch')
-    instance = instantiate(blueprint_id, version_id, 'PP1')
+def test_deletes_built_in_endpoint_mappings_provenance_and_internal_connections():
+    template_id, version_id = create_blueprint([slot('front'), slot('rear')], [{'from_slot_key': 'front', 'to_slot_key': 'rear'}], name='Patch')
+    instance = instantiate(template_id, version_id, 'PP1')
     response = client.delete(f"/v1/topology/physical-objects/{instance['physical_object_ref']['entity_id']}")
     assert response.status_code == 204
     with SessionLocal() as session:
-        for model in (PhysicalObject, ConnectionPoint, Connection, ConnectionMember, BlueprintInstance, BlueprintInstanceSlot):
+        for model in (PhysicalObject, ConnectionPoint, Connection, ConnectionMember, ObjectConfiguration, BuiltInEndpointMapping):
             assert session.scalar(select(func.count()).select_from(model)) == 0
 
 

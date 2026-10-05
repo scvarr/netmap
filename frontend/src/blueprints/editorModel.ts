@@ -1,14 +1,15 @@
-import type { BlueprintInternalLink, BlueprintSlot, BlueprintSlotKind, CreateObjectBlueprintRequest, ObjectBlueprintVersionDocument, PresentationPanel } from '../topology/objectBlueprintTypes';
+import type { BaseInternalLink, BlueprintSlot, BlueprintSlotKind, CreateBaseTemplateRequest, BaseTemplateRevisionDocument, PresentationPanel } from '../topology/baseTemplateTypes';
 
 export interface BlueprintEditorState {
   name: string; defaultClass: string; width: number; height: number; fillColor: string;
-  panels: PresentationPanel[]; slots: BlueprintSlot[]; individualLinks: BlueprintInternalLink[];
+  bays?: import("../topology/hardwareModules").ModuleBay[];
+  panels: PresentationPanel[]; slots: BlueprintSlot[]; individualLinks: BaseInternalLink[];
   activePanelKey: string; nextPanelNumber: number; nextLocalNumberByPanel: Record<string, number>;
 }
 export type BlueprintValidationError = 'nameRequired' | 'panelNameRequired' | 'dimensionsPositive' | 'colorFormat' | 'duplicateSlotKeys' | 'individualSelfLink' | 'individualMissingPort' | 'duplicateIndividualLink';
 export const internalLinkPairKey = (first: string, second: string) => [first, second].sort().join('\u0000');
 export type PairwiseContinuityError = 'empty' | 'countMismatch' | 'missingEndpoint' | 'duplicateKey' | 'selfLink' | 'duplicatePair' | 'existingLink';
-export interface PairwiseContinuityPreview { pairs: BlueprintInternalLink[]; error?: PairwiseContinuityError }
+export interface PairwiseContinuityPreview { pairs: BaseInternalLink[]; error?: PairwiseContinuityError }
 /** Captured order is authoritative; preflight validates the entire undirected batch. */
 export const pairwiseContinuityPreview = (state: BlueprintEditorState, a: readonly string[], b: readonly string[], reverseB: boolean): PairwiseContinuityPreview => {
   if (!a.length || !b.length) return { pairs: [], error: 'empty' };
@@ -28,7 +29,7 @@ export const applyPairwiseContinuity = (state: BlueprintEditorState, a: readonly
   const preview = pairwiseContinuityPreview(state, a, b, reverseB);
   return preview.error ? state : { ...state, individualLinks: [...state.individualLinks, ...preview.pairs] };
 };
-export const cleanupLinks = (links: BlueprintInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
+export const cleanupLinks = (links: BaseInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
 export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState => {
   const slots = state.slots.filter((slot) => !keys.has(slot.key));
   const nextLocalNumberByPanel = { ...state.nextLocalNumberByPanel };
@@ -105,7 +106,7 @@ export const renameActivePanel = (state: BlueprintEditorState, name: string): Bl
   ...state, panels: state.panels.map((panel) => panel.panel_key === state.activePanelKey ? { ...panel, display_name: name } : panel),
 });
 export const deleteActivePanel = (state: BlueprintEditorState): BlueprintEditorState => {
-  if (state.panels.length <= 1 || state.slots.some((slot) => slot.panel_key === state.activePanelKey)) return state;
+  if (state.panels.length <= 1 || state.bays?.some(bay => bay.panel_key === state.activePanelKey) || state.slots.some((slot) => slot.panel_key === state.activePanelKey)) return state;
   const panels = state.panels.filter((panel) => panel.panel_key !== state.activePanelKey);
   const nextLocalNumberByPanel = { ...state.nextLocalNumberByPanel };
   delete nextLocalNumberByPanel[state.activePanelKey];
@@ -302,7 +303,7 @@ export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKin
   });
   return { ...state, nextLocalNumberByPanel: { ...state.nextLocalNumberByPanel, [panelKey]: next + count }, slots: [...state.slots, ...slots] };
 };
-export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocument): BlueprintEditorState => ({
+export const hydrateBlueprintEditorState = (version: BaseTemplateRevisionDocument): BlueprintEditorState => ({
   name: version.name, defaultClass: version.default_physical_object_class ?? '', width: version.body.width,
   height: version.body.height, fillColor: version.body.fill_color ?? '#28565a',
   panels: version.panels.map((panel) => ({ ...panel })),
@@ -312,7 +313,7 @@ export const hydrateBlueprintEditorState = (version: ObjectBlueprintVersionDocum
   nextPanelNumber: version.next_panel_number,
   nextLocalNumberByPanel: Object.fromEntries(version.panels.map((panel) => [panel.panel_key, Math.max(1, ...version.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => new RegExp(`^${panel.panel_number}-(\\d+)$`).exec(slot.display_name)).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => Number(match[1]) + 1))])),
 });
-export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateObjectBlueprintRequest; errors: BlueprintValidationError[] } => {
+export const createBlueprintRequest = (state: BlueprintEditorState): { request?: CreateBaseTemplateRequest; errors: BlueprintValidationError[] } => {
   const errors: BlueprintValidationError[] = [];
   if (!state.name.trim()) errors.push('nameRequired');
   if (state.panels.some((panel) => !panel.display_name.trim())) errors.push('panelNameRequired');
@@ -329,11 +330,11 @@ export const createBlueprintRequest = (state: BlueprintEditorState): { request?:
   }
   if (errors.length) return { errors };
   return { errors, request: {
-    name: state.name.trim(), ...(state.defaultClass.trim() ? { default_physical_object_class: state.defaultClass.trim() } : {}),
+    name: state.name, ...(state.defaultClass.trim() ? { default_physical_object_class: state.defaultClass.trim() } : {}),
     body: { kind: 'RECTANGLE', width: bounds.width, height: bounds.height, fill_color: state.fillColor },
     panels: state.panels.map((panel) => ({ ...panel })),
     slots: state.slots.map((slot) => ({ ...slot, rendered_position: { ...slot.rendered_position } })),
-    internal_links: state.individualLinks,
+    internal_links: state.individualLinks, bays: state.bays ?? [],
   } };
 };
 

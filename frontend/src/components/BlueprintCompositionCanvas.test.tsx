@@ -2,7 +2,7 @@ import { fireEvent, render } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
-import type { BlueprintSlot } from '../topology/objectBlueprintTypes';
+import type { BlueprintSlot } from '../topology/baseTemplateTypes';
 import { BlueprintCompositionCanvas } from './BlueprintCompositionCanvas';
 
 const slot = (index: number, x = .5, y = .5): BlueprintSlot => ({

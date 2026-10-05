@@ -1,3 +1,4 @@
+from tests.l1_builders import create_device as build_device, create_object_details
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -5,10 +6,8 @@ from app.main import app
 client = TestClient(app)
 
 def device(name: str) -> tuple[str, str]:
-    response = client.post('/v1/topology/devices', json={'display_name': name, 'initial_interface': {'display_name': 'eth0'}})
-    assert response.status_code == 201
-    body = response.json()
-    return body['device']['source_ref']['entity_id'], body['interfaces'][0]['interface_ref']['entity_id']
+    document = build_device(client, name)
+    return document["device"]["source_ref"]["entity_id"], document["interfaces"][0]["interface_ref"]["entity_id"]
 
 def test_inventory_authoritatively_separates_equipment_from_canonical_cables():
     source_object, source_interface = device('SW1')

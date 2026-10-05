@@ -14,8 +14,8 @@ const projection = {
   id: 'panel', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'object-1' }],
   attributes: {
     blueprint_presentation: {
-      blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprint' as const, entity_id: 'bp' },
-      version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'ObjectBlueprintVersion' as const, entity_id: 'v1' },
+      blueprint_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'BaseTemplate' as const, entity_id: 'bp' },
+      version_ref: { ref_type: 'LIBRARY_RECORD' as const, entity_type: 'BaseTemplateRevision' as const, entity_id: 'v1' },
       body: { kind: 'RECTANGLE' as const, width: 200, height: 100 },
       panels: [{ panel_key: 'front', panel_number: 1, display_name: 'Panel 1', x: 0, y: 0, width: 200, height: 100 }, { panel_key: 'rear', panel_number: 2, display_name: 'Panel 2', x: 0, y: 100, width: 200, height: 100 }],
       slots: [

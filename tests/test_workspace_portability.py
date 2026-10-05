@@ -1,3 +1,4 @@
+from tests.l1_builders import create_object_details
 import copy
 import uuid
 
@@ -39,15 +40,11 @@ def create_graph():
     assert location.status_code == 201, location.text
     objects = []
     for name in ('SW1', 'PP1'):
-        response = client.post('/v1/topology/physical-objects', json={
-            'display_name': name, 'initial_connection_point': {'display_name': 'p1'},
-        })
-        assert response.status_code == 201, response.text
-        objects.append(response.json())
+        objects.append(create_object_details(client, name))
     point_ids = [item['connection_points'][0]['connection_point_ref']['entity_id'] for item in objects]
     object_ids = [item['physical_object']['source_ref']['entity_id'] for item in objects]
     cable = create_endpoint_cable(client, point_ids[0], point_ids[1])
-    blueprint = client.post('/v1/library/object-blueprints', json={
+    blueprint = client.post('/v1/library/base-templates', json={
         'name': 'Test blueprint', 'body': {'kind': 'RECTANGLE', 'width': 100, 'height': 40},
         'panels': [{'panel_key': 'panel-1', 'panel_number': 1, 'display_name': 'Панель 1', 'x': 0, 'y': 0, 'width': 100, 'height': 40}],
         'slots': [
@@ -57,9 +54,9 @@ def create_graph():
         'internal_links': [],
     })
     assert blueprint.status_code == 201, blueprint.text
-    blueprint_id = blueprint.json()['blueprint_ref']['entity_id']
+    template_id = blueprint.json()['blueprint_ref']['entity_id']
     version_id = blueprint.json()['version_ref']['entity_id']
-    instantiated = client.post(f'/v1/library/object-blueprints/{blueprint_id}/versions/{version_id}/instantiate', json={'display_name': 'From blueprint'})
+    instantiated = client.post("/v1/topology/physical-objects", json={"base_template_id": template_id, 'display_name': 'From blueprint'})
     assert instantiated.status_code == 201, instantiated.text
     saved = client.post('/v1/maps', json={'name': 'Rack map'})
     assert saved.status_code == 201, saved.text
@@ -85,7 +82,7 @@ def create_graph():
 def test_empty_export_and_roundtrip():
     empty = snapshot()
     assert empty['format'] == 'netmap-workspace'
-    assert empty['format_version'] == 3
+    assert empty['format_version'] == 4
     assert all(not rows for section in ('canonical', 'authoring', 'presentation') for rows in empty[section].values())
     assert empty['settings']['CableLabelSettings'] == [{'id': 1, 'unique_labels': False}]
     assert client.post('/v1/workspace/package', json=empty).status_code == 204
@@ -98,8 +95,8 @@ def test_graph_export_reset_import_restores_all_persisted_state():
     assert len(before['canonical']['PhysicalObject']) == 3
     assert len(before['canonical']['ConnectionMember']) == 1
     assert len(before['canonical']['InterfacePhysicalBinding']) >= 1
-    assert len(before['authoring']['BlueprintInstance']) == 1
-    assert len(before['authoring']['BlueprintEndpointSlot']) == 2
+    assert len(before['authoring']['ObjectConfiguration']) == 1
+    assert len(before['authoring']['BuiltInEndpointDefinition']) == 2
     assert before['authoring']['PresentationPanel'][0]['panel_key'] == 'panel-1'
     assert 'PortBlockVersion' not in before['authoring']
     assert len(before['presentation']['MapPlacement']) == 2

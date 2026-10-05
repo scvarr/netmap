@@ -7,9 +7,9 @@ TARGET SUPERSEDED BY 09.6.**
 
 This document supersedes only the binary `FRONT | REAR` presentation model in
 [09.4](09-04-direct-blueprint-endpoint-authoring.md). Direct endpoint slots
-remain the primary Blueprint-version authoring entities. Persistence, API,
-workspace v3, projection, runtime geometry, preview, and the current
-multi-panel editor use panel composition. Slice B2 adds panel move and resize
+remain the foundation for base-template built-in endpoint authoring in 09.6-A.
+Persistence, API, workspace v4, projection, runtime geometry, preview, and the
+current multi-panel editor use panel composition. Slice B2 adds panel move and resize
 with transient screen-space snapping and guides. Phase C is **PAUSED** pending
 bounded [09.6](09-06-hardware-template-module-contract.md) implementation and
 manual HV-01 recheck. Port
@@ -22,9 +22,12 @@ between instances of one base server must not require separate full templates.
 Panel identity, composition geometry, and presentation-only semantics remain
 foundations; implemented slices are not reclassified as unimplemented.
 
-In the implemented model, an immutable `ObjectBlueprintVersion` owns body/overall presentation,
-`PresentationPanel` records, direct `BlueprintEndpointSlots`, and
-`BlueprintInternalLinks`. A panel is authoring, provenance, and presentation
+After the 09.6-A cutover, an immutable `BaseTemplateRevision` owns body/overall
+presentation, `PresentationPanel` records, `BuiltInEndpointDefinition` records,
+`BaseInternalLink` records and module bays. ObjectConfiguration and module
+installations pin immutable revisions. The old published-edit/additive-upgrade
+workflow is removed; draft/review/update publication remains open in 09.6.
+A panel is authoring, provenance, and presentation
 inside that immutable snapshot. It is not canonical topology, a
 `PhysicalObject` component, a `SavedMap` entity/view, or a reusable library
 entity. Canonical topology remains the runtime source of truth.
@@ -168,10 +171,10 @@ panel does not create a canonical endpoint; a copied slot later has a new key
 and materializes as a new endpoint. Panels never become canonical topology or
 `PhysicalObject` components. The current restricted upgrade semantics are
 superseded by 09.6 safe updates and deterministic module relocation. Workspace
-exchange format must incompatibly bump from current v2 to v3 and include each
+exchange format is now v4 after 09.6-A and includes each
 panel's key, number, name, and rectangle, and each slot's panel key,
 panel-local position, and existing exact fields. Compatibility with old v2
-development snapshots is not required.
+development snapshots is not required. v3 import is also rejected after 09.6-A.
 
 ## Representative cases
 

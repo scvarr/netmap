@@ -1,3 +1,4 @@
+from tests.l1_builders import create_device as build_device
 import uuid
 
 import pytest
@@ -24,15 +25,7 @@ client = TestClient(app)
 
 
 def create_device() -> dict:
-    response = client.post(
-        "/v1/topology/devices",
-        json={
-            "display_name": "CORE-NEW",
-            "initial_interface": {"display_name": "eth0"},
-        },
-    )
-    assert response.status_code == 201
-    return response.json()
+    return build_device(client, "CORE-NEW")
 
 
 def add_interface(device_id: str, display_name: str = "eth1"):

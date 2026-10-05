@@ -77,8 +77,8 @@ export const parsePhysicalObjectDetailsDocument = (
   }
   if (value.blueprint_provenance !== undefined) {
     requireObject(value.blueprint_provenance, 'blueprint_provenance');
-    validateLibraryRef(value.blueprint_provenance.blueprint_ref, 'blueprint_provenance.blueprint_ref', 'ObjectBlueprint');
-    validateLibraryRef(value.blueprint_provenance.version_ref, 'blueprint_provenance.version_ref', 'ObjectBlueprintVersion');
+    validateLibraryRef(value.blueprint_provenance.blueprint_ref, 'blueprint_provenance.blueprint_ref', 'BaseTemplate');
+    validateLibraryRef(value.blueprint_provenance.version_ref, 'blueprint_provenance.version_ref', 'BaseTemplateRevision');
     requireCount(value.blueprint_provenance.version_number, 'blueprint_provenance.version_number', 1);
   }
   if (!Array.isArray(value.connection_points)) malformed('connection_points must be an array.');

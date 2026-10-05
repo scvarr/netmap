@@ -1,3 +1,4 @@
+from tests.l1_builders import create_device as build_device
 import uuid
 
 from fastapi.testclient import TestClient
@@ -5,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.database import SessionLocal
 from app.main import app
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from tests.test_object_blueprints_e2e import create_blueprint, instantiate, panel, slot
+from tests.test_base_templates_e2e import create_blueprint, instantiate, panel, slot
 
 
 client = TestClient(app)
@@ -31,15 +32,7 @@ def projection_query(object_ids: list[str] | None = None, include_cable_continua
 
 
 def create_device(name: str) -> dict:
-    response = client.post(
-        "/v1/topology/devices",
-        json={
-            "display_name": name,
-            "initial_interface": {"display_name": "eth0"},
-        },
-    )
-    assert response.status_code == 201
-    return response.json()
+    return build_device(client, name)
 
 
 def physical_object_id(document: dict) -> str:
@@ -198,47 +191,11 @@ def test_internal_links_keep_all_branched_members_and_respect_object_scope():
     assert str(foreign.id) not in str(scoped)
 
 
-def test_blueprint_instance_projection_keeps_exact_v1_presentation_after_v2():
-    blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01", x=.8, y=.7)], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Panel", body={"kind": "RECTANGLE", "width": 480, "height": 70, "fill_color": "#123456"})
-    instance = instantiate(blueprint_id, version_id, "PP1")
-    same_version_instance = instantiate(blueprint_id, version_id, "PP2")
-    created_version = client.post(f"/v1/library/object-blueprints/{blueprint_id}/versions", json={"body": {"kind": "RECTANGLE", "width": 10, "height": 10}, "panels": [panel(width=10, height=10)], "slots": [slot("Front01", x=.8, y=.7)], "internal_links": []})
-    assert created_version.status_code == 201, created_version.text
-    second_version_id = created_version.json()["version_ref"]["entity_id"]
-    second_version_instance = instantiate(blueprint_id, second_version_id, "PP3")
-    instance_ids = [item["physical_object_ref"]["entity_id"] for item in (instance, same_version_instance, second_version_instance)]
-    document = client.post("/v1/topology/projection", json=projection_query(instance_ids)).json()
-    node = node_by_object(document, instance_ids[0])
-    same_version = node_by_object(document, instance_ids[1])["attributes"]["blueprint_presentation"]
-    second_version = node_by_object(document, instance_ids[2])["attributes"]["blueprint_presentation"]
-    assert same_version["version_ref"]["entity_id"] == version_id
-    assert same_version["panels"] == [panel(width=480, height=70)]
-    assert second_version["version_ref"]["entity_id"] == second_version_id
-    assert second_version["panels"] == [panel(width=10, height=10)]
-    presentation = node["attributes"]["blueprint_presentation"]
-    assert presentation["version_ref"]["entity_id"] == version_id
-    assert presentation["body"] == {"kind": "RECTANGLE", "width": 480.0, "height": 70.0, "fill_color": "#123456"}
-    assert presentation["panels"] == [panel(width=480, height=70)]
-    assert all("anchor" not in slot for slot in presentation["slots"])
-    assert all(0 <= slot["rendered_position"][axis] <= 1 for slot in presentation["slots"] for axis in ("x", "y"))
-    assert {slot["slot_key"]: slot["rendered_position"] for slot in presentation["slots"]} == {"Front01": {"x": .2, "y": .3}, "Rear01": {"x": .8, "y": .7}}
-    assert {slot["slot_key"]: slot["external_attachment"]["side"] for slot in presentation["slots"]} == {"Front01": "TOP", "Rear01": "BOTTOM"}
-    assert all(slot["external_attachment"]["side"] in {"LEFT", "RIGHT", "TOP", "BOTTOM"} for slot in presentation["slots"])
-    assert {slot["connection_point_id"] for slot in presentation["slots"]} == {slot["connection_point_ref"]["entity_id"] for slot in instance["slots"]}
-    assert all(ref["ref_type"] == "CANONICAL_FACT" for ref in node["source_refs"])
-    internal = node["attributes"]["internal_l1_links"]
-    assert len(internal) == 1
-    assert {internal[0]["from_connection_point_id"], internal[0]["to_connection_point_id"]} == {
-        slot["connection_point_ref"]["entity_id"] for slot in instance["slots"]
-    }
-    assert {ref["entity_type"] for ref in internal[0]["source_refs"]} == {
-        "PhysicalObject", "ConnectionPoint", "Connection", "ConnectionMember"
-    }
 
 
 def test_switch_blueprint_exposes_network_port_mapping_without_self_edge():
-    blueprint_id, version_id = create_blueprint([slot("eth01", "NETWORK_PORT"), slot("eth02", "NETWORK_PORT")], name="Switch", body={"kind": "RECTANGLE", "width": 400, "height": 100})
-    instance = instantiate(blueprint_id, version_id, "SW1")
+    template_id, version_id = create_blueprint([slot("eth01", "NETWORK_PORT"), slot("eth02", "NETWORK_PORT")], name="Switch", body={"kind": "RECTANGLE", "width": 400, "height": 100})
+    instance = instantiate(template_id, version_id, "SW1")
     document = client.post("/v1/topology/projection", json=projection_query()).json()
     node = node_by_object(document, instance["physical_object_ref"]["entity_id"])
     mapped = node["attributes"]["blueprint_presentation"]["slots"]

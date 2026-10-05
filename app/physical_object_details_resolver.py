@@ -5,9 +5,9 @@ from sqlalchemy import select
 
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
 from app.cable_labels import resolved_cable_label
-from app.models import BlueprintEndpointSlot, BlueprintInstance, BlueprintInstanceSlot, Cable, InterfacePhysicalBinding, ObjectBlueprint, ObjectBlueprintVersion
+from app.models import BuiltInEndpointDefinition, ObjectConfiguration, BuiltInEndpointMapping, Cable, InterfacePhysicalBinding, BaseTemplate, BaseTemplateRevision
 from app.repository import CanonicalRepository, PhysicalBindingRecord
-from app.schemas import BlueprintInstanceProvenance, BlueprintLibraryRef, BlueprintSlotMetadata, ConnectionPointDetails, DirectInterfaceBindingDetails, ExternalPhysicalAttachmentDetails, InternalPhysicalCounterpartDetails, PhysicalObjectDetails, PhysicalObjectDetailsDocument, ProjectionSourceRef
+from app.schemas import ObjectConfigurationProvenance, BlueprintLibraryRef, BlueprintSlotMetadata, ConnectionPointDetails, DirectInterfaceBindingDetails, ExternalPhysicalAttachmentDetails, InternalPhysicalCounterpartDetails, PhysicalObjectDetails, PhysicalObjectDetailsDocument, ProjectionSourceRef
 
 
 class ConfiguredPhysicalObjectDetailsResolver:
@@ -82,12 +82,18 @@ class ConfiguredPhysicalObjectDetailsResolver:
         return ConnectionPointDetails(connection_point_ref=self._ref("ConnectionPoint", point.point_id), label=self._label(alias, "ConnectionPoint", point.point_id), label_source=None if alias else "TECHNICAL_FALLBACK", cardinality=point.cardinality, incident_connection_count=len({member.connection_id for member in point_members}), external_connection_count=len(external_connections), direct_interface_binding_count=len(bindings), ordering_key=slot.slot_key if slot else self._label(alias, "ConnectionPoint", point.point_id), blueprint_slot=slot, direct_interface_bindings=direct_bindings, internal_physical_counterparts=internal, external_physical_attachments=external, source_refs=self._dedupe_refs(refs))
 
     def _blueprint_instance(self, object_id):
-        row = self.repository.session.execute(select(BlueprintInstance, ObjectBlueprintVersion, ObjectBlueprint).join(ObjectBlueprintVersion, ObjectBlueprintVersion.id == BlueprintInstance.blueprint_version_id).join(ObjectBlueprint, ObjectBlueprint.id == ObjectBlueprintVersion.blueprint_id).where(BlueprintInstance.physical_object_id == object_id)).one_or_none()
+        row = self.repository.session.execute(select(ObjectConfiguration, BaseTemplateRevision, BaseTemplate).join(BaseTemplateRevision, BaseTemplateRevision.id == ObjectConfiguration.base_revision_id).join(BaseTemplate, BaseTemplate.id == BaseTemplateRevision.template_id).where(ObjectConfiguration.physical_object_id == object_id)).one_or_none()
         if row is None: return None, {}
         instance, version, blueprint = row
-        mappings = self.repository.session.execute(select(BlueprintInstanceSlot, BlueprintEndpointSlot).join(BlueprintEndpointSlot, BlueprintEndpointSlot.id == BlueprintInstanceSlot.blueprint_slot_id).where(BlueprintInstanceSlot.blueprint_instance_id == instance.id)).all()
+        mappings = self.repository.session.execute(select(BuiltInEndpointMapping, BuiltInEndpointDefinition).join(BuiltInEndpointDefinition, BuiltInEndpointDefinition.id == BuiltInEndpointMapping.definition_id).where(BuiltInEndpointMapping.configuration_id == instance.id)).all()
         slots = {mapping.connection_point_id: BlueprintSlotMetadata(slot_key=slot.slot_key, kind=slot.kind) for mapping, slot in mappings}
-        return BlueprintInstanceProvenance(blueprint_ref=BlueprintLibraryRef(entity_type="ObjectBlueprint", entity_id=blueprint.id), version_ref=BlueprintLibraryRef(entity_type="ObjectBlueprintVersion", entity_id=version.id), version_number=version.version_number), slots
+        from app.hardware_catalog import HardwareCatalog
+        for bay in HardwareCatalog(self.repository.session).configuration_document(object_id)["bays"]:
+            installation = bay["installation"]
+            if installation:
+                for endpoint in installation["endpoints"]:
+                    slots[uuid.UUID(endpoint["connection_point_id"])] = BlueprintSlotMetadata(slot_key=f"{installation['id']}:{endpoint['key']}", kind=endpoint["kind"])
+        return ObjectConfigurationProvenance(blueprint_ref=BlueprintLibraryRef(entity_type="BaseTemplate", entity_id=blueprint.id), version_ref=BlueprintLibraryRef(entity_type="BaseTemplateRevision", entity_id=version.id), version_number=version.version_number), slots
 
     @staticmethod
     def _label(alias: DisplayAliasRecord | None, entity_type: str, entity_id: uuid.UUID) -> str: return alias.value if alias else f"{entity_type} {str(entity_id)[:8]}"

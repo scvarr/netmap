@@ -6,14 +6,15 @@ from sqlalchemy.engine import make_url
 
 from app.database import SessionLocal
 from app.models import (
+    ModuleBay, ModuleTemplate, ModuleTemplateRevision, ModuleEndpointDefinition, ModuleInstallation, ModuleEndpointMapping,
     Connection,
     CableLabelHistory,
     ConnectionMember,
     ConnectionPoint,
-    BlueprintEndpointSlot,
-    BlueprintInstance,
-    BlueprintInstanceSlot,
-    BlueprintInternalLink,
+    BuiltInEndpointDefinition,
+    ObjectConfiguration,
+    BuiltInEndpointMapping,
+    BaseInternalLink,
     InterfaceAddress,
     InterfacePhysicalBinding,
     NetworkInterface,
@@ -26,8 +27,8 @@ from app.models import (
     PacketProcessingPlan,
     PacketProcessingPlanAttachment,
     PacketProcessingPlanAttachmentSet,
-    ObjectBlueprint,
-    ObjectBlueprintVersion,
+    BaseTemplate,
+    BaseTemplateRevision,
     PresentationPanel,
     MapCableRoute,
     MapPlacement,
@@ -94,13 +95,19 @@ def clean_database(request: pytest.FixtureRequest):
         session.execute(delete(MapViewPosition))
         session.execute(delete(MapPlacement))
         session.execute(delete(SavedMap))
-        session.execute(delete(BlueprintInstanceSlot))
-        session.execute(delete(BlueprintInstance))
-        session.execute(delete(BlueprintInternalLink))
-        session.execute(delete(BlueprintEndpointSlot))
+        session.execute(delete(ModuleEndpointMapping))
+        session.execute(delete(ModuleInstallation))
+        session.execute(delete(ModuleEndpointDefinition))
+        session.execute(delete(ModuleTemplateRevision))
+        session.execute(delete(ModuleTemplate))
+        session.execute(delete(ModuleBay))
+        session.execute(delete(BuiltInEndpointMapping))
+        session.execute(delete(ObjectConfiguration))
+        session.execute(delete(BaseInternalLink))
+        session.execute(delete(BuiltInEndpointDefinition))
         session.execute(delete(PresentationPanel))
-        session.execute(delete(ObjectBlueprintVersion))
-        session.execute(delete(ObjectBlueprint))
+        session.execute(delete(BaseTemplateRevision))
+        session.execute(delete(BaseTemplate))
         session.execute(delete(PacketProcessingPlanAttachment))
         session.execute(delete(PacketProcessingPlanAttachmentSet))
         session.execute(delete(ProcessingEntryPoint))

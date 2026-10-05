@@ -1,31 +1,28 @@
+import { NewModuleTemplatePage } from './pages/NewModuleTemplatePage';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { InfrastructureObjectDetailPage } from './pages/InfrastructureObjectDetailPage';
 import { InfrastructureObjectsPage } from './pages/InfrastructureObjectsPage';
 import { MapPage } from './pages/MapPage';
 import { NewInfrastructureObjectPage } from './pages/NewInfrastructureObjectPage';
-import { NewObjectBlueprintPage } from './pages/NewObjectBlueprintPage';
-import { ObjectBlueprintLibraryPage } from './pages/ObjectBlueprintLibraryPage';
-import { EditObjectBlueprintPage } from './pages/EditObjectBlueprintPage';
+import { NewBaseTemplatePage } from './pages/NewBaseTemplatePage';
+import { BaseTemplateLibraryPage } from './pages/BaseTemplateLibraryPage';
 import type { ConnectionPointWriteDataSource } from './topology/connectionPointWriteTypes';
 import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
 import type { DeviceInterfaceWriteDataSource } from './topology/deviceInterfaceWriteTypes';
-import type { DeviceWriteDataSource } from './topology/deviceWriteTypes';
 import type { TopologyLayoutStore } from './topology/layoutStore';
 import type { PhysicalEndpointConnectionWriteDataSource } from './topology/physicalEndpointConnectionWriteTypes';
 import type { PhysicalLinkWriteDataSource } from './topology/physicalLinkWriteTypes';
 import type { PhysicalObjectClassWriteDataSource } from './topology/physicalObjectClassWriteTypes';
 import type { PhysicalObjectDetailsDataSource } from './topology/physicalObjectDetailsTypes';
-import type { PhysicalObjectWriteDataSource } from './topology/physicalObjectWriteTypes';
 import type { TopologyDataSource } from './topology/types';
 import type { PhysicalObjectL1TraceDataSource } from './topology/physicalObjectL1TraceTypes';
 import type { L2ForwardingContextWriteDataSource } from './topology/l2ForwardingContextWriteTypes';
-import type { ObjectBlueprintDataSource } from './topology/objectBlueprintTypes';
+import type { BaseTemplateDataSource } from './topology/baseTemplateTypes';
 import type { PhysicalObjectDeleteDataSource } from './topology/physicalObjectDeleteTypes';
 import type { SavedMapDataSource } from './topology/savedMapTypes';
 import type { CatalogInventoryDataSource } from './topology/catalogInventoryTypes';
 import type { PhysicalObjectDisplayNameWriteDataSource } from './topology/physicalObjectDisplayNameWriteTypes';
-import type { BlueprintUpgradeDataSource } from './topology/blueprintUpgradeTypes';
 import type { CableDeleteDataSource } from './topology/cableDeleteTypes';
 import { LocationsPage } from './pages/LocationsPage';
 import { CableLabelTemplatesPage } from './pages/CableLabelTemplatesPage';
@@ -37,23 +34,20 @@ export interface AppProps {
   dataSource: TopologyDataSource;
   deviceDetailsDataSource: DeviceDetailsDataSource;
   traceDataSource?: PhysicalObjectL1TraceDataSource;
-  deviceWriteDataSource?: DeviceWriteDataSource;
   deviceInterfaceWriteDataSource?: DeviceInterfaceWriteDataSource;
   physicalLinkWriteDataSource?: PhysicalLinkWriteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   physicalEndpointConnectionWriteDataSource?: PhysicalEndpointConnectionWriteDataSource;
-  physicalObjectWriteDataSource?: PhysicalObjectWriteDataSource;
   physicalObjectClassWriteDataSource?: PhysicalObjectClassWriteDataSource;
   connectionPointWriteDataSource?: ConnectionPointWriteDataSource;
   topologyLayoutStore?: TopologyLayoutStore;
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
-  objectBlueprintDataSource?: ObjectBlueprintDataSource;
+  baseTemplateDataSource?: BaseTemplateDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
   cableDeleteDataSource?: CableDeleteDataSource;
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource: CatalogInventoryDataSource;
   physicalObjectDisplayNameWriteDataSource?: PhysicalObjectDisplayNameWriteDataSource;
-  blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
   locationDataSource?: LocationDataSource;
   cableLabelDataSource?: CableLabelDataSource;
 }
@@ -86,16 +80,14 @@ export function App(props: AppProps) {
         <Route path="infrastructure/locations" element={props.locationDataSource ? <LocationsPage dataSource={props.locationDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="infrastructure/cable-label-templates" element={props.cableLabelDataSource ? <CableLabelTemplatesPage dataSource={props.cableLabelDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="settings/data" element={<WorkspaceDataPage />} />
-        <Route path="library/object-blueprints" element={props.objectBlueprintDataSource ? <ObjectBlueprintLibraryPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
-        <Route path="library/object-blueprints/new" element={props.objectBlueprintDataSource ? <NewObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
-        <Route path="library/object-blueprints/:blueprintId/versions/:versionId/edit" element={props.objectBlueprintDataSource ? <EditObjectBlueprintPage dataSource={props.objectBlueprintDataSource} /> : <Navigate replace to="/map" />} />
+        <Route path="library/base-templates" element={props.baseTemplateDataSource ? <BaseTemplateLibraryPage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/map" />} />
+        <Route path="library/module-templates/new" element={<NewModuleTemplatePage />} />
+        <Route path="library/base-templates/new" element={props.baseTemplateDataSource ? <NewBaseTemplatePage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/map" />} />
         <Route
           path="infrastructure/objects/new"
           element={(
             <NewInfrastructureObjectPage
-              deviceWriteDataSource={props.deviceWriteDataSource}
-              physicalObjectWriteDataSource={props.physicalObjectWriteDataSource}
-              objectBlueprintDataSource={props.objectBlueprintDataSource}
+              baseTemplateDataSource={props.baseTemplateDataSource}
               locationDataSource={props.locationDataSource}
             />
           )}
@@ -115,8 +107,7 @@ export function App(props: AppProps) {
               l2ForwardingContextWriteDataSource={props.l2ForwardingContextWriteDataSource}
               catalogInventoryDataSource={props.catalogInventoryDataSource}
               savedMapDataSource={props.savedMapDataSource}
-              blueprintUpgradeDataSource={props.blueprintUpgradeDataSource}
-              objectBlueprintDataSource={props.objectBlueprintDataSource}
+              baseTemplateDataSource={props.baseTemplateDataSource}
               locationDataSource={props.locationDataSource}
               cableLabelDataSource={props.cableLabelDataSource}
             />
@@ -137,8 +128,7 @@ export function App(props: AppProps) {
               l2ForwardingContextWriteDataSource={props.l2ForwardingContextWriteDataSource}
               catalogInventoryDataSource={props.catalogInventoryDataSource}
               savedMapDataSource={props.savedMapDataSource}
-              blueprintUpgradeDataSource={props.blueprintUpgradeDataSource}
-              objectBlueprintDataSource={props.objectBlueprintDataSource}
+              baseTemplateDataSource={props.baseTemplateDataSource}
               locationDataSource={props.locationDataSource}
               cableLabelDataSource={props.cableLabelDataSource}
             />

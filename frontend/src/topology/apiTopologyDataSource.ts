@@ -28,8 +28,8 @@ const requirePositiveNumber = (value: unknown, path: string): void => { if (type
 const validateLibraryRef = (value: unknown, path: string, type: string): void => { requireObject(value, path); if (value.ref_type !== 'LIBRARY_RECORD' || value.entity_type !== type) malformed(`${path} must be a LIBRARY_RECORD ${type} ref.`); requireString(value.entity_id, `${path}.entity_id`); };
 const validateBlueprintPresentation = (value: unknown, path: string): void => {
   requireObject(value, path);
-  validateLibraryRef(value.blueprint_ref, `${path}.blueprint_ref`, 'ObjectBlueprint');
-  validateLibraryRef(value.version_ref, `${path}.version_ref`, 'ObjectBlueprintVersion');
+  validateLibraryRef(value.blueprint_ref, `${path}.blueprint_ref`, 'BaseTemplate');
+  validateLibraryRef(value.version_ref, `${path}.version_ref`, 'BaseTemplateRevision');
   requireObject(value.body, `${path}.body`);
   if (value.body.kind !== 'RECTANGLE') malformed(`${path}.body.kind must be RECTANGLE.`);
   requirePositiveNumber(value.body.width, `${path}.body.width`);

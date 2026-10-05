@@ -3,8 +3,8 @@ import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, blueprintNodeDisplayDimensions, clampB
 import type { BlueprintPresentation } from './types';
 
 const presentation = (panels: BlueprintPresentation['panels'], positions: Array<{ x: number; y: number }> = []): BlueprintPresentation => ({
-  blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
-  version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v' },
+  blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' },
+  version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v' },
   body: { kind: 'RECTANGLE', width: panels[0].width, height: panels[0].height }, panels,
   slots: positions.map((point, index) => ({ slot_key: `${index}`, display_name: `${index}`, kind: 'CONNECTION_POINT', panel_key: panels[0].panel_key, panel_local_position: point, rendered_position: point, external_attachment: { ...point, side: 'TOP' }, connection_point_id: `${index}` })),
 });

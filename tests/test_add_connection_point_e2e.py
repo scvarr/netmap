@@ -1,3 +1,4 @@
+from tests.l1_builders import create_object_details
 import uuid
 
 import pytest
@@ -25,16 +26,7 @@ client = TestClient(app)
 
 
 def create_object() -> dict:
-    response = client.post(
-        "/v1/topology/physical-objects",
-        json={
-            "display_name": "PP1",
-            "class": "patch_panel",
-            "initial_connection_point": {"display_name": "Port01"},
-        },
-    )
-    assert response.status_code == 201
-    return response.json()
+    return create_object_details(client, "Outlet1", "Port01")
 
 
 def physical_projection() -> dict:

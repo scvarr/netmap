@@ -1,9 +1,9 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import type { BlueprintBody, BlueprintInternalLink, BlueprintSlot, PresentationPanel } from '../topology/objectBlueprintTypes';
+import type { BlueprintBody, BaseInternalLink, BlueprintSlot, PresentationPanel } from '../topology/baseTemplateTypes';
 import { useI18n } from '../i18n';
 import { blueprintThumbnailGeometry } from '../topology/blueprintThumbnailGeometry';
 
-interface BlueprintPreviewProps { body: BlueprintBody; panels: PresentationPanel[]; slots: BlueprintSlot[]; internalLinks?: BlueprintInternalLink[]; label?: string; style?: CSSProperties; viewportWidth?: number; viewportHeight?: number; }
+interface BlueprintPreviewProps { body: BlueprintBody; panels: PresentationPanel[]; slots: BlueprintSlot[]; internalLinks?: BaseInternalLink[]; label?: string; style?: CSSProperties; viewportWidth?: number; viewportHeight?: number; }
 const pointFor = (slot: BlueprintSlot, panels: PresentationPanel[]) => {
   const panel = panels.find((item) => item.panel_key === slot.panel_key);
   if (!panel) throw new Error(`Unknown Blueprint panel ${slot.panel_key}`);

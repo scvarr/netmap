@@ -1,3 +1,4 @@
+from tests.l1_builders import create_device as build_device, create_object_details
 import uuid
 
 from fastapi.testclient import TestClient
@@ -17,42 +18,20 @@ from app.models import (
 )
 from app.repository import CanonicalRepository
 from app.repository import ConnectionMemberInput
-from tests.test_object_blueprints_e2e import create_blueprint, instantiate, slot
+from tests.test_base_templates_e2e import create_blueprint, instantiate, slot
 
 
 client = TestClient(app)
 
 
 def create_device(name: str, interface_name: str) -> tuple[str, str]:
-    response = client.post(
-        "/v1/topology/devices",
-        json={
-            "display_name": name,
-            "initial_interface": {"display_name": interface_name},
-        },
-    )
-    assert response.status_code == 201
-    document = response.json()
-    return (
-        document["device"]["source_ref"]["entity_id"],
-        document["interfaces"][0]["interface_ref"]["entity_id"],
-    )
+    document = build_device(client, name, interface_name)
+    return document["device"]["source_ref"]["entity_id"], document["interfaces"][0]["interface_ref"]["entity_id"]
 
 
 def create_physical_object(name: str, point_name: str) -> tuple[str, str]:
-    response = client.post(
-        "/v1/topology/physical-objects",
-        json={
-            "display_name": name,
-            "initial_connection_point": {"display_name": point_name},
-        },
-    )
-    assert response.status_code == 201
-    document = response.json()
-    return (
-        document["physical_object"]["source_ref"]["entity_id"],
-        document["connection_points"][0]["connection_point_ref"]["entity_id"],
-    )
+    document = create_object_details(client, name, point_name)
+    return document["physical_object"]["source_ref"]["entity_id"], document["connection_points"][0]["connection_point_ref"]["entity_id"]
 
 
 def interface_endpoint(interface_id: str) -> dict[str, str]:
@@ -93,8 +72,8 @@ def physical_projection() -> dict:
 def test_blueprint_patch_panel_internal_pair_allows_one_external_attachment_per_side():
     pc_id, pc_interface_id = create_device("PC1", "eth0")
     switch_id, switch_interface_id = create_device("SW1", "eth1")
-    blueprint_id, version_id = create_blueprint([slot("Front01"), slot("Rear01")], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Patch panel", body={"kind": "RECTANGLE", "width": 300, "height": 80})
-    panel = instantiate(blueprint_id, version_id, "PP1")
+    template_id, version_id = create_blueprint([slot("Front01"), slot("Rear01")], [{"from_slot_key": "Front01", "to_slot_key": "Rear01"}], name="Patch panel", body={"kind": "RECTANGLE", "width": 300, "height": 80})
+    panel = instantiate(template_id, version_id, "PP1")
     panel_id = panel["physical_object_ref"]["entity_id"]
     front_point, rear_point = [item["connection_point_ref"]["entity_id"] for item in panel["slots"]]
 

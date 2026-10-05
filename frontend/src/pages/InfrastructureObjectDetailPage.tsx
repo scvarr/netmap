@@ -1,7 +1,8 @@
+import { ModuleInstallationSection } from '../components/ModuleInstallationSection';
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { DeviceInterfacesSection } from "../components/DeviceInterfacesSection";
-import { PhysicalObjectBlueprintOverview, PhysicalObjectClassEditor, PhysicalObjectDetailsSection } from "../components/PhysicalObjectDetailsSection";
+import { PhysicalBaseTemplateOverview, PhysicalObjectClassEditor, PhysicalObjectDetailsSection } from "../components/PhysicalObjectDetailsSection";
 import { physicalClassPresentationForLocale } from "../topology/presentation";
 import { PHYSICAL_PROJECTION_REQUEST } from "../topology/projection";
 import type { ConnectionPointWriteDataSource } from "../topology/connectionPointWriteTypes";
@@ -29,8 +30,7 @@ import type {
 } from "../topology/types";
 import { useI18n } from "../i18n";
 import { Breadcrumbs, PageHeader, PageShell } from "../components/PageChrome";
-import type { BlueprintUpgradeDataSource } from "../topology/blueprintUpgradeTypes";
-import type { ObjectBlueprintDataSource } from "../topology/objectBlueprintTypes";
+import type { BaseTemplateDataSource } from "../topology/baseTemplateTypes";
 import type { LocationDataSource } from "../topology/locationTypes";
 import { PhysicalObjectLocationSection } from "../components/PhysicalObjectLocationSection";
 import type { CableLabelDataSource } from "../topology/cableLabelTypes";
@@ -47,8 +47,7 @@ interface InfrastructureObjectDetailPageProps {
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
   catalogInventoryDataSource: CatalogInventoryDataSource;
   savedMapDataSource?: SavedMapDataSource;
-  blueprintUpgradeDataSource?: BlueprintUpgradeDataSource;
-  objectBlueprintDataSource?: ObjectBlueprintDataSource;
+  baseTemplateDataSource?: BaseTemplateDataSource;
   locationDataSource?: LocationDataSource;
   cableLabelDataSource?: CableLabelDataSource;
 }
@@ -70,8 +69,7 @@ export function InfrastructureObjectDetailPage({
   l2ForwardingContextWriteDataSource,
   catalogInventoryDataSource,
   savedMapDataSource,
-  blueprintUpgradeDataSource,
-  objectBlueprintDataSource,
+  baseTemplateDataSource,
   locationDataSource,
   cableLabelDataSource,
 }: InfrastructureObjectDetailPageProps) {
@@ -244,7 +242,7 @@ export function InfrastructureObjectDetailPage({
       {details ? <dl className="object-detail-record">
             <div><dt>Тип объекта</dt><dd>{physicalObjectClassWriteDataSource ? <PhysicalObjectClassEditor key={details.physical_object.class ?? "unclassified"} physicalObjectId={physicalObjectId} currentClass={details.physical_object.class} dataSource={physicalObjectClassWriteDataSource} dialog onUpdated={(document) => { setDetails(document); refreshProjection(); }} /> : physicalClassPresentationForLocale(details.physical_object.class, locale).label}</dd></div>
             <div><dt>Расположение</dt><dd><PhysicalObjectLocationSection physicalObjectId={physicalObjectId} dataSource={locationDataSource} compact /></dd></div>
-            {details.blueprint_provenance && <div><dt>Шаблон</dt><dd><PhysicalObjectBlueprintOverview physicalObjectId={physicalObjectId} provenance={details.blueprint_provenance} dataSource={blueprintUpgradeDataSource} objectBlueprintDataSource={objectBlueprintDataSource} refresh={refreshDetails} /></dd></div>}
+            {details.blueprint_provenance && <div><dt>Шаблон</dt><dd><PhysicalBaseTemplateOverview physicalObjectId={physicalObjectId} provenance={details.blueprint_provenance} baseTemplateDataSource={baseTemplateDataSource} refresh={refreshDetails} /></dd></div>}
       {activeSection === "overview" && details && (
         <div>
           <dt>На картах</dt><dd>
@@ -360,6 +358,7 @@ export function InfrastructureObjectDetailPage({
       )}
       </>}
       {activeSection === "physical" && <section className="detail-section detail-section--operations">
+        <ModuleInstallationSection objectId={physicalObjectId} onInstalled={async () => { await refreshDetails(); refreshProjection(); }} />
         <PhysicalObjectDetailsSection
           key={physicalObjectId}
           node={node}
@@ -380,8 +379,7 @@ export function InfrastructureObjectDetailPage({
           onConnected={() => { refreshProjection(); void refreshDetails(); }}
           onClassUpdated={() => { refreshProjection(); void refreshDetails(); }}
           onConnectionPointCreated={() => { refreshProjection(); void refreshDetails(); }}
-          blueprintUpgradeDataSource={blueprintUpgradeDataSource}
-          objectBlueprintDataSource={objectBlueprintDataSource}
+          baseTemplateDataSource={baseTemplateDataSource}
           cableLabelDataSource={cableLabelDataSource}
           document={details}
           loadFailed={detailsFailed}

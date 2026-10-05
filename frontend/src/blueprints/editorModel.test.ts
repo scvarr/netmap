@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
-import { newBlueprintEditorState } from '../pages/ObjectBlueprintEditor';
-import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprintTypes';
+import { newBlueprintEditorState } from '../pages/BaseTemplateEditor';
+import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 
 describe('selected-slot copy to panel', () => {
   const fixture = () => {
@@ -163,9 +163,9 @@ describe('direct Blueprint slots', () => {
   });
 
   it('preserves identity through exact edit, hydration, link and deletion', () => {
-    const document: ObjectBlueprintVersionDocument = {
-      schema_version: '2.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
-      version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v1' },
+    const document: BaseTemplateRevisionDocument = {
+      schema_version: '2.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' },
+      version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v1' },
       version_number: 1, next_panel_number: 2, name: 'Panel', body: { kind: 'RECTANGLE', width: 100, height: 40 }, panels: [{ panel_key: 'panel-1', panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 100, height: 40 }],
       slots: [
         { key: 'opaque-a', display_name: 'P1', kind: 'CONNECTION_POINT', panel_key: 'panel-1', rendered_position: { x: .2, y: .3 } },
@@ -186,8 +186,8 @@ describe('direct Blueprint slots', () => {
     const first = initial.panels[0];
     const second = { ...first, panel_key: 'second', panel_number: 2, display_name: 'Rear', x: -70, y: -20, width: 70, height: 30 };
     const state = hydrateBlueprintEditorState({
-      schema_version: '2.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprint', entity_id: 'bp' },
-      version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'ObjectBlueprintVersion', entity_id: 'v' },
+      schema_version: '2.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' },
+      version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v' },
       version_number: 2, next_panel_number: 5, name: 'Device', body: { kind: 'RECTANGLE', width: 230, height: 80 },
       panels: [second, first], slots: [{ key: 's', display_name: '2-4', kind: 'NETWORK_PORT', panel_key: 'second', rendered_position: { x: .2, y: .3 } }], internal_links: [],
     });

@@ -1,3 +1,4 @@
+from tests.l1_builders import create_device as build_device, create_object_details
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
@@ -83,11 +84,7 @@ def test_unknown_integrity_error_is_not_classified_as_uniqueness_conflict(monkey
 
 
 def create_object(name: str) -> dict:
-    response = client.post("/v1/topology/physical-objects", json={
-        "display_name": name, "initial_connection_point": {"display_name": "p1"},
-    })
-    assert response.status_code == 201
-    return response.json()
+    return create_object_details(client, name)
 
 
 def object_id(document: dict) -> str:

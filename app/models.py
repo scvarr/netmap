@@ -426,30 +426,30 @@ class EntityMetadata(Base):
     value: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
-class ObjectBlueprint(Base):
+class BaseTemplate(Base):
     """Authoring record; it is not a canonical topology fact."""
 
-    __tablename__ = "object_blueprints"
+    __tablename__ = "base_templates"
     __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
-class ObjectBlueprintVersion(Base):
-    __tablename__ = "object_blueprint_versions"
+class BaseTemplateRevision(Base):
+    __tablename__ = "base_template_revisions"
     __table_args__ = (
         CheckConstraint("version_number >= 1", name="version_number_positive"),
         CheckConstraint("body_kind = 'RECTANGLE'", name="rectangle_only"),
         CheckConstraint("width > 0", name="width_positive"),
         CheckConstraint("height > 0", name="height_positive"),
         CheckConstraint("fill_color IS NULL OR fill_color ~ '^#[0-9A-Fa-f]{6}$'", name="fill_color_hex"),
-        UniqueConstraint("blueprint_id", "version_number", name="uq_object_blueprint_versions_number"),
+        UniqueConstraint("template_id", "version_number", name="uq_base_template_revisions_number"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    blueprint_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("object_blueprints.id", ondelete="RESTRICT"), nullable=False
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("base_templates.id", ondelete="RESTRICT"), nullable=False
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     default_physical_object_class: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -465,12 +465,12 @@ class PresentationPanel(Base):
         CheckConstraint("char_length(btrim(panel_key)) > 0", name="panel_key_not_blank"),
         CheckConstraint("panel_number > 0", name="panel_number_positive"),
         CheckConstraint("width > 0 AND height > 0", name="size_positive"),
-        UniqueConstraint("blueprint_version_id", "panel_key", name="uq_presentation_panels_version_key"),
-        UniqueConstraint("blueprint_version_id", "panel_number", name="uq_presentation_panels_version_number"),
+        UniqueConstraint("base_revision_id", "panel_key", name="uq_presentation_panels_version_key"),
+        UniqueConstraint("base_revision_id", "panel_number", name="uq_presentation_panels_version_number"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False)
+    base_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False)
     panel_key: Mapped[str] = mapped_column(String(255), nullable=False)
     panel_number: Mapped[int] = mapped_column(Integer, nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -480,24 +480,24 @@ class PresentationPanel(Base):
     height: Mapped[float] = mapped_column(Float, nullable=False)
 
 
-class BlueprintEndpointSlot(Base):
-    __tablename__ = "blueprint_endpoint_slots"
+class BuiltInEndpointDefinition(Base):
+    __tablename__ = "built_in_endpoint_definitions"
     __table_args__ = (
         CheckConstraint("char_length(btrim(slot_key)) > 0", name="slot_key_not_blank"),
         CheckConstraint("char_length(btrim(display_name)) > 0", name="display_name_not_blank"),
         CheckConstraint("kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="kind_supported"),
-        UniqueConstraint("blueprint_version_id", "slot_key", name="uq_blueprint_endpoint_slots_key"),
+        UniqueConstraint("base_revision_id", "slot_key", name="uq_built_in_endpoint_definitions_key"),
         ForeignKeyConstraint(
-            ["blueprint_version_id", "panel_key"],
-            ["presentation_panels.blueprint_version_id", "presentation_panels.panel_key"],
-            name="fk_blueprint_endpoint_slots_panel_version", ondelete="RESTRICT",
+            ["base_revision_id", "panel_key"],
+            ["presentation_panels.base_revision_id", "presentation_panels.panel_key"],
+            name="fk_built_in_endpoint_definitions_panel_version", ondelete="RESTRICT",
         ),
         CheckConstraint("position_x >= 0 AND position_x <= 1 AND position_y >= 0 AND position_y <= 1", name="position_bounds"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False
+    base_revision_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False
     )
     slot_key: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -507,52 +507,52 @@ class BlueprintEndpointSlot(Base):
     position_y: Mapped[float] = mapped_column(Float, nullable=False)
 
 
-class BlueprintInternalLink(Base):
-    __tablename__ = "blueprint_internal_links"
+class BaseInternalLink(Base):
+    __tablename__ = "base_internal_links"
     __table_args__ = (
         CheckConstraint("slot_a_id <> slot_b_id", name="distinct_slots"),
-        UniqueConstraint("blueprint_version_id", "slot_a_id", "slot_b_id", name="uq_blueprint_internal_links_unordered"),
+        UniqueConstraint("base_revision_id", "slot_a_id", "slot_b_id", name="uq_base_internal_links_unordered"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False
+    base_revision_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False
     )
     slot_a_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("blueprint_endpoint_slots.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("built_in_endpoint_definitions.id", ondelete="RESTRICT"), nullable=False
     )
     slot_b_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("blueprint_endpoint_slots.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("built_in_endpoint_definitions.id", ondelete="RESTRICT"), nullable=False
     )
 
 
-class BlueprintInstance(Base):
-    __tablename__ = "blueprint_instances"
-    __table_args__ = (UniqueConstraint("physical_object_id", name="uq_blueprint_instances_physical_object"),)
+class ObjectConfiguration(Base):
+    __tablename__ = "object_configurations"
+    __table_args__ = (UniqueConstraint("physical_object_id", name="uq_object_configurations_physical_object"),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    blueprint_version_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("object_blueprint_versions.id", ondelete="RESTRICT"), nullable=False
+    base_revision_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False
     )
     physical_object_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("physical_objects.id", ondelete="RESTRICT"), nullable=False
     )
 
 
-class BlueprintInstanceSlot(Base):
-    __tablename__ = "blueprint_instance_slots"
+class BuiltInEndpointMapping(Base):
+    __tablename__ = "built_in_endpoint_mappings"
     __table_args__ = (
-        UniqueConstraint("blueprint_instance_id", "blueprint_slot_id", name="uq_blueprint_instance_slots_slot"),
-        UniqueConstraint("connection_point_id", name="uq_blueprint_instance_slots_connection_point"),
-        UniqueConstraint("network_interface_id", name="uq_blueprint_instance_slots_network_interface"),
+        UniqueConstraint("configuration_id", "definition_id", name="uq_built_in_endpoint_mappings_slot"),
+        UniqueConstraint("connection_point_id", name="uq_built_in_endpoint_mappings_connection_point"),
+        UniqueConstraint("network_interface_id", name="uq_built_in_endpoint_mappings_network_interface"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    blueprint_instance_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("blueprint_instances.id", ondelete="RESTRICT"), nullable=False
+    configuration_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("object_configurations.id", ondelete="RESTRICT"), nullable=False
     )
-    blueprint_slot_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("blueprint_endpoint_slots.id", ondelete="RESTRICT"), nullable=False
+    definition_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("built_in_endpoint_definitions.id", ondelete="RESTRICT"), nullable=False
     )
     connection_point_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("connection_points.id", ondelete="RESTRICT"), nullable=False
@@ -560,6 +560,88 @@ class BlueprintInstanceSlot(Base):
     network_interface_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("network_interfaces.id", ondelete="RESTRICT"), nullable=True
     )
+
+
+class ModuleBay(Base):
+    __tablename__ = "module_bays"
+    __table_args__ = (
+        UniqueConstraint("base_revision_id", "bay_key"),
+        ForeignKeyConstraint(["base_revision_id", "panel_key"], ["presentation_panels.base_revision_id", "presentation_panels.panel_key"], ondelete="RESTRICT"),
+        CheckConstraint("x >= 0 AND y >= 0 AND width > 0 AND height > 0 AND x + width <= 1 AND y + height <= 1", name="rectangle_inside_panel"),
+        CheckConstraint("char_length(btrim(bay_key)) > 0 AND char_length(btrim(display_name)) > 0 AND char_length(btrim(compatibility)) > 0", name="bay_strings_not_blank"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    base_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False)
+    bay_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    compatibility: Mapped[str] = mapped_column(String(255), nullable=False)
+    panel_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    x: Mapped[float] = mapped_column(Float, nullable=False)
+    y: Mapped[float] = mapped_column(Float, nullable=False)
+    width: Mapped[float] = mapped_column(Float, nullable=False)
+    height: Mapped[float] = mapped_column(Float, nullable=False)
+
+
+class ModuleTemplate(Base):
+    __tablename__ = "module_templates"
+    __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"),)
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class ModuleTemplateRevision(Base):
+    __tablename__ = "module_template_revisions"
+    __table_args__ = (
+        UniqueConstraint("template_id", "version_number"),
+        CheckConstraint("version_number > 0 AND char_length(btrim(compatibility)) > 0", name="revision_valid"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_templates.id", ondelete="RESTRICT"), nullable=False)
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    compatibility: Mapped[str] = mapped_column(String(255), nullable=False)
+
+
+class ModuleEndpointDefinition(Base):
+    __tablename__ = "module_endpoint_definitions"
+    __table_args__ = (
+        UniqueConstraint("module_revision_id", "definition_key", name="uq_module_endpoint_definition_key"),
+        UniqueConstraint("module_revision_id", "order_index", name="uq_module_endpoint_definition_order"),
+        CheckConstraint("order_index >= 0 AND kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="endpoint_valid"),
+        CheckConstraint("char_length(btrim(definition_key)) > 0 AND char_length(btrim(display_name)) > 0", name="endpoint_strings_not_blank"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    module_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="RESTRICT"), nullable=False)
+    definition_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    order_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+
+
+class ModuleInstallation(Base):
+    __tablename__ = "module_installations"
+    __table_args__ = (
+        UniqueConstraint("configuration_id", "bay_key"),
+        CheckConstraint("orientation IN ('HORIZONTAL', 'VERTICAL')", name="orientation_valid"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    configuration_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("object_configurations.id", ondelete="RESTRICT"), nullable=False)
+    module_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="RESTRICT"), nullable=False)
+    bay_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    orientation: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
+class ModuleEndpointMapping(Base):
+    __tablename__ = "module_endpoint_mappings"
+    __table_args__ = (
+        UniqueConstraint("installation_id", "definition_id"),
+        UniqueConstraint("connection_point_id"),
+        UniqueConstraint("network_interface_id"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    installation_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_installations.id", ondelete="RESTRICT"), nullable=False)
+    definition_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_endpoint_definitions.id", ondelete="RESTRICT"), nullable=False)
+    connection_point_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("connection_points.id", ondelete="RESTRICT"), nullable=False)
+    network_interface_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("network_interfaces.id", ondelete="RESTRICT"), nullable=True)
 
 
 class InterfacePhysicalBinding(Base):
