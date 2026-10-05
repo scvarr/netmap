@@ -5,6 +5,7 @@ import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
 import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateTypes';
+import type { ModuleBay } from '../topology/hardwareModules';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
 export const newBlueprintEditorState = (): BlueprintEditorState => { const key = crypto.randomUUID(); return { name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', panels: [{ panel_key: key, panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 160, height: 60 }], slots: [], individualLinks: [], activePanelKey: key, nextPanelNumber: 2, nextLocalNumberByPanel: { [key]: 1 } }; };
@@ -26,6 +27,9 @@ const formatGeometryNumber = (value: number) => Number(value.toFixed(1));
 export function BaseTemplateEditor({ title, description, saveLabel, onSave, initialState, versionNotice }: Props) {
   const { t } = useI18n();
   const [editor, setEditor] = useState(initialState);
+  const [selectedBayKey, setSelectedBayKey] = useState<string>();
+  const selectedBay = editor.bays?.find(bay => bay.bay_key === selectedBayKey);
+  const changeBay = (key: string, patch: Partial<ModuleBay>) => setEditor(old => ({ ...old, bays: old.bays?.map(bay => bay.bay_key === key ? { ...bay, ...patch } : bay) }));
   const panelKey = editor.activePanelKey;
   const activePanel = editor.panels.find((panel) => panel.panel_key === panelKey)!;
   const bounds = compositionBounds(editor.panels);
@@ -109,7 +113,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     setPositionDraft(undefined);
   };
   const deleteSelected = () => { setEditor((old) => removeEndpoints(old, selected)); setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); };
-  const clearPanelUi = () => { setOrderedKeys([]); setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); setCopyDestination(''); setCreateContinuity(false); };
+  const clearPanelUi = () => { setSelectedBayKey(undefined); setOrderedKeys([]); setSelected(new Set()); setPositionDraft(undefined); setMenu(undefined); setDistributionAxis(undefined); setDistributionPercent('50'); setDistributionFull(false); setCopyDestination(''); setCreateContinuity(false); };
   const copySelected = () => {
     const result = copySelectionToPanel(editor, selected, destinationKey, createContinuity);
     if (result.error) return;
@@ -120,6 +124,16 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   const activatePanel = (key: string) => { if (key === panelKey) return; setEditor((old) => ({ ...old, activePanelKey: key })); clearPanelUi(); };
   const createPanel = (direction: PanelDirection) => { setEditor((old) => addPanel(old, direction)); clearPanelUi(); };
   const removePanel = () => { setEditor((old) => deleteActivePanel(old)); clearPanelUi(); };
+  const selectBay = (key: string) => {
+    const bay = editor.bays?.find(item => item.bay_key === key);
+    if (!bay) return;
+    activatePanel(bay.panel_key); setSelectedBayKey(key); setSelected(new Set()); setOrderedMode(false); setMenu(undefined); setPositionDraft(undefined);
+  };
+  const addBay = () => {
+    const bay = { bay_key: crypto.randomUUID(), display_name: t('hardware.bay'), compatibility: '', panel_key: panelKey, x: .25, y: .25, width: .3, height: .3 };
+    setEditor(old => ({ ...old, bays: [...old.bays ?? [], bay] }));
+    setSelectedBayKey(bay.bay_key); setSelected(new Set()); setOrderedMode(false); setMenu(undefined);
+  };
   useEffect(() => {
     const onPointerDown = (event: globalThis.PointerEvent) => {
       if (menu && (!(event.target instanceof Element) || !event.target.closest('.blueprint-composer__context-menu'))) setMenu(undefined);
@@ -189,6 +203,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     setDistributionAxis(undefined);
   };
   const selectSlot = (key: string, toggle: boolean) => {
+    setSelectedBayKey(undefined);
     if (orderedMode) {
       const owningPanel = editor.slots.find((slot) => slot.key === key)?.panel_key;
       setOrderedKeys((old) => toggleOrderedKey(owningPanel === panelKey ? old : [], key));
@@ -221,7 +236,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   };
   return <>
     <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
-    <ModuleBaysEditor bays={editor.bays ?? []} panels={editor.panels} onChange={bays => setEditor(old => ({ ...old, bays }))} />
     <div className="blueprint-composer blueprint-composer--authoring-workspace"><div className="blueprint-composer__workspace" inert={linksOpen || orderOpen || pairwiseOpen}>
       <section className="blueprint-editor-controls blueprint-composer__properties">
         <div className="blueprint-editor-controls__row">
@@ -246,7 +260,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         <div className="blueprint-composer__chooser">
           <label>{t('blueprint.endpoint.kind')}<select value={kind} onChange={(e) => setKind(e.target.value as BlueprintSlotKind)}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
-          <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, panelKey); if (next === editor) return; setEditor(next); if (!orderedMode) setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
+          <button type="button" className="secondary-action" onClick={() => { const next = addEndpoints(editor, kind, count, panelKey); if (next === editor) return; setEditor(next); setSelectedBayKey(undefined); if (!orderedMode) setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
         </div>
         <div className="blueprint-composer__panels" role="group" aria-label={t('blueprint.panel.list')}>{[...editor.panels].sort((a, b) => a.panel_number - b.panel_number).map((panel) => <button key={panel.panel_key} type="button" aria-pressed={panel.panel_key === panelKey} onClick={() => activatePanel(panel.panel_key)}>{panel.display_name}</button>)}</div>
         <div className="blueprint-composer__panel-actions">
@@ -257,10 +271,11 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
             onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitPanelSize(axis, event.currentTarget.value); } }}
           /></label>)}
           {(['above', 'right', 'below', 'left'] as const).map((direction) => <button key={direction} type="button" className="secondary-action" onClick={() => createPanel(direction)}>{t(`blueprint.panel.add.${direction}`)}</button>)}
-          <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
+          <button type="button" className="secondary-action" onClick={addBay}>{t('hardware.addBay')}</button>
+          <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey) || editor.bays?.some(bay => bay.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
         </div>
         <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
-          <BlueprintCompositionCanvas key={`${panelKey}:${orderedMode}`} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} orderedKeys={orderedMode ? orderedKeys : undefined} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle) => setEditor((old) => setPanelRectangle(old, key, rectangle))} onContextMenu={(key, clientX, clientY) => {
+          <BlueprintCompositionCanvas bays={editor.bays} selectedBayKey={selectedBayKey} onSelectBay={selectBay} onBayGeometry={changeBay} key={`${panelKey}:${orderedMode}`} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} orderedKeys={orderedMode ? orderedKeys : undefined} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelectedBayKey(undefined); setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle) => setEditor((old) => setPanelRectangle(old, key, rectangle))} onContextMenu={(key, clientX, clientY) => {
             if (orderedMode) return;
             if (key && !selected.has(key)) setSelected(new Set([key]));
             if (!key && selected.size === 0) { setMenu(undefined); return; }
@@ -281,12 +296,17 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           </div>}
         </div>
         <div className="blueprint-composer__contextual">
-          <button ref={pairwiseEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setPairwiseOpen(true); }}>{t('blueprint.pairwise.open')} · A: {capturedA.length} · B: {capturedB.length}</button>
+          {selectedBay && <ModuleBaysEditor key={selectedBay.bay_key} bay={selectedBay} panels={editor.panels} onChange={patch => {
+            changeBay(selectedBay.bay_key, patch);
+            if (patch.panel_key) { activatePanel(patch.panel_key); setSelectedBayKey(selectedBay.bay_key); }
+          }} onRemove={() => { setEditor(old => ({ ...old, bays: old.bays?.filter(bay => bay.bay_key !== selectedBay.bay_key) })); setSelectedBayKey(undefined); }} />}
+          {!selectedBay && <><button ref={pairwiseEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setPairwiseOpen(true); }}>{t('blueprint.pairwise.open')} · A: {capturedA.length} · B: {capturedB.length}</button>
           {!orderedMode ? <button type="button" className="secondary-action" onClick={() => { clearPanelUi(); setOrderedMode(true); }}>{t('blueprint.order.enter')}</button> : <>
             <span>{t('blueprint.order.count', { count: orderedKeys.length })}</span>
             <button ref={orderEntry} type="button" className="secondary-action" onClick={() => setOrderOpen(true)}>{t('blueprint.order.edit')}</button>
             <button type="button" className="text-action" onClick={() => setOrderedKeys([])}>{t('blueprint.order.clear')}</button>
             <button type="button" className="text-action" onClick={() => { clearPanelUi(); setOrderedMode(false); }}>{t('blueprint.order.exit')}</button>
+          </>}
           </>}
         {selected.size > 1 && <span className="blueprint-composer__selection-count">{t('blueprint.layout.selected', { count: selected.size })}</span>}
         {selectedPosition && <section className="blueprint-composer__position" role="group" aria-label={t('blueprint.position.title')}>

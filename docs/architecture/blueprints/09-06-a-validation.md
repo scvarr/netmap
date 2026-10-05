@@ -37,3 +37,20 @@ The development database was actually dropped and recreated, rather than merely
 stamped or upgraded over the old schema. Browser verification data remains in it
 for inspection. This initialization history intentionally requires a clean
 development database; it does not provide an old-schema migration path.
+
+## Corrective UI review
+
+The 09.6-A correction adds bay rectangles to the existing composition canvas,
+single-bay selection, bounded drag and eight resize handles, plus synchronized
+numeric geometry in the existing contextual rail. Bays are created on the active
+panel; endpoints retain interactive priority; a panel with a bay cannot be deleted.
+New module, installation and library controls reuse the existing NetMap styles.
+Backend, API and database schema are unchanged by this correction.
+
+- Relevant frontend checks: 185 passed across five files, including 13 new bay
+  authoring tests; Docker frontend production build passed.
+- Browser verification on the final build: add bay, drag, corner resize, numeric
+  x correction, save base template successfully; module creation and installation
+  forms also visually inspected.
+- `git diff --check` passed. No backend suite was run for this UI correction.
+- Corrective acceptance still requires external inspection; 09.6-B remains open.

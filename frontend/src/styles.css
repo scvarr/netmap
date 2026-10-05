@@ -520,7 +520,7 @@ a { color: inherit; }
 .blueprint-composer__panels { justify-self: start; width: fit-content; max-width: 100%; }
 .blueprint-composer__panels button { border: 1px solid #496b68; border-radius: 6px; color: #dceee9; background: #102628; padding: 7px 12px; cursor: pointer; }
 .blueprint-composer__panels button[aria-pressed="true"] { border-color: #f4d06f; box-shadow: inset 0 0 0 1px #f4d06f; }
-.blueprint-composer__panel-actions label { display: grid; gap: 4px; }
+.blueprint-composer__panel-actions label { display: grid; gap: 4px; color: #91a5a5; font-size: 10px; }
 .blueprint-composition-canvas [data-active="true"] .blueprint-composition-canvas__body { stroke: #f4d06f; stroke-width: 6; }
 .blueprint-composer__selection-count { justify-self: start; color: #b6dfd3; font-size: 12px; }
 .blueprint-composer__context-menu { position: absolute; z-index: 10; box-sizing: border-box; width: 320px; max-width: calc(100vw - 24px); max-height: min(320px, 80vh); overflow-y: auto; padding: 4px; border: 1px solid #496b68; border-radius: 8px; background: #0d2022; box-shadow: 0 12px 30px #0009; scrollbar-color: #496b68 #102326; scrollbar-width: thin; }
@@ -653,7 +653,12 @@ a { color: inherit; }
 .workspace-data-file-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .workspace-data-file-name { color: #91a5a5; font-size: 11px; overflow-wrap: anywhere; }
 
-.blueprint-composer__chooser input, .blueprint-composer__selected input { width: 100%; min-height: 34px; padding: 7px 9px; color: #e7f4f1; background: #081315; border: 1px solid #2a4448; border-radius: 6px; }
+.blueprint-composer__chooser input, .blueprint-composer__selected input, .blueprint-composer__panel-actions input { box-sizing: border-box; width: 100%; min-height: 34px; padding: 7px 9px; color: #e7f4f1; background: #081315; border: 1px solid #2a4448; border-radius: 6px; }
+
+.blueprint-composition-canvas__bay > rect { fill: #85cdbb; fill-opacity: .12; stroke: #85cdbb; stroke-width: 1.5; stroke-dasharray: 6 3; cursor: grab; }
+.blueprint-composition-canvas__bay[data-selected="true"] > rect { fill-opacity: .2; stroke: #f4d06f; stroke-width: 2; stroke-dasharray: none; }
+.blueprint-composition-canvas__bay text { fill: #e7f4f1; pointer-events: none; }
+.blueprint-composer__contextual .blueprint-composer__selected--bay label:has(input[type="number"]) { width: 72px; }
 
 .blueprint-links-dialog { box-sizing: border-box; width: min(100%, 760px); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
 .blueprint-links-dialog__bulk { display: flex; flex-wrap: wrap; gap: 6px; flex: none; }

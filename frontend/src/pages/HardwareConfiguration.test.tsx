@@ -29,6 +29,8 @@ describe('09.6-A user path', () => {
     expect(screen.getByRole('link', { name: 'Создать базовый шаблон' })).toHaveAttribute('href', '/library/base-templates/new');
     expect(screen.getByRole('link', { name: 'Создать шаблон модуля' })).toHaveAttribute('href', '/library/module-templates/new');
     expect(screen.queryByRole('link', { name: 'Редактировать' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Создать шаблон модуля' })).toHaveClass('secondary-action');
+    expect(screen.getByRole('link', { name: 'Создать объект' })).toHaveClass('secondary-action');
   });
   it('creates an object using only the root base selection and navigates to its card', async () => {
     const source = bases(); show(<NewInfrastructureObjectPage baseTemplateDataSource={source} />);
@@ -46,6 +48,9 @@ describe('09.6-A user path', () => {
     await userEvent.type(screen.getByLabelText('Совместимость'), 'OCP3');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
     await userEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
+    expect(screen.getByLabelText('Совместимость').closest('form')).toHaveClass('blueprint-editor-controls');
+    expect(screen.getByRole('button', { name: 'Добавить конечную точку' })).toHaveClass('secondary-action');
+    expect(screen.getByRole('button', { name: 'Создать шаблон' })).toHaveClass('primary-action');
     const fields = screen.getAllByRole('group');
     await userEvent.type(within(fields[0]).getByLabelText('Название'), 'P1');
     await userEvent.type(within(fields[1]).getByLabelText('Название'), 'P2');
@@ -57,6 +62,8 @@ describe('09.6-A user path', () => {
     const source = modules(); const refresh = vi.fn(); show(<ModuleInstallationSection objectId="object" dataSource={source} onInstalled={refresh} />);
     expect(await screen.findByText('OCP3 · Свободен')).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Other NIC' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Ориентация').closest('.blueprint-editor-controls')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Установить модуль' })).toHaveClass('primary-action');
     await userEvent.selectOptions(screen.getByLabelText('Выберите совместимый модуль'), 'module');
     await userEvent.selectOptions(screen.getByLabelText('Ориентация'), 'VERTICAL');
     await userEvent.click(screen.getByRole('button', { name: 'Установить модуль' }));
@@ -70,10 +77,10 @@ describe('09.6-A user path', () => {
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Server base');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить отсек' }));
     const bay = screen.getByRole('region', { name: 'Отсеки модулей' });
-    await userEvent.type(within(bay).getByLabelText('Название'), 'OCP bay');
+    await userEvent.clear(within(bay).getByLabelText('Название')); await userEvent.type(within(bay).getByLabelText('Название'), 'OCP bay');
     await userEvent.type(within(bay).getByLabelText('Совместимость'), 'OCP3');
     await userEvent.clear(within(bay).getByLabelText('x')); await userEvent.type(within(bay).getByLabelText('x'), '0.2');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
-    await waitFor(() => expect(source.createBaseTemplate).toHaveBeenCalledWith(expect.objectContaining({ bays: [expect.objectContaining({ bay_key: expect.any(String), display_name: 'OCP bay', compatibility: 'OCP3', x: .2, width: .8 })] })));
+    await waitFor(() => expect(source.createBaseTemplate).toHaveBeenCalledWith(expect.objectContaining({ bays: [expect.objectContaining({ bay_key: expect.any(String), display_name: 'OCP bay', compatibility: 'OCP3', x: .2, width: .3 })] })));
   });
 });
