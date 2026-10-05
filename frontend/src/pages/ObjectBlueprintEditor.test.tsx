@@ -9,8 +9,9 @@ import type { ObjectBlueprintVersionDocument } from '../topology/objectBlueprint
 import { newBlueprintEditorState, ObjectBlueprintEditor } from './ObjectBlueprintEditor';
 
 describe('numeric active-panel size', () => {
-  const setup = (multi = true) => {
+  const setup = (multi = true, dimensions?: { width: number; height: number }) => {
     const source = newBlueprintEditorState(); source.name = 'Device';
+    if (dimensions) source.panels[0] = { ...source.panels[0], ...dimensions };
     const endpoints = addEndpoints(source, 'NETWORK_PORT', 1, source.activePanelKey);
     const state = multi ? { ...addPanel(endpoints, 'right'), activePanelKey: source.activePanelKey } : endpoints;
     state.panels[0] = { ...state.panels[0], x: -10, y: -20 };
@@ -20,6 +21,57 @@ describe('numeric active-panel size', () => {
   };
   const size = (axis: 'width' | 'height') => screen.getByRole('spinbutton', { name: axis === 'width' ? 'Ширина панели' : 'Высота панели' });
   const body = (axis: 'width' | 'height') => screen.getByRole('spinbutton', { name: axis === 'width' ? 'Пропорция ширины корпуса' : 'Пропорция высоты корпуса' });
+
+  it.each([true, false])('formats exact rectangles and derived bounds without changing data on untouched Enter/blur (multi=%s)', (multi) => {
+    const { state, save } = setup(multi, { width: 3.2851326877543, height: 20 });
+    const width = multi ? size('width') : body('width'); const height = multi ? size('height') : body('height');
+    expect(width).toHaveValue(3.3); expect(height).toHaveValue(20);
+    expect((height as HTMLInputElement).value).toBe('20');
+    expect(body('width')).toHaveValue(multi ? 16.6 : 3.3); expect(body('height')).toHaveValue(multi ? 40 : 20);
+    fireEvent.focus(width); fireEvent.keyDown(width, { key: 'Enter' }); fireEvent.blur(width);
+    fireEvent.focus(height); fireEvent.blur(height);
+    if (multi) {
+      fireEvent.click(screen.getByRole('button', { name: state.panels[1].display_name }));
+      expect(size('width')).toHaveValue(3.3); expect(size('height')).toHaveValue(20);
+    }
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].panels).toEqual(state.panels);
+    expect(createBlueprintRequest(save.mock.calls[0][0]).request!.panels).toEqual(state.panels);
+    expect(createBlueprintRequest(save.mock.calls[0][0]).request!.body).toEqual(createBlueprintRequest(state).request!.body);
+  });
+
+  it.each([true, false].flatMap((multi) => (['width', 'height'] as const).flatMap((axis) => [
+    { multi, axis, raw: '20.74', expected: 20.7, commit: 'Enter' },
+    { multi, axis, raw: '20.76', expected: 20.8, commit: 'blur' },
+  ])))('normalizes $axis $raw to $expected on $commit (multi=$multi)', async ({ multi, axis, raw, expected, commit }) => {
+    const { state, save } = setup(multi); const input = multi ? size(axis) : body(axis);
+    expect(input).toHaveAttribute('step', '0.1');
+    await userEvent.clear(input); expect(input).toHaveValue(null);
+    await userEvent.type(input, raw); expect(input).toHaveValue(Number(raw));
+    if (commit === 'Enter') await userEvent.keyboard('{Enter}'); else await userEvent.tab();
+    expect(input).toHaveValue(expected);
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], [axis]: expected }, ...state.panels.slice(1)]);
+  });
+
+  it('shows 3.3 after pointer resize while save retains the exact pointer-generated width', () => {
+    const { state, save } = setup(false, { width: 20, height: 20 });
+    const canvas = document.querySelector('.blueprint-composition-canvas')!;
+    Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 1000 }) });
+    const exact = 3.2851326877543;
+    fireEvent.pointerDown(document.querySelector('[data-panel-resize="e"]')!, { button: 0, clientX: 500, clientY: 500 });
+    fireEvent.pointerMove(canvas, { clientX: 500 + (exact - 20) * 50, clientY: 500 });
+    expect(body('width')).toHaveValue(3.3);
+    fireEvent.pointerUp(canvas);
+    fireEvent.focus(body('width')); fireEvent.blur(body('width'));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const saved = save.mock.calls[0][0];
+    expect(saved.panels[0].width).toBeCloseTo(exact, 12); expect(saved.panels[0].width).not.toBe(3.3);
+    expect(saved.panels[0]).toMatchObject({ x: state.panels[0].x, y: state.panels[0].y, height: 20 });
+    expect(saved.slots).toEqual(state.slots);
+    const request = createBlueprintRequest(saved).request!;
+    expect(request.panels[0].width).toBe(saved.panels[0].width); expect(request.body.width).toBe(saved.panels[0].width);
+  });
 
   it.each(['width', 'height'] as const)('commits decimal %s on Enter with only that active-panel dimension changed and derives save bounds', async (axis) => {
     const { state, save } = setup();
@@ -35,29 +87,29 @@ describe('numeric active-panel size', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(save.mock.calls[1][0].panels).toEqual(state.panels);
     await userEvent.keyboard('{Enter}');
-    expect(input).toHaveValue(400.125);
+    expect(input).toHaveValue(400.1);
     expect(panelBody.getAttribute(axis)).not.toBe(originalDimension);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     const saved = save.mock.calls[2][0];
-    expect(saved.panels).toEqual([{ ...state.panels[0], [axis]: 400.125 }, state.panels[1]]);
+    expect(saved.panels).toEqual([{ ...state.panels[0], [axis]: 400.1 }, state.panels[1]]);
     expect([...document.querySelectorAll('[data-panel-key]')].map((node) => node.getAttribute('data-panel-key'))).toEqual([state.panels[1].panel_key, state.activePanelKey]);
     expect(saved.slots).toEqual(state.slots); expect(saved.individualLinks).toEqual(state.individualLinks);
     const request = createBlueprintRequest(saved).request!;
     expect(request.panels).toEqual(saved.panels); expect(request.slots[0].rendered_position).toEqual(state.slots[0].rendered_position);
-    expect(request.body).toMatchObject(axis === 'width' ? { width: 400.125, height: 80 } : { width: 330, height: 400.125 });
-    expect(body(axis)).toHaveValue(400.125);
+    expect(request.body).toMatchObject(axis === 'width' ? { width: 400.1, height: 80 } : { width: 330, height: 400.1 });
+    expect(body(axis)).toHaveValue(400.1);
   });
 
   it.each(['width', 'height'] as const)('accepts positive %s below one on blur without snapping or an arbitrary minimum', async (axis) => {
     const { state, save } = setup(); const input = size(axis);
     await userEvent.clear(input); await userEvent.type(input, '0.125'); await userEvent.tab();
-    expect(input).toHaveValue(.125);
+    expect(input).toHaveValue(.1);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], [axis]: .125 }, state.panels[1]]);
+    expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], [axis]: .1 }, state.panels[1]]);
   });
 
-  it.each(['', 'NaN', 'Infinity', '1e', '0', '-2'])('rejects invalid input %j on Enter and blur and restores the last valid dimension', (raw) => {
-    const { state, save } = setup(); const input = size('width');
+  it.each([true, false].flatMap((multi) => ['', 'NaN', 'Infinity', '1e', '0', '-2', '0.04'].map((raw) => ({ multi, raw }))))('rejects invalid input $raw on Enter and blur (multi=$multi)', ({ multi, raw }) => {
+    const { state, save } = setup(multi); const input = multi ? size('width') : body('width');
     fireEvent.change(input, { target: { value: '170.5' } }); fireEvent.keyDown(input, { key: 'Enter' });
     for (const commit of ['Enter', 'blur']) {
       fireEvent.change(input, { target: { value: raw } });
@@ -65,7 +117,7 @@ describe('numeric active-panel size', () => {
       expect(input).toHaveValue(170.5);
     }
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], width: 170.5 }, state.panels[1]]);
+    expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], width: 170.5 }, ...state.panels.slice(1)]);
   });
 
   it('drops stale drafts on panel switch and synchronizes both controls during pointer resize after numeric editing', () => {
@@ -84,9 +136,9 @@ describe('numeric active-panel size', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     const resized = save.mock.calls[0][0].panels[0];
     expect(resized.width).toBeGreaterThan(200.5); expect(resized.height).toBeGreaterThan(60);
-    expect(size('width')).toHaveValue(resized.width); expect(size('height')).toHaveValue(resized.height);
+    expect(size('width')).toHaveValue(233.5); expect(size('height')).toHaveValue(93);
     fireEvent.pointerUp(canvas);
-    expect(size('width')).toHaveValue(resized.width); expect(size('height')).toHaveValue(resized.height);
+    expect(size('width')).toHaveValue(233.5); expect(size('height')).toHaveValue(93);
     expect(save.mock.calls[0][0].slots).toEqual(state.slots);
   });
 
@@ -95,7 +147,8 @@ describe('numeric active-panel size', () => {
     expect(screen.queryByRole('spinbutton', { name: 'Ширина панели' })).not.toBeInTheDocument();
     expect(screen.queryByRole('spinbutton', { name: 'Высота панели' })).not.toBeInTheDocument();
     expect(body('width')).toBeEnabled(); expect(body('height')).toBeEnabled();
-    fireEvent.change(body('width'), { target: { value: '190' } }); fireEvent.change(body('height'), { target: { value: '75' } });
+    fireEvent.change(body('width'), { target: { value: '190' } }); fireEvent.keyDown(body('width'), { key: 'Enter' });
+    fireEvent.change(body('height'), { target: { value: '75' } }); fireEvent.blur(body('height'));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], width: 190, height: 75 }]);
     expect(createBlueprintRequest(save.mock.calls[0][0]).request!.body).toMatchObject({ width: 190, height: 75 });
@@ -563,7 +616,9 @@ describe('minimal direct endpoint editor', () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><ObjectBlueprintEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
     fireEvent.change(screen.getByLabelText('Пропорция ширины корпуса'), { target: { value: '240' } });
+    fireEvent.blur(screen.getByLabelText('Пропорция ширины корпуса'));
     fireEvent.change(screen.getByLabelText('Пропорция высоты корпуса'), { target: { value: '80' } });
+    fireEvent.blur(screen.getByLabelText('Пропорция высоты корпуса'));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     const request = createBlueprintRequest(save.mock.calls[0][0]).request!;
     expect(request.panels[0]).toMatchObject({ width: 240, height: 80 });

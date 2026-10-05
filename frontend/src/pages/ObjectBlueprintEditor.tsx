@@ -20,6 +20,7 @@ const menuSections = [
   { label: 'delete', actions: ['deleteSelected'] },
 ] as const;
 type MenuAction = (typeof menuSections)[number]['actions'][number];
+const formatGeometryNumber = (value: number) => Number(value.toFixed(1));
 
 export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, initialState, versionNotice }: Props) {
   const { t } = useI18n();
@@ -29,13 +30,17 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
   const bounds = compositionBounds(editor.panels);
   const [panelSizeDraft, setPanelSizeDraft] = useState<{ panelKey: string; width: number; height: number; axis: 'width' | 'height'; value: string }>();
   useEffect(() => { setPanelSizeDraft(undefined); }, [panelKey, activePanel.width, activePanel.height]);
-  const shownPanelSize = (axis: 'width' | 'height') => panelSizeDraft?.panelKey === panelKey && panelSizeDraft.width === activePanel.width && panelSizeDraft.height === activePanel.height && panelSizeDraft.axis === axis ? panelSizeDraft.value : String(activePanel[axis]);
+  const currentPanelSizeDraft = panelSizeDraft?.panelKey === panelKey && panelSizeDraft.width === activePanel.width && panelSizeDraft.height === activePanel.height ? panelSizeDraft : undefined;
+  const shownPanelSize = (axis: 'width' | 'height') => currentPanelSizeDraft?.axis === axis ? currentPanelSizeDraft.value : formatGeometryNumber(activePanel[axis]);
+  const draftPanelSize = (axis: 'width' | 'height', value: string) => setPanelSizeDraft({ panelKey, width: activePanel.width, height: activePanel.height, axis, value });
   const commitPanelSize = (axis: 'width' | 'height', raw: string) => {
-    const value = Number(raw);
-    if (raw.trim() && Number.isFinite(value) && value > 0) {
+    const requested = Number(raw);
+    const value = formatGeometryNumber(requested);
+    if (currentPanelSizeDraft?.axis === axis && raw.trim() && Number.isFinite(requested) && requested > 0 && value > 0) {
       setEditor((old) => {
         const panel = old.panels.find((item) => item.panel_key === panelKey)!;
-        return setPanelRectangle(old, panelKey, { x: panel.x, y: panel.y, width: panel.width, height: panel.height, [axis]: value });
+        const next = setPanelRectangle(old, panelKey, { x: panel.x, y: panel.y, width: panel.width, height: panel.height, [axis]: value });
+        return old.panels.length === 1 ? { ...next, [axis]: value } : next;
       });
     }
     setPanelSizeDraft(undefined);
@@ -221,8 +226,11 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
           <label>{t('blueprint.editor.class')}<input value={editor.defaultClass} onChange={(e) => setEditor({ ...editor, defaultClass: e.target.value })} /></label>
         </div>
         <div className="blueprint-editor-controls__row">
-          <label>{t('blueprint.editor.width')}<input type="number" min="1" value={editor.panels.length === 1 ? activePanel.width : bounds.width} disabled={editor.panels.length > 1} onChange={(e) => setEditor((old) => ({ ...old, width: Number(e.target.value), panels: old.panels.map((panel) => ({ ...panel, width: Number(e.target.value) })) }))} /></label>
-          <label>{t('blueprint.editor.height')}<input type="number" min="1" value={editor.panels.length === 1 ? activePanel.height : bounds.height} disabled={editor.panels.length > 1} onChange={(e) => setEditor((old) => ({ ...old, height: Number(e.target.value), panels: old.panels.map((panel) => ({ ...panel, height: Number(e.target.value) })) }))} /></label>
+          {(['width', 'height'] as const).map((axis) => <label key={axis}>{t(`blueprint.editor.${axis}`)}<input type="number" step="0.1" value={editor.panels.length === 1 ? shownPanelSize(axis) : formatGeometryNumber(bounds[axis])} disabled={editor.panels.length > 1}
+            onChange={(event) => draftPanelSize(axis, event.target.value)}
+            onBlur={(event) => commitPanelSize(axis, event.currentTarget.value)}
+            onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitPanelSize(axis, event.currentTarget.value); } }}
+          /></label>)}
         </div>
         <label>{t('blueprint.editor.color')}<input type="color" value={editor.fillColor} onChange={(e) => setEditor({ ...editor, fillColor: e.target.value })} /></label>
         <section className="blueprint-composer__section blueprint-composer__links"><h2>{t('blueprint.composition.links')}</h2>
@@ -240,8 +248,8 @@ export function ObjectBlueprintEditor({ title, description, saveLabel, onSave, i
         <div className="blueprint-composer__panels" role="group" aria-label={t('blueprint.panel.list')}>{[...editor.panels].sort((a, b) => a.panel_number - b.panel_number).map((panel) => <button key={panel.panel_key} type="button" aria-pressed={panel.panel_key === panelKey} onClick={() => activatePanel(panel.panel_key)}>{panel.display_name}</button>)}</div>
         <div className="blueprint-composer__panel-actions">
           <label>{t('blueprint.panel.name')}<input value={activePanel.display_name} onChange={(event) => setEditor((old) => renameActivePanel(old, event.target.value))} /></label>
-          {editor.panels.length > 1 && (['width', 'height'] as const).map((axis) => <label key={`${panelKey}:${axis}`}>{t(`blueprint.panel.${axis}`)}<input type="number" step="any" value={shownPanelSize(axis)}
-            onChange={(event) => setPanelSizeDraft({ panelKey, width: activePanel.width, height: activePanel.height, axis, value: event.target.value })}
+          {editor.panels.length > 1 && (['width', 'height'] as const).map((axis) => <label key={`${panelKey}:${axis}`}>{t(`blueprint.panel.${axis}`)}<input type="number" step="0.1" value={shownPanelSize(axis)}
+            onChange={(event) => draftPanelSize(axis, event.target.value)}
             onBlur={(event) => commitPanelSize(axis, event.currentTarget.value)}
             onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitPanelSize(axis, event.currentTarget.value); } }}
           /></label>)}
