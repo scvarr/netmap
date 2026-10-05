@@ -40,6 +40,7 @@ describe('numeric active-panel size', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     const saved = save.mock.calls[2][0];
     expect(saved.panels).toEqual([{ ...state.panels[0], [axis]: 400.125 }, state.panels[1]]);
+    expect([...document.querySelectorAll('[data-panel-key]')].map((node) => node.getAttribute('data-panel-key'))).toEqual([state.panels[1].panel_key, state.activePanelKey]);
     expect(saved.slots).toEqual(state.slots); expect(saved.individualLinks).toEqual(state.individualLinks);
     const request = createBlueprintRequest(saved).request!;
     expect(request.panels).toEqual(saved.panels); expect(request.slots[0].rendered_position).toEqual(state.slots[0].rendered_position);

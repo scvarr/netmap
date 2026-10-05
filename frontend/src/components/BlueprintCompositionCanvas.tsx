@@ -42,6 +42,7 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
   const liveHeight = Math.max(compositionHeight, 1) * liveUnit;
   const { minX, minY, unit, height } = frozenView ?? { minX: liveMinX, minY: liveMinY, unit: liveUnit, height: liveHeight };
   const activePanel = panels.find((panel) => panel.panel_key === activePanelKey)!;
+  const bodyPanels = [...panels.filter((panel) => panel.panel_key !== activePanelKey), activePanel];
   const panelRect = (panel: PresentationPanel) => ({ x: (panel.x - minX) * unit, y: (panel.y - minY) * unit, width: panel.width * unit, height: panel.height * unit });
   const activeRect = panelRect(activePanel);
   const [canvasScale, setCanvasScale] = useState(1);
@@ -126,7 +127,7 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
     if (panel && panel !== activePanelKey) { onActivatePanel(panel); return; }
     onContextMenu(key, event.clientX, event.clientY);
   }}>
-    {panels.map((panel) => { const rect = panelRect(panel); const active = panel.panel_key === activePanelKey; return <g key={panel.panel_key} data-panel-key={panel.panel_key} data-active={active}>
+    {bodyPanels.map((panel) => { const rect = panelRect(panel); const active = panel.panel_key === activePanelKey; return <g key={panel.panel_key} data-panel-key={panel.panel_key} data-active={active}>
       <rect className="blueprint-composition-canvas__body" x={rect.x} y={rect.y} width={rect.width} height={rect.height} fill={body.fillColor} onPointerDown={(event) => {
         if (event.button !== 0) return;
         if (!active) { onActivatePanel(panel.panel_key); return; }

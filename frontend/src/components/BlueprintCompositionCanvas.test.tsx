@@ -12,6 +12,40 @@ const slot = (index: number, x = .5, y = .5): BlueprintSlot => ({
 
 afterEach(() => vi.restoreAllMocks());
 
+describe('active panel body foreground', () => {
+  it.each([0, 50])('switches body stacking without changing source order or geometry (second panel x=%s)', (x) => {
+    const panels = [
+      { panel_key: 'panel-1', panel_number: 1, display_name: 'One', x: 0, y: 0, width: 100, height: 80 },
+      { panel_key: 'panel-2', panel_number: 2, display_name: 'Two', x, y: 0, width: 100, height: 80 },
+    ];
+    const original = panels.map((panel) => ({ ...panel }));
+    panels.forEach(Object.freeze); Object.freeze(panels);
+    const onPanelGeometry = vi.fn();
+    const props = { body: { width: 100 + x, height: 80, fillColor: '#123456' }, panels,
+      slots: [slot(1), { ...slot(2), panel_key: 'panel-2' }], links: [{ from_slot_key: 'slot-1', to_slot_key: 'slot-2' }],
+      selectedKeys: new Set<string>(), onActivatePanel: vi.fn(), onSelect: vi.fn(), onMarquee: vi.fn(), onTranslate: vi.fn(), onContextMenu: vi.fn(), onPanelGeometry };
+    const { container, rerender } = render(<I18nProvider><BlueprintCompositionCanvas {...props} activePanelKey="panel-1" /></I18nProvider>);
+    const bodies = () => [...container.querySelectorAll('[data-panel-key]')].map((node) => node.getAttribute('data-panel-key'));
+    const rectangles = () => Object.fromEntries(panels.map((panel) => {
+      const body = container.querySelector(`[data-panel-key="${panel.panel_key}"] .blueprint-composition-canvas__body`)!;
+      return [panel.panel_key, ['x', 'y', 'width', 'height'].map((axis) => body.getAttribute(axis))];
+    }));
+    const originalRectangles = rectangles();
+    const link = container.querySelector('.blueprint-composition-canvas__link');
+    const endpoints = [...container.querySelectorAll('[data-slot-key]')];
+    expect(bodies()).toEqual(['panel-2', 'panel-1']);
+    rerender(<I18nProvider><BlueprintCompositionCanvas {...props} activePanelKey="panel-2" /></I18nProvider>);
+    expect(bodies()).toEqual(['panel-1', 'panel-2']);
+    expect(rectangles()).toEqual(originalRectangles);
+    expect(panels).toEqual(original);
+    expect(container.querySelector('.blueprint-composition-canvas__link')).toBe(link);
+    expect([...container.querySelectorAll('[data-slot-key]')]).toEqual(endpoints);
+    expect(container.querySelector('[data-panel-move-border]')).toHaveAttribute('data-panel-move-border', 'panel-2');
+    expect(container.querySelectorAll('[data-panel-resize]')).toHaveLength(8);
+    expect(onPanelGeometry).not.toHaveBeenCalled();
+  });
+});
+
 describe('Blueprint endpoint screen-space markers', () => {
   it('keeps the gesture view stable while an outer panel moves and derives link endpoints', () => {
     vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 400 } as DOMRect);
@@ -94,7 +128,8 @@ describe('Blueprint endpoint screen-space markers', () => {
       selectedKeys={new Set()} onActivatePanel={onActivatePanel} onSelect={onSelect} onMarquee={vi.fn()} onTranslate={vi.fn()} onContextMenu={vi.fn()}
     /></I18nProvider>);
     expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 1000 400');
-    expect([...container.querySelectorAll('.blueprint-composition-canvas__body')].map((node) => node.getAttribute('x'))).toEqual(['500', '0']);
+    expect(container.querySelector('[data-panel-key="panel-1"] .blueprint-composition-canvas__body')).toHaveAttribute('x', '500');
+    expect(container.querySelector('[data-panel-key="panel-2"] .blueprint-composition-canvas__body')).toHaveAttribute('x', '0');
     expect(container.querySelector('.blueprint-composition-canvas text')).toBeNull();
     expect(container.querySelector('.blueprint-composition-canvas__link')).toHaveAttribute('x1', '750');
     fireEvent.pointerDown(container.querySelector('[data-panel-key="panel-2"] .blueprint-composition-canvas__body')!);
