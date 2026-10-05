@@ -5,7 +5,7 @@
 Этот файл — внутренний workflow contract только для ChatGPT, который
 координирует разработку NetMap.
 
-`Luna`, `Sol` и `Astra` не должны читать `docs/chatgpt.md` как
+`Luna`, `Sol 6.1` и `Astra` не должны читать `docs/chatgpt.md` как
 project instructions. ChatGPT не включает этот файл в обязательный reading
 list operational prompts для coding agents. Единственное исключение —
 bounded task, которая непосредственно редактирует или проверяет
@@ -44,8 +44,8 @@ contract, а не оставаться только в истории чата.
 2. явно разделяет in-scope, out-of-scope и acceptance criteria;
 3. даёт пользователю команды `cmd.exe` для создания milestone-ветки;
 4. после создания ветки отдельно сообщает execution profile:
-   recommended model, reasoning effort, `Session: new` или
-   `Session: continue current`, и краткую причину;
+   `Model: Luna / Sol 6.1 / Astra`, `Reasoning effort: Low / Medium / High`,
+   `Session: new / continue current` и краткую конкретную причину;
 5. выдаёт один короткий operational prompt.
 
 Branch создаёт пользователь до запуска agent. Operational prompt содержит
@@ -55,15 +55,15 @@ roadmap или устройство репозитория. `docs/chatgpt.md` в
 включается.
 
 Перед каждым operational prompt model, reasoning effort и session указываются
-заново, даже если они не изменились. В заголовке также указывается краткая
-конкретная причина выбора профиля:
-
-```text
-Model: Sol
-Reasoning effort: Medium
-Session: new
-Причина: bounded implementation обычной сложности.
-```
+заново обычным текстом, **вне** копируемого fenced block с operational
+prompt, даже если они не изменились. ChatGPT указывает четыре строки:
+`Model: Luna / Sol 6.1 / Astra`; `Reasoning effort: Low / Medium / High`;
+`Session: new / continue current`; `Причина: краткое конкретное объяснение
+выбора`. Это metadata для пользователя и выбора coding-agent configuration,
+а не инструкции coding agent. Сам operational prompt — ровно один копируемый
+fenced block, содержащий только инструкции, которые непосредственно получает
+coding agent. Внутри него нельзя повторять модель, reasoning effort, session
+или причину выбора модели.
 
 Если указано `Session: continue current`, выбранная модель должна совпадать с
 моделью текущей coding-agent session. В пределах одной coding-agent session
@@ -74,25 +74,21 @@ Session: new
 
 ## Выбор модели и reasoning effort
 
-Рабочая линейка моделей: `Luna`, `Sol` и `Astra`. Политика не привязывается к
-номеру поколения модели.
+Рабочая линейка моделей: `Luna`, `Sol 6.1` и `Astra`.
 
-`Sol + Medium` — основной профиль для обычной bounded implementation и
-integration работы, а также для большинства corrective implementation задач,
-если нет конкретной причины снизить effort. Не повышать модель или effort
+`Sol 6.1 + Medium` — основной/default профиль для практически всех bounded
+implementation, integration и corrective задач. Не повышать модель
 «для надёжности».
 
-`Luna` подходит для документации, инвентаризации, механического cleanup,
-простого restructuring и других задач без необходимости в сложном
-implementation reasoning. Обычно выбирается `Low` или `Medium` в зависимости
-от объёма анализа.
+`Luna` предназначена для документации, инвентаризации, механического cleanup
+и restructuring, а также других задач, где мощная implementation-модель
+объективно не нужна.
 
-`Astra` — исключение для задач с конкретной существенной сложностью: например,
-архитектурной неопределённостью, сложной concurrency/transactional
-correctness, нетривиальной migration существующих данных или semantics,
-identity/remapping problem, либо нескольких действительно конкурирующих
-implementation strategies, где `Sol` объективно недостаточен. Не выбирать
-`Astra` «на всякий случай».
+`Astra` — исключение для действительно сложных задач, где `Sol 6.1`
+объективно недостаточен: существенная архитектурная неопределённость, сложная
+concurrency/transactional correctness, нетривиальная migration/identity
+remapping или несколько реально конкурирующих implementation strategies. Не
+выбирать `Astra` «на всякий случай».
 
 `Low` предназначен для локальных corrective задач, небольших bugfix и
 механических docs/cleanup задач. `Medium` — default для обычной bounded
