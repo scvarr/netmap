@@ -6,6 +6,7 @@ import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCa
 import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateTypes';
 import type { ModuleBay } from '../topology/hardwareModules';
+import { duplicateModuleBay } from '../blueprints/moduleBayGeometry';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
 export const newBlueprintEditorState = (): BlueprintEditorState => { const key = crypto.randomUUID(); return { name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', panels: [{ panel_key: key, panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 160, height: 60 }], slots: [], individualLinks: [], activePanelKey: key, nextPanelNumber: 2, nextLocalNumberByPanel: { [key]: 1 } }; };
@@ -30,6 +31,12 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   const [selectedBayKey, setSelectedBayKey] = useState<string>();
   const selectedBay = editor.bays?.find(bay => bay.bay_key === selectedBayKey);
   const changeBay = (key: string, patch: Partial<ModuleBay>) => setEditor(old => ({ ...old, bays: old.bays?.map(bay => bay.bay_key === key ? { ...bay, ...patch } : bay) }));
+  const duplicateBay = () => {
+    if (!selectedBay) return;
+    const copy = duplicateModuleBay(selectedBay);
+    setEditor(old => ({ ...old, bays: [...old.bays ?? [], copy] }));
+    setSelectedBayKey(copy.bay_key);
+  };
   const panelKey = editor.activePanelKey;
   const activePanel = editor.panels.find((panel) => panel.panel_key === panelKey)!;
   const bounds = compositionBounds(editor.panels);
@@ -296,7 +303,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           </div>}
         </div>
         <div className="blueprint-composer__contextual">
-          {selectedBay && <ModuleBaysEditor key={selectedBay.bay_key} bay={selectedBay} panels={editor.panels} onChange={patch => {
+          {selectedBay && <ModuleBaysEditor key={selectedBay.bay_key} bay={selectedBay} panels={editor.panels} onDuplicate={duplicateBay} onChange={patch => {
             changeBay(selectedBay.bay_key, patch);
             if (patch.panel_key) { activatePanel(patch.panel_key); setSelectedBayKey(selectedBay.bay_key); }
           }} onRemove={() => { setEditor(old => ({ ...old, bays: old.bays?.filter(bay => bay.bay_key !== selectedBay.bay_key) })); setSelectedBayKey(undefined); }} />}

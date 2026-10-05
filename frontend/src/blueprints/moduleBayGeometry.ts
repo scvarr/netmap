@@ -5,6 +5,16 @@ export type BayRectangle = Pick<ModuleBay, 'x' | 'y' | 'width' | 'height'>;
 export const minimumBaySize = .01;
 const bounded = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 
+export function duplicateModuleBay(bay: ModuleBay): ModuleBay {
+  const shift = (position: number, size: number) => {
+    const offset = .025;
+    if (position + offset <= 1 - size) return position + offset;
+    if (position - offset >= 0) return position - offset;
+    return position;
+  };
+  return { ...bay, bay_key: crypto.randomUUID(), x: shift(bay.x, bay.width), y: shift(bay.y, bay.height) };
+}
+
 export function bayGestureGeometry(bay: BayRectangle, handle: 'move' | PanelHandle, dx: number, dy: number): BayRectangle {
   if (handle === 'move') return { ...bay, x: bounded(bay.x + dx, 0, 1 - bay.width), y: bounded(bay.y + dy, 0, 1 - bay.height) };
   let left = bay.x, top = bay.y, right = bay.x + bay.width, bottom = bay.y + bay.height;

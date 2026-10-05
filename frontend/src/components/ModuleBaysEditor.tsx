@@ -7,8 +7,8 @@ import { bayNumericGeometry, minimumBaySize, type BayRectangle } from '../bluepr
 
 const signature = (bay: BayRectangle) => [bay.x, bay.y, bay.width, bay.height].join(':');
 
-export function ModuleBaysEditor({ bay, panels, onChange, onRemove }: {
-  bay: ModuleBay; panels: PresentationPanel[]; onChange: (patch: Partial<ModuleBay>) => void; onRemove: () => void;
+export function ModuleBaysEditor({ bay, panels, onChange, onRemove, onDuplicate }: {
+  bay: ModuleBay; panels: PresentationPanel[]; onChange: (patch: Partial<ModuleBay>) => void; onRemove: () => void; onDuplicate: () => void;
 }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState<{ axis: keyof BayRectangle; raw: string; geometry: string }>();
@@ -24,6 +24,7 @@ export function ModuleBaysEditor({ bay, panels, onChange, onRemove }: {
         if (geometry !== bay) onChange(geometry);
         setDraft({ axis, raw, geometry: signature(geometry) });
       }} onBlur={() => setDraft(undefined)} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }} /></label>)}
+    <button type="button" className="secondary-action" onClick={onDuplicate}>{t('hardware.duplicateBay')}</button>
     <button type="button" className="text-action" onClick={onRemove}>{t('hardware.remove')}</button>
   </section>;
 }

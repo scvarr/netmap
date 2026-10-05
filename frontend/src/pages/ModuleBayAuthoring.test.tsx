@@ -27,6 +27,50 @@ beforeEach(() => { localStorage.clear(); vi.spyOn(SVGSVGElement.prototype, 'getB
 afterEach(() => vi.restoreAllMocks());
 
 describe('bay on the existing authoring canvas', () => {
+  it('duplicates properties with a fresh key, selects and draws the copy, then drags and saves both bays', () => {
+    const original = Object.freeze({ ...bay });
+    const { choose, container, field, rectangle, gesture, canvas, save } = show({ bays: [original] }); choose();
+    fireEvent.click(screen.getByRole('button', { name: 'Дублировать отсек' }));
+    expect(container.querySelectorAll('[data-bay-key]')).toHaveLength(2);
+    const copy = container.querySelector('[data-bay-key][data-selected="true"]')!;
+    const key = copy.getAttribute('data-bay-key')!;
+    expect(key).not.toBe(original.bay_key);
+    expect(key).toMatch(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i);
+    expect(rectangle().parentElement).toHaveAttribute('data-selected', 'false');
+    expect(field('Название')).toHaveValue(original.display_name);
+    expect(field('Совместимость')).toHaveValue(original.compatibility);
+    expect(field('Панель')).toHaveValue(original.panel_key);
+    expect(field('width')).toHaveValue(original.width); expect(field('height')).toHaveValue(original.height);
+    expect(field('x')).toHaveValue(.225); expect(field('y')).toHaveValue(.225);
+    expect(rectangle(key)).toHaveAttribute('width', rectangle().getAttribute('width'));
+    expect(rectangle(key)).toHaveAttribute('height', rectangle().getAttribute('height'));
+    gesture(rectangle(key), [250, 100], [350, 140]);
+    expect(field('x')).toHaveValue(.325); expect(field('y')).toHaveValue(.325);
+    gesture(canvas().querySelector('[data-bay-resize="se"]')!, [625, 250], [675, 270]);
+    expect(field('width')).toHaveValue(.35); expect(field('height')).toHaveValue(.35);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const saved = save.mock.calls[0][0].bays;
+    expect(saved).toHaveLength(2); expect(saved[0]).toEqual(original); expect(original).toEqual(bay);
+    expect(saved[1]).toEqual(expect.objectContaining({ bay_key: key, display_name: original.display_name, compatibility: original.compatibility, panel_key: original.panel_key }));
+    expect(saved[1].x).toBeCloseTo(.325); expect(saved[1].y).toBeCloseTo(.325);
+  });
+  it.each([
+    { x: .7, y: .7, width: .3, height: .3, copyX: .675, copyY: .675 },
+    { x: .7, y: .2, width: .3, height: .3, copyX: .675, copyY: .225 },
+    { x: .01, y: .01, width: .98, height: .98, copyX: .01, copyY: .01 },
+    { x: 0, y: 0, width: 1, height: 1, copyX: 0, copyY: 0 },
+  ])('keeps duplicate inside its panel without changing size ($x,$y / $width,$height)', ({ copyX, copyY, ...geometry }) => {
+    const original = { ...bay, ...geometry };
+    const { choose, field, save } = show({ bays: [original] }); choose();
+    fireEvent.click(screen.getByRole('button', { name: 'Дублировать отсек' }));
+    expect(field('x')).toHaveValue(copyX); expect(field('y')).toHaveValue(copyY);
+    expect(field('width')).toHaveValue(original.width); expect(field('height')).toHaveValue(original.height);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const copy = save.mock.calls[0][0].bays[1];
+    expect(copy.x).toBeGreaterThanOrEqual(0); expect(copy.y).toBeGreaterThanOrEqual(0);
+    expect(copy.x + copy.width).toBeLessThanOrEqual(1); expect(copy.y + copy.height).toBeLessThanOrEqual(1);
+    expect(save.mock.calls[0][0].bays[0]).toEqual(original);
+  });
   it('draws panel-local geometry with the owning panel offset and scale', () => {
     const { rectangle } = show({ panels: [{ ...panel, x: -100, y: -40 }, { ...rear, x: 0 }], bays: [{ ...bay, panel_key: 'two' }] });
     expect(rectangle().closest('[data-panel-key]')).toHaveAttribute('data-panel-key', 'two');
@@ -116,6 +160,7 @@ describe('bay on the existing authoring canvas', () => {
     expect(properties.closest('.blueprint-composer__contextual')).not.toBeNull();
     expect(properties.querySelector('fieldset')).toBeNull();
     expect(within(properties).getByRole('button', { name: 'Удалить' })).toHaveClass('text-action');
+    expect(within(properties).getByRole('button', { name: 'Дублировать отсек' })).toHaveClass('secondary-action');
     expect(screen.getByRole('button', { name: 'Добавить отсек' })).toHaveClass('secondary-action');
   });
 });
