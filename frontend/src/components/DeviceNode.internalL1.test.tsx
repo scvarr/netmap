@@ -28,6 +28,24 @@ const projection = {
 };
 
 describe('DeviceNode internal L1 overlay', () => {
+  it('uses local module names in spatial markers even when detached point names are contextual', () => {
+    const slots = [1, 2].flatMap(installation => [1, 2].map(port => ({
+      ...projection.attributes.blueprint_presentation.slots[0],
+      slot_key: `installation-${installation}:definition-${port}`,
+      connection_point_id: `point-${installation}-${port}`, display_name: `feth${port}`,
+      panel_local_position: { x: installation * .3, y: port * .3 },
+    })));
+    const moduleProjection = { ...projection, attributes: {
+      ...projection.attributes,
+      blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots },
+      connection_points: slots.map(s => ({ connection_point_id: s.connection_point_id, display_name: `Back / PCIe${s.connection_point_id.split('-')[1]} / ${s.display_name}`, cardinality: 1, external_connection_count: 0 })),
+    } };
+    render(<DeviceNode {...({ data: { projection: moduleProjection }, selected: false, width: 300 } as any)} />);
+    expect(screen.getAllByTitle('feth1 · CONNECTION_POINT')).toHaveLength(2);
+    expect(screen.getAllByTitle('feth2 · CONNECTION_POINT')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-connection-point-id]')).toHaveLength(4);
+    expect(screen.queryByText('Back / PCIe1 / feth1')).not.toBeInTheDocument();
+  });
   it('puts the Location path inside the existing Blueprint nameplate without changing its height or footprint', () => {
     const props = { data: { projection, locationPresentationPath: 'U01 / SLOT-A' }, selected: false, width: 160 } as any;
     const view = render(<DeviceNode {...props} />);

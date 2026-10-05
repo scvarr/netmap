@@ -15,6 +15,19 @@ const renderDetails = (value: PhysicalObjectDetailsDocument, props = {}) => rend
 const deferred = <T,>() => { let resolve!: (value: T) => void; return { promise: new Promise<T>((next) => { resolve = next; }), resolve }; };
 
 describe('PhysicalObjectDetailsSection ports', () => {
+  it('renders module contextual names for physical ports, bound interfaces and remote attachments', async () => {
+    const first = 'Back / PCIe1 / feth1'; const second = 'Back / PCIe2 / feth1';
+    renderDetails(document([
+      point(first, 'module-one', { direct_interface_bindings: [{ interface_ref: ref('NetworkInterface', 'ni-one'), label: first, evidence_refs: [] }] }),
+      point(second, 'module-two', { external_physical_attachments: [{ kind: 'DIRECT_CONNECTION', connection_ref: ref('Connection', 'link'), evidence_refs: [], remote_physical_object_label: 'Other object', remote_connection_point_label: 'Front / Slot 1 / feth1' }] }),
+      point('MGMT'),
+    ]));
+    expect(await screen.findByRole('rowheader', { name: first })).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: second })).toBeInTheDocument();
+    expect(within(screen.getByRole('rowheader', { name: first }).closest('tr')!).getAllByText(first)).toHaveLength(2);
+    expect(screen.getByText('Other object · Front / Slot 1 / feth1')).toBeInTheDocument();
+    expect(screen.getByRole('rowheader', { name: 'MGMT' })).toBeInTheDocument();
+  });
   it('renders active ports in natural display-label ordering with factual status, neighbour, cable, interface and icon actions', async () => {
     const cable = point('A10', 'a10', { ordering_key: '000', direct_interface_bindings: [{ interface_ref: ref('NetworkInterface', 'ni'), label: 'Eth1', evidence_refs: [] }], external_physical_attachments: [{ kind: 'CABLE', connection_ref: ref('Connection', 'c'), cable_ref: ref('Cable', 'cable'), evidence_refs: [], cable_label: 'CAB-1', remote_physical_object_label: 'SW2', remote_connection_point_label: 'Eth2' }] });
     const direct = point('A02', 'a02', { ordering_key: 'zzz', external_physical_attachments: [{ kind: 'DIRECT_CONNECTION', connection_ref: ref('Connection', 'd'), evidence_refs: [], remote_physical_object_label: 'PP1', remote_connection_point_label: 'B01' }] });

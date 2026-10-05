@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import select
 
+from app.module_endpoint_names import EndpointNames
 from app.device_catalog import (
     DeviceCatalog,
     DisplayAliasRecord,
@@ -189,7 +190,7 @@ class ConfiguredTopologyProjectionResolver:
                 continue
             points_by_object.setdefault(point.physical_object_id, []).append(point)
 
-        point_aliases = DeviceCatalog(self.repository.session).connection_point_display_aliases(
+        point_aliases = EndpointNames(self.repository.session).connection_points(
             [point.point_id for point in all_points if point.physical_object_id in selected_object_ids]
         )
         external_connection_ids_by_point: dict[uuid.UUID, set[uuid.UUID]] = {}
@@ -297,7 +298,7 @@ class ConfiguredTopologyProjectionResolver:
         object_aliases = DeviceCatalog(self.repository.session).physical_object_display_aliases(
             list(object_ids)
         )
-        point_aliases = DeviceCatalog(self.repository.session).connection_point_display_aliases(
+        point_aliases = EndpointNames(self.repository.session).connection_points(
             list(point_ids)
         )
         continuations: list[L1OffMapContinuation] = []
@@ -583,7 +584,7 @@ class ConfiguredTopologyProjectionResolver:
                     continue
                 for endpoint in installation["endpoints"]:
                     key = f"{installation['id']}:{endpoint['key']}"
-                    slot = SimpleNamespace(slot_key=key, display_name=endpoint["display_name"], kind=endpoint["kind"], panel_key=bay["panel_key"], position_x=endpoint["x"], position_y=endpoint["y"])
+                    slot = SimpleNamespace(slot_key=key, display_name=endpoint["local_display_name"], kind=endpoint["kind"], panel_key=bay["panel_key"], position_x=endpoint["x"], position_y=endpoint["y"])
                     mapping = SimpleNamespace(connection_point_id=endpoint["connection_point_id"], network_interface_id=endpoint["network_interface_id"])
                     instance_rows.append((mapping, slot))
             geometry = derive_port_geometry([slot for _, slot in instance_rows], panels_by_version[version.id])

@@ -1679,13 +1679,14 @@ export function MapPage({
   };
   const openPortContext = (port: { physicalObjectId: string; connectionPointId: string; label: string }, screen: XYPosition) => {
     if (contextBusy || !physicalObjectDetailsDataSource) return;
+    const displayName = document?.nodes.find((node) => physicalObjectIdForNode(node) === port.physicalObjectId)?.attributes.connection_points?.find((point) => point.connection_point_id === port.connectionPointId)?.display_name ?? port.label;
     setSelection((current) => document?.nodes.find((node) => physicalObjectIdForNode(node) === port.physicalObjectId) ? { type: "node", item: document.nodes.find((node) => physicalObjectIdForNode(node) === port.physicalObjectId)! } : current);
-    setContextAnchor({ kind: "port", objectId: port.physicalObjectId, connectionPointId: port.connectionPointId, label: port.label, screen, action: "loading" });
+    setContextAnchor({ kind: "port", objectId: port.physicalObjectId, connectionPointId: port.connectionPointId, label: displayName, screen, action: "loading" });
     void physicalObjectDetailsDataSource.loadPhysicalObjectDetails(port.physicalObjectId).then((details) => {
       const point = details.connection_points.find((item) => item.connection_point_ref.entity_id === port.connectionPointId);
       const attachments = point?.external_physical_attachments;
       const action: MapContextTarget extends infer _ ? "connect" | "unavailable" | { disconnectConnectionId: string } : never = point?.cardinality === 1 && Array.isArray(attachments) && attachments.length === 0 ? "connect" : point?.cardinality === 1 && attachments?.length === 1 ? { disconnectConnectionId: attachments[0].connection_ref.entity_id } : "unavailable";
-      setContextAnchor((current) => current?.kind === "port" && current.connectionPointId === port.connectionPointId ? { ...current, action } : current);
+      setContextAnchor((current) => current?.kind === "port" && current.connectionPointId === port.connectionPointId ? { ...current, label: point?.label ?? current.label, action } : current);
     }, () => setContextAnchor((current) => current?.kind === "port" && current.connectionPointId === port.connectionPointId ? { ...current, action: "unavailable" } : current));
   };
   const connectFromPort = (physicalObjectId: string, connectionPointId: string) => {

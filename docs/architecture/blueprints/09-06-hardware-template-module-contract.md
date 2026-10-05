@@ -244,6 +244,32 @@ new forward migrations. Determine that boundary from actual repository state
 in the implementation milestone. The implemented 09.6-A boundary uses that
 authorized destructive cutover and fresh initialization, as described above.
 
+## Installed endpoint names (09.6-A)
+
+`ModuleEndpointDefinition.display_name` is the local endpoint name within a
+module revision. It does not need to be unique across the owning PhysicalObject.
+Spatial object/blueprint presentation labels use this local name.
+
+Detached lists, physical object cards, interface bindings, endpoint pickers and
+connection details use the derived name `Panel / Bay / Endpoint`, with the exact
+current display names of PresentationPanel, ModuleBay and ModuleEndpointDefinition.
+One server read resolver follows ModuleEndpointMapping → ModuleInstallation →
+the configuration's current ModuleBay → PresentationPanel and the definition.
+It batches these joins and exposes installation ID, panel/bay keys and names,
+local/contextual names and canonical ConnectionPoint/NetworkInterface IDs.
+
+The configuration document's installed endpoints explicitly expose
+`local_display_name` and `contextual_display_name`; the ambiguous installed
+endpoint `display_name` field is removed. Template definitions and graphical
+presentation slots retain `display_name` with local semantics.
+
+Contextual names are derived read context, never canonical identity, installation
+identity, persisted columns or EntityMetadata aliases. Existing materialization
+may retain the local definition name as a canonical display alias. Renaming a
+panel/bay in read state recalculates the path without changing endpoint IDs.
+There is no global numbering, naming-template editor or installation movement
+in this correction; subsequent 09.6 phases remain open.
+
 ## OPEN and outside this contract
 
 - Endpoint technology/capability semantics: Ethernet, Fibre Channel, speed,

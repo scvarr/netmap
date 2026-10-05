@@ -22,6 +22,16 @@ function show(element: React.ReactNode) { return render(<I18nProvider><MemoryRou
 beforeEach(() => localStorage.clear());
 
 describe('09.6-A user path', () => {
+  it('uses server-derived contextual names in the installed module endpoint list', async () => {
+    const source = modules();
+    source.loadConfiguration = vi.fn().mockResolvedValue({ ...config, bays: [1, 2].map(index => ({
+      ...config.bays[0], bay_key: `bay-${index}`, display_name: `PCIe${index}`,
+      installation: { id: `installation-${index}`, module_template_id: 'module', module_revision_id: 'module-rev', name: 'NIC', orientation: 'HORIZONTAL', endpoints: [1, 2].map(port => ({ key: `p${port}`, kind: 'NETWORK_PORT', local_display_name: `feth${port}`, contextual_display_name: `Back / PCIe${index} / feth${port}`, connection_point_id: `point-${index}-${port}`, network_interface_id: `ni-${index}-${port}`, x: .3, y: .5 })) },
+    })) });
+    show(<ModuleInstallationSection objectId="object" dataSource={source} onInstalled={vi.fn()} />);
+    for (const index of [1, 2]) for (const port of [1, 2]) expect(await screen.findByText(`Back / PCIe${index} / feth${port}`)).toBeInTheDocument();
+    expect(screen.queryByText('feth1')).not.toBeInTheDocument();
+  });
   it('shows separate base and module roles with both creation actions and no published editing', async () => {
     show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={modules()} />);
     expect(await screen.findByRole('rowheader', { name: 'Server base' })).toBeInTheDocument();

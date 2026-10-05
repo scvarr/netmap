@@ -28,8 +28,8 @@ def create_base(payload=None):
     return response.json()['blueprint_ref']['entity_id'], payload
 
 
-def create_module(compatibility='OCP3'):
-    response = client.post('/v1/library/module-templates', json={"name": " NIC exact ", "compatibility": compatibility, "endpoints": [{"key": str(uuid.uuid4()), "display_name": name, "kind": "NETWORK_PORT"} for name in ['P1', 'P2']]})
+def create_module(compatibility='OCP3', names=('P1', 'P2')):
+    response = client.post('/v1/library/module-templates', json={"name": " NIC exact ", "compatibility": compatibility, "endpoints": [{"key": str(uuid.uuid4()), "display_name": name, "kind": "NETWORK_PORT"} for name in names]})
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -65,7 +65,7 @@ def test_materialization_identity_binding_geometry_and_round_trip(orientation):
         installation = response.json()['bays'][0]['installation']
         installation_ids.append(installation['id'])
         endpoints.extend(installation['endpoints'])
-        assert [e['display_name'] for e in installation['endpoints']] == ['P1', 'P2']
+        assert [e['local_display_name'] for e in installation['endpoints']] == ['P1', 'P2']
         for index, endpoint in enumerate(installation['endpoints']):
             expected = (.2 + .6 * (index + 1) / 3, .5) if orientation == 'HORIZONTAL' else (.5, .1 + .8 * (index + 1) / 3)
             assert (endpoint['x'], endpoint['y']) == pytest.approx(expected)
@@ -114,9 +114,11 @@ def test_rejected_installations_are_atomic():
 
 def test_two_installations_in_one_object_have_distinct_definition_mappings_and_projection():
     payload = base_payload()
-    payload['bays'].append({**payload['bays'][0], 'bay_key': str(uuid.uuid4()), 'display_name': 'Second'})
+    payload['panels'][0]['display_name'] = 'Back'
+    payload['bays'][0]['display_name'] = 'PCIe1'
+    payload['bays'].append({**payload['bays'][0], 'bay_key': str(uuid.uuid4()), 'display_name': 'PCIe2'})
     template_id, payload = create_base(payload)
-    module = create_module()
+    module = create_module(names=('feth1', 'feth2'))
     object_id = create_object(template_id)['physical_object_ref']['entity_id']
     for bay in payload['bays']:
         assert install(object_id, module['template_id'], bay['bay_key']).status_code == 201
@@ -126,6 +128,16 @@ def test_two_installations_in_one_object_have_distinct_definition_mappings_and_p
     endpoints = [e for i in installations for e in i['endpoints']]
     assert len({e['connection_point_id'] for e in endpoints}) == 4
     assert len({e['network_interface_id'] for e in endpoints}) == 4
+    expected = {f'Back / PCIe{bay} / feth{port}' for bay in (1, 2) for port in (1, 2)}
+    assert {e['contextual_display_name'] for e in endpoints} == expected
+    assert {e['local_display_name'] for e in endpoints} == {'feth1', 'feth2'}
+    assert [e['display_name'] for e in module['endpoints']] == ['feth1', 'feth2']
+    details = client.get(f'/v1/topology/physical-objects/{object_id}').json()
+    assert {p['label'] for p in details['connection_points']} == expected | {'MGMT'}
+    module_points = [p for p in details['connection_points'] if p['label'] in expected]
+    assert {p['direct_interface_bindings'][0]['label'] for p in module_points} == expected
+    devices = client.get(f'/v1/topology/devices/{object_id}').json()
+    assert {i['label'] for i in devices['interfaces']} == expected | {'MGMT'}
     projection = client.post('/v1/topology/projection', json={"layer": "L1", "detail_level": "PHYSICAL_OBJECT", "scope": {"include_location_subtrees": [], "include_entities": []}})
     assert projection.status_code == 200, projection.text
     node = next(n for n in projection.json()['nodes'] if any(r['entity_id'] == object_id for r in n['source_refs']))
@@ -133,6 +145,73 @@ def test_two_installations_in_one_object_have_distinct_definition_mappings_and_p
     assert len(slots) == 5
     assert {e['connection_point_id'] for e in endpoints} <= {s['connection_point_id'] for s in slots}
     assert len({s['slot_key'] for s in slots}) == 5
+    assert {p['display_name'] for p in node['attributes']['connection_points']} == expected | {'MGMT'}
+    assert sorted(s['display_name'] for s in slots) == ['MGMT', 'feth1', 'feth1', 'feth2', 'feth2']
+    # Read-state changes demonstrate derivation without an authoring API for published revisions.
+    from app.hardware_catalog import HardwareCatalog
+    from app.module_endpoint_names import module_endpoint_contexts
+    from app.models import EntityMetadata, ModuleBay, PresentationPanel
+    from sqlalchemy import event
+    with SessionLocal() as session:
+        metadata = session.scalars(select(EntityMetadata).where(EntityMetadata.connection_point_id.in_([uuid.UUID(e['connection_point_id']) for e in endpoints]))).all()
+        assert {m.value for m in metadata} == {'feth1', 'feth2'}
+        interface_metadata = session.scalars(select(EntityMetadata).where(EntityMetadata.network_interface_id.in_([uuid.UUID(e['network_interface_id']) for e in endpoints]))).all()
+        assert {m.value for m in interface_metadata} == {'feth1', 'feth2'}
+        statements = []
+        def capture(*args):
+            statements.append(args[2])
+        event.listen(session.bind, 'before_cursor_execute', capture)
+        try:
+            contexts = module_endpoint_contexts(session, connection_point_ids=[uuid.UUID(e['connection_point_id']) for e in endpoints])
+            assert len(statements) == 1 and len(contexts) == 4
+            statements.clear()
+            HardwareCatalog(session).configuration_document(uuid.UUID(object_id))
+            assert len(statements) <= 7  # Bounded batches, independent of installation count.
+        finally:
+            event.remove(session.bind, 'before_cursor_execute', capture)
+        session.scalar(select(PresentationPanel)).display_name = 'Rear'
+        bay = session.scalar(select(ModuleBay).where(ModuleBay.bay_key == payload['bays'][0]['bay_key']))
+        bay.display_name = 'Renamed'
+        renamed = HardwareCatalog(session).configuration_document(uuid.UUID(object_id))
+        changed = next(b['installation']['endpoints'] for b in renamed['bays'] if b['bay_key'] == bay.bay_key)
+        assert {e['contextual_display_name'] for e in changed} == {'Rear / Renamed / feth1', 'Rear / Renamed / feth2'}
+        assert {e['connection_point_id'] for b in renamed['bays'] for e in b['installation']['endpoints']} == {e['connection_point_id'] for e in endpoints}
+        assert {e['network_interface_id'] for b in renamed['bays'] for e in b['installation']['endpoints']} == {e['network_interface_id'] for e in endpoints}
+        session.rollback()
+    remote = create_object(template_id)
+    remote_id = remote['physical_object_ref']['entity_id']
+    source = endpoints[0]
+    connection = client.post('/v1/topology/physical-connections', json={
+        'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_point_id'], 'member_index': 1},
+        'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': remote['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
+    })
+    assert connection.status_code == 201, connection.text
+    remote_details = client.get(f'/v1/topology/physical-objects/{remote_id}').json()
+    assert remote_details['connection_points'][0]['external_physical_attachments'][0]['remote_connection_point_label'] == source['contextual_display_name']
+    inventory = client.get('/v1/catalog/inventory').json()
+    assert source['contextual_display_name'] in {e['remote_connection_point_label'] for c in inventory['cables'] for e in (c['endpoint_a'], c['endpoint_b'])}
+    scoped = client.post('/v1/topology/projection', json={
+        'layer': 'L1', 'detail_level': 'PHYSICAL_OBJECT', 'include_cable_continuations': True,
+        'scope': {'include_location_subtrees': [], 'include_entities': [{'ref_type': 'CANONICAL_FACT', 'entity_type': 'PhysicalObject', 'entity_id': object_id}]},
+    })
+    assert scoped.status_code == 200, scoped.text
+    assert scoped.json()['l1_off_map_continuations'][0]['local_connection_point_display_name'] == source['contextual_display_name']
+
+
+def test_repeated_bay_names_on_different_panels_use_full_context():
+    payload = base_payload()
+    payload['panels'][0]['display_name'] = 'Front'
+    back = {**payload['panels'][0], 'panel_key': str(uuid.uuid4()), 'panel_number': 2, 'display_name': 'Back'}
+    payload['panels'].append(back)
+    payload['bays'][0]['display_name'] = 'Slot 1'
+    payload['bays'].append({**payload['bays'][0], 'bay_key': str(uuid.uuid4()), 'panel_key': back['panel_key']})
+    template_id, _ = create_base(payload)
+    module = create_module(names=('feth1', 'feth2'))
+    object_id = create_object(template_id)['physical_object_ref']['entity_id']
+    for bay in payload['bays']:
+        assert install(object_id, module['template_id'], bay['bay_key']).status_code == 201
+    document = client.get(f'/v1/topology/physical-objects/{object_id}/configuration').json()
+    assert {e['contextual_display_name'] for b in document['bays'] for e in b['installation']['endpoints']} == {f'{panel} / Slot 1 / feth{port}' for panel in ('Front', 'Back') for port in (1, 2)}
 
 
 def test_base_internal_links_are_canonical_and_metadata_is_preserved():

@@ -1,5 +1,6 @@
 import uuid
 
+from app.module_endpoint_names import EndpointNames
 from app.device_catalog import DeviceCatalog
 from app.repository import CanonicalRepository
 from app.schemas import (
@@ -29,7 +30,7 @@ class ConfiguredDeviceDetailsResolver:
         )
         owners = tuple(sorted(owners, key=lambda owner: str(owner.interface_id)))
         interface_ids = [owner.interface_id for owner in owners]
-        interface_aliases = catalog.network_interface_display_aliases(interface_ids)
+        interface_aliases = EndpointNames(self.repository.session).network_interfaces(interface_ids)
 
         l2_by_interface = self.repository.get_l2_bindings_by_interface(interface_ids)
         l3_by_interface = self.repository.get_l3_bindings_by_interface(interface_ids)
@@ -88,7 +89,7 @@ class ConfiguredDeviceDetailsResolver:
                 self._ref("NetworkInterfacePhysicalOwner", owner.owner_relation_id),
                 *(
                     [self._ref("EntityMetadata", interface_alias.metadata_id)]
-                    if interface_alias is not None
+                    if interface_alias is not None and interface_alias.metadata_id is not None
                     else []
                 ),
                 *(

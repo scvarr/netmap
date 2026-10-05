@@ -10,7 +10,12 @@ export interface ModuleTemplate extends ModuleTemplateInput { template_id: strin
 export interface ModuleInstallation {
   id: string; module_template_id: string; module_revision_id: string; name: string;
   orientation: 'HORIZONTAL' | 'VERTICAL';
-  endpoints: Array<ModuleEndpoint & { connection_point_id: string; network_interface_id: string | null; x: number; y: number }>;
+  endpoints: Array<Omit<ModuleEndpoint, 'display_name'> & {
+    installation_id: string; panel_key: string; panel_display_name: string;
+    bay_key: string; bay_display_name: string;
+    local_display_name: string; contextual_display_name: string;
+    connection_point_id: string; network_interface_id: string | null; x: number; y: number;
+  }>;
 }
 export interface HardwareConfiguration { configuration_id: string | null; bays: Array<ModuleBay & { installation: ModuleInstallation | null }> }
 export interface HardwareModuleDataSource {

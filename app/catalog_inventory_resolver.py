@@ -3,6 +3,7 @@ from collections import defaultdict
 
 from sqlalchemy import select
 
+from app.module_endpoint_names import EndpointNames
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
 from app.cable_labels import resolved_cable_label
 from app.models import Cable, MapPlacement, SavedMap
@@ -32,7 +33,7 @@ class CatalogInventoryResolver:
         classes = catalog.physical_object_classes(list(object_ids))
         points = self.repository.get_all_connection_point_records()
         members = self.repository.get_physical_connection_member_records()
-        point_aliases = catalog.connection_point_display_aliases([point.point_id for point in points])
+        point_aliases = EndpointNames(self.repository.session).connection_points([point.point_id for point in points])
         points_by_object = self._points_by_object(points)
         memberships = self._map_memberships()
 

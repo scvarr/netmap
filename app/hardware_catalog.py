@@ -20,6 +20,7 @@ from app.models import (
     ModuleInstallation, ModuleEndpointMapping, PhysicalObject,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from app.module_endpoint_names import module_endpoint_contexts
 
 
 @dataclass(frozen=True)
@@ -399,18 +400,22 @@ class HardwareCatalog:
         if config is None:
             return {"configuration_id": None, "bays": []}
         installations = {i.bay_key: i for i in self.session.scalars(select(ModuleInstallation).where(ModuleInstallation.configuration_id == config.id))}
+        contexts = {c["connection_point_id"]: c for c in module_endpoint_contexts(self.session, configuration_ids=[config.id])}
+        modules = {r.id: (r, t) for r, t in self.session.execute(select(ModuleTemplateRevision, ModuleTemplate).join(ModuleTemplate, ModuleTemplate.id == ModuleTemplateRevision.template_id).where(ModuleTemplateRevision.id.in_([i.module_revision_id for i in installations.values()])))}
+        endpoints_by_installation = {}
+        for mapping, definition in self.session.execute(select(ModuleEndpointMapping, ModuleEndpointDefinition).join(ModuleEndpointDefinition, ModuleEndpointDefinition.id == ModuleEndpointMapping.definition_id).where(ModuleEndpointMapping.installation_id.in_([i.id for i in installations.values()])).order_by(ModuleEndpointDefinition.order_index)):
+            endpoints_by_installation.setdefault(mapping.installation_id, []).append((mapping, definition))
         bays = []
         for bay in self.session.scalars(select(ModuleBay).where(ModuleBay.base_revision_id == config.base_revision_id).order_by(ModuleBay.bay_key)):
             installation = installations.get(bay.bay_key)
             installed = None
             if installation:
-                revision = self.session.get(ModuleTemplateRevision, installation.module_revision_id)
-                template = self.session.get(ModuleTemplate, revision.template_id)
+                revision, template = modules[installation.module_revision_id]
                 endpoints = []
-                rows = self.session.execute(select(ModuleEndpointMapping, ModuleEndpointDefinition).join(ModuleEndpointDefinition, ModuleEndpointDefinition.id == ModuleEndpointMapping.definition_id).where(ModuleEndpointMapping.installation_id == installation.id).order_by(ModuleEndpointDefinition.order_index)).all()
+                rows = endpoints_by_installation.get(installation.id, [])
                 for index, (mapping, definition) in enumerate(rows):
                     x, y = module_endpoint_position(bay, installation.orientation, index, len(rows))
-                    endpoints.append({"key": definition.definition_key, "kind": definition.kind, "display_name": definition.display_name, "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id else None, "x": x, "y": y})
+                    endpoints.append({"key": definition.definition_key, "kind": definition.kind, **contexts[str(mapping.connection_point_id)], "x": x, "y": y})
                 installed = {"id": str(installation.id), "module_template_id": str(template.id), "module_revision_id": str(revision.id), "name": template.name, "orientation": installation.orientation, "endpoints": endpoints}
             bays.append({"bay_key": bay.bay_key, "display_name": bay.display_name, "compatibility": bay.compatibility, "panel_key": bay.panel_key, "x": bay.x, "y": bay.y, "width": bay.width, "height": bay.height, "installation": installed})
         return {"configuration_id": str(config.id), "base_revision_id": str(config.base_revision_id), "bays": bays}

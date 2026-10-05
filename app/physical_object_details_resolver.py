@@ -3,6 +3,7 @@ import uuid
 
 from sqlalchemy import select
 
+from app.module_endpoint_names import EndpointNames
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
 from app.cable_labels import resolved_cable_label
 from app.models import BuiltInEndpointDefinition, ObjectConfiguration, BuiltInEndpointMapping, Cable, InterfacePhysicalBinding, BaseTemplate, BaseTemplateRevision
@@ -28,7 +29,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
             cable.connection_id: cable
             for cable in self.repository.session.scalars(select(Cable))
         }
-        point_aliases = catalog.connection_point_display_aliases(list(endpoint_ids | point_ids))
+        point_aliases = EndpointNames(self.repository.session).connection_points(list(endpoint_ids | point_ids))
         object_ids = {point_by_id[endpoint].physical_object_id for endpoint in endpoint_ids}
         object_aliases = catalog.physical_object_display_aliases(list(object_ids | {physical_object_id}))
         object_class = catalog.physical_object_classes([physical_object_id]).get(physical_object_id)
@@ -36,7 +37,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
         for binding in self.repository.session.scalars(select(InterfacePhysicalBinding).where(InterfacePhysicalBinding.point_id.in_(point_ids)).order_by(InterfacePhysicalBinding.point_id, InterfacePhysicalBinding.id)):
             bindings_by_point[binding.point_id].append(PhysicalBindingRecord(binding.id, binding.interface_id, binding.point_id, binding.point_member))
         interface_ids = {binding.interface_id for values in bindings_by_point.values() for binding in values}
-        interface_aliases = catalog.network_interface_display_aliases(list(interface_ids))
+        interface_aliases = EndpointNames(self.repository.session).network_interfaces(list(interface_ids))
         provenance, slots = self._blueprint_instance(physical_object_id)
         details = [self._point_details(point, point_aliases.get(point.point_id), incident, point_by_id, point_aliases, object_aliases, bindings_by_point[point.point_id], interface_aliases, slots.get(point.point_id), cables_by_connection) for point in points]
         details.sort(key=lambda value: self._natural_key(value.ordering_key))
@@ -47,7 +48,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
     def _point_details(self, point, alias, incident, point_by_id, point_aliases, object_aliases, bindings, interface_aliases, slot, cables_by_connection):
         point_members = [member for member in incident if point.point_id in (member.point_a_id, member.point_b_id)]
         refs = [self._ref("ConnectionPoint", point.point_id)]
-        if alias: refs.append(self._ref("EntityMetadata", alias.metadata_id))
+        if alias and alias.metadata_id: refs.append(self._ref("EntityMetadata", alias.metadata_id))
         direct_bindings = []
         for binding in bindings:
             interface_alias = interface_aliases.get(binding.interface_id)
