@@ -358,6 +358,29 @@ class HardwareCatalog:
     def list_modules(self):
         return {"modules": [self.module_document(t, r) for t, r in self.session.execute(select(ModuleTemplate, ModuleTemplateRevision).join(ModuleTemplateRevision, ModuleTemplateRevision.template_id == ModuleTemplate.id).order_by(ModuleTemplate.name, ModuleTemplate.id)).all()]}
 
+    def delete_module(self, template_id: uuid.UUID) -> None:
+        template = self.session.scalar(select(ModuleTemplate).where(
+            ModuleTemplate.id == template_id
+        ).with_for_update())
+        if template is None:
+            raise ValidationError("ModuleTemplate was not found", {"template_id": str(template_id)})
+        # Lock all revisions before checking usage; concurrent FK references must wait.
+        revision_ids = tuple(self.session.scalars(select(ModuleTemplateRevision.id).where(
+            ModuleTemplateRevision.template_id == template_id
+        ).order_by(ModuleTemplateRevision.id).with_for_update()))
+        installation_id = self.session.scalar(select(ModuleInstallation.id).where(
+            ModuleInstallation.module_revision_id.in_(revision_ids)
+        ).limit(1))
+        if installation_id is not None:
+            raise ModelError("ModuleTemplate cannot be deleted because one of its revisions is installed", {
+                "template_id": str(template_id), "installation_id": str(installation_id),
+            })
+        self.session.execute(delete(ModuleEndpointDefinition).where(
+            ModuleEndpointDefinition.module_revision_id.in_(revision_ids)
+        ))
+        self.session.execute(delete(ModuleTemplateRevision).where(ModuleTemplateRevision.id.in_(revision_ids)))
+        self.session.delete(template)
+
     def install_module(self, object_id, query):
         # Serializes installations for this object, including the empty-bay case.
         obj = self.session.scalar(select(PhysicalObject).where(PhysicalObject.id == object_id).with_for_update())

@@ -93,3 +93,27 @@ columns, metadata aliases, canonical identities or naming templates were added.
   names. Verification fixture remains in the development database.
 - Full backend/frontend suites were not run. No merge or later milestone work;
   external inspection is still required before accepting 09.6-A.
+
+## Corrective module template deletion
+
+Root `DELETE /v1/library/module-templates/{template_id}` deletes an unused module
+template, all its revisions and endpoint definitions in one transaction (204).
+Any installation of any revision blocks deletion with the existing domain-error
+response (409), preserving the entire configuration and canonical endpoints.
+Root and revision row locks protect the usage check and deletion. Missing roots
+use the existing validation-error style (422). No schema changes or cascading
+installation deletion were introduced.
+
+The module library table now has the existing text-action delete control, typed
+Russian/English confirmation, list refresh on success and the existing error
+display on refusal. Published template editing and future phase status remain
+unchanged; 09.6-A still awaits external inspection.
+
+- Targeted backend: 21 passed in module template deletion, hardware configuration
+  and base template tests, including unused multi-revision cleanup and exact
+  workspace/configuration preservation after refusal for old/latest installations.
+- Targeted frontend: 12 passed in hardware configuration/library and module API
+  tests, including declined confirmation, successful row removal, server refusal,
+  existing BaseTemplate deletion and empty DELETE 204 handling.
+- Docker frontend TypeScript/Vite build and `git diff --check` passed.
+- Full suites were not run; no merge or next milestone work.

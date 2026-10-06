@@ -17,11 +17,56 @@ const panel = { panel_key: 'panel', panel_number: 1, display_name: 'Panel', x: 0
 const module = { template_id: 'module', revision_id: 'module-rev', name: 'OCP NIC', compatibility: 'OCP3', endpoints: [{ key: 'p1', display_name: 'P1', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', kind: 'NETWORK_PORT' as const }] };
 const config: HardwareConfiguration = { configuration_id: 'config', bays: [{ bay_key: 'bay', display_name: 'OCP bay', compatibility: 'OCP3', panel_key: 'panel', x: .1, y: .1, width: .8, height: .8, installation: null }] };
 const bases = (): BaseTemplateDataSource => ({ loadBaseTemplates: vi.fn().mockResolvedValue({ schema_version: '2.0', blueprints: [base] }), loadBaseTemplateRevision: vi.fn().mockResolvedValue({ ...base, schema_version: '2.0', next_panel_number: 2, panels: [panel], slots: [], internal_links: [], bays: config.bays }), createBaseTemplate: vi.fn().mockResolvedValue({ schema_version: '2.0', blueprint_ref: base.blueprint_ref, version_ref: base.version_ref }), createPhysicalObject: vi.fn().mockResolvedValue({ physical_object_ref: { entity_id: 'object' } }) });
-const modules = (): HardwareModuleDataSource => ({ listModules: vi.fn().mockResolvedValue({ modules: [module, { ...module, template_id: 'wrong', name: 'Other NIC', compatibility: 'ocp3' }] }), createModule: vi.fn().mockResolvedValue(module), loadConfiguration: vi.fn().mockResolvedValue(config), installModule: vi.fn().mockResolvedValue({ ...config, bays: [{ ...config.bays[0], installation: { id: 'installation', name: module.name, orientation: 'VERTICAL', module_template_id: module.template_id, module_revision_id: module.revision_id, endpoints: [] } }] }) });
+const modules = (): HardwareModuleDataSource => ({ listModules: vi.fn().mockResolvedValue({ modules: [module, { ...module, template_id: 'wrong', name: 'Other NIC', compatibility: 'ocp3' }] }), createModule: vi.fn().mockResolvedValue(module), deleteModule: vi.fn().mockResolvedValue(undefined), loadConfiguration: vi.fn().mockResolvedValue(config), installModule: vi.fn().mockResolvedValue({ ...config, bays: [{ ...config.bays[0], installation: { id: 'installation', name: module.name, orientation: 'VERTICAL', module_template_id: module.template_id, module_revision_id: module.revision_id, endpoints: [] } }] }) });
 function show(element: React.ReactNode) { return render(<I18nProvider><MemoryRouter><Routes><Route path="/" element={element} /><Route path="/infrastructure/objects/object" element={<h1>Created object</h1>} /><Route path="/library/base-templates" element={<h1>Saved library</h1>} /></Routes></MemoryRouter></I18nProvider>); }
-beforeEach(() => localStorage.clear());
+beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
 
 describe('09.6-A user path', () => {
+  it('offers styled module deletion and does nothing when confirmation is declined', async () => {
+    const source = modules(); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);
+    const row = (await screen.findByRole('rowheader', { name: 'OCP NIC' })).closest('tr')!;
+    const button = within(row).getByRole('button', { name: 'Удалить' });
+    expect(button).toHaveClass('text-action');
+    await userEvent.click(button);
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('OCP NIC'));
+    expect(source.deleteModule).not.toHaveBeenCalled();
+    expect(screen.getByRole('rowheader', { name: 'OCP NIC' })).toBeInTheDocument();
+  });
+  it('refreshes module rows after confirmed successful deletion', async () => {
+    const source = modules(); vi.spyOn(window, 'confirm').mockReturnValue(true);
+    source.listModules = vi.fn().mockResolvedValueOnce({ modules: [module] }).mockResolvedValue({ modules: [] });
+    show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);
+    const row = (await screen.findByRole('rowheader', { name: 'OCP NIC' })).closest('tr')!;
+    await userEvent.click(within(row).getByRole('button', { name: 'Удалить' }));
+    await waitFor(() => expect(source.listModules).toHaveBeenCalledTimes(2));
+    expect(source.deleteModule).toHaveBeenCalledWith('module');
+    await waitFor(() => expect(screen.queryByRole('rowheader', { name: 'OCP NIC' })).not.toBeInTheDocument());
+    expect(await screen.findByRole('rowheader', { name: 'Server base' })).toBeInTheDocument();
+  });
+  it('shows a server refusal and retains the installed module row', async () => {
+    const source = modules(); vi.spyOn(window, 'confirm').mockReturnValue(true);
+    source.deleteModule = vi.fn().mockRejectedValue(new Error('ModuleTemplate revision is installed'));
+    show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);
+    const row = (await screen.findByRole('rowheader', { name: 'OCP NIC' })).closest('tr')!;
+    await userEvent.click(within(row).getByRole('button', { name: 'Удалить' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('ModuleTemplate revision is installed');
+    expect(screen.getByRole('rowheader', { name: 'OCP NIC' })).toBeInTheDocument();
+    expect(source.listModules).toHaveBeenCalledTimes(1);
+  });
+  it('retains confirmed base template deletion and refreshes the existing library', async () => {
+    const source = bases(); const modulesSource = modules(); vi.spyOn(window, 'confirm').mockReturnValue(true);
+    source.deleteBaseTemplate = vi.fn().mockResolvedValue(undefined);
+    source.loadBaseTemplates = vi.fn().mockResolvedValueOnce({ schema_version: '2.0', blueprints: [base] }).mockResolvedValue({ schema_version: '2.0', blueprints: [] });
+    show(<BaseTemplateLibraryPage dataSource={source} moduleDataSource={modulesSource} />);
+    const row = (await screen.findByRole('rowheader', { name: 'Server base' })).closest('tr')!;
+    await userEvent.click(within(row).getByRole('button', { name: 'Удалить' }));
+    await waitFor(() => expect(source.loadBaseTemplates).toHaveBeenCalledTimes(2));
+    expect(source.deleteBaseTemplate).toHaveBeenCalledWith('base');
+    await waitFor(() => expect(screen.queryByRole('rowheader', { name: 'Server base' })).not.toBeInTheDocument());
+    expect(await screen.findByRole('rowheader', { name: 'OCP NIC' })).toBeInTheDocument();
+    expect(modulesSource.deleteModule).not.toHaveBeenCalled();
+  });
   it('uses server-derived contextual names in the installed module endpoint list', async () => {
     const source = modules();
     source.loadConfiguration = vi.fn().mockResolvedValue({ ...config, bays: [1, 2].map(index => ({

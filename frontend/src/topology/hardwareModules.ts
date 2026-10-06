@@ -21,11 +21,13 @@ export interface HardwareConfiguration { configuration_id: string | null; bays: 
 export interface HardwareModuleDataSource {
   listModules(): Promise<{ modules: ModuleTemplate[] }>;
   createModule(input: ModuleTemplateInput): Promise<ModuleTemplate>;
+  deleteModule(templateId: string): Promise<void>;
   loadConfiguration(objectId: string): Promise<HardwareConfiguration>;
   installModule(objectId: string, input: { module_template_id: string; bay_key: string; orientation: 'HORIZONTAL' | 'VERTICAL' }): Promise<HardwareConfiguration>;
 }
-async function request<T>(url: string, input?: unknown): Promise<T> {
-  const response = await fetch(url, input === undefined ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) });
+async function request<T>(url: string, input?: unknown, method: 'GET' | 'POST' | 'DELETE' = input === undefined ? 'GET' : 'POST'): Promise<T> {
+  const response = await fetch(url, { method, ...(input === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }) });
+  if (response.status === 204) return undefined as T;
   const document = await response.json();
   if (!response.ok) throw new Error(document.error?.message ?? `HTTP ${response.status}`);
   return document as T;
@@ -33,6 +35,7 @@ async function request<T>(url: string, input?: unknown): Promise<T> {
 export const hardwareModuleDataSource: HardwareModuleDataSource = {
   listModules: () => request('/api/v1/library/module-templates'),
   createModule: input => request('/api/v1/library/module-templates', input),
+  deleteModule: id => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}`, undefined, 'DELETE'),
   loadConfiguration: id => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/configuration`),
   installModule: (id, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations`, input),
 };

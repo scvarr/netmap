@@ -1509,6 +1509,16 @@ def list_module_templates(session: Session = Depends(get_session)):
     return HardwareCatalog(session).list_modules()
 
 
+@app.delete(
+    "/v1/library/module-templates/{template_id}",
+    status_code=204,
+    responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+)
+def delete_module_template(template_id: uuid.UUID, session: Session = Depends(get_session)) -> None:
+    with session.begin():
+        HardwareCatalog(session).delete_module(template_id)
+
+
 @app.get("/v1/topology/physical-objects/{physical_object_id}/configuration")
 def get_object_configuration(physical_object_id: uuid.UUID, session: Session = Depends(get_session)):
     return HardwareCatalog(session).configuration_document(physical_object_id)
