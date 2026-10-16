@@ -46,6 +46,21 @@ the accepted redesign. The bounded implementation below does not close existing
   associates each definition with its canonical endpoints through that ID.
   Two installations have different endpoints; a module is never another
   PhysicalObject. NETWORK_PORT retains point, interface, ownership and binding.
+- Users can explicitly remove one installed module by stable installation ID:
+  `DELETE /v1/topology/physical-objects/{object_id}/module-installations/{installation_id}`.
+  The object/configuration/installation are validated and locked in installation
+  lock order. One transaction preflights dependencies and removes only that
+  installation's mappings, expected physical bindings/ownership, endpoint aliases,
+  materialized interfaces/points and installation, then returns current configuration.
+  The bay becomes free; ModuleTemplate/revision and other installations remain.
+  Any Connection (including within the same object, and Cable-backed connections),
+  L2/L3 binding, upper/lower realization, unexpected physical binding or owner,
+  other definition mapping, or external endpoint metadata blocks the operation
+  with 409 `MODULE_INSTALLATION_IN_USE` and blocker counts. Supported persisted
+  interface references in Security/NAT/processing attachment scopes and routing
+  policy predicates also block. Endpoint row locks protect FK references; SHARE
+  locks cover those four JSON reference tables through preflight/deletion.
+  This does not implement module movement, relocation or template editing.
 - Horizontal endpoint coordinates are `x = bay.x + bay.width * (i+1)/(N+1)`,
   `y = bay.y + bay.height/2`. Vertical coordinates use centered x and evenly
   spaced y. These are derived for configuration and panel-aware L1/Map

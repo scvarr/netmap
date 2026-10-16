@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
 from app.hardware_catalog import HardwareCatalog
+from app.module_installation_deletion import ModuleInstallationDeletionCatalog
 from app.catalog_inventory_resolver import CatalogInventoryResolver
 from app.cable_labels import CableLabelCatalog
 from app.database import engine, get_session
@@ -1528,3 +1529,13 @@ def get_object_configuration(physical_object_id: uuid.UUID, session: Session = D
 def install_module(physical_object_id: uuid.UUID, query: InstallModuleRequest, session: Session = Depends(get_session)):
     with session.begin():
         return HardwareCatalog(session).install_module(physical_object_id, query)
+
+
+@app.delete(
+    "/v1/topology/physical-objects/{physical_object_id}/module-installations/{installation_id}",
+    responses={409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}},
+)
+def delete_module_installation(physical_object_id: uuid.UUID, installation_id: uuid.UUID, session: Session = Depends(get_session)):
+    with session.begin():
+        ModuleInstallationDeletionCatalog(session).delete(physical_object_id, installation_id)
+        return HardwareCatalog(session).configuration_document(physical_object_id)

@@ -117,3 +117,48 @@ unchanged; 09.6-A still awaits external inspection.
   existing BaseTemplate deletion and empty DELETE 204 handling.
 - Docker frontend TypeScript/Vite build and `git diff --check` passed.
 - Full suites were not run; no merge or next milestone work.
+
+## Corrective module installation removal
+
+Explicit uninstall is implemented by stable ModuleInstallation ID under its
+owning PhysicalObject. It validates object/configuration/installation membership,
+locks in install order and performs complete preflight before any DELETE.
+Only the owned materialized aggregate is removed, in FK order. The successful
+response is the updated configuration; the frontend waits for it, then refreshes
+the physical card/projection through the existing callback. ModuleTemplate and
+its revision survive. Refusal is 409 `MODULE_INSTALLATION_IN_USE` with counts.
+
+Dependency inventory was checked against both current models and the running
+PostgreSQL FK schema: Connection, InterfacePhysicalBinding,
+NetworkInterfacePhysicalOwner, NetworkInterfaceRealization, EntityMetadata,
+BuiltInEndpointMapping, ModuleEndpointMapping, L2Binding and L3Binding (15 FK
+columns total). Only the current installation's mappings, expected binding pairs,
+owning-object ownership and endpoint aliases are permitted. Cable/ConnectionMember
+depend on Connection; their existence is covered by blocking every incident
+Connection, including internal connections. No deletion-catalog refactor was needed.
+
+Additional persisted JSON references were found in SecurityPolicyAttachment,
+NATPolicyAttachment and PacketProcessingPlanAttachment scopes, and nested
+RoutingPolicyRule predicates. They are preflighted too; SHARE table locks protect
+their checks from concurrent scope/predicate writes within the uninstall transaction.
+Current map route anchors reference Location, not module endpoints; processing
+stage payloads reference policy/table records rather than CP/NI directly.
+
+- Backend: 37 passed (`test_module_uninstall.py`, `test_hardware_configuration.py`,
+  `test_l1_physical_projection_e2e.py`, `test_device_details_e2e.py`). Includes
+  active/passive endpoints, other-installation preservation, all significant
+  blockers, unchanged whole-workspace snapshots on refusal, root membership
+  validation, template-delete transition, read-model disappearance and reinstall.
+- Frontend: 17 passed (ModuleInstallationSection, hardware configuration and
+  hardware module API tests). Confirms module/bay naming, cancel, stable ID,
+  pending/409 preservation, endpoint disappearance, card callback and reinstall.
+- Docker frontend TypeScript/Vite build and `git diff --check` passed.
+- Browser A: created object `13c8174c-16a8-44b6-8469-1dadea4cd077`, installed
+  `09.6-A uninstall NIC` in Back / PCIe1, removed it through the confirmed action:
+  bay free, only MGMT remains, same template successfully installed again.
+- Browser B: connected feth1 to peer `599a88cd-4ff4-41fc-9919-878e911a71ab`
+  with cable `UNINSTALL-KEEP`; uninstall refused and occupied bay, both endpoints,
+  interface labels and cable remained visible. Complete workspace export before
+  and after refusal is identical. Fixture remains for inspection.
+- Schema and workspace v4 are unchanged; no migration or full suite run.
+  Template editing, relocation, publication and later phases remain open.

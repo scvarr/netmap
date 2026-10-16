@@ -22,6 +22,7 @@ export interface HardwareModuleDataSource {
   listModules(): Promise<{ modules: ModuleTemplate[] }>;
   createModule(input: ModuleTemplateInput): Promise<ModuleTemplate>;
   deleteModule(templateId: string): Promise<void>;
+  uninstallModule(objectId: string, installationId: string): Promise<HardwareConfiguration>;
   loadConfiguration(objectId: string): Promise<HardwareConfiguration>;
   installModule(objectId: string, input: { module_template_id: string; bay_key: string; orientation: 'HORIZONTAL' | 'VERTICAL' }): Promise<HardwareConfiguration>;
 }
@@ -36,6 +37,7 @@ export const hardwareModuleDataSource: HardwareModuleDataSource = {
   listModules: () => request('/api/v1/library/module-templates'),
   createModule: input => request('/api/v1/library/module-templates', input),
   deleteModule: id => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}`, undefined, 'DELETE'),
+  uninstallModule: (id, installationId) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations/${encodeURIComponent(installationId)}`, undefined, 'DELETE'),
   loadConfiguration: id => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/configuration`),
   installModule: (id, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations`, input),
 };
