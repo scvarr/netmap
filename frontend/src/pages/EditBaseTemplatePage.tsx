@@ -72,6 +72,15 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
   const current = review?.current && !dirty && !revalidating && !error;
   return <PageShell className="catalog-page blueprint-editor-page">
     <Link to="/library/base-templates">{t('blueprint.breadcrumb.library')}</Link>
+    {document?.publication_state && <section aria-label={t('publication.state')}>
+      <p>{t('publication.revision', { number: document.publication_state.version_number })}</p>
+      <p>{t('publication.outdated', { count: document.publication_state.outdated_count })}</p>
+      <p>{t('publication.awaiting', { count: document.publication_state.awaiting_update_count })}</p>
+      <p>{t('publication.intervention', { count: document.publication_state.requires_intervention_count })}</p>
+      <ul>{document.publication_state.objects.map(object => <li key={object.physical_object_id}>
+        <Link to={`/infrastructure/objects/${object.physical_object_id}`}>{object.display_name ?? object.physical_object_id}</Link>: {t(object.classification === 'requires_intervention' ? 'review.attention' : 'publication.waiting')}
+      </li>)}</ul>
+    </section>}
     {error && <p role="alert">{error}</p>}
     {initial && document && <BaseTemplateEditor key={templateId} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy} onStateChange={changed} onSave={async state => {
       if (busy) return;
@@ -87,11 +96,19 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
         setBusy(true); setError('');
         void dataSource.checkDraft!(templateId, document.generation).then(accept).catch(e => setError(String(e))).finally(() => setBusy(false));
       }}>{t('review.check')}</button>
+      <button className="primary-action" type="button" disabled={busy || !current || !dataSource.publishCandidate} onClick={() => {
+        if (!review || !current || busy) return;
+        setBusy(true); setError(''); setNotice('');
+        void dataSource.publishCandidate!(templateId, review.candidate_id).then(async publication => {
+          setNotice(t('publication.completed', { number: publication.version_number }));
+          accept(await dataSource.loadDraft!(templateId));
+        }).catch(e => setError(String(e))).finally(() => setBusy(false));
+      }}>{t('publication.publish')}</button>
       {dirty && <p>{t('review.unsaved')}</p>}
       {review && <>
         <h2>{t('review.impacts')}</h2>
         <p>{t('review.candidate', { id: review.candidate_id, time: review.created_at })}</p>
-        <p>{t(current ? 'review.current' : 'review.stale')}</p>
+        <p>{t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')}</p>
         <ul>{review.result.changes.map((c, i) => <li key={i}>{t(`review.section.${c.section}` as 'review.section.properties')} · {t(`review.operation.${c.operation}` as 'review.operation.changed')} · {Array.isArray(c.key) ? c.key.join(' ↔ ') : c.key}</li>)}</ul>
         {current && <>{review.result.objects.length === 0 && <p>{t('review.noObjects')}</p>}
           <ul>{review.result.objects.map(object => <li key={object.physical_object_id}>

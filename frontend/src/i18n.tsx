@@ -6,6 +6,11 @@ export const localeStorageKey = 'netmap.locale';
 
 const messages = {
   ru: {
+    'publication.candidatePublished': 'Этот кандидат опубликован. Следующие изменения проверяются отдельно.',
+    'publication.publish': 'Опубликовать', 'publication.completed': 'Публикация завершена. Текущая ревизия: {number}. Существующие объекты сохранены.',
+    'publication.state': 'Состояние публикации', 'publication.revision': 'Текущая опубликованная ревизия: {number}',
+    'publication.outdated': 'Объектов на прежних ревизиях: {count}', 'publication.awaiting': 'Ожидают обновления: {count}',
+    'publication.intervention': 'Требуют вмешательства: {count}', 'publication.waiting': 'Ожидает обновления',
     'review.dep.connections': 'канонические соединения', 'review.dep.metadata': 'пользовательские имена или данные', 'review.dep.bindings': 'физические привязки интерфейсов',
     'review.dep.l2': 'настройки L2', 'review.dep.l3': 'сетевые настройки L3', 'review.dep.realizations': 'реализации интерфейсов',
     'review.dep.security': 'политики безопасности', 'review.dep.nat': 'политики NAT', 'review.dep.processing': 'планы обработки пакетов', 'review.dep.routing': 'политики маршрутизации',
@@ -82,6 +87,11 @@ const messages = {
     'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
+    'publication.candidatePublished': 'This candidate has been published. Check subsequent changes separately.',
+    'publication.publish': 'Publish', 'publication.completed': 'Publication complete. Current revision: {number}. Existing objects are preserved.',
+    'publication.state': 'Publication status', 'publication.revision': 'Current published revision: {number}',
+    'publication.outdated': 'Objects on earlier revisions: {count}', 'publication.awaiting': 'Awaiting update: {count}',
+    'publication.intervention': 'Require intervention: {count}', 'publication.waiting': 'Awaiting update',
     'review.dep.connections': 'canonical connections', 'review.dep.metadata': 'user names or data', 'review.dep.bindings': 'physical interface bindings',
     'review.dep.l2': 'L2 settings', 'review.dep.l3': 'L3 network settings', 'review.dep.realizations': 'interface realizations',
     'review.dep.security': 'security policies', 'review.dep.nat': 'NAT policies', 'review.dep.processing': 'packet processing plans', 'review.dep.routing': 'routing policies',

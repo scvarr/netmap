@@ -1,9 +1,9 @@
-"""Persisted authoring and advisory review. No canonical writes or publication."""
+"""Persisted authoring, advisory review and atomic base publication."""
 import copy
 import hashlib
 import json
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -201,6 +201,7 @@ class BaseTemplateReview:
     def document(self, draft, candidate, input_fingerprint=None):
         review = None
         if candidate:
+            publication = self.session.get(m.BaseTemplatePublication, candidate.id)
             current = (candidate.draft_generation == draft.generation
                        and candidate.source_revision_id == draft.source_revision_id
                        and candidate.definition == draft.definition
@@ -208,9 +209,11 @@ class BaseTemplateReview:
                        and candidate.input_fingerprint == input_fingerprint)
             review = {"candidate_id": str(candidate.id), "draft_generation": candidate.draft_generation,
                       "definition": candidate.definition, "result": candidate.result, "current": current,
+                      "published_revision_id": str(publication.revision_id) if publication else None,
                       "created_at": candidate.created_at.isoformat()}
         return {"template_id": str(draft.template_id), "source_revision_id": str(draft.source_revision_id),
-                "generation": draft.generation, "definition": draft.definition, "review": review}
+                "generation": draft.generation, "definition": draft.definition, "review": review,
+                "publication_state": publication_state(self.session, draft.template_id)}
 
     def open(self, template_id):
         draft = self._draft(template_id, lock=False)
@@ -243,3 +246,83 @@ class BaseTemplateReview:
         self.session.add(candidate)
         self.session.flush()
         return self.document(draft, candidate, fingerprint)
+
+    def publish(self, template_id, candidate_id):
+        candidate = self.session.get(m.BaseTemplateCandidate, candidate_id)
+        if candidate is None or candidate.template_id != template_id:
+            raise ValidationError("Candidate does not belong to BaseTemplate")
+        receipt = self.session.get(m.BaseTemplatePublication, candidate_id)
+        if receipt is not None:
+            return self._published(receipt)
+
+        # The review fingerprint covers the whole canonical/authoring dataset.
+        # Lock exactly those inputs before reading a fresh READ COMMITTED view;
+        # keep them stable through COMMIT. SHARE ROW EXCLUSIVE also serializes
+        # publishers before they insert revisions (no SHARE-to-write upgrade race).
+        # GET/check continue using non-blocking MVCC; drafts use row locks only.
+        from app.workspace_portability import _specs, _tables_in_dependency_order
+        inputs = {model.__tablename__ for section, _, model, _ in _specs()
+                  if section in ("canonical", "authoring") and model not in (m.BaseTemplateDraft, m.BaseTemplateCandidate)}
+        preparer = self.session.bind.dialect.identifier_preparer
+        names = ", ".join(preparer.format_table(t) for t in _tables_in_dependency_order() if t.name in inputs)
+        self.session.execute(text(f"LOCK TABLE {names} IN SHARE ROW EXCLUSIVE MODE"))
+        # A dataset replacement may have completed while locks were awaited.
+        candidate = self.session.scalar(select(m.BaseTemplateCandidate).where(
+            m.BaseTemplateCandidate.id == candidate_id).execution_options(populate_existing=True))
+        if candidate is None or candidate.template_id != template_id:
+            raise ValidationError("Candidate does not belong to BaseTemplate")
+        draft = self._draft(template_id)
+        self.session.refresh(draft, with_for_update=True)
+        receipt = self.session.get(m.BaseTemplatePublication, candidate_id)
+        if receipt is not None:
+            return self._published(receipt)
+        latest = self.session.scalar(select(m.BaseTemplateRevision).where(
+            m.BaseTemplateRevision.template_id == template_id).order_by(m.BaseTemplateRevision.version_number.desc()).limit(1))
+
+        def stale(reason):
+            messages = {
+                "SOURCE_REVISION_CHANGED": "Опубликованная ревизия изменилась. Откройте актуальный черновик и повторно проверьте изменения.",
+                "DRAFT_CHANGED": "Черновик изменился после проверки. Повторно проверьте сохранённые изменения.",
+                "REVIEW_INPUTS_CHANGED": "Данные анализа изменились после проверки. Повторно проверьте изменения.",
+            }
+            raise ModelError(messages[reason],
+                             {"reason": reason, "recheck_required": True})
+
+        if candidate.source_revision_id != latest.id or draft.source_revision_id != latest.id:
+            stale("SOURCE_REVISION_CHANGED")
+        if candidate.draft_generation != draft.generation or candidate.definition != draft.definition:
+            stale("DRAFT_CHANGED")
+        if candidate.input_fingerprint != self._inputs():
+            stale("REVIEW_INPUTS_CHANGED")
+        query = CreateBaseTemplateRequest.model_validate(candidate.definition)
+        revision = HardwareCatalog(self.session)._create_version(template_id, latest.version_number + 1, query)
+        self.session.get(m.BaseTemplate, template_id).name = query.name
+        receipt = m.BaseTemplatePublication(id=candidate.id, revision_id=revision.id)
+        self.session.add(receipt)
+        # Advance the persisted draft in the same transaction. Never mutate the
+        # frozen candidate or rewind a later draft on an idempotent retry.
+        draft.source_revision_id = revision.id
+        draft.generation += 1
+        draft.definition = copy.deepcopy(candidate.definition)
+        self.session.flush()
+        return self._published(receipt)
+
+    def _published(self, receipt):
+        revision = self.session.get(m.BaseTemplateRevision, receipt.revision_id)
+        return {"candidate_id": str(receipt.id), "revision_id": str(revision.id), "version_number": revision.version_number}
+
+
+def publication_state(session, template_id):
+    """Derived status against current facts, never an authorization to update."""
+    revision = session.scalar(select(m.BaseTemplateRevision).where(
+        m.BaseTemplateRevision.template_id == template_id).order_by(m.BaseTemplateRevision.version_number.desc()).limit(1))
+    definition = published_definition(session, template_id, revision.id)
+    configs = session.scalars(select(m.ObjectConfiguration).join(
+        m.BaseTemplateRevision, m.ObjectConfiguration.base_revision_id == m.BaseTemplateRevision.id).where(
+        m.BaseTemplateRevision.template_id == template_id, m.ObjectConfiguration.base_revision_id != revision.id)
+        .order_by(m.ObjectConfiguration.physical_object_id)).all()
+    objects = [analyze_object(session, config, definition) for config in configs]
+    intervention = sum(o["classification"] == "requires_intervention" for o in objects)
+    return {"revision_id": str(revision.id), "version_number": revision.version_number,
+            "outdated_count": len(objects), "awaiting_update_count": len(objects) - intervention,
+            "requires_intervention_count": intervention, "objects": objects}

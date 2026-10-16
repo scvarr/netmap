@@ -22,6 +22,17 @@ function show(element: React.ReactNode) { return render(<I18nProvider><MemoryRou
 beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
 
 describe('09.6-A user path', () => {
+  it('shows the current revision and distinguishes waiting objects from intervention', async () => {
+    const source = bases();
+    source.loadBaseTemplates = vi.fn().mockResolvedValue({ schema_version: '2.0', blueprints: [{ ...base, version_number: 2,
+      publication_state: { revision_id: 'rev2', version_number: 2, outdated_count: 3, awaiting_update_count: 2, requires_intervention_count: 1, objects: [] } }] });
+    show(<BaseTemplateLibraryPage dataSource={source} moduleDataSource={modules()} />);
+    expect(await screen.findByText('Текущая опубликованная ревизия: 2')).toBeInTheDocument();
+    expect(screen.getByText('Объектов на прежних ревизиях: 3')).toBeInTheDocument();
+    expect(screen.getByText('Ожидают обновления: 2')).toBeInTheDocument();
+    expect(screen.getByText('Требуют вмешательства: 1')).toBeInTheDocument();
+  });
+
   it('offers styled module deletion and does nothing when confirmation is declined', async () => {
     const source = modules(); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);

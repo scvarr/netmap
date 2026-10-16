@@ -881,6 +881,7 @@ class BaseTemplateListItemDocument(BaseModel):
     slot_count: int = Field(ge=0)
     internal_link_count: int = Field(ge=0)
     version_count: int = Field(ge=1)
+    publication_state: dict
 
 
 class BaseTemplateListDocument(BaseModel):

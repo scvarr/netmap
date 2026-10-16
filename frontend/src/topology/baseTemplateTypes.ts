@@ -56,6 +56,7 @@ export interface BaseTemplateListItem {
   slot_count: number;
   internal_link_count: number;
   version_count: number;
+  publication_state?: BaseTemplatePublicationState;
 }
 
 export interface BaseTemplateListDocument {
@@ -102,6 +103,7 @@ export interface BaseTemplateDataSource {
   loadDraft?(templateId: string): Promise<BaseTemplateDraftDocument>;
   saveDraft?(templateId: string, definition: CreateBaseTemplateRequest, generation: number): Promise<BaseTemplateDraftDocument>;
   checkDraft?(templateId: string, generation: number): Promise<BaseTemplateDraftDocument>;
+  publishCandidate?(templateId: string, candidateId: string): Promise<{ candidate_id: string; revision_id: string; version_number: number }>;
   loadBaseTemplates(): Promise<BaseTemplateListDocument>;
   loadBaseTemplateRevision(blueprintId: string, versionId: string): Promise<BaseTemplateRevisionDocument>;
   createBaseTemplate(request: CreateBaseTemplateRequest): Promise<BaseTemplateCreationDocument>;
@@ -113,8 +115,14 @@ export interface TemplateStructuralChange { section: string; key: string | strin
 export interface TemplateImpactReason { code: string; key?: string | string[]; endpoint_name?: string; dependencies?: string[]; compatibility?: string; installation_id?: string; connection_ids?: string[] }
 export interface BaseTemplateReviewDocument {
   candidate_id: string; draft_generation: number; definition: CreateBaseTemplateRequest; current: boolean; created_at: string;
+  published_revision_id?: string | null;
   result: { changes: TemplateStructuralChange[]; objects: Array<{ physical_object_id: string; display_name?: string; source_revision_id: string; classification: 'requires_intervention' | 'potentially_safe'; reasons: TemplateImpactReason[]; proposed_placements: Record<string, string>; changes: TemplateStructuralChange[] }> };
 }
 export interface BaseTemplateDraftDocument {
   template_id: string; source_revision_id: string; generation: number; definition: CreateBaseTemplateRequest; review: BaseTemplateReviewDocument | null;
+  publication_state?: BaseTemplatePublicationState;
+}
+export interface BaseTemplatePublicationState {
+  revision_id: string; version_number: number; outdated_count: number; awaiting_update_count: number; requires_intervention_count: number;
+  objects: BaseTemplateReviewDocument['result']['objects'];
 }

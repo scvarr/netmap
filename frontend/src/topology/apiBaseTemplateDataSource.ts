@@ -75,7 +75,7 @@ export const parseBaseTemplateListDocument = (value: unknown): BaseTemplateListD
     const item = requireObject(value, `blueprints[${index}]`);
     if (typeof item.version_number !== 'number' || item.version_number < 1 || typeof item.slot_count !== 'number' || item.slot_count < 0 || typeof item.internal_link_count !== 'number' || item.internal_link_count < 0 || typeof item.version_count !== 'number' || item.version_count < 1) malformed(`blueprints[${index}] has invalid counts.`);
     if (item.default_physical_object_class != null) requireString(item.default_physical_object_class, `blueprints[${index}].default_physical_object_class`);
-    return { blueprint_ref: parseRef(item.blueprint_ref, `blueprints[${index}].blueprint_ref`, 'BaseTemplate'), name: requireString(item.name, `blueprints[${index}].name`), version_ref: parseRef(item.version_ref, `blueprints[${index}].version_ref`, 'BaseTemplateRevision'), version_number: item.version_number as number, default_physical_object_class: item.default_physical_object_class as string | null | undefined, body: parseBody(item.body, `blueprints[${index}].body`), slot_count: item.slot_count as number, internal_link_count: item.internal_link_count as number, version_count: item.version_count as number };
+    return { blueprint_ref: parseRef(item.blueprint_ref, `blueprints[${index}].blueprint_ref`, 'BaseTemplate'), name: requireString(item.name, `blueprints[${index}].name`), version_ref: parseRef(item.version_ref, `blueprints[${index}].version_ref`, 'BaseTemplateRevision'), version_number: item.version_number as number, default_physical_object_class: item.default_physical_object_class as string | null | undefined, body: parseBody(item.body, `blueprints[${index}].body`), slot_count: item.slot_count as number, internal_link_count: item.internal_link_count as number, version_count: item.version_count as number, publication_state: item.publication_state as import('./baseTemplateTypes').BaseTemplatePublicationState };
   }) };
 };
 
@@ -120,6 +120,11 @@ export class ApiBaseTemplateDataSource implements BaseTemplateDataSource {
   loadDraft(id: string) { return this.draftRequest(id, 'GET'); }
   saveDraft(id: string, definition: CreateBaseTemplateRequest, generation: number) { return this.draftRequest(id, 'PUT', `?expected_generation=${generation}`, definition); }
   checkDraft(id: string, generation: number) { return this.draftRequest(id, 'POST', `/check?expected_generation=${generation}`); }
+  async publishCandidate(id: string, candidateId: string) {
+    const response = await fetch(`${this.endpoint}/${encodeURIComponent(id)}/candidates/${encodeURIComponent(candidateId)}/publish`, { method: 'POST' });
+    if (!response.ok) throw await backendError(response);
+    return response.json() as Promise<{ candidate_id: string; revision_id: string; version_number: number }>;
+  }
   async loadBaseTemplates(): Promise<BaseTemplateListDocument> {
     const response = await fetch(this.endpoint); if (!response.ok) throw await backendError(response);
     let body: unknown; try { body = await response.json(); } catch { return malformed('response body must be valid JSON.'); }

@@ -25,12 +25,62 @@ function setup(document = draft()) {
       persisted = { ...persisted, definition, generation: generation + 1, review: persisted.review ? { ...persisted.review, current: false } : null }; return structuredClone(persisted);
     }),
     checkDraft: vi.fn(async () => { persisted = withReview(persisted); return structuredClone(persisted); }),
+    publishCandidate: vi.fn(async () => {
+      persisted = { ...persisted, source_revision_id: 'new-revision', generation: persisted.generation + 1,
+        review: persisted.review ? { ...persisted.review, current: false, published_revision_id: 'new-revision' } : null,
+        publication_state: { revision_id: 'new-revision', version_number: 2, outdated_count: 1, awaiting_update_count: 1, requires_intervention_count: 0, objects: persisted.review?.result.objects ?? [] } };
+      return { candidate_id: 'candidate', revision_id: 'new-revision', version_number: 2 };
+    }),
   } satisfies BaseTemplateDataSource;
   const mount = () => render(<I18nProvider><MemoryRouter initialEntries={['/library/base-templates/base/edit']}><Routes><Route path="/library/base-templates/:templateId/edit" element={<EditBaseTemplatePage dataSource={source as BaseTemplateDataSource} />} /></Routes></MemoryRouter></I18nProvider>);
   return { source, mount };
 }
 
 describe('persisted base template review', () => {
+  it('publishes only a current saved candidate and reopens the advanced draft', async () => {
+    const { source, mount } = setup(withReview(draft()));
+    let view = mount();
+    await screen.findByDisplayValue('Сохранённый черновик');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+    expect(await screen.findByText(/Публикация завершена/)).toBeInTheDocument();
+    expect(source.publishCandidate).toHaveBeenCalledExactlyOnceWith('base', 'candidate');
+    expect(await screen.findByText('Текущая опубликованная ревизия: 2')).toBeInTheDocument();
+    expect(screen.getByText('Объектов на прежних ревизиях: 1')).toBeInTheDocument();
+    expect(screen.getByText('Ожидают обновления: 1')).toBeInTheDocument();
+    expect(screen.getByText('Требуют вмешательства: 0')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+    expect(screen.getByText('Этот кандидат опубликован. Следующие изменения проверяются отдельно.')).toBeInTheDocument();
+    view.unmount(); view = mount();
+    expect(await screen.findByText('Текущая опубликованная ревизия: 2')).toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue('Сохранённый черновик'), { target: { value: 'Next edit' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
+    await screen.findByText('Черновик сохранён');
+    expect(source.saveDraft).toHaveBeenCalledWith('base', expect.objectContaining({ name: 'Next edit' }), 3);
+  });
+
+  it('blocks unsaved and revalidating publication and retains work after rejection', async () => {
+    const { source, mount } = setup(withReview(draft()));
+    source.publishCandidate.mockRejectedValueOnce(new Error('Кандидат устарел. Повторите проверку изменений.'));
+    mount();
+    await screen.findByDisplayValue('Сохранённый черновик');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Повторите проверку');
+    expect(screen.getByDisplayValue('Сохранённый черновик')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Проверить изменения' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled());
+    let resolve!: (doc: BaseTemplateDraftDocument) => void;
+    source.loadDraft.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+    fireEvent.focus(window);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled());
+    resolve(withReview(draft()));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled());
+    fireEvent.change(screen.getByDisplayValue('Сохранённый черновик'), { target: { value: 'Unsaved' } });
+    expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+  });
+
   it('loads saved edits, uses the existing editor, saves explicitly and restores review on reopening', async () => {
     const { source, mount } = setup();
     let view = mount();

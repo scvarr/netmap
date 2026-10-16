@@ -452,6 +452,7 @@ class BaseTemplateRevision(Base):
         ForeignKey("base_templates.id", ondelete="RESTRICT"), nullable=False
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
     default_physical_object_class: Mapped[str | None] = mapped_column(String(255), nullable=True)
     body_kind: Mapped[str] = mapped_column(String(32), nullable=False)
     width: Mapped[float] = mapped_column(Float, nullable=False)
@@ -481,6 +482,14 @@ class BaseTemplateCandidate(Base):
     result: Mapped[dict] = mapped_column(JSONB, nullable=False)
     input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class BaseTemplatePublication(Base):
+    """Immutable publication receipt; candidates themselves are never modified."""
+    __tablename__ = "base_template_publications"
+
+    id: Mapped[uuid.UUID] = mapped_column(ForeignKey("base_template_candidates.id", ondelete="CASCADE"), primary_key=True)
+    revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("base_template_revisions.id", ondelete="CASCADE"), nullable=False, unique=True)
 
 
 class PresentationPanel(Base):

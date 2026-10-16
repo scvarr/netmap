@@ -46,7 +46,7 @@ from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.saved_map_catalog import SavedMapCatalog
 from app.workspace_portability import PackageError, export_package, import_package, reset_dataset
-from app.base_template_review import BaseTemplateReview
+from app.base_template_review import BaseTemplateReview, publication_state
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
 from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolver
@@ -764,6 +764,10 @@ def create_object_blueprint(
 def list_base_templates(
     session: Session = Depends(get_session),
 ) -> BaseTemplateListDocument:
+    return _template_review_snapshot(session, lambda: _base_template_list_document(session))
+
+
+def _base_template_list_document(session):
     blueprints = HardwareCatalog(session).list_blueprints()
     return {
         "blueprints": [
@@ -780,6 +784,7 @@ def list_base_templates(
                 "slot_count": item.slot_count,
                 "internal_link_count": item.internal_link_count,
                 "version_count": item.version_count,
+                "publication_state": publication_state(session, item.template_id),
             }
             for item in blueprints
         ],
@@ -861,6 +866,22 @@ def save_base_template_draft(template_id: uuid.UUID, query: CreateBaseTemplateRe
 def check_base_template_draft(template_id: uuid.UUID, expected_generation: int,
                               session: Session = Depends(get_session)):
     return _template_review_snapshot(session, lambda: BaseTemplateReview(session).check(template_id, expected_generation))
+
+
+@app.post("/v1/library/base-templates/{template_id}/candidates/{candidate_id}/publish")
+def publish_base_template_candidate(template_id: uuid.UUID, candidate_id: uuid.UUID,
+                                    session: Session = Depends(get_session)):
+    # READ COMMITTED: all revalidation reads occur AFTER publication input locks.
+    for attempt in range(3):
+        try:
+            with session.begin():
+                return BaseTemplateReview(session).publish(template_id, candidate_id)
+        except OperationalError as error:
+            if getattr(error.orig, "sqlstate", None) not in ("40001", "40P01"):
+                raise
+            if attempt == 2:
+                raise ModelError("Конкурирующее изменение данных. Повторите проверку изменений и публикацию.",
+                                 {"reason": "PUBLICATION_CONFLICT", "recheck_required": True}) from error
 
 
 @app.delete(

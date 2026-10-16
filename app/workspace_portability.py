@@ -61,9 +61,10 @@ ENTITIES = (
     ("canonical", "PacketProcessingPlanAttachmentSet", "PacketProcessingPlanAttachmentSet", "id routing_context_id traffic_class configured_completeness"),
     ("canonical", "PacketProcessingPlanAttachment", "PacketProcessingPlanAttachment", "id attachment_set_id plan_id scope"),
     ("authoring", "BaseTemplate", "BaseTemplate", "id name"),
-    ("authoring", "BaseTemplateRevision", "BaseTemplateRevision", "id template_id version_number default_physical_object_class body_kind width height fill_color"),
+    ("authoring", "BaseTemplateRevision", "BaseTemplateRevision", "id template_id version_number name default_physical_object_class body_kind width height fill_color"),
     ("authoring", "BaseTemplateDraft", "BaseTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "BaseTemplateCandidate", "BaseTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
+    ("authoring", "BaseTemplatePublication", "BaseTemplatePublication", "id revision_id"),
     ("authoring", "PresentationPanel", "PresentationPanel", "id base_revision_id panel_key panel_number display_name x y width height"),
     ("authoring", "BuiltInEndpointDefinition", "BuiltInEndpointDefinition", "id base_revision_id slot_key display_name kind panel_key position_x position_y"),
     ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id"),
@@ -225,6 +226,31 @@ def _validate_template_reviews(rows):
     from pydantic import ValidationError as SchemaError
     from app.errors import ValidationError as DefinitionError
     revisions = {r["id"]: r for r in rows["base_template_revisions"]}
+    candidates = {r["id"]: r for r in rows["base_template_candidates"]}
+    for receipt in rows["base_template_publications"]:
+        candidate = candidates[receipt["id"]]
+        revision = revisions[receipt["revision_id"]]
+        source = revisions[candidate["source_revision_id"]]
+        if (revision["template_id"] != candidate["template_id"]
+                or revision["version_number"] != source["version_number"] + 1):
+            raise PackageError("Publication does not match candidate ownership or source")
+        definition = candidate["definition"]
+        actual = {
+            "name": revision["name"], "default_physical_object_class": revision["default_physical_object_class"],
+            "body": {"kind": revision["body_kind"], "width": revision["width"], "height": revision["height"], "fill_color": revision["fill_color"]},
+            "panels": [{k: p[k] for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height")} for p in rows["presentation_panels"] if p["base_revision_id"] == revision["id"]],
+            "slots": [{"key": s["slot_key"], "display_name": s["display_name"], "kind": s["kind"], "panel_key": s["panel_key"], "rendered_position": {"x": s["position_x"], "y": s["position_y"]}} for s in rows["built_in_endpoint_definitions"] if s["base_revision_id"] == revision["id"]],
+            "bays": [{k: b[k] for k in ("bay_key", "display_name", "compatibility", "panel_key", "x", "y", "width", "height")} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
+        }
+        keys = {s["id"]: s["slot_key"] for s in rows["built_in_endpoint_definitions"]}
+        actual["internal_links"] = [{"from_slot_key": keys[l["slot_a_id"]], "to_slot_key": keys[l["slot_b_id"]]} for l in rows["base_internal_links"] if l["base_revision_id"] == revision["id"]]
+        from app.base_template_review import structural_changes
+        try:
+            changes = structural_changes(validate_definition(definition), validate_definition(actual))
+        except (SchemaError, DefinitionError, TypeError) as exc:
+            raise PackageError("Invalid publication definition") from exc
+        if changes:
+            raise PackageError("Published revision differs from frozen candidate")
     for table, generation in (("base_template_drafts", "generation"), ("base_template_candidates", "draft_generation")):
         for row in rows[table]:
             if revisions[row["source_revision_id"]]["template_id"] != row["template_id"] or row[generation] < 1:

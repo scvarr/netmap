@@ -95,6 +95,7 @@ class HardwareCatalog:
     def _create_version(self, template_id: uuid.UUID, version_number: int, query: object) -> BaseTemplateRevision:
         version = BaseTemplateRevision(
             template_id=template_id,
+            name=query.name,
             version_number=version_number,
             default_physical_object_class=query.default_physical_object_class,
             body_kind=query.body.kind,
@@ -165,7 +166,7 @@ class HardwareCatalog:
         return tuple(
             BlueprintListItem(
                 template_id=blueprint.id,
-                name=blueprint.name,
+                name=version.name,
                 version_id=version.id,
                 version_number=version.version_number,
                 default_physical_object_class=version.default_physical_object_class,
@@ -227,7 +228,7 @@ class HardwareCatalog:
         )
         return BlueprintVersionDetail(
             template_id=blueprint.id,
-            name=blueprint.name,
+            name=version.name,
             version_id=version.id,
             version_number=version.version_number,
             default_physical_object_class=version.default_physical_object_class,

@@ -4,7 +4,7 @@
 
 **ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A IMPLEMENTED, AWAITING
 EXTERNAL INSPECTION. 09.6-C IMPLEMENTED, AWAITING EXTERNAL INSPECTION;
-09.6-D/E REMAIN OPEN.**
+09.6-D1 IMPLEMENTED, AWAITING EXTERNAL INSPECTION; D2/E REMAIN OPEN.**
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -28,7 +28,7 @@ the accepted redesign. The bounded implementation below does not close existing
 
 - The library distinguishes `BaseTemplate` / `BaseTemplateRevision` and
   `ModuleTemplate` / `ModuleTemplateRevision`. Creation publishes only their
-  first immutable revision. No subsequent published editing API is available.
+  first immutable revision. D1 adds explicit checked-candidate publication.
 - Base revisions own presentation panels, built-in endpoint definitions,
   explicit internal links and `ModuleBay` records. Bays have opaque keys and
   numeric panel-local normalized rectangles contained within `[0,1] × [0,1]`.
@@ -79,17 +79,17 @@ Workspace exchange is **v5 only**, explicitly including base templates and
 revisions, panels, built-in definitions and internal links, bays, module
 templates and revisions, ordered module definitions, configurations,
 installations, both endpoint mapping tables, persisted base drafts and frozen
-candidates with their impact results. Canonical,
+candidates with their impact results, immutable revision names and publication receipts. Canonical,
 authoring/configuration and map-presentation sections remain separate. v3
 and v4 imports are rejected; v5 round-trip preserves pinned revisions, canonical
 IDs and authoring review snapshots.
 
 The historical 09.6-A cutover introduced **0001 current schema initialization**,
 including the CableLabelSettings singleton. 09.6-C adds forward migration
-**0002**, preserving existing databases; applied 0001 remains unchanged.
+**0002**; D1 adds **0003** for immutable revision names and publication receipts. Both preserve existing databases; applied 0001/0002 remain unchanged.
 
-**OPEN (09.6-D/E):** later publication, safe object/module updates,
-update-required state and module relocation/movement remain outside the implemented
+**OPEN (09.6-D2/E):** safe object/module updates and module relocation/movement
+remain outside the implemented
 boundary. Dense Map LOD and endpoint technology semantics remain
 open. External branch inspection and manual HV-01 acceptance are still required;
 this implementation does not accept or resume Phase C.
@@ -97,7 +97,7 @@ this implementation does not accept or resume Phase C.
 ## Implemented boundary: 09.6-C
 
 **09.6-C IMPLEMENTED — persisted drafts, frozen candidates and impact analysis.
-09.6-D OPEN — publication and safe application of changes.** This boundary
+09.6-D1 IMPLEMENTED — publication. D2 OPEN — safe application of changes.** This boundary
 awaits external inspection and does not complete Phase C or HV-01.
 
 - Library **«Изменить шаблон»** opens the existing `BaseTemplateEditor`. The
@@ -126,7 +126,7 @@ awaits external inspection and does not complete Phase C or HV-01.
   Changed aliases are user data. Endpoint kind changes, missing mappings and
   continuity changes touching Connections conservatively require intervention.
 - A candidate records its exact definition, draft generation and SHA-256 of
-  canonical/authoring inputs. SHARE table locks make review reads coherent.
+  canonical/authoring inputs. REPEATABLE READ makes review reads coherent without global SHARE locks.
   Saving advances the generation and invalidates prior review. Reading review
   recomputes input freshness; any canonical/configuration change invalidates it.
   This deliberately conservative workspace-wide fingerprint may also invalidate
@@ -138,9 +138,51 @@ awaits external inspection and does not complete Phase C or HV-01.
   `authoring`. Import validates source ownership, definitions and analysis shape;
   the regular coherent export, transactional import and dependency ordering apply.
 
-No publication, canonical reconciliation, object update status, ModuleTemplate
-editing or module revision update mechanism is implemented. See
+At the C boundary, publication, canonical reconciliation, object update status, ModuleTemplate
+editing and module revision updates were unimplemented. D1 adds publication and derived status below. See
 [09.6-C validation](09-06-c-validation.md).
+
+## Implemented boundary: 09.6-D1
+
+**D1 IMPLEMENTED, AWAITING EXTERNAL INSPECTION. D2 OPEN — safe updates of
+existing objects. Phase C PAUSED; HV-01 remains incomplete.**
+
+- Explicit **«Опубликовать»** posts the frozen candidate ID to
+  `POST /v1/library/base-templates/{id}/candidates/{candidate_id}/publish`.
+  The server revalidates ownership, saved draft generation/definition, latest
+  source revision and the exact review fingerprint immediately before writing.
+  Stale requests return 409 with a concrete reason and `recheck_required=true`.
+- One transaction creates the immutable revision's properties (including its
+  own name), panels, built-in definitions, links and bays, preserving opaque
+  keys. The highest version number remains the current-revision selector.
+  Publication receipts uniquely bind one candidate to one revision; retries
+  return the receipt even after further edits, without creating or resetting
+  anything. Candidates remain unchanged. The draft advances to the new source
+  revision and generation atomically.
+- Publication uses READ COMMITTED with SHARE ROW EXCLUSIVE locks on the
+  canonical/authoring fingerprint inputs, acquired in dependency order before
+  revalidation and held until commit. These locks serialize publishers and
+  prevent input writers from committing between fingerprint validation and
+  publication. Draft saves/checks serialize through existing template/draft row
+  locks. Deadlock/serialization failures have bounded transaction retries.
+  Ordinary draft reads/checks retain non-blocking REPEATABLE READ snapshots.
+- Existing configurations, built-in/module mappings, installations, canonical
+  endpoints, Connections/Cables and user data are never updated. Objects created
+  from the base select its current published revision through the existing path.
+- Library/editor status derives the count of earlier-revision objects and
+  separately shows those awaiting update and those requiring intervention,
+  using their actual pinned definitions/configurations and current facts.
+  These read results are advisory; there is no persisted status flag, update
+  execution or conflict-resolution mechanism. Published candidate completion
+  remains visible on reopening.
+- Forward migration **0003** backfills revision names and adds immutable
+  publication receipts. Workspace **v5** includes these necessary authoring
+  fields/records, validates receipt ownership and candidate/revision equality,
+  and preserves receipts, pinned configurations and the rebased draft on
+  round-trip. There is no canonical or presentation format cutover.
+
+See [D1 validation](09-06-d1-validation.md). Publication does not begin D2,
+resume Phase C or complete HV-01.
 
 ## Library roles and base equipment template
 
