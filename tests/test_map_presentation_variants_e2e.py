@@ -84,18 +84,26 @@ def test_deleting_a_non_primary_layout_removes_only_its_presentation_state():
     primary_id = client.get(f"/v1/maps/{map_id}").json()["active_variant_ref"]["entity_id"]
     object_id, _ = create_object_with_point(client, "Placed")
     second_object_id, _ = create_object_with_point(client, "Placed second")
-    assert client.post(f"/v1/maps/{map_id}/placements?variant_id={primary_id}", json={"physical_object_id": object_id, "x": 10, "y": 20}).status_code == 201
+    assert client.post(f"/v1/maps/{map_id}/placements?variant_id={primary_id}", json={"physical_object_id": object_id, "x": 10, "y": 20, "display_width": 320}).status_code == 201
     assert client.post(f"/v1/maps/{map_id}/placements?variant_id={primary_id}", json={"physical_object_id": second_object_id, "x": 30, "y": 40}).status_code == 201
     cable_id = create_interface_cable(client)["cable_ref"]["entity_id"]
     assert client.put(f"/v1/maps/{map_id}/cable-routes/{cable_id}?variant_id={primary_id}", json={"view": "physical", "waypoints": [{"x": 1, "y": 2}]}).status_code == 200
     assert client.post(f"/v1/maps/{map_id}/text-annotations", json={"text": "Keep", "position": {"x": 5, "y": 6}, "text_color": "#123456", "font_size": 12}).status_code == 201
     copy_id = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": "Copy", "source_variant_id": primary_id}).json()["variant_ref"]["entity_id"]
+    other_id = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": "Keep", "source_variant_id": primary_id}).json()["variant_ref"]["entity_id"]
+    primary_before = client.get(f"/v1/maps/{map_id}?variant_id={primary_id}").json()
+    other_before = client.get(f"/v1/maps/{map_id}?variant_id={other_id}").json()
+    assert client.put(f"/v1/maps/{map_id}/placements/{object_id}/positions/physical?variant_id={copy_id}", json={"x": 90, "y": 80, "display_width": 440}).status_code == 200
 
     assert client.delete(f"/v1/maps/{map_id}/presentation-variants/{copy_id}").status_code == 204
+    assert client.get(f"/v1/maps/{map_id}?variant_id={copy_id}").status_code == 422
+    for variant_id, before in ((primary_id, primary_before), (other_id, other_before)):
+        after = client.get(f"/v1/maps/{map_id}?variant_id={variant_id}").json()
+        assert after == {**before, "variants": [item for item in before["variants"] if item["variant_ref"]["entity_id"] != copy_id]}
 
     with SessionLocal() as session:
-        assert session.scalar(select(func.count()).select_from(MapViewPosition)) == 2
-        assert session.scalar(select(func.count()).select_from(MapCableRoute)) == 1
+        assert session.scalar(select(func.count()).select_from(MapViewPosition)) == 4
+        assert session.scalar(select(func.count()).select_from(MapCableRoute)) == 2
         assert session.scalar(select(func.count()).select_from(MapPlacement)) == 2
         assert session.scalar(select(func.count()).select_from(MapTextAnnotation)) == 1
     primary = client.get(f"/v1/maps/{map_id}?variant_id={primary_id}").json()

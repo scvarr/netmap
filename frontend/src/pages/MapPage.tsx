@@ -11,6 +11,7 @@ import { MapContextMenu, type MapContextTarget } from "../components/MapContextM
 import { CableRenameDialog } from "../components/CableRenameDialog";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
+import { MapObjectSearchPanel } from "../components/MapObjectSearchPanel";
 import { SavedMapApiError } from "../topology/apiSavedMapDataSource";
 import {
   PresentationAuthoringPanel,
@@ -327,6 +328,8 @@ export function MapPage({
   const [blueprintSizeError, setBlueprintSizeError] = useState<string | null>(null);
   const selectedMapId = useRef<string | null>(mapId);
   const selectedVariantId = useRef<string | null>(variantId);
+  const deletionSelection = useRef({ mapId, variantId });
+  if (deletionSelection.current.mapId !== mapId || deletionSelection.current.variantId !== variantId) deletionSelection.current = { mapId, variantId };
   const mapDetailRequest = useRef(0);
   const deletedMapIds = useRef(new Set<string>());
   const mapListRequest = useRef(0);
@@ -343,6 +346,8 @@ export function MapPage({
 
   selectedMapId.current = mapId;
   selectedVariantId.current = variantId;
+  useEffect(() => { setPresentationVariantDeletion(null); }, [mapId, variantId]);
+  useEffect(() => { setVariantDeletion(null); }, [mapId]);
   useEffect(() => { setGroupMoveRefresh(null); setGroupMoveError(null); }, [mapId, variantId]);
   const acceptsMapDetail = (targetMapId: string, request: number) =>
     selectedMapId.current === targetMapId && mapDetailRequest.current === request && !deletedMapIds.current.has(targetMapId);
@@ -434,6 +439,7 @@ export function MapPage({
       setParams((current) => {
         const next = new URLSearchParams(current);
         next.set("map", id);
+        next.delete("variant");
         next.set("view", next.get("view") ?? "physical");
         next.delete("focus");
         return next;
@@ -460,6 +466,7 @@ export function MapPage({
     setParams((current) => {
       const next = new URLSearchParams(current);
       next.delete("map");
+      next.delete("variant");
       next.delete("focus");
       next.delete("add");
       return next;
@@ -537,7 +544,13 @@ export function MapPage({
   const refreshDeletedPresentationVariant = async (deletion: { mapId: string; primaryVariantId: string }) => {
     if (!savedMapDataSource) return;
     const request = ++mapDetailRequest.current;
-    const detail = await savedMapDataSource.loadMap(deletion.mapId, deletion.primaryVariantId);
+    let detail: SavedMap;
+    try {
+      detail = await savedMapDataSource.loadMap(deletion.mapId, deletion.primaryVariantId);
+    } catch {
+      if (acceptsMapDetail(deletion.mapId, request)) setVariantDeletion({ ...deletion, status: "refresh-failed" });
+      return;
+    }
     if (!acceptsMapDetail(deletion.mapId, request)) return;
     skipNextMapLoad.current = `${deletion.mapId}/${deletion.primaryVariantId}`;
     setMap(detail);
@@ -546,28 +559,28 @@ export function MapPage({
 
   const retryPresentationVariantDeletionRefresh = async () => {
     if (!variantDeletion || variantDeletion.status !== "refresh-failed") return;
-    try {
-      await refreshDeletedPresentationVariant(variantDeletion);
-    } catch {
-      // Keep the bounded retry visible; diagnostics stay inside the data source.
-    }
+    await refreshDeletedPresentationVariant(variantDeletion);
   };
 
   const confirmPresentationVariantDeletion = async () => {
     const operation = presentationVariantDeletion;
     if (!savedMapDataSource?.deletePresentationVariant || !operation || operation.status !== "confirming" || presentationVariantDeletionPending.current) return;
     presentationVariantDeletionPending.current = true;
+    const selectionAtSubmit = deletionSelection.current;
+    const stillSelected = () => deletionSelection.current === selectionAtSubmit && selectedMapId.current === operation.mapId && !deletedMapIds.current.has(operation.mapId);
     setPresentationVariantDeletion({ ...operation, status: "deleting", error: null });
     try {
       await savedMapDataSource.deletePresentationVariant(operation.mapId, operation.variantId);
-    } catch {
-      setPresentationVariantDeletion({ ...operation, status: "confirming", error: "Не удалось удалить компоновку карты." });
+    } catch (reason) {
+      if (stillSelected()) setPresentationVariantDeletion({ ...operation, status: "confirming", error: reason instanceof SavedMapApiError ? `${reason.serverMessage} (${reason.code})` : "Не удалось удалить компоновку карты." });
       presentationVariantDeletionPending.current = false;
       return;
     }
     presentationVariantDeletionPending.current = false;
+    if (!stillSelected()) return;
     setPresentationVariantDeletion(null);
     const deletion = { mapId: operation.mapId, primaryVariantId: operation.primaryVariantId };
+    setMap(null);
     setVariantDeletion({ ...deletion, status: "refreshing" });
     mapDetailRequest.current += 1;
     setParams((currentParams) => {
@@ -575,12 +588,8 @@ export function MapPage({
       next.set("variant", operation.primaryVariantId);
       return next;
     });
-    try {
-      await refreshDeletedPresentationVariant(deletion);
-    } catch {
-      // Acknowledged deletion is never retried; only the primary read is retryable.
-      setVariantDeletion({ ...deletion, status: "refresh-failed" });
-    }
+    // Acknowledged deletion is never retried; only the primary read is retryable.
+    await refreshDeletedPresentationVariant(deletion);
   };
 
   useEffect(() => {
@@ -621,7 +630,8 @@ export function MapPage({
       skipNextMapLoad.current = null;
       return undefined;
     }
-    if (variantDeletion?.mapId === mapId && variantDeletion.primaryVariantId === variantId) return undefined;
+    // The acknowledged DELETE owns its refresh, including the render before URL navigation.
+    if (variantDeletion?.mapId === mapId) return undefined;
     let active = true;
     const request = ++mapDetailRequest.current;
     setError(null);
@@ -1815,10 +1825,10 @@ export function MapPage({
       )}
 
       {!legacy && activeMap && viewMode === "physical" && !physicalAnnotationMode && (
-        <section className="map-object-search" aria-label={t("map.objectSearch")}>
+        <MapObjectSearchPanel title={t("map.objectSearch")}>
           <label>
-            {t("map.objectSearch")}
             <input
+              aria-label={t("map.objectSearch")}
               type="search"
               value={objectSearch}
               onChange={(event) => setObjectSearch(event.target.value)}
@@ -1832,7 +1842,7 @@ export function MapPage({
               ))}
             </div>
           )}
-        </section>
+        </MapObjectSearchPanel>
       )}
 
       {physicalAnnotationMode && activeMap && <>
@@ -1997,6 +2007,7 @@ export function MapPage({
         })()}>{t("map.size.apply")}</button></div>
       </div></section>}
       {cableRename && cableLabelDataSource && <CableRenameDialog cableId={cableRename.cableId} userLabel={cableRename.userLabel} fallback={cableRename.fallback} dataSource={cableLabelDataSource} refresh={refreshCableRename} onClose={() => setCableRename(null)} />}
+      <div className="map-page__errors">
       {presentationVariantCreationRefresh?.status === "refresh-failed" && <section role="alert"><p>Компоновка создана, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantCreationRefresh()}>Повторить обновление</button></section>}
       {variantDeletion?.status === "refresh-failed" && <section role="alert"><p>Компоновка удалена, но карту не удалось обновить.</p><button type="button" onClick={() => void retryPresentationVariantDeletionRefresh()}>Повторить обновление</button></section>}
       {cableRouteReset?.status === "refresh-failed" && <section role="alert"><p>{cableRouteReset.message}</p><button type="button" onClick={() => void retryCableRouteResetRefresh()}>{t("map.retryRefresh")}</button></section>}
@@ -2010,6 +2021,7 @@ export function MapPage({
         <div className="map-dialog__actions">{groupMoveRefresh && <button type="button" onClick={() => void retryGroupMoveRefresh()}>{t("map.retryRefresh")}</button>}<button type="button" onClick={() => setGroupMoveError(null)}>Закрыть</button></div>
       </div></section>, globalThis.document.body)}
       {error && <p role="alert">{error}</p>}
+      </div>
       {document &&
         params.get("focus") &&
         !nodeForPhysicalObject(document.nodes, params.get("focus")!) && (

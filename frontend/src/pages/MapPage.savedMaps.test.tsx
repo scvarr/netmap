@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { MapPage } from './MapPage';
+import { SavedMapApiError } from '../topology/apiSavedMapDataSource';
 import { createMapPageHarness } from './MapPage.testHarness';
 import type { SavedMapDataSource } from '../topology/savedMapTypes';
 import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
@@ -29,6 +30,70 @@ const openTools = () => fireEvent.click(screen.getByRole('button', { name: 'Ин
 const startRegions = () => { openTools(); fireEvent.click(screen.getByRole('button', { name: 'Области' })); };
 
 describe('MapPage SavedMap scope', () => {
+  const deletionFixture = () => {
+    const primary = saved(A, [[PP, 1, 2]]);
+    const customId = 'custom';
+    const custom = { ...primary, active_variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: customId }, variants: [...primary.variants, { variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: customId }, name: 'Копия' }] };
+    const other = saved(B, [[SW, 5, 6]]);
+    const loadMap = vi.fn((id: string, variant?: string) => Promise.resolve(id === B ? other : variant === customId ? custom : primary));
+    const maps = { listMaps: vi.fn().mockResolvedValue([custom, other]), loadMap, deletePresentationVariant: vi.fn().mockResolvedValue(undefined) };
+    renderPage({ loadProjection: vi.fn(scopedProjection) }, maps as unknown as SavedMapDataSource, `/map?map=${A}&view=physical&variant=${customId}`);
+    return { primary, custom, other, maps };
+  };
+  const confirmDelete = async () => {
+    await screen.findByText('PP1'); openLayout();
+    fireEvent.click(screen.getByRole('button', { name: 'Удалить' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Удалить компоновку' })).getByRole('button', { name: 'Удалить' }));
+  };
+
+  it('does not reread the deleted layout and updates the URL, catalog and active layout', async () => {
+    const { primary, maps } = deletionFixture();
+    await screen.findByText('PP1'); maps.loadMap.mockClear();
+    await confirmDelete();
+    await waitFor(() => expect(screen.getByLabelText('Текущая компоновка')).toHaveValue(primary.active_variant_ref.entity_id));
+    expect(maps.loadMap.mock.calls).toEqual([[A, primary.active_variant_ref.entity_id]]);
+    expect(screen.getByTestId('location')).toHaveTextContent(`variant=${primary.active_variant_ref.entity_id}`);
+    fireEvent.click(screen.getByLabelText('Текущая компоновка'));
+    expect(screen.queryByRole('option', { name: 'Копия' })).not.toBeInTheDocument();
+  });
+
+  it('shows the structured server refusal and retains the selected layout', async () => {
+    const { maps } = deletionFixture();
+    maps.deletePresentationVariant.mockRejectedValue(new SavedMapApiError('VALIDATION_ERROR', 'Компоновка недоступна на этой карте', {}));
+    await confirmDelete();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Компоновка недоступна на этой карте (VALIDATION_ERROR)');
+    expect(screen.getByTestId('location')).toHaveTextContent('variant=custom');
+  });
+
+  it.each(['success', 'failure'])('ignores stale DELETE %s after changing maps', async (outcome) => {
+    const { maps } = deletionFixture();
+    let resolve!: () => void; let reject!: (error: Error) => void;
+    maps.deletePresentationVariant.mockImplementation(() => new Promise<void>((yes, no) => { resolve = yes; reject = no; }));
+    await confirmDelete();
+    selectToolbarOption('Карты', 'B'); await screen.findByText('SW1');
+    maps.loadMap.mockClear();
+    await act(async () => { if (outcome === 'success') resolve(); else reject(new Error('late failure')); });
+    expect(screen.getByTestId('location')).toHaveTextContent(`map=${B}`);
+    expect(screen.getByTestId('location')).not.toHaveTextContent('variant=');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(maps.loadMap).not.toHaveBeenCalled();
+  });
+
+  it.each(['success', 'failure'])('ignores stale primary refresh %s after changing maps', async (outcome) => {
+    const { maps, primary, other } = deletionFixture();
+    await screen.findByText('PP1');
+    let resolve!: (value: typeof primary) => void; let reject!: (error: Error) => void;
+    maps.loadMap.mockImplementation((id) => id === B ? Promise.resolve(other) : new Promise((yes, no) => { resolve = yes; reject = no; }));
+    await confirmDelete();
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(`variant=${primary.active_variant_ref.entity_id}`));
+    selectToolbarOption('Карты', 'B'); await screen.findByText('SW1');
+    await act(async () => { if (outcome === 'success') resolve(primary); else reject(new Error('late read failure')); });
+    expect(screen.getByTestId('location')).toHaveTextContent(`map=${B}`);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByTestId('canvas')).toHaveAttribute('data-scene', `${B}/physical`);
+    expect(maps.deletePresentationVariant).toHaveBeenCalledTimes(1);
+  });
   it('keeps the authoritative variant catalog through two creates, switches, a stale read, and deletion', async () => {
     const primaryId = `variant-${A}`;
     const ids = { Основной: primaryId, A: 'variant-copy-a', B: 'variant-copy-b' };

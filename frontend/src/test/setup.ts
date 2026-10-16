@@ -10,7 +10,7 @@ class ResizeObserverMock {
   disconnect() {}
 }
 
-Object.defineProperty(globalThis, 'ResizeObserver', { value: ResizeObserverMock });
+Object.defineProperty(globalThis, 'ResizeObserver', { value: ResizeObserverMock, configurable: true });
 Object.defineProperty(globalThis, 'fetch', {
   configurable: true,
   writable: true,
