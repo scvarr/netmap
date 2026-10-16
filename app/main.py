@@ -46,6 +46,7 @@ from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.saved_map_catalog import SavedMapCatalog
 from app.workspace_portability import PackageError, export_package, import_package, reset_dataset
+from app.base_template_review import BaseTemplateReview
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
 from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolver
@@ -827,6 +828,26 @@ def get_object_blueprint_version(
             for left, right in version.internal_links
         ],
     }
+
+
+@app.get("/v1/library/base-templates/{template_id}/draft")
+def open_base_template_draft(template_id: uuid.UUID, session: Session = Depends(get_session)):
+    with session.begin():
+        return BaseTemplateReview(session).open(template_id)
+
+
+@app.put("/v1/library/base-templates/{template_id}/draft")
+def save_base_template_draft(template_id: uuid.UUID, query: CreateBaseTemplateRequest,
+                             expected_generation: int, session: Session = Depends(get_session)):
+    with session.begin():
+        return BaseTemplateReview(session).save(template_id, query.model_dump(mode="json"), expected_generation)
+
+
+@app.post("/v1/library/base-templates/{template_id}/draft/check")
+def check_base_template_draft(template_id: uuid.UUID, expected_generation: int,
+                              session: Session = Depends(get_session)):
+    with session.begin():
+        return BaseTemplateReview(session).check(template_id, expected_generation)
 
 
 @app.delete(

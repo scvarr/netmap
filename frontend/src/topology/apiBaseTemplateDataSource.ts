@@ -112,6 +112,14 @@ const backendError = async (response: Response): Promise<Error> => {
 
 export class ApiBaseTemplateDataSource implements BaseTemplateDataSource {
   constructor(private readonly endpoint = DEFAULT_ENDPOINT) {}
+  private async draftRequest(id: string, method: string, suffix = '', definition?: CreateBaseTemplateRequest): Promise<import('./baseTemplateTypes').BaseTemplateDraftDocument> {
+    const response = await fetch(`${this.endpoint}/${encodeURIComponent(id)}/draft${suffix}`, { method, headers: { 'Content-Type': 'application/json' }, ...(definition ? { body: JSON.stringify(definition) } : {}) });
+    if (!response.ok) throw await backendError(response);
+    return response.json();
+  }
+  loadDraft(id: string) { return this.draftRequest(id, 'GET'); }
+  saveDraft(id: string, definition: CreateBaseTemplateRequest, generation: number) { return this.draftRequest(id, 'PUT', `?expected_generation=${generation}`, definition); }
+  checkDraft(id: string, generation: number) { return this.draftRequest(id, 'POST', `/check?expected_generation=${generation}`); }
   async loadBaseTemplates(): Promise<BaseTemplateListDocument> {
     const response = await fetch(this.endpoint); if (!response.ok) throw await backendError(response);
     let body: unknown; try { body = await response.json(); } catch { return malformed('response body must be valid JSON.'); }

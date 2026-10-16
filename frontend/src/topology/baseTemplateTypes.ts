@@ -99,9 +99,22 @@ export interface BaseTemplateInstantiationDocument {
 }
 
 export interface BaseTemplateDataSource {
+  loadDraft?(templateId: string): Promise<BaseTemplateDraftDocument>;
+  saveDraft?(templateId: string, definition: CreateBaseTemplateRequest, generation: number): Promise<BaseTemplateDraftDocument>;
+  checkDraft?(templateId: string, generation: number): Promise<BaseTemplateDraftDocument>;
   loadBaseTemplates(): Promise<BaseTemplateListDocument>;
   loadBaseTemplateRevision(blueprintId: string, versionId: string): Promise<BaseTemplateRevisionDocument>;
   createBaseTemplate(request: CreateBaseTemplateRequest): Promise<BaseTemplateCreationDocument>;
   deleteBaseTemplate?(blueprintId: string): Promise<void>;
   createPhysicalObject?(baseTemplateId: string, request: { display_name: string; location_id?: string }): Promise<BaseTemplateInstantiationDocument>;
+}
+
+export interface TemplateStructuralChange { section: string; key: string | string[]; operation: string }
+export interface TemplateImpactReason { code: string; key?: string | string[]; endpoint_name?: string; dependencies?: string[]; compatibility?: string; installation_id?: string; connection_ids?: string[] }
+export interface BaseTemplateReviewDocument {
+  candidate_id: string; draft_generation: number; definition: CreateBaseTemplateRequest; current: boolean; created_at: string;
+  result: { changes: TemplateStructuralChange[]; objects: Array<{ physical_object_id: string; display_name?: string; source_revision_id: string; classification: 'requires_intervention' | 'potentially_safe'; reasons: TemplateImpactReason[]; proposed_placements: Record<string, string>; changes: TemplateStructuralChange[] }> };
+}
+export interface BaseTemplateDraftDocument {
+  template_id: string; source_revision_id: string; generation: number; definition: CreateBaseTemplateRequest; review: BaseTemplateReviewDocument | null;
 }

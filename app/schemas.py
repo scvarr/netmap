@@ -789,14 +789,49 @@ class CreateBaseTemplateRequest(BaseModel):
             raise PydanticCustomError("hardware_validation", "Bay keys must be unique and reference a template panel")
         if len({slot.key for slot in self.slots}) != len(self.slots):
             raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
-        if not any(panel.panel_number == 1 for panel in self.panels):
-            raise PydanticCustomError("blueprint_initial_panel", "A new Blueprint must include panel 1")
         if any(slot.panel_key not in {panel.panel_key for panel in self.panels} for slot in self.slots):
             raise PydanticCustomError("blueprint_unknown_panel", "Blueprint slot refers to an unknown panel")
         return self
 
 
 
+
+
+class BaseTemplateStructuralChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    section: Literal["properties", "panels", "slots", "bays", "internal_links"]
+    key: str | list[str]
+    operation: Literal["added", "removed", "changed"]
+    before: Any = None
+    after: Any = None
+
+
+class BaseTemplateImpactReason(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    code: Literal["MISSING_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "INSUFFICIENT_COMPATIBLE_CAPACITY", "INTERNAL_LINK_CONNECTIONS", "IDENTITY_AND_DATA_PRESERVED"]
+    key: str | list[str] | None = None
+    endpoint_name: str | None = None
+    dependencies: list[str] | None = None
+    installation_id: uuid.UUID | None = None
+    compatibility: str | None = None
+    connection_ids: list[uuid.UUID] | None = None
+
+
+class BaseTemplateObjectImpact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    physical_object_id: uuid.UUID
+    display_name: str
+    source_revision_id: uuid.UUID
+    classification: Literal["requires_intervention", "potentially_safe"]
+    reasons: list[BaseTemplateImpactReason] = Field(min_length=1)
+    proposed_placements: dict[str, str]
+    changes: list[BaseTemplateStructuralChange]
+
+
+class BaseTemplateImpactResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    changes: list[BaseTemplateStructuralChange]
+    objects: list[BaseTemplateObjectImpact]
 
 
 class BaseTemplateCreationDocument(BaseModel):

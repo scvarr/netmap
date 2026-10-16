@@ -108,11 +108,13 @@ describe('bay edge snapping and hundredth precision', () => {
     expect(field('width')).toHaveValue(.35); expect(field('height')).toHaveValue(.35);
     fireEvent.click(screen.getByRole('button', { name: 'Save' })); precision(save.mock.calls[0][0].bays[0]);
   });
-  it('normalizes small and boundary geometry before exposing the editable state', () => {
-    const { choose, field, save } = show({ bays: [{ ...bay, x: .9999, y: .9999, width: .0001, height: .0001 }] }); choose();
-    expect(field('x')).toHaveValue(.99); expect(field('y')).toHaveValue(.99);
-    expect(field('width')).toHaveValue(.01); expect(field('height')).toHaveValue(.01);
-    fireEvent.click(screen.getByRole('button', { name: 'Save' })); precision(save.mock.calls[0][0].bays[0]);
+  it('preserves persisted small and boundary geometry when opening and saving without geometry edits', () => {
+    const persisted = { ...bay, x: .9999, y: .9999, width: .0001, height: .0001 };
+    const { choose, field, save } = show({ bays: [persisted] }); choose();
+    expect(field('x')).toHaveValue(.9999); expect(field('y')).toHaveValue(.9999);
+    expect(field('width')).toHaveValue(.0001); expect(field('height')).toHaveValue(.0001);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].bays[0]).toEqual(persisted);
   });
   it('rounds actual numeric state and duplicate geometry, including geometry at panel bounds', () => {
     const { choose, field, save } = show(); choose();

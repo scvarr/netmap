@@ -81,7 +81,7 @@ def test_materialization_identity_binding_geometry_and_round_trip(orientation):
     assert len({e['connection_point_id'] for e in endpoints}) == 4
     assert len({e['network_interface_id'] for e in endpoints}) == 4
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 4
+    assert package['format_version'] == 5
     assert 'ModuleInstallation' in package['authoring']
     assert 'ObjectBlueprint' not in package['authoring']
     before = client.get(f'/v1/topology/physical-objects/{object_ids[0]}/configuration').json()

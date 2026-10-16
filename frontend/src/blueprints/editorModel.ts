@@ -304,8 +304,9 @@ export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKin
   return { ...state, nextLocalNumberByPanel: { ...state.nextLocalNumberByPanel, [panelKey]: next + count }, slots: [...state.slots, ...slots] };
 };
 export const hydrateBlueprintEditorState = (version: BaseTemplateRevisionDocument): BlueprintEditorState => ({
+  bays: version.bays?.map(bay => ({ ...bay })),
   name: version.name, defaultClass: version.default_physical_object_class ?? '', width: version.body.width,
-  height: version.body.height, fillColor: version.body.fill_color ?? '#28565a',
+  height: version.body.height, fillColor: version.body.fill_color ?? '',
   panels: version.panels.map((panel) => ({ ...panel })),
   slots: version.slots.map((slot) => ({ ...slot, rendered_position: { ...slot.rendered_position } })),
   individualLinks: version.internal_links.map((link) => ({ ...link })),
@@ -331,7 +332,7 @@ export const createBlueprintRequest = (state: BlueprintEditorState): { request?:
   if (errors.length) return { errors };
   return { errors, request: {
     name: state.name, ...(state.defaultClass.trim() ? { default_physical_object_class: state.defaultClass.trim() } : {}),
-    body: { kind: 'RECTANGLE', width: bounds.width, height: bounds.height, fill_color: state.fillColor },
+    body: { kind: 'RECTANGLE', width: bounds.width, height: bounds.height, fill_color: state.fillColor || null },
     panels: state.panels.map((panel) => ({ ...panel })),
     slots: state.slots.map((slot) => ({ ...slot, rendered_position: { ...slot.rendered_position } })),
     internal_links: state.individualLinks, bays: state.bays ?? [],

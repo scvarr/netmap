@@ -82,7 +82,7 @@ def create_graph():
 def test_empty_export_and_roundtrip():
     empty = snapshot()
     assert empty['format'] == 'netmap-workspace'
-    assert empty['format_version'] == 4
+    assert empty['format_version'] == 5
     assert all(not rows for section in ('canonical', 'authoring', 'presentation') for rows in empty[section].values())
     assert empty['settings']['CableLabelSettings'] == [{'id': 1, 'unique_labels': False}]
     assert client.post('/v1/workspace/package', json=empty).status_code == 204

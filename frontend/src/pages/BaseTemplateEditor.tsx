@@ -8,7 +8,7 @@ import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateT
 import type { ModuleBay } from '../topology/hardwareModules';
 import { duplicateModuleBay, normalizeBayGeometry } from '../blueprints/moduleBayGeometry';
 
-interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; }
+interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; onStateChange?: (state: BlueprintEditorState) => void; saveDisabled?: boolean; }
 export const newBlueprintEditorState = (): BlueprintEditorState => { const key = crypto.randomUUID(); return { name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', panels: [{ panel_key: key, panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 160, height: 60 }], slots: [], individualLinks: [], activePanelKey: key, nextPanelNumber: 2, nextLocalNumberByPanel: { [key]: 1 } }; };
 const validationKey = {
   nameRequired: 'blueprint.validation.nameRequired', panelNameRequired: 'blueprint.validation.panelNameRequired', dimensionsPositive: 'blueprint.validation.dimensionsPositive', colorFormat: 'blueprint.validation.colorFormat',
@@ -25,9 +25,10 @@ const menuSections = [
 type MenuAction = (typeof menuSections)[number]['actions'][number];
 const formatGeometryNumber = (value: number) => Number(value.toFixed(1));
 
-export function BaseTemplateEditor({ title, description, saveLabel, onSave, initialState, versionNotice }: Props) {
+export function BaseTemplateEditor({ title, description, saveLabel, onSave, initialState, versionNotice, onStateChange, saveDisabled }: Props) {
   const { t } = useI18n();
-  const [editor, setEditor] = useState(() => initialState.bays ? { ...initialState, bays: initialState.bays.map(bay => ({ ...bay, ...normalizeBayGeometry(bay) })) } : initialState);
+  const [editor, setEditor] = useState(initialState);
+  useEffect(() => { onStateChange?.(editor); }, [editor, onStateChange]);
   const [selectedBayKey, setSelectedBayKey] = useState<string>();
   const selectedBay = editor.bays?.find(bay => bay.bay_key === selectedBayKey);
   const changeBay = (key: string, patch: Partial<ModuleBay>) => setEditor(old => ({ ...old, bays: old.bays?.map(bay => bay.bay_key === key ? { ...bay, ...patch } : bay) }));
@@ -236,6 +237,8 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     }
   };
   const save = async () => {
+    if (saveDisabled) return;
+    setError(undefined);
     const result = createBlueprintRequest(editor);
     if (!result.request) { setError(t(validationKey[result.errors[0]])); return; }
     if (editor.bays?.some(b => !b.display_name.trim() || !b.compatibility.trim() || !editor.panels.some(p => p.panel_key === b.panel_key) || ![b.x,b.y,b.width,b.height].every(Number.isFinite) || b.x < 0 || b.y < 0 || b.width <= 0 || b.height <= 0 || b.x + b.width > 1 || b.y + b.height > 1)) { setError(t("hardware.geometryError")); return; }
@@ -261,7 +264,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <button ref={linksEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setLinksOpen(true); }}>{t('blueprint.composition.editLinks', { count: editor.individualLinks.length })}</button>
         </section>
         {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
-        <button type="button" className="primary-action" onClick={() => void save()}>{saveLabel}</button>
+        <button type="button" className="primary-action" disabled={saveDisabled} onClick={() => void save()}>{saveLabel}</button>
       </section>
       <section className="blueprint-composer__composition blueprint-composer__surface">
         <div className="blueprint-composer__chooser">

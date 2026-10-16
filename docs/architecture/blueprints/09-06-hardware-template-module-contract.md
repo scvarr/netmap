@@ -3,7 +3,8 @@
 ## Status and authority
 
 **ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A IMPLEMENTED, AWAITING
-EXTERNAL INSPECTION. 09.6-C/D/E REMAIN OPEN.**
+EXTERNAL INSPECTION. 09.6-C IMPLEMENTED, AWAITING EXTERNAL INSPECTION;
+09.6-D/E REMAIN OPEN.**
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -74,23 +75,72 @@ the accepted redesign. The bounded implementation below does not close existing
   upgrades, published-edit actions and template-less equipment creation API/UI
   are removed. Low-level canonical test builders remain permitted.
 
-Workspace exchange is **v4 only**, explicitly including base templates and
+Workspace exchange is **v5 only**, explicitly including base templates and
 revisions, panels, built-in definitions and internal links, bays, module
 templates and revisions, ordered module definitions, configurations,
-installations and both endpoint mapping tables. Canonical,
+installations, both endpoint mapping tables, persisted base drafts and frozen
+candidates with their impact results. Canonical,
 authoring/configuration and map-presentation sections remain separate. v3
-import is rejected; v4 round-trip preserves pinned revisions and canonical IDs.
+and v4 imports are rejected; v5 round-trip preserves pinned revisions, canonical
+IDs and authoring review snapshots.
 
-Migration history is replaced by **0001 current schema initialization**,
-including the CableLabelSettings singleton. Development databases must be
-destroyed and recreated. No old records or revision IDs are translated; this
-authorized destructive cutover does not modify an applied historical revision.
+The historical 09.6-A cutover introduced **0001 current schema initialization**,
+including the CableLabelSettings singleton. 09.6-C adds forward migration
+**0002**, preserving existing databases; applied 0001 remains unchanged.
 
-**OPEN:** persisted drafts, frozen candidates, impact review, later publication,
-safe object/module updates, update-required state and module relocation/movement
-remain outside 09.6-A. Dense Map LOD and endpoint technology semantics remain
+**OPEN (09.6-D/E):** later publication, safe object/module updates,
+update-required state and module relocation/movement remain outside the implemented
+boundary. Dense Map LOD and endpoint technology semantics remain
 open. External branch inspection and manual HV-01 acceptance are still required;
 this implementation does not accept or resume Phase C.
+
+## Implemented boundary: 09.6-C
+
+**09.6-C IMPLEMENTED — persisted drafts, frozen candidates and impact analysis.
+09.6-D OPEN — publication and safe application of changes.** This boundary
+awaits external inspection and does not complete Phase C or HV-01.
+
+- Library **«Изменить шаблон»** opens the existing `BaseTemplateEditor`. The
+  server initializes one draft from the latest published revision, then restores
+  that draft on subsequent visits. A draft contains full properties, panels,
+  built-in definitions, unordered internal-link pairs and bays. Existing opaque
+  keys are preserved; editor additions generate UUID keys. Panel numbers do not
+  determine identity or require retaining an empty original panel.
+- `GET /v1/library/base-templates/{id}/draft` opens/initializes a draft;
+  `PUT .../draft?expected_generation=N` saves it. Concurrent stale writes return
+  409. **«Сохранить черновик»** confirms success and retains local edits on error.
+  These operations never create or change a published revision.
+- `POST .../draft/check?expected_generation=N` freezes a separate candidate,
+  compares definitions by opaque key (internal links by unordered endpoint keys),
+  and persists structural differences and per-object impact results. Candidates
+  have no edit API. All objects pinned to any revision of this base are analyzed
+  against their own pinned definitions and actual configurations.
+- Bay assessment preserves compatible existing placements, then proposes free
+  compatible bays in lexicographic installation-ID / bay-key order. Compatibility
+  remains exact and case-sensitive. Insufficient capacity requires intervention.
+  Proposed placements are evidence only; no installation moves.
+- Endpoint removal checks all persisted direct ConnectionPoint/NetworkInterface
+  FK references and canonical JSON fields, including Connections, bindings,
+  interface realizations and policy references. Only the endpoint's own mapping,
+  expected physical owner/binding and unchanged generated aliases are exempt.
+  Changed aliases are user data. Endpoint kind changes, missing mappings and
+  continuity changes touching Connections conservatively require intervention.
+- A candidate records its exact definition, draft generation and SHA-256 of
+  canonical/authoring inputs. SHARE table locks make review reads coherent.
+  Saving advances the generation and invalidates prior review. Reading review
+  recomputes input freshness; any canonical/configuration change invalidates it.
+  This deliberately conservative workspace-wide fingerprint may also invalidate
+  review after unrelated edits. Presentation-only map state is excluded.
+- The client suppresses conclusions for local unsaved edits, stale results,
+  failed or pending revalidation. It revalidates on focus and every 15 seconds;
+  text explicitly describes the last checked state, never a live safety guarantee.
+- Workspace v5 stores `BaseTemplateDraft` and `BaseTemplateCandidate` in
+  `authoring`. Import validates source ownership, definitions and analysis shape;
+  the regular coherent export, transactional import and dependency ordering apply.
+
+No publication, canonical reconciliation, object update status, ModuleTemplate
+editing or module revision update mechanism is implemented. See
+[09.6-C validation](09-06-c-validation.md).
 
 ## Library roles and base equipment template
 

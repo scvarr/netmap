@@ -1,4 +1,4 @@
-"""Version 4 exchange contract for the current implicit workspace dataset.
+"""Version 5 exchange contract for the current implicit workspace dataset.
 
 The public names and fields below are deliberately fixed independently of table
 names. A storage change must adapt this mapping or introduce a new format version.
@@ -19,7 +19,7 @@ from app import models
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 4
+FORMAT_VERSION = 5
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -62,6 +62,8 @@ ENTITIES = (
     ("canonical", "PacketProcessingPlanAttachment", "PacketProcessingPlanAttachment", "id attachment_set_id plan_id scope"),
     ("authoring", "BaseTemplate", "BaseTemplate", "id name"),
     ("authoring", "BaseTemplateRevision", "BaseTemplateRevision", "id template_id version_number default_physical_object_class body_kind width height fill_color"),
+    ("authoring", "BaseTemplateDraft", "BaseTemplateDraft", "id template_id source_revision_id generation definition"),
+    ("authoring", "BaseTemplateCandidate", "BaseTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "PresentationPanel", "PresentationPanel", "id base_revision_id panel_key panel_number display_name x y width height"),
     ("authoring", "BuiltInEndpointDefinition", "BuiltInEndpointDefinition", "id base_revision_id slot_key display_name kind panel_key position_x position_y"),
     ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id"),
@@ -213,7 +215,31 @@ def validate_package(package: object) -> dict:
             seen.add(current)
             current = locations[current]
     _validate_hardware_configuration(result)
+    _validate_template_reviews(result)
     return result
+
+
+def _validate_template_reviews(rows):
+    from app.base_template_review import validate_definition
+    from app.schemas import BaseTemplateImpactResult
+    from pydantic import ValidationError as SchemaError
+    from app.errors import ValidationError as DefinitionError
+    revisions = {r["id"]: r for r in rows["base_template_revisions"]}
+    for table, generation in (("base_template_drafts", "generation"), ("base_template_candidates", "draft_generation")):
+        for row in rows[table]:
+            if revisions[row["source_revision_id"]]["template_id"] != row["template_id"] or row[generation] < 1:
+                raise PackageError("Review source revision or generation is invalid")
+            try:
+                validate_definition(row["definition"])
+            except (SchemaError, DefinitionError, TypeError) as exc:
+                raise PackageError("Invalid review definition") from exc
+            if table == "base_template_candidates":
+                try:
+                    BaseTemplateImpactResult.model_validate(row["result"])
+                except SchemaError as exc:
+                    raise PackageError("Invalid review analysis") from exc
+                if len(row["input_fingerprint"]) != 64 or any(c not in "0123456789abcdef" for c in row["input_fingerprint"]):
+                    raise PackageError("Invalid review fingerprint")
 
 
 def _validate_hardware_configuration(rows):
