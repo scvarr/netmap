@@ -7,7 +7,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
-from sqlalchemy.exc import DataError, IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError, OperationalError
 from sqlalchemy.orm import Session
 
 from app.adjacency_resolver import StructuralAdjacencyResolver
@@ -19,7 +19,7 @@ from app.database import engine, get_session
 from app.perf_instrumentation import instrument_request, install_listener
 from app.device_catalog import DeviceCatalog
 from app.device_details_resolver import ConfiguredDeviceDetailsResolver
-from app.errors import NetMapError, ValidationError
+from app.errors import ModelError, NetMapError, ValidationError
 from app.interface_resolver import InterfacePhysicalResolver
 from app.l2_resolver import L2ReachabilityResolver
 from app.l2_catalog import L2Catalog, L2ForwardingContextBindingInput
@@ -830,10 +830,24 @@ def get_object_blueprint_version(
     }
 
 
+def _template_review_snapshot(session, operation):
+    # Configure isolation before the first data query. No table locks: all reads
+    # (draft, candidate, inputs and impact) share one PostgreSQL MVCC snapshot.
+    for attempt in range(2):
+        try:
+            with session.begin():
+                session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ"))
+                return operation()
+        except OperationalError as error:
+            if getattr(error.orig, "sqlstate", None) != "40001":
+                raise
+            if attempt:
+                raise ModelError("Draft changed concurrently; retry the request", {"reason": "DRAFT_CONFLICT"}) from error
+
+
 @app.get("/v1/library/base-templates/{template_id}/draft")
 def open_base_template_draft(template_id: uuid.UUID, session: Session = Depends(get_session)):
-    with session.begin():
-        return BaseTemplateReview(session).open(template_id)
+    return _template_review_snapshot(session, lambda: BaseTemplateReview(session).open(template_id))
 
 
 @app.put("/v1/library/base-templates/{template_id}/draft")
@@ -846,8 +860,7 @@ def save_base_template_draft(template_id: uuid.UUID, query: CreateBaseTemplateRe
 @app.post("/v1/library/base-templates/{template_id}/draft/check")
 def check_base_template_draft(template_id: uuid.UUID, expected_generation: int,
                               session: Session = Depends(get_session)):
-    with session.begin():
-        return BaseTemplateReview(session).check(template_id, expected_generation)
+    return _template_review_snapshot(session, lambda: BaseTemplateReview(session).check(template_id, expected_generation))
 
 
 @app.delete(

@@ -3,7 +3,8 @@ import copy
 import hashlib
 import json
 
-from sqlalchemy import select, text
+from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app import models as m
@@ -165,36 +166,46 @@ class BaseTemplateReview:
     def __init__(self, session: Session):
         self.session = session
 
-    def _draft(self, template_id):
+    def _draft(self, template_id, *, lock=True):
+        if not lock:
+            draft = self.session.scalar(select(m.BaseTemplateDraft).where(m.BaseTemplateDraft.template_id == template_id))
+            if draft is not None:
+                return draft
+        # Only initialization and saves need to serialize on the template.
         template = self.session.scalar(select(m.BaseTemplate).where(m.BaseTemplate.id == template_id).with_for_update())
         if template is None:
             raise ValidationError("BaseTemplate was not found")
         draft = self.session.scalar(select(m.BaseTemplateDraft).where(m.BaseTemplateDraft.template_id == template_id))
         if draft is None:
             revision = self.session.scalar(select(m.BaseTemplateRevision).where(m.BaseTemplateRevision.template_id == template_id).order_by(m.BaseTemplateRevision.version_number.desc()).limit(1))
-            draft = m.BaseTemplateDraft(template_id=template_id, source_revision_id=revision.id,
-                                        definition=published_definition(self.session, template_id, revision.id))
-            self.session.add(draft)
-            self.session.flush()
+            # A concurrent initializer may have committed after our RR snapshot.
+            # ON CONFLICT raises 40001 in that case, so the API retries the snapshot.
+            self.session.execute(insert(m.BaseTemplateDraft).values(
+                template_id=template_id, source_revision_id=revision.id,
+                definition=published_definition(self.session, template_id, revision.id),
+            ).on_conflict_do_nothing(index_elements=["template_id"]))
+            draft = self.session.scalar(select(m.BaseTemplateDraft).where(m.BaseTemplateDraft.template_id == template_id))
         return draft
 
     def _inputs(self):
         from app.workspace_portability import _specs, _json_value
-        # SHARE locks give a consistent multi-query view, including phantom inserts.
+        # The caller supplies a REPEATABLE READ transaction. Hash the same MVCC
+        # snapshot as the analysis/freshness reads, without blocking data writers.
         specs = [s for s in _specs() if s[0] in ("canonical", "authoring") and s[2] not in (m.BaseTemplateDraft, m.BaseTemplateCandidate)]
-        names = ", ".join(sorted(s[2].__tablename__ for s in specs))
-        self.session.execute(text(f"LOCK TABLE {names} IN SHARE MODE"))
         data = {name: [{field: _json_value(getattr(row, field)) for field in fields} for row in self.session.scalars(select(model).order_by(model.id))] for _, name, model, fields in specs}
         return hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()).hexdigest()
 
-    def document(self, draft):
-        candidate = self.session.scalar(select(m.BaseTemplateCandidate).where(m.BaseTemplateCandidate.template_id == draft.template_id).order_by(m.BaseTemplateCandidate.created_at.desc(), m.BaseTemplateCandidate.id.desc()).limit(1))
+    def _latest_candidate(self, draft):
+        return self.session.scalar(select(m.BaseTemplateCandidate).where(m.BaseTemplateCandidate.template_id == draft.template_id).order_by(m.BaseTemplateCandidate.created_at.desc(), m.BaseTemplateCandidate.id.desc()).limit(1))
+
+    def document(self, draft, candidate, input_fingerprint=None):
         review = None
         if candidate:
             current = (candidate.draft_generation == draft.generation
                        and candidate.source_revision_id == draft.source_revision_id
                        and candidate.definition == draft.definition
-                       and candidate.input_fingerprint == self._inputs())
+                       and input_fingerprint is not None
+                       and candidate.input_fingerprint == input_fingerprint)
             review = {"candidate_id": str(candidate.id), "draft_generation": candidate.draft_generation,
                       "definition": candidate.definition, "result": candidate.result, "current": current,
                       "created_at": candidate.created_at.isoformat()}
@@ -202,7 +213,10 @@ class BaseTemplateReview:
                 "generation": draft.generation, "definition": draft.definition, "review": review}
 
     def open(self, template_id):
-        return self.document(self._draft(template_id))
+        draft = self._draft(template_id, lock=False)
+        candidate = self._latest_candidate(draft)
+        fingerprint = self._inputs() if candidate and candidate.draft_generation == draft.generation else None
+        return self.document(draft, candidate, fingerprint)
 
     def save(self, template_id, definition, expected_generation):
         draft = self._draft(template_id)
@@ -211,10 +225,13 @@ class BaseTemplateReview:
         draft.definition = validate_definition(definition)
         draft.generation += 1
         self.session.flush()
-        return self.document(draft)
+        return self.document(draft, self._latest_candidate(draft))
 
     def check(self, template_id, expected_generation):
-        draft = self._draft(template_id)
+        draft = self._draft(template_id, lock=False)
+        # Serialize only this draft against saves. If it changed since our MVCC
+        # snapshot, PostgreSQL raises 40001 and the API retries from a fresh one.
+        self.session.refresh(draft, with_for_update=True)
         if draft.generation != expected_generation:
             raise ModelError("Draft changed; reload before checking", {"reason": "DRAFT_CONFLICT"})
         fingerprint = self._inputs()
@@ -225,4 +242,4 @@ class BaseTemplateReview:
                     "objects": [analyze_object(self.session, c, draft.definition) for c in configs]})
         self.session.add(candidate)
         self.session.flush()
-        return self.document(draft)
+        return self.document(draft, candidate, fingerprint)
