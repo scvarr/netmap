@@ -130,6 +130,11 @@ export class ApiBaseTemplateDataSource implements BaseTemplateDataSource {
     let body: unknown; try { body = await response.json(); } catch { return malformed('response body must be valid JSON.'); }
     return parseBaseTemplateListDocument(body);
   }
+  async reconcileObjects(id: string) {
+    const response = await fetch(`${this.endpoint}/${encodeURIComponent(id)}/reconcile`, { method: 'POST' });
+    if (!response.ok) throw await backendError(response);
+    return response.json() as Promise<import('./baseTemplateTypes').BaseTemplateReconciliationResult>;
+  }
   async loadBaseTemplateRevision(blueprintId: string, versionId: string): Promise<BaseTemplateRevisionDocument> {
     const response = await fetch(`${this.endpoint}/${encodeURIComponent(blueprintId)}/versions/${encodeURIComponent(versionId)}`); if (!response.ok) throw await backendError(response);
     let body: unknown; try { body = await response.json(); } catch { return malformed('response body must be valid JSON.'); }

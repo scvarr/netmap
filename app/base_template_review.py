@@ -60,15 +60,15 @@ def structural_changes(before, after):
 
 def _contains_reference(value, ids):
     if isinstance(value, str):
-        return value in ids
+        return any(identity in value.lower() for identity in ids)
     if isinstance(value, dict):
-        return any(_contains_reference(v, ids) for v in value.values())
+        return any(_contains_reference(v, ids) for pair in value.items() for v in pair)
     if isinstance(value, list):
         return any(_contains_reference(v, ids) for v in value)
     return False
 
 
-def endpoint_dependencies(session, config, mapping, definition):
+def endpoint_dependencies(session, config, mapping, definition, *, lock_rows=False):
     """Inspect every persisted direct endpoint reference, including JSON policies.
 
     Only the expected materialization rows and unchanged generated aliases may
@@ -89,7 +89,10 @@ def endpoint_dependencies(session, config, mapping, definition):
             target_id = mapping.connection_point_id if "connection_points" in targets else mapping.network_interface_id if "network_interfaces" in targets else None
             if target_id is None:
                 continue
-            for row in session.execute(select(table).where(column == target_id)).mappings():
+            query = select(table).where(column == target_id)
+            if lock_rows:
+                query = query.order_by(table.c.id).with_for_update()
+            for row in session.execute(query).mappings():
                 if table.name == "built_in_endpoint_mappings" and row["id"] == mapping.id:
                     continue
                 if table.name == "interface_physical_bindings" and row["interface_id"] == mapping.network_interface_id and row["point_id"] == mapping.connection_point_id and row["point_member"] == 1:
@@ -120,7 +123,10 @@ def analyze_object(session, config, candidate):
     old = {s["key"]: s for s in before["slots"]}
     new = {s["key"]: s for s in candidate["slots"]}
     definitions = {d.id: d.slot_key for d in session.scalars(select(m.BuiltInEndpointDefinition).where(m.BuiltInEndpointDefinition.base_revision_id == revision.id))}
-    mappings = {definitions[e.definition_id]: e for e in session.scalars(select(m.BuiltInEndpointMapping).where(m.BuiltInEndpointMapping.configuration_id == config.id))}
+    rows = list(session.scalars(select(m.BuiltInEndpointMapping).where(m.BuiltInEndpointMapping.configuration_id == config.id)))
+    mappings = {definitions[e.definition_id]: e for e in rows if e.definition_id in definitions}
+    if any(e.definition_id not in definitions for e in rows):
+        reasons.append({"code": "INVALID_ENDPOINT_MAPPING"})
     for key in sorted(old):
         if key not in mappings:
             reasons.append({"code": "MISSING_ENDPOINT_MAPPING", "key": key})
@@ -130,6 +136,12 @@ def analyze_object(session, config, candidate):
                 reasons.append({"code": "ENDPOINT_DEPENDENCIES", "key": key, "endpoint_name": old[key]["display_name"], "dependencies": blockers})
         elif old[key]["kind"] != new[key]["kind"]:
             reasons.append({"code": "ENDPOINT_KIND_CHANGE", "key": key, "endpoint_name": old[key]["display_name"]})
+        else:
+            mapping = mappings[key]
+            point = session.get(m.ConnectionPoint, mapping.connection_point_id)
+            if (point is None or point.physical_object_id != config.physical_object_id
+                    or (old[key]["kind"] == "NETWORK_PORT") != (mapping.network_interface_id is not None)):
+                reasons.append({"code": "INVALID_ENDPOINT_MAPPING", "key": key})
     bays = {b["bay_key"]: b for b in candidate["bays"]}
     installations = list(session.scalars(select(m.ModuleInstallation).where(m.ModuleInstallation.configuration_id == config.id)))
     displaced = []
@@ -155,6 +167,10 @@ def analyze_object(session, config, candidate):
             connections = session.scalars(select(m.Connection).where(m.Connection.point_a_id.in_(points) | m.Connection.point_b_id.in_(points))).all() if points else []
             if connections:
                 reasons.append({"code": "INTERNAL_LINK_CONNECTIONS", "key": pair, "connection_ids": sorted(str(c.id) for c in connections)})
+            elif change["operation"] == "added" and any(
+                session.get(m.ConnectionPoint, point_id).cardinality != 1 for point_id in points
+            ):
+                reasons.append({"code": "INTERNAL_LINK_CARDINALITY", "key": pair})
     label = session.scalar(select(m.EntityMetadata.value).where(m.EntityMetadata.physical_object_id == config.physical_object_id, m.EntityMetadata.key == DISPLAY_ALIAS_KEY))
     return {"physical_object_id": str(config.physical_object_id), "display_name": label or str(config.physical_object_id), "source_revision_id": str(revision.id),
             "classification": "requires_intervention" if reasons else "potentially_safe",
@@ -323,6 +339,12 @@ def publication_state(session, template_id):
         .order_by(m.ObjectConfiguration.physical_object_id)).all()
     objects = [analyze_object(session, config, definition) for config in configs]
     intervention = sum(o["classification"] == "requires_intervention" for o in objects)
+    current_objects = [{"physical_object_id": str(object_id), "display_name": label or str(object_id)}
+                       for object_id, label in session.execute(select(m.ObjectConfiguration.physical_object_id, m.EntityMetadata.value)
+                       .outerjoin(m.EntityMetadata, (m.EntityMetadata.physical_object_id == m.ObjectConfiguration.physical_object_id)
+                                  & (m.EntityMetadata.key == DISPLAY_ALIAS_KEY))
+                       .where(m.ObjectConfiguration.base_revision_id == revision.id).order_by(m.ObjectConfiguration.physical_object_id))]
     return {"revision_id": str(revision.id), "version_number": revision.version_number,
+            "current_objects": current_objects,
             "outdated_count": len(objects), "awaiting_update_count": len(objects) - intervention,
             "requires_intervention_count": intervention, "objects": objects}

@@ -884,6 +884,12 @@ def publish_base_template_candidate(template_id: uuid.UUID, candidate_id: uuid.U
                                  {"reason": "PUBLICATION_CONFLICT", "recheck_required": True}) from error
 
 
+@app.post("/v1/library/base-templates/{template_id}/reconcile")
+def reconcile_base_template_objects(template_id: uuid.UUID, session: Session = Depends(get_session)):
+    from app.object_reconciliation import reconcile_objects
+    return reconcile_objects(session, template_id)
+
+
 @app.delete(
     "/v1/library/base-templates/{template_id}",
     status_code=204,

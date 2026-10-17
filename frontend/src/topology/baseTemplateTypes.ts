@@ -104,6 +104,7 @@ export interface BaseTemplateDataSource {
   saveDraft?(templateId: string, definition: CreateBaseTemplateRequest, generation: number): Promise<BaseTemplateDraftDocument>;
   checkDraft?(templateId: string, generation: number): Promise<BaseTemplateDraftDocument>;
   publishCandidate?(templateId: string, candidateId: string): Promise<{ candidate_id: string; revision_id: string; version_number: number }>;
+  reconcileObjects?(templateId: string): Promise<BaseTemplateReconciliationResult>;
   loadBaseTemplates(): Promise<BaseTemplateListDocument>;
   loadBaseTemplateRevision(blueprintId: string, versionId: string): Promise<BaseTemplateRevisionDocument>;
   createBaseTemplate(request: CreateBaseTemplateRequest): Promise<BaseTemplateCreationDocument>;
@@ -125,4 +126,11 @@ export interface BaseTemplateDraftDocument {
 export interface BaseTemplatePublicationState {
   revision_id: string; version_number: number; outdated_count: number; awaiting_update_count: number; requires_intervention_count: number;
   objects: BaseTemplateReviewDocument['result']['objects'];
+  current_objects: Array<{ physical_object_id: string; display_name: string }>;
+}
+
+export interface BaseTemplateReconciliationResult {
+  revision_id: string; version_number: number;
+  objects: Array<{ physical_object_id: string; display_name?: string; source_revision_id?: string; target_revision_id: string;
+    status: 'updated' | 'already_current' | 'requires_intervention'; reasons: TemplateImpactReason[] }>;
 }

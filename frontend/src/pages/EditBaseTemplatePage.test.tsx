@@ -3,7 +3,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { EditBaseTemplatePage } from './EditBaseTemplatePage';
-import type { BaseTemplateDataSource, BaseTemplateDraftDocument } from '../topology/baseTemplateTypes';
+import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult } from '../topology/baseTemplateTypes';
 
 const draft = (): BaseTemplateDraftDocument => ({ template_id: 'base', source_revision_id: 'published', generation: 2, review: null,
   definition: { name: 'Сохранённый черновик', default_physical_object_class: 'server', body: { kind: 'RECTANGLE', width: 160, height: 60, fill_color: '#28565a' },
@@ -28,8 +28,20 @@ function setup(document = draft()) {
     publishCandidate: vi.fn(async () => {
       persisted = { ...persisted, source_revision_id: 'new-revision', generation: persisted.generation + 1,
         review: persisted.review ? { ...persisted.review, current: false, published_revision_id: 'new-revision' } : null,
-        publication_state: { revision_id: 'new-revision', version_number: 2, outdated_count: 1, awaiting_update_count: 1, requires_intervention_count: 0, objects: persisted.review?.result.objects ?? [] } };
+        publication_state: { revision_id: 'new-revision', version_number: 2, outdated_count: 1, awaiting_update_count: 1, requires_intervention_count: 0, current_objects: [], objects: persisted.review?.result.objects ?? [] } };
       return { candidate_id: 'candidate', revision_id: 'new-revision', version_number: 2 };
+    }),
+    reconcileObjects: vi.fn(async (): Promise<BaseTemplateReconciliationResult> => {
+      persisted = { ...persisted, publication_state: { ...persisted.publication_state!, outdated_count: 1,
+        awaiting_update_count: 0, requires_intervention_count: 1,
+        current_objects: [{ physical_object_id: 'safe', display_name: 'Safe object' }, { physical_object_id: 'current', display_name: 'Current object' }],
+        objects: persisted.publication_state!.objects.filter(o => o.classification === 'requires_intervention') } };
+      return { revision_id: 'latest', version_number: 2, objects: [
+        { physical_object_id: 'safe', display_name: 'Safe object', target_revision_id: 'latest', status: 'updated', reasons: [] },
+        { physical_object_id: 'current', display_name: 'Current object', target_revision_id: 'latest', status: 'already_current', reasons: [] },
+        { physical_object_id: 'blocked', display_name: 'Blocked object', target_revision_id: 'latest', status: 'requires_intervention',
+          reasons: [{ code: 'ENDPOINT_DEPENDENCIES', endpoint_name: 'User port', dependencies: ['CONNECTIONS', 'ENTITY_METADATA'] }] },
+      ] };
     }),
   } satisfies BaseTemplateDataSource;
   const mount = () => render(<I18nProvider><MemoryRouter initialEntries={['/library/base-templates/base/edit']}><Routes><Route path="/library/base-templates/:templateId/edit" element={<EditBaseTemplatePage dataSource={source as BaseTemplateDataSource} />} /></Routes></MemoryRouter></I18nProvider>);
@@ -37,6 +49,68 @@ function setup(document = draft()) {
 }
 
 describe('persisted base template review', () => {
+  const outdated = (): BaseTemplateDraftDocument => ({ ...draft(), publication_state: {
+    revision_id: 'latest', version_number: 2, outdated_count: 2, awaiting_update_count: 1, requires_intervention_count: 1,
+    current_objects: [{ physical_object_id: 'current', display_name: 'Current object' }],
+    objects: [
+      { physical_object_id: 'safe', display_name: 'Safe object', source_revision_id: 'old', classification: 'potentially_safe', reasons: [], proposed_placements: {}, changes: [] },
+      { physical_object_id: 'blocked', display_name: 'Blocked object', source_revision_id: 'old', classification: 'requires_intervention',
+        reasons: [{ code: 'ENDPOINT_DEPENDENCIES', endpoint_name: 'User port', dependencies: ['CONNECTIONS', 'ENTITY_METADATA'] }], proposed_placements: {}, changes: [] },
+    ],
+  } });
+
+  it('runs reconciliation explicitly, reports each outcome and restores actual state and reasons after reload', async () => {
+    const { source, mount } = setup(outdated());
+    let view = mount();
+    const run = await screen.findByRole('button', { name: 'Обновить совместимые объекты' });
+    expect(source.reconcileObjects).not.toHaveBeenCalled();
+    fireEvent.click(run);
+    expect(run).toBeDisabled();
+    await screen.findByRole('heading', { name: 'Результаты обновления объектов' });
+    expect(source.reconcileObjects).toHaveBeenCalledExactlyOnceWith('base');
+    expect(screen.getByText(/Обновлён/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Актуален/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/канонические соединения, пользовательские имена или данные/).length).toBeGreaterThan(0);
+    await screen.findByText('Ожидают обновления: 0');
+    view.unmount(); view = mount();
+    await screen.findByText('Объектов на прежних ревизиях: 1');
+    expect(screen.queryByRole('heading', { name: 'Результаты обновления объектов' })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/Актуален/)).toHaveLength(2);
+    expect(screen.getByText(/канонические соединения, пользовательские имена или данные/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Blocked object' })).toHaveAttribute('href', '/infrastructure/objects/blocked');
+    view.unmount();
+  });
+
+  it('retains unsaved authoring edits through object updates and permits retry after request failure', async () => {
+    const { source, mount } = setup(outdated());
+    source.reconcileObjects.mockRejectedValueOnce(new Error('Update unavailable'));
+    mount();
+    fireEvent.change(await screen.findByDisplayValue('Сохранённый черновик'), { target: { value: 'Keep unsaved draft' } });
+    const run = screen.getByRole('button', { name: 'Обновить совместимые объекты' });
+    fireEvent.click(run);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Update unavailable');
+    expect(screen.getByDisplayValue('Keep unsaved draft')).toBeInTheDocument();
+    await waitFor(() => expect(run).toBeEnabled());
+    fireEvent.click(run);
+    await screen.findByRole('heading', { name: 'Результаты обновления объектов' });
+    expect(screen.getByDisplayValue('Keep unsaved draft')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
+  });
+
+  it('does not adopt a concurrent draft generation while refreshing object outcomes', async () => {
+    const document = outdated();
+    const { source, mount } = setup(document);
+    mount();
+    fireEvent.change(await screen.findByDisplayValue('Сохранённый черновик'), { target: { value: 'Local edits' } });
+    source.loadDraft.mockResolvedValueOnce({ ...document, generation: document.generation + 1,
+      definition: { ...document.definition, name: 'Other author edits' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить совместимые объекты' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Черновик изменён в другой сессии');
+    expect(screen.getByDisplayValue('Local edits')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
+    await waitFor(() => expect(source.saveDraft).toHaveBeenCalledWith('base', expect.anything(), document.generation));
+  });
+
   it('publishes only a current saved candidate and reopens the advanced draft', async () => {
     const { source, mount } = setup(withReview(draft()));
     let view = mount();

@@ -4,7 +4,7 @@ import { createBlueprintRequest, hydrateBlueprintEditorState, type BlueprintEdit
 import { BaseTemplateEditor } from './BaseTemplateEditor';
 import { PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
-import type { BaseTemplateDataSource, BaseTemplateDraftDocument, CreateBaseTemplateRequest, TemplateImpactReason } from '../topology/baseTemplateTypes';
+import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult, CreateBaseTemplateRequest, TemplateImpactReason } from '../topology/baseTemplateTypes';
 
 const signature = (d?: CreateBaseTemplateRequest) => d ? JSON.stringify(
   [d.name, d.default_physical_object_class ?? null, d.body, d.panels, d.slots, d.internal_links, d.bays ?? []],
@@ -15,6 +15,7 @@ const signature = (d?: CreateBaseTemplateRequest) => d ? JSON.stringify(
 export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateDataSource }) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
   const [document, setDocument] = useState<BaseTemplateDraftDocument>();
+  const [reconciliation, setReconciliation] = useState<BaseTemplateReconciliationResult>();
   const [initial, setInitial] = useState<BlueprintEditorState>();
   const [saved, setSaved] = useState(''); const [editing, setEditing] = useState('');
   const [error, setError] = useState(''); const [notice, setNotice] = useState(''); const [busy, setBusy] = useState(false);
@@ -43,7 +44,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
   useEffect(() => {
     let active = true;
     const validate = () => {
-      if (!document?.review || busy) return;
+      if (!document || busy) return;
       setRevalidating(true);
       void refresh().catch(e => { if (active) setError(String(e)); }).finally(() => { if (active) setRevalidating(false); });
     };
@@ -58,6 +59,9 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
       IDENTITY_AND_DATA_PRESERVED: 'review.reason.preserved', ENDPOINT_DEPENDENCIES: 'review.reason.dependencies',
       MISSING_ENDPOINT_MAPPING: 'review.reason.mapping', ENDPOINT_KIND_CHANGE: 'review.reason.kind',
       INSUFFICIENT_COMPATIBLE_CAPACITY: 'review.reason.capacity', INTERNAL_LINK_CONNECTIONS: 'review.reason.links',
+      INVALID_ENDPOINT_MAPPING: 'reconciliation.mapping', INTERNAL_LINK_CARDINALITY: 'reconciliation.cardinality',
+      CONCURRENT_CHANGE: 'reconciliation.concurrent', OBJECT_CHANGED: 'reconciliation.objectChanged',
+      TARGET_REVISION_CHANGED: 'reconciliation.targetChanged', APPLY_FAILED: 'reconciliation.failed',
     } as const;
     const dependencies = {
       CONNECTIONS: 'review.dep.connections', ENTITY_METADATA: 'review.dep.metadata', INTERFACE_PHYSICAL_BINDINGS: 'review.dep.bindings',
@@ -77,8 +81,27 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
       <p>{t('publication.outdated', { count: document.publication_state.outdated_count })}</p>
       <p>{t('publication.awaiting', { count: document.publication_state.awaiting_update_count })}</p>
       <p>{t('publication.intervention', { count: document.publication_state.requires_intervention_count })}</p>
+      <button className="primary-action" type="button" disabled={busy || revalidating || !dataSource.reconcileObjects} onClick={() => {
+        setBusy(true); setError(''); setReconciliation(undefined);
+        void dataSource.reconcileObjects!(templateId).then(async result => {
+          setReconciliation(result);
+          // Refresh only server facts: unsaved authoring edits stay in the editor.
+          await refresh();
+        }).catch(e => setError(String(e))).finally(() => setBusy(false));
+      }}>{t('reconciliation.run')}</button>
+      {reconciliation && <section aria-label={t('reconciliation.results')}>
+        <h2>{t('reconciliation.results')}</h2>
+        <ul>{reconciliation.objects.map(object => <li key={object.physical_object_id}>
+          <Link to={`/infrastructure/objects/${object.physical_object_id}`}>{object.display_name ?? object.physical_object_id}</Link>: {t(object.status === 'updated' ? 'reconciliation.updated' : object.status === 'already_current' ? 'reconciliation.current' : 'review.attention')}
+          <ul>{object.reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}</ul>
+        </li>)}</ul>
+      </section>}
+      <ul>{document.publication_state.current_objects.map(object => <li key={object.physical_object_id}>
+        <Link to={`/infrastructure/objects/${object.physical_object_id}`}>{object.display_name}</Link>: {t('reconciliation.current')}
+      </li>)}</ul>
       <ul>{document.publication_state.objects.map(object => <li key={object.physical_object_id}>
         <Link to={`/infrastructure/objects/${object.physical_object_id}`}>{object.display_name ?? object.physical_object_id}</Link>: {t(object.classification === 'requires_intervention' ? 'review.attention' : 'publication.waiting')}
+        {object.classification === 'requires_intervention' && <ul>{object.reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}</ul>}
       </li>)}</ul>
     </section>}
     {error && <p role="alert">{error}</p>}

@@ -6,6 +6,14 @@ export const localeStorageKey = 'netmap.locale';
 
 const messages = {
   ru: {
+    'reconciliation.run': 'Обновить совместимые объекты', 'reconciliation.results': 'Результаты обновления объектов',
+    'reconciliation.updated': 'Обновлён', 'reconciliation.current': 'Актуален',
+    'reconciliation.mapping': 'Сопоставление конечной точки не соответствует конфигурации:',
+    'reconciliation.cardinality': 'Кардинальность конечной точки не допускает безопасного создания внутренней связи:',
+    'reconciliation.concurrent': 'Данные изменяются в другой операции. Повторите обновление.',
+    'reconciliation.objectChanged': 'Объект или его конфигурация изменились. Повторите обновление.',
+    'reconciliation.targetChanged': 'Опубликована другая ревизия. Повторите обновление.',
+    'reconciliation.failed': 'Не удалось применить обновление. Изменения этого объекта отменены; повторите операцию.',
     'publication.candidatePublished': 'Этот кандидат опубликован. Следующие изменения проверяются отдельно.',
     'publication.publish': 'Опубликовать', 'publication.completed': 'Публикация завершена. Текущая ревизия: {number}. Существующие объекты сохранены.',
     'publication.state': 'Состояние публикации', 'publication.revision': 'Текущая опубликованная ревизия: {number}',
@@ -87,6 +95,14 @@ const messages = {
     'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
+    'reconciliation.run': 'Update compatible objects', 'reconciliation.results': 'Object update results',
+    'reconciliation.updated': 'Updated', 'reconciliation.current': 'Current',
+    'reconciliation.mapping': 'Endpoint mapping does not match the configuration:',
+    'reconciliation.cardinality': 'Endpoint cardinality prevents safe internal link creation:',
+    'reconciliation.concurrent': 'Another operation is changing the data. Retry the update.',
+    'reconciliation.objectChanged': 'The object or its configuration changed. Retry the update.',
+    'reconciliation.targetChanged': 'Another revision was published. Retry the update.',
+    'reconciliation.failed': 'Update failed. All changes to this object were rolled back; retry the operation.',
     'publication.candidatePublished': 'This candidate has been published. Check subsequent changes separately.',
     'publication.publish': 'Publish', 'publication.completed': 'Publication complete. Current revision: {number}. Existing objects are preserved.',
     'publication.state': 'Publication status', 'publication.revision': 'Current published revision: {number}',

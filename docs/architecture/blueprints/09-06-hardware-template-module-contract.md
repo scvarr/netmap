@@ -4,7 +4,7 @@
 
 **ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A IMPLEMENTED, AWAITING
 EXTERNAL INSPECTION. 09.6-C IMPLEMENTED, AWAITING EXTERNAL INSPECTION;
-09.6-D1 IMPLEMENTED, AWAITING EXTERNAL INSPECTION; D2/E REMAIN OPEN.**
+09.6-D1/D2 IMPLEMENTED, AWAITING EXTERNAL INSPECTION; E REMAINS OPEN.**
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -88,16 +88,16 @@ The historical 09.6-A cutover introduced **0001 current schema initialization**,
 including the CableLabelSettings singleton. 09.6-C adds forward migration
 **0002**; D1 adds **0003** for immutable revision names and publication receipts. Both preserve existing databases; applied 0001/0002 remain unchanged.
 
-**OPEN (09.6-D2/E):** safe object/module updates and module relocation/movement
-remain outside the implemented
-boundary. Dense Map LOD and endpoint technology semantics remain
+**D2 implements safe base-revision reconciliation and automatic module relocation.**
+Module revision updates and arbitrary user movement remain outside the implemented
+boundary (09.6-E). Dense Map LOD and endpoint technology semantics remain
 open. External branch inspection and manual HV-01 acceptance are still required;
 this implementation does not accept or resume Phase C.
 
 ## Implemented boundary: 09.6-C
 
 **09.6-C IMPLEMENTED — persisted drafts, frozen candidates and impact analysis.
-09.6-D1 IMPLEMENTED — publication. D2 OPEN — safe application of changes.** This boundary
+09.6-D1 IMPLEMENTED — publication. D2 IMPLEMENTED — safe object reconciliation.** This boundary
 awaits external inspection and does not complete Phase C or HV-01.
 
 - Library **«Изменить шаблон»** opens the existing `BaseTemplateEditor`. The
@@ -139,13 +139,14 @@ awaits external inspection and does not complete Phase C or HV-01.
   the regular coherent export, transactional import and dependency ordering apply.
 
 At the C boundary, publication, canonical reconciliation, object update status, ModuleTemplate
-editing and module revision updates were unimplemented. D1 adds publication and derived status below. See
+editing and module revision updates were unimplemented. D1 adds publication and derived status;
+D2 adds safe base reconciliation below. See
 [09.6-C validation](09-06-c-validation.md).
 
 ## Implemented boundary: 09.6-D1
 
-**D1 IMPLEMENTED, AWAITING EXTERNAL INSPECTION. D2 OPEN — safe updates of
-existing objects. Phase C PAUSED; HV-01 remains incomplete.**
+**D1 IMPLEMENTED, AWAITING EXTERNAL INSPECTION. D2 is implemented below.
+Phase C PAUSED; HV-01 remains incomplete.**
 
 - Explicit **«Опубликовать»** posts the frozen candidate ID to
   `POST /v1/library/base-templates/{id}/candidates/{candidate_id}/publish`.
@@ -172,7 +173,7 @@ existing objects. Phase C PAUSED; HV-01 remains incomplete.**
 - Library/editor status derives the count of earlier-revision objects and
   separately shows those awaiting update and those requiring intervention,
   using their actual pinned definitions/configurations and current facts.
-  These read results are advisory; there is no persisted status flag, update
+  These read results are advisory; D1 introduced no persisted status flag, update
   execution or conflict-resolution mechanism. Published candidate completion
   remains visible on reopening.
 - Forward migration **0003** backfills revision names and adds immutable
@@ -181,8 +182,8 @@ existing objects. Phase C PAUSED; HV-01 remains incomplete.**
   and preserves receipts, pinned configurations and the rebased draft on
   round-trip. There is no canonical or presentation format cutover.
 
-See [D1 validation](09-06-d1-validation.md). Publication does not begin D2,
-resume Phase C or complete HV-01.
+See [D1 validation](09-06-d1-validation.md). Publication alone neither updates
+objects, resumes Phase C nor completes HV-01.
 
 ### Workspace v5 archive compatibility (D1 corrective)
 
@@ -204,6 +205,65 @@ existing receipt FK/ownership/source/candidate-content checks remain strict.
 This is a bounded v5 archive compatibility contract, not a general version
 migration framework or an obsolete runtime/authoring API. Applied migrations
 0001/0002/0003 remain unchanged; no database migration or reset is required.
+
+## Implemented boundary: 09.6-D2
+
+**D2 IMPLEMENTED, AWAITING EXTERNAL INSPECTION. Phase C PAUSED;
+HV-01 remains incomplete, not PASSED.**
+
+- Explicit **«Обновить совместимые объекты»** in the base editor calls
+  `POST /v1/library/base-templates/{id}/reconcile`. Each object returns
+  `updated`, `already_current`, or `requires_intervention` with concrete reasons.
+  Every object commits independently; an error or busy object cannot roll back
+  successful peers. The batch targets the published revision selected at start;
+  if another publication intervenes, remaining objects refuse and can be retried.
+- Reconciliation compares the actual pinned revision directly to that target by
+  opaque keys, including skipped revisions. Surviving built-in mappings retain
+  their IDs and change only `definition_id`; points, interfaces, Connections,
+  ownership/bindings, realizations, policies and all aliases/user data survive.
+  Definition renames never infer alias provenance or overwrite existing values.
+  New endpoints receive the usual point/interface/owner/binding/mapping rows.
+  Kind changes, foreign/missing mappings and ambiguous identity refuse the object.
+- Removing an endpoint requires the full current direct-FK and canonical-JSON
+  dependency check. Only its own mapping, expected physical binding/owner and
+  unchanged default alias materialization are exempt, as in C's preflight.
+  Modified aliases and all other metadata/dependencies block deletion. Unknown
+  JSON references (including keys and embedded/case-varied UUID strings) fail
+  closed. Existing Connections are never deleted by reconciliation.
+- Valid module placements remain. Displaced installations receive free bays of
+  exact compatibility in stable installation-ID/bay-key order; insufficient
+  capacity refuses the whole object. Swaps use transaction-private temporary
+  bay keys to satisfy the immediate unique constraint. Only the final necessary
+  `bay_key` changes persist; installation IDs, pinned module revisions,
+  orientations, mappings and canonical endpoints/data stay intact.
+- Changed internal links touching existing Connections conservatively refuse
+  the object: materialized Connections have no retained link provenance.
+  Additions require free cardinality=1 canonical points and valid member pairs;
+  ordinary repository creation enforces the existing connection constraints.
+  Unchanged links never trigger rematerialization or speculative provenance.
+- READ COMMITTED preflight occurs after locks, independently of C/D1 review.
+  Lock order is base root SHARE, object/configuration/installation/mapping rows,
+  then interfaces and points in stable ID order. Object/configuration locks
+  serialize install/uninstall. Endpoint UPDATE locks stop new FK dependents;
+  current direct dependency row locks also stop alias/binding/owner edits that
+  do not change a FK. Only endpoint deletion takes SHARE locks on every canonical
+  JSON table, in workspace dependency order, because JSON references have no FK.
+  Additive/presentation updates take no global writer locks. A 1500ms lock timeout
+  or deadlock/serialization conflict rolls back that object and returns a retry
+  reason; no partial materialization/relocation can commit. Session identity state
+  is discarded between object transactions so retained ORM rows cannot authorize
+  a later object's writes. Success is returned only after commit.
+- Current/waiting/intervention state is derived afresh from ObjectConfiguration
+  and current dependencies, including after reload. The editor shows object
+  outcomes and localized reasons; unsaved authoring edits survive an update or
+  failed request. No status column, workflow schema or migration is introduced.
+  Workspace v5 and the bounded C archive compatibility stay unchanged; updated
+  and blocked objects, modules and canonical data round-trip together.
+
+Module authoring/publication, installation revision upgrades, a manual conflict
+editor and arbitrary movement remain outside D2. See
+[D2 validation](09-06-d2-validation.md). No next milestone or Phase C resumption
+is included.
 
 ## Library roles and base equipment template
 
