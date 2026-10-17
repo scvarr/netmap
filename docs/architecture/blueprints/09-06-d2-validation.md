@@ -1,5 +1,23 @@
 # 09.6-D2 validation — safe PhysicalObject reconciliation
 
+## Subsequent status consolidation (2026-10-17)
+
+D2 (including review corrections through `053e579`) is IMPLEMENTED,
+externally ACCEPTED and merged
+into main. External acceptance is confirmed by the status-consolidation task;
+the cited commits are ancestors of main `053e579`.
+
+This subsequent status does not constitute manual user acceptance: Phase C
+remains PAUSED, HV-01 is not PASSED and requires manual recheck, and individual
+C-* findings remain unchanged. ModuleTemplate editing/publication/updating
+remains OPEN. See the [current 09.6 contract](09-06-hardware-template-module-contract.md).
+
+## Original validation record (historical)
+
+The record below retains its original implementation-time statuses, scope and
+check results; references to pending inspection or later unimplemented slices
+are historical, not the current series status.
+
 **D2 IMPLEMENTED, AWAITING EXTERNAL INSPECTION.**
 **Phase C PAUSED; HV-01 remains incomplete, not PASSED.** No merge or next
 milestone is included.

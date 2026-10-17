@@ -52,9 +52,14 @@ naming, and pairwise continuity (D2) are implemented; Port Block application
 surfaces are removed. Manual HV-01 revealed that small differences between
 instances of one base server must not require separate complete templates.
 The authoritative [09.6 hardware template/module contract](../architecture/blueprints/09-06-hardware-template-module-contract.md)
-therefore supersedes the complete-configuration target of 09.4/09.5. Bounded
-base-template/module/update implementation, external review/acceptance, and
-manual HV-01 recheck are required before resuming; see 11-04. This adds no
+therefore supersedes the complete-configuration target of 09.4/09.5.
+Creation and module installation/removal are implemented in main (09.6-A;
+separate final external acceptance unverified). Base draft/check (09.6-C),
+BaseTemplateRevision publication (D1) and safe PhysicalObject updates (D2) are
+implemented, externally accepted and merged. ModuleTemplate editing, publication
+of subsequent revisions and installed-module updates remain **OPEN (09.6-E)**;
+an E1/E2/E3 split is not an approved contract. Manual HV-01 recheck is still
+required before resuming; see [11-04](11-04-phase-c-representative-l1-testbed.md). This adds no
 roadmap scope beyond that accepted redesign. Technology/capability and dense
 runtime Map presentation remain **OPEN**; Phase C is not complete or PASSED.
 

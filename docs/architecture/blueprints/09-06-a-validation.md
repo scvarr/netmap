@@ -1,5 +1,23 @@
 # 09.6-A validation record
 
+## Subsequent status consolidation (2026-10-17)
+
+Implementation and corrective commits (`009e4a0` through `bcf8414`) are in
+main. Separate final external acceptance of A is not established by the
+repository evidence inspected for this cleanup; A remains IMPLEMENTED with
+external acceptance unverified.
+
+This subsequent status does not constitute manual user acceptance: Phase C
+remains PAUSED, HV-01 is not PASSED and requires manual recheck, and individual
+C-* findings remain unchanged. ModuleTemplate editing/publication/updating
+remains OPEN. See the [current 09.6 contract](09-06-hardware-template-module-contract.md).
+
+## Original validation record (historical)
+
+The record below retains its original implementation-time statuses, scope and
+check results; references to pending inspection or later unimplemented slices
+are historical, not the current series status.
+
 Implementation is complete on the milestone branch and awaits external inspection.
 Draft/review/update/publication workflows and subsequent phases remain open.
 

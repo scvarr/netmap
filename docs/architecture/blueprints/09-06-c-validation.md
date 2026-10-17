@@ -1,5 +1,22 @@
 # 09.6-C validation — persisted base template editing and review
 
+## Subsequent status consolidation (2026-10-17)
+
+C through `1e73331` is IMPLEMENTED, externally ACCEPTED and merged
+into main. External acceptance is confirmed by the status-consolidation task;
+the cited commits are ancestors of main `053e579`.
+
+This subsequent status does not constitute manual user acceptance: Phase C
+remains PAUSED, HV-01 is not PASSED and requires manual recheck, and individual
+C-* findings remain unchanged. ModuleTemplate editing/publication/updating
+remains OPEN. See the [current 09.6 contract](09-06-hardware-template-module-contract.md).
+
+## Original validation record (historical)
+
+The record below retains its original implementation-time statuses, scope and
+check results; references to pending inspection or later unimplemented slices
+are historical, not the current series status.
+
 09.6-C **IMPLEMENTED, AWAITING EXTERNAL INSPECTION**.
 09.6-D **OPEN**: publication and safe application remain unimplemented.
 Phase C remains PAUSED; HV-01 is not complete or PASSED.

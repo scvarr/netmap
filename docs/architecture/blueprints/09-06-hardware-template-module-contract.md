@@ -2,9 +2,24 @@
 
 ## Status and authority
 
-**ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A IMPLEMENTED, AWAITING
-EXTERNAL INSPECTION. 09.6-C IMPLEMENTED, AWAITING EXTERNAL INSPECTION;
-09.6-D1/D2 IMPLEMENTED, AWAITING EXTERNAL INSPECTION; E REMAINS OPEN.**
+**ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A IMPLEMENTED IN MAIN
+(separate external acceptance not verified). 09.6-C, D1 AND D2 IMPLEMENTED,
+EXTERNALLY ACCEPTED AND MERGED INTO MAIN; 09.6-E REMAINS OPEN.**
+
+Status consolidated against main `053e5798bb53d095c1627551ca71a1b2e65aeaff`.
+C/D1/D2 external acceptance is confirmed by the status-consolidation task;
+repository history contains C through `1e73331`, D1 through `f2206a1`, and D2
+through `053e579` (including review corrections). The A implementation and its
+corrections are present from `009e4a0` through `bcf8414`; the
+[A validation record](09-06-a-validation.md) does not establish a separate final
+external acceptance. IMPLEMENTED describes delivered behavior; ACCEPTED here
+means external branch review, not manual user acceptance of HV-01 or Phase C.
+
+Current capability boundary: creation and module installation/removal, base
+draft/check, BaseTemplateRevision publication and safe PhysicalObject updates
+are implemented. ModuleTemplate editing, publication of subsequent module
+revisions and updates of installed modules remain **OPEN (09.6-E)**. Any proposed
+E1/E2/E3 split is not an approved implementation contract.
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -91,14 +106,15 @@ including the CableLabelSettings singleton. 09.6-C adds forward migration
 **D2 implements safe base-revision reconciliation and automatic module relocation.**
 Module revision updates and arbitrary user movement remain outside the implemented
 boundary (09.6-E). Dense Map LOD and endpoint technology semantics remain
-open. External branch inspection and manual HV-01 acceptance are still required;
-this implementation does not accept or resume Phase C.
+open. C/D1/D2 have passed external inspection; manual HV-01 rechecking and
+acceptance are still required. This implementation does not accept or resume Phase C.
 
 ## Implemented boundary: 09.6-C
 
-**09.6-C IMPLEMENTED — persisted drafts, frozen candidates and impact analysis.
-09.6-D1 IMPLEMENTED — publication. D2 IMPLEMENTED — safe object reconciliation.** This boundary
-awaits external inspection and does not complete Phase C or HV-01.
+**09.6-C IMPLEMENTED / ACCEPTED / MERGED — persisted drafts, frozen candidates and impact analysis.
+09.6-D1 IMPLEMENTED / ACCEPTED / MERGED — publication.
+D2 IMPLEMENTED / ACCEPTED / MERGED — safe object reconciliation.**
+External acceptance of these slices does not complete Phase C or HV-01.
 
 - Library **«Изменить шаблон»** opens the existing `BaseTemplateEditor`. The
   server initializes one draft from the latest published revision, then restores
@@ -145,7 +161,7 @@ D2 adds safe base reconciliation below. See
 
 ## Implemented boundary: 09.6-D1
 
-**D1 IMPLEMENTED, AWAITING EXTERNAL INSPECTION. D2 is implemented below.
+**D1 IMPLEMENTED / ACCEPTED / MERGED. D2 is implemented below.
 Phase C PAUSED; HV-01 remains incomplete.**
 
 - Explicit **«Опубликовать»** posts the frozen candidate ID to
@@ -208,7 +224,7 @@ migration framework or an obsolete runtime/authoring API. Applied migrations
 
 ## Implemented boundary: 09.6-D2
 
-**D2 IMPLEMENTED, AWAITING EXTERNAL INSPECTION. Phase C PAUSED;
+**D2 IMPLEMENTED / ACCEPTED / MERGED. Phase C PAUSED;
 HV-01 remains incomplete, not PASSED.**
 
 - Explicit **«Обновить совместимые объекты»** in the base editor calls
@@ -456,10 +472,12 @@ identity, persisted columns or EntityMetadata aliases. Existing materialization
 may retain the local definition name as a canonical display alias. Renaming a
 panel/bay in read state recalculates the path without changing endpoint IDs.
 There is no global numbering, naming-template editor or installation movement
-in this correction; subsequent 09.6 phases remain open.
+in this correction; later C/D1/D2 delivery is recorded above.
 
 ## OPEN and outside this contract
 
+- ModuleTemplate editing, publication of subsequent ModuleTemplateRevision
+  records and updates of installed modules (09.6-E).
 - Endpoint technology/capability semantics: Ethernet, Fibre Channel, speed,
   connector, and other semantic properties.
 - Global endpoint color/shape visual rules.

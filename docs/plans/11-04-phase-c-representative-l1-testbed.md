@@ -8,7 +8,7 @@
 ## Назначение и граница
 
 **Current acceptance status:** **PAUSED** at the same HV-01 authoring
-step until bounded template/module implementation and manual recheck. Direct-slot persistence,
+step; manual HV-01 recheck remains required. Direct-slot persistence,
 multi-panel editing, multi-selection, alignment/distribution, panel copy,
 ordered bulk naming, and pairwise continuity (D2) are implemented. Editor
 prerequisites for the earlier panel slices are complete; Phase C is not complete
@@ -17,6 +17,12 @@ differences between instances of one base server must not require a full
 template for every configuration. The authoritative target is now
 [09.6 hardware templates and object module installations](../architecture/blueprints/09-06-hardware-template-module-contract.md):
 one mandatory base template and modules installed in each concrete object.
+Creation and module installation/removal are implemented in main (09.6-A;
+separate external acceptance unverified). Base draft/check (C), revision
+publication (D1) and safe PhysicalObject updates (D2) are implemented, externally
+accepted and merged. ModuleTemplate editing, publication of subsequent module
+revisions and installed-module updates remain **OPEN (09.6-E)**. These external
+reviews do not establish manual HV-01 acceptance; HV-01 is **not PASSED**.
 Technology/capability and dense runtime Map presentation remain **OPEN**;
 existing `C-*` findings are not closed automatically. Port Block
 is not a prerequisite or target authoring entity. See the implemented
@@ -513,7 +519,7 @@ capability axes, а не закрытый список device classes.
 | 9 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
 | 10 | router | RTR1 |
 | 11 | dual-homed server | SRV1 — PASSED / VERIFIED: independent traces to CORE-A / CORE-B |
-| 12 | Historical FRONT/REAR scenario; 09.5 multi-panel slices implemented, manual acceptance pending; 09.6 template/module implementation pending | PP-301, FPP-811, SRV1 |
+| 12 | Historical FRONT/REAR scenario; 09.5 multi-panel slices implemented, manual acceptance pending; 09.6 creation/install/removal and C/D1/D2 implemented; ModuleTemplate editing/publication/updating OPEN; manual HV-01 recheck pending | PP-301, FPP-811, SRV1 |
 | 13 | несколько Port Blocks в одном Blueprint | SW-301-ACCESS |
 | 14 | ConnectionPoint port kind | O1 / PP-301 |
 | 15 | `NETWORK_PORT` port kind | PC1 / SW-301-ACCESS, если поддерживается |
