@@ -1,0 +1,511 @@
+{
+  "format": "netmap-workspace",
+  "format_version": 5,
+  "canonical": {
+    "Location": [
+      {
+        "id": "f48fc250-6e1a-4dec-bb67-76eda1f81c09",
+        "name": "Rack",
+        "type": "rack",
+        "parent_location_id": null
+      }
+    ],
+    "PhysicalObject": [
+      {
+        "id": "169b4520-2aab-40ab-af54-5729e2c72a70",
+        "location_id": null
+      },
+      {
+        "id": "2e99cd28-1794-41e1-bb64-20a8f291e92a",
+        "location_id": null
+      },
+      {
+        "id": "b88e527e-9c87-4589-879e-b53c6458a520",
+        "location_id": null
+      }
+    ],
+    "ConnectionPoint": [
+      {
+        "id": "408f9ec5-d199-4466-8cfc-ce22018b4ab8",
+        "physical_object_id": "169b4520-2aab-40ab-af54-5729e2c72a70",
+        "cardinality": 1
+      },
+      {
+        "id": "439ce7a2-c9ae-4c35-8646-fce87aefe933",
+        "physical_object_id": "2e99cd28-1794-41e1-bb64-20a8f291e92a",
+        "cardinality": 1
+      },
+      {
+        "id": "6be4aa9d-69a4-4ee9-8d0d-4b5503bcf34a",
+        "physical_object_id": "b88e527e-9c87-4589-879e-b53c6458a520",
+        "cardinality": 1
+      },
+      {
+        "id": "ba30af9d-7747-4d5e-ba5a-a43011e8c799",
+        "physical_object_id": "169b4520-2aab-40ab-af54-5729e2c72a70",
+        "cardinality": 1
+      }
+    ],
+    "NetworkInterface": [
+      {
+        "id": "0ca266b5-c732-467a-ac6b-fc7eb25187f0"
+      }
+    ],
+    "NetworkInterfacePhysicalOwner": [
+      {
+        "id": "72ec6002-be4d-43bd-bef3-01168144f83f",
+        "interface_id": "0ca266b5-c732-467a-ac6b-fc7eb25187f0",
+        "physical_object_id": "169b4520-2aab-40ab-af54-5729e2c72a70"
+      }
+    ],
+    "NetworkInterfaceRealization": [],
+    "InterfacePhysicalBinding": [
+      {
+        "id": "f23d50fe-274c-4518-923a-9cc3cbea939c",
+        "interface_id": "0ca266b5-c732-467a-ac6b-fc7eb25187f0",
+        "point_id": "408f9ec5-d199-4466-8cfc-ce22018b4ab8",
+        "point_member": 1
+      }
+    ],
+    "Connection": [
+      {
+        "id": "5b3105f1-18e6-4107-a976-b91922a2b69e",
+        "point_a_id": "439ce7a2-c9ae-4c35-8646-fce87aefe933",
+        "point_b_id": "6be4aa9d-69a4-4ee9-8d0d-4b5503bcf34a",
+        "cardinality": 1
+      }
+    ],
+    "ConnectionMember": [
+      {
+        "id": "53a8d132-9a51-4047-90dd-bd9207e4456c",
+        "connection_id": "5b3105f1-18e6-4107-a976-b91922a2b69e",
+        "index": 1,
+        "point_a_member": 1,
+        "point_b_member": 1
+      }
+    ],
+    "Cable": [
+      {
+        "id": "d0bdc055-3075-4004-92e0-9195b26f8ac8",
+        "connection_id": "5b3105f1-18e6-4107-a976-b91922a2b69e",
+        "label": null
+      }
+    ],
+    "EntityMetadata": [
+      {
+        "id": "062d222b-df49-4c2d-84f3-718a75fc4757",
+        "physical_object_id": null,
+        "network_interface_id": null,
+        "connection_point_id": "408f9ec5-d199-4466-8cfc-ce22018b4ab8",
+        "key": "alias.display",
+        "value": "N1"
+      },
+      {
+        "id": "136a845a-cdf2-43da-a432-62420a239e45",
+        "physical_object_id": null,
+        "network_interface_id": null,
+        "connection_point_id": "ba30af9d-7747-4d5e-ba5a-a43011e8c799",
+        "key": "alias.display",
+        "value": "P1"
+      },
+      {
+        "id": "1383342a-090d-42a3-a774-64f64b4cd9c0",
+        "physical_object_id": "169b4520-2aab-40ab-af54-5729e2c72a70",
+        "network_interface_id": null,
+        "connection_point_id": null,
+        "key": "alias.display",
+        "value": "From blueprint"
+      },
+      {
+        "id": "643ec287-9d00-4689-aaa0-ea69a506659f",
+        "physical_object_id": "b88e527e-9c87-4589-879e-b53c6458a520",
+        "network_interface_id": null,
+        "connection_point_id": null,
+        "key": "alias.display",
+        "value": "PP1"
+      },
+      {
+        "id": "6d20ca90-9d76-4ea5-936f-d1fcd7c92f89",
+        "physical_object_id": "2e99cd28-1794-41e1-bb64-20a8f291e92a",
+        "network_interface_id": null,
+        "connection_point_id": null,
+        "key": "alias.display",
+        "value": "SW1"
+      },
+      {
+        "id": "c11d5d52-2f2c-4cee-8da3-3b30a382714b",
+        "physical_object_id": null,
+        "network_interface_id": null,
+        "connection_point_id": "6be4aa9d-69a4-4ee9-8d0d-4b5503bcf34a",
+        "key": "alias.display",
+        "value": "p1"
+      },
+      {
+        "id": "c92b68cd-bb17-46df-b5dd-f5dbd63d3953",
+        "physical_object_id": null,
+        "network_interface_id": null,
+        "connection_point_id": "439ce7a2-c9ae-4c35-8646-fce87aefe933",
+        "key": "alias.display",
+        "value": "p1"
+      },
+      {
+        "id": "e986cf27-abef-403e-8fe3-2930c22384f8",
+        "physical_object_id": null,
+        "network_interface_id": "0ca266b5-c732-467a-ac6b-fc7eb25187f0",
+        "connection_point_id": null,
+        "key": "alias.display",
+        "value": "N1"
+      }
+    ],
+    "L2ForwardingContext": [],
+    "L2Binding": [],
+    "L2IngressRule": [],
+    "L2EgressRule": [],
+    "RoutingContext": [],
+    "L3Binding": [],
+    "InterfaceAddress": [],
+    "RoutingTable": [],
+    "Route": [],
+    "RouteNextHop": [],
+    "RoutingPolicy": [],
+    "RoutingPolicyRule": [],
+    "SecurityPolicy": [],
+    "SecurityRule": [],
+    "SecurityPolicyAttachment": [],
+    "NATPolicy": [],
+    "NATPool": [],
+    "NATRule": [],
+    "NATPolicyAttachment": [],
+    "PacketProcessingPlan": [],
+    "ProcessingStage": [],
+    "ProcessingTransition": [],
+    "ProcessingEntryPoint": [],
+    "PacketProcessingPlanAttachmentSet": [],
+    "PacketProcessingPlanAttachment": []
+  },
+  "authoring": {
+    "BaseTemplate": [
+      {
+        "id": "6e28a394-7b5e-4fbb-b625-05b79c489a40",
+        "name": "Test blueprint"
+      }
+    ],
+    "BaseTemplateRevision": [
+      {
+        "id": "0524f9e1-bf02-459e-bc7f-c2c7ed13f35b",
+        "template_id": "6e28a394-7b5e-4fbb-b625-05b79c489a40",
+        "version_number": 1,
+        "default_physical_object_class": null,
+        "body_kind": "RECTANGLE",
+        "width": 100.0,
+        "height": 40.0,
+        "fill_color": null
+      }
+    ],
+    "BaseTemplateDraft": [
+      {
+        "id": "a3862340-91b7-4069-8ef0-0a07afb8d4d8",
+        "template_id": "6e28a394-7b5e-4fbb-b625-05b79c489a40",
+        "source_revision_id": "0524f9e1-bf02-459e-bc7f-c2c7ed13f35b",
+        "generation": 2,
+        "definition": {
+          "bays": [],
+          "body": {
+            "kind": "RECTANGLE",
+            "width": 100.0,
+            "height": 40.0,
+            "fill_color": null
+          },
+          "name": "09.6-C saved draft, not the published name",
+          "slots": [
+            {
+              "key": "point-1",
+              "kind": "CONNECTION_POINT",
+              "panel_key": "panel-1",
+              "display_name": "P1",
+              "rendered_position": {
+                "x": 0.2,
+                "y": 0.3
+              }
+            },
+            {
+              "key": "port-1",
+              "kind": "NETWORK_PORT",
+              "panel_key": "panel-1",
+              "display_name": "N1",
+              "rendered_position": {
+                "x": 0.7,
+                "y": 0.8
+              }
+            }
+          ],
+          "panels": [
+            {
+              "x": 0.0,
+              "y": 0.0,
+              "width": 100.0,
+              "height": 40.0,
+              "panel_key": "panel-1",
+              "display_name": "Панель 1",
+              "panel_number": 1
+            }
+          ],
+          "internal_links": [],
+          "default_physical_object_class": null
+        }
+      }
+    ],
+    "BaseTemplateCandidate": [
+      {
+        "id": "d194c7a1-d872-4ef6-82ad-424ae9753148",
+        "template_id": "6e28a394-7b5e-4fbb-b625-05b79c489a40",
+        "source_revision_id": "0524f9e1-bf02-459e-bc7f-c2c7ed13f35b",
+        "draft_generation": 2,
+        "definition": {
+          "bays": [],
+          "body": {
+            "kind": "RECTANGLE",
+            "width": 100.0,
+            "height": 40.0,
+            "fill_color": null
+          },
+          "name": "09.6-C saved draft, not the published name",
+          "slots": [
+            {
+              "key": "point-1",
+              "kind": "CONNECTION_POINT",
+              "panel_key": "panel-1",
+              "display_name": "P1",
+              "rendered_position": {
+                "x": 0.2,
+                "y": 0.3
+              }
+            },
+            {
+              "key": "port-1",
+              "kind": "NETWORK_PORT",
+              "panel_key": "panel-1",
+              "display_name": "N1",
+              "rendered_position": {
+                "x": 0.7,
+                "y": 0.8
+              }
+            }
+          ],
+          "panels": [
+            {
+              "x": 0.0,
+              "y": 0.0,
+              "width": 100.0,
+              "height": 40.0,
+              "panel_key": "panel-1",
+              "display_name": "Панель 1",
+              "panel_number": 1
+            }
+          ],
+          "internal_links": [],
+          "default_physical_object_class": null
+        },
+        "result": {
+          "changes": [
+            {
+              "key": "name",
+              "after": "09.6-C saved draft, not the published name",
+              "before": "Test blueprint",
+              "section": "properties",
+              "operation": "changed"
+            }
+          ],
+          "objects": [
+            {
+              "changes": [
+                {
+                  "key": "name",
+                  "after": "09.6-C saved draft, not the published name",
+                  "before": "Test blueprint",
+                  "section": "properties",
+                  "operation": "changed"
+                }
+              ],
+              "reasons": [
+                {
+                  "code": "IDENTITY_AND_DATA_PRESERVED"
+                }
+              ],
+              "display_name": "From blueprint",
+              "classification": "potentially_safe",
+              "physical_object_id": "169b4520-2aab-40ab-af54-5729e2c72a70",
+              "source_revision_id": "0524f9e1-bf02-459e-bc7f-c2c7ed13f35b",
+              "proposed_placements": {}
+            }
+          ]
+        },
+        "input_fingerprint": "fadd6402392104ff17fc19de0bfb46c82421b31c7652a84af12c51c718440ee8",
+        "created_at": "2026-10-17T06:10:08.076548+00:00"
+      }
+    ],
+    "PresentationPanel": [
+      {
+        "id": "4177e83f-353a-4151-851e-ac2eef52851a",
+        "base_revision_id": "0524f9e1-bf02-459e-bc7f-c2c7ed13f35b",
+        "panel_key": "panel-1",
+        "panel_number": 1,
+        "display_name": "Панель 1",
+        "x": 0.0,
+        "y": 0.0,
+        "width": 100.0,
+        "height": 40.0
+      }
+    ],
+    "BuiltInEndpointDefinition": [
+      {
+        "id": "4531337b-2341-4856-867a-57d31efbfc29",
+        "base_revision_id": "0524f9e1-bf02-459e-bc7f-c2c7ed13f35b",
+        "slot_key": "port-1",
+        "display_name": "N1",
+        "kind": "NETWORK_PORT",
+        "panel_key": "panel-1",
+        "position_x": 0.7,
+        "position_y": 0.8
+      },
+      {
+        "id": "ad95ca16-9819-48d3-b8ed-34cf3242c834",
+        "base_revision_id": "0524f9e1-bf02-459e-bc7f-c2c7ed13f35b",
+        "slot_key": "point-1",
+        "display_name": "P1",
+        "kind": "CONNECTION_POINT",
+        "panel_key": "panel-1",
+        "position_x": 0.2,
+        "position_y": 0.3
+      }
+    ],
+    "BaseInternalLink": [],
+    "ObjectConfiguration": [
+      {
+        "id": "36cca3ce-5bcc-4c0b-9015-eec8e9f54e98",
+        "base_revision_id": "0524f9e1-bf02-459e-bc7f-c2c7ed13f35b",
+        "physical_object_id": "169b4520-2aab-40ab-af54-5729e2c72a70"
+      }
+    ],
+    "BuiltInEndpointMapping": [
+      {
+        "id": "5de3df14-e9df-4ca7-bfd4-d4e3dc9493b6",
+        "configuration_id": "36cca3ce-5bcc-4c0b-9015-eec8e9f54e98",
+        "definition_id": "ad95ca16-9819-48d3-b8ed-34cf3242c834",
+        "connection_point_id": "ba30af9d-7747-4d5e-ba5a-a43011e8c799",
+        "network_interface_id": null
+      },
+      {
+        "id": "cf641c6f-182a-4732-a10c-acec04b03487",
+        "configuration_id": "36cca3ce-5bcc-4c0b-9015-eec8e9f54e98",
+        "definition_id": "4531337b-2341-4856-867a-57d31efbfc29",
+        "connection_point_id": "408f9ec5-d199-4466-8cfc-ce22018b4ab8",
+        "network_interface_id": "0ca266b5-c732-467a-ac6b-fc7eb25187f0"
+      }
+    ],
+    "ModuleBay": [],
+    "ModuleTemplate": [],
+    "ModuleTemplateRevision": [],
+    "ModuleEndpointDefinition": [],
+    "ModuleInstallation": [],
+    "ModuleEndpointMapping": []
+  },
+  "presentation": {
+    "SavedMap": [
+      {
+        "id": "57664fea-b1d4-45d8-bac5-ed016ca60bea",
+        "name": "Rack map",
+        "created_at": "2026-10-17T06:10:07.947555+00:00",
+        "updated_at": "2026-10-17T06:10:07.947555+00:00"
+      }
+    ],
+    "MapPresentationVariant": [
+      {
+        "id": "91e82764-e45f-4e84-afbe-b9c9f0645a46",
+        "map_id": "57664fea-b1d4-45d8-bac5-ed016ca60bea",
+        "name": "Основной"
+      }
+    ],
+    "MapPlacement": [
+      {
+        "id": "07005253-0291-43ec-95be-56ccf2dae123",
+        "map_id": "57664fea-b1d4-45d8-bac5-ed016ca60bea",
+        "physical_object_id": "2e99cd28-1794-41e1-bb64-20a8f291e92a"
+      },
+      {
+        "id": "715ec766-02f6-41ee-a6f6-1b28ee750eec",
+        "map_id": "57664fea-b1d4-45d8-bac5-ed016ca60bea",
+        "physical_object_id": "b88e527e-9c87-4589-879e-b53c6458a520"
+      }
+    ],
+    "MapViewPosition": [
+      {
+        "id": "5d15e5db-e138-470f-8e6e-b11532b6c935",
+        "placement_id": "07005253-0291-43ec-95be-56ccf2dae123",
+        "variant_id": "91e82764-e45f-4e84-afbe-b9c9f0645a46",
+        "view_key": "L1/PHYSICAL_OBJECT",
+        "x": 100.0,
+        "y": 50.0,
+        "locked": true,
+        "display_width": null
+      },
+      {
+        "id": "fb311cde-f86b-4b2e-8289-c8e2954d964c",
+        "placement_id": "715ec766-02f6-41ee-a6f6-1b28ee750eec",
+        "variant_id": "91e82764-e45f-4e84-afbe-b9c9f0645a46",
+        "view_key": "L1/PHYSICAL_OBJECT",
+        "x": 300.0,
+        "y": 50.0,
+        "locked": false,
+        "display_width": null
+      }
+    ],
+    "MapLocationState": [],
+    "MapCableRoute": [
+      {
+        "id": "a1881733-415d-4f0c-aef4-04905f8ac970",
+        "map_id": "57664fea-b1d4-45d8-bac5-ed016ca60bea",
+        "variant_id": "91e82764-e45f-4e84-afbe-b9c9f0645a46",
+        "cable_id": "d0bdc055-3075-4004-92e0-9195b26f8ac8",
+        "view_key": "L1/PHYSICAL_OBJECT",
+        "waypoints": [
+          {
+            "x": 120.0,
+            "y": 80.0
+          }
+        ]
+      }
+    ],
+    "MapTextAnnotation": [
+      {
+        "id": "7bba82f6-cae6-4633-8fc8-bafe2e5877d2",
+        "map_id": "57664fea-b1d4-45d8-bac5-ed016ca60bea",
+        "text": "Rack note",
+        "position": {
+          "x": 15.0,
+          "y": 25.0
+        },
+        "text_color": "#123456",
+        "font_size": 18.0
+      }
+    ]
+  },
+  "settings": {
+    "CableLabelSettings": [
+      {
+        "id": 1,
+        "unique_labels": false
+      }
+    ],
+    "CableLabelTemplate": [
+      {
+        "id": "e61705c4-868f-4a3a-b10a-37f83690d756",
+        "name": "Cable IDs",
+        "description": "Rack links",
+        "pattern": "C-###",
+        "start_at": 1
+      }
+    ],
+    "CableLabelHistory": []
+  }
+}

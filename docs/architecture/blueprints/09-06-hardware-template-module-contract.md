@@ -184,6 +184,27 @@ existing objects. Phase C PAUSED; HV-01 remains incomplete.**
 See [D1 validation](09-06-d1-validation.md). Publication does not begin D2,
 resume Phase C or complete HV-01.
 
+### Workspace v5 archive compatibility (D1 corrective)
+
+Exports always use the current explicit v5 shape: every BaseTemplateRevision
+has its immutable `name`, and `BaseTemplatePublication` is present, including
+when empty. Import additionally accepts exactly the historical 09.6-C shape
+exported by main `1e733319`: that collection is absent, every base revision
+lacks `name`, and only initial (`version_number=1`) base revisions exist.
+For that profile alone, revision names are restored from each owning
+BaseTemplate's name and publications are empty. Draft/candidate definitions,
+fingerprints, IDs, configurations, canonical facts, SavedMaps and other data
+are preserved as recorded. Import does not rewrite the supplied archive.
+
+The two shape changes must occur together; mixed/partial shapes, unknown or
+other missing fields/collections remain errors. Later base revisions cannot
+be disguised as C archives by stripping receipts and names. In the current
+shape, every noninitial base revision requires exactly one receipt, and all
+existing receipt FK/ownership/source/candidate-content checks remain strict.
+This is a bounded v5 archive compatibility contract, not a general version
+migration framework or an obsolete runtime/authoring API. Applied migrations
+0001/0002/0003 remain unchanged; no database migration or reset is required.
+
 ## Library roles and base equipment template
 
 The user-facing template library has two categories: **базовые шаблоны

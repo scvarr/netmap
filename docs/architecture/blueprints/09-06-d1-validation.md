@@ -104,3 +104,52 @@ writers to those inputs, and derived intervention analysis can be expensive for
 large libraries. Ordinary reads do not acquire global SHARE locks. D1 does not
 implement safe object updates, module movement or ModuleTemplate publication.
 External inspection and the separate HV-01 acceptance remain outstanding.
+
+## Bounded corrective after review of 25789a3 (2026-10-17)
+
+The reviewed D1 exporter added revision names and publication receipts while
+retaining format v5, but its strict importer rejected real 09.6-C v5 archives.
+This correction defines two exact v5 archive profiles. Exports remain in the
+current explicit shape. Only a complete C shape (no publication collection,
+no revision names, initial base revisions only) receives the bounded import
+adaptation: each revision's name comes from its owning BaseTemplate, and
+publications are empty. Mixed shapes, unknown fields and missing unrelated
+collections are rejected. Current noninitial revisions require exactly one
+receipt; FK/ownership/source/content checks remain active.
+
+Evidence uses an actual archive produced by the unchanged exporter at main
+`1e73331921e08ca6992a9c1bff3a6a7e7f8f4726`, on schema **0002** in the separate
+Docker project `netmap-c-archive-fixture`. The source was extracted with
+`git archive`; this branch was not switched. The committed fixture and its
+reproduction instructions are in `tests/fixtures/workspace_09_6_c_v5.json`
+and `tests/fixtures/README.md`. It contains synthetic connected topology, an
+ObjectConfiguration, SavedMap/placements/routes/annotation, settings and a saved
+draft/candidate whose name deliberately differs from the published root name.
+
+Correction validation, isolated Docker/PostgreSQL schema **0003**:
+
+- `docker compose -f compose.test.yaml exec -T test-backend pytest -o addopts= tests/test_workspace_portability.py tests/test_base_template_publication.py -q --tb=short`
+  — **38 passed** (25 workspace tests and 13 existing D1 publication tests).
+- Real C archive import succeeds; subsequent exports preserve every old
+  record and identifier exactly, including immutable review fingerprints,
+  pinned configurations and all canonical/presentation/settings sections.
+  Only revision names and the explicit empty receipt collection are added.
+  The supplied archive is not mutated. Re-import into a nonempty dataset
+  remains forbidden and does not change its data.
+- The imported C dataset can publish through the unchanged D1 workflow and
+  round-trip again with its receipt intact. Canonical topology, SavedMaps and
+  existing ObjectConfiguration remain identical throughout.
+- Negative cases cover mixed C/current shapes, missing unrelated collections,
+  later revisions disguised as C, missing/empty/null receipts, nonexistent
+  candidate/revision references, foreign ownership, wrong source, mismatched
+  candidate content, duplicate receipts/revision assignments and unknown fields.
+  Rejected imports leave the destination dataset unchanged.
+- `alembic current` — **0003 (head)**. Applied migrations 0001/0002/0003,
+  publication transaction/locks/idempotency, impact analysis, UI and
+  ObjectConfiguration code are unchanged. No user database reset or migration.
+- `git diff --check` — **PASS**. Targeted import impact analysis is LOW;
+  staged GitNexus `detect_changes` covers **6 files / 15 symbols / 4 import
+  flows**, aggregate risk **medium**, with no partial/truncated result.
+  Index path and baseline match this working tree and reviewed SHA.
+  Full suites/frontend checks/browser runs are unnecessary for this import-only
+  correction and were not run. D2 remains OPEN, Phase C PAUSED, HV-01 incomplete.

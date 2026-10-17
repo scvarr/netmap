@@ -168,21 +168,37 @@ def validate_package(package: object) -> dict:
         raise PackageError("Incomplete or unknown package sections")
     specs = _specs()
     result = {}
+    # Exact 09.6-C v5 profile: no publication collection and no revision names.
+    # This is an archive import contract, not an authoring/runtime fallback.
+    historical_c = isinstance(package["authoring"], dict) and "BaseTemplatePublication" not in package["authoring"]
     for section in ("canonical", "authoring", "presentation", "settings"):
         expected = {name for part, name, _, _ in specs if part == section}
+        if historical_c and section == "authoring":
+            expected.remove("BaseTemplatePublication")
         if not isinstance(package[section], dict) or set(package[section]) != expected:
             raise PackageError(f"Incomplete {section} section")
     for section, name, model, fields in specs:
-        records = package[section][name]
+        records = [] if historical_c and name == "BaseTemplatePublication" else package[section][name]
         if not isinstance(records, list):
             raise PackageError(f"{name} must be a list")
         columns = {column.key: column for column in model.__table__.columns}
         parsed = []
         ids = set()
+        historical_revision = historical_c and name == "BaseTemplateRevision"
+        expected_fields = set(fields) - {"name"} if historical_revision else set(fields)
+        template_names = {r["id"]: r["name"] for r in result["base_templates"]} if historical_revision else {}
         for record in records:
-            if not isinstance(record, dict) or set(record) != set(fields):
+            if not isinstance(record, dict) or set(record) != expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
-            row = {field: _decode(record[field], columns[field], f"{name}.{field}") for field in fields}
+            row = {field: _decode(record[field], columns[field], f"{name}.{field}") for field in fields if field in expected_fields}
+            if historical_revision:
+                # C could publish only the initial revision. Do not disguise a
+                # D1 archive stripped of its receipts/names as a C export.
+                if row["version_number"] != 1:
+                    raise PackageError("09.6-C archive can contain only initial base revisions")
+                if row["template_id"] not in template_names:
+                    raise PackageError("BaseTemplateRevision.template_id refers to a missing entity")
+                row["name"] = template_names[row["template_id"]]
             if row["id"] in ids:
                 raise PackageError(f"Duplicate {name} ID")
             ids.add(row["id"])
@@ -227,6 +243,10 @@ def _validate_template_reviews(rows):
     from app.errors import ValidationError as DefinitionError
     revisions = {r["id"]: r for r in rows["base_template_revisions"]}
     candidates = {r["id"]: r for r in rows["base_template_candidates"]}
+    published_ids = [r["revision_id"] for r in rows["base_template_publications"]]
+    if (len(published_ids) != len(set(published_ids))
+            or set(published_ids) != {r["id"] for r in revisions.values() if r["version_number"] > 1}):
+        raise PackageError("Every noninitial base revision must have exactly one publication receipt")
     for receipt in rows["base_template_publications"]:
         candidate = candidates[receipt["id"]]
         revision = revisions[receipt["revision_id"]]
