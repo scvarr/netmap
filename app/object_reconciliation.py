@@ -91,6 +91,18 @@ class ObjectReconciliation:
         list(session.scalars(select(m.ConnectionPoint).where(m.ConnectionPoint.id.in_(
             [e.connection_point_id for e in mappings]
         )).order_by(m.ConnectionPoint.id).with_for_update()))
+        # Retained NETWORK_PORT tuples must stay valid through the revision write.
+        # Endpoint FK locks protect absent rows/new references, but an existing
+        # owner/binding can be deleted or edited without changing its endpoint FK.
+        retained_interfaces = [e.network_interface_id for key, e in by_key.items()
+                               if key in new and old[key]["kind"] == "NETWORK_PORT" and e.network_interface_id]
+        if retained_interfaces:
+            list(session.scalars(select(m.NetworkInterfacePhysicalOwner.id).where(
+                m.NetworkInterfacePhysicalOwner.interface_id.in_(retained_interfaces)
+            ).order_by(m.NetworkInterfacePhysicalOwner.id).with_for_update(read=True)))
+            list(session.scalars(select(m.InterfacePhysicalBinding.id).where(
+                m.InterfacePhysicalBinding.interface_id.in_(retained_interfaces)
+            ).order_by(m.InterfacePhysicalBinding.id).with_for_update(read=True)))
         # FK locks alone do not serialize an existing alias/binding/owner UPDATE
         # that leaves its FK unchanged. Lock all current direct dependency rows
         # before the fresh analysis, not just endpoints or rows to be deleted.

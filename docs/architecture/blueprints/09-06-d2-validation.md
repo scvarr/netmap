@@ -155,3 +155,71 @@ errors are logged and shown for that attempt; after reload the UI recomputes
 actual revision/dependency state, without a separate status flag. No new provenance
 relationship, conflict editor, ModuleTemplate editing/updating, SavedMap redesign,
 or next-milestone work is included. Phase C and HV-01 remain unaccepted.
+
+## Bounded corrective after external review of 4499de0 (2026-10-17)
+
+Reviewed baseline: `4499de069284c3aa92db472d3749d1dc20b20cfb`; same branch,
+initially clean. The retained built-in NETWORK_PORT check previously accepted
+an interface ID without proving the canonical ownership and binding required
+by the existing hardware configuration/import invariants.
+
+- Shared `analyze_object` now requires the exact existing owner tuple
+  `(network_interface_id, configuration.physical_object_id)` and binding tuple
+  `(network_interface_id, mapping.connection_point_id, point_member=1)` for
+  surviving network ports. Missing or contradictory facts produce
+  `requires_intervention` / `INVALID_ENDPOINT_MAPPING`, identifying the opaque
+  endpoint key, endpoint name and `NETWORK_INTERFACE_PHYSICAL_OWNERS` and/or
+  `INTERFACE_PHYSICAL_BINDINGS` as the invalid dependencies. The same check is
+  used by advisory review/status and the fresh transaction preflight. It never
+  repairs or deletes the contradictory facts, configuration or mapping.
+- Existing endpoint UPDATE locks alone were insufficient: a writer can delete
+  a dependent row or edit a non-endpoint FK/member without taking a new endpoint
+  FK lock. Reconciliation now takes **row-level FOR SHARE** locks on existing
+  owner/binding rows for retained network interfaces, in stable row-ID order,
+  after the existing interface/point locks and before analysis. These protect
+  the positive ownership/binding evidence through commit; endpoint locks still
+  protect absent rows against concurrent FK insertions. READ COMMITTED queries
+  after a waited row lock see the committed change and refuse safely. No new
+  table locks, new ownership model or canonical writes are introduced.
+- The existing `INVALID_ENDPOINT_MAPPING` diagnostic is also admitted by the
+  persisted review reason validator. D2 already emitted and displayed this
+  code, but the validator omitted it. No fields, archive shape/version, workspace
+  parser, migrations or frontend were changed. The new reasons validate under
+  the same `BaseTemplateImpactResult` used to read persisted review snapshots.
+
+Targeted Docker/PostgreSQL validation:
+
+`docker compose -f compose.test.yaml exec -T test-backend pytest -o addopts= tests/test_retained_builtin_endpoint_integrity.py tests/test_object_reconciliation.py tests/test_object_reconciliation_concurrency.py tests/test_base_template_review.py tests/test_base_template_review_concurrency.py tests/test_hardware_configuration.py tests/test_workspace_portability.py -q --tb=short`
+
+**122 passed**, including **15 new corrective tests**, with no exclusions:
+
+- Seven data cases cover missing/foreign owner, missing binding, wrong point,
+  wrong interface, wrong member and simultaneous absence of both required rows.
+  Every case checks persisted advisory diagnostics, transaction refusal, exact
+  preservation of all canonical facts and the blocked configuration/mapping,
+  successful identity-preserving update of a correct NETWORK_PORT on another
+  object, derived reasons after reload and idempotent repeat.
+- Four independent PostgreSQL writer cases commit owner deletion/reassignment
+  or binding deletion/retargeting while reconciliation waits on that row. An
+  earlier safe advisory result cannot authorize the write: fresh preflight
+  refuses and preserves the writer's canonical facts and old configuration.
+- Four more cases pause after successful preflight and prove concurrent owner
+  deletion/reassignment or binding deletion/member edits cannot pass the row
+  locks before reconciliation commits. The concurrent writes time out with
+  `55P03`; successful reconciliation leaves canonical facts identical.
+- Existing D2 behavior/concurrency, advisory snapshot, hardware configuration
+  and workspace portability tests pass. Full suites, frontend build/browser
+  runs and a user-runtime redeployment are unnecessary for this backend-only
+  correction and were not performed. Tests use the isolated `netmap_test` DB;
+  no user database reset or applied migration edit occurred.
+
+Publication code, module relocation and internal Connections were not changed.
+The corrective diff was reread; `git diff --check` and the staged equivalent
+pass. GitNexus staged `detect_changes` covers **5 files / 17 symbols / 10 affected
+flows**, aggregate **HIGH**, with all 17 symbols returned and no partial/truncated
+result. The index path and reviewed baseline were verified, and all four changed
+Python source/test SHA-256 hashes match the rebuilt index. The affected shared
+advisory flows have targeted coverage above; graph inventory limits remain as
+documented for D2. Only this report's final inspection prose was completed after
+indexing. External acceptance remains outstanding; Phase C stays **PAUSED**,
+HV-01 is not PASSED, and no next milestone is started.

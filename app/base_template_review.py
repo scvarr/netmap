@@ -142,6 +142,24 @@ def analyze_object(session, config, candidate):
             if (point is None or point.physical_object_id != config.physical_object_id
                     or (old[key]["kind"] == "NETWORK_PORT") != (mapping.network_interface_id is not None)):
                 reasons.append({"code": "INVALID_ENDPOINT_MAPPING", "key": key})
+            elif mapping.network_interface_id is not None:
+                # Same canonical tuples required by workspace hardware validation.
+                # An interface ID alone is not proof of network-port materialization.
+                dependencies = []
+                owner = session.scalar(select(m.NetworkInterfacePhysicalOwner.id).where(
+                    m.NetworkInterfacePhysicalOwner.interface_id == mapping.network_interface_id,
+                    m.NetworkInterfacePhysicalOwner.physical_object_id == config.physical_object_id))
+                if owner is None:
+                    dependencies.append("NETWORK_INTERFACE_PHYSICAL_OWNERS")
+                binding = session.scalar(select(m.InterfacePhysicalBinding.id).where(
+                    m.InterfacePhysicalBinding.interface_id == mapping.network_interface_id,
+                    m.InterfacePhysicalBinding.point_id == mapping.connection_point_id,
+                    m.InterfacePhysicalBinding.point_member == 1))
+                if binding is None:
+                    dependencies.append("INTERFACE_PHYSICAL_BINDINGS")
+                if dependencies:
+                    reasons.append({"code": "INVALID_ENDPOINT_MAPPING", "key": key,
+                                    "endpoint_name": old[key]["display_name"], "dependencies": dependencies})
     bays = {b["bay_key"]: b for b in candidate["bays"]}
     installations = list(session.scalars(select(m.ModuleInstallation).where(m.ModuleInstallation.configuration_id == config.id)))
     displaced = []
