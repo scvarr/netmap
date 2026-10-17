@@ -808,7 +808,7 @@ class BaseTemplateStructuralChange(BaseModel):
 
 class BaseTemplateImpactReason(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "INSUFFICIENT_COMPATIBLE_CAPACITY", "INTERNAL_LINK_CONNECTIONS", "IDENTITY_AND_DATA_PRESERVED"]
+    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "INSUFFICIENT_COMPATIBLE_CAPACITY", "INTERNAL_LINK_CONNECTIONS", "INTERNAL_LINK_CARDINALITY", "IDENTITY_AND_DATA_PRESERVED"]
     key: str | list[str] | None = None
     endpoint_name: str | None = None
     dependencies: list[str] | None = None
