@@ -7,6 +7,7 @@ import { MapPage } from './pages/MapPage';
 import { NewInfrastructureObjectPage } from './pages/NewInfrastructureObjectPage';
 import { NewBaseTemplatePage } from './pages/NewBaseTemplatePage';
 import { EditBaseTemplatePage } from './pages/EditBaseTemplatePage';
+import { EditModuleTemplatePage } from './pages/EditModuleTemplatePage';
 import { BaseTemplateLibraryPage } from './pages/BaseTemplateLibraryPage';
 import type { ConnectionPointWriteDataSource } from './topology/connectionPointWriteTypes';
 import type { DeviceDetailsDataSource } from './topology/deviceDetailsTypes';
@@ -83,6 +84,7 @@ export function App(props: AppProps) {
         <Route path="settings/data" element={<WorkspaceDataPage />} />
         <Route path="library/base-templates" element={props.baseTemplateDataSource ? <BaseTemplateLibraryPage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/module-templates/new" element={<NewModuleTemplatePage />} />
+        <Route path="library/module-templates/:templateId/edit" element={<EditModuleTemplatePage />} />
         <Route path="library/base-templates/new" element={props.baseTemplateDataSource ? <NewBaseTemplatePage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/base-templates/:templateId/edit" element={props.baseTemplateDataSource?.loadDraft ? <EditBaseTemplatePage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/library/base-templates" />} />
         <Route

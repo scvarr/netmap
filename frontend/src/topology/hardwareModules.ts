@@ -1,4 +1,4 @@
-import type { BlueprintSlotKind } from './baseTemplateTypes';
+import type { BlueprintSlotKind, TemplateImpactReason } from './baseTemplateTypes';
 
 export interface ModuleBay {
   bay_key: string; display_name: string; compatibility: string; panel_key: string;
@@ -7,6 +7,26 @@ export interface ModuleBay {
 export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind }
 export interface ModuleTemplateInput { name: string; compatibility: string; endpoints: ModuleEndpoint[] }
 export interface ModuleTemplate extends ModuleTemplateInput { template_id: string; revision_id: string }
+export interface ModuleDraftDocument {
+  template_id: string; source_revision_id: string; generation: number; definition: ModuleTemplateInput;
+  review: null | {
+    candidate_id: string; draft_generation: number; definition: ModuleTemplateInput; current: boolean; created_at: string;
+    result: { changes: ModuleStructuralChange[]; installations: Array<{
+      installation_id: string; physical_object_id: string; display_name: string; source_revision_id: string; bay_key: string;
+      classification: 'potentially_safe' | 'requires_intervention'; reasons: TemplateImpactReason[]; changes: ModuleStructuralChange[];
+    }> };
+  };
+}
+export interface ModuleStructuralChange {
+  section: 'properties' | 'endpoints'; key: string; operation: 'added' | 'removed' | 'changed';
+  before: string | (ModuleEndpoint & { order_index: number }) | null;
+  after: string | (ModuleEndpoint & { order_index: number }) | null;
+}
+export interface ModuleReviewDataSource {
+  loadDraft(id: string): Promise<ModuleDraftDocument>;
+  saveDraft(id: string, definition: ModuleTemplateInput, generation: number): Promise<ModuleDraftDocument>;
+  checkDraft(id: string, generation: number): Promise<ModuleDraftDocument>;
+}
 export interface ModuleInstallation {
   id: string; module_template_id: string; module_revision_id: string; name: string;
   orientation: 'HORIZONTAL' | 'VERTICAL';
@@ -26,7 +46,7 @@ export interface HardwareModuleDataSource {
   loadConfiguration(objectId: string): Promise<HardwareConfiguration>;
   installModule(objectId: string, input: { module_template_id: string; bay_key: string; orientation: 'HORIZONTAL' | 'VERTICAL' }): Promise<HardwareConfiguration>;
 }
-async function request<T>(url: string, input?: unknown, method: 'GET' | 'POST' | 'DELETE' = input === undefined ? 'GET' : 'POST'): Promise<T> {
+async function request<T>(url: string, input?: unknown, method: 'GET' | 'POST' | 'DELETE' | 'PUT' = input === undefined ? 'GET' : 'POST'): Promise<T> {
   const response = await fetch(url, { method, ...(input === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }) });
   if (response.status === 204) return undefined as T;
   const document = await response.json();
@@ -40,4 +60,9 @@ export const hardwareModuleDataSource: HardwareModuleDataSource = {
   uninstallModule: (id, installationId) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations/${encodeURIComponent(installationId)}`, undefined, 'DELETE'),
   loadConfiguration: id => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/configuration`),
   installModule: (id, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations`, input),
+};
+export const moduleReviewDataSource: ModuleReviewDataSource = {
+  loadDraft: id => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft`),
+  saveDraft: (id, input, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft?expected_generation=${generation}`, input, 'PUT'),
+  checkDraft: (id, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft/check?expected_generation=${generation}`, undefined, 'POST'),
 };

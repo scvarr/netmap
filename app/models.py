@@ -634,6 +634,30 @@ class ModuleTemplateRevision(Base):
     compatibility: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
+class ModuleTemplateDraft(Base):
+    __tablename__ = "module_template_drafts"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_templates.id", ondelete="CASCADE"), unique=True, nullable=False)
+    source_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="CASCADE"), nullable=False)
+    generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    definition: Mapped[dict] = mapped_column(JSONB, nullable=False)
+
+
+class ModuleTemplateCandidate(Base):
+    """Append-only review snapshot, following the base template review contract."""
+    __tablename__ = "module_template_candidates"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    template_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_templates.id", ondelete="CASCADE"), nullable=False)
+    source_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="CASCADE"), nullable=False)
+    draft_generation: Mapped[int] = mapped_column(Integer, nullable=False)
+    definition: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    result: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class ModuleEndpointDefinition(Base):
     __tablename__ = "module_endpoint_definitions"
     __table_args__ = (

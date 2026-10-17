@@ -834,6 +834,54 @@ class BaseTemplateImpactResult(BaseModel):
     objects: list[BaseTemplateObjectImpact]
 
 
+class ModuleEndpointSnapshot(ModuleEndpointRequest):
+    order_index: int = Field(ge=0)
+
+
+class ModuleTemplateStructuralChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    section: Literal["properties", "endpoints"]
+    key: str
+    operation: Literal["added", "removed", "changed"]
+    before: str | ModuleEndpointSnapshot | None
+    after: str | ModuleEndpointSnapshot | None
+
+    @model_validator(mode="after")
+    def valid_change(self):
+        values = [v for v in (self.before, self.after) if v is not None]
+        if self.section == "properties":
+            valid = self.key in ("name", "compatibility") and self.operation == "changed" and len(values) == 2 and all(isinstance(v, str) for v in values)
+        else:
+            valid = all(isinstance(v, ModuleEndpointSnapshot) and v.key == self.key for v in values)
+        if (not valid or not values or (self.operation == "added" and (self.before is not None or self.after is None))
+                or (self.operation == "removed" and (self.before is None or self.after is not None))
+                or (self.operation == "changed" and len(values) != 2)):
+            raise ValueError("Invalid module structural change")
+        return self
+
+
+class ModuleTemplateImpactReason(BaseTemplateImpactReason):
+    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "BAY_COMPATIBILITY_MISMATCH", "IDENTITY_AND_DATA_PRESERVED"]
+
+
+class ModuleTemplateInstallationImpact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    installation_id: uuid.UUID
+    physical_object_id: uuid.UUID
+    display_name: str
+    source_revision_id: uuid.UUID
+    bay_key: str = Field(min_length=1)
+    classification: Literal["requires_intervention", "potentially_safe"]
+    reasons: list[ModuleTemplateImpactReason] = Field(min_length=1)
+    changes: list[ModuleTemplateStructuralChange]
+
+
+class ModuleTemplateImpactResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    changes: list[ModuleTemplateStructuralChange]
+    installations: list[ModuleTemplateInstallationImpact]
+
+
 class BaseTemplateCreationDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

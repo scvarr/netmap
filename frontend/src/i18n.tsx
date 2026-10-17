@@ -6,6 +6,10 @@ export const localeStorageKey = 'netmap.locale';
 
 const messages = {
   ru: {
+    'moduleReview.up': 'Выше', 'moduleReview.down': 'Ниже', 'moduleReview.endpoints': 'Конечные точки модуля',
+    'moduleReview.compatibility': 'Совместимость не совпадает с текущим отсеком. Требуется вмешательство.',
+    'moduleReview.installation': 'Установка: {id}; исходная ревизия: {revision}; отсек: {bay}',
+    'moduleReview.noInstallations': 'Установок этого шаблона пока нет.',
     'reconciliation.run': 'Обновить совместимые объекты', 'reconciliation.results': 'Результаты обновления объектов',
     'reconciliation.updated': 'Обновлён', 'reconciliation.current': 'Актуален',
     'reconciliation.mapping': 'Сопоставление конечной точки не соответствует конфигурации:',
@@ -95,6 +99,10 @@ const messages = {
     'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
+    'moduleReview.up': 'Move up', 'moduleReview.down': 'Move down', 'moduleReview.endpoints': 'Module endpoints',
+    'moduleReview.compatibility': 'Compatibility does not match the current bay. Intervention is required.',
+    'moduleReview.installation': 'Installation: {id}; source revision: {revision}; bay: {bay}',
+    'moduleReview.noInstallations': 'This template has no installations yet.',
     'reconciliation.run': 'Update compatible objects', 'reconciliation.results': 'Object update results',
     'reconciliation.updated': 'Updated', 'reconciliation.current': 'Current',
     'reconciliation.mapping': 'Endpoint mapping does not match the configuration:',

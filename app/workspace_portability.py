@@ -73,6 +73,8 @@ ENTITIES = (
     ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name compatibility panel_key x y width height"),
     ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
     ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number compatibility"),
+    ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
+    ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind"),
     ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id module_revision_id bay_key orientation"),
     ("authoring", "ModuleEndpointMapping", "ModuleEndpointMapping", "id installation_id definition_id connection_point_id network_interface_id"),
@@ -171,14 +173,19 @@ def validate_package(package: object) -> dict:
     # Exact 09.6-C v5 profile: no publication collection and no revision names.
     # This is an archive import contract, not an authoring/runtime fallback.
     historical_c = isinstance(package["authoring"], dict) and "BaseTemplatePublication" not in package["authoring"]
+    module_review_names = {"ModuleTemplateDraft", "ModuleTemplateCandidate"}
+    pre_e1 = isinstance(package["authoring"], dict) and not module_review_names.intersection(package["authoring"])
     for section in ("canonical", "authoring", "presentation", "settings"):
         expected = {name for part, name, _, _ in specs if part == section}
         if historical_c and section == "authoring":
             expected.remove("BaseTemplatePublication")
+        if pre_e1 and section == "authoring":
+            expected -= module_review_names
         if not isinstance(package[section], dict) or set(package[section]) != expected:
             raise PackageError(f"Incomplete {section} section")
     for section, name, model, fields in specs:
-        records = [] if historical_c and name == "BaseTemplatePublication" else package[section][name]
+        absent = (historical_c and name == "BaseTemplatePublication") or (pre_e1 and name in module_review_names)
+        records = [] if absent else package[section][name]
         if not isinstance(records, list):
             raise PackageError(f"{name} must be a list")
         columns = {column.key: column for column in model.__table__.columns}
@@ -233,7 +240,40 @@ def validate_package(package: object) -> dict:
             current = locations[current]
     _validate_hardware_configuration(result)
     _validate_template_reviews(result)
+    _validate_module_template_reviews(result)
     return result
+
+
+def _validate_module_template_reviews(rows):
+    from app.module_template_review import validate_definition
+    from app.schemas import ModuleTemplateImpactResult
+    from pydantic import ValidationError as SchemaError
+    revisions = {r["id"]: r for r in rows["module_template_revisions"]}
+    templates = set()
+    for table, generation in (("module_template_drafts", "generation"), ("module_template_candidates", "draft_generation")):
+        for row in rows[table]:
+            if revisions[row["source_revision_id"]]["template_id"] != row["template_id"] or row[generation] < 1:
+                raise PackageError("Module review source revision or generation is invalid")
+            if table == "module_template_drafts":
+                if row["template_id"] in templates:
+                    raise PackageError("Duplicate module template draft")
+                templates.add(row["template_id"])
+            try:
+                validate_definition(row["definition"])
+                if table == "module_template_candidates":
+                    ModuleTemplateImpactResult.model_validate(row["result"])
+            except (SchemaError, TypeError) as exc:
+                raise PackageError("Invalid module review definition or analysis") from exc
+            if table == "module_template_candidates":
+                impacts = row["result"]["installations"]
+                if len({i["installation_id"] for i in impacts}) != len(impacts):
+                    raise PackageError("Duplicate module installation impact")
+                for impact in impacts:
+                    source = revisions.get(uuid.UUID(impact["source_revision_id"]))
+                    if source is None or source["template_id"] != row["template_id"]:
+                        raise PackageError("Module impact source revision belongs to another template")
+                if len(row["input_fingerprint"]) != 64 or any(c not in "0123456789abcdef" for c in row["input_fingerprint"]):
+                    raise PackageError("Invalid module review fingerprint")
 
 
 def _validate_template_reviews(rows):

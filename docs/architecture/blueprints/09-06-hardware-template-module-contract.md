@@ -4,7 +4,8 @@
 
 **ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A IMPLEMENTED IN MAIN
 (separate external acceptance not verified). 09.6-C, D1 AND D2 IMPLEMENTED,
-EXTERNALLY ACCEPTED AND MERGED INTO MAIN; 09.6-E REMAINS OPEN.**
+EXTERNALLY ACCEPTED AND MERGED INTO MAIN; 09.6-E1 IMPLEMENTED ON THE WORKING
+BRANCH, EXTERNAL REVIEW PENDING; E2/E3 REMAIN OPEN.**
 
 Status consolidated against main `053e5798bb53d095c1627551ca71a1b2e65aeaff`.
 C/D1/D2 external acceptance is confirmed by the status-consolidation task;
@@ -17,9 +18,10 @@ means external branch review, not manual user acceptance of HV-01 or Phase C.
 
 Current capability boundary: creation and module installation/removal, base
 draft/check, BaseTemplateRevision publication and safe PhysicalObject updates
-are implemented. ModuleTemplate editing, publication of subsequent module
-revisions and updates of installed modules remain **OPEN (09.6-E)**. Any proposed
-E1/E2/E3 split is not an approved implementation contract.
+are implemented. The agreed E1 slice adds ModuleTemplate editing, saved drafts
+and advisory installation impact checks on the working branch. Publication of
+subsequent module revisions and updates of installed modules remain **OPEN
+(E2/E3)**; E1 does not implement or accept those slices.
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -276,10 +278,54 @@ HV-01 remains incomplete, not PASSED.**
   Workspace v5 and the bounded C archive compatibility stay unchanged; updated
   and blocked objects, modules and canonical data round-trip together.
 
-Module authoring/publication, installation revision upgrades, a manual conflict
-editor and arbitrary movement remain outside D2. See
+At the D2 boundary, module authoring/publication, installation revision upgrades,
+a manual conflict editor and arbitrary movement remain outside D2. See
 [D2 validation](09-06-d2-validation.md). No next milestone or Phase C resumption
 is included.
+
+## Implemented boundary: 09.6-E1 (external review pending)
+
+- Library **«Изменить шаблон»** opens the module editor for name, exact open
+  compatibility and ordered endpoints. Rename/reorder preserve opaque keys;
+  additions receive new UUID keys. No module canvas is introduced.
+- `GET /v1/library/module-templates/{id}/draft` initializes/restores one server
+  draft from the current revision. `PUT .../draft?expected_generation=N` saves
+  the definition and advances generation. Stale saves/checks return 409
+  `DRAFT_CONFLICT`; failed saves retain local input.
+- `POST .../draft/check?expected_generation=N` appends an immutable candidate
+  containing definition, source revision, draft generation, SHA-256 input
+  fingerprint, structural changes and one impact entry per ModuleInstallation.
+  All installations of the root template are included, even on older revisions.
+  Each entry identifies its PhysicalObject, installation, pinned source revision
+  and current bay, with concrete reasons for intervention.
+- Endpoints match only by `definition_key`. Rename/reorder/addition are
+  potentially safe. Kind changes require intervention. Removal reuses D2's
+  direct FK and canonical JSON dependency inspection, exempting only the own
+  mapping, expected materialization and unchanged generated aliases. Missing or
+  invalid materialization requires intervention. Compatibility must equal the
+  current bay value exactly, including case and whitespace. E1 proposes no move.
+- Review uses C's coherent REPEATABLE READ snapshot/retry and conservative
+  workspace-wide canonical/authoring fingerprint. Save invalidates the previous
+  generation; canonical/configuration/installation changes invalidate the
+  fingerprint. Both base and module draft/candidate tables are excluded from
+  review inputs and base publication input locks, so module authoring alone does
+  not invalidate BaseTemplate checks. Map presentation remains excluded.
+- The client revalidates on focus and every 15 seconds. Unsaved edits, pending
+  or failed revalidation, generation conflicts and stale server results suppress
+  conclusions. The visible result describes the last verified snapshot.
+- Forward migration **0004** adds ModuleTemplateDraft/ModuleTemplateCandidate;
+  applied 0001–0003 are unchanged. Workspace remains **format_version=5** and
+  exports both new collections explicitly under `authoring`. Import accepts
+  earlier v5 archives only with both module review collections absent; a missing
+  single collection, unknown fields or malformed definitions/results are rejected.
+  Historical 09.6-C revision-name/publication handling remains supported. Review
+  ownership, generation, fingerprints and nested analysis shapes are validated;
+  canonical IDs, pinned revisions and frozen review snapshots round-trip.
+
+E1 never publishes a ModuleTemplateRevision, updates an installation or changes
+canonical endpoints, Connections or user data. E2/E3, manual conflict resolution,
+Phase C, HV-01 and spatial presentation remain outside this slice. See
+[E1 validation](09-06-e1-validation.md).
 
 ## Library roles and base equipment template
 
@@ -476,8 +522,9 @@ in this correction; later C/D1/D2 delivery is recorded above.
 
 ## OPEN and outside this contract
 
-- ModuleTemplate editing, publication of subsequent ModuleTemplateRevision
-  records and updates of installed modules (09.6-E).
+- Publication of subsequent ModuleTemplateRevision records and updates of
+  installed modules (09.6-E2/E3). E1 editing/review is implemented on the working
+  branch and awaits external inspection.
 - Endpoint technology/capability semantics: Ethernet, Fibre Channel, speed,
   connector, and other semantic properties.
 - Global endpoint color/shape visual rules.

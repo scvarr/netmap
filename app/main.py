@@ -47,6 +47,7 @@ from app.resolver import L1Resolver
 from app.saved_map_catalog import SavedMapCatalog
 from app.workspace_portability import PackageError, export_package, import_package, reset_dataset
 from app.base_template_review import BaseTemplateReview, publication_state
+from app.module_template_review import ModuleTemplateReview
 from app.routing_policy_resolver import ConfiguredRoutingPolicyResolver
 from app.security_resolver import ConfiguredSecurityPolicyResolver
 from app.security_evaluation_resolver import ConfiguredSecurityEvaluationResolver
@@ -1569,6 +1570,24 @@ def create_module_template(query: CreateModuleTemplateRequest, session: Session 
 @app.get("/v1/library/module-templates")
 def list_module_templates(session: Session = Depends(get_session)):
     return HardwareCatalog(session).list_modules()
+
+
+@app.get("/v1/library/module-templates/{template_id}/draft")
+def open_module_template_draft(template_id: uuid.UUID, session: Session = Depends(get_session)):
+    return _template_review_snapshot(session, lambda: ModuleTemplateReview(session).open(template_id))
+
+
+@app.put("/v1/library/module-templates/{template_id}/draft")
+def save_module_template_draft(template_id: uuid.UUID, query: CreateModuleTemplateRequest,
+                               expected_generation: int, session: Session = Depends(get_session)):
+    with session.begin():
+        return ModuleTemplateReview(session).save(template_id, query.model_dump(mode="json"), expected_generation)
+
+
+@app.post("/v1/library/module-templates/{template_id}/draft/check")
+def check_module_template_draft(template_id: uuid.UUID, expected_generation: int,
+                                session: Session = Depends(get_session)):
+    return _template_review_snapshot(session, lambda: ModuleTemplateReview(session).check(template_id, expected_generation))
 
 
 @app.delete(

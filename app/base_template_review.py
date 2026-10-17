@@ -93,7 +93,7 @@ def endpoint_dependencies(session, config, mapping, definition, *, lock_rows=Fal
             if lock_rows:
                 query = query.order_by(table.c.id).with_for_update()
             for row in session.execute(query).mappings():
-                if table.name == "built_in_endpoint_mappings" and row["id"] == mapping.id:
+                if table.name == mapping.__tablename__ and row["id"] == mapping.id:
                     continue
                 if table.name == "interface_physical_bindings" and row["interface_id"] == mapping.network_interface_id and row["point_id"] == mapping.connection_point_id and row["point_member"] == 1:
                     continue
@@ -225,7 +225,7 @@ class BaseTemplateReview:
         from app.workspace_portability import _specs, _json_value
         # The caller supplies a REPEATABLE READ transaction. Hash the same MVCC
         # snapshot as the analysis/freshness reads, without blocking data writers.
-        specs = [s for s in _specs() if s[0] in ("canonical", "authoring") and s[2] not in (m.BaseTemplateDraft, m.BaseTemplateCandidate)]
+        specs = [s for s in _specs() if s[0] in ("canonical", "authoring") and s[2] not in (m.BaseTemplateDraft, m.BaseTemplateCandidate, m.ModuleTemplateDraft, m.ModuleTemplateCandidate)]
         data = {name: [{field: _json_value(getattr(row, field)) for field in fields} for row in self.session.scalars(select(model).order_by(model.id))] for _, name, model, fields in specs}
         return hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False, allow_nan=False).encode()).hexdigest()
 
@@ -296,7 +296,7 @@ class BaseTemplateReview:
         # GET/check continue using non-blocking MVCC; drafts use row locks only.
         from app.workspace_portability import _specs, _tables_in_dependency_order
         inputs = {model.__tablename__ for section, _, model, _ in _specs()
-                  if section in ("canonical", "authoring") and model not in (m.BaseTemplateDraft, m.BaseTemplateCandidate)}
+                  if section in ("canonical", "authoring") and model not in (m.BaseTemplateDraft, m.BaseTemplateCandidate, m.ModuleTemplateDraft, m.ModuleTemplateCandidate)}
         preparer = self.session.bind.dialect.identifier_preparer
         names = ", ".join(preparer.format_table(t) for t in _tables_in_dependency_order() if t.name in inputs)
         self.session.execute(text(f"LOCK TABLE {names} IN SHARE ROW EXCLUSIVE MODE"))
