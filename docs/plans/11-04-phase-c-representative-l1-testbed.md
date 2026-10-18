@@ -20,9 +20,19 @@ one mandatory base template and modules installed in each concrete object.
 Creation and module installation/removal are implemented in main (09.6-A;
 separate external acceptance unverified). Base draft/check (C), revision
 publication (D1) and safe PhysicalObject updates (D2) are implemented, externally
-accepted and merged. ModuleTemplate editing, publication of subsequent module
-revisions and installed-module updates remain **OPEN (09.6-E)**. These external
-reviews do not establish manual HV-01 acceptance; HV-01 is **not PASSED**.
+accepted and merged.
+09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**, итоговый SHA
+`b96dc43303b8925d8973e7e2078a6d93540add98`.
+E2 (публикация ревизий модулей) и E3 (обновление установок) остаются **OPEN**.
+Внешняя приёмка E1 не заменяет ручную проверку: Phase C — **PAUSED**,
+HV-01 — **не PASSED**. После E2/E3 предусмотрено отдельное будущее направление
+09.6-F (F1: геометрия и графический редактор шаблонов модулей; F2: компоновка
+установок внутри PhysicalObject). Оно ещё не реализовано; деление предварительное,
+подробные контракты реализации не согласованы. См.
+[план 11-03](11-03-pre-l2-product-completion.md) и
+[контракт 09.6](../architecture/blueprints/09-06-hardware-template-module-contract.md).
+09.6-F не входит в существующие замечания Phase C, Dense Map LOD или технологии
+конечных точек. Исторические сценарии и результаты ниже не переоцениваются.
 Technology/capability and dense runtime Map presentation remain **OPEN**;
 existing `C-*` findings are not closed automatically. Port Block
 is not a prerequisite or target authoring entity. See the implemented

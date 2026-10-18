@@ -1,8 +1,12 @@
 # 09.6-E1 validation — ModuleTemplate drafts and impact review
 
 Date: 2026-10-17. Branch: `09-06-e1-module-template-draft-review`.
-Implementation complete; external inspection/acceptance pending. E2/E3 remain
-OPEN; Phase C remains PAUSED and HV-01 requires its separate manual recheck.
+Текущий статус 09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**.
+Итоговый SHA: `b96dc43303b8925d8973e7e2078a6d93540add98`.
+E2 (публикация ревизий) и E3 (обновление установок) остаются OPEN.
+Phase C остаётся PAUSED, HV-01 — не PASSED; требуется отдельная ручная проверка.
+Исторические результаты проверок и записи ниже сохранены; упоминания ожидаемой
+приёмки описывают состояние на момент соответствующей проверки.
 
 ## Delivered contract
 
@@ -89,3 +93,11 @@ Follow-up to external inspection of `3cdd6681fef56181332e641cddad7dab7f833fc3`:
 These corrections do not change BaseTemplate, publication, installation writes,
 canonical write paths, the schema or the E1 boundary. External acceptance remains
 pending.
+
+## Актуализация после приёмки — 2026-10-18
+
+Внешняя приёмка E1 завершена; итоговые исправления объединены в main на
+`b96dc43303b8925d8973e7e2078a6d93540add98`. Это не закрывает E2/E3 или HV-01
+и не возобновляет Phase C. Новая геометрия модулей остаётся будущим направлением
+09.6-F в [контракте 09.6](09-06-hardware-template-module-contract.md),
+а не частью реализованного E1.

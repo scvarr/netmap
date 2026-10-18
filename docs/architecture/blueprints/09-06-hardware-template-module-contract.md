@@ -2,12 +2,12 @@
 
 ## Status and authority
 
-**ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A IMPLEMENTED IN MAIN
-(separate external acceptance not verified). 09.6-C, D1 AND D2 IMPLEMENTED,
-EXTERNALLY ACCEPTED AND MERGED INTO MAIN; 09.6-E1 IMPLEMENTED ON THE WORKING
-BRANCH, EXTERNAL REVIEW PENDING; E2/E3 REMAIN OPEN.**
+**ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A — IMPLEMENTED в main
+(отдельная внешняя приёмка не подтверждена). 09.6-C, D1, D2 и E1 —
+IMPLEMENTED / ACCEPTED / MERGED. E2/E3 — OPEN.**
 
-Status consolidated against main `053e5798bb53d095c1627551ca71a1b2e65aeaff`.
+Статус актуализирован по `main`: `b96dc43303b8925d8973e7e2078a6d93540add98`.
+09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**, включая исправления внешнего ревью.
 C/D1/D2 external acceptance is confirmed by the status-consolidation task;
 repository history contains C through `1e73331`, D1 through `f2206a1`, and D2
 through `053e579` (including review corrections). The A implementation and its
@@ -18,10 +18,10 @@ means external branch review, not manual user acceptance of HV-01 or Phase C.
 
 Current capability boundary: creation and module installation/removal, base
 draft/check, BaseTemplateRevision publication and safe PhysicalObject updates
-are implemented. The agreed E1 slice adds ModuleTemplate editing, saved drafts
-and advisory installation impact checks on the working branch. Publication of
-subsequent module revisions and updates of installed modules remain **OPEN
-(E2/E3)**; E1 does not implement or accept those slices.
+are implemented. E1 добавляет редактирование ModuleTemplate, сохранённые черновики
+и рекомендательные проверки влияния на установки; реализация принята и включена
+в main. Публикация последующих ревизий модулей (E2) и обновление установок (E3)
+остаются **OPEN**; приёмка E1 их не закрывает.
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -106,8 +106,9 @@ including the CableLabelSettings singleton. 09.6-C adds forward migration
 **0002**; D1 adds **0003** for immutable revision names and publication receipts. Both preserve existing databases; applied 0001/0002 remain unchanged.
 
 **D2 implements safe base-revision reconciliation and automatic module relocation.**
-Module revision updates and arbitrary user movement remain outside the implemented
-boundary (09.6-E). Dense Map LOD and endpoint technology semantics remain
+Обновление ревизий установок (09.6-E3) и свободная визуальная компоновка
+(09.6-F) остаются за пределами реализованного поведения.
+Dense Map LOD and endpoint technology semantics remain
 open. C/D1/D2 have passed external inspection; manual HV-01 rechecking and
 acceptance are still required. This implementation does not accept or resume Phase C.
 
@@ -283,7 +284,10 @@ a manual conflict editor and arbitrary movement remain outside D2. See
 [D2 validation](09-06-d2-validation.md). No next milestone or Phase C resumption
 is included.
 
-## Implemented boundary: 09.6-E1 (external review pending)
+## Реализованная граница: 09.6-E1 — IMPLEMENTED / ACCEPTED / MERGED
+
+Итоговый SHA: `b96dc43303b8925d8973e7e2078a6d93540add98`.
+E2/E3 остаются OPEN; Phase C — PAUSED, HV-01 — не PASSED.
 
 - Library **«Изменить шаблон»** opens the module editor for name, exact open
   compatibility and ordered endpoints. Rename/reorder preserve opaque keys;
@@ -372,12 +376,48 @@ endpoint definitions with stable opaque keys, exact endpoint names, and endpoint
 kind. Future endpoint semantic properties require a separate contract.
 Endpoint order is presentation input, never endpoint identity.
 
-The module template needs no absolute geometry of its own. At installation,
-the user selects **horizontal** or **vertical** placement. Endpoint positions
-are derived deterministically and evenly from endpoint order, orientation,
-and the bay rectangle. Moving or resizing that rectangle changes presentation
-without changing installation or endpoint identity. No independent module
-canvas or hardware geometry model is required by this contract.
+### Реализованное представление
+
+Сейчас шаблон модуля не имеет собственной геометрии или графического редактора.
+При установке пользователь выбирает горизонтальное или вертикальное
+распределение портов. Координаты равномерно вычисляются из порядка портов,
+ориентации и прямоугольника отсека, как описано в границе 09.6-A.
+Перемещение и изменение размеров прямоугольника меняют представление,
+сохраняя идентичность установки и конечных точек.
+
+### Согласованное продуктовое направление: 09.6-F — OPEN
+
+Это будущее направление, ещё не реализованное поведение. Базовый шаблон
+оборудования задаёт корпус, панели, встроенные порты и видимые отсеки для
+установки модулей. Шаблон модуля получает собственную геометрию и расположение
+портов относительно модуля; графическое редактирование следует общим принципам
+редактора базовых шаблонов. Вложенные модули не предусматриваются.
+
+При установке пользователь выбирает совместимый отсек. Модуль отображается
+как самостоятельный визуальный элемент внутри PhysicalObject. Пользователь
+может свободно менять положение и размеры установленного модуля; порты
+масштабируются и перемещаются вместе с ним. Индивидуальное изменение положения
+портов установленного экземпляра не предусматривается. Изменение визуальной
+геометрии не означает физическое перемещение модуля в другой отсек.
+
+Геометрия шаблона модуля отделена от геометрии конкретной установки.
+Индивидуальная компоновка принадлежит представлению конфигурации PhysicalObject,
+а не SavedMap. Геометрия не является источником канонической истины.
+Сохраняются ModuleInstallation.id, идентификаторы конечных точек,
+NetworkInterface, Connections и Cables. Совместимость отсеков остаётся открытым
+пользовательским значением. Новые канонические сущности и отношения не вводятся.
+
+После E2/E3 предусмотрено отдельное направление 09.6-F:
+
+- F1: геометрия и графический редактор шаблонов модулей.
+- F2: визуальная компоновка установленных модулей внутри PhysicalObject.
+
+Деление F1/F2 предварительное; подробные контракты реализации ещё не согласованы.
+Конкретные таблицы, API, алгоритмы преобразования координат и правила переноса
+пользовательской геометрии при обновлении ревизий здесь не определяются.
+Существующие правила обновления базовых шаблонов ниже не задают такие правила
+для будущей геометрии модулей. 09.6-F не входит в E2/E3, Dense Map LOD,
+семантику технологий конечных точек или существующие замечания Phase C.
 
 ## PhysicalObject configuration and canonical endpoints
 
@@ -522,9 +562,10 @@ in this correction; later C/D1/D2 delivery is recorded above.
 
 ## OPEN and outside this contract
 
-- Publication of subsequent ModuleTemplateRevision records and updates of
-  installed modules (09.6-E2/E3). E1 editing/review is implemented on the working
-  branch and awaits external inspection.
+- Публикация последующих ModuleTemplateRevision (09.6-E2) и обновление установок
+  (09.6-E3). E1: IMPLEMENTED / ACCEPTED / MERGED.
+- Геометрия и графический редактор шаблонов модулей, компоновка установок
+  внутри PhysicalObject (09.6-F): OPEN, согласованное будущее направление.
 - Endpoint technology/capability semantics: Ethernet, Fibre Channel, speed,
   connector, and other semantic properties.
 - Global endpoint color/shape visual rules.

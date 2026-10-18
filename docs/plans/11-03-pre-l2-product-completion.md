@@ -56,12 +56,26 @@ therefore supersedes the complete-configuration target of 09.4/09.5.
 Creation and module installation/removal are implemented in main (09.6-A;
 separate final external acceptance unverified). Base draft/check (09.6-C),
 BaseTemplateRevision publication (D1) and safe PhysicalObject updates (D2) are
-implemented, externally accepted and merged. ModuleTemplate editing, publication
-of subsequent revisions and installed-module updates remain **OPEN (09.6-E)**;
-an E1/E2/E3 split is not an approved contract. Manual HV-01 recheck is still
-required before resuming; see [11-04](11-04-phase-c-representative-l1-testbed.md). This adds no
-roadmap scope beyond that accepted redesign. Technology/capability and dense
-runtime Map presentation remain **OPEN**; Phase C is not complete or PASSED.
+implemented, externally accepted and merged.
+09.6-E1 (редактирование ModuleTemplate, сохранённые черновики и проверка влияния):
+**IMPLEMENTED / ACCEPTED / MERGED**, итоговый SHA
+`b96dc43303b8925d8973e7e2078a6d93540add98`.
+E2 (публикация последующих ревизий модулей) и E3 (обновление установок) — **OPEN**.
+Phase C остаётся **PAUSED**, HV-01 — **не PASSED**; перед возобновлением нужна
+ручная повторная проверка, см. [11-04](11-04-phase-c-representative-l1-testbed.md).
+
+После E2/E3 предусмотрено отдельное согласованное продуктовое направление
+**09.6-F — OPEN**, ещё не реализованное:
+
+- F1: геометрия и графический редактор шаблонов модулей.
+- F2: визуальная компоновка установленных модулей внутри PhysicalObject.
+
+Деление F1/F2 предварительное; подробные контракты реализации ещё не согласованы.
+Продуктовые границы и инварианты зафиксированы в
+[контракте 09.6](../architecture/blueprints/09-06-hardware-template-module-contract.md).
+09.6-F не смешивается с E2/E3, Dense Map LOD, технологиями конечных точек
+или существующими замечаниями Phase C и не закрывает их. Технологии конечных
+точек и плотное представление карты остаются OPEN; Phase C не завершена.
 
 В spatial strand P-UX-03A/B/C/D реализованы, ручная проверка P-UX-03D
 пройдена. Bounded Cable route follow-up из 11-08 завершён. Следующий spatial
