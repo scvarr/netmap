@@ -105,6 +105,32 @@ describe('module persisted draft and review', () => {
     }
   });
 
+  it.each(['clean', 'dirty', 'generation'])('recovers from transient revalidation failure with %s input', async mode => {
+    const { source, mount } = setup(reviewed(draft())); mount();
+    await screen.findByText('Потенциально безопасное автоматическое обновление');
+    source.loadDraft.mockRejectedValueOnce(new Error('Offline'));
+    fireEvent(window, new Event('focus'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Offline');
+    expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument();
+    if (mode === 'dirty') fireEvent.change(screen.getByDisplayValue('P1'), { target: { value: 'Keep local edits' } });
+    if (mode === 'generation') source.loadDraft.mockResolvedValueOnce({ ...reviewed(draft()), generation: 4 });
+    await act(async () => { fireEvent(window, new Event('focus')); });
+    if (mode === 'generation') {
+      expect(screen.getByRole('alert')).toHaveTextContent('Черновик изменён в другой сессии');
+      expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
+      await screen.findByText('Черновик сохранён');
+      expect(source.saveDraft.mock.calls[0][2]).toBe(3);
+    } else {
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      if (mode === 'dirty') {
+        expect(screen.getByDisplayValue('Keep local edits')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
+        expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument();
+      } else expect(screen.getByText('Потенциально безопасное автоматическое обновление')).toBeInTheDocument();
+    }
+  });
+
   it('revalidates every 15 seconds without replacing unsaved input', async () => {
     vi.useFakeTimers();
     const { source, mount } = setup(reviewed(draft()));

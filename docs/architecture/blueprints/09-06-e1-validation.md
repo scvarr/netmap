@@ -68,3 +68,24 @@ unrelated canonical edits may invalidate a review. Reviews are advisory snapshot
 not authorization to apply an update. No module publication, installation update,
 module relocation, conflict editor or module canvas is included. External branch
 inspection is the next acceptance boundary; no merge to main is performed.
+
+## External review corrections — 2026-10-18
+
+Follow-up to external inspection of `3cdd6681fef56181332e641cddad7dab7f833fc3`:
+
+- Retained module endpoints now require ConnectionPoint cardinality exactly 1;
+  an invalid cardinality reports `requires_intervention` / `INVALID_ENDPOINT_MAPPING`.
+  Addressed tests cover both NETWORK_PORT and CONNECTION_POINT, with unchanged
+  canonical data and installations after the advisory check.
+- A successful refresh clears the previous error only after its generation
+  matches the editor's saved generation. Confirmed current conclusions become
+  visible again after a transient failure; dirty input and generation conflicts
+  still suppress conclusions and preserve local input/the saved generation.
+- Docker targeted checks: `tests/test_module_template_review.py` **42 passed**;
+  `src/pages/EditModuleTemplatePage.test.tsx` **12 passed**. New regression tests
+  reproduced both defects before the fixes. TypeScript/Vite production build
+  and `git diff --check` pass.
+
+These corrections do not change BaseTemplate, publication, installation writes,
+canonical write paths, the schema or the E1 boundary. External acceptance remains
+pending.

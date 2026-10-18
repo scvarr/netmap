@@ -29,6 +29,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
         if (!active) return;
         if (doc.generation !== document.generation) throw new Error(t('review.conflict'));
         setDocument(doc);
+        setError('');
       }).catch(e => { if (active) setError(String(e)); })
         .finally(() => { validating.current = false; if (active) setRevalidating(false); });
     };

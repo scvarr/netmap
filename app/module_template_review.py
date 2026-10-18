@@ -56,7 +56,7 @@ def analyze_installation(session, installation, candidate):
             reasons.append({"code": "MISSING_ENDPOINT_MAPPING", "key": key, "endpoint_name": definition["display_name"]})
             continue
         point = session.get(m.ConnectionPoint, mapping.connection_point_id)
-        valid = (point is not None and point.physical_object_id == config.physical_object_id
+        valid = (point is not None and point.cardinality == 1 and point.physical_object_id == config.physical_object_id
                  and (definition["kind"] == "NETWORK_PORT") == (mapping.network_interface_id is not None))
         if mapping.network_interface_id is not None:
             valid = valid and session.scalar(select(m.NetworkInterfacePhysicalOwner.id).where(

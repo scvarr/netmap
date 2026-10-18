@@ -223,6 +223,33 @@ def test_invalid_materialization_requires_intervention(damage):
     assert impact['reasons'][0]['code'] == ('MISSING_ENDPOINT_MAPPING' if damage == 'missing_mapping' else 'INVALID_ENDPOINT_MAPPING')
 
 
+@pytest.mark.parametrize('kind', ['NETWORK_PORT', 'CONNECTION_POINT'])
+def test_retained_endpoint_with_invalid_cardinality_requires_intervention(kind):
+    base_id, payload = create_base()
+    response = client.post('/v1/library/module-templates', json={
+        'name': 'Module', 'compatibility': 'OCP3',
+        'endpoints': [{'key': 'retained', 'display_name': 'P1', 'kind': kind}],
+    })
+    assert response.status_code == 201, response.text
+    template_id = response.json()['template_id']
+    object_id = create_object(base_id)['physical_object_ref']['entity_id']
+    assert install(object_id, template_id, payload['bays'][0]['bay_key']).status_code == 201
+    with SessionLocal.begin() as session:
+        mapping = session.scalar(select(m.ModuleEndpointMapping))
+        session.get(m.ConnectionPoint, mapping.connection_point_id).cardinality = 2
+    draft = open_draft(template_id)
+    definition = copy.deepcopy(draft['definition'])
+    definition['endpoints'][0]['display_name'] = 'Renamed retained endpoint'
+    saved = save(template_id, draft, definition)
+    before = client.get('/v1/workspace/package').json()
+    impact = check(template_id, saved)['review']['result']['installations'][0]
+    assert impact['classification'] == 'requires_intervention'
+    assert impact['reasons'] == [{'code': 'INVALID_ENDPOINT_MAPPING', 'key': 'retained', 'endpoint_name': 'P1'}]
+    after = client.get('/v1/workspace/package').json()
+    assert after['canonical'] == before['canonical']
+    assert after['authoring']['ModuleInstallation'] == before['authoring']['ModuleInstallation']
+
+
 def test_snapshot_check_and_freshness_after_concurrent_canonical_write(monkeypatch):
     _, module, ids = setup_installations(1)
     template_id = module['template_id']
