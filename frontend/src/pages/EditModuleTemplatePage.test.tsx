@@ -167,3 +167,22 @@ it('publishes the saved candidate and displays derived diagnostics', async () =>
   fireEvent.change(screen.getByDisplayValue('P1'), { target: { value: 'Unsaved' } });
   expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
 });
+
+
+it('reconciles installations and refreshes diagnostics preserving unsaved edits', async () => {
+  const initial = draft();
+  initial.publication_state = { revision_id: 'latest', version_number: 2, outdated_count: 1,
+    awaiting_update_count: 1, requires_intervention_count: 0, installations: [] };
+  const source = {
+    ...setup(initial).source,
+    reconcileInstallations: vi.fn(async () => ({ revision_id: 'latest', version_number: 2,
+      installations: [{ installation_id: 'installation', status: 'updated' as const, reasons: [] }] })),
+  };
+  render(<I18nProvider><MemoryRouter><EditModuleTemplatePage dataSource={source} /></MemoryRouter></I18nProvider>);
+  fireEvent.change(await screen.findByDisplayValue('Сохранённый модуль'), { target: { value: 'Unsaved' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Обновить совместимые установки' }));
+  expect(await screen.findByText(/installation: Обновлён/)).toBeInTheDocument();
+  expect(screen.getByDisplayValue('Unsaved')).toBeInTheDocument();
+  expect(source.loadDraft).toHaveBeenCalledTimes(2);
+  expect(source.saveDraft).not.toHaveBeenCalled();
+});

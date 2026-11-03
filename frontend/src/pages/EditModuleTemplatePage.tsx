@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
-import { moduleReviewDataSource, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
+import { moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
 
 const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.compatibility, d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
 
 export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: { dataSource?: ModuleReviewDataSource }) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
+  const [results, setResults] = useState<ModuleReconciliationResult>();
   const [document, setDocument] = useState<ModuleDraftDocument>();
   const [definition, setDefinition] = useState<ModuleTemplateInput>();
   const [error, setError] = useState(''); const [notice, setNotice] = useState('');
@@ -58,6 +59,8 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
     BUILT_IN_ENDPOINT_MAPPINGS: 'review.dep.mapping', MODULE_ENDPOINT_MAPPINGS: 'review.dep.mapping', CONNECTION_POINT_DATA: 'review.dep.point',
   } as const;
   const reasonLabels = {
+    CONCURRENT_CHANGE: 'reconciliation.concurrent', INSTALLATION_CHANGED: 'moduleReconciliation.changed',
+    TARGET_REVISION_CHANGED: 'reconciliation.targetChanged', APPLY_FAILED: 'reconciliation.failed',
     BAY_COMPATIBILITY_MISMATCH: 'moduleReview.compatibility', ENDPOINT_DEPENDENCIES: 'review.reason.dependencies',
     ENDPOINT_KIND_CHANGE: 'review.reason.kind', MISSING_ENDPOINT_MAPPING: 'review.reason.mapping',
     INVALID_ENDPOINT_MAPPING: 'reconciliation.mapping', IDENTITY_AND_DATA_PRESERVED: 'review.reason.preserved',
@@ -88,6 +91,17 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
       <p>{t('publication.revision', { number: document.publication_state.version_number })}</p>
       <p>{t('publication.awaiting', { count: document.publication_state.awaiting_update_count })}</p>
       <p>{t('publication.intervention', { count: document.publication_state.requires_intervention_count })}</p>
+      <button type="button" disabled={busy || revalidating || !dataSource.reconcileInstallations} onClick={async () => {
+        setBusy(true); setError(''); setResults(undefined);
+        try {
+          setResults(await dataSource.reconcileInstallations!(templateId));
+          setDocument(await dataSource.loadDraft(templateId));
+        } catch (e) { setError(String(e)); } finally { setBusy(false); }
+      }}>{t('moduleReconciliation.action')}</button>
+      {results && <ul>{results.installations.map(i => <li key={i.installation_id}>
+        {i.installation_id}: {t(i.status === 'updated' ? 'reconciliation.updated' : i.status === 'already_current' ? 'reconciliation.current' : 'review.attention')}
+        <ul>{i.reasons.map((r, n) => <li key={n}>{t(reasonLabels[r.code as keyof typeof reasonLabels] ?? 'review.reason.unknown')} ({r.code}) {r.endpoint_name ?? r.key} {r.dependencies?.join(', ')}</li>)}</ul>
+      </li>)}</ul>}
       <ul>{document.publication_state.installations.map(i => <li key={i.installation_id}>
         <Link to={`/infrastructure/objects/${i.physical_object_id}`}>{i.display_name}</Link>
         <p>{t('moduleReview.installation', { id: i.installation_id, revision: i.source_revision_id, bay: i.bay_key })}</p>

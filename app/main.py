@@ -1641,3 +1641,9 @@ def publish_module_template_candidate(template_id: uuid.UUID, candidate_id: uuid
             if attempt == 2:
                 raise ModelError("Конкурирующее изменение данных. Повторите проверку изменений и публикацию.",
                                  {"reason": "PUBLICATION_CONFLICT", "recheck_required": True}) from error
+
+
+@app.post("/v1/library/module-templates/{template_id}/reconcile")
+def reconcile_module_installations(template_id: uuid.UUID, session: Session = Depends(get_session)):
+    from app.module_reconciliation import reconcile_installations
+    return reconcile_installations(session, template_id)

@@ -4,7 +4,7 @@
 
 **ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A — IMPLEMENTED в main
 (отдельная внешняя приёмка не подтверждена). 09.6-C, D1, D2 и E1 —
-IMPLEMENTED / ACCEPTED / MERGED. E2 — IMPLEMENTED (external inspection pending); E3 — OPEN.**
+IMPLEMENTED / ACCEPTED / MERGED. E2 — IMPLEMENTED (external inspection pending); E3 — IMPLEMENTED (external inspection pending).**
 
 Статус актуализирован по `main`: `b96dc43303b8925d8973e7e2078a6d93540add98`.
 09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**, включая исправления внешнего ревью.
@@ -21,7 +21,7 @@ draft/check, BaseTemplateRevision publication and safe PhysicalObject updates
 are implemented. E1 добавляет редактирование ModuleTemplate, сохранённые черновики
 и рекомендательные проверки влияния на установки; реализация принята и включена
 в main. Публикация последующих ревизий модулей (E2) реализована в текущей ветке,
-внешняя инспекция ожидается. Обновление установок (E3) остаётся **OPEN**.
+внешняя инспекция ожидается. Обновление установок (E3) реализовано ниже; внешняя инспекция ожидается.
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -106,8 +106,8 @@ including the CableLabelSettings singleton. 09.6-C adds forward migration
 **0002**; D1 adds **0003** for immutable revision names and publication receipts. Both preserve existing databases; applied 0001/0002 remain unchanged.
 
 **D2 implements safe base-revision reconciliation and automatic module relocation.**
-Обновление ревизий установок (09.6-E3) и свободная визуальная компоновка
-(09.6-F) остаются за пределами реализованного поведения.
+Обновление ревизий установок (09.6-E3) реализовано ниже. Свободная визуальная
+компоновка (09.6-F) остаётся за пределами реализованного поведения.
 Dense Map LOD and endpoint technology semantics remain
 open. C/D1/D2 have passed external inspection; manual HV-01 rechecking and
 acceptance are still required. This implementation does not accept or resume Phase C.
@@ -421,7 +421,7 @@ NetworkInterface, Connections и Cables. Совместимость отсеко
 
 ## Implemented boundary: 09.6-E2
 
-E2 IMPLEMENTED in branch; external inspection pending. E3 and F1/F2 remain OPEN.
+E2 IMPLEMENTED in branch; external inspection pending. E3 IMPLEMENTED (external inspection pending); F1/F2 remain OPEN.
 
 - Module editor publishes only a saved, currently checked candidate through
   `POST /v1/library/module-templates/{id}/candidates/{candidate_id}/publish`.
@@ -590,7 +590,7 @@ in this correction; later C/D1/D2 delivery is recorded above.
 
 ## OPEN and outside this contract
 
-- Обновление установок (09.6-E3): OPEN. E2 реализована, ожидает внешней инспекции. E1: IMPLEMENTED / ACCEPTED / MERGED.
+- Обновление установок (09.6-E3): IMPLEMENTED (external inspection pending). E2 реализована, ожидает внешней инспекции. E1: IMPLEMENTED / ACCEPTED / MERGED.
 - Геометрия и графический редактор шаблонов модулей, компоновка установок
   внутри PhysicalObject (09.6-F): OPEN, согласованное будущее направление.
 - Endpoint technology/capability semantics: Ethernet, Fibre Channel, speed,
@@ -607,3 +607,39 @@ closes no old `C-*` findings automatically, and does not expand the pre-L2
 roadmap beyond the accepted base-template/module/update redesign. Phase C can
 resume only after its bounded implementation, external review/acceptance, and
 manual HV-01 recheck; it is neither complete nor PASSED.
+
+## Implemented boundary: 09.6-E3
+
+**E3 IMPLEMENTED; external branch inspection pending. F1/F2 OPEN.
+Phase C PAUSED; HV-01 not PASSED.**
+
+- «Обновить совместимые установки» calls POST
+  /v1/library/module-templates/{id}/reconcile. The batch pins the latest
+  published revision, processes installations sequentially with independent
+  commits and returns updated, already_current, or requires_intervention
+  with live reasons. A changed published target refuses remaining attempts.
+- Definitions match only by definition_key within each installation, directly
+  across skipped revisions. Retained mappings change only definition_id;
+  installation ID, bay, orientation, canonical IDs, aliases, metadata and all
+  existing user dependencies survive. Base revision provenance does not change.
+- Added endpoints receive normal canonical materialization. Kind changes,
+  incompatible current bays, missing/broken materialization and unsafe removal
+  refuse the installation. No relocation or manual conflict resolution is added.
+- Preflight runs under READ COMMITTED after module-root SHARE and
+  object/configuration/installation/mapping locks. Interfaces precede points;
+  retained owner/binding rows stay SHARE locked. Removal uses D2's complete
+  direct-FK/JSON dependency checks, locks current direct references and all
+  canonical JSON tables. Lock timeout/deadlock/error rolls back that installation.
+  Cached E1/E2 analysis never authorizes a write.
+- The editor shows individual results and reloads server diagnostics without
+  replacing local unsaved definitions. Results are transient, with no stored status.
+- Workspace remains format_version=5; existing revision/mapping provenance
+  supports mixed revisions without schema additions or migrations.
+
+Validation: Docker targeted E3 tests cover skipped revisions, identity,
+addition/removal, refusals, independent rollback/success, retry, target change,
+mixed-revision archive restore and concurrent FK/JSON/owner/binding writers.
+D2 reconciliation/concurrency and E1/E2 review/publication regression tests,
+targeted client tests, TypeScript/Vite build and diff checks are the boundary.
+Full suites were not requested or run. Manual HV-01 and external acceptance
+remain outstanding.

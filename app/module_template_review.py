@@ -1,4 +1,4 @@
-"""Module drafts, advisory checks and atomic publication; no installation updates."""
+"""Module drafts, atomic publication and advisory installation diagnostics."""
 import copy
 
 from sqlalchemy import select, text
@@ -66,6 +66,14 @@ def analyze_installation(session, installation, candidate):
                 m.InterfacePhysicalBinding.interface_id == mapping.network_interface_id,
                 m.InterfacePhysicalBinding.point_id == mapping.connection_point_id,
                 m.InterfacePhysicalBinding.point_member == 1)) is not None
+        if mapping.network_interface_id is not None:
+            valid = valid and session.get(m.NetworkInterface, mapping.network_interface_id) is not None
+            owners = list(session.scalars(select(m.NetworkInterfacePhysicalOwner).where(
+                m.NetworkInterfacePhysicalOwner.interface_id == mapping.network_interface_id)))
+            bindings = list(session.scalars(select(m.InterfacePhysicalBinding).where(
+                (m.InterfacePhysicalBinding.interface_id == mapping.network_interface_id) |
+                (m.InterfacePhysicalBinding.point_id == mapping.connection_point_id))))
+            valid = valid and len(owners) == 1 and len(bindings) == 1
         if not valid:
             reasons.append({"code": "INVALID_ENDPOINT_MAPPING", "key": key, "endpoint_name": definition["display_name"]})
         if key not in new:
