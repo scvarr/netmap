@@ -687,6 +687,7 @@ class ModuleInstallation(Base):
     module_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="RESTRICT"), nullable=False)
     bay_key: Mapped[str] = mapped_column(String(255), nullable=False)
     orientation: Mapped[str] = mapped_column(String(16), nullable=False)
+    layout: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class ModuleEndpointMapping(Base):

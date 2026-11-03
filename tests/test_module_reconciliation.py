@@ -49,6 +49,7 @@ def test_skipped_revisions_identity_add_remove_and_retry():
     assert result['physical_object_id']
     after = package()
     assert before['authoring']['ObjectConfiguration'] == after['authoring']['ObjectConfiguration']
+    assert [i['layout'] for i in before['authoring']['ModuleInstallation']] == [i['layout'] for i in after['authoring']['ModuleInstallation']]
     old = {r['id']: r for r in before['authoring']['ModuleEndpointMapping']}
     new = {r['id']: r for r in after['authoring']['ModuleEndpointMapping']}
     for key, row in old.items():

@@ -105,11 +105,11 @@ def add_dependency(session, obj, dependency):
             scope={str(point_id).upper(): f'opaque reference: {str(interface_id).upper()}'}))
     elif dependency == 'mapping':
         module = m.ModuleTemplate(name='Other'); session.add(module); session.flush()
-        revision_ = m.ModuleTemplateRevision(template_id=module.id, version_number=1, name='Module', compatibility='OCP3'); session.add(revision_); session.flush()
+        revision_ = m.ModuleTemplateRevision(geometry={'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'other': {'x': .5, 'y': .5}}}, template_id=module.id, version_number=1, name='Module', compatibility='OCP3'); session.add(revision_); session.flush()
         definition = m.ModuleEndpointDefinition(module_revision_id=revision_.id, definition_key='other', display_name='Other', kind='NETWORK_PORT', order_index=0)
         config = session.scalar(select(m.ObjectConfiguration).where(m.ObjectConfiguration.physical_object_id == uuid.UUID(oid(obj))))
         bay = session.scalar(select(m.ModuleBay).where(m.ModuleBay.base_revision_id == config.base_revision_id))
-        installation = m.ModuleInstallation(configuration_id=config.id, module_revision_id=revision_.id, bay_key=bay.bay_key, orientation='HORIZONTAL')
+        installation = m.ModuleInstallation(layout={'panel_key': bay.panel_key, 'x': .1, 'y': .1, 'width': .2, 'height': .2}, configuration_id=config.id, module_revision_id=revision_.id, bay_key=bay.bay_key, orientation='HORIZONTAL')
         session.add_all([definition, installation]); session.flush()
         session.add(m.ModuleEndpointMapping(installation_id=installation.id, definition_id=definition.id, connection_point_id=point_id, network_interface_id=interface_id))
     else:
@@ -230,19 +230,9 @@ def test_module_capacity_and_deterministic_relocation(capacity):
     revision(template_id, lambda d: d.update(bays=[{**bay, 'bay_key': f'new-{i}'} for i in reversed(range(capacity))]))
     before = package()
     result = reconcile(template_id)[oid(obj)]
-    if capacity < 2:
-        assert result['status'] == 'requires_intervention'
-        assert result['reasons'][0]['code'] == 'INSUFFICIENT_COMPATIBLE_CAPACITY'
-        assert package() == before
-    else:
-        assert result['status'] == 'updated'
-        after = package()
-        assert after['canonical'] == before['canonical']
-        assert after['authoring']['ModuleEndpointMapping'] == before['authoring']['ModuleEndpointMapping']
-        for index, (old, new) in enumerate(zip(before['authoring']['ModuleInstallation'], after['authoring']['ModuleInstallation'])):
-            assert new == {**old, 'bay_key': f'new-{index}'}
-        assert reconcile(template_id)[oid(obj)]['status'] == 'already_current'
-        assert package() == after
+    assert result['status'] == 'requires_intervention'
+    assert any(r['code'] == 'MODULE_LAYOUT_PANEL_CONFLICT' for r in result['reasons'])
+    assert package() == before
 
 
 def test_valid_placement_is_preserved_and_compatibility_swaps_are_atomic():
@@ -358,7 +348,8 @@ def test_updated_and_blocked_objects_round_trip_with_module_connections():
     revision(template_id, lambda d: (d.update(slots=[]), d['bays'][0].update(bay_key='relocated')))
     results = reconcile(template_id)
     assert results[oid(blocked)]['status'] == 'requires_intervention'
-    assert results[oid(safe)]['status'] == results[oid(modular)]['status'] == 'updated'
+    assert results[oid(safe)]['status'] == 'updated'
+    assert results[oid(modular)]['status'] == 'requires_intervention'
     before = package()
     states = open_draft(template_id)['publication_state']
     assert client.delete('/v1/workspace/dataset').status_code == 204  # isolated netmap_test only

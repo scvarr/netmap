@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.module_layout import initial_layout, validate_layout, endpoint_position
 from app.device_catalog import DISPLAY_ALIAS_KEY, PHYSICAL_OBJECT_CLASS_KEY
 from app.errors import ModelError, ValidationError
 from app.models import (
@@ -405,7 +406,10 @@ class HardwareCatalog:
             raise ValidationError("Module template was not found")
         if revision.compatibility != bay.compatibility:
             raise ModelError("Module compatibility must exactly match the bay")
-        installation = ModuleInstallation(configuration_id=config.id, module_revision_id=revision.id, bay_key=bay.bay_key, orientation=query.orientation)
+        panel = self.session.scalar(select(PresentationPanel).where(PresentationPanel.base_revision_id == config.base_revision_id, PresentationPanel.panel_key == bay.panel_key))
+        layout = initial_layout({k: getattr(bay, k) for k in ("panel_key", "x", "y", "width", "height")}, revision.geometry, query.orientation, {"width": panel.width, "height": panel.height})
+        validate_layout(layout, bay.panel_key)
+        installation = ModuleInstallation(layout=layout, configuration_id=config.id, module_revision_id=revision.id, bay_key=bay.bay_key, orientation=query.orientation)
         self.session.add(installation)
         self.session.flush()
         repository = CanonicalRepository(self.session)
@@ -442,12 +446,14 @@ class HardwareCatalog:
                 revision, template = modules[installation.module_revision_id]
                 endpoints = []
                 rows = endpoints_by_installation.get(installation.id, [])
-                for index, (mapping, definition) in enumerate(rows):
-                    x, y = module_endpoint_position(bay, installation.orientation, index, len(rows))
+                validate_layout(installation.layout, bay.panel_key)
+                for mapping, definition in rows:
+                    x, y = endpoint_position(installation.layout, revision.geometry["endpoints"][definition.definition_key], installation.orientation)
                     endpoints.append({"key": definition.definition_key, "kind": definition.kind, **contexts[str(mapping.connection_point_id)], "x": x, "y": y})
-                installed = {"id": str(installation.id), "module_template_id": str(template.id), "module_revision_id": str(revision.id), "name": revision.name, "orientation": installation.orientation, "endpoints": endpoints}
+                installed = {"id": str(installation.id), "module_template_id": str(template.id), "module_revision_id": str(revision.id), "name": revision.name, "orientation": installation.orientation, "layout": installation.layout, "fill_color": revision.geometry["fill_color"], "endpoints": endpoints}
             bays.append({"bay_key": bay.bay_key, "display_name": bay.display_name, "compatibility": bay.compatibility, "panel_key": bay.panel_key, "x": bay.x, "y": bay.y, "width": bay.width, "height": bay.height, "installation": installed})
-        return {"configuration_id": str(config.id), "base_revision_id": str(config.base_revision_id), "bays": bays}
+        panels = [{k: getattr(p, k) for k in ("panel_key", "display_name", "width", "height")} for p in self.session.scalars(select(PresentationPanel).where(PresentationPanel.base_revision_id == config.base_revision_id))]
+        return {"configuration_id": str(config.id), "base_revision_id": str(config.base_revision_id), "panels": panels, "bays": bays}
 
     def _metadata(
         self,
@@ -466,10 +472,3 @@ class HardwareCatalog:
             value=value,
         ))
         self.session.flush()
-
-
-def module_endpoint_position(bay, orientation, index, count):
-    fraction = (index + 1) / (count + 1)
-    if orientation == "HORIZONTAL":
-        return bay.x + bay.width * fraction, bay.y + bay.height / 2
-    return bay.x + bay.width / 2, bay.y + bay.height * fraction

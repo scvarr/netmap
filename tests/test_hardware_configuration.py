@@ -169,7 +169,7 @@ def test_two_installations_in_one_object_have_distinct_definition_mappings_and_p
             assert len(statements) == 1 and len(contexts) == 4
             statements.clear()
             HardwareCatalog(session).configuration_document(uuid.UUID(object_id))
-            assert len(statements) <= 7  # Bounded batches, independent of installation count.
+            assert len(statements) <= 8  # Bounded batches, independent of installation count.
         finally:
             event.remove(session.bind, 'before_cursor_execute', capture)
         session.scalar(select(PresentationPanel)).display_name = 'Rear'

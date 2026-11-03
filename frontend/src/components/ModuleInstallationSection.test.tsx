@@ -7,8 +7,8 @@ import { ModuleInstallationSection } from './ModuleInstallationSection';
 
 const module = { template_id: 'template', revision_id: 'revision', name: 'FC25Gb-2', compatibility: 'OCP3', endpoints: [] };
 const free: HardwareConfiguration = { configuration_id: 'config', bays: [{ bay_key: 'bay-key', display_name: 'PCIe1', compatibility: 'OCP3', panel_key: 'back', x: .1, y: .1, width: .3, height: .3, installation: null }] };
-const occupied: HardwareConfiguration = { ...free, bays: [{ ...free.bays[0], installation: {
-  id: 'stable-installation-id', name: module.name, module_template_id: 'template', module_revision_id: 'revision', orientation: 'HORIZONTAL', endpoints: [{
+const occupied: HardwareConfiguration = { ...free, panels: [{ panel_key: 'back', display_name: 'Back', width: 600, height: 200 }], bays: [{ ...free.bays[0], installation: {
+  layout: { panel_key: 'back', x: .1, y: .1, width: .3, height: .2 }, fill_color: '#123456', id: 'stable-installation-id', name: module.name, module_template_id: 'template', module_revision_id: 'revision', orientation: 'HORIZONTAL', endpoints: [{
     key: 'endpoint', kind: 'NETWORK_PORT', installation_id: 'stable-installation-id', panel_key: 'back', panel_display_name: 'Back', bay_key: 'bay-key', bay_display_name: 'PCIe1',
     local_display_name: 'feth1', contextual_display_name: 'Back / PCIe1 / feth1', connection_point_id: 'point', network_interface_id: 'interface', x: .2, y: .2,
   }],
@@ -29,7 +29,7 @@ describe('ModuleInstallationSection uninstall', () => {
     await userEvent.click(remove);
     expect(confirm).toHaveBeenCalledWith('Удалить модуль «FC25Gb-2» из отсека «PCIe1»?');
     expect(data.uninstallModule).not.toHaveBeenCalled();
-    expect(screen.getByText('Back / PCIe1 / feth1')).toBeInTheDocument();
+    expect(screen.getByText('Back / PCIe1 / feth1', { selector: 'li' })).toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
   });
   it('keeps occupied state until server success, then frees the bay and refreshes the card', async () => {
@@ -38,7 +38,7 @@ describe('ModuleInstallationSection uninstall', () => {
     const refresh = show(data); vi.spyOn(window, 'confirm').mockReturnValue(true);
     await userEvent.click(await screen.findByRole('button', { name: 'Удалить модуль' }));
     expect(data.uninstallModule).toHaveBeenCalledWith('object', 'stable-installation-id');
-    expect(screen.getByText('Back / PCIe1 / feth1')).toBeInTheDocument();
+    expect(screen.getByText('Back / PCIe1 / feth1', { selector: 'li' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Удалить модуль' })).toBeDisabled();
     expect(screen.queryByLabelText('Выберите совместимый модуль')).not.toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
@@ -50,7 +50,7 @@ describe('ModuleInstallationSection uninstall', () => {
     await userEvent.selectOptions(screen.getByLabelText('Выберите совместимый модуль'), 'template');
     await userEvent.click(screen.getByRole('button', { name: 'Установить модуль' }));
     expect(data.installModule).toHaveBeenCalledWith('object', { bay_key: 'bay-key', module_template_id: 'template', orientation: 'HORIZONTAL' });
-    expect(await screen.findByText('Back / PCIe1 / feth1')).toBeInTheDocument();
+    expect(await screen.findByText('Back / PCIe1 / feth1', { selector: 'li' })).toBeInTheDocument();
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
   });
   it('keeps installation and endpoints visible after a domain refusal', async () => {
@@ -59,7 +59,7 @@ describe('ModuleInstallationSection uninstall', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Удалить модуль' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('ModuleInstallation endpoints are in use (409)');
     expect(screen.getByText('OCP3 · Занят: FC25Gb-2')).toBeInTheDocument();
-    expect(screen.getByText('Back / PCIe1 / feth1')).toBeInTheDocument();
+    expect(screen.getByText('Back / PCIe1 / feth1', { selector: 'li' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Удалить модуль' })).toBeEnabled();
     expect(screen.queryByLabelText('Выберите совместимый модуль')).not.toBeInTheDocument();
     expect(refresh).not.toHaveBeenCalled();
@@ -69,4 +69,13 @@ describe('ModuleInstallationSection uninstall', () => {
     expect(await screen.findByText('OCP3 · Свободен')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Удалить модуль' })).not.toBeInTheDocument();
   });
+});
+
+it('renders the installed body and canonical port at projected coordinates', async () => {
+  show(source());
+  const image = await screen.findByRole('img', { name: 'Back' });
+  const port = image.querySelector('[data-endpoint-id="point"]');
+  expect(port).toHaveAttribute('cx', '120');
+  expect(port).toHaveAttribute('cy', '40');
+  expect(image.querySelector('[fill="#123456"]')).toHaveAttribute('width', '180');
 });

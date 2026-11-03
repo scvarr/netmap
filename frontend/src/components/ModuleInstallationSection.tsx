@@ -17,6 +17,14 @@ export function ModuleInstallationSection({ objectId, onInstalled, dataSource = 
   return <section className="blueprint-editor-controls" aria-label={t('hardware.bays')}><h2>{t('hardware.bays')}</h2>
     {error && <p role="alert">{error} <button type="button" className="secondary-action" onClick={() => setRetry(v => v + 1)}>{t('action.retry')}</button></p>}
     {!config && !error && <p>{t('create.blueprintsLoading')}</p>}
+    {config?.panels?.map(panel => <svg key={panel.panel_key} role="img" aria-label={panel.display_name} viewBox={`0 0 ${panel.width} ${panel.height}`} style={{ width: '100%', maxHeight: 300 }}>
+      {config.bays.filter(b => b.panel_key === panel.panel_key).map(b => <g key={b.bay_key}>
+        <rect x={b.x * panel.width} y={b.y * panel.height} width={b.width * panel.width} height={b.height * panel.height} fill="none" stroke="#94a3b8" />
+        {b.installation && <g><rect x={b.installation.layout.x * panel.width} y={b.installation.layout.y * panel.height} width={b.installation.layout.width * panel.width} height={b.installation.layout.height * panel.height} fill={b.installation.fill_color}><title>{b.installation.name}</title></rect>
+          {b.installation.endpoints.map(e => <circle key={e.connection_point_id} data-endpoint-id={e.connection_point_id} cx={e.x * panel.width} cy={e.y * panel.height} r={3} fill="white" stroke="black"><title>{e.contextual_display_name}</title></circle>)}
+        </g>}
+      </g>)}
+    </svg>)}
     {config?.bays.map(bay => { const compatible = modules.filter(m => m.compatibility === bay.compatibility); const choice = choices[bay.bay_key] ?? { module: '', orientation: 'HORIZONTAL' as const }; return <section className="blueprint-composer__section" key={bay.bay_key} aria-label={bay.display_name}><h3>{bay.display_name}</h3><p>{bay.compatibility} · {bay.installation ? t('hardware.occupied', { name: bay.installation.name }) : t('hardware.free')}</p>
       {bay.installation ? <><ul>{bay.installation.endpoints.map(e => <li key={e.connection_point_id}>{e.contextual_display_name}</li>)}</ul><button type="button" className="text-action" disabled={pending} onClick={() => void uninstall(bay.installation!.id, bay.installation!.name, bay.display_name)}>{t('hardware.uninstall')}</button></> : <>
         <label>{t('hardware.selectModule')}<select disabled={pending} value={choice.module} onChange={e => setChoices(old => ({ ...old, [bay.bay_key]: { ...choice, module: e.target.value } }))}><option value="">{t(compatible.length ? 'hardware.selectModule' : 'hardware.noModules')}</option>{compatible.map(m => <option key={m.template_id} value={m.template_id}>{m.name}</option>)}</select></label>

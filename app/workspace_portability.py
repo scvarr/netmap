@@ -77,7 +77,7 @@ ENTITIES = (
     ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind"),
-    ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id module_revision_id bay_key orientation"),
+    ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id module_revision_id bay_key orientation layout"),
     ("authoring", "ModuleEndpointMapping", "ModuleEndpointMapping", "id installation_id definition_id connection_point_id network_interface_id"),
     ("presentation", "SavedMap", "SavedMap", "id name created_at updated_at"),
     ("presentation", "MapPresentationVariant", "MapPresentationVariant", "id map_id name"),
@@ -117,7 +117,7 @@ def _json_value(value):
 
 
 def export_package(session: Session) -> dict:
-    package = {"format": FORMAT, "format_version": FORMAT_VERSION, "module_geometry_version": 1,
+    package = {"format": FORMAT, "format_version": FORMAT_VERSION, "module_geometry_version": 1, "module_layout_version": 1,
                "canonical": {}, "authoring": {}, "presentation": {}, "settings": {}}
     for section, name, model, fields in _specs():
         rows = session.scalars(select(model).order_by(model.id)).all()
@@ -167,7 +167,7 @@ def validate_package(package: object) -> dict:
         raise PackageError("Not a NetMap workspace package")
     if type(package.get("format_version")) is not int or package["format_version"] != FORMAT_VERSION:
         raise PackageError("Unsupported NetMap workspace format_version")
-    if set(package) - {"module_geometry_version"} != {"format", "format_version", "canonical", "authoring", "presentation", "settings"}:
+    if set(package) - {"module_geometry_version", "module_layout_version"} != {"format", "format_version", "canonical", "authoring", "presentation", "settings"}:
         raise PackageError("Incomplete or unknown package sections")
     # Accept only a complete historical profile or a complete F1 profile.
     import copy
@@ -207,6 +207,28 @@ def validate_package(package: object) -> dict:
         for name in ("ModuleTemplateDraft", "ModuleTemplateCandidate"):
             for row in authoring.get(name, []):
                 row["definition"] = extend_definition(row["definition"])
+    from app.module_layout import initial_layout
+    installs = authoring.get("ModuleInstallation", [])
+    if not isinstance(installs, list) or any(not isinstance(i, dict) for i in installs):
+        raise PackageError("Invalid installations")
+    if "module_layout_version" in package:
+        if (type(package["module_layout_version"]) is not int or package["module_layout_version"] != 1
+                or package.get("module_geometry_version") != 1 or any("layout" not in i for i in installs)):
+            raise PackageError("Incomplete F2a profile")
+    else:
+        if any("layout" in i for i in installs):
+            raise PackageError("F2a layout requires module_layout_version=1")
+        try:
+            configs = {r["id"]: r for r in authoring["ObjectConfiguration"]}
+            revisions = {r["id"]: r for r in authoring["ModuleTemplateRevision"]}
+            bays = {(r["base_revision_id"], r["bay_key"]): r for r in authoring["ModuleBay"]}
+            panels = {(r["base_revision_id"], r["panel_key"]): r for r in authoring["PresentationPanel"]}
+            for i in installs:
+                revision_id = configs[i["configuration_id"]]["base_revision_id"]
+                bay = bays[revision_id, i["bay_key"]]
+                i["layout"] = initial_layout(bay, revisions[i["module_revision_id"]]["geometry"], i["orientation"], panels[revision_id, bay["panel_key"]])
+        except (KeyError, TypeError, ValueError, ZeroDivisionError) as error:
+            raise PackageError("Invalid historical module layout inputs") from error
     specs = _specs()
     result = {}
     # Exact 09.6-C v5 profile: no publication collection and no revision names.
@@ -420,6 +442,11 @@ def _validate_hardware_configuration(rows):
         bay = bays.get((config["base_revision_id"], installation["bay_key"]))
         if bay is None or bay["compatibility"] != revisions[installation["module_revision_id"]]["compatibility"]:
             raise PackageError("Installation has no compatible bay in its owning configuration")
+        from app.module_layout import validate_layout
+        try:
+            validate_layout(installation["layout"], bay["panel_key"])
+        except ValueError as error:
+            raise PackageError(str(error)) from error
     seen_points, seen_interfaces = set(), set()
     def validate_mapping(mapping, definition, object_id):
         point_id, interface_id = mapping["connection_point_id"], mapping["network_interface_id"]

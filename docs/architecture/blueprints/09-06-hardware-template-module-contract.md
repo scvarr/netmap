@@ -385,7 +385,7 @@ Endpoint order is presentation input, never endpoint identity.
 Перемещение и изменение размеров прямоугольника меняют представление,
 сохраняя идентичность установки и конечных точек.
 
-### Согласованное продуктовое направление: F1 IMPLEMENTED; F2 OPEN
+### Согласованное продуктовое направление: F1 IMPLEMENTED; F2a IMPLEMENTED; F2b OPEN
 
 F1 реализован ниже; описание свободной компоновки установки относится к открытому F2. Базовый шаблон
 оборудования задаёт корпус, панели, встроенные порты и видимые отсеки для
@@ -421,7 +421,7 @@ NetworkInterface, Connections и Cables. Совместимость отсеко
 
 ## Implemented boundary: 09.6-E2
 
-E2 IMPLEMENTED / ACCEPTED / MERGED. E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED; F2 OPEN.
+E2 IMPLEMENTED / ACCEPTED / MERGED. E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED; F2a IMPLEMENTED; F2b OPEN.
 
 - Module editor publishes only a saved, currently checked candidate through
   `POST /v1/library/module-templates/{id}/candidates/{candidate_id}/publish`.
@@ -610,7 +610,7 @@ manual HV-01 recheck; it is neither complete nor PASSED.
 
 ## Implemented boundary: 09.6-E3
 
-**E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED; F2 OPEN.
+**E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED; F2a IMPLEMENTED; F2b OPEN.
 Phase C PAUSED; HV-01 not PASSED.**
 
 - «Обновить совместимые установки» calls POST
@@ -648,7 +648,7 @@ remain outstanding.
 ## Implemented boundary: 09.6-F1
 
 F1 **IMPLEMENTED** (external branch inspection pending). E1/E2/E3:
-**IMPLEMENTED / ACCEPTED / MERGED**. F2 **OPEN**. Phase C **PAUSED**;
+**IMPLEMENTED / ACCEPTED / MERGED**. F2a **IMPLEMENTED**; F2b **OPEN**. Phase C **PAUSED**;
 HV-01 is not PASSED.
 
 - ModuleTemplateRevision owns one rectangular body: positive finite width and
@@ -677,3 +677,30 @@ HV-01 is not PASSED.
   mixed profiles and invalid geometry are rejected. Publication ownership,
   immutable candidate/revision equality, endpoint identities and installation
   mappings retain their existing validation.
+
+
+## Implemented boundary: 09.6-F2a
+
+F2a **IMPLEMENTED** (external branch inspection pending). F2b **OPEN**.
+Phase C **PAUSED**; HV-01 is not PASSED.
+
+- Installation `layout` belongs to ObjectConfiguration through its stable
+  ModuleInstallation ID: panel_key and normalized panel-local x/y/width/height.
+  This is presentation, with no canonical entities or SavedMap dependencies.
+- Initial layout fits the F1 body inside its bay, preserving aspect ratio in
+  panel units. VERTICAL rotates the complete image clockwise. Layout stays
+  inside the bay's panel; visual placement never changes bay_key.
+- Configuration reads batch panels, revisions and mappings, returning body
+  layout/color and transformed F1 port coordinates by definition_key, retaining
+  canonical endpoint IDs. PhysicalObject renders the installed body and ports.
+- E3 preserves layout when updating the pinned revision. D2 retains layout
+  when the bay remains on its panel, including bay rectangle changes. Removed
+  bays and panel changes return MODULE_LAYOUT_PANEL_CONFLICT through analysis
+  and apply; automatic cross-panel migration is not implemented.
+- Forward migration **0007** deterministically fills existing installations.
+  Applied 0001–0006 are unchanged. Workspace stays **v5** and adds
+  module_layout_version=1. Historical archives lacking both marker and layout
+  receive the same deterministic fit. Current incomplete or invalid profiles
+  fail before writes. Saved layout round-trips unchanged.
+- Interactive movement/resizing, per-port installation geometry, nested modules,
+  SavedMap and Dense Map LOD remain outside F2a.

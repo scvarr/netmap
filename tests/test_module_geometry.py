@@ -48,6 +48,8 @@ def test_historical_v5_extension_and_mixed_profile_rejection():
     package = client.get('/v1/workspace/package').json()
     historical = copy.deepcopy(package)
     del historical["module_geometry_version"]
+    del historical["module_layout_version"]
+    for row in historical["authoring"]["ModuleInstallation"]: del row["layout"]
     for r in historical['authoring']['ModuleTemplateRevision']: del r['geometry']
     for name in ('ModuleTemplateDraft', 'ModuleTemplateCandidate'):
         for r in historical['authoring'][name]: del r['definition']['geometry']

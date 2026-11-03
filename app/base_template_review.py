@@ -166,6 +166,8 @@ def analyze_object(session, config, candidate):
     for installation in sorted(installations, key=lambda i: str(i.id)):
         compatibility = session.get(m.ModuleTemplateRevision, installation.module_revision_id).compatibility
         bay = bays.get(installation.bay_key)
+        if bay is None or bay["panel_key"] != installation.layout["panel_key"]:
+            reasons.append({"code": "MODULE_LAYOUT_PANEL_CONFLICT", "installation_id": str(installation.id)})
         if bay and bay["compatibility"] == compatibility:
             placements[str(installation.id)] = installation.bay_key
         else:
