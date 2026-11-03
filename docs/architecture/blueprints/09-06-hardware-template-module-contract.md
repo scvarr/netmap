@@ -6,7 +6,7 @@
 (отдельная внешняя приёмка не подтверждена). 09.6-C, D1, D2 и E1 —
 IMPLEMENTED / ACCEPTED / MERGED. E2 — IMPLEMENTED / ACCEPTED / MERGED; E3 — IMPLEMENTED (external inspection pending).**
 
-Статус актуализирован по `main`: `b96dc43303b8925d8973e7e2078a6d93540add98`.
+Статус актуализирован по `main` (base E3): `cf3a0c35f0a89ca0e0f0fa2e54fe561463c0fbbe`.
 09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**, включая исправления внешнего ревью.
 C/D1/D2 external acceptance is confirmed by the status-consolidation task;
 repository history contains C through `1e73331`, D1 through `f2206a1`, and D2
@@ -286,7 +286,7 @@ is included.
 ## Реализованная граница: 09.6-E1 — IMPLEMENTED / ACCEPTED / MERGED
 
 Итоговый SHA: `b96dc43303b8925d8973e7e2078a6d93540add98`.
-На границе E1 E2/E3 оставались OPEN; E2 реализована ниже; Phase C — PAUSED, HV-01 — не PASSED.
+E2: IMPLEMENTED / ACCEPTED / MERGED. E3: IMPLEMENTED, внешняя приёмка ожидается. Phase C — PAUSED, HV-01 — не PASSED.
 
 - Library **«Изменить шаблон»** opens the module editor for name, exact open
   compatibility and ordered endpoints. Rename/reorder preserve opaque keys;
@@ -642,5 +642,3 @@ D2 reconciliation/concurrency and E1/E2 review/publication regression tests,
 targeted client tests, TypeScript/Vite build and diff checks are the boundary.
 Full suites were not requested or run. Manual HV-01 and external acceptance
 remain outstanding.
-
-Current status: E2 IMPLEMENTED / ACCEPTED / MERGED (cf3a0c35f0a89ca0e0f0fa2e54fe561463c0fbbe). E3 IMPLEMENTED, external acceptance pending. F1/F2 OPEN. Phase C PAUSED; HV-01 not PASSED.

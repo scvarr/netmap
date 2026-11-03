@@ -188,3 +188,36 @@ def test_concurrent_writers_blocked_after_preflight(monkeypatch, dependency):
         finally:
             release.set()
         assert future.result(timeout=5)['installations'][0]['status'] == 'updated'
+
+
+def test_deleted_after_batch_snapshot_preserves_context_and_updates_peer():
+    from sqlalchemy import event
+    from concurrent.futures import ThreadPoolExecutor
+    from app.module_installation_deletion import ModuleInstallationDeletionCatalog
+    _, module, ids = setup_installations(2)
+    tid = module['template_id']
+    revision(tid, lambda d: d.update(name='new revision'))
+    with SessionLocal() as session:
+        installation = session.get(m.ModuleInstallation, ids[0])
+        object_id = session.get(m.ObjectConfiguration, installation.configuration_id).physical_object_id
+        source_id, bay_key = installation.module_revision_id, installation.bay_key
+
+    with SessionLocal() as updater:
+        def after_snapshot(session):
+            # A separate transaction commits deletion after initial context was read.
+            def remove():
+                with SessionLocal.begin() as writer:
+                    ModuleInstallationDeletionCatalog(writer).delete(object_id, ids[0])
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(remove).result(timeout=5)
+        event.listen(updater, 'after_commit', after_snapshot, once=True)
+        result = reconcile_installations(updater, uuid.UUID(tid))
+    deleted, peer = result['installations']
+    assert deleted['installation_id'] == str(ids[0])
+    assert deleted['status'] == 'requires_intervention'
+    assert deleted['reasons'] == [{'code': 'INSTALLATION_CHANGED'}]
+    assert deleted['context_at_batch_start'] is True
+    assert deleted['physical_object_id'] == str(object_id)
+    assert deleted['source_revision_id'] == str(source_id)
+    assert deleted['bay_key'] == bay_key
+    assert peer['status'] == 'updated'

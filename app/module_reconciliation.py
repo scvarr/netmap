@@ -158,19 +158,27 @@ def reconcile_installations(session, template_id):
         if latest is None:
             raise ValidationError("ModuleTemplate was not found")
         target_id, version_number = latest.id, latest.version_number
-        installation_ids = list(session.scalars(select(m.ModuleInstallation.id).join(
-            m.ModuleTemplateRevision, m.ModuleTemplateRevision.id == m.ModuleInstallation.module_revision_id
-        ).where(m.ModuleTemplateRevision.template_id == template_id).order_by(m.ModuleInstallation.id)))
-        contexts = {}
-        for installation_id in installation_ids:
-            installation = session.get(m.ModuleInstallation, installation_id)
-            config = session.get(m.ObjectConfiguration, installation.configuration_id)
-            contexts[installation_id] = {"physical_object_id": str(config.physical_object_id),
-                "source_revision_id": str(installation.module_revision_id), "bay_key": installation.bay_key,
-                "display_name": session.scalar(select(m.EntityMetadata.value).where(
-                    m.EntityMetadata.physical_object_id == config.physical_object_id, m.EntityMetadata.key == DISPLAY_ALIAS_KEY))}
+        # One statement snapshot: deletion cannot split the ID list from its context.
+        rows = session.execute(select(
+            m.ModuleInstallation.id, m.ObjectConfiguration.physical_object_id,
+            m.ModuleInstallation.module_revision_id, m.ModuleInstallation.bay_key,
+            m.EntityMetadata.value,
+        ).join(m.ModuleTemplateRevision,
+               m.ModuleTemplateRevision.id == m.ModuleInstallation.module_revision_id
+        ).join(m.ObjectConfiguration,
+               m.ObjectConfiguration.id == m.ModuleInstallation.configuration_id
+        ).outerjoin(m.EntityMetadata,
+                    (m.EntityMetadata.physical_object_id == m.ObjectConfiguration.physical_object_id) &
+                    (m.EntityMetadata.key == DISPLAY_ALIAS_KEY)
+        ).where(m.ModuleTemplateRevision.template_id == template_id
+        ).order_by(m.ModuleInstallation.id)).all()
+        contexts = {row.id: {
+            "physical_object_id": str(row.physical_object_id),
+            "source_revision_id": str(row.module_revision_id),
+            "bay_key": row.bay_key, "display_name": row.value,
+        } for row in rows}
     results = []
-    for installation_id in installation_ids:
+    for installation_id in contexts:
         # SessionLocal deliberately retains objects after commits. A previous
         # transaction's identity map must never supply this installation's preflight.
         session.expunge_all()
