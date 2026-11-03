@@ -4,7 +4,7 @@
 
 **ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A — IMPLEMENTED в main
 (отдельная внешняя приёмка не подтверждена). 09.6-C, D1, D2 и E1 —
-IMPLEMENTED / ACCEPTED / MERGED. E2 — IMPLEMENTED (external inspection pending); E3 — IMPLEMENTED (external inspection pending).**
+IMPLEMENTED / ACCEPTED / MERGED. E2 — IMPLEMENTED / ACCEPTED / MERGED; E3 — IMPLEMENTED (external inspection pending).**
 
 Статус актуализирован по `main`: `b96dc43303b8925d8973e7e2078a6d93540add98`.
 09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**, включая исправления внешнего ревью.
@@ -20,8 +20,7 @@ Current capability boundary: creation and module installation/removal, base
 draft/check, BaseTemplateRevision publication and safe PhysicalObject updates
 are implemented. E1 добавляет редактирование ModuleTemplate, сохранённые черновики
 и рекомендательные проверки влияния на установки; реализация принята и включена
-в main. Публикация последующих ревизий модулей (E2) реализована в текущей ветке,
-внешняя инспекция ожидается. Обновление установок (E3) реализовано ниже; внешняя инспекция ожидается.
+в main. Публикация последующих ревизий модулей (E2): IMPLEMENTED / ACCEPTED / MERGED. Обновление установок (E3) реализовано ниже; внешняя инспекция ожидается.
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -421,7 +420,7 @@ NetworkInterface, Connections и Cables. Совместимость отсеко
 
 ## Implemented boundary: 09.6-E2
 
-E2 IMPLEMENTED in branch; external inspection pending. E3 IMPLEMENTED (external inspection pending); F1/F2 remain OPEN.
+E2 IMPLEMENTED / ACCEPTED / MERGED. E3 IMPLEMENTED (external inspection pending); F1/F2 remain OPEN.
 
 - Module editor publishes only a saved, currently checked candidate through
   `POST /v1/library/module-templates/{id}/candidates/{candidate_id}/publish`.
@@ -590,7 +589,7 @@ in this correction; later C/D1/D2 delivery is recorded above.
 
 ## OPEN and outside this contract
 
-- Обновление установок (09.6-E3): IMPLEMENTED (external inspection pending). E2 реализована, ожидает внешней инспекции. E1: IMPLEMENTED / ACCEPTED / MERGED.
+- Обновление установок (09.6-E3): IMPLEMENTED (external inspection pending). E2 IMPLEMENTED / ACCEPTED / MERGED. E1: IMPLEMENTED / ACCEPTED / MERGED.
 - Геометрия и графический редактор шаблонов модулей, компоновка установок
   внутри PhysicalObject (09.6-F): OPEN, согласованное будущее направление.
 - Endpoint technology/capability semantics: Ethernet, Fibre Channel, speed,
@@ -643,3 +642,5 @@ D2 reconciliation/concurrency and E1/E2 review/publication regression tests,
 targeted client tests, TypeScript/Vite build and diff checks are the boundary.
 Full suites were not requested or run. Manual HV-01 and external acceptance
 remain outstanding.
+
+Current status: E2 IMPLEMENTED / ACCEPTED / MERGED (cf3a0c35f0a89ca0e0f0fa2e54fe561463c0fbbe). E3 IMPLEMENTED, external acceptance pending. F1/F2 OPEN. Phase C PAUSED; HV-01 not PASSED.

@@ -60,7 +60,7 @@ implemented, externally accepted and merged.
 09.6-E1 (редактирование ModuleTemplate, сохранённые черновики и проверка влияния):
 **IMPLEMENTED / ACCEPTED / MERGED**, итоговый SHA
 `b96dc43303b8925d8973e7e2078a6d93540add98`.
-E2 (публикация последующих ревизий модулей) и E3 (обновление установок) — **OPEN**.
+E2 — **IMPLEMENTED / ACCEPTED / MERGED**; E3 — **IMPLEMENTED**, внешняя приёмка ожидается.
 Phase C остаётся **PAUSED**, HV-01 — **не PASSED**; перед возобновлением нужна
 ручная повторная проверка, см. [11-04](11-04-phase-c-representative-l1-testbed.md).
 
@@ -256,3 +256,5 @@ contract.
 
 Этот roadmap самостоятельно является source of truth для execution order. Новые
 bounded findings могут появляться в review, но не изменяют roadmap молча.
+
+Current status: E2 IMPLEMENTED / ACCEPTED / MERGED (cf3a0c35f0a89ca0e0f0fa2e54fe561463c0fbbe). E3 IMPLEMENTED, external acceptance pending. F1/F2 OPEN. Phase C PAUSED; HV-01 not PASSED.

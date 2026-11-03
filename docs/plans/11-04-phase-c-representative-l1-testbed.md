@@ -23,7 +23,7 @@ publication (D1) and safe PhysicalObject updates (D2) are implemented, externall
 accepted and merged.
 09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**, итоговый SHA
 `b96dc43303b8925d8973e7e2078a6d93540add98`.
-E2 (публикация ревизий модулей) и E3 (обновление установок) остаются **OPEN**.
+E2 — **IMPLEMENTED / ACCEPTED / MERGED**; E3 — **IMPLEMENTED**, внешняя приёмка ожидается.
 Внешняя приёмка E1 не заменяет ручную проверку: Phase C — **PAUSED**,
 HV-01 — **не PASSED**. После E2/E3 предусмотрено отдельное будущее направление
 09.6-F (F1: геометрия и графический редактор шаблонов модулей; F2: компоновка
@@ -529,7 +529,7 @@ capability axes, а не закрытый список device classes.
 | 9 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
 | 10 | router | RTR1 |
 | 11 | dual-homed server | SRV1 — PASSED / VERIFIED: independent traces to CORE-A / CORE-B |
-| 12 | Historical FRONT/REAR scenario; 09.5 multi-panel slices implemented, manual acceptance pending; 09.6 creation/install/removal and C/D1/D2 implemented; ModuleTemplate editing/publication/updating OPEN; manual HV-01 recheck pending | PP-301, FPP-811, SRV1 |
+| 12 | Historical FRONT/REAR scenario; 09.5 multi-panel slices implemented, manual acceptance pending; 09.6 creation/install/removal and C/D1/D2 implemented; ModuleTemplate editing/publication accepted and merged; updating implemented, external acceptance pending; manual HV-01 recheck pending | PP-301, FPP-811, SRV1 |
 | 13 | несколько Port Blocks в одном Blueprint | SW-301-ACCESS |
 | 14 | ConnectionPoint port kind | O1 / PP-301 |
 | 15 | `NETWORK_PORT` port kind | PC1 / SW-301-ACCESS, если поддерживается |
@@ -1320,3 +1320,5 @@ anchors и recomputation через будущий `Cable Guide` / `Routing Corr
 создавать exhaustive combinatorial matrix vendor/device variants. Цель — один
 representative example на каждую существенно различающуюся structural
 capability.
+
+Current status: E2 IMPLEMENTED / ACCEPTED / MERGED (cf3a0c35f0a89ca0e0f0fa2e54fe561463c0fbbe). E3 IMPLEMENTED, external acceptance pending. F1/F2 OPEN. Phase C PAUSED; HV-01 not PASSED.

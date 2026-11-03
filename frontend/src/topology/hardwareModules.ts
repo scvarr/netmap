@@ -25,7 +25,7 @@ export interface ModuleStructuralChange {
 }
 export interface ModuleReconciliationResult {
   revision_id: string; version_number: number;
-  installations: Array<{ installation_id: string; physical_object_id?: string; status: 'updated' | 'already_current' | 'requires_intervention'; reasons: TemplateImpactReason[] }>;
+  installations: Array<{ installation_id: string; physical_object_id?: string; display_name?: string | null; bay_key?: string; source_revision_id?: string; context_at_batch_start?: boolean; status: 'updated' | 'already_current' | 'requires_intervention'; reasons: TemplateImpactReason[] }>;
 }
 export interface ModuleReviewDataSource {
   reconcileInstallations?(id: string): Promise<ModuleReconciliationResult>;

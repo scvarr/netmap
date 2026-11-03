@@ -99,6 +99,9 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
         } catch (e) { setError(String(e)); } finally { setBusy(false); }
       }}>{t('moduleReconciliation.action')}</button>
       {results && <ul>{results.installations.map(i => <li key={i.installation_id}>
+        {i.physical_object_id && <Link to={'/infrastructure/objects/' + i.physical_object_id}>{i.display_name || i.physical_object_id}</Link>}
+        <p>{i.bay_key} {i.source_revision_id}</p>
+        {i.context_at_batch_start && <p>{t('moduleReconciliation.snapshot')}</p>}
         {i.installation_id}: {t(i.status === 'updated' ? 'reconciliation.updated' : i.status === 'already_current' ? 'reconciliation.current' : 'review.attention')}
         <ul>{i.reasons.map((r, n) => <li key={n}>{t(reasonLabels[r.code as keyof typeof reasonLabels] ?? 'review.reason.unknown')} ({r.code}) {r.endpoint_name ?? r.key} {r.dependencies?.join(', ')}</li>)}</ul>
       </li>)}</ul>}

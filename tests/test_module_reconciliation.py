@@ -42,7 +42,11 @@ def test_skipped_revisions_identity_add_remove_and_retry():
         d['endpoints'][0]['display_name'] = 'Renamed'
         d['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'Added', 'kind': 'NETWORK_PORT'})
     target = revision(tid, edit)
-    assert apply(tid)[0]['status'] == 'updated'
+    result = apply(tid)[0]
+    assert result['status'] == 'updated'
+    assert result['bay_key']
+    assert result['source_revision_id']
+    assert result['physical_object_id']
     after = package()
     assert before['authoring']['ObjectConfiguration'] == after['authoring']['ObjectConfiguration']
     old = {r['id']: r for r in before['authoring']['ModuleEndpointMapping']}

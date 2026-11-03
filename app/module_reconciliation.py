@@ -52,7 +52,9 @@ class ModuleReconciliation:
         if session.get(m.ModuleTemplateRevision, installation.module_revision_id).template_id != template_id:
             raise ModelError("Installation changed", {"reason": "INSTALLATION_CHANGED"})
         result = {"installation_id": str(installation_id), "physical_object_id": str(object_id),
-                  "source_revision_id": str(installation.module_revision_id), "target_revision_id": str(latest.id)}
+                  "source_revision_id": str(installation.module_revision_id), "target_revision_id": str(latest.id), "bay_key": installation.bay_key,
+                  "display_name": session.scalar(select(m.EntityMetadata.value).where(
+                      m.EntityMetadata.physical_object_id == object_id, m.EntityMetadata.key == DISPLAY_ALIAS_KEY))}
         if installation.module_revision_id == latest.id:
             return {**result, "status": "already_current", "reasons": []}
         mappings = list(session.scalars(select(m.ModuleEndpointMapping).where(
@@ -159,6 +161,14 @@ def reconcile_installations(session, template_id):
         installation_ids = list(session.scalars(select(m.ModuleInstallation.id).join(
             m.ModuleTemplateRevision, m.ModuleTemplateRevision.id == m.ModuleInstallation.module_revision_id
         ).where(m.ModuleTemplateRevision.template_id == template_id).order_by(m.ModuleInstallation.id)))
+        contexts = {}
+        for installation_id in installation_ids:
+            installation = session.get(m.ModuleInstallation, installation_id)
+            config = session.get(m.ObjectConfiguration, installation.configuration_id)
+            contexts[installation_id] = {"physical_object_id": str(config.physical_object_id),
+                "source_revision_id": str(installation.module_revision_id), "bay_key": installation.bay_key,
+                "display_name": session.scalar(select(m.EntityMetadata.value).where(
+                    m.EntityMetadata.physical_object_id == config.physical_object_id, m.EntityMetadata.key == DISPLAY_ALIAS_KEY))}
     results = []
     for installation_id in installation_ids:
         # SessionLocal deliberately retains objects after commits. A previous
@@ -179,6 +189,6 @@ def reconcile_installations(session, template_id):
                 code = "CONCURRENT_CHANGE"
             else:
                 logger.exception("Module reconciliation failed for %s", installation_id)
-            results.append({"installation_id": str(installation_id), "target_revision_id": str(target_id),
+            results.append({**contexts[installation_id], "context_at_batch_start": True, "installation_id": str(installation_id), "target_revision_id": str(target_id),
                             "status": "requires_intervention", "reasons": [{"code": code}]})
     return {"revision_id": str(target_id), "version_number": version_number, "installations": results}

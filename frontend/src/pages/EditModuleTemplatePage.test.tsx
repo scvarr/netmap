@@ -176,13 +176,15 @@ it('reconciles installations and refreshes diagnostics preserving unsaved edits'
   const source = {
     ...setup(initial).source,
     reconcileInstallations: vi.fn(async () => ({ revision_id: 'latest', version_number: 2,
-      installations: [{ installation_id: 'installation', status: 'updated' as const, reasons: [] }] })),
+      installations: [{ installation_id: 'installation', physical_object_id: 'object-result', bay_key: 'bay-result', source_revision_id: 'source-result', status: 'updated' as const, reasons: [] }] })),
   };
   render(<I18nProvider><MemoryRouter><EditModuleTemplatePage dataSource={source} /></MemoryRouter></I18nProvider>);
   fireEvent.change(await screen.findByDisplayValue('Сохранённый модуль'), { target: { value: 'Unsaved' } });
   fireEvent.click(screen.getByRole('button', { name: 'Обновить совместимые установки' }));
   expect(await screen.findByText(/installation: Обновлён/)).toBeInTheDocument();
   expect(screen.getByDisplayValue('Unsaved')).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'object-result' })).toHaveAttribute('href', '/infrastructure/objects/object-result');
+  expect(screen.getByText(/bay-result/)).toBeInTheDocument();
   expect(source.loadDraft).toHaveBeenCalledTimes(2);
   expect(source.saveDraft).not.toHaveBeenCalled();
 });
