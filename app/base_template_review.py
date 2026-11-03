@@ -166,8 +166,6 @@ def analyze_object(session, config, candidate):
     for installation in sorted(installations, key=lambda i: str(i.id)):
         compatibility = session.get(m.ModuleTemplateRevision, installation.module_revision_id).compatibility
         bay = bays.get(installation.bay_key)
-        if bay is None or bay["panel_key"] != installation.layout["panel_key"]:
-            reasons.append({"code": "MODULE_LAYOUT_PANEL_CONFLICT", "installation_id": str(installation.id)})
         if bay and bay["compatibility"] == compatibility:
             placements[str(installation.id)] = installation.bay_key
         else:
@@ -178,6 +176,11 @@ def analyze_object(session, config, candidate):
             placements[str(installation.id)] = available[0]
         else:
             reasons.append({"code": "INSUFFICIENT_COMPATIBLE_CAPACITY", "installation_id": str(installation.id), "compatibility": compatibility})
+    # Validate the final assignment, shared by candidate review and locked apply.
+    for installation in installations:
+        target_key = placements.get(str(installation.id))
+        if target_key is not None and bays[target_key]["panel_key"] != installation.layout["panel_key"]:
+            reasons.append({"code": "MODULE_LAYOUT_PANEL_CONFLICT", "installation_id": str(installation.id)})
     for change in changes:
         if change["section"] == "internal_links":
             # Removing authored continuity must never silently discard a Connection.

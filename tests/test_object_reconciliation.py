@@ -230,9 +230,16 @@ def test_module_capacity_and_deterministic_relocation(capacity):
     revision(template_id, lambda d: d.update(bays=[{**bay, 'bay_key': f'new-{i}'} for i in reversed(range(capacity))]))
     before = package()
     result = reconcile(template_id)[oid(obj)]
-    assert result['status'] == 'requires_intervention'
-    assert any(r['code'] == 'MODULE_LAYOUT_PANEL_CONFLICT' for r in result['reasons'])
-    assert package() == before
+    if capacity < 2:
+        assert result['status'] == 'requires_intervention'
+        assert {r['code'] for r in result['reasons']} == {'INSUFFICIENT_COMPATIBLE_CAPACITY'}
+        assert package() == before
+    else:
+        assert result['status'] == 'updated'
+        after = package()
+        assert after['canonical'] == before['canonical']
+        for old, new in zip(before['authoring']['ModuleInstallation'], after['authoring']['ModuleInstallation']):
+            assert {k:v for k,v in old.items() if k != 'bay_key'} == {k:v for k,v in new.items() if k != 'bay_key'}
 
 
 def test_valid_placement_is_preserved_and_compatibility_swaps_are_atomic():
@@ -349,7 +356,7 @@ def test_updated_and_blocked_objects_round_trip_with_module_connections():
     results = reconcile(template_id)
     assert results[oid(blocked)]['status'] == 'requires_intervention'
     assert results[oid(safe)]['status'] == 'updated'
-    assert results[oid(modular)]['status'] == 'requires_intervention'
+    assert results[oid(modular)]['status'] == 'updated'
     before = package()
     states = open_draft(template_id)['publication_state']
     assert client.delete('/v1/workspace/dataset').status_code == 204  # isolated netmap_test only

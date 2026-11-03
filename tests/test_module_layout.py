@@ -137,3 +137,28 @@ def test_0007_backfills_existing_installations():
         isolated.dispose()
         with admin.connect() as c: c.exec_driver_sql(f'DROP DATABASE {database} WITH (FORCE)')
         admin.dispose()
+
+
+@pytest.mark.parametrize('replace_key', [True, False])
+def test_d2_final_assignment_panel_conflict_is_atomic(replace_key):
+    base, obj, _, _ = setup()
+    def edit(d):
+        original = d['bays'][0]
+        d['panels'].append({**d['panels'][0], 'panel_key': 'other', 'panel_number': 2})
+        if replace_key:
+            # Original bay survives but becomes incompatible: D2 must reassign.
+            d['bays'].append({**original, 'bay_key': 'replacement', 'panel_key': 'other'})
+            original['compatibility'] = 'incompatible'
+        else:
+            original['panel_key'] = 'other'
+    revision(base, edit)
+    from tests.test_base_template_review import open_draft as base_draft
+    review = base_draft(base)['publication_state']['objects'][0]
+    assert review['classification'] == 'requires_intervention'
+    assert any(r['code'] == 'MODULE_LAYOUT_PANEL_CONFLICT' for r in review['reasons'])
+    before = package()
+    result = reconcile(base)[obj]
+    assert result['status'] == 'requires_intervention'
+    assert any(r['code'] == 'MODULE_LAYOUT_PANEL_CONFLICT' for r in result['reasons'])
+    assert package() == before
+    assert client.get(f'/v1/topology/physical-objects/{obj}/configuration').status_code == 200

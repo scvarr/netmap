@@ -647,7 +647,7 @@ remain outstanding.
 
 ## Implemented boundary: 09.6-F1
 
-F1 **IMPLEMENTED** (external branch inspection pending). E1/E2/E3:
+F1 **IMPLEMENTED / ACCEPTED / MERGED**. E1/E2/E3:
 **IMPLEMENTED / ACCEPTED / MERGED**. F2a **IMPLEMENTED**; F2b **OPEN**. Phase C **PAUSED**;
 HV-01 is not PASSED.
 
@@ -694,9 +694,10 @@ Phase C **PAUSED**; HV-01 is not PASSED.
   layout/color and transformed F1 port coordinates by definition_key, retaining
   canonical endpoint IDs. PhysicalObject renders the installed body and ports.
 - E3 preserves layout when updating the pinned revision. D2 retains layout
-  when the bay remains on its panel, including bay rectangle changes. Removed
-  bays and panel changes return MODULE_LAYOUT_PANEL_CONFLICT through analysis
-  and apply; automatic cross-panel migration is not implemented.
+  when the bay remains on its panel, including bay rectangle changes. The panel of the final D2 proposed placement is checked against layout.panel_key.
+  Reassignment to a compatible bay on the same panel preserves layout and IDs.
+  A final bay on another panel returns MODULE_LAYOUT_PANEL_CONFLICT through
+  analysis and fresh locked apply; missing capacity retains INSUFFICIENT_COMPATIBLE_CAPACITY; automatic cross-panel migration is not implemented.
 - Forward migration **0007** deterministically fills existing installations.
   Applied 0001–0006 are unchanged. Workspace stays **v5** and adds
   module_layout_version=1. Historical archives lacking both marker and layout
