@@ -345,19 +345,24 @@ class HardwareCatalog:
         template = ModuleTemplate(name=query.name)
         self.session.add(template)
         self.session.flush()
-        revision = ModuleTemplateRevision(template_id=template.id, version_number=1, compatibility=query.compatibility)
+        revision = self._create_module_revision(template.id, 1, query)
+        return self.module_document(template, revision)
+
+    def _create_module_revision(self, template_id, version_number, query):
+        revision = ModuleTemplateRevision(template_id=template_id, name=query.name, version_number=version_number, compatibility=query.compatibility)
         self.session.add(revision)
         self.session.flush()
         for index, endpoint in enumerate(query.endpoints):
             self.session.add(ModuleEndpointDefinition(module_revision_id=revision.id, definition_key=endpoint.key, display_name=endpoint.display_name, kind=endpoint.kind, order_index=index))
         self.session.flush()
-        return self.module_document(template, revision)
+        return revision
 
     def module_document(self, template, revision):
-        return {"template_id": str(template.id), "revision_id": str(revision.id), "name": template.name, "compatibility": revision.compatibility, "endpoints": [{"key": e.definition_key, "display_name": e.display_name, "kind": e.kind} for e in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index))]}
+        return {"template_id": str(template.id), "revision_id": str(revision.id), "name": revision.name, "compatibility": revision.compatibility, "endpoints": [{"key": e.definition_key, "display_name": e.display_name, "kind": e.kind} for e in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index))]}
 
     def list_modules(self):
-        return {"modules": [self.module_document(t, r) for t, r in self.session.execute(select(ModuleTemplate, ModuleTemplateRevision).join(ModuleTemplateRevision, ModuleTemplateRevision.template_id == ModuleTemplate.id).order_by(ModuleTemplate.name, ModuleTemplate.id)).all()]}
+        latest = select(ModuleTemplateRevision.id).where(ModuleTemplateRevision.template_id == ModuleTemplate.id).order_by(ModuleTemplateRevision.version_number.desc()).limit(1).correlate(ModuleTemplate).scalar_subquery()
+        return {"modules": [self.module_document(t, r) for t, r in self.session.execute(select(ModuleTemplate, ModuleTemplateRevision).join(ModuleTemplateRevision, ModuleTemplateRevision.id == latest).order_by(ModuleTemplate.name, ModuleTemplate.id)).all()]}
 
     def delete_module(self, template_id: uuid.UUID) -> None:
         template = self.session.scalar(select(ModuleTemplate).where(
@@ -440,7 +445,7 @@ class HardwareCatalog:
                 for index, (mapping, definition) in enumerate(rows):
                     x, y = module_endpoint_position(bay, installation.orientation, index, len(rows))
                     endpoints.append({"key": definition.definition_key, "kind": definition.kind, **contexts[str(mapping.connection_point_id)], "x": x, "y": y})
-                installed = {"id": str(installation.id), "module_template_id": str(template.id), "module_revision_id": str(revision.id), "name": template.name, "orientation": installation.orientation, "endpoints": endpoints}
+                installed = {"id": str(installation.id), "module_template_id": str(template.id), "module_revision_id": str(revision.id), "name": revision.name, "orientation": installation.orientation, "endpoints": endpoints}
             bays.append({"bay_key": bay.bay_key, "display_name": bay.display_name, "compatibility": bay.compatibility, "panel_key": bay.panel_key, "x": bay.x, "y": bay.y, "width": bay.width, "height": bay.height, "installation": installed})
         return {"configuration_id": str(config.id), "base_revision_id": str(config.base_revision_id), "bays": bays}
 

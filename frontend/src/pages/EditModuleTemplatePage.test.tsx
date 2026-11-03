@@ -18,6 +18,7 @@ const reviewed = (doc: ModuleDraftDocument): ModuleDraftDocument => ({ ...doc, r
 function setup(initial = draft()) {
   let persisted = structuredClone(initial);
   const source = {
+    publishCandidate: vi.fn(async () => ({ revision_id: "published", version_number: 2 })),
     loadDraft: vi.fn(async () => structuredClone(persisted)),
     saveDraft: vi.fn(async (_id, definition, generation) => {
       persisted = { ...persisted, definition, generation: generation + 1, review: persisted.review ? { ...persisted.review, current: false } : null };
@@ -64,7 +65,7 @@ describe('module persisted draft and review', () => {
     expect(source.checkDraft).toHaveBeenCalledWith('module', 3);
     expect(screen.getByRole('link', { name: 'Server' })).toHaveAttribute('href', '/infrastructure/objects/object');
     expect(screen.getByText(/исходная ревизия: older-revision/)).toHaveTextContent('Установка: installation');
-    expect(screen.queryByRole('button', { name: 'Опубликовать' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled();
     fireEvent.change(screen.getByDisplayValue('P1'), { target: { value: 'Unsaved' } });
     expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
@@ -151,4 +152,18 @@ describe('module persisted draft and review', () => {
     expect(screen.getByText(/Совместимость не совпадает с текущим отсеком/)).toBeInTheDocument();
     expect(within(screen.getByRole('region', { name: 'Последствия для физических объектов' })).getByText(/Изменяется тип конечной точки/)).toHaveTextContent('P1');
   });
+});
+
+it('publishes the saved candidate and displays derived diagnostics', async () => {
+  const initial = reviewed(draft());
+  initial.publication_state = { revision_id: 'latest', version_number: 2, outdated_count: 1, awaiting_update_count: 0,
+    requires_intervention_count: 1, installations: [{ ...initial.review!.result.installations[0], classification: 'requires_intervention', reasons: [{ code: 'BAY_COMPATIBILITY_MISMATCH' }] }] };
+  const { source, mount } = setup(initial); mount();
+  expect(await screen.findByText('Текущая опубликованная ревизия: 2')).toBeInTheDocument();
+  expect(screen.getByText('Требуют вмешательства: 1')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+  await screen.findByRole('status');
+  expect(source.publishCandidate).toHaveBeenCalledWith('module', 'candidate');
+  fireEvent.change(screen.getByDisplayValue('P1'), { target: { value: 'Unsaved' } });
+  expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
 });

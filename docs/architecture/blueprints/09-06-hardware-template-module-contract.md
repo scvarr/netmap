@@ -4,7 +4,7 @@
 
 **ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A — IMPLEMENTED в main
 (отдельная внешняя приёмка не подтверждена). 09.6-C, D1, D2 и E1 —
-IMPLEMENTED / ACCEPTED / MERGED. E2/E3 — OPEN.**
+IMPLEMENTED / ACCEPTED / MERGED. E2 — IMPLEMENTED (external inspection pending); E3 — OPEN.**
 
 Статус актуализирован по `main`: `b96dc43303b8925d8973e7e2078a6d93540add98`.
 09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**, включая исправления внешнего ревью.
@@ -20,8 +20,8 @@ Current capability boundary: creation and module installation/removal, base
 draft/check, BaseTemplateRevision publication and safe PhysicalObject updates
 are implemented. E1 добавляет редактирование ModuleTemplate, сохранённые черновики
 и рекомендательные проверки влияния на установки; реализация принята и включена
-в main. Публикация последующих ревизий модулей (E2) и обновление установок (E3)
-остаются **OPEN**; приёмка E1 их не закрывает.
+в main. Публикация последующих ревизий модулей (E2) реализована в текущей ветке,
+внешняя инспекция ожидается. Обновление установок (E3) остаётся **OPEN**.
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -287,7 +287,7 @@ is included.
 ## Реализованная граница: 09.6-E1 — IMPLEMENTED / ACCEPTED / MERGED
 
 Итоговый SHA: `b96dc43303b8925d8973e7e2078a6d93540add98`.
-E2/E3 остаются OPEN; Phase C — PAUSED, HV-01 — не PASSED.
+На границе E1 E2/E3 оставались OPEN; E2 реализована ниже; Phase C — PAUSED, HV-01 — не PASSED.
 
 - Library **«Изменить шаблон»** opens the module editor for name, exact open
   compatibility and ordered endpoints. Rename/reorder preserve opaque keys;
@@ -418,6 +418,34 @@ NetworkInterface, Connections и Cables. Совместимость отсеко
 Существующие правила обновления базовых шаблонов ниже не задают такие правила
 для будущей геометрии модулей. 09.6-F не входит в E2/E3, Dense Map LOD,
 семантику технологий конечных точек или существующие замечания Phase C.
+
+## Implemented boundary: 09.6-E2
+
+E2 IMPLEMENTED in branch; external inspection pending. E3 and F1/F2 remain OPEN.
+
+- Module editor publishes only a saved, currently checked candidate through
+  `POST /v1/library/module-templates/{id}/candidates/{candidate_id}/publish`.
+  Ownership, latest source revision, generation, definition and workspace review
+  fingerprint are revalidated under D1 dependency-ordered SHARE ROW EXCLUSIVE
+  input locks in READ COMMITTED, with bounded transaction retries.
+- One transaction creates the next immutable revision, its own name, exact
+  compatibility and ordered endpoint definitions preserving definition keys;
+  records a unique candidate/revision receipt; advances draft source/generation.
+  Candidate stays unchanged. Repeated requests return the receipt without writes.
+  Stale checks return concrete 409 reasons and `recheck_required=true`.
+- New installations pin the latest revision with exact compatibility. Library
+  lists one current revision per template. Historical revision names remain
+  unchanged; current root name follows publication. No existing installation,
+  mapping, canonical endpoint, Connection, Cable or user data is reconciled.
+- Editor/library expose derived counts; editor lists outdated installations,
+  their object, bay, pinned source and E1 reasons against that actual source.
+  Diagnostics confer no update authorization and execute no update.
+- Forward migration **0005** adds revision names and publication receipts;
+  applied migrations remain unchanged. Workspace format remains **5**. Historical
+  C/D1/D2/E1 archives without module publication/name fields are accepted only
+  with initial module revisions. Current archives require names, receipts for
+  every noninitial revision, matching candidate ownership/source numbering and
+  exact ordered published definitions. Partial E2 profiles are rejected.
 
 ## PhysicalObject configuration and canonical endpoints
 
@@ -562,8 +590,7 @@ in this correction; later C/D1/D2 delivery is recorded above.
 
 ## OPEN and outside this contract
 
-- Публикация последующих ModuleTemplateRevision (09.6-E2) и обновление установок
-  (09.6-E3). E1: IMPLEMENTED / ACCEPTED / MERGED.
+- Обновление установок (09.6-E3): OPEN. E2 реализована, ожидает внешней инспекции. E1: IMPLEMENTED / ACCEPTED / MERGED.
 - Геометрия и графический редактор шаблонов модулей, компоновка установок
   внутри PhysicalObject (09.6-F): OPEN, согласованное будущее направление.
 - Endpoint technology/capability semantics: Ethernet, Fibre Channel, speed,

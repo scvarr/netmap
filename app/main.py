@@ -1569,7 +1569,13 @@ def create_module_template(query: CreateModuleTemplateRequest, session: Session 
 
 @app.get("/v1/library/module-templates")
 def list_module_templates(session: Session = Depends(get_session)):
-    return HardwareCatalog(session).list_modules()
+    def read():
+        from app.module_template_review import publication_state as module_publication_state
+        result = HardwareCatalog(session).list_modules()
+        for module in result["modules"]:
+            module["publication_state"] = module_publication_state(session, uuid.UUID(module["template_id"]))
+        return result
+    return _template_review_snapshot(session, read)
 
 
 @app.get("/v1/library/module-templates/{template_id}/draft")
@@ -1619,3 +1625,19 @@ def delete_module_installation(physical_object_id: uuid.UUID, installation_id: u
     with session.begin():
         ModuleInstallationDeletionCatalog(session).delete(physical_object_id, installation_id)
         return HardwareCatalog(session).configuration_document(physical_object_id)
+
+
+@app.post("/v1/library/module-templates/{template_id}/candidates/{candidate_id}/publish")
+def publish_module_template_candidate(template_id: uuid.UUID, candidate_id: uuid.UUID,
+                                    session: Session = Depends(get_session)):
+    # READ COMMITTED: all revalidation reads occur AFTER publication input locks.
+    for attempt in range(3):
+        try:
+            with session.begin():
+                return ModuleTemplateReview(session).publish(template_id, candidate_id)
+        except OperationalError as error:
+            if getattr(error.orig, "sqlstate", None) not in ("40001", "40P01"):
+                raise
+            if attempt == 2:
+                raise ModelError("Конкурирующее изменение данных. Повторите проверку изменений и публикацию.",
+                                 {"reason": "PUBLICATION_CONFLICT", "recheck_required": True}) from error

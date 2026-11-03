@@ -72,7 +72,8 @@ ENTITIES = (
     ("authoring", "BuiltInEndpointMapping", "BuiltInEndpointMapping", "id configuration_id definition_id connection_point_id network_interface_id"),
     ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name compatibility panel_key x y width height"),
     ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
-    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number compatibility"),
+    ("authoring", "ModuleTemplatePublication", "ModuleTemplatePublication", "id revision_id"),
+    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name compatibility"),
     ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind"),
@@ -173,10 +174,15 @@ def validate_package(package: object) -> dict:
     # Exact 09.6-C v5 profile: no publication collection and no revision names.
     # This is an archive import contract, not an authoring/runtime fallback.
     historical_c = isinstance(package["authoring"], dict) and "BaseTemplatePublication" not in package["authoring"]
+    pre_e2 = isinstance(package["authoring"], dict) and "ModuleTemplatePublication" not in package["authoring"]
     module_review_names = {"ModuleTemplateDraft", "ModuleTemplateCandidate"}
     pre_e1 = isinstance(package["authoring"], dict) and not module_review_names.intersection(package["authoring"])
+    if pre_e1 and not pre_e2:
+        raise PackageError("E2 archive requires module review collections")
     for section in ("canonical", "authoring", "presentation", "settings"):
         expected = {name for part, name, _, _ in specs if part == section}
+        if pre_e2 and section == "authoring":
+            expected.remove("ModuleTemplatePublication")
         if historical_c and section == "authoring":
             expected.remove("BaseTemplatePublication")
         if pre_e1 and section == "authoring":
@@ -184,16 +190,16 @@ def validate_package(package: object) -> dict:
         if not isinstance(package[section], dict) or set(package[section]) != expected:
             raise PackageError(f"Incomplete {section} section")
     for section, name, model, fields in specs:
-        absent = (historical_c and name == "BaseTemplatePublication") or (pre_e1 and name in module_review_names)
+        absent = (pre_e2 and name == "ModuleTemplatePublication") or (historical_c and name == "BaseTemplatePublication") or (pre_e1 and name in module_review_names)
         records = [] if absent else package[section][name]
         if not isinstance(records, list):
             raise PackageError(f"{name} must be a list")
         columns = {column.key: column for column in model.__table__.columns}
         parsed = []
         ids = set()
-        historical_revision = historical_c and name == "BaseTemplateRevision"
+        historical_revision = (historical_c and name == "BaseTemplateRevision") or (pre_e2 and name == "ModuleTemplateRevision")
         expected_fields = set(fields) - {"name"} if historical_revision else set(fields)
-        template_names = {r["id"]: r["name"] for r in result["base_templates"]} if historical_revision else {}
+        template_names = {r["id"]: r["name"] for r in result["module_templates" if name == "ModuleTemplateRevision" else "base_templates"]} if historical_revision else {}
         for record in records:
             if not isinstance(record, dict) or set(record) != expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
@@ -249,6 +255,25 @@ def _validate_module_template_reviews(rows):
     from app.schemas import ModuleTemplateImpactResult
     from pydantic import ValidationError as SchemaError
     revisions = {r["id"]: r for r in rows["module_template_revisions"]}
+    candidates = {r["id"]: r for r in rows["module_template_candidates"]}
+    receipts = rows["module_template_publications"]
+    published = [r["revision_id"] for r in receipts]
+    if len(published) != len(set(published)) or set(published) != {r["id"] for r in revisions.values() if r["version_number"] > 1}:
+        raise PackageError("Every noninitial module revision requires one publication receipt")
+    for receipt in receipts:
+        candidate = candidates[receipt["id"]]
+        revision = revisions[receipt["revision_id"]]
+        source = revisions[candidate["source_revision_id"]]
+        actual = {"name": revision["name"], "compatibility": revision["compatibility"], "endpoints": [
+            {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"]}
+            for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]}
+        if (revision["template_id"] != candidate["template_id"] or source["template_id"] != candidate["template_id"]
+                or revision["version_number"] != source["version_number"] + 1 or actual != candidate["definition"]):
+            raise PackageError("Module publication differs from candidate ownership, source or definition")
+    for template in rows["module_templates"]:
+        latest = max((r for r in revisions.values() if r["template_id"] == template["id"]), key=lambda r: r["version_number"], default=None)
+        if latest is None or latest["name"] != template["name"]:
+            raise PackageError("Module template name must match current revision")
     templates = set()
     for table, generation in (("module_template_drafts", "generation"), ("module_template_candidates", "draft_generation")):
         for row in rows[table]:

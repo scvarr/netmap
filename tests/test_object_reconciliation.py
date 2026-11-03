@@ -105,7 +105,7 @@ def add_dependency(session, obj, dependency):
             scope={str(point_id).upper(): f'opaque reference: {str(interface_id).upper()}'}))
     elif dependency == 'mapping':
         module = m.ModuleTemplate(name='Other'); session.add(module); session.flush()
-        revision_ = m.ModuleTemplateRevision(template_id=module.id, version_number=1, compatibility='OCP3'); session.add(revision_); session.flush()
+        revision_ = m.ModuleTemplateRevision(template_id=module.id, version_number=1, name='Module', compatibility='OCP3'); session.add(revision_); session.flush()
         definition = m.ModuleEndpointDefinition(module_revision_id=revision_.id, definition_key='other', display_name='Other', kind='NETWORK_PORT', order_index=0)
         config = session.scalar(select(m.ObjectConfiguration).where(m.ObjectConfiguration.physical_object_id == uuid.UUID(oid(obj))))
         bay = session.scalar(select(m.ModuleBay).where(m.ModuleBay.base_revision_id == config.base_revision_id))

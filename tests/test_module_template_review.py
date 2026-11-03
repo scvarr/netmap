@@ -312,6 +312,9 @@ def test_workspace_roundtrip_and_pre_e1_v5():
     assert response.status_code == 204, response.text
     assert client.get('/v1/workspace/package').json() == package
     assert open_draft(module['template_id'])['review'] == checked['review']
+    del package['authoring']['ModuleTemplatePublication']
+    for revision in package['authoring']['ModuleTemplateRevision']:
+        del revision['name']
     for key in ('ModuleTemplateDraft', 'ModuleTemplateCandidate'):
         del package['authoring'][key]
     assert client.delete('/v1/workspace/dataset').status_code == 204

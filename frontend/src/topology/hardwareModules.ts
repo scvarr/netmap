@@ -6,11 +6,12 @@ export interface ModuleBay {
 }
 export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind }
 export interface ModuleTemplateInput { name: string; compatibility: string; endpoints: ModuleEndpoint[] }
-export interface ModuleTemplate extends ModuleTemplateInput { template_id: string; revision_id: string }
+export interface ModuleTemplate extends ModuleTemplateInput { template_id: string; revision_id: string; publication_state?: ModuleDraftDocument["publication_state"] }
 export interface ModuleDraftDocument {
   template_id: string; source_revision_id: string; generation: number; definition: ModuleTemplateInput;
+  publication_state?: { revision_id: string; version_number: number; outdated_count: number; awaiting_update_count: number; requires_intervention_count: number; installations: NonNullable<ModuleDraftDocument["review"]>["result"]["installations"] };
   review: null | {
-    candidate_id: string; draft_generation: number; definition: ModuleTemplateInput; current: boolean; created_at: string;
+    published_revision_id?: string | null; candidate_id: string; draft_generation: number; definition: ModuleTemplateInput; current: boolean; created_at: string;
     result: { changes: ModuleStructuralChange[]; installations: Array<{
       installation_id: string; physical_object_id: string; display_name: string; source_revision_id: string; bay_key: string;
       classification: 'potentially_safe' | 'requires_intervention'; reasons: TemplateImpactReason[]; changes: ModuleStructuralChange[];
@@ -23,6 +24,7 @@ export interface ModuleStructuralChange {
   after: string | (ModuleEndpoint & { order_index: number }) | null;
 }
 export interface ModuleReviewDataSource {
+  publishCandidate(id: string, candidateId: string): Promise<{ revision_id: string; version_number: number }>;
   loadDraft(id: string): Promise<ModuleDraftDocument>;
   saveDraft(id: string, definition: ModuleTemplateInput, generation: number): Promise<ModuleDraftDocument>;
   checkDraft(id: string, generation: number): Promise<ModuleDraftDocument>;
@@ -62,6 +64,7 @@ export const hardwareModuleDataSource: HardwareModuleDataSource = {
   installModule: (id, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations`, input),
 };
 export const moduleReviewDataSource: ModuleReviewDataSource = {
+  publishCandidate: (id, candidate) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/candidates/${encodeURIComponent(candidate)}/publish`, undefined, "POST"),
   loadDraft: id => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft`),
   saveDraft: (id, input, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft?expected_generation=${generation}`, input, 'PUT'),
   checkDraft: (id, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft/check?expected_generation=${generation}`, undefined, 'POST'),

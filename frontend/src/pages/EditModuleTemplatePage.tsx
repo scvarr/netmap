@@ -84,13 +84,34 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
         <button type="submit" disabled={revalidating || !definition.name.trim() || !definition.compatibility.trim() || definition.endpoints.some(e => !e.display_name.trim())}>{t('review.save')}</button>
       </fieldset>
     </form>}
+    {document?.publication_state && <section aria-label={t('publication.state')}>
+      <p>{t('publication.revision', { number: document.publication_state.version_number })}</p>
+      <p>{t('publication.awaiting', { count: document.publication_state.awaiting_update_count })}</p>
+      <p>{t('publication.intervention', { count: document.publication_state.requires_intervention_count })}</p>
+      <ul>{document.publication_state.installations.map(i => <li key={i.installation_id}>
+        <Link to={`/infrastructure/objects/${i.physical_object_id}`}>{i.display_name}</Link>
+        <p>{t('moduleReview.installation', { id: i.installation_id, revision: i.source_revision_id, bay: i.bay_key })}</p>
+        <strong>{t(i.classification === 'requires_intervention' ? 'review.attention' : 'publication.waiting')}</strong>
+        <ul>{i.reasons.map((r, n) => <li key={n}>{t(reasonLabels[r.code as keyof typeof reasonLabels] ?? 'review.reason.unknown')} {r.endpoint_name ?? r.key} {r.dependencies?.map(d => t(dependencyLabels[d as keyof typeof dependencyLabels] ?? 'review.dep.other')).join(', ')}</li>)}</ul>
+      </li>)}</ul>
+    </section>}
     {notice && <p role="status">{notice}</p>}
     {document && <section aria-label={t('review.impacts')}>
       <button type="button" disabled={busy || revalidating || dirty} onClick={() => void run(true)}>{t('review.check')}</button>
+      <button type="button" disabled={!current || !!review?.published_revision_id} onClick={async () => {
+        if (!review || !current) return;
+        setBusy(true); setError(''); setNotice('');
+        try {
+          const published = await dataSource.publishCandidate(templateId, review.candidate_id);
+          const doc = await dataSource.loadDraft(templateId);
+          setDocument(doc); setDefinition(doc.definition);
+          setNotice(t('publication.completed', { number: published.version_number }));
+        } catch (e) { setError(String(e)); } finally { setBusy(false); }
+      }}>{t('publication.publish')}</button>
       {dirty && <p>{t('review.unsaved')}</p>}
       {review && <>
         <p>{t('review.candidate', { id: review.candidate_id, time: review.created_at })}</p>
-        <p>{t(current ? 'review.current' : 'review.stale')}</p>
+        <p>{t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')}</p>
         {current && <>
           <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : 'review.section.properties')} · {t(`review.operation.${c.operation}`)} · {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after?.display_name) || (typeof c.before === 'object' && c.before?.display_name)}</li>)}</ul>
           {!review.result.installations.length && <p>{t('moduleReview.noInstallations')}</p>}

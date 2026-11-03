@@ -631,6 +631,7 @@ class ModuleTemplateRevision(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     template_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_templates.id", ondelete="RESTRICT"), nullable=False)
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
     compatibility: Mapped[str] = mapped_column(String(255), nullable=False)
 
 
@@ -1288,3 +1289,9 @@ class PacketProcessingPlanAttachment(Base):
         ForeignKey("packet_processing_plans.id", ondelete="RESTRICT"), nullable=False
     )
     scope: Mapped[dict[str, object]] = mapped_column(JSONB, nullable=False)
+
+
+class ModuleTemplatePublication(Base):
+    __tablename__ = "module_template_publications"
+    id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_candidates.id", ondelete="CASCADE"), primary_key=True)
+    revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="CASCADE"), unique=True, nullable=False)
