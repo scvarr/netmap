@@ -733,3 +733,9 @@ a { color: inherit; }
 .blueprint-pairwise-dialog__row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; overflow-wrap: anywhere; }
 .blueprint-pairwise-dialog .catalog-dialog__actions { flex: none; margin: 0; }
 @media (max-width: 760px) { .blueprint-order-dialog__row { grid-template-columns: 24px minmax(0, 1fr) auto auto auto; } .blueprint-order-dialog__row [data-name-preview] { grid-column: 2; grid-row: 2; } }
+
+.blueprint-order-dialog > svg { flex: none; height: 150px; min-height: 100px; }
+.blueprint-order-dialog__row { padding: 6px; border: 2px solid transparent; }
+.blueprint-order-dialog__row:nth-child(even) { background: #20383d; }
+.blueprint-order-dialog__row:hover { background: #2c4b52; }
+.blueprint-order-dialog__row[data-active="true"] { border-color: #ff7b22; background: #304a50; }

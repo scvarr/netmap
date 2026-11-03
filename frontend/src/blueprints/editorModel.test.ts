@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
+import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, spatialOrderedKeys, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, hydrateBlueprintEditorState, layoutSelectionRow, layoutSelectionTwoRows, panelGestureGeometry, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, snapSelectionTranslation, translateSelection, type BlueprintEditorState, type PanelHandle } from './editorModel';
 import { newBlueprintEditorState } from '../pages/BaseTemplateEditor';
 import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 
@@ -448,9 +448,9 @@ describe('ordered bulk naming pure operations', () => {
     expect(reorderOrderedKeys(keys, 1, -1)).toEqual(['b', 'a', 'c']); expect(reorderOrderedKeys(keys, 1, 1)).toEqual(['a', 'c', 'b']);
     expect(reorderOrderedKeys(keys, 0, -1)).toEqual(keys); expect(reorderOrderedKeys(keys, 2, 1)).toEqual(keys);
   });
-  it.each([['Ge0/', '1', '1', ['Ge0/1', 'Ge0/2']], ['', '1', '1', ['1', '2']], ['Port-', '1', '2', ['Port-1', 'Port-3']], ['', '24', '-1', ['24', '23']]])('uses exact user order for prefix %s, start %s, step %s', (prefix, start, step, expected) => {
+  it.each([['Ge0/#', '1', '1', ['Ge0/1', 'Ge0/2']], ['#', '1', '1', ['1', '2']], ['Port-#', '1', '2', ['Port-1', 'Port-3']]])('uses exact user order for prefix %s, start %s, step %s', (mask, start, step, expected) => {
     const state = fixture(); state.slots[0].display_name = 'MGMT'; const before = structuredClone(state);
-    const keys = [state.slots[2].key, state.slots[0].key]; const parameters = { prefix, start, step };
+    const keys = [state.slots[2].key, state.slots[0].key]; const parameters = { mask, start, step };
     const preview = bulkNamePreview(state, keys, parameters)!; expect(preview.map((item) => item.display_name)).toEqual(expected);
     const result = applyBulkNames(state, keys, parameters); expect(state).toEqual(before);
     expect(keys.map((key) => result.slots.find((slot) => slot.key === key)!.display_name)).toEqual(expected);
@@ -462,12 +462,12 @@ describe('ordered bulk naming pure operations', () => {
     expect(Object.keys(result).sort()).toEqual(Object.keys(state).sort()); expect(JSON.stringify(request)).not.toMatch(/ordered|prefix|start|step|recipe/);
   });
   it.each([['1', '0'], ['1.5', '1'], ['1', '2.5'], ['', '1'], ['1', ''], ['Infinity', '1'], ['1', 'NaN']])('rejects invalid inputs atomically (%s, %s)', (start, step) => {
-    const state = fixture(); const keys = state.slots.map((slot) => slot.key); const parameters = { prefix: 'x', start, step };
+    const state = fixture(); const keys = state.slots.map((slot) => slot.key); const parameters = { mask: 'x#', start, step };
     expect(bulkNamePreview(state, keys, parameters)).toBeUndefined(); expect(applyBulkNames(state, keys, parameters)).toBe(state);
   });
   it('rejects unknown, duplicate and cross-panel keys atomically', () => {
     const state = fixture(); const other = addPanel(state, 'right'); const both = addEndpoints(other, 'NETWORK_PORT', 1, other.activePanelKey);
-    for (const keys of [['missing'], [both.slots.at(-1)!.key, state.slots[0].key], [both.slots.at(-1)!.key, both.slots.at(-1)!.key]]) expect(applyBulkNames(both, keys, { prefix: '', start: '1', step: '1' })).toBe(both);
+    for (const keys of [['missing'], [both.slots.at(-1)!.key, state.slots[0].key], [both.slots.at(-1)!.key, both.slots.at(-1)!.key]]) expect(applyBulkNames(both, keys, { mask: '#', start: '1', step: '1' })).toBe(both);
   });
 });
 
@@ -512,5 +512,28 @@ describe('general pairwise continuity', () => {
     expect(pairwiseContinuityPreview(state, ['a', 'b'], ['c', 'd'], false).error).toBe('existingLink');
     expect(applyPairwiseContinuity(state, ['a', 'b'], ['c', 'd'], false)).toBe(state);
     expect(state.individualLinks).toBe(links); expect(links).toHaveLength(1);
+  });
+});
+
+describe('C-UX-12 mask and spatial order', () => {
+  const fixture = () => { const state = newBlueprintEditorState(); return addEndpoints(state, 'NETWORK_PORT', 4, state.activePanelKey); };
+  it.each([['##','1','1',['01','02','03']], ['1-#','1','2',['1-1','1-3','1-5']]])('previews %s', (mask,start,step,expected) => {
+    const state=fixture(); const keys=state.slots.slice(0,3).map(s=>s.key);
+    expect(bulkNamePreview(state,keys,{mask,start,step})?.map(s=>s.display_name)).toEqual(expected);
+  });
+  it.each(['', 'GE-', '#-#'])('rejects invalid mask %s atomically', mask => {
+    const state=fixture(); expect(applyBulkNames(state,state.slots.map(s=>s.key),{mask,start:'1',step:'1'})).toBe(state);
+  });
+  it('sorts rows in both directions and previews manual reorder without changing geometry', () => {
+    const state=fixture(); state.slots.forEach((s,i)=>{ s.rendered_position={x:i%2 ? .2 : .8,y:i<2 ? .2 : .8}; });
+    const keys=state.slots.map(s=>s.key); const before=structuredClone(state);
+    expect(spatialOrderedKeys(state,keys,'ltr','ttb')).toEqual([keys[1],keys[0],keys[3],keys[2]]);
+    expect(spatialOrderedKeys(state,keys,'rtl','btt')).toEqual([keys[2],keys[3],keys[0],keys[1]]);
+    const manual=reorderOrderedKeys(spatialOrderedKeys(state,keys,'ltr','ttb'),0,1);
+    expect(bulkNamePreview(state,manual,{mask:'#',start:'1',step:'1'})?.map(s=>s.key)).toEqual(manual);
+    expect(state).toEqual(before);
+    state.slots.forEach(s=>{s.rendered_position.y=.5;});
+    expect(spatialOrderedKeys(state,keys.slice(0,2),'ltr','ttb')).toEqual([keys[1],keys[0]]);
+    expect(spatialOrderedKeys(state,keys.slice(0,2),'rtl','ttb')).toEqual([keys[0],keys[1]]);
   });
 });

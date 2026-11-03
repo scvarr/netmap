@@ -872,7 +872,29 @@ describe('transient ordered selection and naming', () => {
     return { state, save };
   };
   const click = (key: string, flags = {}) => { fireEvent.pointerDown(document.querySelector(`[data-slot-key="${key}"]`)!, { button: 0, ...flags }); fireEvent.pointerUp(document.querySelector('svg')!); };
-  const order = () => [...document.querySelectorAll('[data-endpoint-sequence]')].sort((a, b) => Number(a.getAttribute('data-endpoint-sequence')) - Number(b.getAttribute('data-endpoint-sequence'))).map((badge) => badge.parentElement!.getAttribute('data-slot-key'));
+  const order = () => [...document.querySelectorAll('.blueprint-composer__canvas-wrap [data-endpoint-sequence]')].sort((a, b) => Number(a.getAttribute('data-endpoint-sequence')) - Number(b.getAttribute('data-endpoint-sequence'))).map((badge) => badge.parentElement!.getAttribute('data-slot-key'));
+  it('preserves group on right click, previews spatial and manual order and retains endpoint links on apply', () => {
+    const {state,save}=setup(); const keys=state.slots.slice(0,3).map(s=>s.key);
+    keys.forEach(key=>click(key,{ctrlKey:true}));
+    fireEvent.pointerDown(document.querySelector(`[data-slot-key="${keys[1]}"]`)!,{button:2});
+    fireEvent.contextMenu(document.querySelector(`[data-slot-key="${keys[1]}"]`)!,{clientX:100,clientY:100});
+    expect(document.querySelectorAll('.blueprint-composer__canvas-wrap [data-selected="true"]')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('menuitem',{name:'Массовое переименование'}));
+    const dialog=screen.getByRole('dialog');
+    expect(dialog.querySelectorAll('[data-ordered-key]')).toHaveLength(3);
+    fireEvent.change(within(dialog).getByLabelText('Маска (#, ##, GE-##)'),{target:{value:'##'}});
+    expect([...dialog.querySelectorAll('[data-name-preview]')].map(n=>n.textContent)).toEqual(['→ 01','→ 02','→ 03']);
+    fireEvent.click(within(dialog).getByRole('button',{name:'Ниже: 1'}));
+    expect(dialog.querySelector('[data-active="true"][data-ordered-key]')).toHaveAttribute('data-ordered-key',keys[0]);
+    expect(dialog.querySelector('[data-highlighted="true"]')).toHaveAttribute('data-slot-key',keys[0]);
+    fireEvent.click(within(dialog).getByRole('button',{name:'Применить имена'}));
+    fireEvent.click(within(dialog).getByRole('button',{name:'Закрыть'}));
+    fireEvent.click(screen.getByRole('button',{name:'Save'}));
+    const saved=save.mock.calls[0][0];
+    expect(saved.slots.map(({display_name:_,...s}: typeof state.slots[number])=>s)).toEqual(state.slots.map(({display_name:_,...s})=>s));
+    expect(saved.individualLinks).toEqual(state.individualLinks);
+    expect(saved.slots.slice(0,3).map((s: typeof state.slots[number])=>s.display_name)).toEqual(['02','01','03']);
+  });
   it('starts empty, toggles A/B/C, compacts badges, reorders/removes and returns to spatial tools', async () => {
     const { state, save } = setup(); const [a, b, c] = state.slots;
     click(a.key); expect(document.querySelector('.blueprint-composer__position')).toBeInTheDocument();
@@ -881,7 +903,7 @@ describe('transient ordered selection and naming', () => {
     for (const slot of [a, b, c]) click(slot.key);
     expect(order()).toEqual([a.key, b.key, c.key]); click(b.key);
     expect(order()).toEqual([a.key, c.key]);
-    expect([...document.querySelectorAll('[data-endpoint-sequence]')].map((node) => node.textContent)).toEqual(['1', '2']);
+    expect([...document.querySelectorAll('.blueprint-composer__canvas-wrap [data-endpoint-sequence]')].map((node) => node.textContent)).toEqual(['1', '2']);
     await userEvent.click(screen.getByRole('button', { name: 'Порядок и имена' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('button', { name: 'Выше: 1' })).toBeDisabled();
@@ -932,13 +954,13 @@ describe('transient ordered selection and naming', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Порядок и имена' }));
     const dialog = screen.getByRole('dialog'); expect(dialog.querySelector('.blueprint-order-dialog__list')).toBeInTheDocument();
     expect(dialog.querySelectorAll('[data-ordered-key]')).toHaveLength(count);
-    fireEvent.change(screen.getByLabelText('Префикс'), { target: { value: 'Ge0/' } });
+    fireEvent.change(screen.getByLabelText('Маска (#, ##, GE-##)'), { target: { value: 'Ge0/#' } });
     fireEvent.change(screen.getByLabelText('Начальный номер'), { target: { value: '24' } });
-    fireEvent.change(screen.getByLabelText('Шаг'), { target: { value: '-1' } });
+    fireEvent.change(screen.getByLabelText('Шаг'), { target: { value: '1' } });
     const previews = [...dialog.querySelectorAll('[data-name-preview]')].map((node) => node.textContent!.replace('→ ', ''));
-    expect(previews.slice(0, 3)).toEqual(['Ge0/24', 'Ge0/23', 'Ge0/22']);
+    expect(previews.slice(0, 3)).toEqual(['Ge0/24', 'Ge0/25', 'Ge0/26']);
     fireEvent.change(screen.getByLabelText('Шаг'), { target: { value: '0' } }); expect(screen.getByRole('button', { name: 'Применить имена' })).toBeDisabled();
-    fireEvent.change(screen.getByLabelText('Шаг'), { target: { value: '-1' } });
+    fireEvent.change(screen.getByLabelText('Шаг'), { target: { value: '1' } });
     await userEvent.click(screen.getByRole('button', { name: 'Применить имена' }));
     await userEvent.click(screen.getByRole('button', { name: 'Закрыть' })); expect(order()).toHaveLength(count);
     expect([...document.querySelectorAll('[data-endpoint-marker] title')].slice(0, count).map((node) => node.textContent).reverse()).toEqual(previews);

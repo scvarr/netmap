@@ -348,15 +348,29 @@ export const reorderOrderedKeys = (keys: readonly string[], index: number, direc
   [next[index], next[destination]] = [next[destination], next[index]];
   return next;
 };
-export interface BulkNameParameters { prefix: string; start: string; step: string }
+// Row membership uses a fixed panel-local tolerance, anchored to the first Y in each row.
+// Sorting is total (Y, X, stable key); no coordinates or persisted records change.
+export const spatialOrderedKeys = (state: BlueprintEditorState, keys: readonly string[], horizontal: 'ltr' | 'rtl', vertical: 'ttb' | 'btt'): string[] => {
+  const slots = state.slots.filter(slot => keys.includes(slot.key) && slot.panel_key === state.activePanelKey)
+    .sort((a, b) => a.rendered_position.y - b.rendered_position.y || a.rendered_position.x - b.rendered_position.x || (a.key < b.key ? -1 : 1));
+  const rows: typeof slots[] = [];
+  for (const slot of slots) {
+    const row = rows.at(-1);
+    if (!row || slot.rendered_position.y - row[0].rendered_position.y > .01) rows.push([slot]);
+    else row.push(slot);
+  }
+  if (vertical === 'btt') rows.reverse();
+  return rows.flatMap(row => row.sort((a, b) => (horizontal === 'ltr' ? 1 : -1) * (a.rendered_position.x - b.rendered_position.x) || a.rendered_position.y - b.rendered_position.y || (a.key < b.key ? -1 : 1)).map(slot => slot.key));
+};
+export interface BulkNameParameters { mask: string; start: string; step: string }
 export const bulkNamePreview = (state: BlueprintEditorState, keys: readonly string[], parameters: BulkNameParameters) => {
-  const { prefix, start, step } = parameters;
+  const { mask, start, step } = parameters;
   const first = Number(start); const increment = Number(step);
-  if (!start.trim() || !step.trim() || !Number.isSafeInteger(first) || !Number.isSafeInteger(increment) || increment === 0 || new Set(keys).size !== keys.length) return undefined;
+  if ((mask.match(/#+/g) ?? []).length !== 1 || !start.trim() || !step.trim() || !Number.isSafeInteger(first) || !Number.isSafeInteger(increment) || increment <= 0 || new Set(keys).size !== keys.length) return undefined;
   const slots = new Map(state.slots.map((slot) => [slot.key, slot]));
   if (keys.some((key) => slots.get(key)?.panel_key !== state.activePanelKey || !slots.has(key))) return undefined;
   if (keys.some((_, index) => !Number.isSafeInteger(first + index * increment))) return undefined;
-  return keys.map((key, index) => ({ key, currentName: slots.get(key)!.display_name, display_name: prefix + (first + index * increment) }));
+  return keys.map((key, index) => ({ key, currentName: slots.get(key)!.display_name, display_name: mask.replace(/#+/, (token) => { const number = first + index * increment; return (number < 0 ? '-' : '') + String(Math.abs(number)).padStart(token.length, '0'); }) }));
 };
 export const applyBulkNames = (state: BlueprintEditorState, keys: readonly string[], parameters: BulkNameParameters): BlueprintEditorState => {
   const preview = bulkNamePreview(state, keys, parameters);

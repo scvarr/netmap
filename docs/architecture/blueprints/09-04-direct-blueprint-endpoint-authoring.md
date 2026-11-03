@@ -118,9 +118,14 @@ endpoint records; they do not create persisted groups or recipes.
 **IMPLEMENTED (D1)** — For order-dependent bulk actions, users explicitly form an ordered selection.
 The editor shows transient sequence numbers and provides a clear way to set or
 reorder processing order. Those numbers are neither identity nor persisted
-grouping. Bulk naming supports a prefix, starting number, step, exact-name
-preview, and apply. For example, prefix `Ge0/`, start `1`, step `1` applied to
-four ordered endpoints yields `Ge0/1` through `Ge0/4`. After apply, persist
+grouping. Bulk naming supports a mask, starting number, positive step, exact-name
+preview, and apply (C-UX-12: IMPLEMENTED / MANUAL RECHECK PENDING). A single
+run of `#` is the numeric placeholder; its length sets minimum zero-padded
+width. For example, mask `Ge0/#`, start `1`, step `1` applied to
+four ordered endpoints yields `Ge0/1` through `Ge0/4`. Context-menu entry
+preserves spatial selection. Row-major spatial order supports both horizontal
+and vertical directions; manual reorder and canvas-linked row highlighting
+remain available before apply. Naming order never changes internal links. After apply, persist
 only the exact names. Odd/even labels can be authored with separate selections
 and steps of two; no persisted odd/even scheme or arbitrary naming DSL is
 introduced. A single endpoint remains individually renameable. Names are open

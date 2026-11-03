@@ -8,7 +8,7 @@ import { bayGestureGeometry, type BayRectangle } from '../blueprints/moduleBayGe
 interface Props {
   body: { width: number; height: number; fillColor: string }; panels: PresentationPanel[]; activePanelKey: string;
   slots: BlueprintSlot[]; links: BaseInternalLink[]; selectedKeys: ReadonlySet<string>;
-  orderedKeys?: readonly string[];
+  orderedKeys?: readonly string[]; highlightedKey?: string;
   onSelect: (key: string, toggle: boolean) => void; onMarquee: (keys: string[]) => void;
   onTranslate: (keys: ReadonlySet<string>, dx: number, dy: number) => void;
   onContextMenu: (key: string | undefined, clientX: number, clientY: number) => void;
@@ -31,7 +31,7 @@ export function endpointMarkerRadii(scale: number) {
   };
 }
 
-export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel, onPanelGeometry, orderedKeys, bays = [], selectedBayKey, onSelectBay, onBayGeometry }: Props) {
+export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel, onPanelGeometry, orderedKeys, highlightedKey, bays = [], selectedBayKey, onSelectBay, onBayGeometry }: Props) {
   const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null);
   const gesture = useRef<Gesture | undefined>(undefined);
@@ -177,7 +177,7 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
       const y = activeRect.y + activeRect.height * (bay.y + bay.height * (handle.includes('n') ? 0 : handle.includes('s') ? 1 : .5));
       return <circle key={`${bay.bay_key}:${handle}`} data-bay-resize={handle} className={`blueprint-composition-canvas__resize blueprint-composition-canvas__resize--${handle}`} cx={x} cy={y} r={5 / canvasScale} stroke="#071315" strokeWidth={2 / canvasScale} onPointerDown={event => startBayGesture(event, bay, handle)} />;
     }))}
-    {slots.map((slot) => { const point = points.get(slot.key)!; const sequence = orderedKeys?.indexOf(slot.key); const selected = orderedKeys ? sequence !== -1 : selectedKeys.has(slot.key); return <g key={slot.key} data-slot-key={slot.key} data-selected={selected} className="blueprint-composition-canvas__port" onPointerDown={(event) => {
+    {slots.map((slot) => { const point = points.get(slot.key)!; const sequence = orderedKeys?.indexOf(slot.key); const selected = orderedKeys ? sequence !== -1 : selectedKeys.has(slot.key); return <g key={slot.key} data-slot-key={slot.key} data-highlighted={highlightedKey === slot.key} data-selected={selected} className="blueprint-composition-canvas__port" onPointerDown={(event) => {
       if (event.button !== 0) return;
       event.preventDefault(); event.stopPropagation();
       if (slot.panel_key !== activePanelKey) { onActivatePanel(slot.panel_key); onSelect(slot.key, false); return; }
@@ -188,7 +188,7 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
       gesture.current = toggle ? undefined : { kind: 'move', key: slot.key, keys: selected ? new Set(selectedKeys) : new Set([slot.key]), start: position(event), applied: { x: 0, y: 0 }, slots: visible, moved: false };
     }}>
       <circle data-endpoint-hit-target cx={point.x} cy={point.y} r={marker.hit} fill="transparent" pointerEvents="all" />
-      <circle data-endpoint-marker cx={point.x} cy={point.y} r={selected ? marker.selected : marker.regular} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={selected ? '#fff' : '#1c3135'} strokeWidth="2" vectorEffect="non-scaling-stroke"><title>{slot.display_name}</title></circle>
+      <circle data-endpoint-marker cx={point.x} cy={point.y} r={selected ? marker.selected : marker.regular} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={highlightedKey === slot.key ? '#ff7b22' : selected ? '#fff' : '#1c3135'} strokeWidth={highlightedKey === slot.key ? 5 : 2} vectorEffect="non-scaling-stroke"><title>{slot.display_name}</title></circle>
       {sequence !== undefined && sequence >= 0 && <g data-endpoint-sequence={sequence + 1} pointerEvents="none" transform={`translate(${point.x + 9 / canvasScale} ${point.y - 9 / canvasScale}) scale(${1 / canvasScale})`}>
         <rect x="-8" y="-7" width="16" height="14" rx="3" fill="#12272b" />
         <text textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="10">{sequence + 1}</text>

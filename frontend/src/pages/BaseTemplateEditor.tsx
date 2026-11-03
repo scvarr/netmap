@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
-import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
+import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, spatialOrderedKeys, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateTypes';
 import type { ModuleBay } from '../topology/hardwareModules';
 import { duplicateModuleBay, normalizeBayGeometry } from '../blueprints/moduleBayGeometry';
@@ -87,7 +87,10 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     if (next === editor) return;
     setEditor(next); setCapturedA([]); setCapturedB([]); setReverseB(false); setPairwiseOpen(false);
   };
-  const [naming, setNaming] = useState({ prefix: '', start: '1', step: '1' });
+  const [naming, setNaming] = useState({ mask: '#', start: '1', step: '1' });
+  const [activeOrderKey, setActiveOrderKey] = useState<string>();
+  const [horizontal, setHorizontal] = useState<'ltr' | 'rtl'>('ltr');
+  const [vertical, setVertical] = useState<'ttb' | 'btt'>('ttb');
   const orderEntry = useRef<HTMLButtonElement>(null);
   const preview = bulkNamePreview(editor, orderedKeys, naming);
   useEffect(() => { if (orderOpen) return () => orderEntry.current?.focus(); }, [orderOpen]);
@@ -294,6 +297,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
             setMenu({ x: Math.max(0, Math.min(clientX - rect.left, rect.width - 320)), y: Math.max(0, Math.min(clientY - rect.top, rect.height - 280)) });
           }} />
           {menu && <div className="blueprint-composer__context-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
+            <button type="button" role="menuitem" disabled={!selected.size} onClick={() => { setOrderedKeys(spatialOrderedKeys(editor, [...selected], horizontal, vertical)); setOrderedMode(true); setOrderOpen(true); setMenu(undefined); }}>{t('blueprint.naming.open')}</button>
             {menuSections.map((section) => <div key={section.label} className={`blueprint-composer__context-section blueprint-composer__context-section--${section.label}`}>
               <strong>{t(`blueprint.layout.section.${section.label}`)}</strong>
               {section.actions.map((action) => <button key={action} type="button" role="menuitem" disabled={selected.size < (action === 'distributeX' || action === 'distributeY' || action === 'twoRows' ? 3 : action === 'horizontalLine' || action === 'verticalLine' || action === 'oneRow' ? 2 : 1)} onClick={() => runMenuAction(action)}>{t(`blueprint.layout.${action}`)}</button>)}
@@ -350,15 +354,22 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <button type="button" disabled={!capturedB.length} onClick={() => setCapturedB([])}>{t('blueprint.pairwise.clearB')}</button>
         </div>
         <div className="blueprint-order-dialog__parameters">
-          {(['prefix', 'start', 'step'] as const).map((field) => <label key={field}>{t(`blueprint.naming.${field}`)}<input type={field === 'prefix' ? 'text' : 'number'} step={field === 'prefix' ? undefined : '1'} value={naming[field]} onChange={(event) => setNaming((old) => ({ ...old, [field]: event.target.value }))} /></label>)}
+          {(['mask', 'start', 'step'] as const).map((field) => <label key={field}>{t(`blueprint.naming.${field}`)}<input type={field === 'mask' ? 'text' : 'number'} step={field === 'mask' ? undefined : '1'} value={naming[field]} onChange={(event) => setNaming((old) => ({ ...old, [field]: event.target.value }))} /></label>)}
         </div>
         {!preview && <p role="alert">{t('blueprint.naming.invalid')}</p>}
+        <span>{t('blueprint.order.count', { count: orderedKeys.length })}</span>
+        <div className="blueprint-order-dialog__parameters">
+          <label>{t('blueprint.order.horizontal')}<select value={horizontal} onChange={e => setHorizontal(e.target.value as 'ltr' | 'rtl')}><option value="ltr">{t('blueprint.order.ltr')}</option><option value="rtl">{t('blueprint.order.rtl')}</option></select></label>
+          <label>{t('blueprint.order.vertical')}<select value={vertical} onChange={e => setVertical(e.target.value as 'ttb' | 'btt')}><option value="ttb">{t('blueprint.order.ttb')}</option><option value="btt">{t('blueprint.order.btt')}</option></select></label>
+          <button type="button" onClick={() => setOrderedKeys(spatialOrderedKeys(editor, orderedKeys, horizontal, vertical))}>{t('blueprint.order.spatial')}</button>
+        </div>
+        <BlueprintCompositionCanvas body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} orderedKeys={orderedKeys} highlightedKey={activeOrderKey} onSelect={key => setActiveOrderKey(key)} onMarquee={() => {}} onTranslate={() => {}} onContextMenu={() => {}} onActivatePanel={() => {}} />
         <div className="blueprint-order-dialog__list">
-          {orderedKeys.map((key, index) => { const slot = editor.slots.find((item) => item.key === key)!; return <div key={key} className="blueprint-order-dialog__row" data-ordered-key={key}>
+          {orderedKeys.map((key, index) => { const slot = editor.slots.find((item) => item.key === key)!; return <div key={key} className="blueprint-order-dialog__row" data-active={activeOrderKey === key} onMouseEnter={() => setActiveOrderKey(key)} onFocus={() => setActiveOrderKey(key)} data-ordered-key={key}>
             <span>{index + 1}</span><span>{slot.display_name} · {activePanel.display_name}</span>
             <span data-name-preview>{preview && `→ ${preview[index].display_name}`}</span>
-            <button type="button" aria-label={t('blueprint.order.up', { index: index + 1 })} disabled={index === 0} onClick={() => setOrderedKeys((old) => reorderOrderedKeys(old, index, -1))}>↑</button>
-            <button type="button" aria-label={t('blueprint.order.down', { index: index + 1 })} disabled={index === orderedKeys.length - 1} onClick={() => setOrderedKeys((old) => reorderOrderedKeys(old, index, 1))}>↓</button>
+            <button type="button" aria-label={t('blueprint.order.up', { index: index + 1 })} disabled={index === 0} onClick={() => { setActiveOrderKey(key); setOrderedKeys((old) => reorderOrderedKeys(old, index, -1)); }}>↑</button>
+            <button type="button" aria-label={t('blueprint.order.down', { index: index + 1 })} disabled={index === orderedKeys.length - 1} onClick={() => { setActiveOrderKey(key); setOrderedKeys((old) => reorderOrderedKeys(old, index, 1)); }}>↓</button>
             <button type="button" className="text-action" onClick={() => setOrderedKeys((old) => old.filter((item) => item !== key))}>{t('blueprint.composition.remove')}</button>
           </div>; })}
         </div>
