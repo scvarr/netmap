@@ -1,3 +1,4 @@
+import { moduleEndpointPositions } from '../topology/hardwareModules';
 import { ModuleGeometryEditor } from '../components/ModuleGeometryEditor';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -40,7 +41,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
   }, [dataSource, templateId, document?.generation, busy, t]);
   const dirty = !!document && !!definition && signature(document.definition) !== signature(definition);
   const current = document?.review?.current && !dirty && !busy && !revalidating && !error;
-  const change = (value: ModuleTemplateInput) => { value = { ...value, geometry: { ...value.geometry, endpoints: Object.fromEntries(value.endpoints.map(e => [e.key, value.geometry.endpoints[e.key] ?? { x: .5, y: .5 }])) } }; setDefinition(value); setNotice(''); };
+  const change = (value: ModuleTemplateInput) => { value = { ...value, geometry: { ...value.geometry, endpoints: moduleEndpointPositions(value.endpoints, value.geometry.endpoints) } }; setDefinition(value); setNotice(''); };
   const run = async (check: boolean) => {
     if (!document || !definition || busy || revalidating) return;
     setBusy(true); setError(''); setNotice('');

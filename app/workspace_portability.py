@@ -176,6 +176,16 @@ def validate_package(package: object) -> dict:
     authoring = package["authoring"]
     if not isinstance(authoring, dict):
         raise PackageError("Invalid authoring section")
+    for name in ("ModuleTemplateRevision", "ModuleTemplateDraft", "ModuleTemplateCandidate"):
+        records = authoring.get(name, [])
+        if not isinstance(records, list) or any(not isinstance(r, dict) for r in records):
+            raise PackageError(f"Invalid {name} collection or record")
+        if name != "ModuleTemplateRevision" and any(not isinstance(r.get("definition"), dict) for r in records):
+            raise PackageError(f"Invalid {name} definition")
+    if any(not isinstance(r.get("result"), dict) or not isinstance(r["result"].get("changes"), list)
+           or any(not isinstance(c, dict) for c in r["result"]["changes"])
+           for r in authoring.get("ModuleTemplateCandidate", [])):
+        raise PackageError("Invalid module candidate analysis")
     geometry_records = [*authoring.get("ModuleTemplateRevision", []),
                         *(r.get("definition", {}) for name in ("ModuleTemplateDraft", "ModuleTemplateCandidate") for r in authoring.get(name, []))]
     if any(not isinstance(r, dict) for r in geometry_records):
@@ -183,6 +193,8 @@ def validate_package(package: object) -> dict:
     flags = ["geometry" in r for r in geometry_records]
     if "module_geometry_version" in package and (type(package["module_geometry_version"]) is not int or package["module_geometry_version"] != 1 or not all(flags)):
         raise PackageError("Invalid or incomplete F1 geometry profile")
+    if any(flags) and package.get("module_geometry_version") != 1:
+        raise PackageError("F1 geometry requires module_geometry_version=1")
     if any(flags) and not all(flags):
         raise PackageError("Mixed historical and F1 module geometry profiles")
     f1_evidence = any(c.get("section") == "geometry" for r in authoring.get("ModuleTemplateCandidate", []) for c in r.get("result", {}).get("changes", []))

@@ -1,3 +1,4 @@
+import { moduleEndpointPositions } from './hardwareModules';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { hardwareModuleDataSource, moduleReviewDataSource } from './hardwareModules';
 
@@ -34,4 +35,13 @@ describe('module template deletion API', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { message: 'ModuleTemplate revision is installed' } }), { status: 409 })));
     await expect(hardwareModuleDataSource.deleteModule('module')).rejects.toThrow('ModuleTemplate revision is installed');
   });
+});
+
+it('allocates distinct positions without moving authored keys on add, rename or reorder', () => {
+ const endpoints = ['a','b','c','d'].map(key => ({ key, display_name:key, kind:'NETWORK_PORT' as const }));
+ const first = moduleEndpointPositions(endpoints.slice(0,2), { a:{x:.2,y:.3} });
+ const all = moduleEndpointPositions(endpoints,first);
+ expect(all.a).toEqual({x:.2,y:.3}); expect(all.b).toEqual(first.b);
+ expect(new Set(Object.values(all).map(p=>JSON.stringify(p))).size).toBe(4);
+ expect(moduleEndpointPositions([...endpoints].reverse().map(e=>({...e,display_name:'Renamed'})),all)).toEqual(all);
 });

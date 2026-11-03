@@ -77,3 +77,21 @@ export const moduleReviewDataSource: ModuleReviewDataSource = {
   saveDraft: (id, input, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft?expected_generation=${generation}`, input, 'PUT'),
   checkDraft: (id, generation) => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}/draft/check?expected_generation=${generation}`, undefined, 'POST'),
 };
+
+// Allocate only missing keys; retain all authored positions exactly.
+export function moduleEndpointPositions(endpoints: ModuleEndpoint[], positions: ModuleGeometry['endpoints']): ModuleGeometry['endpoints'] {
+ const result: ModuleGeometry['endpoints'] = {};
+ for (const e of endpoints) if (positions[e.key]) result[e.key] = positions[e.key];
+ for (const e of endpoints) {
+  if (result[e.key]) continue;
+  let found = false;
+  for (let level = 1; !found; level++) {
+   const n = 2 ** level;
+   for (let y = 1; y < n && !found; y++) for (let x = 1; x < n && !found; x++) {
+    const point = { x: x / n, y: y / n };
+    if (Object.values(result).every(p => Math.hypot(p.x-point.x,p.y-point.y) > Math.min(.08, 1/n))) { result[e.key] = point; found = true; }
+   }
+  }
+ }
+ return result;
+}

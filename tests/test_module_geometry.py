@@ -117,3 +117,23 @@ def test_geometry_edit_invalidates_frozen_review():
     assert not open_draft(tid)['review']['current']
     assert publish(tid, checked['review']['candidate_id']).status_code == 409
     assert open_draft(tid)['review']['definition']['geometry']['height'] == 80
+
+
+@pytest.mark.parametrize('name', ['ModuleTemplateRevision','ModuleTemplateDraft','ModuleTemplateCandidate'])
+@pytest.mark.parametrize('bad', [None, {}, 'invalid', [None], [1], ['invalid']])
+def test_malformed_module_collections_rejected_without_writes(name, bad):
+    setup_installations(0)
+    before = client.get('/v1/workspace/package').json()
+    package = copy.deepcopy(before)
+    package['authoring'][name] = bad
+    assert client.delete('/v1/workspace/dataset').status_code == 204
+    empty = client.get('/v1/workspace/package').json()
+    assert client.post('/v1/workspace/package', json=package).status_code == 422
+    assert client.get('/v1/workspace/package').json() == empty
+
+
+def test_f1_geometry_requires_marker():
+    setup_installations(0)
+    package = client.get('/v1/workspace/package').json()
+    del package['module_geometry_version']
+    with pytest.raises(PackageError): validate_package(package)
