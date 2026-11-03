@@ -745,16 +745,33 @@ class ModuleEndpointRequest(BaseModel):
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
 
 
+class ModuleEndpointPosition(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    x: float = Field(ge=0, le=1, allow_inf_nan=False)
+    y: float = Field(ge=0, le=1, allow_inf_nan=False)
+
+
+class ModuleGeometry(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    width: float = Field(gt=0, allow_inf_nan=False)
+    height: float = Field(gt=0, allow_inf_nan=False)
+    fill_color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
+    endpoints: dict[str, ModuleEndpointPosition]
+
+
 class CreateModuleTemplateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=255)
     compatibility: str = Field(min_length=1, max_length=255)
     endpoints: list[ModuleEndpointRequest]
+    geometry: ModuleGeometry
 
     @model_validator(mode="after")
     def valid_definitions(self):
         if not self.name.strip() or not self.compatibility.strip() or any(not e.key.strip() or not e.display_name.strip() for e in self.endpoints):
             raise PydanticCustomError("hardware_validation", "Module strings must not be blank")
+        if set(self.geometry.endpoints) != {e.key for e in self.endpoints}:
+            raise PydanticCustomError("hardware_validation", "Geometry must match endpoint keys")
         if len({e.key for e in self.endpoints}) != len(self.endpoints):
             raise PydanticCustomError("hardware_validation", "Module definition keys must be unique")
         return self
@@ -840,16 +857,18 @@ class ModuleEndpointSnapshot(ModuleEndpointRequest):
 
 class ModuleTemplateStructuralChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    section: Literal["properties", "endpoints"]
+    section: Literal["properties", "endpoints", "geometry"]
     key: str
     operation: Literal["added", "removed", "changed"]
-    before: str | ModuleEndpointSnapshot | None
-    after: str | ModuleEndpointSnapshot | None
+    before: str | ModuleEndpointSnapshot | ModuleGeometry | None
+    after: str | ModuleEndpointSnapshot | ModuleGeometry | None
 
     @model_validator(mode="after")
     def valid_change(self):
         values = [v for v in (self.before, self.after) if v is not None]
-        if self.section == "properties":
+        if self.section == "geometry":
+            valid = self.key == "geometry" and self.operation == "changed" and len(values) == 2 and all(isinstance(v, ModuleGeometry) for v in values)
+        elif self.section == "properties":
             valid = self.key in ("name", "compatibility") and self.operation == "changed" and len(values) == 2 and all(isinstance(v, str) for v in values)
         else:
             valid = all(isinstance(v, ModuleEndpointSnapshot) and v.key == self.key for v in values)

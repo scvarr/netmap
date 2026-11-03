@@ -29,7 +29,10 @@ def create_base(payload=None):
 
 
 def create_module(compatibility='OCP3', names=('P1', 'P2')):
-    response = client.post('/v1/library/module-templates', json={"name": " NIC exact ", "compatibility": compatibility, "endpoints": [{"key": str(uuid.uuid4()), "display_name": name, "kind": "NETWORK_PORT"} for name in names]})
+    payload = {"name": " NIC exact ", "compatibility": compatibility, "endpoints": [{"key": str(uuid.uuid4()), "display_name": name, "kind": "NETWORK_PORT"} for name in names]}
+    from app.module_geometry import initial_geometry
+    payload["geometry"] = initial_geometry(e["key"] for e in payload["endpoints"])
+    response = client.post('/v1/library/module-templates', json=payload)
     assert response.status_code == 201, response.text
     return response.json()
 

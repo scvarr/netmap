@@ -349,7 +349,7 @@ class HardwareCatalog:
         return self.module_document(template, revision)
 
     def _create_module_revision(self, template_id, version_number, query):
-        revision = ModuleTemplateRevision(template_id=template_id, name=query.name, version_number=version_number, compatibility=query.compatibility)
+        revision = ModuleTemplateRevision(template_id=template_id, name=query.name, version_number=version_number, compatibility=query.compatibility, geometry=query.geometry.model_dump(mode="json"))
         self.session.add(revision)
         self.session.flush()
         for index, endpoint in enumerate(query.endpoints):
@@ -358,7 +358,7 @@ class HardwareCatalog:
         return revision
 
     def module_document(self, template, revision):
-        return {"template_id": str(template.id), "revision_id": str(revision.id), "name": revision.name, "compatibility": revision.compatibility, "endpoints": [{"key": e.definition_key, "display_name": e.display_name, "kind": e.kind} for e in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index))]}
+        return {"template_id": str(template.id), "revision_id": str(revision.id), "name": revision.name, "compatibility": revision.compatibility, "geometry": revision.geometry, "endpoints": [{"key": e.definition_key, "display_name": e.display_name, "kind": e.kind} for e in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index))]}
 
     def list_modules(self):
         latest = select(ModuleTemplateRevision.id).where(ModuleTemplateRevision.template_id == ModuleTemplate.id).order_by(ModuleTemplateRevision.version_number.desc()).limit(1).correlate(ModuleTemplate).scalar_subquery()

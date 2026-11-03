@@ -165,7 +165,7 @@ def test_real_c_v5_archive_restores_ids_configuration_review_and_maps_on_0003():
     from sqlalchemy import text
     from app.workspace_portability import validate_package
     with SessionLocal() as session:
-        assert session.scalar(text('SELECT version_num FROM alembic_version')) == '0005'
+        assert session.scalar(text('SELECT version_num FROM alembic_version')) == '0006'
     archive = c_archive()
     untouched = copy.deepcopy(archive)
     assert 'BaseTemplatePublication' not in archive['authoring']
@@ -179,6 +179,7 @@ def test_real_c_v5_archive_restores_ids_configuration_review_and_maps_on_0003():
     assert response.status_code == 204, response.text
     current = snapshot()
     expected = copy.deepcopy(archive)
+    expected['module_geometry_version'] = 1
     expected['authoring']['BaseTemplatePublication'] = []
     expected['authoring']['ModuleTemplateDraft'] = []
     expected['authoring']['ModuleTemplateCandidate'] = []

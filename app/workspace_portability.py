@@ -73,7 +73,7 @@ ENTITIES = (
     ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name compatibility panel_key x y width height"),
     ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
     ("authoring", "ModuleTemplatePublication", "ModuleTemplatePublication", "id revision_id"),
-    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name compatibility"),
+    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name compatibility geometry"),
     ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind"),
@@ -117,7 +117,7 @@ def _json_value(value):
 
 
 def export_package(session: Session) -> dict:
-    package = {"format": FORMAT, "format_version": FORMAT_VERSION,
+    package = {"format": FORMAT, "format_version": FORMAT_VERSION, "module_geometry_version": 1,
                "canonical": {}, "authoring": {}, "presentation": {}, "settings": {}}
     for section, name, model, fields in _specs():
         rows = session.scalars(select(model).order_by(model.id)).all()
@@ -167,8 +167,34 @@ def validate_package(package: object) -> dict:
         raise PackageError("Not a NetMap workspace package")
     if type(package.get("format_version")) is not int or package["format_version"] != FORMAT_VERSION:
         raise PackageError("Unsupported NetMap workspace format_version")
-    if set(package) != {"format", "format_version", "canonical", "authoring", "presentation", "settings"}:
+    if set(package) - {"module_geometry_version"} != {"format", "format_version", "canonical", "authoring", "presentation", "settings"}:
         raise PackageError("Incomplete or unknown package sections")
+    # Accept only a complete historical profile or a complete F1 profile.
+    import copy
+    from app.module_geometry import initial_geometry, extend_definition
+    package = copy.deepcopy(package)
+    authoring = package["authoring"]
+    if not isinstance(authoring, dict):
+        raise PackageError("Invalid authoring section")
+    geometry_records = [*authoring.get("ModuleTemplateRevision", []),
+                        *(r.get("definition", {}) for name in ("ModuleTemplateDraft", "ModuleTemplateCandidate") for r in authoring.get(name, []))]
+    if any(not isinstance(r, dict) for r in geometry_records):
+        raise PackageError("Invalid module geometry profile")
+    flags = ["geometry" in r for r in geometry_records]
+    if "module_geometry_version" in package and (type(package["module_geometry_version"]) is not int or package["module_geometry_version"] != 1 or not all(flags)):
+        raise PackageError("Invalid or incomplete F1 geometry profile")
+    if any(flags) and not all(flags):
+        raise PackageError("Mixed historical and F1 module geometry profiles")
+    f1_evidence = any(c.get("section") == "geometry" for r in authoring.get("ModuleTemplateCandidate", []) for c in r.get("result", {}).get("changes", []))
+    if f1_evidence and not all(flags):
+        raise PackageError("F1 published geometry is missing")
+    if flags and not any(flags):
+        for revision in authoring.get("ModuleTemplateRevision", []):
+            endpoints = sorted((e for e in authoring.get("ModuleEndpointDefinition", []) if e["module_revision_id"] == revision["id"]), key=lambda e: e["order_index"])
+            revision["geometry"] = initial_geometry(e["definition_key"] for e in endpoints)
+        for name in ("ModuleTemplateDraft", "ModuleTemplateCandidate"):
+            for row in authoring.get(name, []):
+                row["definition"] = extend_definition(row["definition"])
     specs = _specs()
     result = {}
     # Exact 09.6-C v5 profile: no publication collection and no revision names.
@@ -260,11 +286,18 @@ def _validate_module_template_reviews(rows):
     published = [r["revision_id"] for r in receipts]
     if len(published) != len(set(published)) or set(published) != {r["id"] for r in revisions.values() if r["version_number"] > 1}:
         raise PackageError("Every noninitial module revision requires one publication receipt")
+    for revision in revisions.values():
+        try:
+            validate_definition({"name": revision["name"], "compatibility": revision["compatibility"], "geometry": revision["geometry"], "endpoints": [
+                {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"]}
+                for e in rows["module_endpoint_definitions"] if e["module_revision_id"] == revision["id"]]})
+        except (SchemaError, TypeError) as exc:
+            raise PackageError("Invalid module revision geometry") from exc
     for receipt in receipts:
         candidate = candidates[receipt["id"]]
         revision = revisions[receipt["revision_id"]]
         source = revisions[candidate["source_revision_id"]]
-        actual = {"name": revision["name"], "compatibility": revision["compatibility"], "endpoints": [
+        actual = {"name": revision["name"], "compatibility": revision["compatibility"], "geometry": revision["geometry"], "endpoints": [
             {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"]}
             for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]}
         if (revision["template_id"] != candidate["template_id"] or source["template_id"] != candidate["template_id"]

@@ -6,7 +6,7 @@ import { EditModuleTemplatePage } from './EditModuleTemplatePage';
 import type { ModuleDraftDocument, ModuleReviewDataSource } from '../topology/hardwareModules';
 
 const draft = (): ModuleDraftDocument => ({ template_id: 'module', source_revision_id: 'revision', generation: 3,
-  definition: { name: 'Сохранённый модуль', compatibility: ' OCP3 ', endpoints: [
+  definition: { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { first: { x: .3, y: .5 }, second: { x: .7, y: .5 } } }, name: 'Сохранённый модуль', compatibility: ' OCP3 ', endpoints: [
     { key: 'first', display_name: 'P1', kind: 'NETWORK_PORT' }, { key: 'second', display_name: 'P2', kind: 'CONNECTION_POINT' },
   ] }, review: null });
 const reviewed = (doc: ModuleDraftDocument): ModuleDraftDocument => ({ ...doc, review: {
@@ -187,4 +187,22 @@ it('reconciles installations and refreshes diagnostics preserving unsaved edits'
   expect(screen.getByText(/bay-result/)).toBeInTheDocument();
   expect(source.loadDraft).toHaveBeenCalledTimes(2);
   expect(source.saveDraft).not.toHaveBeenCalled();
+});
+
+it('keeps unsaved geometry through diagnostics and save failure, and restores saved geometry', async () => {
+ const {source,mount}=setup(); const view=mount();
+ const width=await screen.findByLabelText('Ширина');
+ fireEvent.change(width,{target:{value:'480'}});
+ expect(screen.getByText('Проверить изменения')).toBeDisabled();
+ fireEvent.focus(window);
+ await act(async()=>{await Promise.resolve();});
+ expect(screen.getByLabelText('Ширина')).toHaveValue(480);
+ source.saveDraft.mockRejectedValueOnce(new Error('Geometry save failed'));
+ fireEvent.click(screen.getByText('Сохранить черновик'));
+ await screen.findByText(/Geometry save failed/);
+ expect(screen.getByLabelText('Ширина')).toHaveValue(480);
+ fireEvent.click(screen.getByText('Сохранить черновик'));
+ await act(async()=>{await Promise.resolve();});
+ view.unmount();mount();
+ expect(await screen.findByLabelText('Ширина')).toHaveValue(480);
 });

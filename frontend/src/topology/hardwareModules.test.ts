@@ -7,7 +7,7 @@ describe('module template deletion API', () => {
   it('persists exact module input and sends generation for save and check', async () => {
     const fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ generation: 4 }), { status: 200 }));
     vi.stubGlobal('fetch', fetch);
-    const definition = { name: ' Name ', compatibility: ' OCP3 ', endpoints: [{ key: 'stable-key', display_name: ' P1 ', kind: 'NETWORK_PORT' as const }] };
+    const definition = { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { 'stable-key': { x: .5, y: .5 } } }, name: ' Name ', compatibility: ' OCP3 ', endpoints: [{ key: 'stable-key', display_name: ' P1 ', kind: 'NETWORK_PORT' as const }] };
     await moduleReviewDataSource.loadDraft('module/id');
     await moduleReviewDataSource.saveDraft('module/id', definition, 3);
     await moduleReviewDataSource.checkDraft('module/id', 4);

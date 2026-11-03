@@ -1,0 +1,31 @@
+import { useRef, useState } from 'react';
+import { useI18n } from '../i18n';
+import type { ModuleGeometry, ModuleEndpoint } from '../topology/hardwareModules';
+export function ModuleGeometryEditor({ geometry, endpoints, onChange }: { geometry: ModuleGeometry; endpoints: ModuleEndpoint[]; onChange?: (g: ModuleGeometry) => void }) {
+ const { t } = useI18n(); const [selected, select] = useState<Set<string>>(new Set()); const [zoom, setZoom] = useState(1);
+ const svg = useRef<SVGSVGElement>(null);
+ const drag = useRef<{ x: number; y: number; geometry: ModuleGeometry; keys: string[] } | undefined>(undefined);
+ const point = (x: number, y: number) => { const m = svg.current!.getScreenCTM()!; const p = new DOMPoint(x,y).matrixTransform(m.inverse()); return { x: p.x / geometry.width, y: p.y / geometry.height }; };
+ const arrange = (axis: 'x' | 'y', distribute: boolean) => {
+  const keys = Object.keys(geometry.endpoints).filter(k => selected.has(k)).sort((a,b) => geometry.endpoints[a][axis] - geometry.endpoints[b][axis] || a.localeCompare(b));
+  if (keys.length < 2) return; const values = keys.map(k => geometry.endpoints[k][axis]); const positions = { ...geometry.endpoints };
+  keys.forEach((k,i) => { positions[k] = { ...positions[k], [axis]: distribute ? values[0] + (values.at(-1)! - values[0]) * i / (keys.length - 1) : values.reduce((a,b) => a+b) / values.length }; }); onChange?.({ ...geometry, endpoints: positions });
+ };
+ return <section aria-label={t('moduleGeometry.title')}>
+ {onChange && <>
+ {(['width','height'] as const).map(k => <label key={k}>{t(k === 'width' ? 'moduleGeometry.width' : 'moduleGeometry.height')}<input type="number" min="0.01" step="any" value={geometry[k]} onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n) && n > 0) onChange({ ...geometry, [k]: n }); }} /></label>)}
+ <label>{t('moduleGeometry.color')}<input type="color" value={geometry.fill_color} onChange={e => onChange({ ...geometry, fill_color: e.target.value })} /></label>
+ {(['horizontal','vertical','distributeX','distributeY'] as const).map(a => <button type="button" key={a} disabled={selected.size < 2} onClick={() => arrange(a === 'horizontal' || a === 'distributeY' ? 'y' : 'x', a.startsWith('distribute'))}>{t(`moduleGeometry.${a}`)}</button>)}
+ </>}
+ <button type="button" onClick={() => setZoom(z => Math.min(8,z*1.25))}>+</button><button type="button" onClick={() => setZoom(z => Math.max(.25,z/1.25))}>−</button><button type="button" onClick={() => setZoom(1)}>{t('moduleGeometry.fit')}</button>
+ <div style={{overflow:'auto',maxHeight:500}}><svg ref={svg} aria-label={t('moduleGeometry.title')} viewBox={`${-geometry.width*.05} ${-geometry.height*.15} ${geometry.width*1.1} ${geometry.height*1.3}`} style={{width:`${zoom*100}%`,minHeight:220,touchAction:'none'}} onPointerMove={e => {
+ const d = drag.current; if (!d || !onChange) return; const p = point(e.clientX,e.clientY); const positions = {...d.geometry.endpoints}; const points = d.keys.map(k => positions[k]);
+ const dx = Math.max(-Math.min(...points.map(p=>p.x)),Math.min(p.x-d.x,1-Math.max(...points.map(p=>p.x)))); const dy = Math.max(-Math.min(...points.map(p=>p.y)),Math.min(p.y-d.y,1-Math.max(...points.map(p=>p.y))));
+ d.keys.forEach(k => { positions[k] = {x:positions[k].x+dx,y:positions[k].y+dy}; }); onChange({...d.geometry,endpoints:positions});
+ }} onPointerUp={() => {drag.current=undefined;}} onPointerCancel={() => {drag.current=undefined;}}>
+ <rect width={geometry.width} height={geometry.height} fill={geometry.fill_color} stroke="currentColor" onPointerDown={() => select(new Set())}/>
+ {endpoints.map(e => {const p=geometry.endpoints[e.key]; return p && <g key={e.key} role="button" aria-label={e.display_name} aria-pressed={selected.has(e.key)} onPointerDown={event => {
+ if (!onChange) return; event.stopPropagation(); const toggle=event.shiftKey||event.ctrlKey||event.metaKey; const keys=toggle||selected.has(e.key)?new Set(selected):new Set<string>(); if(toggle&&keys.has(e.key)) keys.delete(e.key); else keys.add(e.key); select(keys); if(!keys.has(e.key))return; drag.current={...point(event.clientX,event.clientY),geometry,keys:[...keys]};svg.current?.setPointerCapture(event.pointerId);
+ }}><circle cx={p.x*geometry.width} cy={p.y*geometry.height} r={Math.min(geometry.width,geometry.height)*.045} fill={selected.has(e.key)?'#f59e0b':'white'} stroke="black"/><text x={p.x*geometry.width} y={p.y*geometry.height-geometry.height*.07} fontSize={geometry.height*.09} textAnchor="middle">{e.display_name}</text></g>;})}
+ </svg></div></section>;
+}

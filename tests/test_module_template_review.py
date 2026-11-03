@@ -19,6 +19,7 @@ def open_draft(template_id):
 
 
 def save(template_id, draft, definition):
+    definition["geometry"]["endpoints"] = {e["key"]: definition["geometry"]["endpoints"].get(e["key"], {"x": .5, "y": .5}) for e in definition["endpoints"]}
     response = client.put(f'/v1/library/module-templates/{template_id}/draft', params={'expected_generation': draft['generation']}, json=definition)
     assert response.status_code == 200, response.text
     return response.json()
@@ -227,7 +228,7 @@ def test_invalid_materialization_requires_intervention(damage):
 def test_retained_endpoint_with_invalid_cardinality_requires_intervention(kind):
     base_id, payload = create_base()
     response = client.post('/v1/library/module-templates', json={
-        'name': 'Module', 'compatibility': 'OCP3',
+        'name': 'Module', 'compatibility': 'OCP3', 'geometry': {'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'retained': {'x': .5, 'y': .5}}},
         'endpoints': [{'key': 'retained', 'display_name': 'P1', 'kind': kind}],
     })
     assert response.status_code == 201, response.text

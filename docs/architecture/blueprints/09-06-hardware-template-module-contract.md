@@ -4,7 +4,7 @@
 
 **ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A — IMPLEMENTED в main
 (отдельная внешняя приёмка не подтверждена). 09.6-C, D1, D2 и E1 —
-IMPLEMENTED / ACCEPTED / MERGED. E2 — IMPLEMENTED / ACCEPTED / MERGED; E3 — IMPLEMENTED (external inspection pending).**
+IMPLEMENTED / ACCEPTED / MERGED. E2 — IMPLEMENTED / ACCEPTED / MERGED; E3 — IMPLEMENTED / ACCEPTED / MERGED.**
 
 Статус актуализирован по `main` (base E3): `cf3a0c35f0a89ca0e0f0fa2e54fe561463c0fbbe`.
 09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**, включая исправления внешнего ревью.
@@ -20,7 +20,7 @@ Current capability boundary: creation and module installation/removal, base
 draft/check, BaseTemplateRevision publication and safe PhysicalObject updates
 are implemented. E1 добавляет редактирование ModuleTemplate, сохранённые черновики
 и рекомендательные проверки влияния на установки; реализация принята и включена
-в main. Публикация последующих ревизий модулей (E2): IMPLEMENTED / ACCEPTED / MERGED. Обновление установок (E3) реализовано ниже; внешняя инспекция ожидается.
+в main. Публикация последующих ревизий модулей (E2): IMPLEMENTED / ACCEPTED / MERGED. Обновление установок (E3): IMPLEMENTED / ACCEPTED / MERGED.
 
 This document supersedes the user concept of `ObjectBlueprint` as a complete
 immutable snapshot of one particular equipment configuration in
@@ -384,9 +384,9 @@ Endpoint order is presentation input, never endpoint identity.
 Перемещение и изменение размеров прямоугольника меняют представление,
 сохраняя идентичность установки и конечных точек.
 
-### Согласованное продуктовое направление: 09.6-F — OPEN
+### Согласованное продуктовое направление: F1 IMPLEMENTED; F2 OPEN
 
-Это будущее направление, ещё не реализованное поведение. Базовый шаблон
+F1 реализован ниже; описание свободной компоновки установки относится к открытому F2. Базовый шаблон
 оборудования задаёт корпус, панели, встроенные порты и видимые отсеки для
 установки модулей. Шаблон модуля получает собственную геометрию и расположение
 портов относительно модуля; графическое редактирование следует общим принципам
@@ -411,7 +411,7 @@ NetworkInterface, Connections и Cables. Совместимость отсеко
 - F1: геометрия и графический редактор шаблонов модулей.
 - F2: визуальная компоновка установленных модулей внутри PhysicalObject.
 
-Деление F1/F2 предварительное; подробные контракты реализации ещё не согласованы.
+Контракт F1 реализован ниже; подробный контракт F2 остаётся открытым.
 Конкретные таблицы, API, алгоритмы преобразования координат и правила переноса
 пользовательской геометрии при обновлении ревизий здесь не определяются.
 Существующие правила обновления базовых шаблонов ниже не задают такие правила
@@ -420,7 +420,7 @@ NetworkInterface, Connections и Cables. Совместимость отсеко
 
 ## Implemented boundary: 09.6-E2
 
-E2 IMPLEMENTED / ACCEPTED / MERGED. E3 IMPLEMENTED (external inspection pending); F1/F2 remain OPEN.
+E2 IMPLEMENTED / ACCEPTED / MERGED. E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED; F2 OPEN.
 
 - Module editor publishes only a saved, currently checked candidate through
   `POST /v1/library/module-templates/{id}/candidates/{candidate_id}/publish`.
@@ -589,7 +589,7 @@ in this correction; later C/D1/D2 delivery is recorded above.
 
 ## OPEN and outside this contract
 
-- Обновление установок (09.6-E3): IMPLEMENTED (external inspection pending). E2 IMPLEMENTED / ACCEPTED / MERGED. E1: IMPLEMENTED / ACCEPTED / MERGED.
+- Обновление установок (09.6-E3): IMPLEMENTED / ACCEPTED / MERGED. E2 IMPLEMENTED / ACCEPTED / MERGED. E1: IMPLEMENTED / ACCEPTED / MERGED.
 - Геометрия и графический редактор шаблонов модулей, компоновка установок
   внутри PhysicalObject (09.6-F): OPEN, согласованное будущее направление.
 - Endpoint technology/capability semantics: Ethernet, Fibre Channel, speed,
@@ -609,7 +609,7 @@ manual HV-01 recheck; it is neither complete nor PASSED.
 
 ## Implemented boundary: 09.6-E3
 
-**E3 IMPLEMENTED; external branch inspection pending. F1/F2 OPEN.
+**E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED; F2 OPEN.
 Phase C PAUSED; HV-01 not PASSED.**
 
 - «Обновить совместимые установки» calls POST
@@ -642,3 +642,37 @@ D2 reconciliation/concurrency and E1/E2 review/publication regression tests,
 targeted client tests, TypeScript/Vite build and diff checks are the boundary.
 Full suites were not requested or run. Manual HV-01 and external acceptance
 remain outstanding.
+
+
+## Implemented boundary: 09.6-F1
+
+F1 **IMPLEMENTED** (external branch inspection pending). E1/E2/E3:
+**IMPLEMENTED / ACCEPTED / MERGED**. F2 **OPEN**. Phase C **PAUSED**;
+HV-01 is not PASSED.
+
+- ModuleTemplateRevision owns one rectangular body: positive finite width and
+  height, `#RRGGBB` fill_color, and finite normalized endpoint coordinates in
+  [0,1], keyed by definition_key. Geometry is part of the definition and its
+  immutable draft/check/candidate/publication workflow. Rename, reorder and
+  body resizing preserve endpoint positions. Geometry changes appear in review
+  and alone require no intervention.
+- Creation and editing provide body properties, endpoint selection, group drag,
+  horizontal/vertical alignment and distribution, zoom and fit view. Endpoint
+  names, kinds and order remain form properties. Published geometry is visible
+  in the library. Unsaved geometry participates in dirty state and survives
+  failed requests and diagnostic refreshes.
+- F1 never changes installation geometry: until F2, installed endpoints retain
+  the ModuleBay/orientation/endpoint-order algorithm. Installation revision
+  changes require explicit E3, preserving canonical identity by definition_key.
+  No free-layout fields, panels or canonical entities are introduced.
+- Forward migration **0006** adds revision geometry and deterministically extends
+  historical revision/draft/candidate definitions: 240 × 80, #64748b, endpoint
+  x=(i+1)/(N+1), y=0.5 in existing order. IDs, user edits, publication receipts
+  and canonical data remain intact; migrations 0001–0005 are unchanged.
+- Workspace format remains **v5**. New exports identify F1 with top-level
+  `module_geometry_version=1`, so removing all geometry from a current export
+  cannot disguise it as historical. Full historical profiles receive the same
+  deterministic extension. Current F1 profiles require geometry throughout;
+  mixed profiles and invalid geometry are rejected. Publication ownership,
+  immutable candidate/revision equality, endpoint identities and installation
+  mappings retain their existing validation.

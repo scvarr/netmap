@@ -6,6 +6,16 @@ export const localeStorageKey = 'netmap.locale';
 
 const messages = {
   ru: {
+    'moduleGeometry.title': 'Геометрия модуля',
+    'moduleGeometry.width': 'Ширина',
+    'moduleGeometry.height': 'Высота',
+    'moduleGeometry.color': 'Цвет корпуса',
+    'moduleGeometry.horizontal': 'Выровнять по горизонтали',
+    'moduleGeometry.vertical': 'Выровнять по вертикали',
+    'moduleGeometry.distributeX': 'Распределить по горизонтали',
+    'moduleGeometry.distributeY': 'Распределить по вертикали',
+    'moduleGeometry.fit': 'Общий вид',
+
     'moduleReview.up': 'Выше', 'moduleReview.down': 'Ниже', 'moduleReview.endpoints': 'Конечные точки модуля',
     'moduleReview.compatibility': 'Совместимость не совпадает с текущим отсеком. Требуется вмешательство.',
     'moduleReview.installation': 'Установка: {id}; исходная ревизия: {revision}; отсек: {bay}',
@@ -102,6 +112,16 @@ const messages = {
     'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
+    'moduleGeometry.title': 'Module geometry',
+    'moduleGeometry.width': 'Width',
+    'moduleGeometry.height': 'Height',
+    'moduleGeometry.color': 'Body color',
+    'moduleGeometry.horizontal': 'Align horizontally',
+    'moduleGeometry.vertical': 'Align vertically',
+    'moduleGeometry.distributeX': 'Distribute horizontally',
+    'moduleGeometry.distributeY': 'Distribute vertically',
+    'moduleGeometry.fit': 'Fit view',
+
     'moduleReview.up': 'Move up', 'moduleReview.down': 'Move down', 'moduleReview.endpoints': 'Module endpoints',
     'moduleReview.compatibility': 'Compatibility does not match the current bay. Intervention is required.',
     'moduleReview.installation': 'Installation: {id}; source revision: {revision}; bay: {bay}',

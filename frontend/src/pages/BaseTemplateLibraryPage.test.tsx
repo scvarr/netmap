@@ -12,7 +12,7 @@ it('opens the persisted module editor through the library edit action', async ()
     loadBaseTemplateRevision: vi.fn(), createBaseTemplate: vi.fn(),
   };
   render(<I18nProvider><MemoryRouter><BaseTemplateLibraryPage dataSource={source} moduleDataSource={{ ...hardwareModuleDataSource,
-    listModules: async () => ({ modules: [{ template_id: 'module', revision_id: 'revision', name: 'NIC', compatibility: 'OCP3', endpoints: [] }] }),
+    listModules: async () => ({ modules: [{ template_id: 'module', revision_id: 'revision', name: 'NIC', compatibility: 'OCP3', geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: {} }, endpoints: [] }] }),
   }} /></MemoryRouter></I18nProvider>);
   const row = (await screen.findByRole('rowheader', { name: 'NIC' })).closest('tr')!;
   expect(within(row).getByRole('link', { name: 'Изменить шаблон' })).toHaveAttribute('href', '/library/module-templates/module/edit');

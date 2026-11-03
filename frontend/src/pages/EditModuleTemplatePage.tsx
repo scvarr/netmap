@@ -1,10 +1,11 @@
+import { ModuleGeometryEditor } from '../components/ModuleGeometryEditor';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
 import { moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
 
-const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.compatibility, d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
+const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.compatibility, d.geometry, d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
 
 export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: { dataSource?: ModuleReviewDataSource }) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
@@ -39,7 +40,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
   }, [dataSource, templateId, document?.generation, busy, t]);
   const dirty = !!document && !!definition && signature(document.definition) !== signature(definition);
   const current = document?.review?.current && !dirty && !busy && !revalidating && !error;
-  const change = (value: ModuleTemplateInput) => { setDefinition(value); setNotice(''); };
+  const change = (value: ModuleTemplateInput) => { value = { ...value, geometry: { ...value.geometry, endpoints: Object.fromEntries(value.endpoints.map(e => [e.key, value.geometry.endpoints[e.key] ?? { x: .5, y: .5 }])) } }; setDefinition(value); setNotice(''); };
   const run = async (check: boolean) => {
     if (!document || !definition || busy || revalidating) return;
     setBusy(true); setError(''); setNotice('');
@@ -72,6 +73,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
     {error && <p role="alert">{error}</p>}
     {definition && <form className="blueprint-editor-controls" onSubmit={e => { e.preventDefault(); void run(false); }}>
       <fieldset disabled={busy}>
+        <ModuleGeometryEditor geometry={definition.geometry} endpoints={definition.endpoints} onChange={geometry => change({ ...definition, geometry })} />
         <label>{t('hardware.name')}<input required value={definition.name} onChange={e => change({ ...definition, name: e.target.value })} /></label>
         <label>{t('hardware.compatibility')}<input required value={definition.compatibility} onChange={e => change({ ...definition, compatibility: e.target.value })} /></label>
         {definition.endpoints.map((endpoint, index) => <fieldset className="endpoint-group" key={endpoint.key}><legend>{index + 1}</legend>
@@ -130,7 +132,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
         <p>{t('review.candidate', { id: review.candidate_id, time: review.created_at })}</p>
         <p>{t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')}</p>
         {current && <>
-          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : 'review.section.properties')} · {t(`review.operation.${c.operation}`)} · {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after?.display_name) || (typeof c.before === 'object' && c.before?.display_name)}</li>)}</ul>
+          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : 'review.section.properties')} · {t(`review.operation.${c.operation}`)} · {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
           {!review.result.installations.length && <p>{t('moduleReview.noInstallations')}</p>}
           <ul>{review.result.installations.map(i => <li key={i.installation_id}>
             <Link to={`/infrastructure/objects/${i.physical_object_id}`}>{i.display_name}</Link>

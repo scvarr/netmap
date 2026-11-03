@@ -5,7 +5,9 @@ export interface ModuleBay {
   x: number; y: number; width: number; height: number;
 }
 export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind }
-export interface ModuleTemplateInput { name: string; compatibility: string; endpoints: ModuleEndpoint[] }
+export interface ModuleGeometry { width: number; height: number; fill_color: string; endpoints: Record<string, { x: number; y: number }> }
+export const initialModuleGeometry = (): ModuleGeometry => ({ width: 240, height: 80, fill_color: "#64748b", endpoints: {} });
+export interface ModuleTemplateInput { geometry: ModuleGeometry; name: string; compatibility: string; endpoints: ModuleEndpoint[] }
 export interface ModuleTemplate extends ModuleTemplateInput { template_id: string; revision_id: string; publication_state?: ModuleDraftDocument["publication_state"] }
 export interface ModuleDraftDocument {
   template_id: string; source_revision_id: string; generation: number; definition: ModuleTemplateInput;
@@ -19,9 +21,9 @@ export interface ModuleDraftDocument {
   };
 }
 export interface ModuleStructuralChange {
-  section: 'properties' | 'endpoints'; key: string; operation: 'added' | 'removed' | 'changed';
-  before: string | (ModuleEndpoint & { order_index: number }) | null;
-  after: string | (ModuleEndpoint & { order_index: number }) | null;
+  section: 'properties' | 'endpoints' | 'geometry'; key: string; operation: 'added' | 'removed' | 'changed';
+  before: ModuleGeometry | string | (ModuleEndpoint & { order_index: number }) | null;
+  after: ModuleGeometry | string | (ModuleEndpoint & { order_index: number }) | null;
 }
 export interface ModuleReconciliationResult {
   revision_id: string; version_number: number;

@@ -19,7 +19,7 @@ def validate_definition(value):
 def published_definition(session, template_id, revision_id):
     document = HardwareCatalog(session).module_document(
         session.get(m.ModuleTemplate, template_id), session.get(m.ModuleTemplateRevision, revision_id))
-    return validate_definition({k: document[k] for k in ("name", "compatibility", "endpoints")})
+    return validate_definition({k: document[k] for k in ("name", "compatibility", "endpoints", "geometry")})
 
 
 def structural_changes(before, after):
@@ -33,6 +33,8 @@ def structural_changes(before, after):
     for key in ("name", "compatibility"):
         if before[key] != after[key]:
             changes.append({"section": "properties", "key": key, "operation": "changed", "before": before[key], "after": after[key]})
+    if before["geometry"] != after["geometry"]:
+        changes.append({"section": "geometry", "key": "geometry", "operation": "changed", "before": before["geometry"], "after": after["geometry"]})
     return changes
 
 

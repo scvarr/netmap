@@ -633,6 +633,7 @@ class ModuleTemplateRevision(Base):
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     compatibility: Mapped[str] = mapped_column(String(255), nullable=False)
+    geometry: Mapped[dict] = mapped_column(JSONB, nullable=False)
 
 
 class ModuleTemplateDraft(Base):
