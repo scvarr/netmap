@@ -1,3 +1,4 @@
+import canvasCss from '../styles.css?raw';
 import { fireEvent, render } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -133,6 +134,9 @@ describe('Blueprint endpoint screen-space markers', () => {
     expect(container.querySelectorAll('[data-endpoint-name]')).toHaveLength(2);
     expect(container.querySelector('[data-endpoint-name]')).toHaveAttribute('pointer-events', 'none');
     expect(container.querySelector('[data-endpoint-name]')).toHaveAttribute('font-size', '8.5');
+    const stylesheet = document.createElement('style'); stylesheet.textContent = canvasCss; document.head.append(stylesheet);
+    expect(getComputedStyle(container.querySelector('[data-endpoint-name]')!).fontSize).toBe('8.5px');
+    stylesheet.remove();
     expect(container.querySelector('.blueprint-composition-canvas__link')).toHaveAttribute('x1', '750');
     fireEvent.pointerDown(container.querySelector('[data-panel-key="panel-2"] .blueprint-composition-canvas__body')!);
     expect(onActivatePanel).toHaveBeenCalledWith('panel-2');
