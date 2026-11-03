@@ -1,3 +1,4 @@
+from app.schemas import SaveModuleLayoutRequest
 import logging
 import json
 import uuid
@@ -1647,3 +1648,18 @@ def publish_module_template_candidate(template_id: uuid.UUID, candidate_id: uuid
 def reconcile_module_installations(template_id: uuid.UUID, session: Session = Depends(get_session)):
     from app.module_reconciliation import reconcile_installations
     return reconcile_installations(session, template_id)
+
+
+@app.put("/v1/topology/physical-objects/{physical_object_id}/module-installations/{installation_id}/layout")
+def save_module_layout(physical_object_id: uuid.UUID, installation_id: uuid.UUID,
+                       query: SaveModuleLayoutRequest, session: Session = Depends(get_session)):
+    from app.module_layout_editing import save_layout
+    try:
+        with session.begin():
+            save_layout(session, physical_object_id, installation_id, query)
+            return HardwareCatalog(session).configuration_document(physical_object_id)
+    except OperationalError as error:
+        if getattr(error.orig, "sqlstate", None) not in ("40001", "40P01", "55P03"):
+            raise
+        raise ModelError("Конкурирующее изменение компоновки. Повторите действие.",
+                         {"reason": "MODULE_LAYOUT_BUSY"}) from error

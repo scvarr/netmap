@@ -39,6 +39,7 @@ export interface ModuleReviewDataSource {
 export interface ModuleInstallation {
   id: string; module_template_id: string; module_revision_id: string; name: string;
   layout: { panel_key: string; x: number; y: number; width: number; height: number };
+  initial_layout?: ModuleInstallation["layout"];
   fill_color: string;
   orientation: 'HORIZONTAL' | 'VERTICAL';
   endpoints: Array<Omit<ModuleEndpoint, 'display_name'> & {
@@ -48,8 +49,9 @@ export interface ModuleInstallation {
     connection_point_id: string; network_interface_id: string | null; x: number; y: number;
   }>;
 }
-export interface HardwareConfiguration { configuration_id: string | null; panels?: Array<{ panel_key: string; display_name: string; width: number; height: number }>; bays: Array<ModuleBay & { installation: ModuleInstallation | null }> }
+export interface HardwareConfiguration { configuration_id: string | null; base_revision_id?: string; panels?: Array<{ panel_key: string; display_name: string; width: number; height: number }>; bays: Array<ModuleBay & { installation: ModuleInstallation | null }> }
 export interface HardwareModuleDataSource {
+  saveLayout?(objectId: string, installationId: string, input: unknown): Promise<HardwareConfiguration>;
   listModules(): Promise<{ modules: ModuleTemplate[] }>;
   createModule(input: ModuleTemplateInput): Promise<ModuleTemplate>;
   deleteModule(templateId: string): Promise<void>;
@@ -65,6 +67,7 @@ async function request<T>(url: string, input?: unknown, method: 'GET' | 'POST' |
   return document as T;
 }
 export const hardwareModuleDataSource: HardwareModuleDataSource = {
+  saveLayout: (id, installationId, input) => request(`/api/v1/topology/physical-objects/${encodeURIComponent(id)}/module-installations/${encodeURIComponent(installationId)}/layout`, input, "PUT"),
   listModules: () => request('/api/v1/library/module-templates'),
   createModule: input => request('/api/v1/library/module-templates', input),
   deleteModule: id => request(`/api/v1/library/module-templates/${encodeURIComponent(id)}`, undefined, 'DELETE'),

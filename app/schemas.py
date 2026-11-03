@@ -2619,3 +2619,23 @@ class ErrorBody(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: ErrorBody
+
+
+class ModuleLayoutValue(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    panel_key: str
+    x: FiniteFloat
+    y: FiniteFloat
+    width: FiniteFloat
+    height: FiniteFloat
+
+
+class SaveModuleLayoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    configuration_id: uuid.UUID
+    base_revision_id: uuid.UUID
+    module_revision_id: uuid.UUID
+    bay_key: str
+    orientation: Literal["HORIZONTAL", "VERTICAL"]
+    expected_layout: ModuleLayoutValue
+    layout: ModuleLayoutValue

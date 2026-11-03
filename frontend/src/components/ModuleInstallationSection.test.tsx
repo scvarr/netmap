@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
@@ -78,4 +78,81 @@ it('renders the installed body and canonical port at projected coordinates', asy
   expect(port).toHaveAttribute('cx', '120');
   expect(port).toHaveAttribute('cy', '40');
   expect(image.querySelector('[fill="#123456"]')).toHaveAttribute('width', '180');
+});
+
+
+function pointerSurface() {
+  vi.stubGlobal('PointerEvent', MouseEvent);
+  vi.stubGlobal('DOMPoint', class {
+    constructor(public x: number, public y: number) {}
+    matrixTransform() { return this; }
+  });
+  Object.defineProperty(SVGElement.prototype, 'getScreenCTM', { configurable: true, value: () => ({ inverse: () => ({}) }) });
+  Object.defineProperty(SVGElement.prototype, 'setPointerCapture', { configurable: true, value: vi.fn() });
+}
+async function editingSource() {
+  pointerSurface();
+  const data = source();
+  const document = structuredClone(occupied);
+  document.base_revision_id = 'base-revision';
+  document.bays[0].installation!.initial_layout = { panel_key: 'back', x: .15, y: .15, width: .2, height: .1 };
+  data.loadConfiguration = vi.fn().mockResolvedValue(document);
+  data.saveLayout = vi.fn().mockImplementation(async (_obj, _id, body) => {
+    const result = structuredClone(document); result.bays[0].installation!.layout = body.layout; return result;
+  });
+  const refresh = show(data);
+  await screen.findByRole('img', { name: 'Back' });
+  const body = documentQuery();
+  const panel = screen.getByRole('img', { name: 'Back' });
+  return { data, body, panel, refresh };
+}
+function documentQuery() { return document.querySelector('[data-installation-id]')!; }
+function drag(body: Element, panel: Element, x = 1200, y = 400) {
+  fireEvent.pointerDown(body, { clientX: 60, clientY: 20, pointerId: 1 });
+  fireEvent.pointerMove(panel, { clientX: x, clientY: y, pointerId: 1 });
+  fireEvent.pointerUp(panel, { pointerId: 1 });
+}
+it('keeps normal view inert; selects, clamps drag, projects ports, cancels and exits', async () => {
+  const { data, body, panel } = await editingSource();
+  drag(body, panel); expect(body.getAttribute('x')).toBe('60');
+  await userEvent.click(screen.getByText('Корректировать расположение'));
+  drag(body, panel);
+  expect(Number(body.getAttribute('x'))).toBeCloseTo(420);
+  expect(Number(body.getAttribute('y'))).toBeCloseTo(160);
+  expect(screen.getByLabelText('Изменить размер')).toBeInTheDocument();
+  const port = document.querySelector('[data-endpoint-id]')!;
+  expect(Number(port.getAttribute('cx'))).toBeCloseTo(480);
+  expect(screen.getByText('Есть несохранённые изменения')).toBeInTheDocument();
+  expect(data.saveLayout).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByText('Отменить правки'));
+  expect(body.getAttribute('x')).toBe('60');
+  await userEvent.click(screen.getByText('Завершить корректировку'));
+  expect(screen.queryByLabelText('Изменить размер')).not.toBeInTheDocument();
+});
+it('resizes proportionally inside panel and saves the expected server snapshot', async () => {
+  const { data, body, panel, refresh } = await editingSource();
+  await userEvent.click(screen.getByText('Корректировать расположение'));
+  fireEvent.pointerDown(body, { clientX: 60, clientY: 20 }); fireEvent.pointerUp(panel);
+  const handle = screen.getByLabelText('Изменить размер');
+  drag(handle, panel);
+  expect(Number(body.getAttribute('width')) / Number(body.getAttribute('height'))).toBeCloseTo(4.5);
+  expect(Number(body.getAttribute('x')) + Number(body.getAttribute('width'))).toBeLessThanOrEqual(600);
+  await userEvent.click(screen.getByText('Сохранить расположение'));
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  expect(data.saveLayout).toHaveBeenCalledWith('object', 'stable-installation-id', expect.objectContaining({ base_revision_id: 'base-revision', expected_layout: occupied.bays[0].installation!.layout }));
+  expect(screen.queryByText('Есть несохранённые изменения')).not.toBeInTheDocument();
+});
+it.each(['server error', '409 layout changed'])('retains reset draft on %s and allows retry or cancel', async message => {
+  const { data, body, panel } = await editingSource();
+  await userEvent.click(screen.getByText('Корректировать расположение'));
+  fireEvent.pointerDown(body, { clientX: 60, clientY: 20 }); fireEvent.pointerUp(panel);
+  await userEvent.click(screen.getByText('Начальное размещение'));
+  expect(body.getAttribute('x')).toBe('90'); expect(data.saveLayout).not.toHaveBeenCalled();
+  vi.mocked(data.saveLayout!).mockRejectedValueOnce(new Error(message));
+  await userEvent.click(screen.getByText('Сохранить расположение'));
+  expect(await screen.findByRole('alert')).toHaveTextContent(message);
+  expect(body.getAttribute('x')).toBe('90');
+  expect(screen.getByText('Есть несохранённые изменения')).toBeInTheDocument();
+  await userEvent.click(screen.getByText('Сохранить расположение'));
+  await waitFor(() => expect(screen.queryByText('Есть несохранённые изменения')).not.toBeInTheDocument());
 });

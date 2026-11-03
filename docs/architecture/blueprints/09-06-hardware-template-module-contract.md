@@ -105,8 +105,7 @@ including the CableLabelSettings singleton. 09.6-C adds forward migration
 **0002**; D1 adds **0003** for immutable revision names and publication receipts. Both preserve existing databases; applied 0001/0002 remain unchanged.
 
 **D2 implements safe base-revision reconciliation and automatic module relocation.**
-Обновление ревизий установок (09.6-E3) реализовано ниже. Свободная визуальная
-компоновка (09.6-F) остаётся за пределами реализованного поведения.
+Обновление ревизий установок (09.6-E3) реализовано ниже. Визуальная компоновка установок реализована ограниченным срезом F2b ниже.
 Dense Map LOD and endpoint technology semantics remain
 open. C/D1/D2 have passed external inspection; manual HV-01 rechecking and
 acceptance are still required. This implementation does not accept or resume Phase C.
@@ -385,7 +384,7 @@ Endpoint order is presentation input, never endpoint identity.
 Перемещение и изменение размеров прямоугольника меняют представление,
 сохраняя идентичность установки и конечных точек.
 
-### Согласованное продуктовое направление: F1 IMPLEMENTED; F2a IMPLEMENTED; F2b OPEN
+### Согласованное продуктовое направление: F1 IMPLEMENTED / ACCEPTED / MERGED; F2a IMPLEMENTED / ACCEPTED / MERGED; F2b IMPLEMENTED
 
 F1 реализован ниже; описание свободной компоновки установки относится к открытому F2. Базовый шаблон
 оборудования задаёт корпус, панели, встроенные порты и видимые отсеки для
@@ -412,7 +411,7 @@ NetworkInterface, Connections и Cables. Совместимость отсеко
 - F1: геометрия и графический редактор шаблонов модулей.
 - F2: визуальная компоновка установленных модулей внутри PhysicalObject.
 
-Контракт F1 реализован ниже; подробный контракт F2 остаётся открытым.
+Контракты F1, F2a и ограниченного редактирования F2b реализованы ниже.
 Конкретные таблицы, API, алгоритмы преобразования координат и правила переноса
 пользовательской геометрии при обновлении ревизий здесь не определяются.
 Существующие правила обновления базовых шаблонов ниже не задают такие правила
@@ -421,7 +420,7 @@ NetworkInterface, Connections и Cables. Совместимость отсеко
 
 ## Implemented boundary: 09.6-E2
 
-E2 IMPLEMENTED / ACCEPTED / MERGED. E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED; F2a IMPLEMENTED; F2b OPEN.
+E2 IMPLEMENTED / ACCEPTED / MERGED. E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED / ACCEPTED / MERGED; F2a IMPLEMENTED / ACCEPTED / MERGED; F2b IMPLEMENTED.
 
 - Module editor publishes only a saved, currently checked candidate through
   `POST /v1/library/module-templates/{id}/candidates/{candidate_id}/publish`.
@@ -591,8 +590,8 @@ in this correction; later C/D1/D2 delivery is recorded above.
 ## OPEN and outside this contract
 
 - Обновление установок (09.6-E3): IMPLEMENTED / ACCEPTED / MERGED. E2 IMPLEMENTED / ACCEPTED / MERGED. E1: IMPLEMENTED / ACCEPTED / MERGED.
-- Геометрия и графический редактор шаблонов модулей, компоновка установок
-  внутри PhysicalObject (09.6-F): OPEN, согласованное будущее направление.
+- Геометрия шаблонов F1 и layout F2a: IMPLEMENTED / ACCEPTED / MERGED;
+  ограниченное редактирование установок F2b: IMPLEMENTED.
 - Endpoint technology/capability semantics: Ethernet, Fibre Channel, speed,
   connector, and other semantic properties.
 - Global endpoint color/shape visual rules.
@@ -610,7 +609,7 @@ manual HV-01 recheck; it is neither complete nor PASSED.
 
 ## Implemented boundary: 09.6-E3
 
-**E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED; F2a IMPLEMENTED; F2b OPEN.
+**E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED / ACCEPTED / MERGED; F2a IMPLEMENTED / ACCEPTED / MERGED; F2b IMPLEMENTED.
 Phase C PAUSED; HV-01 not PASSED.**
 
 - «Обновить совместимые установки» calls POST
@@ -648,7 +647,7 @@ remain outstanding.
 ## Implemented boundary: 09.6-F1
 
 F1 **IMPLEMENTED / ACCEPTED / MERGED**. E1/E2/E3:
-**IMPLEMENTED / ACCEPTED / MERGED**. F2a **IMPLEMENTED**; F2b **OPEN**. Phase C **PAUSED**;
+**IMPLEMENTED / ACCEPTED / MERGED**. F2a **IMPLEMENTED / ACCEPTED / MERGED**; F2b **IMPLEMENTED**. Phase C **PAUSED**;
 HV-01 is not PASSED.
 
 - ModuleTemplateRevision owns one rectangular body: positive finite width and
@@ -681,7 +680,7 @@ HV-01 is not PASSED.
 
 ## Implemented boundary: 09.6-F2a
 
-F2a **IMPLEMENTED** (external branch inspection pending). F2b **OPEN**.
+F2a **IMPLEMENTED / ACCEPTED / MERGED**. F2b **IMPLEMENTED** (external branch inspection pending).
 Phase C **PAUSED**; HV-01 is not PASSED.
 
 - Installation `layout` belongs to ObjectConfiguration through its stable
@@ -705,3 +704,40 @@ Phase C **PAUSED**; HV-01 is not PASSED.
   fail before writes. Saved layout round-trips unchanged.
 - Interactive movement/resizing, per-port installation geometry, nested modules,
   SavedMap and Dense Map LOD remain outside F2a.
+
+
+## Implemented boundary: 09.6-F2b
+
+F1 and F2a **IMPLEMENTED / ACCEPTED / MERGED**. F2b **IMPLEMENTED**;
+external inspection of the final branch diff remains required. Phase C **PAUSED**;
+HV-01 **not PASSED**.
+
+- PhysicalObject provides explicit adjustment mode, single body selection, bounded
+  mouse/pointer movement and one corner handle for proportional resizing. Ports
+  follow their F1 relative positions, including VERTICAL rotation. Normal view
+  cannot move modules. Selection and handle are visible only in adjustment mode.
+- Save, cancel and reset are explicit. Reset uses the current pinned bay, module
+  geometry, orientation and panel dimensions through the F2a initial fit function.
+  Draft layout stays local until save; errors retain draft and its expected server
+  snapshot. A conflict never rebases or overwrites another session automatically:
+  cancel and reload the object to obtain fresh configuration. Dirty selection
+  cannot be replaced by another selection; cancel or save it first.
+- PUT `/v1/topology/physical-objects/{object_id}/module-installations/{installation_id}/layout`
+  accepts configuration_id, base_revision_id, module_revision_id, bay_key,
+  orientation, expected_layout and layout. Exact expected-state comparison runs
+  after object/configuration/installation UPDATE locks in the existing order.
+  Revision, bay/orientation, configuration or layout mismatch returns 409 with
+  a concrete reason. Lock timeout/deadlock/serialization failure returns controlled
+  409; transaction rollback prevents partial writes. Invalid ownership, panel,
+  coordinates or sizes return 422. Numbers must be finite, sizes positive and
+  rectangle contained in its current bay panel. Extra request fields are rejected.
+- Only installation.layout changes. Identical current requests do not write.
+  Configuration response refreshes body and ports, and existing detail/projection
+  refresh preserves unrelated page state. No schema, migrations, template editor,
+  per-port tools, D2/E3 algorithm changes or SavedMap changes are introduced.
+- Targeted Docker checks cover save, expected-state refusals, concurrent locked
+  writers, canonical/mapping identity, rollback, idempotence and v5 round-trip;
+  F2a tests retain E3/D2 guarantees. Client checks cover adjustment mode, selection,
+  bounded movement, proportional resize, port projection, save/cancel/reset and
+  retained drafts after server errors/conflicts. TypeScript/Vite and diff checks
+  are required. Full suites and manual HV-01 are outside this acceptance evidence.
