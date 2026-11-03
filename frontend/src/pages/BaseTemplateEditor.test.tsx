@@ -204,118 +204,13 @@ describe('authoring workspace contextual region', () => {
     expect(document.querySelector('.blueprint-composer__selected')).toBeNull();
     expect(contextual).toContainElement(screen.getByRole('group', { name: 'Положение выделения' }));
     expect(contextual).toContainElement(screen.getByRole('group', { name: 'Копировать выделение' }));
-    expect(document.querySelector('.blueprint-composer__properties')).toContainElement(screen.getByRole('button', { name: 'Редактировать связи · 0' }));
+    expect(document.querySelector('.blueprint-composer__properties')).toContainElement(screen.getByRole('button', { name: 'Порты и внутренние связи · 0' }));
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(document.querySelector('.blueprint-composer__contextual')).toContainElement(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
     expect(document.querySelector('.blueprint-composer__contextual')).toBe(contextual);
     fireEvent.pointerDown(nodes[0]); fireEvent.pointerUp(document.querySelector('svg')!);
     await userEvent.click(screen.getByRole('button', { name: 'Панель 2' }));
     expect(document.querySelector('.blueprint-composer__contextual')).toContainElement(screen.getByRole('button', { name: 'Упорядоченное выделение' }));
-  });
-});
-
-describe('internal links on demand', () => {
-  const fixture = (count: number) => {
-    const initial = newBlueprintEditorState(); initial.name = 'Device';
-    const source = addEndpoints(initial, 'CONNECTION_POINT', Math.max(3, count), initial.activePanelKey);
-    const destination = addPanel(source, 'below');
-    const copies = addEndpoints(destination, 'CONNECTION_POINT', Math.max(3, count), destination.activePanelKey);
-    return { ...copies, individualLinks: source.slots.slice(0, count).map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: copies.slots[source.slots.length + index].key })) };
-  };
-  it.each([0, 4, 24])('keeps %i links out of the workspace and renders both selectors per dialog row', async (count) => {
-    render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={fixture(count)} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
-    const entry = screen.getByRole('button', { name: `Редактировать связи · ${count}` });
-    expect(entry).toBeEnabled();
-    expect(document.querySelectorAll('.blueprint-composer__workspace .blueprint-composer__link')).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: 'Добавить связь' })).toBeNull();
-    await userEvent.click(entry);
-    const dialog = screen.getByRole('dialog', { name: 'Внутренние связи' });
-    const rows = dialog.querySelectorAll('.blueprint-composer__link');
-    expect(rows).toHaveLength(count);
-    for (const row of rows) {
-      expect(within(row as HTMLElement).getAllByRole('combobox')).toHaveLength(2);
-      expect(within(row as HTMLElement).getByRole('button', { name: 'Удалить' })).toBeInTheDocument();
-    }
-    if (count) {
-      expect(within(rows[0] as HTMLElement).getAllByRole('option', { name: '1-1 · Панель 1' })).toHaveLength(2);
-      expect(within(rows[0] as HTMLElement).getAllByRole('option', { name: '2-1 · Панель 2' })).toHaveLength(2);
-    }
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Закрыть' }));
-    expect(screen.queryByRole('dialog')).toBeNull(); expect(entry).toHaveFocus();
-  });
-  it('edits, adds and deletes ordinary links locally, retaining changes after close and Blueprint save', async () => {
-    const initial = fixture(2); const save = vi.fn().mockResolvedValue(undefined);
-    render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
-    await userEvent.click(screen.getByRole('button', { name: 'Редактировать связи · 2' }));
-    const dialog = screen.getByRole('dialog');
-    const edited = { from_slot_key: initial.slots[2].key, to_slot_key: initial.slots[5].key };
-    fireEvent.click(within(dialog).getByLabelText('Выбрать связь 1'));
-    await userEvent.selectOptions(within(dialog).getByLabelText('Первый порт внутренней связи 1'), edited.from_slot_key);
-    expect(within(dialog).getByRole('button', { name: 'Удалить выбранные · 0' })).toBeDisabled();
-    fireEvent.click(within(dialog).getByLabelText('Выбрать связь 1'));
-    await userEvent.selectOptions(within(dialog).getByLabelText('Второй порт внутренней связи 1'), edited.to_slot_key);
-    expect(within(dialog).getByRole('button', { name: 'Удалить выбранные · 0' })).toBeDisabled();
-    fireEvent.click(within(dialog).getByLabelText('Выбрать связь 1'));
-    await userEvent.click(within(dialog.querySelectorAll('.blueprint-composer__link')[1] as HTMLElement).getByRole('button', { name: 'Удалить' }));
-    expect(within(dialog).getByRole('button', { name: 'Удалить выбранные · 0' })).toBeDisabled();
-    fireEvent.click(within(dialog).getByLabelText('Выбрать связь 1'));
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Добавить связь' }));
-    expect(within(dialog).getByRole('button', { name: 'Удалить выбранные · 0' })).toBeDisabled();
-    expect(dialog.querySelectorAll('.blueprint-composer__link')).toHaveLength(2);
-    expect(save).not.toHaveBeenCalled();
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Закрыть' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Редактировать связи · 2' }));
-    expect(screen.getByLabelText('Первый порт внутренней связи 1')).toHaveValue(edited.from_slot_key);
-    expect(screen.getByLabelText('Второй порт внутренней связи 1')).toHaveValue(edited.to_slot_key);
-    await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(createBlueprintRequest(save.mock.calls[0][0]).request?.internal_links).toEqual([edited, { from_slot_key: initial.slots[0].key, to_slot_key: initial.slots[1].key }]);
-  });
-  it('selects all 24 rows, clears selection, and starts empty after close/reopen', () => {
-    render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={fixture(24)} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
-    const button = (name: string) => screen.getByRole('button', { name });
-    fireEvent.click(button('Редактировать связи · 24'));
-    const checkboxes = () => screen.getAllByRole('checkbox');
-    expect(checkboxes()).toHaveLength(24); expect(checkboxes().every((node) => !(node as HTMLInputElement).checked)).toBe(true);
-    expect(button('Удалить выбранные · 0')).toBeDisabled();
-    fireEvent.click(screen.getByLabelText('Выбрать связь 1')); expect(button('Удалить выбранные · 1')).toBeEnabled();
-    fireEvent.click(button('Выбрать все')); expect(checkboxes().every((node) => (node as HTMLInputElement).checked)).toBe(true);
-    expect(button('Удалить выбранные · 24')).toBeEnabled();
-    fireEvent.click(button('Снять выбор')); expect(button('Удалить выбранные · 0')).toBeDisabled();
-    expect(checkboxes().every((node) => !(node as HTMLInputElement).checked)).toBe(true);
-    fireEvent.click(button('Выбрать все')); fireEvent.click(button('Закрыть')); fireEvent.click(button('Редактировать связи · 24'));
-    expect(button('Удалить выбранные · 0')).toBeDisabled(); expect(checkboxes().every((node) => !(node as HTMLInputElement).checked)).toBe(true);
-    fireEvent.click(screen.getByLabelText('Выбрать связь 2')); fireEvent.keyDown(document, { key: 'Escape' }); fireEvent.click(button('Редактировать связи · 24'));
-    expect(button('Удалить выбранные · 0')).toBeDisabled();
-    expect(document.querySelector('.blueprint-links-dialog__list')).toBeInTheDocument();
-    expect(styles).toMatch(/\.blueprint-links-dialog \{[^}]*max-height: calc\(100dvh - 40px\)[^}]*overflow: hidden/);
-    expect(styles).toMatch(/\.blueprint-links-dialog__list \{[^}]*overflow-y: auto/);
-    expect(document.querySelectorAll('.blueprint-composer__workspace .blueprint-composer__link')).toHaveLength(0);
-  });
-  it('deletes exactly selected links, preserves untouched link objects and clears the selection', () => {
-    const initial = fixture(4); const save = vi.fn().mockResolvedValue(undefined);
-    render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
-    const button = (name: string) => screen.getByRole('button', { name });
-    fireEvent.click(button('Редактировать связи · 4'));
-    fireEvent.click(screen.getByLabelText('Выбрать связь 2')); fireEvent.click(screen.getByLabelText('Выбрать связь 4'));
-    fireEvent.click(button('Удалить выбранные · 2')); expect(button('Удалить выбранные · 0')).toBeDisabled();
-    expect(document.querySelectorAll('.blueprint-composer__link')).toHaveLength(2);
-    expect(screen.getAllByRole('checkbox').every((node) => !(node as HTMLInputElement).checked)).toBe(true);
-    fireEvent.click(button('Закрыть')); fireEvent.click(button('Save'));
-    const saved = save.mock.calls[0][0];
-    expect(saved.individualLinks).toEqual([initial.individualLinks[0], initial.individualLinks[2]]);
-    expect(saved.individualLinks[0]).toBe(initial.individualLinks[0]); expect(saved.individualLinks[1]).toBe(initial.individualLinks[2]);
-    expect(initial.individualLinks).toHaveLength(4); expect(Object.keys(saved).sort()).toEqual(Object.keys(initial).sort());
-  });
-  it('can create the first link from the zero-count entry', async () => {
-    const initial = fixture(0); const save = vi.fn().mockResolvedValue(undefined);
-    render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
-    await userEvent.click(screen.getByRole('button', { name: 'Редактировать связи · 0' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить связь' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
-    expect(screen.getByRole('button', { name: 'Редактировать связи · 1' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(createBlueprintRequest(save.mock.calls[0][0]).request?.internal_links).toHaveLength(1);
   });
 });
 
@@ -358,13 +253,13 @@ describe('copy selection controls', () => {
     expect(request.slots.slice(0, 3)).toEqual(initial.slots);
     expect(request.internal_links).toEqual(continuity ? initial.slots.map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: copies[index].key })) : []);
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(screen.getByRole('button', { name: `Редактировать связи · ${continuity ? 3 : 0}` })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `Порты и внутренние связи · ${continuity ? 3 : 0}` })).toBeInTheDocument();
     if (continuity) {
       expect(document.querySelectorAll('.blueprint-composition-canvas__link')).toHaveLength(3);
-      await userEvent.click(screen.getByRole('button', { name: 'Редактировать связи · 3' }));
-      expect(screen.getByLabelText('Первый порт внутренней связи 1')).toHaveValue(initial.slots[0].key);
-      expect(screen.getByLabelText('Второй порт внутренней связи 1')).toHaveValue(copies[0].key);
-      expect(screen.getAllByRole('option', { name: '2-1 · Панель 2' })).toHaveLength(6);
+      await userEvent.click(screen.getByRole('button', { name: 'Порты и внутренние связи · 3' }));
+      expect(screen.getByRole('dialog')).toHaveTextContent(initial.slots[0].display_name);
+      expect(screen.getByRole('dialog')).toHaveTextContent(copies[0].display_name);
+      expect(screen.getByRole('dialog')).toHaveTextContent('2-1 · Панель 2');
       await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
     }
     // Existing numeric, layout, drag, individual rename and deletion tools act on copies.
@@ -554,13 +449,17 @@ describe('minimal direct endpoint editor', () => {
     expect(document.querySelectorAll('[data-panel-key]')).toHaveLength(2);
     expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Панель 2' })).toHaveAttribute('aria-pressed', 'true');
-    expect(document.querySelector('.blueprint-composition-canvas text')).toBeNull();
+    expect(document.querySelectorAll('[data-endpoint-name]')).toHaveLength(1);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     expect(screen.getByRole('button', { name: 'Удалить пустую панель' })).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: /Редактировать связи ·/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Порты и внутренние связи ·/ }));
+    const aSide = within(screen.getByRole('region', { name: 'A' }));
+    const bSide = within(screen.getByRole('region', { name: 'B' }));
+    fireEvent.click(aSide.getAllByRole('checkbox')[0]);
+    fireEvent.click(bSide.getAllByRole('checkbox')[1] ?? bSide.getAllByRole('checkbox')[0]);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить связь' }));
-    expect(screen.getAllByRole('option', { name: '1-1 · Панель 1' })).toHaveLength(2);
-    expect(screen.getAllByRole('option', { name: '2-1 · Панель 2' })).toHaveLength(2);
+    expect(screen.getByRole('dialog')).toHaveTextContent('1-1 · Панель 1');
+    expect(screen.getByRole('dialog')).toHaveTextContent('2-1 · Панель 2');
     await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     const request = createBlueprintRequest(save.mock.calls[0][0]).request!;
@@ -585,7 +484,11 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.pointerDown(document.querySelectorAll('[data-slot-key]')[0], { clientX: 500, clientY: 187.5 });
     fireEvent.pointerUp(canvas);
     fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Management' } });
-    await userEvent.click(screen.getByRole('button', { name: /Редактировать связи ·/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Порты и внутренние связи ·/ }));
+    const aSide = within(screen.getByRole('region', { name: 'A' }));
+    const bSide = within(screen.getByRole('region', { name: 'B' }));
+    fireEvent.click(aSide.getAllByRole('checkbox')[0]);
+    fireEvent.click(bSide.getAllByRole('checkbox')[1] ?? bSide.getAllByRole('checkbox')[0]);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить связь' }));
     await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -655,7 +558,11 @@ describe('minimal direct endpoint editor', () => {
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Panel');
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
-    await userEvent.click(screen.getByRole('button', { name: /Редактировать связи ·/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Порты и внутренние связи ·/ }));
+    const aSide = within(screen.getByRole('region', { name: 'A' }));
+    const bSide = within(screen.getByRole('region', { name: 'B' }));
+    fireEvent.click(aSide.getAllByRole('checkbox')[0]);
+    fireEvent.click(bSide.getAllByRole('checkbox')[1] ?? bSide.getAllByRole('checkbox')[0]);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить связь' }));
     await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
@@ -968,107 +875,5 @@ describe('transient ordered selection and naming', () => {
     expect(saved.nextLocalNumberByPanel).toEqual(state.nextLocalNumberByPanel);
     expect(Object.keys(saved).sort()).toEqual(Object.keys(state).sort());
     expect(createBlueprintRequest(saved).request!.slots.slice(0, count).map((slot) => slot.display_name).reverse()).toEqual(previews);
-  });
-});
-
-
-describe('transient pairwise continuity', () => {
-  const setup = (count = 2, existing = false) => {
-    const initial = newBlueprintEditorState(); initial.name = 'Patch';
-    const source = addEndpoints(initial, 'CONNECTION_POINT', count, initial.activePanelKey);
-    const second = addPanel(source, 'below');
-    const both = addEndpoints(second, 'CONNECTION_POINT', count, second.activePanelKey);
-    const state = { ...both, activePanelKey: source.activePanelKey };
-    state.panels[0].display_name = 'Передняя'; state.panels[1].display_name = 'Задняя';
-    if (existing) state.individualLinks = [{ from_slot_key: both.slots[count].key, to_slot_key: source.slots[0].key }];
-    const save = vi.fn().mockResolvedValue(undefined);
-    const view = render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={state} onSave={save} /></MemoryRouter></I18nProvider>);
-    return { state, save, view, a: state.slots.slice(0, count), b: state.slots.slice(count) };
-  };
-  const button = (name: string) => screen.getByRole('button', { name });
-  const click = (key: string) => { fireEvent.pointerDown(document.querySelector(`[data-slot-key="${key}"]`)!, { button: 0 }); fireEvent.pointerUp(document.querySelector('svg')!); };
-  const capture = (set: 'A' | 'B') => {
-    fireEvent.click(button('Порядок и имена')); fireEvent.click(button(`Использовать порядок как ${set}`)); fireEvent.click(button('Закрыть'));
-  };
-  const openPairs = () => { fireEvent.click(screen.getByRole('button', { name: /^Попарные связи/ })); return screen.getByRole('dialog', { name: 'Попарные связи' }); };
-  const rows = () => [...document.querySelectorAll('[data-pairwise-row]')].map((row) => row.textContent);
-  it('copies snapshots, preserves them across reorder/clear/panel/mode/dialog changes, replaces B and supports clear', () => {
-    const { a, b } = setup();
-    fireEvent.click(button('Упорядоченное выделение'));
-    fireEvent.click(button('Порядок и имена')); expect(button('Использовать порядок как A')).toBeDisabled(); fireEvent.click(button('Закрыть'));
-    click(a[1].key); click(a[0].key); capture('A');
-    fireEvent.click(button('Порядок и имена')); expect(screen.getByText('A: 2 · Передняя')).toBeInTheDocument();
-    fireEvent.click(button('Ниже: 1')); fireEvent.click(button('Закрыть'));
-    fireEvent.click(button('Очистить порядок')); fireEvent.click(button('Завершить порядок')); fireEvent.click(button('Упорядоченное выделение'));
-    fireEvent.click(button('Задняя')); expect(screen.getByText('Порядок: 0')).toBeInTheDocument();
-    click(b[0].key); capture('B'); expect(button('Попарные связи · A: 2 · B: 1')).toBeInTheDocument();
-    click(b[1].key); capture('B');
-    const dialog = openPairs(); expect(rows()).toEqual(['11-2 · Передняя↔2-1 · Задняя', '21-1 · Передняя↔2-2 · Задняя']);
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Очистить A' })); expect(within(dialog).getByRole('alert')).toHaveTextContent('Задайте непустые A и B');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Очистить B' })); fireEvent.keyDown(document, { key: 'Escape' });
-    expect(button('Попарные связи · A: 0 · B: 0')).toHaveFocus();
-  });
-  it('explicitly recaptures A and derives current endpoint and panel names', () => {
-    const { a, b } = setup();
-    fireEvent.click(button('Упорядоченное выделение')); click(a[1].key); capture('A');
-    click(a[0].key); capture('A'); fireEvent.click(button('Задняя')); for (const slot of b) click(slot.key); capture('B');
-    fireEvent.click(button('Завершить порядок')); fireEvent.click(button('Передняя'));
-    fireEvent.change(screen.getByLabelText('Название панели'), { target: { value: 'Новая передняя' } });
-    click(a[1].key); fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Exact name' } });
-    const dialog = openPairs(); expect(screen.getByText('A: 2 · Новая передняя')).toBeInTheDocument();
-    expect(rows()[0]).toBe('1Exact name · Новая передняя↔2-1 · Задняя');
-    fireEvent.click(screen.getByLabelText('Обратный порядок B')); expect(rows()[0]).toBe('1Exact name · Новая передняя↔2-2 · Задняя');
-    fireEvent.click(screen.getByLabelText('Обратный порядок B')); expect(rows()[0]).toBe('1Exact name · Новая передняя↔2-1 · Задняя');
-    expect(within(dialog).getByRole('button', { name: 'Создать связи' })).toBeEnabled();
-  });
-  it.each([2, 24])('previews %i rows on demand, reverses B, applies ordinary links and resets session controls', (count) => {
-    const { state, save, view, a, b } = setup(count); const rail = document.querySelector('.blueprint-composer__contextual');
-    fireEvent.click(button('Упорядоченное выделение')); for (const slot of [...a].reverse()) click(slot.key); capture('A');
-    fireEvent.click(button('Задняя')); for (const slot of b) click(slot.key); capture('B');
-    expect(document.querySelector('.blueprint-composer__contextual')).toBe(rail);
-    expect(document.querySelectorAll('.blueprint-composer__workspace [data-pairwise-row]')).toHaveLength(0);
-    const dialog = openPairs(); expect(dialog.querySelector('.blueprint-pairwise-dialog')).toBeInTheDocument();
-    expect(dialog.querySelector('.blueprint-pairwise-dialog__list')).toBeInTheDocument(); expect(rows()).toHaveLength(count);
-    expect(styles).toMatch(/\.blueprint-pairwise-dialog \{[^}]*max-height: calc\(100dvh - 40px\)[^}]*overflow: hidden/);
-    expect(styles).toMatch(/\.blueprint-pairwise-dialog__list \{[^}]*overflow-y: auto/);
-    expect(styles).toMatch(/\.blueprint-editor-page \.blueprint-composer__contextual \{[^}]*height: 130px/);
-    expect(rows()[0]).toBe(`11-${count} · Передняя↔2-1 · Задняя`);
-    fireEvent.click(screen.getByLabelText('Обратный порядок B')); expect(rows()[0]).toBe(`11-${count} · Передняя↔2-${count} · Задняя`);
-    fireEvent.click(button('Создать связи')); expect(screen.queryByRole('dialog')).toBeNull();
-    expect(document.querySelectorAll('.blueprint-composition-canvas__link')).toHaveLength(count);
-    expect(button('Попарные связи · A: 0 · B: 0')).toBeInTheDocument(); expect(screen.getByText(`Порядок: ${count}`)).toBeInTheDocument();
-    openPairs(); expect(screen.getByLabelText('Обратный порядок B')).not.toBeChecked(); fireEvent.click(button('Закрыть'));
-    fireEvent.click(button(`Редактировать связи · ${count}`));
-    const links = screen.getByRole('dialog', { name: 'Внутренние связи' }); expect(links.querySelectorAll('.blueprint-composer__link')).toHaveLength(count);
-    expect(within(links).getByLabelText('Первый порт внутренней связи 1')).toHaveValue(a[count - 1].key);
-    expect(within(links).getByLabelText('Второй порт внутренней связи 1')).toHaveValue(b[count - 1].key);
-    fireEvent.click(button('Закрыть')); fireEvent.click(button('Save'));
-    const saved = save.mock.calls[0][0]; const expected = [...a].reverse().map((slot, index) => ({ from_slot_key: slot.key, to_slot_key: b[count - 1 - index].key }));
-    expect(saved.individualLinks).toEqual(expected); expect(Object.keys(saved).sort()).toEqual(Object.keys(state).sort());
-    const request = createBlueprintRequest(saved).request!; expect(request.internal_links).toEqual(expected);
-    expect(Object.keys(request).sort()).toEqual(['bays', 'body', 'internal_links', 'name', 'panels', 'slots']);
-    fireEvent.click(button(`Редактировать связи · ${count}`)); fireEvent.click(button('Выбрать все'));
-    fireEvent.click(button(`Удалить выбранные · ${count}`)); expect(button('Удалить выбранные · 0')).toBeDisabled();
-    expect(document.querySelectorAll('.blueprint-composer__link')).toHaveLength(0);
-    expect(document.querySelectorAll('.blueprint-composition-canvas__link')).toHaveLength(0);
-    fireEvent.click(button('Закрыть')); fireEvent.click(button('Save')); expect(save.mock.calls.at(-1)![0].individualLinks).toEqual([]);
-    view.unmount(); render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={saved} onSave={save} /></MemoryRouter></I18nProvider>);
-    expect(button('Попарные связи · A: 0 · B: 0')).toBeInTheDocument(); openPairs(); expect(screen.getByLabelText('Обратный порядок B')).not.toBeChecked();
-  });
-  it.each(['mismatch', 'existing', 'stale', 'self', 'duplicate'] as const)('disables Apply with visible %s reason and preserves links', (failure) => {
-    const { state, save, a, b } = setup(2, failure === 'existing');
-    fireEvent.click(button('Упорядоченное выделение')); for (const slot of a) click(slot.key); capture('A');
-    if (failure === 'self') capture('B');
-    else if (failure === 'duplicate') {
-      fireEvent.click(button('Порядок и имена')); fireEvent.click(button('Ниже: 1')); fireEvent.click(button('Использовать порядок как B')); fireEvent.click(button('Закрыть'));
-    } else {
-      fireEvent.click(button('Задняя')); click(b[0].key); if (failure !== 'mismatch') click(b[1].key); capture('B');
-    }
-    if (failure === 'stale') { fireEvent.click(button('Завершить порядок')); click(a[0].key); fireEvent.keyDown(document, { key: 'Delete' }); }
-    const dialog = openPairs(); expect(button('Создать связи')).toBeDisabled();
-    const reasons = { mismatch: 'Количество endpoints', existing: 'уже имеет внутреннюю связь', stale: 'Endpoint удалён', self: 'самим собой', duplicate: 'неориентированная пара' };
-    expect(within(dialog).getByRole('alert')).toHaveTextContent(reasons[failure]);
-    fireEvent.click(button('Создать связи')); expect(screen.getByRole('dialog')).toBeInTheDocument();
-    fireEvent.click(button('Закрыть')); fireEvent.click(button('Save')); expect(save.mock.calls[0][0].individualLinks).toEqual(state.individualLinks);
   });
 });

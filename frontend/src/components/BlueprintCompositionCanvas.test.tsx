@@ -130,7 +130,9 @@ describe('Blueprint endpoint screen-space markers', () => {
     expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 1000 400');
     expect(container.querySelector('[data-panel-key="panel-1"] .blueprint-composition-canvas__body')).toHaveAttribute('x', '500');
     expect(container.querySelector('[data-panel-key="panel-2"] .blueprint-composition-canvas__body')).toHaveAttribute('x', '0');
-    expect(container.querySelector('.blueprint-composition-canvas text')).toBeNull();
+    expect(container.querySelectorAll('[data-endpoint-name]')).toHaveLength(2);
+    expect(container.querySelector('[data-endpoint-name]')).toHaveAttribute('pointer-events', 'none');
+    expect(container.querySelector('[data-endpoint-name]')).toHaveAttribute('font-size', '8.5');
     expect(container.querySelector('.blueprint-composition-canvas__link')).toHaveAttribute('x1', '750');
     fireEvent.pointerDown(container.querySelector('[data-panel-key="panel-2"] .blueprint-composition-canvas__body')!);
     expect(onActivatePanel).toHaveBeenCalledWith('panel-2');

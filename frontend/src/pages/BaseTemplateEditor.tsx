@@ -1,9 +1,10 @@
+import { EndpointLinkWorkspace } from '../components/EndpointLinkWorkspace';
 import { ModuleBaysEditor } from '../components/ModuleBaysEditor';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
-import { applyPairwiseContinuity, pairwiseContinuityPreview, applyBulkNames, bulkNamePreview, spatialOrderedKeys, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, internalLinkPairKey, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
+import { applyBulkNames, bulkNamePreview, spatialOrderedKeys, reorderOrderedKeys, toggleOrderedKey, addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateTypes';
 import type { ModuleBay } from '../topology/hardwareModules';
 import { duplicateModuleBay, normalizeBayGeometry } from '../blueprints/moduleBayGeometry';
@@ -64,29 +65,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   const [orderedMode, setOrderedMode] = useState(false);
   const [orderedKeys, setOrderedKeys] = useState<string[]>([]);
   const [orderOpen, setOrderOpen] = useState(false);
-  const [capturedA, setCapturedA] = useState<string[]>([]);
-  const [capturedB, setCapturedB] = useState<string[]>([]);
-  const [reverseB, setReverseB] = useState(false);
-  const [pairwiseOpen, setPairwiseOpen] = useState(false);
-  const pairwiseEntry = useRef<HTMLButtonElement>(null);
-  useEffect(() => { if (pairwiseOpen) return () => pairwiseEntry.current?.focus(); }, [pairwiseOpen]);
-  const pairwise = pairwiseContinuityPreview(editor, capturedA, capturedB, reverseB);
-  const canCapture = orderedMode && orderedKeys.length > 0 && new Set(orderedKeys).size === orderedKeys.length && orderedKeys.every((key) => editor.slots.some((slot) => slot.key === key && slot.panel_key === panelKey));
-  const captureStatus = (keys: readonly string[]) => {
-    if (!keys.length) return '0';
-    const slots = keys.map((key) => editor.slots.find((slot) => slot.key === key));
-    const panel = editor.panels.find((item) => item.panel_key === slots[0]?.panel_key);
-    return `${keys.length} · ${slots.some((slot) => !slot) || !panel ? t('blueprint.pairwise.invalidSet') : panel.display_name}`;
-  };
-  const endpointLabel = (key: string) => {
-    const slot = editor.slots.find((item) => item.key === key)!;
-    return `${slot.display_name} · ${editor.panels.find((panel) => panel.panel_key === slot.panel_key)?.display_name}`;
-  };
-  const applyPairwise = () => {
-    const next = applyPairwiseContinuity(editor, capturedA, capturedB, reverseB);
-    if (next === editor) return;
-    setEditor(next); setCapturedA([]); setCapturedB([]); setReverseB(false); setPairwiseOpen(false);
-  };
   const [naming, setNaming] = useState({ mask: '#', start: '1', step: '1' });
   const [activeOrderKey, setActiveOrderKey] = useState<string>();
   const [horizontal, setHorizontal] = useState<'ltr' | 'rtl'>('ltr');
@@ -107,8 +85,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   const canvasWrap = useRef<HTMLDivElement>(null);
   const [linksOpen, setLinksOpen] = useState(false);
   const linksEntry = useRef<HTMLButtonElement>(null);
-  const [selectedLinks, setSelectedLinks] = useState<Set<number>>(new Set());
-  const closeLinks = () => { setSelectedLinks(new Set()); setLinksOpen(false); };
+  const closeLinks = () => { setLinksOpen(false); };
   useEffect(() => {
     if (linksOpen) return () => linksEntry.current?.focus();
   }, [linksOpen]);
@@ -150,7 +127,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
       if (menu && (!(event.target instanceof Element) || !event.target.closest('.blueprint-composer__context-menu'))) setMenu(undefined);
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (pairwiseOpen) { if (event.key === 'Escape') { event.preventDefault(); setPairwiseOpen(false); } return; }
       if (orderOpen) { if (event.key === 'Escape') { event.preventDefault(); setOrderOpen(false); } return; }
       if (linksOpen) {
         if (event.key === 'Escape') { event.preventDefault(); closeLinks(); }
@@ -169,7 +145,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
     return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
-  }, [menu, selected, linksOpen, orderOpen, pairwiseOpen]);
+  }, [menu, selected, linksOpen, orderOpen]);
   const normalizedPixels = (axis: 'x' | 'y', pixels: number) => {
     const rect = canvasWrap.current?.querySelector('svg')?.getBoundingClientRect();
     const viewHeight = 1000 * bounds.height / bounds.width;
@@ -229,16 +205,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     });
   };
   const updateSlot = (key: string, patch: Partial<BlueprintSlot>) => setEditor((old) => ({ ...old, slots: old.slots.map((slot) => slot.key === key ? { ...slot, ...patch } : slot) }));
-  const addLink = () => {
-    setSelectedLinks(new Set());
-    const existing = new Set(editor.individualLinks.map((link) => internalLinkPairKey(link.from_slot_key, link.to_slot_key)));
-    for (const first of editor.slots) for (const second of editor.slots) {
-      if (first.key !== second.key && !existing.has(internalLinkPairKey(first.key, second.key))) {
-        setEditor((old) => ({ ...old, individualLinks: [...old.individualLinks, { from_slot_key: first.key, to_slot_key: second.key }] }));
-        return;
-      }
-    }
-  };
   const save = async () => {
     if (saveDisabled) return;
     setError(undefined);
@@ -249,7 +215,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   };
   return <>
     <PageHeader title={title} description={description} notice={versionNotice && <p className="blueprint-editor__notice">{versionNotice}</p>} />
-    <div className="blueprint-composer blueprint-composer--authoring-workspace"><div className="blueprint-composer__workspace" inert={linksOpen || orderOpen || pairwiseOpen}>
+    <div className="blueprint-composer blueprint-composer--authoring-workspace"><div className="blueprint-composer__workspace" inert={linksOpen || orderOpen}>
       <section className="blueprint-editor-controls blueprint-composer__properties">
         <div className="blueprint-editor-controls__row">
           <label>{t('blueprint.editor.name')}<input value={editor.name} onChange={(e) => setEditor({ ...editor, name: e.target.value })} /></label>
@@ -264,7 +230,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         </div>
         <label>{t('blueprint.editor.color')}<input type="color" value={editor.fillColor} onChange={(e) => setEditor({ ...editor, fillColor: e.target.value })} /></label>
         <section className="blueprint-composer__section blueprint-composer__links"><h2>{t('blueprint.composition.links')}</h2>
-          <button ref={linksEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setLinksOpen(true); }}>{t('blueprint.composition.editLinks', { count: editor.individualLinks.length })}</button>
+          <button ref={linksEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setLinksOpen(true); }}>{t('endpointWorkspace.title')} · {editor.individualLinks.length}</button>
         </section>
         {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
         <button type="button" className="primary-action" disabled={saveDisabled} onClick={() => void save()}>{saveLabel}</button>
@@ -314,7 +280,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
             changeBay(selectedBay.bay_key, patch);
             if (patch.panel_key) { activatePanel(patch.panel_key); setSelectedBayKey(selectedBay.bay_key); }
           }} onRemove={() => { setEditor(old => ({ ...old, bays: old.bays?.filter(bay => bay.bay_key !== selectedBay.bay_key) })); setSelectedBayKey(undefined); }} />}
-          {!selectedBay && <><button ref={pairwiseEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setPairwiseOpen(true); }}>{t('blueprint.pairwise.open')} · A: {capturedA.length} · B: {capturedB.length}</button>
+          {!selectedBay && <>
           {!orderedMode ? <button type="button" className="secondary-action" onClick={() => { clearPanelUi(); setOrderedMode(true); }}>{t('blueprint.order.enter')}</button> : <>
             <span>{t('blueprint.order.count', { count: orderedKeys.length })}</span>
             <button ref={orderEntry} type="button" className="secondary-action" onClick={() => setOrderOpen(true)}>{t('blueprint.order.edit')}</button>
@@ -345,14 +311,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     {orderOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-order-title">
       <div className="catalog-dialog__surface blueprint-order-dialog">
         <h2 id="blueprint-order-title">{t('blueprint.order.edit')}</h2>
-        <div className="blueprint-pairwise__captures">
-          <span role="status">A: {captureStatus(capturedA)}</span>
-          <button type="button" disabled={!canCapture} onClick={() => setCapturedA([...orderedKeys])}>{t('blueprint.pairwise.captureA')}</button>
-          <button type="button" disabled={!capturedA.length} onClick={() => setCapturedA([])}>{t('blueprint.pairwise.clearA')}</button>
-          <span role="status">B: {captureStatus(capturedB)}</span>
-          <button type="button" disabled={!canCapture} onClick={() => setCapturedB([...orderedKeys])}>{t('blueprint.pairwise.captureB')}</button>
-          <button type="button" disabled={!capturedB.length} onClick={() => setCapturedB([])}>{t('blueprint.pairwise.clearB')}</button>
-        </div>
         <div className="blueprint-order-dialog__parameters">
           {(['mask', 'start', 'step'] as const).map((field) => <label key={field}>{t(`blueprint.naming.${field}`)}<input type={field === 'mask' ? 'text' : 'number'} step={field === 'mask' ? undefined : '1'} value={naming[field]} onChange={(event) => setNaming((old) => ({ ...old, [field]: event.target.value }))} /></label>)}
         </div>
@@ -379,49 +337,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         </div>
       </div>
     </section>}
-    {pairwiseOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-pairwise-title">
-      <div className="catalog-dialog__surface blueprint-pairwise-dialog">
-        <h2 id="blueprint-pairwise-title">{t('blueprint.pairwise.open')}</h2>
-        <div className="blueprint-pairwise__captures">
-          <span role="status">A: {captureStatus(capturedA)}</span>
-          <button type="button" disabled={!capturedA.length} onClick={() => setCapturedA([])}>{t('blueprint.pairwise.clearA')}</button>
-          <span role="status">B: {captureStatus(capturedB)}</span>
-          <button type="button" disabled={!capturedB.length} onClick={() => setCapturedB([])}>{t('blueprint.pairwise.clearB')}</button>
-        </div>
-        <label><input type="checkbox" checked={reverseB} onChange={(event) => setReverseB(event.target.checked)} />{t('blueprint.pairwise.reverseB')}</label>
-        {pairwise.error && <p role="alert">{t(`blueprint.pairwise.error.${pairwise.error}`)}</p>}
-        <div className="blueprint-pairwise-dialog__list">
-          {pairwise.pairs.map((pair, index) => <div key={index} className="blueprint-pairwise-dialog__row" data-pairwise-row>
-            <span>{index + 1}</span><span>{endpointLabel(pair.from_slot_key)}</span><span>↔</span><span>{endpointLabel(pair.to_slot_key)}</span>
-          </div>)}
-        </div>
-        <div className="catalog-dialog__actions">
-          <button type="button" disabled={Boolean(pairwise.error)} onClick={applyPairwise}>{t('blueprint.pairwise.apply')}</button>
-          <button type="button" autoFocus onClick={() => setPairwiseOpen(false)}>{t('action.close')}</button>
-        </div>
-      </div>
-    </section>}
-    {linksOpen && <section className="catalog-dialog" role="dialog" aria-modal="true" aria-labelledby="blueprint-links-title">
-      <div className="catalog-dialog__surface blueprint-links-dialog">
-        <h2 id="blueprint-links-title">{t('blueprint.composition.links')}</h2>
-        <div className="blueprint-links-dialog__bulk">
-          <button type="button" disabled={!editor.individualLinks.length} onClick={() => setSelectedLinks(new Set(editor.individualLinks.map((_, index) => index)))}>{t('blueprint.links.selectAll')}</button>
-          <button type="button" disabled={!selectedLinks.size} onClick={() => setSelectedLinks(new Set())}>{t('blueprint.links.clearSelection')}</button>
-          <button type="button" disabled={!selectedLinks.size} onClick={() => { setEditor((old) => ({ ...old, individualLinks: old.individualLinks.filter((_, index) => !selectedLinks.has(index)) })); setSelectedLinks(new Set()); }}>{t('blueprint.links.deleteSelected', { count: selectedLinks.size })}</button>
-        </div>
-        <div className="blueprint-links-dialog__list">
-          {editor.individualLinks.map((link, index) => <div className="blueprint-composer__link" key={index}>
-            <input type="checkbox" aria-label={t('blueprint.links.selectRow', { index: index + 1 })} checked={selectedLinks.has(index)} onChange={(event) => { const next = new Set(selectedLinks); if (event.target.checked) next.add(index); else next.delete(index); setSelectedLinks(next); }} />
-            {(['from_slot_key', 'to_slot_key'] as const).map((field) => <label key={field} className="blueprint-links-dialog__endpoint">{field === 'to_slot_key' && <span aria-hidden="true" className="blueprint-links-dialog__separator">↔</span>}<select key={field} aria-label={t(field === 'from_slot_key' ? 'blueprint.composition.firstLink' : 'blueprint.composition.secondLink', { index: index + 1 })} value={link[field]} onChange={(e) => { setSelectedLinks(new Set()); setEditor((old) => ({ ...old, individualLinks: old.individualLinks.map((item, i) => i === index ? { ...item, [field]: e.target.value } : item) })); }}>{editor.slots.map((slot) => <option key={slot.key} value={slot.key}>{slot.display_name} · {editor.panels.find((panel) => panel.panel_key === slot.panel_key)?.display_name}</option>)}</select></label>)}
-            <button type="button" className="text-action" onClick={() => { setSelectedLinks(new Set()); setEditor((old) => ({ ...old, individualLinks: old.individualLinks.filter((_, i) => i !== index) })); }}>{t('blueprint.composition.remove')}</button>
-          </div>)}
-        </div>
-        <div className="catalog-dialog__actions">
-          <button type="button" disabled={editor.slots.length < 2} onClick={addLink}>{t('blueprint.composition.addLink')}</button>
-          <button type="button" autoFocus onClick={closeLinks}>{t('action.close')}</button>
-        </div>
-      </div>
-    </section>}
-
+    {linksOpen && <EndpointLinkWorkspace state={editor} onChange={setEditor} onClose={closeLinks} />}
   </>;
 }

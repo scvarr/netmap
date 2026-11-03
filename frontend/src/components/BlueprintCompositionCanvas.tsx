@@ -189,6 +189,11 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
     }}>
       <circle data-endpoint-hit-target cx={point.x} cy={point.y} r={marker.hit} fill="transparent" pointerEvents="all" />
       <circle data-endpoint-marker cx={point.x} cy={point.y} r={selected ? marker.selected : marker.regular} fill={slot.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'} stroke={highlightedKey === slot.key ? '#ff7b22' : selected ? '#fff' : '#1c3135'} strokeWidth={highlightedKey === slot.key ? 5 : 2} vectorEffect="non-scaling-stroke"><title>{slot.display_name}</title></circle>
+      <text data-endpoint-name pointerEvents="none" x={point.x} y={point.y + 13 / canvasScale} textAnchor="middle" fontSize={8.5 / canvasScale} fill="#fff" stroke="#102326" strokeWidth={2 / canvasScale} paintOrder="stroke"><title>{slot.display_name}</title>{(() => {
+        const nearest = Math.min(...slots.filter(other => other.key !== slot.key && other.panel_key === slot.panel_key && Math.abs(points.get(other.key)!.y - point.y) * canvasScale < 16).map(other => Math.abs(points.get(other.key)!.x - point.x) * canvasScale), 160);
+        const chars = Math.max(2, Math.floor((nearest - 3) / 5));
+        return slot.display_name.length <= chars ? slot.display_name : `${slot.display_name.slice(0, chars - 1)}…`;
+      })()}</text>
       {sequence !== undefined && sequence >= 0 && <g data-endpoint-sequence={sequence + 1} pointerEvents="none" transform={`translate(${point.x + 9 / canvasScale} ${point.y - 9 / canvasScale}) scale(${1 / canvasScale})`}>
         <rect x="-8" y="-7" width="16" height="14" rx="3" fill="#12272b" />
         <text textAnchor="middle" dominantBaseline="central" fill="#fff" fontSize="10">{sequence + 1}</text>

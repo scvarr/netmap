@@ -739,3 +739,18 @@ a { color: inherit; }
 .blueprint-order-dialog__row:nth-child(even) { background: #20383d; }
 .blueprint-order-dialog__row:hover { background: #2c4b52; }
 .blueprint-order-dialog__row[data-active="true"] { border-color: #ff7b22; background: #304a50; }
+.endpoint-workspace { box-sizing: border-box; min-width: 0; width: min(1200px, 95vw); max-height: 90vh; overflow: auto; }
+.endpoint-workspace__columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
+.endpoint-workspace__tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.endpoint-workspace__tools label { flex: 1; min-width: 80px; }
+.endpoint-workspace__tools input { width: 100%; box-sizing: border-box; }
+.endpoint-workspace__list { max-height: 38vh; overflow: auto; }
+.endpoint-workspace__row { display: grid; grid-template-columns: minmax(100px,1fr) auto auto; gap: 5px; padding: 7px; border-bottom: 1px solid #294145; }
+.endpoint-workspace__row label, .endpoint-workspace__row small, .endpoint-workspace__row span { grid-column: 1; overflow-wrap: anywhere; }
+.endpoint-workspace__row button { grid-row: 1; }
+.endpoint-workspace__preview { max-height: 22vh; overflow: auto; margin: 10px 0; font-size: 12px; }
+.endpoint-workspace__preview label { display: inline-flex; align-items: center; }
+.endpoint-workspace button, .blueprint-order-dialog button { padding: 7px 10px; border: 1px solid #35575b; border-radius: 6px; color: #cfe1de; background: #102326; cursor: pointer; }
+.endpoint-workspace button:hover, .endpoint-workspace button:focus-visible, .blueprint-order-dialog button:hover, .blueprint-order-dialog button:focus-visible { border-color: #55e5b5; outline: 2px solid #35575b; }
+.endpoint-workspace button:disabled, .blueprint-order-dialog button:disabled { opacity: .45; cursor: not-allowed; }
+@media(max-width:700px) { .endpoint-workspace__columns { grid-template-columns: 1fr; } }

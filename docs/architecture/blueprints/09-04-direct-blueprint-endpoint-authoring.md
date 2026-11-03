@@ -141,11 +141,12 @@ technology/capability. That question remains **OPEN**.
 ## Internal links and dense authoring
 
 The editor retains individual endpoint-to-endpoint internal links. For dense
-one-to-one continuity, the **IMPLEMENTED (D2)** editor supports capturing ordered sets A and B, previewing
-pairing, and applying the links. A patch panel can pair FRONT 1..24 with REAR
+one-to-one continuity, the **IMPLEMENTED (D2)** editor provides two independently panel-scoped ordered endpoint lists A and B,
+previewing pairing, and applying the links. The same panel may appear on both
+sides. These lists also offer bulk naming directly; canvas context naming remains. A patch panel can pair FRONT 1..24 with REAR
 1..24. Persist only the resulting exact Blueprint internal links; temporary
 pairing sets and named link groups are not domain entities. Reverse pairing is
-a transient editor convenience. Captures copy slot-key snapshots; apply is atomic
+a transient editor convenience. Selections retain slot keys; apply is atomic
 and rejects self-links, missing endpoints, duplicate undirected pairs, and existing
 link conflicts. Only ordinary `BlueprintInternalLink` records persist.
 
