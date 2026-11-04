@@ -6,6 +6,13 @@ export const localeStorageKey = 'netmap.locale';
 
 const messages = {
   ru: {
+    'endpointWorkspace.operations': 'Порты и операции',
+    'endpointWorkspace.existing': 'Существующие связи',
+    'endpointWorkspace.sort': 'Сортировка',
+    'endpointWorkspace.sort.name': 'По имени',
+    'endpointWorkspace.sort.spatial': 'По расположению',
+    'endpointWorkspace.sort.manual': 'Вручную',
+
     'endpointWorkspace.allLinks': 'Все связи',
     'endpointWorkspace.title': 'Порты и внутренние связи', 'endpointWorkspace.natural': 'По имени (1, 2, 10)', 'endpointWorkspace.applied': 'Связи созданы; результат показан ниже',
     'moduleGeometry.title': 'Геометрия модуля',
@@ -115,6 +122,13 @@ const messages = {
     'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
+    'endpointWorkspace.operations': 'Ports and operations',
+    'endpointWorkspace.existing': 'Existing links',
+    'endpointWorkspace.sort': 'Sort',
+    'endpointWorkspace.sort.name': 'By name',
+    'endpointWorkspace.sort.spatial': 'By position',
+    'endpointWorkspace.sort.manual': 'Manual',
+
     'endpointWorkspace.allLinks': 'All links',
     'endpointWorkspace.title': 'Ports and internal links', 'endpointWorkspace.natural': 'By name (1, 2, 10)', 'endpointWorkspace.applied': 'Links created; results shown below',
     'moduleGeometry.title': 'Module geometry',

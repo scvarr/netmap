@@ -22,25 +22,55 @@ function setup(count = 2) {
   return { ...view, initial, latest: () => latest, side, selectAll };
 }
 describe('unified endpoint workspace', () => {
+  it('automatically resorts renamed endpoints while preserving selection by key',()=>{
+    const s=setup();
+    const first=s.side('A').getAllByRole('checkbox')[0]; fireEvent.click(first);
+    const key=first.closest('[data-endpoint-row]')!.getAttribute('data-endpoint-row');
+    fireEvent.change(s.side('A').getByLabelText('Начальный номер'),{target:{value:'99'}});
+    fireEvent.click(s.side('A').getByRole('button',{name:'Применить имена'}));
+    const rows=screen.getByRole('region',{name:'A'}).querySelectorAll('[data-endpoint-row]');
+    expect(rows[1]).toHaveAttribute('data-endpoint-row',key);
+    expect(rows[1].querySelector('input')).toBeChecked();
+    expect(s.latest().slots.find(s=>s.key===key)?.display_name).toBe('99');
+  });
+  it('keeps selected identities across tabs and applies the visible naming preview before resorting',()=>{
+    const s=setup(3); s.selectAll('A');
+    const before=[...screen.getByRole('region',{name:'A'}).querySelectorAll('[data-endpoint-row]')].map(e=>e.getAttribute('data-endpoint-row'));
+    fireEvent.change(s.side('A').getByLabelText('Маска (#, ##, GE-##)'),{target:{value:'#'}});
+    fireEvent.change(s.side('A').getByLabelText('Начальный номер'),{target:{value:'-1'}});
+    fireEvent.click(screen.getByRole('tab',{name:/Существующие связи/}));
+    expect(screen.queryByRole('region',{name:'A'})).toBeNull();
+    fireEvent.click(screen.getByRole('tab',{name:'Порты и операции'}));
+    expect(s.side('A').getAllByRole('checkbox').every(e=>(e as HTMLInputElement).checked)).toBe(true);
+    fireEvent.click(s.side('A').getByRole('button',{name:'Применить имена'}));
+    before.forEach((key,i)=>expect(s.latest().slots.find(s=>s.key===key)?.display_name).toBe(String(i-1)));
+    expect(s.latest().slots.map(s=>[s.key,s.panel_key,s.rendered_position])).toEqual(s.initial.slots.map(s=>[s.key,s.panel_key,s.rendered_position]));
+    expect(s.side('A').getByLabelText('Сортировка')).toHaveValue('name');
+  });
   it('exposes other-panel links through All links and retains single-row type accessibility', () => {
     const s = setup(); s.selectAll('A'); s.selectAll('B');
     fireEvent.click(screen.getByRole('button',{name:'Создать связи'}));
+    fireEvent.click(screen.getByRole('tab',{name:/Существующие связи/}));
     expect(document.querySelectorAll('[data-link-row]')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('tab',{name:'Порты и операции'}));
     fireEvent.change(s.side('B').getByRole('combobox',{name:'B'}),{target:{value:s.initial.activePanelKey}});
+    expect(s.side('A').getAllByRole('img',{name:'Точка подключения'})).toHaveLength(2);
+    fireEvent.click(screen.getByRole('tab',{name:/Существующие связи/}));
     expect(document.querySelectorAll('[data-link-row]')).toHaveLength(0);
     fireEvent.click(screen.getByRole('checkbox',{name:'Все связи'}));
     expect(document.querySelectorAll('[data-link-row]')).toHaveLength(2);
-    expect(s.side('A').getAllByRole('img',{name:'Точка подключения'})).toHaveLength(2);
   });
   it('keeps panel orders independent, supports numeric and manual order and spatial reversal', () => {
     const s = setup();
     const rows = (name: string) => [...screen.getByRole('region', {name}).querySelectorAll('[data-endpoint-row]')].map(n => n.getAttribute('data-endpoint-row'));
     const b = rows('B');
-    fireEvent.click(s.side('A').getByRole('button', {name:'По имени (1, 2, 10)'}));
+    expect(s.side('A').getByLabelText('Сортировка')).toHaveValue('name');
     expect(rows('A')).toEqual([s.initial.slots[1].key,s.initial.slots[0].key]); expect(rows('B')).toEqual(b);
+    fireEvent.change(s.side('A').getByLabelText('Сортировка'),{target:{value:'manual'}});
     fireEvent.click(s.side('A').getByRole('button', {name:'Ниже: 1'})); expect(rows('A')[0]).toBe(s.initial.slots[0].key);
+    fireEvent.change(s.side('B').getByLabelText('Сортировка'),{target:{value:'spatial'}});
     fireEvent.change(s.side('B').getByLabelText('По горизонтали'), {target:{value:'rtl'}});
-    fireEvent.click(s.side('B').getByRole('button', {name:'Применить пространственный порядок'})); expect(rows('B')).toEqual([...b].reverse());
+    expect(rows('B')).toEqual([...b].reverse());
   });
   it('previews and atomically creates links, preserves identity and links on rename, removes selected links', () => {
     const s = setup(24); s.selectAll('A'); s.selectAll('B');
@@ -52,7 +82,8 @@ describe('unified endpoint workspace', () => {
     expect(s.latest().individualLinks).toBe(linked.individualLinks);
     expect(s.latest().slots.map(s => [s.key,s.panel_key,s.rendered_position])).toEqual(linked.slots.map(s => [s.key,s.panel_key,s.rendered_position]));
     expect(screen.getByRole('button',{name:'Создать связи'})).toBeDisabled();
-    const all = screen.getAllByRole('button',{name:'Выбрать все'}); fireEvent.click(all[2]);
+    fireEvent.click(screen.getByRole('tab',{name:/Существующие связи/}));
+    fireEvent.click(screen.getByRole('button',{name:'Выбрать все'}));
     fireEvent.click(screen.getByRole('button',{name:/Удалить выбранные/})); expect(s.latest().individualLinks).toHaveLength(0);
   });
   it('allows same-panel single links and multiple different links per endpoint; blocks self and duplicates', () => {

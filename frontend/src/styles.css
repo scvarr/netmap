@@ -758,3 +758,6 @@ a { color: inherit; }
 .endpoint-workspace button:hover, .endpoint-workspace button:focus-visible, .blueprint-order-dialog button:hover, .blueprint-order-dialog button:focus-visible { border-color: #55e5b5; outline: 2px solid #35575b; }
 .endpoint-workspace button:disabled, .blueprint-order-dialog button:disabled { opacity: .45; cursor: not-allowed; }
 @media(max-width:700px) { .endpoint-workspace__columns { grid-template-columns: 1fr; } }
+.endpoint-workspace__row[data-manual="false"] { grid-template-columns: minmax(65px,1fr) 20px minmax(0,.7fr) minmax(50px,1fr); }
+.endpoint-workspace__tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+.endpoint-workspace__tabs [aria-selected="true"] { border-color: #55e5b5; background: #15372f; }
