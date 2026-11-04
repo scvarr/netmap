@@ -26,8 +26,7 @@ const renderPage = (details: any, disconnect = vi.fn(), projection = vi.fn().moc
 const detail = (attachments: any[] | undefined) => ({ schema_version: "1.0", physical_object: { source_ref: ref("PhysicalObject", "object"), label: "Object" }, connection_points: [{ connection_point_ref: ref("ConnectionPoint", "port"), label: "P1", cardinality: 1, external_physical_attachments: attachments }], owned_interface_count: 0, gaps: [], warnings: [] });
 
 describe("MapPage UX.7 context menu", () => {
-  it("uses the derived module endpoint name in detached port menu and wiring source", async () => {
-    const contextualName = 'Back / PCIe2 / feth1';
+  it.each(['Back / PCIe2 / feth1', 'Renamed base port'])("uses the derived endpoint name %s in detached port menu and wiring source", async (contextualName) => {
     const moduleNode = { ...object, attributes: { ...object.attributes, connection_points: [{ connection_point_id: 'port', display_name: contextualName, cardinality: 1, external_connection_count: 0 }] } };
     const details = detail([]); details.connection_points[0].label = contextualName;
     renderPage(details, vi.fn(), vi.fn().mockResolvedValue({ ...document, nodes: [moduleNode] }));

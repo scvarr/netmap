@@ -7,7 +7,7 @@ from sqlalchemy import and_, select
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
 from app.models import (ModuleEndpointMapping, ModuleEndpointDefinition,
                         ModuleInstallation, ObjectConfiguration, ModuleBay,
-                        PresentationPanel)
+                        PresentationPanel, BuiltInEndpointMapping, BuiltInEndpointDefinition)
 
 
 def module_endpoint_contexts(session, *, connection_point_ids=None,
@@ -49,18 +49,29 @@ class EndpointDisplayName:
 
 
 class EndpointNames:
-    """Detached names: module context takes precedence; built-in aliases stay intact."""
+    """Derived template names with canonical aliases retained as read context."""
     def __init__(self, session):
         self.session = session
 
+    def _built_in_names(self, ids, field):
+        mapping_field = getattr(BuiltInEndpointMapping, field)
+        query = (select(mapping_field, BuiltInEndpointDefinition.display_name)
+                 .join(BuiltInEndpointDefinition, BuiltInEndpointDefinition.id == BuiltInEndpointMapping.definition_id)
+                 .join(ObjectConfiguration, and_(ObjectConfiguration.id == BuiltInEndpointMapping.configuration_id,
+                       ObjectConfiguration.base_revision_id == BuiltInEndpointDefinition.base_revision_id))
+                 .where(mapping_field.in_(ids)))
+        return {entity_id: EndpointDisplayName(name, {}) for entity_id, name in self.session.execute(query)}
+
     def connection_points(self, ids) -> dict[uuid.UUID, DisplayAliasRecord | EndpointDisplayName]:
         names = DeviceCatalog(self.session).connection_point_display_aliases(ids)
+        names.update(self._built_in_names(ids, "connection_point_id"))
         for context in module_endpoint_contexts(self.session, connection_point_ids=ids):
             names[uuid.UUID(context["connection_point_id"])] = EndpointDisplayName(context["contextual_display_name"], context)
         return names
 
     def network_interfaces(self, ids) -> dict[uuid.UUID, DisplayAliasRecord | EndpointDisplayName]:
         names = DeviceCatalog(self.session).network_interface_display_aliases(ids)
+        names.update(self._built_in_names(ids, "network_interface_id"))
         for context in module_endpoint_contexts(self.session, network_interface_ids=ids):
             names[uuid.UUID(context["network_interface_id"])] = EndpointDisplayName(context["contextual_display_name"], context)
         return names

@@ -29,6 +29,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
             cable.connection_id: cable
             for cable in self.repository.session.scalars(select(Cable))
         }
+        canonical_aliases = catalog.connection_point_display_aliases(list(point_ids))
         point_aliases = EndpointNames(self.repository.session).connection_points(list(endpoint_ids | point_ids))
         object_ids = {point_by_id[endpoint].physical_object_id for endpoint in endpoint_ids}
         object_aliases = catalog.physical_object_display_aliases(list(object_ids | {physical_object_id}))
@@ -39,13 +40,13 @@ class ConfiguredPhysicalObjectDetailsResolver:
         interface_ids = {binding.interface_id for values in bindings_by_point.values() for binding in values}
         interface_aliases = EndpointNames(self.repository.session).network_interfaces(list(interface_ids))
         provenance, slots = self._blueprint_instance(physical_object_id)
-        details = [self._point_details(point, point_aliases.get(point.point_id), incident, point_by_id, point_aliases, object_aliases, bindings_by_point[point.point_id], interface_aliases, slots.get(point.point_id), cables_by_connection) for point in points]
+        details = [self._point_details(point, point_aliases.get(point.point_id), incident, point_by_id, point_aliases, object_aliases, bindings_by_point[point.point_id], interface_aliases, slots.get(point.point_id), cables_by_connection, canonical_aliases.get(point.point_id)) for point in points]
         details.sort(key=lambda value: self._natural_key(value.ordering_key))
         owners = tuple(owner for owner in self.repository.get_network_interface_physical_owners() if owner.physical_object_id == physical_object_id)
         object_alias = object_aliases.get(physical_object_id)
         return PhysicalObjectDetailsDocument(physical_object=PhysicalObjectDetails(source_ref=self._ref("PhysicalObject", physical_object_id), label=self._label(object_alias, "PhysicalObject", physical_object_id), label_source=None if object_alias else "TECHNICAL_FALLBACK", class_=(object_class.value if object_class else None)), blueprint_provenance=provenance, connection_points=details, owned_interface_count=len(owners), gaps=[], warnings=[])
 
-    def _point_details(self, point, alias, incident, point_by_id, point_aliases, object_aliases, bindings, interface_aliases, slot, cables_by_connection):
+    def _point_details(self, point, alias, incident, point_by_id, point_aliases, object_aliases, bindings, interface_aliases, slot, cables_by_connection, canonical_alias):
         point_members = [member for member in incident if point.point_id in (member.point_a_id, member.point_b_id)]
         refs = [self._ref("ConnectionPoint", point.point_id)]
         if alias and alias.metadata_id: refs.append(self._ref("EntityMetadata", alias.metadata_id))
@@ -80,7 +81,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
                 remote_connection_point_ref=self._ref("ConnectionPoint", peer_point_id),
                 remote_connection_point_label=self._label(point_aliases.get(peer_point_id), "ConnectionPoint", peer_point_id),
             ))
-        return ConnectionPointDetails(connection_point_ref=self._ref("ConnectionPoint", point.point_id), label=self._label(alias, "ConnectionPoint", point.point_id), label_source=None if alias else "TECHNICAL_FALLBACK", cardinality=point.cardinality, incident_connection_count=len({member.connection_id for member in point_members}), external_connection_count=len(external_connections), direct_interface_binding_count=len(bindings), ordering_key=slot.slot_key if slot else self._label(alias, "ConnectionPoint", point.point_id), blueprint_slot=slot, direct_interface_bindings=direct_bindings, internal_physical_counterparts=internal, external_physical_attachments=external, source_refs=self._dedupe_refs(refs))
+        return ConnectionPointDetails(canonical_label=(canonical_alias.value if canonical_alias else None), connection_point_ref=self._ref("ConnectionPoint", point.point_id), label=self._label(alias, "ConnectionPoint", point.point_id), label_source=None if alias else "TECHNICAL_FALLBACK", cardinality=point.cardinality, incident_connection_count=len({member.connection_id for member in point_members}), external_connection_count=len(external_connections), direct_interface_binding_count=len(bindings), ordering_key=slot.slot_key if slot else self._label(alias, "ConnectionPoint", point.point_id), blueprint_slot=slot, direct_interface_bindings=direct_bindings, internal_physical_counterparts=internal, external_physical_attachments=external, source_refs=self._dedupe_refs(refs))
 
     def _blueprint_instance(self, object_id):
         row = self.repository.session.execute(select(ObjectConfiguration, BaseTemplateRevision, BaseTemplate).join(BaseTemplateRevision, BaseTemplateRevision.id == ObjectConfiguration.base_revision_id).join(BaseTemplate, BaseTemplate.id == BaseTemplateRevision.template_id).where(ObjectConfiguration.physical_object_id == object_id)).one_or_none()

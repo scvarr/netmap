@@ -389,6 +389,7 @@ export function PhysicalObjectDetailsSection({
           <details className="technical-details physical-object-details__technical">
             <summary>{t('physical.objectTechnical')}</summary>
             <SourceRefs refs={[state.document.physical_object.source_ref]} />
+            {state.document.connection_points.map(point => <p key={point.connection_point_ref.entity_id}><code>{point.connection_point_ref.entity_id}</code> · {point.canonical_label}</p>)}
           </details></>
         </>
       )}

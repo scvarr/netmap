@@ -600,6 +600,7 @@ class ExternalPhysicalAttachmentDetails(BaseModel):
 
 
 class ConnectionPointDetails(BaseModel):
+    canonical_label: str | None = None
     model_config = ConfigDict(extra="forbid")
 
     connection_point_ref: ProjectionSourceRef

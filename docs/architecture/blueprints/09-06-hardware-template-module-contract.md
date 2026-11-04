@@ -741,3 +741,25 @@ HV-01 **not PASSED**.
   bounded movement, proportional resize, port projection, save/cancel/reset and
   retained drafts after server errors/conflicts. TypeScript/Vite and diff checks
   are required. Full suites and manual HV-01 are outside this acceptance evidence.
+
+## Endpoint display name consistency correction (2026-11-04)
+
+Built-in endpoint read names follow BuiltInEndpointMapping.definition_id and the
+ObjectConfiguration pinned base revision. Publishing alone does not advance read
+names; successful D2 reconciliation does. Shared EndpointNames resolves CP/NI
+names in bounded batches for details, projection, connection peers and inventory.
+Canonical aliases remain unchanged and are exposed as read-only canonical_label
+in physical point details and shown under object technical details. Graphical
+module names remain local; detached module names remain contextual.
+
+Phase C remains PAUSED; HV-01 remains NOT PASSED. External inspection of this
+correction is required; this change does not alter D2/E3 or canonical topology.
+
+Validation: Docker/PostgreSQL targeted backend checks: 19 passed (new pinned-name
+read test, hardware configuration/module naming, device details and catalog
+inventory). Frontend: 24 passed (physical details/channel refresh, endpoint picker,
+read adapter and derived base/module map menus/wiring source). Docker TypeScript
+and Vite build passed; git diff --check passed. GitNexus detect_changes reports
+critical reach through the shared read resolver; no incomplete result reported.
+Full suites were not run. Browser verification of an existing two-panel 24-port
+object was not performed; manual HV-01 and external diff inspection remain open.

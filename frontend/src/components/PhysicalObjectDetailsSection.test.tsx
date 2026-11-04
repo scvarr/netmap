@@ -15,6 +15,17 @@ const renderDetails = (value: PhysicalObjectDetailsDocument, props = {}) => rend
 const deferred = <T,>() => { let resolve!: (value: T) => void; return { promise: new Promise<T>((next) => { resolve = next; }), resolve }; };
 
 describe('PhysicalObjectDetailsSection ports', () => {
+  it('refreshes derived channel names while keeping canonical aliases in technical details', async () => {
+    const a = point('Renamed A', 'a', { canonical_label: '2-1', internal_physical_counterparts: [{ connection_point_ref: ref('ConnectionPoint', 'b'), label: 'Renamed B', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }] });
+    const b = point('Renamed B', 'b', { canonical_label: '3-1', internal_physical_counterparts: [{ connection_point_ref: ref('ConnectionPoint', 'a'), label: 'Renamed A', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }] });
+    const source = { loadPhysicalObjectDetails: vi.fn() };
+    const view = render(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={source} document={document([a, b])} /></MemoryRouter>);
+    expect(await screen.findByRole('cell', { name: 'Renamed A' })).toBeInTheDocument();
+    expect(screen.getByText(/2-1/)).toBeInTheDocument();
+    view.rerender(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={source} document={document([{ ...a, label: 'Updated A' }, b])} /></MemoryRouter>);
+    expect(await screen.findByRole('cell', { name: 'Updated A' })).toBeInTheDocument();
+    expect(screen.queryByRole('cell', { name: 'Renamed A' })).not.toBeInTheDocument();
+  });
   it('renders module contextual names for physical ports, bound interfaces and remote attachments', async () => {
     const first = 'Back / PCIe1 / feth1'; const second = 'Back / PCIe2 / feth1';
     renderDetails(document([

@@ -9,6 +9,7 @@ export interface PhysicalObjectDetails {
 }
 
 export interface ConnectionPointDetails {
+  canonical_label?: string;
   connection_point_ref: ProjectionSourceRef;
   label: string;
   label_source?: 'TECHNICAL_FALLBACK';
