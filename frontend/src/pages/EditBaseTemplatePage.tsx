@@ -74,13 +74,15 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
   };
   const review = document?.review;
   const current = review?.current && !dirty && !revalidating && !error;
-  return <PageShell className="catalog-page blueprint-editor-page">
+  return <PageShell className="catalog-page blueprint-editor-page base-template-edit-page">
     <Link to="/library/base-templates">{t('blueprint.breadcrumb.library')}</Link>
-    {document?.publication_state && <section aria-label={t('publication.state')}>
+    {document?.publication_state && <section className="base-template-publication" aria-label={t('publication.state')}>
+      <div className="base-template-summary">
       <p>{t('publication.revision', { number: document.publication_state.version_number })}</p>
       <p>{t('publication.outdated', { count: document.publication_state.outdated_count })}</p>
       <p>{t('publication.awaiting', { count: document.publication_state.awaiting_update_count })}</p>
       <p>{t('publication.intervention', { count: document.publication_state.requires_intervention_count })}</p>
+      </div>
       <button className="primary-action" type="button" disabled={busy || revalidating || !dataSource.reconcileObjects} onClick={() => {
         setBusy(true); setError(''); setReconciliation(undefined);
         void dataSource.reconcileObjects!(templateId).then(async result => {
@@ -89,13 +91,18 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
           await refresh();
         }).catch(e => setError(String(e))).finally(() => setBusy(false));
       }}>{t('reconciliation.run')}</button>
-      {reconciliation && <section aria-label={t('reconciliation.results')}>
-        <h2>{t('reconciliation.results')}</h2>
+      {reconciliation && <details className="base-template-details">
+        <summary>{t('reconciliation.results')} · {(['updated', 'already_current', 'requires_intervention'] as const).map(status => `${status}: ${reconciliation.objects.filter(object => object.status === status).length}`).join(' · ')}</summary>
+        <div className="base-template-details__body">
         <ul>{reconciliation.objects.map(object => <li key={object.physical_object_id}>
           <Link to={`/infrastructure/objects/${object.physical_object_id}`}>{object.display_name ?? object.physical_object_id}</Link>: {t(object.status === 'updated' ? 'reconciliation.updated' : object.status === 'already_current' ? 'reconciliation.current' : 'review.attention')}
           <ul>{object.reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}</ul>
         </li>)}</ul>
-      </section>}
+        </div>
+      </details>}
+      <details className="base-template-details">
+      <summary>{t('publication.objects')} · {document.publication_state.current_objects.length + document.publication_state.objects.length}</summary>
+      <div className="base-template-details__body">
       <ul>{document.publication_state.current_objects.map(object => <li key={object.physical_object_id}>
         <Link to={`/infrastructure/objects/${object.physical_object_id}`}>{object.display_name}</Link>: {t('reconciliation.current')}
       </li>)}</ul>
@@ -103,18 +110,12 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
         <Link to={`/infrastructure/objects/${object.physical_object_id}`}>{object.display_name ?? object.physical_object_id}</Link>: {t(object.classification === 'requires_intervention' ? 'review.attention' : 'publication.waiting')}
         {object.classification === 'requires_intervention' && <ul>{object.reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}</ul>}
       </li>)}</ul>
+      </div>
+      </details>
     </section>}
     {error && <p role="alert">{error}</p>}
-    {initial && document && <BaseTemplateEditor key={templateId} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy} onStateChange={changed} onSave={async state => {
-      if (busy) return;
-      const result = createBlueprintRequest(state); if (!result.request) throw new Error(result.errors.join(' '));
-      setBusy(true); setError(''); setNotice('');
-      try { accept(await dataSource.saveDraft!(templateId, result.request, document.generation)); setNotice(t('review.saved')); }
-      catch (e) { setError(String(e)); throw e; }
-      finally { setBusy(false); }
-    }} />}
-    {notice && <p role="status">{notice}</p>}
-    {document && <section aria-label={t('review.impacts')}>
+    {document && <section className="base-template-review" aria-label={t('review.impacts')}>
+      <div className="base-template-review__actions">
       <button className="primary-action" type="button" disabled={busy || dirty} onClick={() => {
         setBusy(true); setError('');
         void dataSource.checkDraft!(templateId, document.generation).then(accept).catch(e => setError(String(e))).finally(() => setBusy(false));
@@ -128,10 +129,11 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
         }).catch(e => setError(String(e))).finally(() => setBusy(false));
       }}>{t('publication.publish')}</button>
       {dirty && <p>{t('review.unsaved')}</p>}
-      {review && <>
-        <h2>{t('review.impacts')}</h2>
+      </div>
+      {review && <details className="base-template-details">
+        <summary>{t('review.impacts')} · {t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')} · {t('review.counts', { changes: review.result.changes.length, objects: review.result.objects.length })}</summary>
+        <div className="base-template-details__body">
         <p>{t('review.candidate', { id: review.candidate_id, time: review.created_at })}</p>
-        <p>{t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')}</p>
         <ul>{review.result.changes.map((c, i) => <li key={i}>{t(`review.section.${c.section}` as 'review.section.properties')} · {t(`review.operation.${c.operation}` as 'review.operation.changed')} · {Array.isArray(c.key) ? c.key.join(' ↔ ') : c.key}</li>)}</ul>
         {current && <>{review.result.objects.length === 0 && <p>{t('review.noObjects')}</p>}
           <ul>{review.result.objects.map(object => <li key={object.physical_object_id}>
@@ -139,7 +141,18 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
             <ul>{object.reasons.map((r, i) => <li key={i}>{reason(r)}</li>)}</ul>
             {Object.entries(object.proposed_placements).map(([installation, bay]) => <p key={installation}>{t('review.placement', { installation, bay })}</p>)}
           </li>)}</ul></>}
-      </>}
+        </div>
+      </details>}
     </section>}
+    {initial && document && <BaseTemplateEditor key={templateId} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy} onStateChange={changed} onSave={async state => {
+      if (busy) return;
+      const result = createBlueprintRequest(state); if (!result.request) throw new Error(result.errors.join(' '));
+      setBusy(true); setError(''); setNotice('');
+      try { accept(await dataSource.saveDraft!(templateId, result.request, document.generation)); setNotice(t('review.saved')); }
+      catch (e) { setError(String(e)); throw e; }
+      finally { setBusy(false); }
+    }} />}
+    {notice && <p role="status">{notice}</p>}
+
   </PageShell>;
 }

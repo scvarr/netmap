@@ -764,3 +764,24 @@ a { color: inherit; }
 
 .endpoint-workspace__existing-links { width: min(620px, 100%); }
 .endpoint-workspace__existing-links > .catalog-dialog__actions { justify-content: flex-start; flex-wrap: wrap; }
+
+/* C-UX-13: keep information bounded and let the edit page scroll naturally. */
+.route-content:has(> .base-template-edit-page) { height: auto; min-height: 100dvh; }
+.page-shell.base-template-edit-page { height: auto; max-height: none; min-height: 100dvh; gap: 12px; }
+.base-template-edit-page > * { flex: none; min-width: 0; }
+.base-template-summary, .base-template-review__actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.base-template-summary p, .base-template-review__actions p { margin: 0; }
+.base-template-publication, .base-template-review { display: grid; gap: 8px; }
+.base-template-publication > button { justify-self: start; }
+.base-template-details { min-width: 0; border: 1px solid #294145; border-radius: 8px; background: #0d2022; overflow-wrap: anywhere; }
+.base-template-details summary { padding: 8px 12px; cursor: pointer; font-size: 13px; }
+.base-template-details summary:hover { background: #173034; }
+.base-template-details summary:focus-visible { outline: 2px solid #69bfb2; outline-offset: 2px; }
+.base-template-details__body { max-height: 240px; overflow-y: auto; padding: 0 12px 8px; }
+.base-template-edit-page > .blueprint-composer--authoring-workspace { flex: none; min-height: 0; margin-top: 0; }
+.base-template-edit-page .blueprint-composer__workspace { height: auto; }
+.base-template-edit-page .blueprint-composer__properties,
+.base-template-edit-page .blueprint-composer__composition { overflow: visible; }
+.base-template-edit-page .blueprint-composer__canvas-wrap { flex: 1 0 320px; min-height: 320px; }
+.base-template-edit-page .blueprint-composer__contextual { flex: none; height: auto; min-height: 0; overflow: visible; }
+.base-template-edit-page .blueprint-composer__contextual:empty { display: none; }

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
@@ -59,14 +59,61 @@ describe('persisted base template review', () => {
     ],
   } });
 
+  it('bounds large disclosures, preserves edits and exposes summary counts', async () => {
+    const doc = withReview(outdated());
+    doc.publication_state!.objects = Array.from({ length: 200 }, (_, i) => ({ ...doc.publication_state!.objects[0], physical_object_id: `object-${i}`, display_name: `Object ${i}` }));
+    doc.publication_state!.outdated_count = 200;
+    const { mount } = setup(doc);
+    const view = mount();
+    const name = await screen.findByDisplayValue('Сохранённый черновик');
+    expect(screen.getByText('Объектов на прежних ревизиях: 200')).toBeInTheDocument();
+    expect(screen.getByText('Ожидают обновления: 1')).toBeInTheDocument();
+    expect(screen.getByText('Требуют вмешательства: 1')).toBeInTheDocument();
+    const objects = screen.getByText(/^Физические объекты/).closest('details')!;
+    const impacts = screen.getByText(/Изменения: 1 · Объекты: 1/).closest('details')!;
+    expect(objects.open).toBe(false);
+    expect(impacts.open).toBe(false);
+    expect(objects.querySelector('.base-template-details__body')).not.toBeNull();
+    fireEvent.change(name, { target: { value: 'Keep local work' } });
+    for (const details of [objects, impacts]) {
+      fireEvent.click(details.querySelector('summary')!);
+      expect(details.open).toBe(true);
+      fireEvent.click(details.querySelector('summary')!);
+      expect(details.open).toBe(false);
+    }
+    expect(screen.getByDisplayValue('Keep local work')).toBe(name);
+    expect(view.container.querySelector('.blueprint-composer__canvas-wrap')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+  });
+
+  it('keeps periodic revalidation pending until the server confirms freshness', async () => {
+    const { source, mount } = setup(withReview(draft()));
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const view = mount();
+    await screen.findByDisplayValue('Сохранённый черновик');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled());
+    try {
+      let resolve!: (doc: BaseTemplateDraftDocument) => void;
+      source.loadDraft.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+      await act(async () => { vi.advanceTimersByTime(15000); });
+      expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+      expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument();
+      const stale = withReview(draft()); stale.review!.current = false;
+      await act(async () => { resolve(stale); });
+      expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+    } finally { view.unmount(); vi.useRealTimers(); }
+  });
+
   it('runs reconciliation explicitly, reports each outcome and restores actual state and reasons after reload', async () => {
     const { source, mount } = setup(outdated());
     let view = mount();
     const run = await screen.findByRole('button', { name: 'Обновить совместимые объекты' });
+    fireEvent.click(screen.getByText(/^Физические объекты/));
     expect(source.reconcileObjects).not.toHaveBeenCalled();
     fireEvent.click(run);
     expect(run).toBeDisabled();
-    await screen.findByRole('heading', { name: 'Результаты обновления объектов' });
+    fireEvent.click(await screen.findByText(/^Результаты обновления объектов/));
     expect(source.reconcileObjects).toHaveBeenCalledExactlyOnceWith('base');
     expect(screen.getByText(/Обновлён/)).toBeInTheDocument();
     expect(screen.getAllByText(/Актуален/).length).toBeGreaterThan(0);
@@ -74,7 +121,8 @@ describe('persisted base template review', () => {
     await screen.findByText('Ожидают обновления: 0');
     view.unmount(); view = mount();
     await screen.findByText('Объектов на прежних ревизиях: 1');
-    expect(screen.queryByRole('heading', { name: 'Результаты обновления объектов' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Результаты обновления объектов/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText(/^Физические объекты/));
     expect(screen.getAllByText(/Актуален/)).toHaveLength(2);
     expect(screen.getByText(/канонические соединения, пользовательские имена или данные/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Blocked object' })).toHaveAttribute('href', '/infrastructure/objects/blocked');
@@ -92,7 +140,7 @@ describe('persisted base template review', () => {
     expect(screen.getByDisplayValue('Keep unsaved draft')).toBeInTheDocument();
     await waitFor(() => expect(run).toBeEnabled());
     fireEvent.click(run);
-    await screen.findByRole('heading', { name: 'Результаты обновления объектов' });
+    fireEvent.click(await screen.findByText(/^Результаты обновления объектов/));
     expect(screen.getByDisplayValue('Keep unsaved draft')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
   });
@@ -124,7 +172,7 @@ describe('persisted base template review', () => {
     expect(screen.getByText('Ожидают обновления: 1')).toBeInTheDocument();
     expect(screen.getByText('Требуют вмешательства: 0')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
-    expect(screen.getByText('Этот кандидат опубликован. Следующие изменения проверяются отдельно.')).toBeInTheDocument();
+    expect(screen.getByText(/Этот кандидат опубликован/)).toBeInTheDocument();
     view.unmount(); view = mount();
     expect(await screen.findByText('Текущая опубликованная ревизия: 2')).toBeInTheDocument();
     fireEvent.change(screen.getByDisplayValue('Сохранённый черновик'), { target: { value: 'Next edit' } });
