@@ -22,6 +22,15 @@ semantic completeness означает достаточную physical-domain fo
 основные L1 workflows. `L1 PRODUCT COMPLETE` означает practically usable
 standalone/multi-user application. L2 не начинается до второго checkpoint.
 
+## Необходимая pre-L2 capability: пользовательские справочники
+
+До L2 пользователь должен достоверно описывать собственную физическую сеть
+без изменения application code ради новых типов оборудования, портов или
+кабелей. [Контракт справочников](../product/user-reference-catalogs.md) фиксирует
+отдельную поверхность «Справочники» и создание значений непосредственно из форм.
+Это необходимая pre-L2 product capability, а не IMPLEMENTED возможность;
+порядок Phase A–I и gates не меняется. Phase C PAUSED; HV-01 NOT PASSED.
+
 ## Последовательный порядок
 
 ### Phase A — Known L1 correctness / workflow completion
@@ -190,6 +199,11 @@ roadmap не объявляется IMPLEMENTED и дальше не расши�
 speculative features. После этой фазы считать L1 network semantics/workflows
 sufficiently frozen для productization.
 
+Для достоверного L1 предусмотреть минимально необходимые пользовательские
+классификации портов/кабелей по контракту справочников. Точный bounded scope
+первой реализации OPEN; это отдельная работа от cardinality/member mapping
+и confirmed C-CAP-01, не расширение в speculative capabilities.
+
 ### Phase E — Pre-L2 UI/UX foundation
 
 Провести `UI/UX audit -> shared design-system primitives/archetypes` до
@@ -198,6 +212,11 @@ inventory/list, object detail, form/editor, catalog/library, canvas/workspace и
 modal/task flow. NetBox/Nautobot — reference only; Map/Blueprint остаются
 canvas/workspace archetypes. Не делать big-bang rewrite: определить primitives,
 state semantics, archetypes и migration slices.
+
+В shared UX предусмотреть единый раздел «Справочники», выбор и повторное
+использование записей, создание нового значения непосредственно из форм,
+переименование и безопасное управление используемыми значениями. Конкретные
+deletion/update rules остаются OPEN.
 
 ### Phase F — Pre-L2 application productization
 
@@ -217,6 +236,10 @@ implementation:
    multi-user writes; event sourcing не требуется. Domain-specific correctness
    history может появляться раньше generic history: `CableLabelHistory` — уже
    реализованный bounded пример такого исключения.
+
+Справочники должны получить workspace/access scope после согласования
+соответствующих контрактов; конкретная модель хранения и доступа здесь не
+предрешается.
 
 Не становятся MUST автоматически: fork, merge/compare, export/import, `.netmap`,
 Blueprint packages, comments/annotations, `PUBLIC_READ`/public links, groups,
@@ -246,6 +269,10 @@ representative data scale. После успешного gate объявить `
 и только затем начинать semantic L2.
 
 ## OPEN
+
+Для справочников отдельно OPEN: модель хранения, точный набор первой
+реализации, semantics ссылок из immutable revisions, удаление/обновление
+используемых значений и будущие правила технической совместимости.
 
 Открыты exact phase/milestone decomposition; auth provider; ACL/storage;
 sharing semantics; optional collaboration/portability scope; generic scene

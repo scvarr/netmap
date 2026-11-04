@@ -38,6 +38,8 @@
   - [[plans/stabilization/10-02-stabilization-backlog|10.2 Stabilization backlog]]
   - [[reviews/10-03-performance-baseline|10.3 Performance baseline и бюджеты]]
 
+- [Пользовательские справочники и границы L1](product/user-reference-catalogs.md) — согласованное pre-L2 продуктовое направление; реализация OPEN.
+
 ## Базовые принципы
 
 - Backend хранит факты о сети, а L1/L2/L3/Security являются проекциями и вычисляемыми представлениями этих фактов.

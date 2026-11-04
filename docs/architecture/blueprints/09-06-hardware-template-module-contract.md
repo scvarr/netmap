@@ -40,6 +40,21 @@ implementation and manual recheck of the same HV-01 step. This document records
 the accepted redesign. The bounded implementation below does not close existing
 `C-*` findings or replace manual HV-01 rechecking.
 
+## Будущие пользовательские характеристики портов
+
+`BaseTemplate` и `ModuleTemplate` должны в дальнейшем поддерживать
+[пользовательские справочники и характеристики портов](../../product/user-reference-catalogs.md).
+Это согласованное pre-L2 направление, не IMPLEMENTED capability 09.6.
+Пользовательский тип порта не заменяет `CONNECTION_POINT` / `NETWORK_PORT`;
+значения совместимости module/bay не доказывают физическую link compatibility.
+Действующее точное сопоставление module/bay здесь не меняется.
+
+Опубликованные ревизии остаются immutable. Семантика ссылок из immutable
+revision на изменяемый справочник — отдельный OPEN вопрос, который необходимо
+согласовать до implementation contract; live lookup или snapshot здесь не
+выбирается. C-CAP-01 остаётся отдельной confirmed gap. Phase C PAUSED;
+HV-01 NOT PASSED.
+
 ## Implemented boundary: 09.6-A
 
 - The library distinguishes `BaseTemplate` / `BaseTemplateRevision` and
