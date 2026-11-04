@@ -739,7 +739,7 @@ a { color: inherit; }
 .blueprint-order-dialog__row:nth-child(even) { background: #20383d; }
 .blueprint-order-dialog__row:hover { background: #2c4b52; }
 .blueprint-order-dialog__row[data-active="true"] { border-color: #ff7b22; background: #304a50; }
-.endpoint-workspace { box-sizing: border-box; min-width: 0; width: min(1200px, 95vw); max-height: 90vh; overflow: auto; }
+.endpoint-workspace { box-sizing: border-box; min-width: 0; width: min(1200px, 95vw); height: 90vh; max-height: 90vh; overflow: auto; }
 .endpoint-workspace__columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
 .endpoint-workspace__tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .endpoint-workspace__tools label { flex: 1; min-width: 80px; }
@@ -750,7 +750,7 @@ a { color: inherit; }
 .endpoint-workspace__row span, .endpoint-workspace__link-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .endpoint-workspace input[type="checkbox"] { flex: 0 0 14px; width: 14px; height: 14px; margin: 0; padding: 0; }
 .endpoint-workspace .endpoint-workspace__row button { width: 26px; height: 26px; padding: 0; }
-.endpoint-workspace__link-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; height: 34px; }
+.endpoint-workspace__link-row { display: grid; width: fit-content; max-width: 100%; grid-template-columns: minmax(0,max-content) auto; align-items: center; gap: 8px; height: 34px; }
 .endpoint-workspace .endpoint-workspace__link-row button { padding: 4px 8px; }
 .endpoint-workspace__preview { max-height: 22vh; overflow: auto; margin: 10px 0; font-size: 12px; }
 .endpoint-workspace__preview label { display: inline-flex; align-items: center; }
@@ -761,3 +761,6 @@ a { color: inherit; }
 .endpoint-workspace__row[data-manual="false"] { grid-template-columns: minmax(65px,1fr) 20px minmax(0,.7fr) minmax(50px,1fr); }
 .endpoint-workspace__tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .endpoint-workspace__tabs [aria-selected="true"] { border-color: #55e5b5; background: #15372f; }
+
+.endpoint-workspace__existing-links { width: min(620px, 100%); }
+.endpoint-workspace__existing-links > .catalog-dialog__actions { justify-content: flex-start; flex-wrap: wrap; }
