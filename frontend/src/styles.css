@@ -534,9 +534,14 @@ a { color: inherit; }
 .blueprint-composer__context-section--distribute strong, .blueprint-composer__context-section--layout strong { grid-column: 1 / -1; }
 .blueprint-composer__context-section:last-child { border-bottom: 0; }
 .blueprint-composer__context-section strong { padding: 1px 8px; color: #91a5a5; font-size: 10px; font-weight: 600; }
+.base-template-edit-page .blueprint-composer__context-menu > button,
 .blueprint-composer__context-section button { width: 100%; padding: 2px 8px; border: 0; border-radius: 4px; background: transparent; color: #e7f4f1; font-size: 12px; font-weight: 500; line-height: 1.2; text-align: left; white-space: nowrap; cursor: pointer; }
+.base-template-edit-page .blueprint-composer__context-menu > button:hover:not(:disabled),
 .blueprint-composer__context-section button:hover:not(:disabled) { background: #1c5550; }
+.base-template-edit-page .blueprint-composer__context-menu > button:disabled,
 .blueprint-composer__context-section button:disabled { color: #657b7b; cursor: default; }
+.base-template-edit-page .blueprint-composer__context-menu :is(button, input):focus-visible { outline: 2px solid #8de2c8; outline-offset: -2px; }
+.base-template-edit-page .blueprint-composer__distribution-settings input[type="number"]:disabled { color: #657b7b; border-color: #2a4448; cursor: default; }
 .blueprint-composer__distribution-settings { grid-column: 1 / -1; display: flex; align-items: end; flex-wrap: wrap; gap: 5px 9px; padding: 5px 8px 7px; border-top: 1px solid #2a4448; }
 .blueprint-composer__distribution-settings label { display: flex; align-items: center; gap: 5px; color: #b8cfca; font-size: 11px; white-space: nowrap; }
 .blueprint-composer__distribution-settings input[type="number"] { box-sizing: border-box; width: 54px; padding: 3px 5px; border: 1px solid #496b68; border-radius: 4px; background: #09191b; color: #e7f4f1; font: inherit; }
