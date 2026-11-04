@@ -745,9 +745,13 @@ a { color: inherit; }
 .endpoint-workspace__tools label { flex: 1; min-width: 80px; }
 .endpoint-workspace__tools input { width: 100%; box-sizing: border-box; }
 .endpoint-workspace__list { max-height: 38vh; overflow: auto; }
-.endpoint-workspace__row { display: grid; grid-template-columns: minmax(100px,1fr) auto auto; gap: 5px; padding: 7px; border-bottom: 1px solid #294145; }
-.endpoint-workspace__row label, .endpoint-workspace__row small, .endpoint-workspace__row span { grid-column: 1; overflow-wrap: anywhere; }
-.endpoint-workspace__row button { grid-row: 1; }
+.endpoint-workspace__row { display: grid; grid-template-columns: minmax(65px,1fr) 20px minmax(0,.7fr) minmax(50px,1fr) 26px 26px; align-items: center; gap: 5px; height: 34px; box-sizing: border-box; border-bottom: 1px solid #294145; font-size: 12px; }
+.endpoint-workspace .endpoint-workspace__row label, .endpoint-workspace .endpoint-workspace__link-row label, .endpoint-workspace .endpoint-workspace__filter { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.endpoint-workspace__row span, .endpoint-workspace__link-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.endpoint-workspace input[type="checkbox"] { flex: 0 0 14px; width: 14px; height: 14px; margin: 0; padding: 0; }
+.endpoint-workspace .endpoint-workspace__row button { width: 26px; height: 26px; padding: 0; }
+.endpoint-workspace__link-row { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; height: 34px; }
+.endpoint-workspace .endpoint-workspace__link-row button { padding: 4px 8px; }
 .endpoint-workspace__preview { max-height: 22vh; overflow: auto; margin: 10px 0; font-size: 12px; }
 .endpoint-workspace__preview label { display: inline-flex; align-items: center; }
 .endpoint-workspace button, .blueprint-order-dialog button { padding: 7px 10px; border: 1px solid #35575b; border-radius: 6px; color: #cfe1de; background: #102326; cursor: pointer; }

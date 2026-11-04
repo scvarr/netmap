@@ -2,9 +2,31 @@ import { useState } from 'react';
 import { useI18n } from '../i18n';
 import { applyBulkNames, bulkNamePreview, spatialOrderedKeys, reorderOrderedKeys, pairwiseContinuityPreview, applyPairwiseContinuity, internalLinkPairKey, type BlueprintEditorState } from '../blueprints/editorModel';
 
+export function presentedLinks(state: BlueprintEditorState, sides: { panel: string; order: string[] }[], all: boolean) {
+  const slots = new Map(state.slots.map(s => [s.key, s]));
+  const compare = (a: string, b: string) => {
+    const x = slots.get(a)!; const y = slots.get(b)!;
+    return (state.panels.find(p => p.panel_key === x.panel_key)!.panel_number - state.panels.find(p => p.panel_key === y.panel_key)!.panel_number)
+      || x.display_name.localeCompare(y.display_name, 'ru', { numeric: true }) || a.localeCompare(b);
+  };
+  return state.individualLinks.flatMap(link => {
+    let a = link.from_slot_key; let b = link.to_slot_key;
+    if (all) { if (compare(a,b) > 0) [a,b] = [b,a]; }
+    else {
+      const forward = slots.get(a)?.panel_key === sides[0].panel && slots.get(b)?.panel_key === sides[1].panel;
+      const backward = slots.get(b)?.panel_key === sides[0].panel && slots.get(a)?.panel_key === sides[1].panel;
+      if (!forward && !backward) return [];
+      if (!forward || (backward && sides[0].order.indexOf(a) > sides[0].order.indexOf(b))) [a,b] = [b,a];
+    }
+    return [{ link, a, b }];
+  }).sort((x,y) => all ? compare(x.a,y.a) || compare(x.b,y.b) : sides[0].order.indexOf(x.a)-sides[0].order.indexOf(y.a) || sides[1].order.indexOf(x.b)-sides[1].order.indexOf(y.b) || compare(x.a,y.a) || compare(x.b,y.b));
+}
+
 export function EndpointLinkWorkspace({ state, onChange, onClose }: { state: BlueprintEditorState; onChange: (state: BlueprintEditorState) => void; onClose: () => void }) {
   const { t } = useI18n();
   const [sides, setSides] = useState(() => [state.activePanelKey, state.panels.find(p => p.panel_key !== state.activePanelKey)?.panel_key ?? state.activePanelKey].map(panel => ({ panel, order: state.slots.filter(s => s.panel_key === panel).map(s => s.key), selected: [] as string[], horizontal: 'ltr' as 'ltr' | 'rtl', vertical: 'ttb' as 'ttb' | 'btt', naming: { mask: '#', start: '1', step: '1' } })));
+  const [allLinks, setAllLinks] = useState(false);
+  const visibleLinks = presentedLinks(state, sides, allLinks);
   const [removed, setRemoved] = useState<string[]>([]);
   const [status, setStatus] = useState('');
   const patch = (index: number, value: Partial<typeof sides[number]>) => setSides(old => old.map((s, i) => i === index ? { ...s, ...value } : s));
@@ -27,9 +49,10 @@ export function EndpointLinkWorkspace({ state, onChange, onClose }: { state: Blu
           <button type="button" onClick={() => patch(index, { selected: [] })}>{t('blueprint.links.clearSelection')}</button>
         </div>
         <div className="endpoint-workspace__list">{side.order.map((key, row) => { const slot = state.slots.find(s => s.key === key)!; const links = state.individualLinks.filter(l => l.from_slot_key === key || l.to_slot_key === key); return <div key={key} className="endpoint-workspace__row" data-endpoint-row={key}>
-          <label><input type="checkbox" checked={side.selected.includes(key)} onChange={e => patch(index, { selected: e.target.checked ? [...side.selected, key] : side.selected.filter(k => k !== key) })} />{slot.display_name}</label>
-          <small>{t(slot.kind === 'NETWORK_PORT' ? 'blueprint.endpoint.networkPort' : 'blueprint.endpoint.connectionPoint')} · {links.length} ↔ {links.map(l => label(l.from_slot_key === key ? l.to_slot_key : l.from_slot_key)).join(', ')}</small>
-          <span>{names?.find(n => n.key === key)?.display_name && `→ ${names.find(n => n.key === key)!.display_name}`}</span>
+          <label><input type="checkbox" checked={side.selected.includes(key)} onChange={e => patch(index, { selected: e.target.checked ? [...side.selected, key] : side.selected.filter(k => k !== key) })} /><span title={slot.display_name}>{slot.display_name}</span></label>
+          <span className="endpoint-workspace__kind" role="img" aria-label={t(slot.kind === 'NETWORK_PORT' ? 'blueprint.endpoint.networkPort' : 'blueprint.endpoint.connectionPoint')} title={t(slot.kind === 'NETWORK_PORT' ? 'blueprint.endpoint.networkPort' : 'blueprint.endpoint.connectionPoint')}>{slot.kind === 'NETWORK_PORT' ? '▣' : '●'}</span>
+          <span className="endpoint-workspace__name-preview" title={names?.find(n => n.key === key)?.display_name}>{names?.find(n => n.key === key)?.display_name && `→ ${names.find(n => n.key === key)!.display_name}`}</span>
+          <span className="endpoint-workspace__connections" title={links.map(l => label(l.from_slot_key === key ? l.to_slot_key : l.from_slot_key)).join(', ')}>↔ {links.length ? links.map(l => label(l.from_slot_key === key ? l.to_slot_key : l.from_slot_key)).join(', ') : '—'}</span>
           <button type="button" aria-label={t('blueprint.order.up', { index: row + 1 })} disabled={!row} onClick={() => patch(index, { order: reorderOrderedKeys(side.order, row, -1) })}>↑</button>
           <button type="button" aria-label={t('blueprint.order.down', { index: row + 1 })} disabled={row === side.order.length - 1} onClick={() => patch(index, { order: reorderOrderedKeys(side.order, row, 1) })}>↓</button>
         </div>; })}</div>
@@ -43,9 +66,10 @@ export function EndpointLinkWorkspace({ state, onChange, onClose }: { state: Blu
     <button type="button" disabled={!!preview.error} onClick={() => { onChange(applyPairwiseContinuity(state, keys[0], keys[1], false)); setStatus(t('endpointWorkspace.applied')); }}>{t(keys[0].length === 1 && keys[1].length === 1 ? 'blueprint.composition.addLink' : 'blueprint.pairwise.apply')}</button>
     <p role="status">{status}</p>
     <h3>{t('blueprint.composition.links')} · {state.individualLinks.length}</h3>
-    <div className="endpoint-workspace__preview">{state.individualLinks.map(l => { const id = internalLinkPairKey(l.from_slot_key,l.to_slot_key); return <div key={id}><label><input type="checkbox" checked={removed.includes(id)} onChange={e => setRemoved(e.target.checked ? [...removed,id] : removed.filter(k => k !== id))} />{label(l.from_slot_key)} ↔ {label(l.to_slot_key)}</label><button type="button" onClick={() => onChange({ ...state, individualLinks: state.individualLinks.filter(link => link !== l) })}>{t('blueprint.composition.remove')}</button></div>; })}</div>
+    <label className="endpoint-workspace__filter"><input type="checkbox" checked={allLinks} onChange={e => { setAllLinks(e.target.checked); setRemoved([]); }} />{t('endpointWorkspace.allLinks')}</label>
+    <div className="endpoint-workspace__preview">{visibleLinks.map(({link:l,a,b}) => { const id = internalLinkPairKey(a,b); const text = `${label(a)} ↔ ${label(b)}`; return <div key={id} className="endpoint-workspace__link-row" data-link-row={id}><label title={text}><input type="checkbox" checked={removed.includes(id)} onChange={e => setRemoved(e.target.checked ? [...removed,id] : removed.filter(k => k !== id))} /><span>{text}</span></label><button type="button" onClick={() => onChange({ ...state, individualLinks: state.individualLinks.filter(link => link !== l) })}>{t('blueprint.composition.remove')}</button></div>; })}</div>
     <div className="catalog-dialog__actions">
-      <button type="button" onClick={() => setRemoved(state.individualLinks.map(l => internalLinkPairKey(l.from_slot_key,l.to_slot_key)))}>{t('blueprint.links.selectAll')}</button>
+      <button type="button" onClick={() => setRemoved(visibleLinks.map(({a,b}) => internalLinkPairKey(a,b)))}>{t('blueprint.links.selectAll')}</button>
       <button type="button" disabled={!removed.length} onClick={() => { onChange({ ...state, individualLinks: state.individualLinks.filter(l => !removed.includes(internalLinkPairKey(l.from_slot_key,l.to_slot_key))) }); setRemoved([]); }}>{t('blueprint.links.deleteSelected', { count: removed.length })}</button>
       <button type="button" autoFocus onClick={onClose}>{t('action.close')}</button>
     </div>

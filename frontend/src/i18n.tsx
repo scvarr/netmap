@@ -6,6 +6,7 @@ export const localeStorageKey = 'netmap.locale';
 
 const messages = {
   ru: {
+    'endpointWorkspace.allLinks': 'Все связи',
     'endpointWorkspace.title': 'Порты и внутренние связи', 'endpointWorkspace.natural': 'По имени (1, 2, 10)', 'endpointWorkspace.applied': 'Связи созданы; результат показан ниже',
     'moduleGeometry.title': 'Геометрия модуля',
     'moduleGeometry.width': 'Ширина',
@@ -114,6 +115,7 @@ const messages = {
     'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
+    'endpointWorkspace.allLinks': 'All links',
     'endpointWorkspace.title': 'Ports and internal links', 'endpointWorkspace.natural': 'By name (1, 2, 10)', 'endpointWorkspace.applied': 'Links created; results shown below',
     'moduleGeometry.title': 'Module geometry',
     'moduleGeometry.width': 'Width',

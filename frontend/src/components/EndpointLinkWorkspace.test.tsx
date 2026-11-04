@@ -22,6 +22,16 @@ function setup(count = 2) {
   return { ...view, initial, latest: () => latest, side, selectAll };
 }
 describe('unified endpoint workspace', () => {
+  it('exposes other-panel links through All links and retains single-row type accessibility', () => {
+    const s = setup(); s.selectAll('A'); s.selectAll('B');
+    fireEvent.click(screen.getByRole('button',{name:'Создать связи'}));
+    expect(document.querySelectorAll('[data-link-row]')).toHaveLength(2);
+    fireEvent.change(s.side('B').getByRole('combobox',{name:'B'}),{target:{value:s.initial.activePanelKey}});
+    expect(document.querySelectorAll('[data-link-row]')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('checkbox',{name:'Все связи'}));
+    expect(document.querySelectorAll('[data-link-row]')).toHaveLength(2);
+    expect(s.side('A').getAllByRole('img',{name:'Точка подключения'})).toHaveLength(2);
+  });
   it('keeps panel orders independent, supports numeric and manual order and spatial reversal', () => {
     const s = setup();
     const rows = (name: string) => [...screen.getByRole('region', {name}).querySelectorAll('[data-endpoint-row]')].map(n => n.getAttribute('data-endpoint-row'));
