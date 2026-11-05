@@ -24,7 +24,8 @@ describe('module geometry', () => {
  Object.defineProperty(globalThis,'DOMPoint',{configurable:true,value:class { constructor(public x=0, public y=0) {} matrixTransform(){return this;} }});
  Object.defineProperty(globalThis,'PointerEvent',{configurable:true,value:MouseEvent});
  SVGSVGElement.prototype.setPointerCapture=()=>{};
- fireEvent.pointerDown(screen.getByRole('button',{name:'a'})); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
+ expect(fireEvent.pointerDown(screen.getByRole('button',{name:'a'}))).toBe(false);
+ expect(screen.getByRole('button',{name:'a'}).querySelector('circle')).toHaveAttribute('fill','white'); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
  fireEvent.pointerDown(screen.getByRole('button',{name:'b'}),{shiftKey:true}); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
  fireEvent.pointerDown(screen.getByRole('button',{name:'c'}),{shiftKey:true}); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
  fireEvent.click(screen.getByRole('button',{name:'Распределить по горизонтали'}));

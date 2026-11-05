@@ -828,3 +828,10 @@ a { color: inherit; }
 .module-geometry__arrange { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .module-geometry--editable .module-geometry__canvas { height: clamp(280px, 40vh, 460px); }
 @media (max-width: 900px) { .module-template-editor { grid-template-columns: minmax(0, 1fr); } }
+
+/* SVG's native focus outline scales in model units. Keep pointer editing like
+   route waypoints, and use the non-scaling circle stroke for keyboard focus. */
+.module-geometry__port { cursor: move; outline: none; user-select: none; }
+.module-geometry__port:focus-visible { outline: none; }
+.module-geometry__port:focus-visible circle { stroke: #8bd5c4; stroke-width: 2px; }
+.module-geometry__port text { pointer-events: none; }

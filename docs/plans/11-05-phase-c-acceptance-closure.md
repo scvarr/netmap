@@ -832,3 +832,15 @@ select both and drag/align/distribute; zoom and fit; rename/change type/reorder,
 add/delete a temporary port, save/reopen and check the draft. Repeat fitting at a
 narrower window width and confirm failed saves retain local values. Continue
 HV-01 only after external branch inspection and successful manual recheck.
+
+
+Pointer-focus follow-up: manual evidence exposed a large native SVG focus ring
+only during port selection. Port pointer handling now prevents default focus
+like route waypoint dragging; port glyphs keep their white fill and use the
+move cursor. Native SVG outlines are disabled, with a thin non-scaling circle
+stroke reserved for keyboard focus. Group selection and list synchronization
+remain available. Browser pointer drag on a 5 × 20 body confirmed no native
+outline, move cursor and unchanged 11.5-pixel marker bounds; focused canvas
+screenshot inspected. Docker targeted geometry/create/draft tests: **23 passed**;
+TypeScript/Vite build passed (bundle-size warning). Manual recheck remains
+pending; Phase C PAUSED, HV-01 NOT PASSED.
