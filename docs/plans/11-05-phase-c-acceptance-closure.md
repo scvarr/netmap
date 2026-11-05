@@ -844,3 +844,17 @@ outline, move cursor and unchanged 11.5-pixel marker bounds; focused canvas
 screenshot inspected. Docker targeted geometry/create/draft tests: **23 passed**;
 TypeScript/Vite build passed (bundle-size warning). Manual recheck remains
 pending; Phase C PAUSED, HV-01 NOT PASSED.
+
+
+Single-port placement follow-up: with one selected definition the alignment
+buttons explicitly become horizontal/vertical body centering (X or Y = 0.5).
+Multi-port alignment retains its previous semantics; distribution still needs
+at least two ports. Selected-port properties now expose normalized X/Y numeric
+inputs (0–1, arbitrary fractional precision). Invalid/out-of-bounds input does
+not change geometry; only the selected definition key is updated. Docker
+validation: **25 targeted tests passed**, including single-port centering,
+manual coordinate precision/bounds and save/reopen preservation, plus existing
+create/draft/geometry flows. TypeScript/Vite build and diff checks passed.
+Manual recheck: select one port, center each axis, enter X=0.123456789 and Y=1,
+save/reopen; then verify multi-selection alignment/distribution and drag.
+Status remains MANUAL RECHECK PENDING; Phase C PAUSED, HV-01 NOT PASSED.

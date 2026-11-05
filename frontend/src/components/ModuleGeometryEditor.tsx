@@ -20,15 +20,19 @@ export function ModuleGeometryEditor({ geometry, endpoints, onChange, selectedKe
  const point = (x: number, y: number) => { const m = svg.current!.getScreenCTM()!; const p = new DOMPoint(x,y).matrixTransform(m.inverse()); return { x: p.x / geometry.width, y: p.y / geometry.height }; };
  const arrange = (axis: 'x' | 'y', distribute: boolean) => {
   const keys = Object.keys(geometry.endpoints).filter(k => selected.has(k)).sort((a,b) => geometry.endpoints[a][axis] - geometry.endpoints[b][axis] || a.localeCompare(b));
-  if (keys.length < 2) return; const values = keys.map(k => geometry.endpoints[k][axis]); const positions = { ...geometry.endpoints };
-  keys.forEach((k,i) => { positions[k] = { ...positions[k], [axis]: distribute ? values[0] + (values.at(-1)! - values[0]) * i / (keys.length - 1) : values.reduce((a,b) => a+b) / values.length }; }); onChange?.({ ...geometry, endpoints: positions });
+  if (!keys.length || (distribute && keys.length < 2)) return; const values = keys.map(k => geometry.endpoints[k][axis]); const positions = { ...geometry.endpoints };
+  keys.forEach((k,i) => { positions[k] = { ...positions[k], [axis]: keys.length === 1 ? .5 : distribute ? values[0] + (values.at(-1)! - values[0]) * i / (keys.length - 1) : values.reduce((a,b) => a+b) / values.length }; }); onChange?.({ ...geometry, endpoints: positions });
  };
  return <section className={`module-geometry ${onChange ? "module-geometry--editable" : ""}`} aria-label={t('moduleGeometry.title')}>
  <div className="module-geometry__toolbar">{onChange && <><div className="module-geometry__tool-group" role="group" aria-label={t('moduleGeometry.body')}>
  {(['width','height'] as const).map(k => <label key={k}>{t(k === 'width' ? 'moduleGeometry.width' : 'moduleGeometry.height')}<input type="number" min="0.01" step="any" value={geometry[k]} onChange={e => { const n = Number(e.target.value); if (Number.isFinite(n) && n > 0) onChange({ ...geometry, [k]: n }); }} /></label>)}
  <label>{t('moduleGeometry.color')}<input type="color" value={geometry.fill_color} onChange={e => onChange({ ...geometry, fill_color: e.target.value })} /></label>
  </div><div className="module-geometry__tool-group module-geometry__arrange" role="group" aria-label={t('moduleGeometry.arrange')}>
- {(['horizontal','vertical','distributeX','distributeY'] as const).map(a => <button className="secondary-action" type="button" key={a} aria-label={t(`moduleGeometry.${a}`)} title={t(`moduleGeometry.${a}`)} disabled={selected.size < 2} onClick={() => arrange(a === 'horizontal' || a === 'distributeY' ? 'y' : 'x', a.startsWith('distribute'))}>{t(a.startsWith('distribute') ? 'moduleGeometry.distributeShort' : 'moduleGeometry.alignShort')} {a === 'horizontal' || a === 'distributeX' ? '↔' : '↕'}</button>)}
+ {(['horizontal','vertical','distributeX','distributeY'] as const).map(a => {
+  const single = selected.size === 1 && !a.startsWith('distribute');
+  const label = single ? t(a === 'horizontal' ? 'blueprint.layout.centerX' : 'blueprint.layout.centerY') : t(`moduleGeometry.${a}`);
+  return <button className="secondary-action" type="button" key={a} aria-label={label} title={label} disabled={selected.size < (a.startsWith('distribute') ? 2 : 1)} onClick={() => arrange(single ? (a === 'horizontal' ? 'x' : 'y') : a === 'horizontal' || a === 'distributeY' ? 'y' : 'x', a.startsWith('distribute'))}>{single ? t('moduleGeometry.centerShort') : t(a.startsWith('distribute') ? 'moduleGeometry.distributeShort' : 'moduleGeometry.alignShort')} {a === 'horizontal' || a === 'distributeX' ? '↔' : '↕'}</button>;
+ })}
  </div></>}
  <div className="module-geometry__tool-group" role="group" aria-label={t('moduleGeometry.zoom')}><button className="secondary-action" type="button" aria-label={t('moduleGeometry.zoomIn')} disabled={zoom >= 8} onClick={() => setZoom(z => Math.min(8,z*1.25))}>+</button><button className="secondary-action" type="button" aria-label={t('moduleGeometry.zoomOut')} disabled={zoom <= .25} onClick={() => setZoom(z => Math.max(.25,z/1.25))}>−</button><button className="secondary-action" type="button" onClick={() => setZoom(1)}>{t('moduleGeometry.fit')}</button><span>{Math.round(zoom * 100)}%</span></div>
  </div>

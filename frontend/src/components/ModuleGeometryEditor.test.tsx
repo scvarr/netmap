@@ -69,3 +69,14 @@ it.each([[5,20],[20,5],[10,1],[1,1]])('fits %s × %s with screen-sized glyphs an
  for(const text of svg.querySelectorAll('text')) expect(Number(text.getAttribute('font-size'))*scale).toBeCloseTo(12);
  expect(geometry.endpoints).toEqual({a:{x:0,y:0},b:{x:1,y:1}});
 });
+
+it('centers a single port on either body axis without changing the other ports', () => {
+ render(<Harness/>);
+ fireEvent.keyDown(screen.getByRole('button',{name:'a'}),{key:'Enter'});
+ expect(screen.getByRole('button',{name:'Распределить по горизонтали'})).toBeDisabled();
+ const before = value().endpoints;
+ fireEvent.click(screen.getByRole('button',{name:'По центру горизонтали'}));
+ expect(value().endpoints).toEqual({...before,a:{x:.5,y:.2}});
+ fireEvent.click(screen.getByRole('button',{name:'По центру вертикали'}));
+ expect(value().endpoints).toEqual({...before,a:{x:.5,y:.5}});
+});
