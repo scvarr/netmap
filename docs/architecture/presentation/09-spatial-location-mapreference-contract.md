@@ -231,3 +231,10 @@ scene and derived frames -> layout/presentation -> canvas. Presentation не
 Location state и text annotations — presentation concerns; `Location`,
 PhysicalObject assignment, endpoints, Connections и Cables сохраняют свои
 canonical semantics.
+
+## Будущие кабель-каналы между Location
+
+[Продуктовый контракт](../../product/location-cable-channels.md) согласован,
+реализация НЕ НАЧАТА. Для будущих каналов необходимая пересекаемая граница
+не скрывается unary упрощением; explicit collapse родителя имеет приоритет.
+Это расширение целевой семантики, а не описание уже реализованного renderer.

@@ -118,3 +118,10 @@ Exact persistence/API/schema/UX остаются OPEN. Это не новый ac
 
 Cable Bundle entity/schema, shared-route persistence, marquee/multi-select,
 middle-button pan, P-UX-03E implementation, general CAD framework и L2 work.
+
+## Связанный будущий контракт
+
+[Каналы между Location](../product/location-cable-channels.md) — согласованный
+продуктовый контракт; реализация НЕ НАЧАТА. Существующие route editor и
+boundary anchors не реализуют общий канал. Scope завершённых milestones выше
+не расширяется; shared-route persistence остаётся вне их границы.
