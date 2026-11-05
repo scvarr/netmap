@@ -16,8 +16,9 @@ def request(document):
         'layout': {**i['layout'], 'x': .02, 'y': .02, 'width': .2, 'height': .1}}
 
 
-def test_save_identity_retry_conflict_archive():
-    _, obj, _, document = setup()
+@pytest.mark.parametrize('logical', [False, True])
+def test_save_identity_retry_conflict_archive(logical):
+    _, obj, _, document = setup(logical)
     i = document['bays'][0]['installation']
     url = f"/v1/topology/physical-objects/{obj}/module-installations/{i['id']}/layout"
     body = request(document)

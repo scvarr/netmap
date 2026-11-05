@@ -963,15 +963,12 @@ and module_layout_version=1. The new profile requires kind on every ModuleBay ro
 Historical archives without the places marker accept geometric rows only and add
 PLACED at the import boundary, preserving frozen definitions and canonical IDs.
 
-Install and final D2 assignment into LOGICAL reject with
-LOGICAL_MODULE_INSTALLATION_UNSUPPORTED before writes. D2 retains its deterministic
-assignment order, exact compatibility, final panel/layout checks,
-MODULE_LAYOUT_PANEL_CONFLICT and INSUFFICIENT_COMPATIBLE_CAPACITY. PLACED F2a fit
-and F2b interaction are unchanged; PLACED adds no movement restriction.
-Frontend reads both kinds, excludes LOGICAL from geometry editing and bay SVG,
-and disables its install action. No new canonical inventory or installation table.
-
-LOGICAL installation, initial placement/reset without rectangle and count UI — OPEN.
+UX-02C enables compatible installations in free LOGICAL places, including D2
+final assignment, existing F2b interaction and workspace v5 import. Exact
+compatibility, capacity=1, locking, expected-state 409, canonical materialization,
+MODULE_LAYOUT_PANEL_CONFLICT and INSUFFICIENT_COMPATIBLE_CAPACITY remain in force.
+Frontend enables installation without drawing an empty LOGICAL rectangle.
+Count-based authoring — OPEN.
 This core supersedes the earlier representation/migration OPEN entries only;
 external inspection and HV-01 acceptance remain outstanding.
 
@@ -985,3 +982,44 @@ uses normalized semantics (missing historical kind means PLACED); real edits
 remain changes. Workspace validation rejects invalid kind/rectangle combinations
 with PackageError before import writes, including markerless invalid rectangles.
 Status remains IMPLEMENTED / EXTERNAL REVIEW PENDING; Phase C PAUSED, HV-01 NOT PASSED.
+
+
+## HV-01-UX-02C — Logical Module Installation
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING. Count-based authoring — OPEN.
+Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+Initial layout uses all LOGICAL places of the pinned base revision on the owning
+panel, sorted lexicographically by bay_key. For N places and panel W × H,
+columns = min(N, max(1, ceil(sqrt(N × W/H)))); rows = ceil(N/columns).
+Places occupy row-major equal normalized cells. The pinned module body is
+centered and proportionally fitted in its cell in panel units; VERTICAL rotates
+the complete image clockwise before fitting. Dimensions are finite and positive,
+and the result stays inside the panel. PLACED retains its existing bay fit.
+
+Cells are transient calculation regions, never persisted ModuleBay rectangles.
+They constrain only initial placement. F2b move/resize/save/cancel/reopen retain
+existing panel bounds and expected-state protection. Reset recomputes from pinned
+base/module revisions, bay_key, panel dimensions and orientation, independent of
+neighbor layouts. Adding/removing installations never moves existing ones.
+Visual overlap does not reduce logical capacity; no packing/collision solver.
+
+D2 retains valid assignments first and deterministic exact-compatible relocation;
+same-panel relocation preserves layout and installation/endpoint identities.
+Cross-panel final assignments still fail atomically. E3 preserves layout and
+canonical identities. Uninstall retains dependency blockers; reinstall creates
+new installation and endpoints, even when initial layout is identical.
+
+Workspace remains v5 with module_places_version=1 and existing geometry/layout
+markers. Only the obsolete LOGICAL installation import prohibition is removed.
+Saved layout, bay_key, pinned revisions, installation IDs, endpoint mappings,
+canonical IDs, connections, metadata and frozen review provenance round-trip
+unchanged. No snapshots or applied Alembic revisions are rewritten.
+
+
+UX-02C validation: Docker/PostgreSQL targeted backend 65 passed
+(logical places, F2a layout/E3/D2, F2b editing), frontend ModuleInstallationSection
+15 passed; Docker TypeScript/Vite build and git diff --check passed. Full suites
+were not run. GitNexus detect_changes reports CRITICAL reach through shared
+configuration reads, installation, D2 and archive validation, without partial or
+truncated flags. External final diff inspection and manual HV-01 remain pending.

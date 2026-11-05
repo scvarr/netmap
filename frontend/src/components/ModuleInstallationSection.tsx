@@ -108,7 +108,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
       {bay.installation ? <><ul>{bay.installation.endpoints.map(e => <li key={e.connection_point_id}>{e.contextual_display_name}</li>)}</ul><button type="button" className="text-action" disabled={pending || editing} onClick={() => void uninstall(bay.installation!.id, bay.installation!.name, bay.display_name)}>{t('hardware.uninstall')}</button></> : <>
         <label>{t('hardware.selectModule')}<select disabled={pending || editing} value={choice.module} onChange={e => setChoices(old => ({ ...old, [bay.bay_key]: { ...choice, module: e.target.value } }))}><option value="">{t(compatible.length ? 'hardware.selectModule' : 'hardware.noModules')}</option>{compatible.map(m => <option key={m.template_id} value={m.template_id}>{m.name}</option>)}</select></label>
         <label>{t('hardware.orientation')}<select disabled={pending || editing} value={choice.orientation} onChange={e => setChoices(old => ({ ...old, [bay.bay_key]: { ...choice, orientation: e.target.value as 'HORIZONTAL' | 'VERTICAL' } }))}><option value="HORIZONTAL">{t('hardware.horizontal')}</option><option value="VERTICAL">{t('hardware.vertical')}</option></select></label>
-        <button type="button" className="primary-action" disabled={pending || editing || !choice.module || bay.kind === "LOGICAL"} onClick={() => void install(bay.bay_key)}>{t('hardware.install')}</button>
+        <button type="button" className="primary-action" disabled={pending || editing || !choice.module} onClick={() => void install(bay.bay_key)}>{t('hardware.install')}</button>
       </>}
     </section>; })}
   </section>;

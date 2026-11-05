@@ -465,8 +465,6 @@ def _validate_hardware_configuration(rows):
     for installation in installations.values():
         config = configs[installation["configuration_id"]]
         bay = bays.get((config["base_revision_id"], installation["bay_key"]))
-        if bay is not None and bay["kind"] == "LOGICAL":
-            raise PackageError("LOGICAL_MODULE_INSTALLATION_UNSUPPORTED")
         if bay is None or bay["compatibility"] != revisions[installation["module_revision_id"]]["compatibility"]:
             raise PackageError("Installation has no compatible bay in its owning configuration")
         from app.module_layout import validate_layout

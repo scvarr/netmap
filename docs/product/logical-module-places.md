@@ -2,15 +2,15 @@
 
 ## Статус и границы
 
-**HV-01-UX-02B — IMPLEMENTED / EXTERNAL REVIEW PENDING. LOGICAL installation и count UI — OPEN.
+**HV-01-UX-02B — IMPLEMENTED / EXTERNAL REVIEW PENDING. HV-01-UX-02C — IMPLEMENTED / EXTERNAL REVIEW PENDING. Count-based authoring — OPEN.
 Phase C — PAUSED. HV-01 — NOT PASSED.**
 
 Основание: main `34e9e392048c94fbcbb345d22907914d63bd8d35`.
-Это согласованная будущая продуктовая семантика, а не описание работающего API.
+Целевая count-based семантика остаётся OPEN; реализованная граница runtime описана в UX-02B/UX-02C ниже.
 Действующие IMPLEMENTED F1/F2a/F2b, D2 и E1/E2/E3 остаются описаны в
 [09.6](../architecture/blueprints/09-06-hardware-template-module-contract.md).
 Документ заменяет обязательность графического создания каждого ModuleBay в
-целевой модели, но не объявляет runtime, миграцию или алгоритм размещения готовыми.
+целевой модели, с актуальными границами runtime, миграции и размещения в разделах UX-02B/UX-02C.
 [Реестр Phase C](../plans/11-05-phase-c-acceptance-closure.md) не закрывается.
 
 ## Согласованная целевая семантика
@@ -34,7 +34,7 @@ PhysicalObject показывает свободную, занятую и общ
 Пустое логическое место может не иметь видимого прямоугольника. Установленный
 модуль имеет собственный body и порты из pinned ModuleTemplateRevision (F1).
 Начальное размещение выполняется на выбранной панели с сохранением пропорций
-в единицах панели и учётом ориентации. Точный fit без bay rectangle ещё OPEN.
+в единицах панели и учётом ориентации. Initial fit без rectangle определён в UX-02C ниже.
 Пользователь корректирует экземпляр через существующий F2b: перемещение,
 пропорциональный resize, явные save/cancel/reset; порты следуют body.
 
@@ -78,8 +78,7 @@ PhysicalObject показывает свободную, занятую и общ
   потерь или частично применённой relocation быть не должно.
 - F2b сохраняет ограничение текущей панели, expected-state conflict protection,
   локальный draft при ошибках и явное сохранение. Изменение ёмкости не сбрасывает
-  пользовательский layout. Reset без rectangle потребует нового определения;
-  текущий reset использует pinned bay fit и не объявляется уже изменённым.
+  пользовательский layout. Reset использует pinned initial fit, определённый UX-02C ниже.
 - Явное удаление модуля остаётся отдельным действием с действующими dependency
   blockers. Успех освобождает место, сохраняя его ключ. Повторная установка —
   новая ModuleInstallation с новыми endpoints и pin текущей module revision;
@@ -128,8 +127,7 @@ IDs, pinned revisions, индивидуальные ключи мест, install
 
 Риски: потеря ключей при count-based редактировании, потеря пустых rectangles,
 пересчёт пользовательского layout, неявный latest revision, обход panel conflict
-и неоднозначный archive profile. До выбора миграции и размещения runtime остаётся
-OPEN. Docs-only результат не подтверждает миграционную совместимость и не
+и неоднозначный archive profile. Миграция и initial placement реализованы в UX-02B/UX-02C; count-based authoring остаётся OPEN. Docs-only результат не подтверждает миграционную совместимость и не
 заменяет внешнее inspection итогового diff или ручную HV-01 приёмку.
 
 ## HV-01-UX-02B — Logical Module Places Core
@@ -149,14 +147,44 @@ and module_layout_version=1. The new profile requires kind on every ModuleBay ro
 Historical archives without the places marker accept geometric rows only and add
 PLACED at the import boundary, preserving frozen definitions and canonical IDs.
 
-Install and final D2 assignment into LOGICAL reject with
-LOGICAL_MODULE_INSTALLATION_UNSUPPORTED before writes. D2 retains its deterministic
-assignment order, exact compatibility, final panel/layout checks,
-MODULE_LAYOUT_PANEL_CONFLICT and INSUFFICIENT_COMPATIBLE_CAPACITY. PLACED F2a fit
-and F2b interaction are unchanged; PLACED adds no movement restriction.
-Frontend reads both kinds, excludes LOGICAL from geometry editing and bay SVG,
-and disables its install action. No new canonical inventory or installation table.
-
-LOGICAL installation, initial placement/reset without rectangle and count UI — OPEN.
+UX-02C enables compatible installations in free LOGICAL places, including D2
+final assignment, existing F2b interaction and workspace v5 import. Exact
+compatibility, capacity=1, locking, expected-state 409, canonical materialization,
+MODULE_LAYOUT_PANEL_CONFLICT and INSUFFICIENT_COMPATIBLE_CAPACITY remain in force.
+Frontend enables installation without drawing an empty LOGICAL rectangle.
+Count-based authoring — OPEN.
 This core supersedes the earlier representation/migration OPEN entries only;
 external inspection and HV-01 acceptance remain outstanding.
+
+
+## HV-01-UX-02C — Logical Module Installation
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING. Count-based authoring — OPEN.
+Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+Initial layout uses all LOGICAL places of the pinned base revision on the owning
+panel, sorted lexicographically by bay_key. For N places and panel W × H,
+columns = min(N, max(1, ceil(sqrt(N × W/H)))); rows = ceil(N/columns).
+Places occupy row-major equal normalized cells. The pinned module body is
+centered and proportionally fitted in its cell in panel units; VERTICAL rotates
+the complete image clockwise before fitting. Dimensions are finite and positive,
+and the result stays inside the panel. PLACED retains its existing bay fit.
+
+Cells are transient calculation regions, never persisted ModuleBay rectangles.
+They constrain only initial placement. F2b move/resize/save/cancel/reopen retain
+existing panel bounds and expected-state protection. Reset recomputes from pinned
+base/module revisions, bay_key, panel dimensions and orientation, independent of
+neighbor layouts. Adding/removing installations never moves existing ones.
+Visual overlap does not reduce logical capacity; no packing/collision solver.
+
+D2 retains valid assignments first and deterministic exact-compatible relocation;
+same-panel relocation preserves layout and installation/endpoint identities.
+Cross-panel final assignments still fail atomically. E3 preserves layout and
+canonical identities. Uninstall retains dependency blockers; reinstall creates
+new installation and endpoints, even when initial layout is identical.
+
+Workspace remains v5 with module_places_version=1 and existing geometry/layout
+markers. Only the obsolete LOGICAL installation import prohibition is removed.
+Saved layout, bay_key, pinned revisions, installation IDs, endpoint mappings,
+canonical IDs, connections, metadata and frozen review provenance round-trip
+unchanged. No snapshots or applied Alembic revisions are rewritten.

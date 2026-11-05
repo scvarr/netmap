@@ -2,10 +2,16 @@
 import math
 
 
-def initial_layout(bay, geometry, orientation, panel):
-    if any(bay.get(k) is None for k in ("x", "y", "width", "height")):
-        from app.errors import ModelError
-        raise ModelError("LOGICAL_MODULE_INSTALLATION_UNSUPPORTED")
+def initial_layout(bay, geometry, orientation, panel, places=()):
+    if bay.get("kind") == "LOGICAL":
+        keys = sorted(p["bay_key"] for p in places
+                      if p["kind"] == "LOGICAL" and p["panel_key"] == bay["panel_key"])
+        index = keys.index(bay["bay_key"])
+        columns = min(len(keys), max(1, math.ceil(math.sqrt(len(keys) * panel["width"] / panel["height"]))))
+        rows = math.ceil(len(keys) / columns)
+        # A transient initial-fit region, never a logical place rectangle.
+        bay = {**bay, "x": (index % columns) / columns, "y": (index // columns) / rows,
+               "width": 1 / columns, "height": 1 / rows}
     width, height = geometry["width"], geometry["height"]
     if orientation == "VERTICAL":
         width, height = height, width

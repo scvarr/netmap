@@ -20,16 +20,18 @@ def test_logical_configuration_atomic_install_and_archive():
     base, _ = create_base(payload)
     obj = create_object(base)['physical_object_ref']['entity_id']
     module = create_module()
-    before = package()
     response = install(obj, module['template_id'], payload['bays'][1]['bay_key'])
-    assert response.status_code == 409, response.text
-    assert 'LOGICAL_MODULE_INSTALLATION_UNSUPPORTED' in response.text
-    assert package() == before
-    response = install(obj, module['template_id'], payload['bays'][0]['bay_key'])
     assert response.status_code == 201, response.text
     bays = {b['bay_key']: b for b in response.json()['bays']}
-    assert bays[payload['bays'][1]['bay_key']]['installation'] is None
+    assert bays[payload['bays'][1]['bay_key']]['installation']['layout'] == bays[payload['bays'][1]['bay_key']]['installation']['initial_layout']
     assert bays[payload['bays'][1]['bay_key']]['x'] is None
+    source = bays[payload['bays'][1]['bay_key']]['installation']['endpoints'][0]
+    remote = create_object(base)
+    connection = client.post('/v1/topology/physical-connections', json={
+        'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_point_id'], 'member_index': 1},
+        'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': remote['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
+    })
+    assert connection.status_code == 201, connection.text
     exported = package()
     assert exported['module_places_version'] == 1
     assert validate_package(exported)['module_bays']
@@ -56,14 +58,15 @@ def test_logical_validation_exact_strings():
     assert result.compatibility == ' Ocp3 ' and result.x is None
 
 
-def test_d2_logical_assignment_blocks_without_changes():
+def test_d2_logical_assignment_preserves_installation():
     base, obj, _, _ = setup()
-    revision(base, lambda d: d['bays'].__setitem__(0, logical(d['bays'][0])))
+    revision(base, lambda d: d['bays'].__setitem__(0, logical({**d['bays'][0], 'bay_key': str(uuid.uuid4())})))
     before = package()
     result = reconcile(base)[obj]
-    assert result['status'] == 'requires_intervention'
-    assert any(r['code'] == 'LOGICAL_MODULE_INSTALLATION_UNSUPPORTED' for r in result['reasons'])
-    assert package() == before
+    assert result['status'] == 'updated'
+    after = package()
+    assert after['canonical'] == before['canonical']
+    assert [{**i, 'bay_key': ''} for i in after['authoring']['ModuleInstallation']] == [{**i, 'bay_key': ''} for i in before['authoring']['ModuleInstallation']]
 
 
 def test_forward_migration_preserves_existing_rectangles():
@@ -209,3 +212,55 @@ def test_historical_placed_profile_restores_saved_layout_and_frozen_snapshots():
     assert client.delete('/v1/workspace/dataset').status_code == 204
     assert client.post('/v1/workspace/package', json=exported).status_code == 204
     assert package() == exported
+
+
+@pytest.mark.parametrize('size', [(160, 60), (60, 160), (100, 100), (1000, 1)])
+@pytest.mark.parametrize('orientation', ['HORIZONTAL', 'VERTICAL'])
+def test_logical_grid_order_and_panel_fit(size, orientation):
+    from app.module_layout import initial_layout, validate_layout
+    places = [dict(kind='LOGICAL', bay_key=str(i), panel_key='p') for i in range(7)]
+    panel = dict(zip(('width', 'height'), size))
+    for bay in places:
+        result = initial_layout(bay, {'width': 240, 'height': 80}, orientation, panel, places)
+        assert result == initial_layout(bay, {'width': 240, 'height': 80}, orientation, panel, places[::-1])
+        validate_layout(result, 'p')
+        ratio = result['width'] * size[0] / (result['height'] * size[1])
+        assert ratio == pytest.approx(3 if orientation == 'HORIZONTAL' else 1/3)
+
+
+def test_logical_install_order_edit_reset_reinstall():
+    from tests.test_module_layout_editing import request
+    payload = base_payload()
+    payload['bays'] = [logical({**payload['bays'][0], 'bay_key': str(uuid.uuid4())}) for _ in range(3)]
+    base, _ = create_base(payload)
+    module = create_module()
+    objects = [create_object(base)['physical_object_ref']['entity_id'] for _ in range(2)]
+    layouts = []
+    for obj, order in zip(objects, [payload['bays'], payload['bays'][::-1]]):
+        for bay in order:
+            response = install(obj, module['template_id'], bay['bay_key'])
+            assert response.status_code == 201, response.text
+        document = response.json()
+        layouts.append({b['bay_key']: b['installation']['layout'] for b in document['bays']})
+    assert layouts[0] == layouts[1]
+    obj = objects[0]
+    i = document['bays'][0]['installation']
+    document = client.get(f'/v1/topology/physical-objects/{obj}/configuration').json()
+    i = document['bays'][0]['installation']
+    url = f"/v1/topology/physical-objects/{obj}/module-installations/{i['id']}"
+    body = request(document)
+    saved = client.put(url + '/layout', json=body)
+    assert saved.status_code == 200, saved.text
+    assert client.put(url + '/layout', json=body).status_code == 409
+    reopened = client.get(f'/v1/topology/physical-objects/{obj}/configuration').json()
+    assert reopened['bays'][0]['installation']['layout'] == body['layout']
+    reset = request(reopened)
+    reset['layout'] = i['initial_layout']
+    assert client.put(url + '/layout', json=reset).status_code == 200
+    assert client.delete(url).status_code == 200
+    installed = install(obj, module['template_id'], document['bays'][0]['bay_key'])
+    assert installed.status_code == 201
+    new = installed.json()['bays'][0]['installation']
+    assert new['id'] != i['id'] and new['layout'] == i['layout']
+    assert {e['connection_point_id'] for e in new['endpoints']}.isdisjoint(e['connection_point_id'] for e in i['endpoints'])
+    assert {b['bay_key']: b['installation']['layout'] for b in installed.json()['bays']} == layouts[0]

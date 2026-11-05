@@ -183,8 +183,6 @@ def analyze_object(session, config, candidate):
     # Validate the final assignment, shared by candidate review and locked apply.
     for installation in installations:
         target_key = placements.get(str(installation.id))
-        if target_key is not None and bays[target_key].get("kind", "PLACED") == "LOGICAL":
-            reasons.append({"code": "LOGICAL_MODULE_INSTALLATION_UNSUPPORTED", "installation_id": str(installation.id)})
         if target_key is not None and bays[target_key]["panel_key"] != installation.layout["panel_key"]:
             reasons.append({"code": "MODULE_LAYOUT_PANEL_CONFLICT", "installation_id": str(installation.id)})
     for change in changes:

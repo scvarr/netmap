@@ -227,7 +227,7 @@ it('selects only one module and reopens the explicitly saved layout without chan
 });
 
 
-it('reads a logical place without drawing a rectangle or enabling installation', async () => {
+it('reads a logical place without drawing a rectangle and enables installation', async () => {
   const data = source();
   vi.mocked(data.loadConfiguration).mockResolvedValue({ ...free, panels: occupied.panels, bays: [{
     kind: 'LOGICAL', bay_key: 'logical', display_name: 'Logical place', compatibility: 'OCP3', panel_key: 'back', installation: null,
@@ -235,7 +235,7 @@ it('reads a logical place without drawing a rectangle or enabling installation',
   show(data);
   await screen.findByRole('heading', { name: 'Logical place' });
   fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'template' } });
-  expect(document.querySelector('button.primary-action')).toBeDisabled();
+  expect(document.querySelector('button.primary-action')).toBeEnabled();
   expect(document.querySelectorAll('svg rect')).toHaveLength(1);
   expect(document.querySelectorAll('svg circle')).toHaveLength(0);
   expect(document.querySelector('svg')?.outerHTML).not.toMatch(/NaN|undefined/);

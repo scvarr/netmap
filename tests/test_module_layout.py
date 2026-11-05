@@ -13,8 +13,13 @@ from tests.test_module_template_review import open_draft, save, check
 from tests.test_module_template_publication import publish
 
 
-def setup():
-    base, payload = create_base()
+def setup(logical=False):
+    from tests.test_hardware_configuration import base_payload
+    payload = base_payload()
+    if logical:
+        from tests.test_logical_module_places import logical as logical_bay
+        payload['bays'] = [logical_bay(b) for b in payload['bays']]
+    base, payload = create_base(payload)
     obj = create_object(base)['physical_object_ref']['entity_id']
     module = create_module()
     response = install(obj, module['template_id'], payload['bays'][0]['bay_key'])
@@ -22,8 +27,9 @@ def setup():
     return base, obj, module, response.json()
 
 
-def test_initial_projection_orientation_and_e3_geometry():
-    base, obj, module, document = setup()
+@pytest.mark.parametrize('logical', [False, True])
+def test_initial_projection_orientation_and_e3_geometry(logical):
+    base, obj, module, document = setup(logical)
     installed = document['bays'][0]['installation']
     layout = installed['layout']
     validate_layout(layout, document['bays'][0]['panel_key'])
@@ -142,8 +148,9 @@ def test_0007_backfills_existing_installations():
 
 
 @pytest.mark.parametrize('replace_key', [True, False])
-def test_d2_final_assignment_panel_conflict_is_atomic(replace_key):
-    base, obj, _, _ = setup()
+@pytest.mark.parametrize('logical', [False, True])
+def test_d2_final_assignment_panel_conflict_is_atomic(replace_key, logical):
+    base, obj, _, _ = setup(logical)
     def edit(d):
         original = d['bays'][0]
         d['panels'].append({**d['panels'][0], 'panel_key': 'other', 'panel_number': 2})
