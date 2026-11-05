@@ -22,9 +22,12 @@ export function presentedLinks(state: BlueprintEditorState, sides: { panel: stri
   }).sort((x,y) => compare(x.a,y.a) || compare(x.b,y.b));
 }
 
-export function EndpointLinkWorkspace({ state, onChange, onClose }: { state: BlueprintEditorState; onChange: (state: BlueprintEditorState) => void; onClose: () => void }) {
+export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelectedKeys }: { state: BlueprintEditorState; initialSelectedKeys?: string[]; onChange: (state: BlueprintEditorState) => void; onClose: () => void }) {
   const { t } = useI18n();
-  const [sideState, setSides] = useState(() => [state.activePanelKey, state.panels.find(p => p.panel_key !== state.activePanelKey)?.panel_key ?? state.activePanelKey].map(panel => ({ panel, mode: 'name' as 'name' | 'spatial' | 'manual', order: state.slots.filter(s => s.panel_key === panel).map(s => s.key), selected: [] as string[], horizontal: 'ltr' as 'ltr' | 'rtl', vertical: 'ttb' as 'ttb' | 'btt', naming: { mask: '#', start: '1', step: '1' } })));
+  const [sideState, setSides] = useState(() => [state.activePanelKey, state.panels.find(p => p.panel_key !== state.activePanelKey)?.panel_key ?? state.activePanelKey].map((panel, index) => {
+    const selected = index === 0 ? (initialSelectedKeys ?? []).filter(key => state.slots.some(s => s.key === key && s.panel_key === panel)) : [];
+    const available = state.slots.filter(s => s.panel_key === panel).map(s => s.key);
+    return { panel, mode: (selected.length ? 'manual' : 'name') as 'name' | 'spatial' | 'manual', order: [...selected, ...available.filter(key => !selected.includes(key))], selected, horizontal: 'ltr' as 'ltr' | 'rtl', vertical: 'ttb' as 'ttb' | 'btt', naming: { mask: '#', start: '1', step: '1' } }; }));
   const sides = sideState.map(side => {
     const available = state.slots.filter(s => s.panel_key === side.panel);
     const order = side.mode === 'name' ? [...available].sort((a,b) => a.display_name.localeCompare(b.display_name, 'ru', { numeric: true }) || a.key.localeCompare(b.key)).map(s => s.key)
