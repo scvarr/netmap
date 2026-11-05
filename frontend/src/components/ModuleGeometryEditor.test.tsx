@@ -27,9 +27,9 @@ describe('module geometry', () => {
  fireEvent.pointerDown(screen.getByRole('button',{name:'a'})); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
  fireEvent.pointerDown(screen.getByRole('button',{name:'b'}),{shiftKey:true}); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
  fireEvent.pointerDown(screen.getByRole('button',{name:'c'}),{shiftKey:true}); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
- fireEvent.click(screen.getByText('Распределить по горизонтали'));
+ fireEvent.click(screen.getByRole('button',{name:'Распределить по горизонтали'}));
  expect(value().endpoints.b.x).toBeCloseTo(.5);
- fireEvent.click(screen.getByText('Выровнять по горизонтали'));
+ fireEvent.click(screen.getByRole('button',{name:'Выровнять по горизонтали'}));
  expect(value().endpoints.a.y).toBeCloseTo(value().endpoints.c.y);
  const before=value().endpoints; const canvas=screen.getByLabelText('Геометрия модуля',{selector:'svg'});
  fireEvent.pointerDown(screen.getByRole('button',{name:'b'}),{clientX:0,clientY:0});
@@ -48,4 +48,23 @@ describe('module geometry', () => {
  fireEvent.click(screen.getByRole('button',{name:'Общий вид'}));
  expect(canvas.getAttribute('viewBox')).toBe(fit);
  });
+});
+
+it.each([[5,20],[20,5],[10,1],[1,1]])('fits %s × %s with screen-sized glyphs and unchanged model', (width,height) => {
+ const geometry = {width,height,fill_color:'#64748b',endpoints:{a:{x:0,y:0},b:{x:1,y:1}}};
+ render(<I18nProvider><ModuleGeometryEditor geometry={geometry} endpoints={['a','b'].map(key=>({key,display_name:key,kind:'NETWORK_PORT'}))}/></I18nProvider>);
+ const svg=screen.getByLabelText('Геометрия модуля',{selector:'svg'});
+ const [x,y,w,h]=svg.getAttribute('viewBox')!.split(' ').map(Number);
+ expect(x).toBeLessThan(0); expect(y).toBeLessThan(0);
+ expect(x+w).toBeGreaterThan(width); expect(y+h).toBeGreaterThan(height);
+ const scale=640/w;
+ expect(w/h).toBeCloseTo(640/360);
+ expect(width*scale).toBeLessThanOrEqual(640*.72+.001);
+ expect(height*scale).toBeLessThanOrEqual(360*.72+.001);
+ for(const circle of svg.querySelectorAll('circle')) {
+   expect(Number(circle.getAttribute('r'))*scale).toBeCloseTo(5);
+   expect(circle.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+ }
+ for(const text of svg.querySelectorAll('text')) expect(Number(text.getAttribute('font-size'))*scale).toBeCloseTo(12);
+ expect(geometry.endpoints).toEqual({a:{x:0,y:0},b:{x:1,y:1}});
 });

@@ -814,3 +814,17 @@ a { color: inherit; }
 .module-geometry--editable .module-geometry__canvas { height: clamp(320px, 48vh, 580px); }
 .module-geometry__canvas svg { display: block; }
 @media (max-width: 900px) { .module-template-editor { grid-template-columns: minmax(0, 1fr); } .module-template-editor__ports { max-height: 260px; } }
+
+.module-geometry__toolbar { align-items: stretch; gap: 10px; }
+.module-geometry__tool-group { display: flex; flex-wrap: wrap; align-items: end; gap: 6px; padding: 8px; border: 1px solid #294145; border-radius: 8px; min-width: 0; }
+.module-geometry__tool-group > span { align-self: center; font-size: 11px; color: #91a5a5; }
+.module-template-editor__port-row { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(70px, .7fr); gap: 8px; align-items: center; padding: 7px; border: 1px solid transparent; border-radius: 6px; }
+.module-template-editor__port-row input { width: auto; margin: 0; }
+.module-template-editor__port-row span { color: #91a5a5; font-size: 10px; overflow-wrap: anywhere; }
+.module-template-editor__port-name { text-align: left; overflow-wrap: anywhere; padding: 4px; border: 0; background: transparent; color: #e7f4f1; cursor: pointer; }
+.module-template-editor__ports { margin-top: 10px; max-height: 220px; }
+
+.module-template-editor { grid-template-columns: minmax(240px, 280px) minmax(0, 1fr); align-items: start; }
+.module-geometry__arrange { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.module-geometry--editable .module-geometry__canvas { height: clamp(280px, 40vh, 460px); }
+@media (max-width: 900px) { .module-template-editor { grid-template-columns: minmax(0, 1fr); } }

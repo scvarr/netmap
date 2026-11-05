@@ -791,3 +791,44 @@ Manual NIC-2GE recheck (not performed by implementation tests):
 4. On a simulated failed save or diagnostic refresh, verify unsaved name and
    geometry remain available; retry successfully. Resume HV-01 only following
    external review and successful manual recheck of this stopped step.
+
+
+### HV-01-UX-01 visual corrective after manual recheck (2026-11-05)
+
+Manual recheck of `1c4cc807` rejected the ModuleTemplate presentation: a narrow
+5 × 20 body exposed oversized port glyphs and overloaded controls. Status remains
+**IMPLEMENTED / MANUAL RECHECK PENDING**; Phase C **PAUSED**, HV-01 **NOT PASSED**.
+
+Root cause: SVG model units scaled the default one-unit marker stroke along
+with the body, while label size depended on body height. At small physical
+sizes the stroke dominated the marker. The correction separates presentation
+from normalized model geometry: markers have a 5 CSS-pixel radius, a 1.5-pixel
+non-scaling stroke, and 12-pixel labels. Uniform fitting uses the actual canvas
+viewport via ResizeObserver and reserves 28% of its extent for margins. Zoom
+changes only the viewBox; glyphs keep their screen size and fit resets to 100%.
+Body aspect ratio, definition keys and normalized positions remain intact.
+
+Ports now use compact selectable name/type rows. A single selected definition
+has editable name, type, order and delete controls; adding selects its new row.
+Checkboxes retain group selection; list and canvas selection share state.
+Body, arrangement and zoom tools are visually grouped, with compact directional
+buttons and full accessible labels/tooltips. Canvas height is bounded independently
+of the body; existing create/draft/check/publication/reconciliation and installation
+layout contracts are unchanged. No changes to BaseTemplateEditor or ModuleBay.
+
+Validation: **34 targeted tests passed** in Docker, covering four extreme body
+ratios (5 × 20, 20 × 5, 10 × 1, 1 × 1), fit margins, constant screen glyph/text
+sizes, bounded group drag, selection, endpoint identity, creation, draft editing,
+save failure/retry, reopen and existing review flows. TypeScript/Vite build passed
+(existing bundle-size warning). No full suite run. Browser inspection against an
+isolated Docker Vite server covered all four ratios at 1440 × 1000 and compact
+layout at 1000 × 800: body fully visible, readable labels, identical 11.5-pixel
+marker bounds including stroke, and no horizontal document overflow. Screenshots
+were inspected locally; this does not replace the user's manual acceptance.
+
+Manual recheck: create/reopen NIC-2GE with two ports; compare the four body sizes,
+select each port from list/canvas and confirm only one detail form; Ctrl/Shift
+select both and drag/align/distribute; zoom and fit; rename/change type/reorder,
+add/delete a temporary port, save/reopen and check the draft. Repeat fitting at a
+narrower window width and confirm failed saves retain local values. Continue
+HV-01 only after external branch inspection and successful manual recheck.

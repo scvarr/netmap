@@ -117,9 +117,10 @@ describe('09.6-A user path', () => {
     expect(screen.getByLabelText('Совместимость').closest('form')).toHaveClass('module-template-form');
     expect(screen.getByRole('button', { name: 'Добавить конечную точку' })).toHaveClass('secondary-action');
     expect(screen.getByRole('button', { name: 'Создать шаблон' })).toHaveClass('primary-action');
-    const fields = screen.getAllByRole('group').filter(element => element.classList.contains('endpoint-group'));
-    await userEvent.type(within(fields[0]).getByLabelText('Название'), 'P1');
-    await userEvent.type(within(fields[1]).getByLabelText('Название'), 'P2');
+    await userEvent.click(screen.getByRole('button', { name: '#1' }));
+    await userEvent.type(within(screen.getByRole('group', { name: 'Свойства выбранного порта' })).getByLabelText('Название'), 'P1');
+    await userEvent.click(screen.getByRole('button', { name: '#2' }));
+    await userEvent.type(within(screen.getByRole('group', { name: 'Свойства выбранного порта' })).getByLabelText('Название'), 'P2');
     await userEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
     expect(source.createModule).toHaveBeenCalledWith({ geometry: expect.objectContaining({ width: 240, height: 80, endpoints: expect.any(Object) }), name: 'NIC', compatibility: 'OCP3', endpoints: [{ key: expect.any(String), display_name: 'P1', kind: 'NETWORK_PORT' }, { key: expect.any(String), display_name: 'P2', kind: 'NETWORK_PORT' }] });
     expect(await screen.findByRole('heading', { name: 'Saved library' })).toBeInTheDocument();

@@ -53,6 +53,7 @@ describe('module persisted draft and review', () => {
     expect(['first', 'second']).not.toContain(key);
     view.unmount(); view = mount();
     await screen.findByDisplayValue('Новое имя');
+    fireEvent.click(screen.getAllByRole('button', { name: 'Renamed' })[0]);
     expect(screen.getByDisplayValue('Renamed')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();
     view.unmount();
