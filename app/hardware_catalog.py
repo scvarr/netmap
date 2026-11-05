@@ -399,6 +399,8 @@ class HardwareCatalog:
         bay = self.session.scalar(select(ModuleBay).where(ModuleBay.base_revision_id == config.base_revision_id, ModuleBay.bay_key == query.bay_key))
         if bay is None:
             raise ValidationError("Bay does not belong to the object's base revision")
+        if bay.kind == "LOGICAL":
+            raise ModelError("LOGICAL_MODULE_INSTALLATION_UNSUPPORTED")
         if self.session.scalar(select(ModuleInstallation.id).where(ModuleInstallation.configuration_id == config.id, ModuleInstallation.bay_key == bay.bay_key)) is not None:
             raise ModelError("Bay is occupied")
         revision = self.session.scalar(select(ModuleTemplateRevision).where(ModuleTemplateRevision.template_id == query.module_template_id).order_by(ModuleTemplateRevision.version_number.desc()).limit(1))
@@ -451,8 +453,8 @@ class HardwareCatalog:
                 for mapping, definition in rows:
                     x, y = endpoint_position(installation.layout, revision.geometry["endpoints"][definition.definition_key], installation.orientation)
                     endpoints.append({"key": definition.definition_key, "kind": definition.kind, **contexts[str(mapping.connection_point_id)], "x": x, "y": y})
-                installed = {"id": str(installation.id), "module_template_id": str(template.id), "module_revision_id": str(revision.id), "name": revision.name, "orientation": installation.orientation, "layout": installation.layout, "fill_color": revision.geometry["fill_color"], "initial_layout": initial_layout({k: getattr(bay, k) for k in ("panel_key", "x", "y", "width", "height")}, revision.geometry, installation.orientation, {"width": panel_rows[bay.panel_key].width, "height": panel_rows[bay.panel_key].height}), "endpoints": endpoints}
-            bays.append({"bay_key": bay.bay_key, "display_name": bay.display_name, "compatibility": bay.compatibility, "panel_key": bay.panel_key, "x": bay.x, "y": bay.y, "width": bay.width, "height": bay.height, "installation": installed})
+                installed = {"id": str(installation.id), "module_template_id": str(template.id), "module_revision_id": str(revision.id), "name": revision.name, "orientation": installation.orientation, "layout": installation.layout, "fill_color": revision.geometry["fill_color"], "initial_layout": None if bay.kind == "LOGICAL" else initial_layout({k: getattr(bay, k) for k in ("panel_key", "x", "y", "width", "height")}, revision.geometry, installation.orientation, {"width": panel_rows[bay.panel_key].width, "height": panel_rows[bay.panel_key].height}), "endpoints": endpoints}
+            bays.append({"bay_key": bay.bay_key, "display_name": bay.display_name, "compatibility": bay.compatibility, "panel_key": bay.panel_key, "kind": bay.kind, "x": bay.x, "y": bay.y, "width": bay.width, "height": bay.height, "installation": installed})
         panels = [{k: getattr(p, k) for k in ("panel_key", "display_name", "width", "height")} for p in panel_rows.values()]
         return {"configuration_id": str(config.id), "base_revision_id": str(config.base_revision_id), "panels": panels, "bays": bays}
 

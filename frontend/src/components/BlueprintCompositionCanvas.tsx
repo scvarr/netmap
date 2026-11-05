@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import type { BaseInternalLink, BlueprintSlot, PresentationPanel } from '../topology/baseTemplateTypes';
 import { useI18n } from '../i18n';
 import { panelGestureGeometry, snapSelectionTranslation, type PanelHandle, type PanelRectangle } from '../blueprints/editorModel';
-import type { ModuleBay } from '../topology/hardwareModules';
+import { isPlacedBay, type PlacedModuleBay as ModuleBay } from '../topology/hardwareModules';
 import { bayGestureGeometry, type BayRectangle } from '../blueprints/moduleBayGeometry';
 
 interface Props {
@@ -14,7 +14,7 @@ interface Props {
   onContextMenu: (key: string | undefined, clientX: number, clientY: number) => void;
   onActivatePanel: (key: string) => void;
   onPanelGeometry?: (key: string, rectangle: PanelRectangle) => void;
-  bays?: ModuleBay[]; selectedBayKey?: string;
+  bays?: import('../topology/hardwareModules').ModuleBay[]; selectedBayKey?: string;
   onSelectBay?: (key: string) => void;
   onBayGeometry?: (key: string, rectangle: BayRectangle) => void;
 }
@@ -31,7 +31,8 @@ export function endpointMarkerRadii(scale: number) {
   };
 }
 
-export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel, onPanelGeometry, orderedKeys, highlightedKey, bays = [], selectedBayKey, onSelectBay, onBayGeometry }: Props) {
+export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel, onPanelGeometry, orderedKeys, highlightedKey, bays: allBays = [], selectedBayKey, onSelectBay, onBayGeometry }: Props) {
+  const bays = allBays.filter(isPlacedBay);
   const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null);
   const gesture = useRef<Gesture | undefined>(undefined);

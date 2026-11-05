@@ -6,7 +6,7 @@ import { PageHeader } from '../components/PageChrome';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
 import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateTypes';
-import type { ModuleBay } from '../topology/hardwareModules';
+import { isPlacedBay, type PlacedModuleBay as ModuleBay } from '../topology/hardwareModules';
 import { duplicateModuleBay, normalizeBayGeometry } from '../blueprints/moduleBayGeometry';
 
 interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; onStateChange?: (state: BlueprintEditorState) => void; saveDisabled?: boolean; }
@@ -31,8 +31,8 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   const [editor, setEditor] = useState(initialState);
   useEffect(() => { onStateChange?.(editor); }, [editor, onStateChange]);
   const [selectedBayKey, setSelectedBayKey] = useState<string>();
-  const selectedBay = editor.bays?.find(bay => bay.bay_key === selectedBayKey);
-  const changeBay = (key: string, patch: Partial<ModuleBay>) => setEditor(old => ({ ...old, bays: old.bays?.map(bay => bay.bay_key === key ? { ...bay, ...patch } : bay) }));
+  const selectedBay = editor.bays?.filter(isPlacedBay).find(bay => bay.bay_key === selectedBayKey);
+  const changeBay = (key: string, patch: Partial<ModuleBay>) => setEditor(old => ({ ...old, bays: old.bays?.map(bay => bay.bay_key === key && isPlacedBay(bay) ? { ...bay, ...patch } : bay) }));
   const duplicateBay = () => {
     if (!selectedBay) return;
     const copy = duplicateModuleBay(selectedBay);
@@ -109,7 +109,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     activatePanel(bay.panel_key); setSelectedBayKey(key); setSelected(new Set()); setMenu(undefined); setPositionDraft(undefined);
   };
   const addBay = () => {
-    const bay = { bay_key: crypto.randomUUID(), display_name: t('hardware.bay'), compatibility: '', panel_key: panelKey, ...normalizeBayGeometry({ x: .25, y: .25, width: .3, height: .3 }) };
+    const bay = { kind: "PLACED" as const, bay_key: crypto.randomUUID(), display_name: t('hardware.bay'), compatibility: '', panel_key: panelKey, ...normalizeBayGeometry({ x: .25, y: .25, width: .3, height: .3 }) };
     setEditor(old => ({ ...old, bays: [...old.bays ?? [], bay] }));
     setSelectedBayKey(bay.bay_key); setSelected(new Set()); setMenu(undefined);
   };
@@ -195,7 +195,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     setError(undefined);
     const result = createBlueprintRequest(editor);
     if (!result.request) { setError(t(validationKey[result.errors[0]])); return; }
-    if (editor.bays?.some(b => !b.display_name.trim() || !b.compatibility.trim() || !editor.panels.some(p => p.panel_key === b.panel_key) || ![b.x,b.y,b.width,b.height].every(Number.isFinite) || b.x < 0 || b.y < 0 || b.width <= 0 || b.height <= 0 || b.x + b.width > 1 || b.y + b.height > 1)) { setError(t("hardware.geometryError")); return; }
+    if (editor.bays?.some(b => !b.display_name.trim() || !b.compatibility.trim() || !editor.panels.some(p => p.panel_key === b.panel_key) || (isPlacedBay(b) && (![b.x,b.y,b.width,b.height].every(Number.isFinite) || b.x < 0 || b.y < 0 || b.width <= 0 || b.height <= 0 || b.x + b.width > 1 || b.y + b.height > 1)))) { setError(t("hardware.geometryError")); return; }
     try { await onSave(editor); } catch { setError(t('blueprint.validation.saveFailed')); }
   };
   return <>

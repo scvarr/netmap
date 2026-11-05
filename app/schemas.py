@@ -725,14 +725,18 @@ class ModuleBayRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=255)
     compatibility: str = Field(min_length=1, max_length=255)
     panel_key: str = Field(min_length=1, max_length=255)
-    x: FiniteFloat = Field(ge=0, le=1)
-    y: FiniteFloat = Field(ge=0, le=1)
-    width: FiniteFloat = Field(gt=0, le=1)
-    height: FiniteFloat = Field(gt=0, le=1)
+    kind: Literal["LOGICAL", "PLACED"] = "PLACED"
+    x: FiniteFloat | None = Field(default=None, ge=0, le=1)
+    y: FiniteFloat | None = Field(default=None, ge=0, le=1)
+    width: FiniteFloat | None = Field(default=None, gt=0, le=1)
+    height: FiniteFloat | None = Field(default=None, gt=0, le=1)
 
     @model_validator(mode="after")
     def rectangle_inside_panel(self):
-        if self.x + self.width > 1 or self.y + self.height > 1:
+        geometry = (self.x, self.y, self.width, self.height)
+        if (self.kind == "LOGICAL" and any(v is not None for v in geometry)) or (self.kind == "PLACED" and any(v is None for v in geometry)):
+            raise PydanticCustomError("hardware_validation", "Bay kind and rectangle contradict each other")
+        if self.kind == "PLACED" and (self.x + self.width > 1 or self.y + self.height > 1):
             raise PydanticCustomError("hardware_validation", "Bay rectangle must be entirely inside its panel")
         if any(not v.strip() for v in (self.bay_key, self.display_name, self.compatibility, self.panel_key)):
             raise PydanticCustomError("hardware_validation", "Bay strings must not be blank")

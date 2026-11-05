@@ -829,7 +829,7 @@ def get_object_blueprint_version(
             }
             for slot in version.slots
         ],
-        "bays": [{key: getattr(bay, key) for key in ("bay_key", "display_name", "compatibility", "panel_key", "x", "y", "width", "height")} for bay in version.bays],
+        "bays": [{key: getattr(bay, key) for key in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for bay in version.bays],
         "internal_links": [
             {"from_slot_key": left, "to_slot_key": right}
             for left, right in version.internal_links

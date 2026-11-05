@@ -1,4 +1,4 @@
-import type { ModuleBay } from '../topology/hardwareModules';
+import type { PlacedModuleBay as ModuleBay } from '../topology/hardwareModules';
 import { nearestSnap, type PanelHandle } from './editorModel';
 
 export type BayRectangle = Pick<ModuleBay, 'x' | 'y' | 'width' | 'height'>;

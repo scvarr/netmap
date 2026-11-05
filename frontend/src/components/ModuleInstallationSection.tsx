@@ -93,7 +93,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           gesture.current = { x: point.x/panel.width, y: point.y/panel.height, layout: l, resize };
         };
         return <g key={b.bay_key}>
-          <rect x={b.x * panel.width} y={b.y * panel.height} width={b.width * panel.width} height={b.height * panel.height} fill="none" stroke="#94a3b8" strokeDasharray="4 3" vectorEffect="non-scaling-stroke"><title>{b.display_name}</title></rect>
+          {b.kind !== "LOGICAL" && <rect x={b.x * panel.width} y={b.y * panel.height} width={b.width * panel.width} height={b.height * panel.height} fill="none" stroke="#94a3b8" strokeDasharray="4 3" vectorEffect="non-scaling-stroke"><title>{b.display_name}</title></rect>}
           {i && l && <g>
             <rect data-installation-id={i.id} onPointerDown={e => begin(e, false)} x={l.x * panel.width} y={l.y * panel.height} width={l.width * panel.width} height={l.height * panel.height} fill={i.fill_color} stroke={editing && selected === i.id ? '#f59e0b' : 'none'} strokeWidth={1.5} vectorEffect="non-scaling-stroke"><title>{i.name}</title></rect>
             {i.endpoints.map(e => <circle key={e.connection_point_id} data-endpoint-id={e.connection_point_id} pointerEvents="none" cx={(l.x + (e.x-i.layout.x)/i.layout.width*l.width)*panel.width} cy={(l.y + (e.y-i.layout.y)/i.layout.height*l.height)*panel.height} r={4 / scale} fill="white" stroke="black" strokeWidth={1} vectorEffect="non-scaling-stroke"><title>{e.contextual_display_name}</title></circle>)}
@@ -108,7 +108,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
       {bay.installation ? <><ul>{bay.installation.endpoints.map(e => <li key={e.connection_point_id}>{e.contextual_display_name}</li>)}</ul><button type="button" className="text-action" disabled={pending || editing} onClick={() => void uninstall(bay.installation!.id, bay.installation!.name, bay.display_name)}>{t('hardware.uninstall')}</button></> : <>
         <label>{t('hardware.selectModule')}<select disabled={pending || editing} value={choice.module} onChange={e => setChoices(old => ({ ...old, [bay.bay_key]: { ...choice, module: e.target.value } }))}><option value="">{t(compatible.length ? 'hardware.selectModule' : 'hardware.noModules')}</option>{compatible.map(m => <option key={m.template_id} value={m.template_id}>{m.name}</option>)}</select></label>
         <label>{t('hardware.orientation')}<select disabled={pending || editing} value={choice.orientation} onChange={e => setChoices(old => ({ ...old, [bay.bay_key]: { ...choice, orientation: e.target.value as 'HORIZONTAL' | 'VERTICAL' } }))}><option value="HORIZONTAL">{t('hardware.horizontal')}</option><option value="VERTICAL">{t('hardware.vertical')}</option></select></label>
-        <button type="button" className="primary-action" disabled={pending || editing || !choice.module} onClick={() => void install(bay.bay_key)}>{t('hardware.install')}</button>
+        <button type="button" className="primary-action" disabled={pending || editing || !choice.module || bay.kind === "LOGICAL"} onClick={() => void install(bay.bay_key)}>{t('hardware.install')}</button>
       </>}
     </section>; })}
   </section>;

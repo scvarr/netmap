@@ -1,9 +1,17 @@
 import type { BlueprintSlotKind, TemplateImpactReason } from './baseTemplateTypes';
 
-export interface ModuleBay {
+export interface PlacedModuleBay {
+  kind?: "PLACED";
   bay_key: string; display_name: string; compatibility: string; panel_key: string;
   x: number; y: number; width: number; height: number;
 }
+export interface LogicalModuleBay {
+  kind: "LOGICAL";
+  bay_key: string; display_name: string; compatibility: string; panel_key: string;
+  x?: null; y?: null; width?: null; height?: null;
+}
+export type ModuleBay = PlacedModuleBay | LogicalModuleBay;
+export const isPlacedBay = (bay: ModuleBay): bay is PlacedModuleBay => bay.kind !== "LOGICAL";
 export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind }
 export interface ModuleGeometry { width: number; height: number; fill_color: string; endpoints: Record<string, { x: number; y: number }> }
 export const initialModuleGeometry = (): ModuleGeometry => ({ width: 240, height: 80, fill_color: "#64748b", endpoints: {} });

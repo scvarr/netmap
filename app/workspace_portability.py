@@ -70,7 +70,7 @@ ENTITIES = (
     ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id"),
     ("authoring", "ObjectConfiguration", "ObjectConfiguration", "id base_revision_id physical_object_id"),
     ("authoring", "BuiltInEndpointMapping", "BuiltInEndpointMapping", "id configuration_id definition_id connection_point_id network_interface_id"),
-    ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name compatibility panel_key x y width height"),
+    ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name compatibility panel_key kind x y width height"),
     ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
     ("authoring", "ModuleTemplatePublication", "ModuleTemplatePublication", "id revision_id"),
     ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name compatibility geometry"),
@@ -117,7 +117,7 @@ def _json_value(value):
 
 
 def export_package(session: Session) -> dict:
-    package = {"format": FORMAT, "format_version": FORMAT_VERSION, "module_geometry_version": 1, "module_layout_version": 1,
+    package = {"format": FORMAT, "format_version": FORMAT_VERSION, "module_geometry_version": 1, "module_layout_version": 1, "module_places_version": 1,
                "canonical": {}, "authoring": {}, "presentation": {}, "settings": {}}
     for section, name, model, fields in _specs():
         rows = session.scalars(select(model).order_by(model.id)).all()
@@ -167,7 +167,7 @@ def validate_package(package: object) -> dict:
         raise PackageError("Not a NetMap workspace package")
     if type(package.get("format_version")) is not int or package["format_version"] != FORMAT_VERSION:
         raise PackageError("Unsupported NetMap workspace format_version")
-    if set(package) - {"module_geometry_version", "module_layout_version"} != {"format", "format_version", "canonical", "authoring", "presentation", "settings"}:
+    if set(package) - {"module_geometry_version", "module_layout_version", "module_places_version"} != {"format", "format_version", "canonical", "authoring", "presentation", "settings"}:
         raise PackageError("Incomplete or unknown package sections")
     # Accept only a complete historical profile or a complete F1 profile.
     import copy
@@ -176,6 +176,22 @@ def validate_package(package: object) -> dict:
     authoring = package["authoring"]
     if not isinstance(authoring, dict):
         raise PackageError("Invalid authoring section")
+    places_version = package.get("module_places_version")
+    if "module_places_version" in package and (type(places_version) is not int or places_version != 1 or package.get("module_layout_version") != 1):
+        raise PackageError("Invalid module places profile")
+    bay_records = authoring.get("ModuleBay", [])
+    if not isinstance(bay_records, list):
+        raise PackageError("Invalid ModuleBay collection")
+    for bay in bay_records:
+        if not isinstance(bay, dict):
+            raise PackageError("Invalid bay record")
+        if places_version == 1:
+            if "kind" not in bay:
+                raise PackageError("Incomplete module places profile")
+        else:
+            if "kind" in bay:
+                raise PackageError("Module places require module_places_version=1")
+            bay["kind"] = "PLACED"
     for name in ("ModuleTemplateRevision", "ModuleTemplateDraft", "ModuleTemplateCandidate"):
         records = authoring.get(name, [])
         if not isinstance(records, list) or any(not isinstance(r, dict) for r in records):
@@ -392,7 +408,7 @@ def _validate_template_reviews(rows):
             "body": {"kind": revision["body_kind"], "width": revision["width"], "height": revision["height"], "fill_color": revision["fill_color"]},
             "panels": [{k: p[k] for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height")} for p in rows["presentation_panels"] if p["base_revision_id"] == revision["id"]],
             "slots": [{"key": s["slot_key"], "display_name": s["display_name"], "kind": s["kind"], "panel_key": s["panel_key"], "rendered_position": {"x": s["position_x"], "y": s["position_y"]}} for s in rows["built_in_endpoint_definitions"] if s["base_revision_id"] == revision["id"]],
-            "bays": [{k: b[k] for k in ("bay_key", "display_name", "compatibility", "panel_key", "x", "y", "width", "height")} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
+            "bays": [{k: b[k] for k in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
         }
         keys = {s["id"]: s["slot_key"] for s in rows["built_in_endpoint_definitions"]}
         actual["internal_links"] = [{"from_slot_key": keys[l["slot_a_id"]], "to_slot_key": keys[l["slot_b_id"]]} for l in rows["base_internal_links"] if l["base_revision_id"] == revision["id"]]
@@ -440,6 +456,8 @@ def _validate_hardware_configuration(rows):
     for installation in installations.values():
         config = configs[installation["configuration_id"]]
         bay = bays.get((config["base_revision_id"], installation["bay_key"]))
+        if bay is not None and bay["kind"] == "LOGICAL":
+            raise PackageError("LOGICAL_MODULE_INSTALLATION_UNSUPPORTED")
         if bay is None or bay["compatibility"] != revisions[installation["module_revision_id"]]["compatibility"]:
             raise PackageError("Installation has no compatible bay in its owning configuration")
         from app.module_layout import validate_layout

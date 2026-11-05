@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { BaseTemplateEditor, newBlueprintEditorState } from './BaseTemplateEditor';
 import type { BlueprintEditorState } from '../blueprints/editorModel';
-import type { ModuleBay } from '../topology/hardwareModules';
+import type { PlacedModuleBay as ModuleBay } from '../topology/hardwareModules';
 
 const bay: ModuleBay = { bay_key: 'bay', display_name: 'OCP', compatibility: 'OCP3', panel_key: 'one', x: .2, y: .2, width: .3, height: .3 };
 const panel = { panel_key: 'one', panel_number: 1, display_name: 'Front', x: 0, y: 0, width: 100, height: 40 };

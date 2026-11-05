@@ -2,7 +2,7 @@
 
 ## Статус и границы
 
-**HV-01-UX-02A — DOCS IMPLEMENTED. Logical module places runtime — OPEN.
+**HV-01-UX-02B — IMPLEMENTED / EXTERNAL REVIEW PENDING. LOGICAL installation и count UI — OPEN.
 Phase C — PAUSED. HV-01 — NOT PASSED.**
 
 Основание: main `34e9e392048c94fbcbb345d22907914d63bd8d35`.
@@ -89,7 +89,7 @@ PhysicalObject показывает свободную, занятую и общ
   даже пустые. Геометрия места и пользовательский layout установки — разные
   данные, сохранение одного не оправдывает потерю другого.
 
-## OPEN перед реализацией
+## Решения исходного docs milestone (core уточнён ниже)
 
 | Решение | Требуемая граница |
 | --- | --- |
@@ -100,8 +100,7 @@ PhysicalObject показывает свободную, занятую и общ
 | Изменение панели | Любая будущая cross-panel стратегия требует отдельного контракта преобразования и сохранения layout; сейчас действует отказ F2a, не автоматический перенос. |
 | Миграция и archives | Выбрать representation, forward migration и archive profile/version с явной валидацией; applied Alembic revisions не изменять. |
 
-Конкретные альтернативы сохранения старых геометрических ModuleBay (ни одна
-здесь не выбрана):
+Рассмотренные в UX-02A альтернативы; UX-02B выбирает сохранение PLACED:
 
 1. Сохранить их как явно фиксированные места с прежними ключами, панелями и
    rectangles; новые свободные места создавать без rectangle. Это сохраняет
@@ -121,8 +120,7 @@ runtime, legacy parser или fallback только ради development compati
 
 Сейчас workspace v5 использует module_geometry_version=1 и
 module_layout_version=1; F1/F2a документируют bounded historical profiles и
-детерминированное дополнение старой геометрии. Этот milestone не меняет import,
-export или принимаемые profiles. Будущая реализация обязана сохранить canonical
+детерминированное дополнение старой геометрии. HV-01-UX-02B расширяет profile, как описано в разделе core ниже. Будущая реализация обязана сохранить canonical
 IDs, pinned revisions, индивидуальные ключи мест, installations, layout,
 координаты прежних bays, пользовательские данные и frozen review provenance.
 Нельзя переинтерпретировать текущий archive как набор безымянных счётчиков или
@@ -133,3 +131,32 @@ IDs, pinned revisions, индивидуальные ключи мест, install
 и неоднозначный archive profile. До выбора миграции и размещения runtime остаётся
 OPEN. Docs-only результат не подтверждает миграционную совместимость и не
 заменяет внешнее inspection итогового diff или ручную HV-01 приёмку.
+
+## HV-01-UX-02B — Logical Module Places Core
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING. Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+ModuleBay is one individual record with stable opaque bay_key, display_name,
+panel_key and exact open compatibility. kind=LOGICAL has no rectangle (NULL
+coordinates); kind=PLACED requires a full valid rectangle. Both have capacity=1.
+Alembic 0008 is forward-only: existing rows become PLACED without changing keys,
+rectangles (including empty bays), installations, endpoints or saved layout.
+Historical immutable definitions remain unchanged and readable as PLACED with a
+complete rectangle. Newly serialized definitions include kind explicitly.
+
+Workspace v5 exports module_places_version=1 alongside module_geometry_version=1
+and module_layout_version=1. The new profile requires kind on every ModuleBay row.
+Historical archives without the places marker accept geometric rows only and add
+PLACED at the import boundary, preserving frozen definitions and canonical IDs.
+
+Install and final D2 assignment into LOGICAL reject with
+LOGICAL_MODULE_INSTALLATION_UNSUPPORTED before writes. D2 retains its deterministic
+assignment order, exact compatibility, final panel/layout checks,
+MODULE_LAYOUT_PANEL_CONFLICT and INSUFFICIENT_COMPATIBLE_CAPACITY. PLACED F2a fit
+and F2b interaction are unchanged; PLACED adds no movement restriction.
+Frontend reads both kinds, excludes LOGICAL from geometry editing and bay SVG,
+and disables its install action. No new canonical inventory or installation table.
+
+LOGICAL installation, initial placement/reset without rectangle and count UI — OPEN.
+This core supersedes the earlier representation/migration OPEN entries only;
+external inspection and HV-01 acceptance remain outstanding.

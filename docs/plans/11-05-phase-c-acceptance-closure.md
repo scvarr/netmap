@@ -945,3 +945,32 @@ Phase C — PAUSED. HV-01 — NOT PASSED.**
 мест без обязательного rectangle. Фиксированные отсеки допустимы. Контракт
 разделяет целевую семантику, инварианты и OPEN решения миграции/размещения;
 действующие IMPLEMENTED F1/F2/D2 не переписываются и runtime не объявляется готовым.
+
+## HV-01-UX-02B — Logical Module Places Core
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING. Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+ModuleBay is one individual record with stable opaque bay_key, display_name,
+panel_key and exact open compatibility. kind=LOGICAL has no rectangle (NULL
+coordinates); kind=PLACED requires a full valid rectangle. Both have capacity=1.
+Alembic 0008 is forward-only: existing rows become PLACED without changing keys,
+rectangles (including empty bays), installations, endpoints or saved layout.
+Historical immutable definitions remain unchanged and readable as PLACED with a
+complete rectangle. Newly serialized definitions include kind explicitly.
+
+Workspace v5 exports module_places_version=1 alongside module_geometry_version=1
+and module_layout_version=1. The new profile requires kind on every ModuleBay row.
+Historical archives without the places marker accept geometric rows only and add
+PLACED at the import boundary, preserving frozen definitions and canonical IDs.
+
+Install and final D2 assignment into LOGICAL reject with
+LOGICAL_MODULE_INSTALLATION_UNSUPPORTED before writes. D2 retains its deterministic
+assignment order, exact compatibility, final panel/layout checks,
+MODULE_LAYOUT_PANEL_CONFLICT and INSUFFICIENT_COMPATIBLE_CAPACITY. PLACED F2a fit
+and F2b interaction are unchanged; PLACED adds no movement restriction.
+Frontend reads both kinds, excludes LOGICAL from geometry editing and bay SVG,
+and disables its install action. No new canonical inventory or installation table.
+
+LOGICAL installation, initial placement/reset without rectangle and count UI — OPEN.
+This core supersedes the earlier representation/migration OPEN entries only;
+external inspection and HV-01 acceptance remain outstanding.

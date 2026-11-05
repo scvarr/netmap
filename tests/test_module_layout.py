@@ -75,6 +75,8 @@ def test_archive_current_historical_and_corruption():
     parsed = validate_package(current)
     assert parsed['module_installations'][0]['layout'] == document['bays'][0]['installation']['layout']
     historical = copy.deepcopy(current)
+    del historical['module_places_version']
+    for b in historical['authoring']['ModuleBay']: del b['kind']
     del historical['module_layout_version']
     for i in historical['authoring']['ModuleInstallation']: del i['layout']
     assert validate_package(historical)['module_installations'] == parsed['module_installations']

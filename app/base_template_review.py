@@ -34,7 +34,7 @@ def published_definition(session, template_id, revision_id):
         "panels": [{k: getattr(p, k) for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height")} for p in detail.panels],
         "slots": [{"key": s.slot_key, "display_name": s.display_name, "kind": s.kind, "panel_key": s.panel_key,
                    "rendered_position": {"x": s.position_x, "y": s.position_y}} for s in detail.slots],
-        "bays": [{k: getattr(b, k) for k in ("bay_key", "display_name", "compatibility", "panel_key", "x", "y", "width", "height")} for b in detail.bays],
+        "bays": [{k: getattr(b, k) for k in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for b in detail.bays],
         "internal_links": [{"from_slot_key": a, "to_slot_key": b} for a, b in detail.internal_links],
     })
 
@@ -179,6 +179,8 @@ def analyze_object(session, config, candidate):
     # Validate the final assignment, shared by candidate review and locked apply.
     for installation in installations:
         target_key = placements.get(str(installation.id))
+        if target_key is not None and bays[target_key].get("kind", "PLACED") == "LOGICAL":
+            reasons.append({"code": "LOGICAL_MODULE_INSTALLATION_UNSUPPORTED", "installation_id": str(installation.id)})
         if target_key is not None and bays[target_key]["panel_key"] != installation.layout["panel_key"]:
             reasons.append({"code": "MODULE_LAYOUT_PANEL_CONFLICT", "installation_id": str(installation.id)})
     for change in changes:

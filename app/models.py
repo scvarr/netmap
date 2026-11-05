@@ -600,6 +600,7 @@ class ModuleBay(Base):
     __table_args__ = (
         UniqueConstraint("base_revision_id", "bay_key"),
         ForeignKeyConstraint(["base_revision_id", "panel_key"], ["presentation_panels.base_revision_id", "presentation_panels.panel_key"], ondelete="RESTRICT"),
+        CheckConstraint("(kind = 'LOGICAL' AND x IS NULL AND y IS NULL AND width IS NULL AND height IS NULL) OR (kind = 'PLACED' AND x IS NOT NULL AND y IS NOT NULL AND width IS NOT NULL AND height IS NOT NULL)", name="bay_representation"),
         CheckConstraint("x >= 0 AND y >= 0 AND width > 0 AND height > 0 AND x + width <= 1 AND y + height <= 1", name="rectangle_inside_panel"),
         CheckConstraint("char_length(btrim(bay_key)) > 0 AND char_length(btrim(display_name)) > 0 AND char_length(btrim(compatibility)) > 0", name="bay_strings_not_blank"),
     )
@@ -609,10 +610,11 @@ class ModuleBay(Base):
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     compatibility: Mapped[str] = mapped_column(String(255), nullable=False)
     panel_key: Mapped[str] = mapped_column(String(255), nullable=False)
-    x: Mapped[float] = mapped_column(Float, nullable=False)
-    y: Mapped[float] = mapped_column(Float, nullable=False)
-    width: Mapped[float] = mapped_column(Float, nullable=False)
-    height: Mapped[float] = mapped_column(Float, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="PLACED", server_default="PLACED")
+    x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    width: Mapped[float | None] = mapped_column(Float, nullable=True)
+    height: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class ModuleTemplate(Base):

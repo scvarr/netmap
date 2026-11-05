@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useI18n } from '../i18n';
-import type { ModuleBay } from '../topology/hardwareModules';
+import type { PlacedModuleBay as ModuleBay } from '../topology/hardwareModules';
 import type { PresentationPanel } from '../topology/baseTemplateTypes';
 
 import { bayNumericGeometry, minimumBaySize, type BayRectangle } from '../blueprints/moduleBayGeometry';

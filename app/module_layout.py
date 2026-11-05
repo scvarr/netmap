@@ -3,6 +3,9 @@ import math
 
 
 def initial_layout(bay, geometry, orientation, panel):
+    if any(bay.get(k) is None for k in ("x", "y", "width", "height")):
+        from app.errors import ModelError
+        raise ModelError("LOGICAL_MODULE_INSTALLATION_UNSUPPORTED")
     width, height = geometry["width"], geometry["height"]
     if orientation == "VERTICAL":
         width, height = height, width
