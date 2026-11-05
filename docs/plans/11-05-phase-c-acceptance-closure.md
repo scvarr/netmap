@@ -871,3 +871,15 @@ TypeScript/Vite build passed (bundle-size warning), diff check passed. Manual
 recheck: drag a port and verify X/Y use hundredths, enter coordinates, save and
 reopen; repeat grouped movement at body boundaries. MANUAL RECHECK PENDING;
 Phase C PAUSED, HV-01 NOT PASSED.
+
+
+Final coordinate-input corrective: Chromium sequential keyboard input against
+1cfdb95 reproduced the defect: typing 0.37 / 0.25 after Ctrl+A resulted in 0.01.
+The jsdom userEvent test alone did not reproduce this browser formatting issue.
+CoordinateInput now retains intermediate local text and commits valid [0,1]
+values rounded to hundredths on blur/Enter; invalid/empty values revert, Escape
+cancels. Opening does not round persisted geometry. Chromium on the correction
+confirmed 0.37 / 0.25 before and after blur. userEvent covers Ctrl+A, sequential
+keyboard input, Backspace, save/reopen; 19 targeted create/draft tests passed.
+TypeScript/Vite build and diff check passed. Layout and other milestone scope
+unchanged. Phase C PAUSED; HV-01 NOT PASSED; MANUAL RECHECK PENDING.

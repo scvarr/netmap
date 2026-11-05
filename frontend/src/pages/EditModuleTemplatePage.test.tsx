@@ -1,3 +1,4 @@
+import userEvent from '@testing-library/user-event';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -228,15 +229,33 @@ it('snaps manual coordinates to hundredths for the selected key and restores the
  const {source,mount}=setup(); const view=mount();
  await screen.findByDisplayValue('P1');
  fireEvent.change(screen.getByLabelText('X (0–1)'),{target:{value:'0.12456789'}});
+ fireEvent.blur(screen.getByLabelText('X (0–1)'));
  fireEvent.change(screen.getByLabelText('Y (0–1)'),{target:{value:'1'}});
+ fireEvent.blur(screen.getByLabelText('Y (0–1)'));
  fireEvent.change(screen.getByLabelText('X (0–1)'),{target:{value:'-1'}});
  fireEvent.change(screen.getByLabelText('Y (0–1)'),{target:{value:'2'}});
+ fireEvent.blur(screen.getByLabelText('X (0–1)')); fireEvent.blur(screen.getByLabelText('Y (0–1)'));
  expect(screen.getByLabelText('X (0–1)')).toHaveValue(.12);
  expect(screen.getByLabelText('Y (0–1)')).toHaveValue(1);
  fireEvent.click(screen.getByRole('button',{name:'Сохранить черновик'}));
  await screen.findByText('Черновик сохранён');
  expect(source.saveDraft.mock.calls[0][1].geometry.endpoints).toEqual({first:{x:.12,y:1},second:{x:.7,y:.5}});
  view.unmount(); mount(); await screen.findByDisplayValue('P1');
+ fireEvent.blur(screen.getByLabelText('X (0–1)')); fireEvent.blur(screen.getByLabelText('Y (0–1)'));
  expect(screen.getByLabelText('X (0–1)')).toHaveValue(.12);
  expect(screen.getByLabelText('Y (0–1)')).toHaveValue(1);
+});
+
+it('supports sequential typing and Backspace before committing coordinates', async () => {
+ const initial=draft(); initial.definition.geometry.endpoints.first={x:.5,y:.8};
+ const {source,mount}=setup(initial); const view=mount(); await screen.findByDisplayValue('P1');
+ const user=userEvent.setup(); const x=screen.getByLabelText('X (0–1)'); const y=screen.getByLabelText('Y (0–1)');
+ await user.click(x); await user.keyboard('{Control>}a{/Control}'); await user.keyboard('0.37');
+ expect(x).toHaveValue(.37); await user.tab();
+ await user.click(y); await user.keyboard('{Control>}a{/Control}'); await user.keyboard('0.28');
+ await user.keyboard('{Backspace}5'); expect(y).toHaveValue(.25); await user.tab();
+ await user.click(screen.getByRole('button',{name:'Сохранить черновик'})); await screen.findByText('Черновик сохранён');
+ expect(source.saveDraft.mock.calls[0][1].geometry.endpoints.first).toEqual({x:.37,y:.25});
+ view.unmount(); mount(); await screen.findByDisplayValue('P1');
+ expect(screen.getByLabelText('X (0–1)')).toHaveValue(.37); expect(screen.getByLabelText('Y (0–1)')).toHaveValue(.25);
 });
