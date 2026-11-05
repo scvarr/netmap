@@ -116,9 +116,14 @@ export const deleteActivePanel = (state: BlueprintEditorState): BlueprintEditorS
 type Axis = 'x' | 'y';
 type Edge = 'start' | 'center' | 'end';
 const selectedSlots = (state: BlueprintEditorState, keys: ReadonlySet<string>) => state.slots.filter((slot) => keys.has(slot.key));
-const reposition = (state: BlueprintEditorState, positions: Map<string, { x: number; y: number }>): BlueprintEditorState => ({
-  ...state, slots: state.slots.map((slot) => positions.has(slot.key) ? { ...slot, rendered_position: positions.get(slot.key)! } : slot),
-});
+// Preflight the whole batch: an impossible transform must not damage the draft.
+const reposition = (state: BlueprintEditorState, positions: Map<string, { x: number; y: number }>): BlueprintEditorState => {
+  if ([...positions.values()].some(point => [point.x, point.y].some(value => !Number.isFinite(value) || value < -1e-12 || value > 1 + 1e-12))) return state;
+  return { ...state, slots: state.slots.map(slot => {
+    const point = positions.get(slot.key);
+    return point ? { ...slot, rendered_position: { x: Math.max(0, Math.min(1, point.x)), y: Math.max(0, Math.min(1, point.y)) } } : slot;
+  }) };
+};
 const spatialOrder = (a: BlueprintSlot, b: BlueprintSlot) => a.rendered_position.y - b.rendered_position.y || a.rendered_position.x - b.rendered_position.x || a.key.localeCompare(b.key);
 const boundedSpan = (min: number, max: number, minimum: number, inset = 0) => {
   const center = (min + max) / 2;
@@ -208,22 +213,28 @@ export const snapSelectionTranslation = (visible: BlueprintSlot[], keys: Readonl
 };
 export type DistributionRange = { mode: 'percent'; percent: number } | { mode: 'full' };
 export const distributeSelection = (state: BlueprintEditorState, keys: ReadonlySet<string>, axis: Axis, range: DistributionRange, inset: number): BlueprintEditorState => {
-  const slots = selectedSlots(state, keys).sort((a, b) => a.rendered_position[axis] - b.rendered_position[axis] || a.key.localeCompare(b.key));
-  if (slots.length < 3) return state;
+  if (!Number.isFinite(inset) || inset < 0 || inset >= .5) return state;
   if (range.mode === 'percent' && (!Number.isFinite(range.percent) || range.percent < 1 || range.percent > 100)) return state;
-  const safeInset = Math.max(0, Math.min(.49, inset));
-  const available = 1 - 2 * safeInset;
-  const span = range.mode === 'full' ? available : Math.min(available, range.percent / 100);
-  const values = slots.map((slot) => slot.rendered_position[axis]);
-  const center = (Math.min(...values) + Math.max(...values)) / 2;
-  const start = Math.max(safeInset, Math.min(center - span / 2, 1 - safeInset - span));
-  return reposition(state, new Map(slots.map((slot, index) => [slot.key, { ...slot.rendered_position, [axis]: start + span * index / (slots.length - 1) }])));
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const panelKey of new Set(selectedSlots(state, keys).map(slot => slot.panel_key))) {
+    const slots = selectedSlots(state, keys).filter(slot => slot.panel_key === panelKey)
+      .sort((a, b) => a.rendered_position[axis] - b.rendered_position[axis] || a.key.localeCompare(b.key));
+    if (slots.length < 3) continue;
+    const available = 1 - 2 * inset;
+    const span = range.mode === 'full' ? available : Math.min(available, range.percent / 100);
+    const values = slots.map(slot => slot.rendered_position[axis]);
+    const center = (Math.min(...values) + Math.max(...values)) / 2;
+    const start = Math.max(inset, Math.min(center - span / 2, 1 - inset - span));
+    slots.forEach((slot, index) => positions.set(slot.key, { ...slot.rendered_position, [axis]: start + span * index / (slots.length - 1) }));
+  }
+  return positions.size ? reposition(state, positions) : state;
 };
 interface LayoutMetrics { minGapX: number; minGapY: number; insetX: number; insetY: number }
 const defaultLayoutMetrics: LayoutMetrics = { minGapX: 0, minGapY: 0, insetX: 0, insetY: 0 };
 export const layoutSelectionRow = (state: BlueprintEditorState, keys: ReadonlySet<string>, metrics: LayoutMetrics = defaultLayoutMetrics): BlueprintEditorState => {
   const slots = selectedSlots(state, keys).sort(spatialOrder);
   if (slots.length < 2) return state;
+  if (metrics.minGapX * (slots.length - 1) > 1 - 2 * metrics.insetX || metrics.insetY >= .5) return state;
   const xs = slots.map((slot) => slot.rendered_position.x);
   const area = boundedSpan(Math.min(...xs), Math.max(...xs), Math.max(Math.min(.8, .06 * (slots.length - 1)), metrics.minGapX * (slots.length - 1)), metrics.insetX);
   const y = Math.max(metrics.insetY, Math.min(1 - metrics.insetY, slots.reduce((sum, slot) => sum + slot.rendered_position.y, 0) / slots.length));
@@ -235,6 +246,7 @@ export const layoutSelectionTwoRows = (state: BlueprintEditorState, keys: Readon
   const xs = slots.map((slot) => slot.rendered_position.x);
   const ys = slots.map((slot) => slot.rendered_position.y);
   const columns = Math.ceil(slots.length / 2);
+  if (metrics.minGapX * (columns - 1) > 1 - 2 * metrics.insetX || metrics.minGapY > 1 - 2 * metrics.insetY) return state;
   const xArea = boundedSpan(Math.min(...xs), Math.max(...xs), Math.max(Math.min(.8, .06 * (columns - 1)), metrics.minGapX * (columns - 1)), metrics.insetX);
   const yArea = boundedSpan(Math.min(...ys), Math.max(...ys), Math.max(.08, metrics.minGapY), metrics.insetY);
   const topCount = columns;

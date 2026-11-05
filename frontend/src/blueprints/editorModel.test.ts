@@ -537,3 +537,55 @@ describe('C-UX-12 mask and spatial order', () => {
     expect(spatialOrderedKeys(state,keys.slice(0,2),'rtl','ttb')).toEqual([keys[0],keys[1]]);
   });
 });
+
+
+describe('C-COR-02 bounded endpoint geometry', () => {
+  const fixture = () => {
+    let state = newBlueprintEditorState();
+    state = addEndpoints(state, 'CONNECTION_POINT', 48, state.activePanelKey);
+    state = addPanel(state, 'below');
+    state = addEndpoints(state, 'CONNECTION_POINT', 48, state.activePanelKey);
+    state.individualLinks = [{ from_slot_key: state.slots[0].key, to_slot_key: state.slots[48].key }];
+    return state;
+  };
+  it.each(['x', 'y'] as const)('distributes 48 endpoints per panel at the %s boundary without changing identity or links', axis => {
+    const state = fixture();
+    state.slots = state.slots.map(slot => ({ ...slot, rendered_position: { ...slot.rendered_position, [axis]: .99 } }));
+    const before = structuredClone(state);
+    const result = distributeSelection(state, new Set(state.slots.map(slot => slot.key)), axis, { mode: 'full' }, .02);
+    for (const panel of state.panels) {
+      const values = result.slots.filter(slot => slot.panel_key === panel.panel_key).map(slot => slot.rendered_position[axis]);
+      expect(Math.min(...values)).toBeCloseTo(.02);
+      expect(Math.max(...values)).toBeCloseTo(.98);
+    }
+    expect(result.slots.map(({ rendered_position: _, ...slot }) => slot)).toEqual(state.slots.map(({ rendered_position: _, ...slot }) => slot));
+    expect(result.individualLinks).toBe(state.individualLinks);
+    expect(state).toEqual(before);
+  });
+  it('lays out 48 points in two bounded rows while leaving the other panel intact', () => {
+    const state = fixture(); const keys = new Set(state.slots.slice(0, 48).map(slot => slot.key));
+    const result = layoutSelectionTwoRows(state, keys, { minGapX: .02, minGapY: .08, insetX: .02, insetY: .02 });
+    expect(new Set(result.slots.slice(0, 48).map(slot => slot.rendered_position.y)).size).toBe(2);
+    expect(result.slots.slice(0, 48).every(slot => Object.values(slot.rendered_position).every(value => value >= .02 && value <= .98))).toBe(true);
+    expect(result.slots.slice(48)).toEqual(state.slots.slice(48));
+    expect(result.individualLinks).toBe(state.individualLinks);
+  });
+  it('rejects an impossible group translation and invalid distribution atomically', () => {
+    const state = fixture(); state.slots[0].rendered_position.x = -2;
+    state.slots[1].rendered_position.x = 2;
+    const keys = new Set(state.slots.map(slot => slot.key));
+    expect(translateSelection(state, keys, .1, .1)).toBe(state);
+    expect(distributeSelection(state, keys, 'y', { mode: 'full' }, .02)).toBe(state);
+    expect(distributeSelection(state, keys, 'x', { mode: 'full' }, NaN)).toBe(state);
+    expect(layoutSelectionTwoRows(state, keys, { minGapX: .1, minGapY: .1, insetX: .02, insetY: .02 })).toBe(state);
+  });
+  it('repairs a selected outlying point through existing numeric positioning, or deletes it', () => {
+    const state = fixture(); const slot = state.slots[48];
+    slot.rendered_position = { x: 3, y: -2 };
+    const keys = new Set([slot.key]);
+    const repaired = positionSelectionAt(state, keys, 'x', .5);
+    expect(repaired.slots[48].rendered_position).toEqual({ x: .5, y: 0 });
+    expect(repaired.individualLinks).toBe(state.individualLinks);
+    expect(removeEndpoints(state, keys).slots.some(item => item.key === slot.key)).toBe(false);
+  });
+});

@@ -39,10 +39,18 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({});
   const [panelGuides, setPanelGuides] = useState<{ x?: number; y?: number }>({});
   const [frozenView, setFrozenView] = useState<{ minX: number; minY: number; unit: number; height: number }>();
-  const liveMinX = Math.min(...panels.map((panel) => panel.x));
-  const liveMinY = Math.min(...panels.map((panel) => panel.y));
-  const width = Math.max(...panels.map((panel) => panel.x + panel.width)) - liveMinX;
-  const compositionHeight = Math.max(...panels.map((panel) => panel.y + panel.height)) - liveMinY;
+  // Include misplaced endpoints so existing drafts remain selectable and repairable.
+  const endpointWorld = slots.flatMap(slot => {
+    const panel = panels.find(panel => panel.panel_key === slot.panel_key);
+    return panel && Number.isFinite(slot.rendered_position.x) && Number.isFinite(slot.rendered_position.y)
+      ? [{ x: panel.x + slot.rendered_position.x * panel.width, y: panel.y + slot.rendered_position.y * panel.height }] : [];
+  });
+  const outside = endpointWorld.filter(point => !panels.some(panel => point.x >= panel.x && point.x <= panel.x + panel.width && point.y >= panel.y && point.y <= panel.y + panel.height));
+  const padding = Math.max(...panels.map(panel => Math.max(panel.width, panel.height))) * .03;
+  const liveMinX = Math.min(...panels.map(panel => panel.x), ...outside.map(point => point.x - padding));
+  const liveMinY = Math.min(...panels.map(panel => panel.y), ...outside.map(point => point.y - padding));
+  const width = Math.max(...panels.map(panel => panel.x + panel.width), ...outside.map(point => point.x + padding)) - liveMinX;
+  const compositionHeight = Math.max(...panels.map(panel => panel.y + panel.height), ...outside.map(point => point.y + padding)) - liveMinY;
   const liveUnit = 1000 / Math.max(width, 1);
   const liveHeight = Math.max(compositionHeight, 1) * liveUnit;
   const { minX, minY, unit, height } = frozenView ?? { minX: liveMinX, minY: liveMinY, unit: liveUnit, height: liveHeight };

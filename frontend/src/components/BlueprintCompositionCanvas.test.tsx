@@ -204,3 +204,23 @@ describe('ordered canvas gestures', () => {
     rerender(<I18nProvider><BlueprintCompositionCanvas {...props} /></I18nProvider>); expect(container.querySelector('[data-endpoint-sequence]')).toBeNull();
   });
 });
+
+
+it('C-COR-02 keeps an outlying endpoint inside the selectable SVG viewport', () => {
+  const onSelect = vi.fn();
+  const { container } = render(<I18nProvider><BlueprintCompositionCanvas
+    body={{ width: 100, height: 80, fillColor: '#123456' }}
+    panels={[{ panel_key: 'panel-1', panel_number: 1, display_name: 'One', x: 0, y: 0, width: 100, height: 80 }]}
+    activePanelKey="panel-1" slots={[slot(1, -2, 3)]} links={[]} selectedKeys={new Set()}
+    onSelect={onSelect} onActivatePanel={() => {}} onMarquee={() => {}} onTranslate={() => {}} onContextMenu={() => {}}
+  /></I18nProvider>);
+  const svg = container.querySelector('svg')!;
+  const marker = container.querySelector('[data-endpoint-marker]')!;
+  const height = Number(svg.getAttribute('viewBox')!.split(' ')[3]);
+  expect(Number(marker.getAttribute('cx'))).toBeGreaterThan(0);
+  expect(Number(marker.getAttribute('cx'))).toBeLessThan(1000);
+  expect(Number(marker.getAttribute('cy'))).toBeGreaterThan(0);
+  expect(Number(marker.getAttribute('cy'))).toBeLessThan(height);
+  fireEvent.pointerDown(container.querySelector('[data-slot-key]')!, { button: 0, pointerId: 1 });
+  expect(onSelect).toHaveBeenCalledWith('slot-1', false);
+});
