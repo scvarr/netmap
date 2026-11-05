@@ -974,3 +974,14 @@ and disables its install action. No new canonical inventory or installation tabl
 LOGICAL installation, initial placement/reset without rectangle and count UI — OPEN.
 This core supersedes the earlier representation/migration OPEN entries only;
 external inspection and HV-01 acceptance remain outstanding.
+
+### HV-01-UX-02B corrective review
+
+Historical v5 restoration is tested against the current Alembic head, without
+changing the original fixture. A companion historical placed-profile round-trip
+covers bay keys/rectangles, installations/endpoints, pinned revisions and saved
+layout. Frozen draft/candidate JSON remains unchanged. Bay structural comparison
+uses normalized semantics (missing historical kind means PLACED); real edits
+remain changes. Workspace validation rejects invalid kind/rectangle combinations
+with PackageError before import writes, including markerless invalid rectangles.
+Status remains IMPLEMENTED / EXTERNAL REVIEW PENDING; Phase C PAUSED, HV-01 NOT PASSED.

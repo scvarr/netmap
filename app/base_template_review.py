@@ -11,7 +11,7 @@ from app import models as m
 from app.errors import ModelError, ValidationError
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.hardware_catalog import HardwareCatalog
-from app.schemas import CreateBaseTemplateRequest
+from app.schemas import CreateBaseTemplateRequest, ModuleBayRequest
 
 
 def validate_definition(value):
@@ -42,7 +42,11 @@ def published_definition(session, template_id, revision_id):
 def structural_changes(before, after):
     changes = []
     for section, key in (("panels", "panel_key"), ("slots", "key"), ("bays", "bay_key")):
-        old, new = ({item[key]: item for item in d[section]} for d in (before, after))
+        # Compare semantic bay representations without rewriting frozen JSON.
+        records = ([ModuleBayRequest.model_validate(item).model_dump(mode="json")
+                    for item in d[section]] if section == "bays" else d[section]
+                   for d in (before, after))
+        old, new = ({item[key]: item for item in items} for items in records)
         for identity in sorted(old.keys() | new.keys()):
             if old.get(identity) != new.get(identity):
                 changes.append({"section": section, "key": identity,

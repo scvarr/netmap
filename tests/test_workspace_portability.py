@@ -162,10 +162,14 @@ def c_archive():
 
 
 def test_real_c_v5_archive_restores_ids_configuration_review_and_maps_on_0003():
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
     from sqlalchemy import text
     from app.workspace_portability import validate_package
     with SessionLocal() as session:
-        assert session.scalar(text('SELECT version_num FROM alembic_version')) == '0006'
+        assert session.scalar(text('SELECT version_num FROM alembic_version')) == ScriptDirectory.from_config(Config('alembic.ini')).get_current_head()
+    # Keep the actual historical fixture untouched. It has no modules; the
+    # companion historical placed-profile test covers installations/layout.
     archive = c_archive()
     untouched = copy.deepcopy(archive)
     assert 'BaseTemplatePublication' not in archive['authoring']
@@ -180,6 +184,8 @@ def test_real_c_v5_archive_restores_ids_configuration_review_and_maps_on_0003():
     current = snapshot()
     expected = copy.deepcopy(archive)
     expected['module_geometry_version'] = 1
+    expected['module_layout_version'] = 1
+    expected['module_places_version'] = 1
     expected['authoring']['BaseTemplatePublication'] = []
     expected['authoring']['ModuleTemplateDraft'] = []
     expected['authoring']['ModuleTemplateCandidate'] = []

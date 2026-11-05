@@ -179,6 +179,8 @@ def validate_package(package: object) -> dict:
     places_version = package.get("module_places_version")
     if "module_places_version" in package and (type(places_version) is not int or places_version != 1 or package.get("module_layout_version") != 1):
         raise PackageError("Invalid module places profile")
+    from app.schemas import ModuleBayRequest
+    from pydantic import ValidationError as SchemaError
     bay_records = authoring.get("ModuleBay", [])
     if not isinstance(bay_records, list):
         raise PackageError("Invalid ModuleBay collection")
@@ -192,6 +194,13 @@ def validate_package(package: object) -> dict:
             if "kind" in bay:
                 raise PackageError("Module places require module_places_version=1")
             bay["kind"] = "PLACED"
+        try:
+            ModuleBayRequest.model_validate({k: v for k, v in bay.items() if k in ModuleBayRequest.model_fields})
+        except SchemaError as error:
+            raise PackageError("Invalid ModuleBay kind or rectangle") from error
+        if bay["kind"] == "LOGICAL":
+            for coordinate in ("x", "y", "width", "height"):
+                bay.setdefault(coordinate, None)
     for name in ("ModuleTemplateRevision", "ModuleTemplateDraft", "ModuleTemplateCandidate"):
         records = authoring.get(name, [])
         if not isinstance(records, list) or any(not isinstance(r, dict) for r in records):
