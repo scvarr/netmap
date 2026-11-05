@@ -206,3 +206,19 @@ it('keeps unsaved geometry through diagnostics and save failure, and restores sa
  view.unmount();mount();
  expect(await screen.findByLabelText('Ширина')).toHaveValue(480);
 });
+
+it('synchronizes port selection and removes only the chosen definition, retaining other keys and geometry', async () => {
+  const { source, mount } = setup(); mount();
+  await screen.findByDisplayValue('P1');
+  const canvas = screen.getByLabelText('Геометрия модуля', { selector: 'svg' });
+  fireEvent.keyDown(within(canvas).getByRole('button', { name: 'P1' }), { key: 'Enter' });
+  expect(screen.getByRole('checkbox', { name: 'Выбрать порт P1' })).toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Выбрать порт P2' }));
+  expect(within(canvas).getByRole('button', { name: 'P2' })).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(screen.getAllByRole('button', { name: 'Удалить' })[0]);
+  expect(within(canvas).queryByRole('button', { name: 'P1' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
+  await screen.findByText('Черновик сохранён');
+  expect(source.saveDraft.mock.calls[0][1].endpoints).toEqual(draft().definition.endpoints.slice(1));
+  expect(source.saveDraft.mock.calls[0][1].geometry.endpoints).toEqual({ second: { x: .7, y: .5 } });
+});

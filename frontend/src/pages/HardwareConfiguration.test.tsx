@@ -114,10 +114,10 @@ describe('09.6-A user path', () => {
     await userEvent.type(screen.getByLabelText('Совместимость'), 'OCP3');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
     await userEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
-    expect(screen.getByLabelText('Совместимость').closest('form')).toHaveClass('blueprint-editor-controls');
+    expect(screen.getByLabelText('Совместимость').closest('form')).toHaveClass('module-template-form');
     expect(screen.getByRole('button', { name: 'Добавить конечную точку' })).toHaveClass('secondary-action');
     expect(screen.getByRole('button', { name: 'Создать шаблон' })).toHaveClass('primary-action');
-    const fields = screen.getAllByRole('group');
+    const fields = screen.getAllByRole('group').filter(element => element.classList.contains('endpoint-group'));
     await userEvent.type(within(fields[0]).getByLabelText('Название'), 'P1');
     await userEvent.type(within(fields[1]).getByLabelText('Название'), 'P2');
     await userEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));

@@ -744,3 +744,50 @@ prerequisite; authoritative target задан в 09-06.
 9. Статусы существующих `C-*` не меняются только из-за смены fixture.
    Historical evidence сохраняется; финальный статус Phase C возможен только
    после требуемой acceptance и закрытия обязательных findings.
+
+
+## HV-01-UX-01 — ModuleTemplate editor UX (2026-11-05)
+
+**IMPLEMENTED / MANUAL RECHECK PENDING.** Branch: `fix/hv01-module-editor-ux`.
+Phase C remains **PAUSED**; HV-01 remains **NOT PASSED**. External inspection
+of the final branch diff and manual recheck are still required.
+
+Creation and draft editing now share `ModuleTemplateEditor`: compact properties
+and a bounded, scrollable endpoint list alongside a separate graphical workspace.
+Body dimensions/color, alignment/distribution and zoom/fit use compact styled
+controls. The canvas retains useful height and fits its container; zoom changes
+its viewBox instead of expanding document dimensions. Endpoint checkboxes and
+canvas selection share state, including multi-selection and deletion. Endpoint
+name/type/order operations remain next to graphical editing. Keyboard selection
+and typed Russian/English labels are provided. Library preview remains read-only.
+
+Stable template/endpoint keys, normalized geometry, body-resize semantics and
+bounded group movement remain unchanged. Existing create, draft save, check,
+publication and installation reconciliation handlers retain their contracts;
+failed requests and diagnostic refreshes retain local edits. No canonical/API,
+database/migration, archive, compatibility or installation-layout changes.
+ModuleBay UX remains separate HV-01-UX-02 work.
+
+Targeted validation in Docker (`node:22.22.2-bookworm-slim`): **30 passed** across
+ModuleGeometryEditor, NewModuleTemplatePage, EditModuleTemplatePage and
+HardwareConfiguration tests. Coverage includes two-port creation, error/retry,
+selection synchronization, deletion/key retention, resize/color, bounded group
+drag, alignment/distribution, zoom/fit and existing create/review/publication/
+reconciliation flows. TypeScript and Vite build passed (bundle-size warning);
+`git diff --check` passed. GitNexus staged `detect_changes` inspected all 11
+changed files, reported MEDIUM risk and no partial/truncated result. Full
+frontend/backend suites were not run.
+
+Manual NIC-2GE recheck (not performed by implementation tests):
+1. Open module creation, name it NIC-2GE, enter the intended compatibility and
+   add/name two NETWORK_PORT endpoints. Check compact layout and useful canvas
+   height at the working window size and a narrower width.
+2. Select ports using the canvas and list; Shift/Ctrl-select both, drag to body
+   edges, align/distribute, zoom and return to fit. Change body width/height and
+   color; confirm relative port positions are retained.
+3. Create the template, reopen editing and verify the same layout and saved
+   values. Rename/change type, add/remove a temporary port, save the draft,
+   reload and check changes through the existing review flow.
+4. On a simulated failed save or diagnostic refresh, verify unsaved name and
+   geometry remain available; retry successfully. Resume HV-01 only following
+   external review and successful manual recheck of this stopped step.

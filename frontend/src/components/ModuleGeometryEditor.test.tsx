@@ -36,5 +36,16 @@ describe('module geometry', () => {
  fireEvent.pointerMove(canvas,{clientX:12,clientY:8}); fireEvent.pointerUp(canvas);
  expect(value().endpoints.a.x).toBeCloseTo(before.a.x+.05);
  expect(value().endpoints.c.y).toBeCloseTo(before.c.y+.1);
+ fireEvent.pointerDown(screen.getByRole('button',{name:'b'}),{clientX:0,clientY:0});
+ fireEvent.pointerMove(canvas,{clientX:99999,clientY:-99999}); fireEvent.pointerUp(canvas);
+ for (const p of Object.values(value().endpoints) as {x:number;y:number}[]) {
+   expect(p.x).toBeGreaterThanOrEqual(0); expect(p.x).toBeLessThanOrEqual(1);
+   expect(p.y).toBeGreaterThanOrEqual(0); expect(p.y).toBeLessThanOrEqual(1);
+ }
+ const fit = canvas.getAttribute('viewBox');
+ fireEvent.click(screen.getByRole('button',{name:'Приблизить'}));
+ expect(canvas.getAttribute('viewBox')).not.toBe(fit);
+ fireEvent.click(screen.getByRole('button',{name:'Общий вид'}));
+ expect(canvas.getAttribute('viewBox')).toBe(fit);
  });
 });

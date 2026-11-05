@@ -24,6 +24,10 @@ const messages = {
     'moduleGeometry.distributeX': 'Распределить по горизонтали',
     'moduleGeometry.distributeY': 'Распределить по вертикали',
     'moduleGeometry.fit': 'Общий вид',
+    'moduleGeometry.select': 'Выбрать порт {name}',
+    'moduleGeometry.zoomIn': 'Приблизить',
+    'moduleGeometry.zoomOut': 'Отдалить',
+    'moduleGeometry.hint': 'Shift / Ctrl + щелчок — выбор нескольких портов. Перетаскивание — перемещение выделенных портов.',
 
     'moduleReview.up': 'Выше', 'moduleReview.down': 'Ниже', 'moduleReview.endpoints': 'Конечные точки модуля',
     'moduleReview.compatibility': 'Совместимость не совпадает с текущим отсеком. Требуется вмешательство.',
@@ -141,6 +145,10 @@ const messages = {
     'moduleGeometry.distributeX': 'Distribute horizontally',
     'moduleGeometry.distributeY': 'Distribute vertically',
     'moduleGeometry.fit': 'Fit view',
+    'moduleGeometry.select': 'Select port {name}',
+    'moduleGeometry.zoomIn': 'Zoom in',
+    'moduleGeometry.zoomOut': 'Zoom out',
+    'moduleGeometry.hint': 'Shift / Ctrl + click to select multiple ports. Drag to move selected ports.',
 
     'moduleReview.up': 'Move up', 'moduleReview.down': 'Move down', 'moduleReview.endpoints': 'Module endpoints',
     'moduleReview.compatibility': 'Compatibility does not match the current bay. Intervention is required.',

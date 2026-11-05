@@ -1,5 +1,5 @@
 import { moduleEndpointPositions } from '../topology/hardwareModules';
-import { ModuleGeometryEditor } from '../components/ModuleGeometryEditor';
+import { ModuleTemplateEditor } from '../components/ModuleTemplateEditor';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader, PageShell } from '../components/PageChrome';
@@ -72,23 +72,9 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
     <PageHeader title={t('review.edit')} eyebrow={t('hardware.module')} />
     <p>{t('review.description')}</p>
     {error && <p role="alert">{error}</p>}
-    {definition && <form className="blueprint-editor-controls" onSubmit={e => { e.preventDefault(); void run(false); }}>
-      <fieldset disabled={busy}>
-        <ModuleGeometryEditor geometry={definition.geometry} endpoints={definition.endpoints} onChange={geometry => change({ ...definition, geometry })} />
-        <label>{t('hardware.name')}<input required value={definition.name} onChange={e => change({ ...definition, name: e.target.value })} /></label>
-        <label>{t('hardware.compatibility')}<input required value={definition.compatibility} onChange={e => change({ ...definition, compatibility: e.target.value })} /></label>
-        {definition.endpoints.map((endpoint, index) => <fieldset className="endpoint-group" key={endpoint.key}><legend>{index + 1}</legend>
-          <label>{t('hardware.name')}<input required value={endpoint.display_name} onChange={e => change({ ...definition, endpoints: definition.endpoints.map(d => d.key === endpoint.key ? { ...d, display_name: e.target.value } : d) })} /></label>
-          <label>{t('blueprint.endpoint.kind')}<select value={endpoint.kind} onChange={e => change({ ...definition, endpoints: definition.endpoints.map(d => d.key === endpoint.key ? { ...d, kind: e.target.value as typeof d.kind } : d) })}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
-          {([-1, 1] as const).map(delta => <button key={delta} type="button" disabled={index + delta < 0 || index + delta >= definition.endpoints.length} onClick={() => {
-            const endpoints = [...definition.endpoints]; [endpoints[index], endpoints[index + delta]] = [endpoints[index + delta], endpoints[index]];
-            change({ ...definition, endpoints });
-          }}>{t(delta < 0 ? 'moduleReview.up' : 'moduleReview.down')}</button>)}
-          <button type="button" onClick={() => change({ ...definition, endpoints: definition.endpoints.filter(d => d.key !== endpoint.key) })}>{t('hardware.remove')}</button>
-        </fieldset>)}
-        <button type="button" onClick={() => change({ ...definition, endpoints: [...definition.endpoints, { key: crypto.randomUUID(), display_name: '', kind: 'NETWORK_PORT' }] })}>{t('hardware.addEndpoint')}</button>
-        <button type="submit" disabled={revalidating || !definition.name.trim() || !definition.compatibility.trim() || definition.endpoints.some(e => !e.display_name.trim())}>{t('review.save')}</button>
-      </fieldset>
+    {definition && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
+      <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} />
+        <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !definition.compatibility.trim() || definition.endpoints.some(e => !e.display_name.trim())}>{t('review.save')}</button>
     </form>}
     {document?.publication_state && <section aria-label={t('publication.state')}>
       <p>{t('publication.revision', { number: document.publication_state.version_number })}</p>
@@ -133,7 +119,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
         <p>{t('review.candidate', { id: review.candidate_id, time: review.created_at })}</p>
         <p>{t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')}</p>
         {current && <>
-          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : 'review.section.properties')} · {t(`review.operation.${c.operation}`)} · {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
+          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : 'review.section.properties')} В· {t(`review.operation.${c.operation}`)} В· {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
           {!review.result.installations.length && <p>{t('moduleReview.noInstallations')}</p>}
           <ul>{review.result.installations.map(i => <li key={i.installation_id}>
             <Link to={`/infrastructure/objects/${i.physical_object_id}`}>{i.display_name}</Link>

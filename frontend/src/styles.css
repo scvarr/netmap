@@ -790,3 +790,27 @@ a { color: inherit; }
 .base-template-edit-page .blueprint-composer__canvas-wrap { flex: 1 0 320px; min-height: 320px; }
 .base-template-edit-page .blueprint-composer__contextual { flex: none; height: auto; min-height: 0; overflow: visible; }
 .base-template-edit-page .blueprint-composer__contextual:empty { display: none; }
+
+/* Shared ModuleTemplate creation and draft workspace. */
+.module-template-form { min-width: 0; }
+.module-template-editor { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 20px; min-width: 0; margin: 0 0 16px; padding: 0; border: 0; }
+.module-template-editor__controls { min-width: 0; padding: 16px; }
+.module-template-editor__ports { max-height: 420px; overflow: auto; }
+.module-template-editor__ports .endpoint-group { margin: 10px 0; padding: 8px; }
+.module-template-editor__ports [data-selected="true"] { border-color: #f59e0b; }
+.module-template-editor__selection { display: flex !important; align-items: center; gap: 6px; margin: 0 !important; }
+.module-template-editor__selection input { width: auto; margin: 0; }
+.module-template-editor__actions, .module-geometry__toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.module-template-editor__actions button, .module-geometry button { margin: 0; padding: 7px 9px; border: 1px solid #35575b; border-radius: 6px; background: #10282b; color: #d8e9e6; cursor: pointer; font-size: 11px; }
+.module-template-editor button:disabled, .module-geometry button:disabled { opacity: .45; cursor: not-allowed; }
+.module-template-editor button:hover:enabled, .module-geometry button:hover:enabled { background: #1d3b3e; }
+.module-template-editor :focus-visible, .module-geometry :focus-visible { outline: 2px solid #8bd5c4; outline-offset: 2px; }
+.module-geometry { min-width: 0; }
+.module-geometry--editable { padding: 16px; border: 1px solid #294145; border-radius: 13px; background: #0b191b; }
+.module-geometry__toolbar label { display: grid; gap: 5px; color: #91a5a5; font-size: 11px; }
+.module-geometry__toolbar input { box-sizing: border-box; width: 86px; height: 32px; padding: 5px; border: 1px solid #2a4448; border-radius: 6px; background: #081315; color: #e7f4f1; }
+.module-geometry__hint { color: #91a5a5; font-size: 11px; line-height: 1.5; }
+.module-geometry__canvas { height: 220px; overflow: hidden; border: 1px solid #35575b; border-radius: 10px; background: #071315; }
+.module-geometry--editable .module-geometry__canvas { height: clamp(320px, 48vh, 580px); }
+.module-geometry__canvas svg { display: block; }
+@media (max-width: 900px) { .module-template-editor { grid-template-columns: minmax(0, 1fr); } .module-template-editor__ports { max-height: 260px; } }
