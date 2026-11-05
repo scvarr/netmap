@@ -224,19 +224,19 @@ it('synchronizes port selection and removes only the chosen definition, retainin
   expect(source.saveDraft.mock.calls[0][1].geometry.endpoints).toEqual({ second: { x: .7, y: .5 } });
 });
 
-it('saves exact manual coordinates for the selected key and restores them on reopen', async () => {
+it('snaps manual coordinates to hundredths for the selected key and restores them on reopen', async () => {
  const {source,mount}=setup(); const view=mount();
  await screen.findByDisplayValue('P1');
- fireEvent.change(screen.getByLabelText('X (0–1)'),{target:{value:'0.123456789'}});
+ fireEvent.change(screen.getByLabelText('X (0–1)'),{target:{value:'0.12456789'}});
  fireEvent.change(screen.getByLabelText('Y (0–1)'),{target:{value:'1'}});
  fireEvent.change(screen.getByLabelText('X (0–1)'),{target:{value:'-1'}});
  fireEvent.change(screen.getByLabelText('Y (0–1)'),{target:{value:'2'}});
- expect(screen.getByLabelText('X (0–1)')).toHaveValue(.123456789);
+ expect(screen.getByLabelText('X (0–1)')).toHaveValue(.12);
  expect(screen.getByLabelText('Y (0–1)')).toHaveValue(1);
  fireEvent.click(screen.getByRole('button',{name:'Сохранить черновик'}));
  await screen.findByText('Черновик сохранён');
- expect(source.saveDraft.mock.calls[0][1].geometry.endpoints).toEqual({first:{x:.123456789,y:1},second:{x:.7,y:.5}});
+ expect(source.saveDraft.mock.calls[0][1].geometry.endpoints).toEqual({first:{x:.12,y:1},second:{x:.7,y:.5}});
  view.unmount(); mount(); await screen.findByDisplayValue('P1');
- expect(screen.getByLabelText('X (0–1)')).toHaveValue(.123456789);
+ expect(screen.getByLabelText('X (0–1)')).toHaveValue(.12);
  expect(screen.getByLabelText('Y (0–1)')).toHaveValue(1);
 });

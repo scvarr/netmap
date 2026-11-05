@@ -858,3 +858,16 @@ create/draft/geometry flows. TypeScript/Vite build and diff checks passed.
 Manual recheck: select one port, center each axis, enter X=0.123456789 and Y=1,
 save/reopen; then verify multi-selection alignment/distribution and drag.
 Status remains MANUAL RECHECK PENDING; Phase C PAUSED, HV-01 NOT PASSED.
+
+
+Coordinate precision follow-up (user-requested adjustment): X/Y display two
+fractional digits and use step 0.01. Manual coordinate edits, pointer movement,
+alignment and distribution snap their resulting coordinates to the nearest
+hundredth within [0,1]. This supersedes the arbitrary-precision input UX above;
+opening or resizing an existing module does not rewrite its stored geometry.
+Definition keys and API/schema remain unchanged. Docker targeted validation:
+**26 tests passed**, including pointer snapping and manual-input save/reopen;
+TypeScript/Vite build passed (bundle-size warning), diff check passed. Manual
+recheck: drag a port and verify X/Y use hundredths, enter coordinates, save and
+reopen; repeat grouped movement at body boundaries. MANUAL RECHECK PENDING;
+Phase C PAUSED, HV-01 NOT PASSED.

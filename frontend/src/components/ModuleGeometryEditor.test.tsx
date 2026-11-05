@@ -80,3 +80,12 @@ it('centers a single port on either body axis without changing the other ports',
  fireEvent.click(screen.getByRole('button',{name:'По центру вертикали'}));
  expect(value().endpoints).toEqual({...before,a:{x:.5,y:.5}});
 });
+
+it('snaps pointer movement to the nearest hundredth inside the body', () => {
+ render(<Harness/>);
+ fireEvent.pointerDown(screen.getByRole('button',{name:'a'}),{clientX:0,clientY:0});
+ const canvas=screen.getByLabelText('Геометрия модуля',{selector:'svg'});
+ fireEvent.pointerMove(canvas,{clientX:7,clientY:3}); fireEvent.pointerUp(canvas);
+ expect(value().endpoints.a).toEqual({x:.13,y:.24});
+ expect(value().endpoints.b).toEqual({x:.4,y:.6});
+});

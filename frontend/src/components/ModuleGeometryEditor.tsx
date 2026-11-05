@@ -21,7 +21,7 @@ export function ModuleGeometryEditor({ geometry, endpoints, onChange, selectedKe
  const arrange = (axis: 'x' | 'y', distribute: boolean) => {
   const keys = Object.keys(geometry.endpoints).filter(k => selected.has(k)).sort((a,b) => geometry.endpoints[a][axis] - geometry.endpoints[b][axis] || a.localeCompare(b));
   if (!keys.length || (distribute && keys.length < 2)) return; const values = keys.map(k => geometry.endpoints[k][axis]); const positions = { ...geometry.endpoints };
-  keys.forEach((k,i) => { positions[k] = { ...positions[k], [axis]: keys.length === 1 ? .5 : distribute ? values[0] + (values.at(-1)! - values[0]) * i / (keys.length - 1) : values.reduce((a,b) => a+b) / values.length }; }); onChange?.({ ...geometry, endpoints: positions });
+  keys.forEach((k,i) => { positions[k] = { ...positions[k], [axis]: Math.round((keys.length === 1 ? .5 : distribute ? values[0] + (values.at(-1)! - values[0]) * i / (keys.length - 1) : values.reduce((a,b) => a+b) / values.length) * 100) / 100 }; }); onChange?.({ ...geometry, endpoints: positions });
  };
  return <section className={`module-geometry ${onChange ? "module-geometry--editable" : ""}`} aria-label={t('moduleGeometry.title')}>
  <div className="module-geometry__toolbar">{onChange && <><div className="module-geometry__tool-group" role="group" aria-label={t('moduleGeometry.body')}>
@@ -40,7 +40,7 @@ export function ModuleGeometryEditor({ geometry, endpoints, onChange, selectedKe
  <div className="module-geometry__canvas"><svg ref={svg} aria-label={t('moduleGeometry.title')} viewBox={`${(geometry.width - viewWidth) / 2} ${(geometry.height - viewHeight) / 2} ${viewWidth} ${viewHeight}`} style={{width:'100%',height:'100%',touchAction:'none'}} onPointerMove={e => {
  const d = drag.current; if (!d || !onChange) return; const p = point(e.clientX,e.clientY); const positions = {...d.geometry.endpoints}; const points = d.keys.map(k => positions[k]);
  const dx = Math.max(-Math.min(...points.map(p=>p.x)),Math.min(p.x-d.x,1-Math.max(...points.map(p=>p.x)))); const dy = Math.max(-Math.min(...points.map(p=>p.y)),Math.min(p.y-d.y,1-Math.max(...points.map(p=>p.y))));
- d.keys.forEach(k => { positions[k] = {x:positions[k].x+dx,y:positions[k].y+dy}; }); onChange({...d.geometry,endpoints:positions});
+ d.keys.forEach(k => { positions[k] = {x:Math.round((positions[k].x+dx)*100)/100,y:Math.round((positions[k].y+dy)*100)/100}; }); onChange({...d.geometry,endpoints:positions});
  }} onPointerUp={() => {drag.current=undefined;}} onPointerCancel={() => {drag.current=undefined;}}>
  <rect width={geometry.width} height={geometry.height} fill={geometry.fill_color} stroke="currentColor" vectorEffect="non-scaling-stroke" onPointerDown={() => select(new Set())}/>
  {endpoints.map(e => {const p=geometry.endpoints[e.key]; return p && <g key={e.key} className={onChange ? "module-geometry__port" : undefined} role="button" aria-label={e.display_name} aria-pressed={selected.has(e.key)} tabIndex={onChange ? 0 : undefined} onKeyDown={event => { if (!onChange || !['Enter', ' '].includes(event.key)) return; event.preventDefault(); const keys = event.shiftKey ? new Set(selected) : new Set<string>(); if (keys.has(e.key)) keys.delete(e.key); else keys.add(e.key); select(keys); }} onPointerDown={event => {
