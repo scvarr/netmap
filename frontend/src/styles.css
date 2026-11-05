@@ -835,3 +835,5 @@ a { color: inherit; }
 .module-geometry__port:focus-visible { outline: none; }
 .module-geometry__port:focus-visible circle { stroke: #8bd5c4; stroke-width: 2px; }
 .module-geometry__port text { pointer-events: none; }
+
+.module-installation-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

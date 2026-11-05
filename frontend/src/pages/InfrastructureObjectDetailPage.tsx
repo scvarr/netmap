@@ -358,7 +358,7 @@ export function InfrastructureObjectDetailPage({
       )}
       </>}
       {activeSection === "physical" && <section className="detail-section detail-section--operations">
-        <ModuleInstallationSection objectId={physicalObjectId} onInstalled={async () => { await refreshDetails(); refreshProjection(); }} />
+        <ModuleInstallationSection presentation={projection?.nodes.find(node => node.source_refs.some(ref => ref.entity_type === "PhysicalObject" && ref.entity_id === physicalObjectId))?.attributes.blueprint_presentation} objectId={physicalObjectId} onInstalled={async () => { await refreshDetails(); refreshProjection(); }} />
         <PhysicalObjectDetailsSection
           key={physicalObjectId}
           node={node}

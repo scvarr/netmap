@@ -883,3 +883,54 @@ confirmed 0.37 / 0.25 before and after blur. userEvent covers Ctrl+A, sequential
 keyboard input, Backspace, save/reopen; 19 targeted create/draft tests passed.
 TypeScript/Vite build and diff check passed. Layout and other milestone scope
 unchanged. Phase C PAUSED; HV-01 NOT PASSED; MANUAL RECHECK PENDING.
+
+
+## HV-01-VIS-01 — Installed module visualization (2026-11-05)
+
+**IMPLEMENTED / MANUAL RECHECK PENDING.** Branch: `fix/hv01-installed-module-visualization`.
+Phase C remains **PAUSED**; HV-01 remains **NOT PASSED**. External inspection
+of the final branch diff and manual SRV1 recheck are required.
+
+ModuleInstallationSection now uses the object's existing L1 PhysicalObject
+`blueprint_presentation` from the detail page projection. As in Map/DeviceNode,
+the body is represented by the authored panel composition and base body color;
+panel coordinates/dimensions and built-in endpoint panel-local positions come
+from the pinned BaseTemplateRevision, never the latest library revision.
+The existing panelCompositionBounds helper provides composition bounds.
+ObjectConfiguration supplies bays, all installed bodies/colors and their pinned
+module port projections. Module endpoint IDs are excluded from the built-in
+layer to avoid duplicate glyphs. A base revision mismatch suppresses the image
+and adjustment entry rather than fabricating geometry.
+
+The complete composition fits a responsive 360px viewport uniformly with 20px
+margins. ResizeObserver updates fitting on container resize. Port radius is
+4 CSS pixels through inverse scale compensation; outlines are non-scaling,
+selection is 1.5px and the resize handle is 8px. Names use hover titles and the
+existing bay/port list instead of text over the body. Built-ins are blue,
+module ports white, bays dashed. Controls use existing primary/secondary styles.
+
+F2b single selection, bounded move, proportional resize, explicit save,
+cancel, pinned initial-layout reset, expected-state payload and error-retained
+local draft remain. Rendering performs no writes. Canonical identity, endpoint
+mappings, compatibility, revisions, backend/API/schema and SavedMap are unchanged.
+
+Targeted Docker validation: 25 tests across ModuleInstallationSection and
+HardwareConfiguration cover panels/body, empty bays, built-in versus two NIC-2GE
+ports, extreme 600:1 and 1:600 ratios, single selection, move/proportional resize,
+cancel/reset, explicit save/reopen, unchanged endpoint identity and error/retry.
+TypeScript/Vite build and git diff --check passed (existing bundle-size warning).
+GitNexus detect_changes inspected this branch; risk MEDIUM. No full suites run.
+These checks do not constitute manual visual acceptance.
+
+Manual SRV1 recheck:
+1. Open SRV1 → physical section. Verify the whole panel composition, built-in
+   ports, free bay and every installed module; identify NIC-2GE and its two ports.
+2. Narrow/widen the window: confirm uniform fit, stable marker size and visible
+   body. Hover a panel, bay, module and port to check names.
+3. Enter adjustment mode, select NIC-2GE on the image, move and proportionally
+   resize it. Verify other panels/ports/modules stay visible and inert; cancel.
+4. Repeat, save, close/reopen SRV1 and verify placement. Reset to initial
+   placement, cancel first, then repeat reset/save/reopen. Verify port identities
+   and existing connections remain intact.
+5. Simulate failed save (offline or stale expected layout in another session):
+   confirm local edits remain, then retry or cancel/reload explicitly.
