@@ -934,3 +934,14 @@ Manual SRV1 recheck:
    and existing connections remain intact.
 5. Simulate failed save (offline or stale expected layout in another session):
    confirm local edits remain, then retry or cancel/reload explicitly.
+
+## HV-01-UX-02A — Logical module places
+
+**HV-01-UX-02A — DOCS IMPLEMENTED. Logical module places runtime — OPEN.
+Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+[Продуктовый контракт логических модульных мест](../product/logical-module-places.md) задаёт будущую
+модель: панель, открытая совместимость и количество индивидуально идентифицируемых
+мест без обязательного rectangle. Фиксированные отсеки допустимы. Контракт
+разделяет целевую семантику, инварианты и OPEN решения миграции/размещения;
+действующие IMPLEMENTED F1/F2/D2 не переписываются и runtime не объявляется готовым.

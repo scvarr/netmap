@@ -778,3 +778,14 @@ and Vite build passed; git diff --check passed. GitNexus detect_changes reports
 critical reach through the shared read resolver; no incomplete result reported.
 Full suites were not run. Browser verification of an existing two-panel 24-port
 object was not performed; manual HV-01 and external diff inspection remain open.
+
+## HV-01-UX-02A — Logical module places
+
+**HV-01-UX-02A — DOCS IMPLEMENTED. Logical module places runtime — OPEN.
+Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+[Продуктовый контракт логических модульных мест](../../product/logical-module-places.md) задаёт будущую
+модель: панель, открытая совместимость и количество индивидуально идентифицируемых
+мест без обязательного rectangle. Фиксированные отсеки допустимы. Контракт
+разделяет целевую семантику, инварианты и OPEN решения миграции/размещения;
+действующие IMPLEMENTED F1/F2/D2 не переписываются и runtime не объявляется готовым.
