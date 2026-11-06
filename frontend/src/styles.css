@@ -837,3 +837,10 @@ a { color: inherit; }
 .module-geometry__port text { pointer-events: none; }
 
 .module-installation-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.module-installation-list { max-height: 24rem; margin-top: 12px; overflow: auto; }
+.module-installation-table { min-width: 34rem; }
+.module-installation-table thead th { position: sticky; top: 0; background: #0b191b; }
+.module-installation-table .module-installation-table__group { background: #102124; white-space: pre-wrap; }
+.module-installation-table select { width: auto; max-width: 15rem; margin: 0; padding: 4px 6px; }
+.module-installation-table summary { cursor: pointer; }
+.module-installation-table ul { margin: 4px 0; padding-inline-start: 18px; }

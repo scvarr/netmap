@@ -1035,3 +1035,21 @@ The acceptance check covers retained bay identities, PLACED editing, safe D2
 relocation with preserved installation identity, endpoints and layout, and
 insufficient capacity with the object still pinned to its prior revision.
 External diff inspection and manual acceptance remain pending.
+
+## HV-01-UX-03 — Compact Module Installation Table
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING. Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+Manual HV-01 steps 1 (BaseTemplate) and 2 (ModuleTemplate) are **PASS**.
+Step 3 (installation) is **functional PASS / UX RECHECK REQUIRED**. On
+`HV01-TEST-SRV1`, the place cards took up too much vertical space and the
+display order showed places 1 and 4 before places 2 and 3.
+
+The installation table groups LOGICAL and PLACED places by panel and exact
+compatibility. It orders panels by the pinned presentation's panel number,
+with unnumbered panels last by panel key. Compatibility uses locale-aware
+ordering with an exact string tie-breaker. Place names use natural numeric
+ordering with `bay_key` as the tie-breaker. Occupied rows show the installed
+orientation and collapsed port details. Free rows offer compact installation
+controls. Manual UX recheck on the same object and external diff inspection
+remain pending.
