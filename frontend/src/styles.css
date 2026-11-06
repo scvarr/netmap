@@ -909,7 +909,6 @@ a { color: inherit; }
 .blueprint-preview__surface > svg {
   display: block;
   overflow: visible;
-  font-family: ui-monospace, monospace;
 }
 .template-library-facts, .template-library-actions {
   display: flex;

@@ -118,8 +118,10 @@ it('uses module list geometry and exposes the published revision and editor on d
   expect(svg.querySelector('[data-slot-key="p2"] circle')).toHaveAttribute('cx', '168');
   expect(svg.querySelector('[data-slot-key="p2"] circle')).toHaveAttribute('cy', '60');
   expect(svg.querySelectorAll('circle')).toHaveLength(2);
-  expect(svg.querySelector('[data-port-label="p1"]')).toHaveTextContent('P1');
-  expect(svg.querySelector('[data-port-label="p2"]')).toHaveTextContent('P2');
+  expect(svg.querySelectorAll('text')).toHaveLength(0);
+  await user.click(within(summary.closest('li')!).getByRole('button', { name: 'Приблизить' }));
+  expect(svg.querySelectorAll('text')).toHaveLength(0);
+  expect([...svg.querySelectorAll('circle title')].map(title => title.textContent)).toEqual(['P1', 'P2']);
   expect(within(svg).queryByRole('button')).not.toBeInTheDocument();
   expect(screen.getByText('Текущая опубликованная ревизия: 3')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Изменить шаблон' })).toHaveAttribute('href', '/library/module-templates/nic/edit');

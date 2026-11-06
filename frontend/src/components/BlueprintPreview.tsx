@@ -13,12 +13,7 @@ interface Props {
   variant?: 'base' | 'module';
 }
 
-interface Box { left: number; top: number; right: number; bottom: number }
-
 const padding = 20;
-const fontSize = 11;
-const intersects = (a: Box, b: Box) =>
-  a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 
 export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays = [], label, variant = 'base' }: Props) {
   const { t } = useI18n();
@@ -73,30 +68,8 @@ export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays
       const distance = Math.hypot(other.x - port.x, other.y - port.y);
       if (distance > 0) radius = Math.min(radius, distance * scale / 3);
     }
-    return { ...port, radius, px: (port.x - left) * scale, py: (port.y - top) * scale };
+    return { ...port, radius };
   });
-  const occupied: Box[] = markers.map(({ px, py, radius }) => {
-    const extent = radius * 1.2;
-    return { left: px - extent, right: px + extent, top: py - extent, bottom: py + extent };
-  });
-  const labels = markers.flatMap(marker => {
-    const { px, py, radius, display_name: name } = marker;
-    // An em per character conservatively reserves room for the monospace label and its halo.
-    const halfWidth = Array.from(name).length * fontSize / 2 + 2;
-    if (halfWidth * 2 > screenWidth + 2 * padding - 4) return [];
-    const center = Math.max(halfWidth - padding + 2, Math.min(px, screenWidth + padding - halfWidth - 2));
-    const offset = radius * 1.2 + 3;
-    const below = py + offset;
-    const above = py - offset - fontSize - 4;
-    for (const y of variant === 'module' ? [above, below] : [below, above]) {
-      const box = { left: center - halfWidth, right: center + halfWidth, top: y, bottom: y + fontSize + 4 };
-      if (box.top < -padding || box.bottom > screenHeight + padding || occupied.some(other => intersects(box, other))) continue;
-      occupied.push(box);
-      return [{ key: marker.key, name, x: left + center / scale, y: top + (y + 2) / scale }];
-    }
-    return [];
-  });
-
   return <div ref={container} className="blueprint-preview">
     <div className="blueprint-preview__controls" role="group" aria-label={t('moduleGeometry.zoom')}>
       <button type="button" className="secondary-action" aria-label={t('moduleGeometry.zoomIn')}
@@ -129,9 +102,6 @@ export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays
               fill={variant === 'module' ? '#fff' : port.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'}
               stroke="#1c3135" strokeWidth={port.radius * .4 / scale}><title>{port.display_name}</title></circle>
           </g>)}
-          {labels.map(port => <text key={port.key} data-port-label={port.key} x={port.x} y={port.y}
-            textAnchor="middle" dominantBaseline="hanging" fontSize={fontSize / scale} fill="#fff"
-            stroke="#102326" strokeWidth={2 / scale} paintOrder="stroke">{port.name}</text>)}
         </svg>
       </div>
     </div>

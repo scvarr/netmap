@@ -43,20 +43,14 @@ it('keeps all 48 ports and 24 links distinct on a low, two-sided CPP24-24 compos
     }
   }
 
+  expect(svg.querySelectorAll('text')).toHaveLength(0);
   const user = userEvent.setup();
   const zoom = screen.getByRole('button', { name: 'Приблизить' });
   await user.click(zoom);
   await user.click(zoom);
-  const labels = [...svg.querySelectorAll('[data-port-label]')];
-  expect(labels).toHaveLength(48);
-  for (const [index, a] of labels.entries()) {
-    for (const b of labels.slice(index + 1)) {
-      const font = Number(a.getAttribute('font-size'));
-      const dx = Math.abs(Number(a.getAttribute('x')) - Number(b.getAttribute('x')));
-      const dy = Math.abs(Number(a.getAttribute('y')) - Number(b.getAttribute('y')));
-      expect(dx >= 3 * font || dy >= font).toBe(true);
-    }
-  }
+  expect(svg.querySelectorAll('text')).toHaveLength(0);
+  expect([...svg.querySelectorAll('circle title')].map(title => title.textContent))
+    .toEqual(slots.map(slot => slot.display_name));
   expect(within(svg).queryByRole('button')).not.toBeInTheDocument();
   expect(svg.querySelector('[data-selected], [data-endpoint-hit-target], [data-panel-resize]')).toBeNull();
   const scroller = screen.getByRole('region', { name: 'CPP24-24' });
