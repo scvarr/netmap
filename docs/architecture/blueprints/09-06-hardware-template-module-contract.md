@@ -39,13 +39,14 @@ panels, and canonical L1 materialization remain foundations of this target.
 The previous complete-configuration authoring and additive-only upgrade
 workflow are superseded where they conflict with this contract.
 
-Manual HV-01 evidence: instances of one base server with small configuration
+Historical HV-01 evidence: instances of one base server with small configuration
 differences must not require a separate complete assembled template for every
 configuration. The accepted answer is a base equipment template plus modules
-installed in each concrete object. Phase C is **PAUSED** until bounded
-implementation and manual recheck of the same HV-01 step. This document records
-the accepted redesign. The bounded implementation below does not close existing
-`C-*` findings or replace manual HV-01 rechecking.
+installed in each concrete object. At that point, Phase C was paused pending
+implementation of 09.6 and a manual recheck of the same HV-01 step.
+
+**Current status: HV-01 PASSED (2026-11-06).** Phase C remains open pending
+representative acceptance and disposition of the remaining `C-*` findings.
 
 ## Будущие пользовательские характеристики портов
 

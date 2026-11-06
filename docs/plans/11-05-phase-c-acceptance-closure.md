@@ -81,7 +81,7 @@ workflow. Такое supersession записывается прямо в finding
 | `C-UX-07` | `IMPLEMENTED / RECHECK PENDING` | Групповой перенос Location реализован и P-UX-03D проверен; повторить сценарий с вложенными объектами и внешним кабелем в P-UX-03E. |
 | `C-COR-01` | `SUPERSEDED / RECHECK PENDING` | MapComposite удалён; проверить выбор и взаимодействие с членами Location subtree в P-UX-03E. |
 | `C-UX-08` | `SUPERSEDED / RECHECK PENDING` | Membership заменён Location placement; проверить изменение состава и сохранение после reload в P-UX-03E. |
-| `C-UX-09` | `SUPERSEDED / RECHECK PENDING` | P-UX-13 был Blueprint picker; библиотека 09.6 содержит previews. Проверить различимость вариантов в актуальном сценарии создания. |
+| `C-UX-09` | `OPEN` | В `NewInfrastructureObjectPage` реализована компактная таблица выбора BaseTemplate. Графического предпросмотра в сценарии создания пока нет. Preview в `BaseTemplateLibraryPage` доступен отдельно. Остаётся ручная проверка различимости шаблонов при создании объекта. |
 | `C-CAP-01` | `OPEN` | Promoted semantic gap; bounded Phase D fix ещё не принят |
 | `C-UX-10` | `OPEN` | Есть контракт Location cable channels и инструменты waypoints/snapping; автоматический comb и общий направляющий участок требуют реализации и проверки. |
 | `C-UX-11` | `IMPLEMENTED / RECHECK PENDING` | P-UX-03D реализован и проверен в своём scope; проверить waypoint lifecycle для внутренних и пересекающих границу маршрутов при перемещении и после reload. |
