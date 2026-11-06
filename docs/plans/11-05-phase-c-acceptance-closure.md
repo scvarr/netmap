@@ -11,16 +11,56 @@ bounded milestone.
 
 ## Status/index layer
 
-Direct Blueprint endpoint authoring, multi-panel editing, spatial tools, panel
-copy, ordered naming, and pairwise continuity (D2) are implemented. Port Block
-application surfaces remain removed. Editor prerequisites from the accepted
-[composable panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
-are complete for those implemented slices. Manual HV-01 showed that small
-configuration differences between instances of one base server must not require
-separate complete templates. Phase C is **PAUSED** until bounded implementation
-of the authoritative [09.6 hardware template/module target](../architecture/blueprints/09-06-hardware-template-module-contract.md)
-and manual HV-01 recheck; it is not complete or PASSED. Technology/capability and
-dense runtime Map presentation remain OPEN; D2 does not close `C-CAP-01`.
+**HV-01 PASSED (06.11.2026).** Блокировка на 09.6 снята. Phase C остаётся
+открытой до повторной representative acceptance. Сверка реализации выполнена
+по main `b27f9ca`. Записи начиная с журнала 03.11 сохраняют статусы своих
+контрольных точек; текущие статусы приведены в этом разделе.
+
+### Ручная приёмка HV-01 — 06.11.2026
+
+Подтверждены создание BaseTemplate и ModuleTemplate, создание двух PhysicalObject
+из одной базовой модели, установка трёх NIC в SRV1 и одного NIC в SRV2,
+создание и сохранение физической кабельной связи, публикация ревизий,
+безопасное обновление конфигураций и сохранение идентичности объектов, модулей,
+портов и соединений.
+
+В изолированной PostgreSQL опубликована ревизия 4 `HV01-TEST-BASE`.
+Совместимая ёмкость `HV01-OCP3` уменьшена с 3 до 2.
+
+| Объект | Предварительный анализ | Фактический reconcile |
+| --- | --- | --- |
+| SRV1 | requires_intervention / INSUFFICIENT_COMPATIBLE_CAPACITY | requires_intervention / INSUFFICIENT_COMPATIBLE_CAPACITY |
+| SRV2 | potentially_safe | updated |
+
+Сравнение архивов до и после D2 подтвердило неизменность конфигурации SRV1,
+установок, сопоставлений портов и всего canonical-раздела. Cable 25 → 25,
+Connection 73 → 73. Связь SRV1–SRV2 сохранена, Connection
+`56aca1ae-8936-4d99-8005-945d7d456ecf`, Cable
+`a42f4479-af89-4ad6-80d8-8d04137ed01b`. У сохранённого Cable отсутствует label.
+
+JSON v5 размером 813541 байт импортирован через API в отдельную пустую
+PostgreSQL (HTTP 204). Повторный экспорт имеет тот же размер и SHA-256
+`11B054FE7BFC9C9AF45B8FA816A2C4270F793BB8885F1B8B21502AFCD716904F`.
+
+### Состояние 09.6 в main
+
+| Срез | Реализация и ручное покрытие |
+| --- | --- |
+| E1/E2/E3 | Implemented / merged. Публикация и безопасное обновление покрыты HV-01. |
+| F1/F2a/F2b | Implemented / merged, включая редактирование компоновки F2b (`c08ca0d`). Отдельная визуальная проверка компоновки протоколом HV-01 не зафиксирована. |
+| UX-01 и VIS-01 | Merged, включая визуальные corrective и pinned composition (`1c4cc80`…`34e9e39`). Создание и установка проверены; отдельные проверки управления портами и pinned preview не зафиксированы. |
+| UX-02A/B/C/D | Контракт и runtime merged (`a3bd0bb`…`a344147`), включая archive corrective. Установки, ёмкость и round-trip проверены. |
+| UX-03 | Таблица и адаптивная высота merged (`e8df1fe`, `745c5fb`). Установка проверена; отдельный визуальный recheck высоты не зафиксирован. |
+| UX-04 | Отдельного среза с таким ID в журнале нет. |
+| UX-05 | Inspector и corrective кнопок merged (`7ed1730`, `b85aa12`). Исходы анализа D2 проверены; читаемость UI остаётся предметом C-UX-14. |
+| UX-06 | Библиотека, faithful preview и clean labels merged (`ec8dd68`, `56c3e65`, `792af1c`). Отдельный визуальный recheck не зафиксирован. |
+| UX-07 | Унификация маркеров merged (`b27f9ca`); размеры в runtime Map остаются в C-VIS-02. |
+
+### Workspace archive size / compression — OPEN
+
+Текущий небольшой тестовый набор занимает 813541 байт в JSON v5. При будущей
+проверке измерить размеры разделов и эффективность ZIP/GZIP до рассмотрения
+собственного формата хранения. Archive v5 contract сохраняется.
 
 Краткий индекс ниже добавляет текущий статус отслеживания. Все `C-*`
 identifiers/findings остаются в обязательном реестре, но accepted target
@@ -33,24 +73,24 @@ workflow. Такое supersession записывается прямо в finding
 | Finding | Текущий статус | Связанный clean-start fix / граница |
 | --- | --- | --- |
 | `C-UX-01` | `IMPLEMENTED / RECHECK PENDING` | `P-UX-18` |
-| `C-UX-02` | `OPEN` | `P-UX-13` не устраняет штатное manual `PhysicalObject` creation; `P-UX-14` это требование не закрывает |
+| `C-UX-02` | `OPEN` | Создание из BaseTemplate проверено в HV-01; штатный ручной путь и выбор Location требуют отдельного прохода (P-UX-14). |
 | `C-UX-03` | `OPEN` | — |
 | `C-UX-04` | `OPEN` | `P-UX-15` не реализует rename |
 | `C-UX-05` | `OPEN` | — |
 | `C-UX-06` | `OPEN` | `P-UX-17` явно оставляет independent Height вне scope |
-| `C-UX-07` | `OPEN` | P-UX-03D Location group move |
-| `C-COR-01` | `OPEN` | superseded MapComposite workflow; replacement recheck pending |
-| `C-UX-08` | `OPEN` | superseded MapComposite workflow; replacement recheck pending |
-| `C-UX-09` | `OPEN` | `P-UX-13` частично покрывает finding компактным Blueprint picker/table; derived preview для различения основных вариантов геометрии Blueprint остаётся незакрытым |
+| `C-UX-07` | `IMPLEMENTED / RECHECK PENDING` | Групповой перенос Location реализован и P-UX-03D проверен; повторить сценарий с вложенными объектами и внешним кабелем в P-UX-03E. |
+| `C-COR-01` | `SUPERSEDED / RECHECK PENDING` | MapComposite удалён; проверить выбор и взаимодействие с членами Location subtree в P-UX-03E. |
+| `C-UX-08` | `SUPERSEDED / RECHECK PENDING` | Membership заменён Location placement; проверить изменение состава и сохранение после reload в P-UX-03E. |
+| `C-UX-09` | `SUPERSEDED / RECHECK PENDING` | P-UX-13 был Blueprint picker; библиотека 09.6 содержит previews. Проверить различимость вариантов в актуальном сценарии создания. |
 | `C-CAP-01` | `OPEN` | Promoted semantic gap; bounded Phase D fix ещё не принят |
-| `C-UX-10` | `OPEN` | — |
-| `C-UX-11` | `OPEN` | P-UX-03D group-move/route semantics |
-| `C-UX-12` | `OPEN` | Обнаруживаемость массового именования и управление порядком |
-| `C-UX-13` | `IMPLEMENTED` | Компоновка страницы редактора шаблона |
-| `C-UX-14` | `OPEN` | Понятность результатов анализа изменений |
+| `C-UX-10` | `OPEN` | Есть контракт Location cable channels и инструменты waypoints/snapping; автоматический comb и общий направляющий участок требуют реализации и проверки. |
+| `C-UX-11` | `IMPLEMENTED / RECHECK PENDING` | P-UX-03D реализован и проверен в своём scope; проверить waypoint lifecycle для внутренних и пересекающих границу маршрутов при перемещении и после reload. |
+| `C-UX-12` | `IMPLEMENTED / RECHECK PENDING` | Массовое именование и spatial order merged (84de939, 3744a82, 51ab092); проверить обнаруживаемость, порядок и сохранение. |
+| `C-UX-13` | `IMPLEMENTED / RECHECK PENDING` | Компоновка BaseTemplate editor merged (a3ba352); проверить рабочую область вручную. |
+| `C-UX-14` | `IMPLEMENTED / RECHECK PENDING` | BaseTemplate Change Inspector merged; D2 подтверждает исходы анализа. Проверить понимание последствий через UI. |
 | `C-VIS-01` | `OPEN` | — |
 | `C-COR-02` | `IMPLEMENTED / RECHECK PENDING` | Распределение точек за пределы панели; высокий приоритет |
-| `C-VIS-02` | `OPEN` | Неодинаковые размеры портов на карте; низкий приоритет |
+| `C-VIS-02` | `OPEN` | b27f9ca унифицирует формы в редакторах и preview. Исправление размеров в runtime Map и ручной recheck исходного случая не подтверждены. |
 
 `C-UX-01` остаётся `RECHECK PENDING`: реализация `P-UX-18` принята и merged
 в `main`, но отдельная полная clean-repeat фиксация именно этого finding ещё
@@ -63,6 +103,20 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
 Проверки ниже выполняются через обычный пользовательский интерфейс. Нельзя
 обходить сценарий прямыми записями в БД или API, а также принимать удаление и
 повторное создание объекта вместо требуемого действия жизненного цикла.
+
+### Остаток Phase C
+
+- Закрыт HV-01. P-UX-03D и P-UX-20 прошли свои ручные проверки; P-UX-03E
+  и проверки связанных C-* остаются отдельными. Новых VERIFIED среди C-* нет.
+- Реализованные исправления и заменяющие сценарии перечислены в таблице.
+  Для C-COR-02 отдельно воспроизвести распределение у границ панели и проверить
+  сохранение после повторного открытия. Ручной результат от 06.11 этого не покрывает.
+- До закрытия Phase C нужны clean rack-first repeat, P-UX-03E и ручные проверки
+  применимых C-* из таблицы. Для строк OPEN требуется устранить остающийся
+  пробел или зафиксировать его перенос в соответствии с roadmap.
+- C-CAP-01 остаётся OPEN для Phase D до реализации и проверки truthful
+  FANOUT-1x24. Endpoint technology, dense Map LOD и исследование размера
+  архива лежат вне HV-01; успешный D2 и archive round-trip их не закрывают.
 
 ## Архитектурные границы и зависимости
 
@@ -715,11 +769,7 @@ internal/external/boundary Cable при перемещении Location subtree,
 Новый operational protocol использует active `Rack-first service-path
 synthetic acceptance` из 11-04 и начинается с пустой тестовой БД:
 
-**Current status: PAUSED — template/module implementation pending.**
-Следующий шаг — bounded implementation 09.6, external review/acceptance и
-manual HV-01 recheck с того же места. Предыдущие editor slices реализованы. Старые
-Port Block authoring ожидания в historical findings не являются target
-prerequisite; authoritative target задан в 09-06.
+**HV-01 PASSED (06.11.2026).** Оставшиеся проверки и блокеры Phase C перечислены в реестре выше. Следующий шаг — продолжить rack-first проход и повторить применимые проверки из реестра.
 
 1. ChatGPT даёт пользователю только следующий небольшой участок — ориентир
    2–5 конкретных действий в обычном UI.

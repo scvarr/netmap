@@ -7,37 +7,8 @@
 
 ## Назначение и граница
 
-**Current acceptance status:** **PAUSED** at the same HV-01 authoring
-step; manual HV-01 recheck remains required. Direct-slot persistence,
-multi-panel editing, multi-selection, alignment/distribution, panel copy,
-ordered bulk naming, and pairwise continuity (D2) are implemented. Editor
-prerequisites for the earlier panel slices are complete; Phase C is not complete
-or PASSED. Manual HV-01 exposed a new architectural requirement: small
-differences between instances of one base server must not require a full
-template for every configuration. The authoritative target is now
-[09.6 hardware templates and object module installations](../architecture/blueprints/09-06-hardware-template-module-contract.md):
-one mandatory base template and modules installed in each concrete object.
-Creation and module installation/removal are implemented in main (09.6-A;
-separate external acceptance unverified). Base draft/check (C), revision
-publication (D1) and safe PhysicalObject updates (D2) are implemented, externally
-accepted and merged.
-09.6-E1: **IMPLEMENTED / ACCEPTED / MERGED**, итоговый SHA
-`b96dc43303b8925d8973e7e2078a6d93540add98`.
-E2 — **IMPLEMENTED / ACCEPTED / MERGED**; E3 — **IMPLEMENTED**, внешняя приёмка ожидается.
-Внешняя приёмка E1 не заменяет ручную проверку: Phase C — **PAUSED**,
-HV-01 — **не PASSED**. После E2/E3 предусмотрено отдельное будущее направление
-09.6-F (F1: геометрия и графический редактор шаблонов модулей; F2: компоновка
-установок внутри PhysicalObject). Оно ещё не реализовано; деление предварительное,
-подробные контракты реализации не согласованы. См.
-[план 11-03](11-03-pre-l2-product-completion.md) и
-[контракт 09.6](../architecture/blueprints/09-06-hardware-template-module-contract.md).
-09.6-F не входит в существующие замечания Phase C, Dense Map LOD или технологии
-конечных точек. Исторические сценарии и результаты ниже не переоцениваются.
-Technology/capability and dense runtime Map presentation remain **OPEN**;
-existing `C-*` findings are not closed automatically. Port Block
-is not a prerequisite or target authoring entity. See the implemented
-[direct endpoint foundation](../architecture/blueprints/09-04-direct-blueprint-endpoint-authoring.md)
-and [composable panel target](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md).
+**HV-01 PASSED (06.11.2026).** Оставшиеся проверки и блокеры Phase C перечислены в [реестр 11-05](11-05-phase-c-acceptance-closure.md#statusindex-layer).
+
 Port Block workflows and fixtures below are historical evidence of the
 removed, architecturally superseded model.
 
@@ -529,7 +500,7 @@ capability axes, а не закрытый список device classes.
 | 9 | два chassis как один будущий logical system | CORE-A + CORE-B / StackWise |
 | 10 | router | RTR1 |
 | 11 | dual-homed server | SRV1 — PASSED / VERIFIED: independent traces to CORE-A / CORE-B |
-| 12 | Historical FRONT/REAR scenario; 09.5 multi-panel slices implemented, manual acceptance pending; 09.6 creation/install/removal and C/D1/D2 implemented; ModuleTemplate editing/publication accepted and merged; updating implemented, external acceptance pending; manual HV-01 recheck pending | PP-301, FPP-811, SRV1 |
+| 12 | Historical FRONT/REAR scenario; 09.6 hardware workflow HV-01 PASSED; отдельная проверка Map presentation остаётся открытой | PP-301, FPP-811, SRV1 |
 | 13 | несколько Port Blocks в одном Blueprint | SW-301-ACCESS |
 | 14 | ConnectionPoint port kind | O1 / PP-301 |
 | 15 | `NETWORK_PORT` port kind | PC1 / SW-301-ACCESS, если поддерживается |
@@ -1320,5 +1291,3 @@ anchors и recomputation через будущий `Cable Guide` / `Routing Corr
 создавать exhaustive combinatorial matrix vendor/device variants. Цель — один
 representative example на каждую существенно различающуюся structural
 capability.
-
-Current status: E2 IMPLEMENTED / ACCEPTED / MERGED (cf3a0c35f0a89ca0e0f0fa2e54fe561463c0fbbe). E3 IMPLEMENTED, external acceptance pending. F1/F2 OPEN. Phase C PAUSED; HV-01 not PASSED.

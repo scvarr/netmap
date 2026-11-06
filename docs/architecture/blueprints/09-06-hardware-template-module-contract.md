@@ -2,6 +2,13 @@
 
 ## Status and authority
 
+**Current status (2026-11-06): HV-01 PASSED.** E1/E2/E3 and F1/F2a/F2b are
+implemented and merged. Logical module places, installation and count authoring
+(UX-02A–D) are merged. See the
+[acceptance record and current register](../../plans/11-05-phase-c-acceptance-closure.md#statusindex-layer)
+for manual coverage and remaining Phase C checks. Dated corrective and
+implementation records preserve their checkpoint status.
+
 **ACCEPTED / AUTHORITATIVE TARGET CONTRACT; 09.6-A — IMPLEMENTED в main
 (отдельная внешняя приёмка не подтверждена). 09.6-C, D1, D2 и E1 —
 IMPLEMENTED / ACCEPTED / MERGED. E2 — IMPLEMENTED / ACCEPTED / MERGED; E3 — IMPLEMENTED / ACCEPTED / MERGED.**
@@ -53,7 +60,7 @@ the accepted redesign. The bounded implementation below does not close existing
 revision на изменяемый справочник — отдельный OPEN вопрос, который необходимо
 согласовать до implementation contract; live lookup или snapshot здесь не
 выбирается. C-CAP-01 остаётся отдельной confirmed gap. Phase C PAUSED;
-HV-01 NOT PASSED.
+HV-01 PASSED.
 
 ## Implemented boundary: 09.6-A
 
@@ -399,7 +406,7 @@ Endpoint order is presentation input, never endpoint identity.
 Перемещение и изменение размеров прямоугольника меняют представление,
 сохраняя идентичность установки и конечных точек.
 
-### Согласованное продуктовое направление: F1 IMPLEMENTED / ACCEPTED / MERGED; F2a IMPLEMENTED / ACCEPTED / MERGED; F2b IMPLEMENTED
+### Согласованное продуктовое направление: F1 IMPLEMENTED / ACCEPTED / MERGED; F2a IMPLEMENTED / ACCEPTED / MERGED; F2b IMPLEMENTED / MERGED
 
 F1 реализован ниже; описание свободной компоновки установки относится к открытому F2. Базовый шаблон
 оборудования задаёт корпус, панели, встроенные порты и видимые отсеки для
@@ -435,7 +442,7 @@ NetworkInterface, Connections и Cables. Совместимость отсеко
 
 ## Implemented boundary: 09.6-E2
 
-E2 IMPLEMENTED / ACCEPTED / MERGED. E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED / ACCEPTED / MERGED; F2a IMPLEMENTED / ACCEPTED / MERGED; F2b IMPLEMENTED.
+E2 IMPLEMENTED / ACCEPTED / MERGED. E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED / ACCEPTED / MERGED; F2a IMPLEMENTED / ACCEPTED / MERGED; F2b IMPLEMENTED / MERGED.
 
 - Module editor publishes only a saved, currently checked candidate through
   `POST /v1/library/module-templates/{id}/candidates/{candidate_id}/publish`.
@@ -624,7 +631,7 @@ manual HV-01 recheck; it is neither complete nor PASSED.
 
 ## Implemented boundary: 09.6-E3
 
-**E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED / ACCEPTED / MERGED; F2a IMPLEMENTED / ACCEPTED / MERGED; F2b IMPLEMENTED.
+**E3 IMPLEMENTED / ACCEPTED / MERGED; F1 IMPLEMENTED / ACCEPTED / MERGED; F2a IMPLEMENTED / ACCEPTED / MERGED; F2b IMPLEMENTED / MERGED.
 Phase C PAUSED; HV-01 not PASSED.**
 
 - «Обновить совместимые установки» calls POST
@@ -695,7 +702,7 @@ HV-01 is not PASSED.
 
 ## Implemented boundary: 09.6-F2a
 
-F2a **IMPLEMENTED / ACCEPTED / MERGED**. F2b **IMPLEMENTED** (external branch inspection pending).
+F2a **IMPLEMENTED / ACCEPTED / MERGED**. F2b **IMPLEMENTED / MERGED**.
 Phase C **PAUSED**; HV-01 is not PASSED.
 
 - Installation `layout` belongs to ObjectConfiguration through its stable

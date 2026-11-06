@@ -7,14 +7,9 @@ library/editor/navigation удалены. P-UX-11/12 shell, bounded workspace и
 ratio сохранены. По принятому
 [09.5 panel contract](../architecture/blueprints/09-05-composable-blueprint-presentation-panels.md)
 editor prerequisites завершены: multi-select, alignment/distribution, panel copy,
-ordered bulk naming и pairwise continuity (D2) реализованы. Phase C — **PAUSED**:
-manual HV-01 выявил необходимость нового
-[09.6 template/module target](../architecture/blueprints/09-06-hardware-template-module-contract.md).
-Один базовый сервер с небольшими отличиями между экземплярами не должен
-требовать отдельного полного шаблона для каждой комплектации. Следующий шаг —
-bounded implementation принятого redesign и manual HV-01 recheck. Это не
-означает Phase C complete/PASSED; technology/capability и dense runtime Map
-presentation остаются OPEN / DEFERRED.
+ordered bulk naming и pairwise continuity (D2) реализованы.
+
+**HV-01 PASSED (06.11.2026).** Оставшиеся проверки и блокеры Phase C перечислены в [реестр 11-05](11-05-phase-c-acceptance-closure.md#statusindex-layer).
 
 Этот журнал фиксирует замечания, найденные при последовательном ручном
 проходе продукта от первого экрана после авторизации до полностью собранного
@@ -455,13 +450,9 @@ A/B/C/D реализованы, ручная перепроверка D прой
 11-08 завершён. P-UX-03E остаётся pending; весь P-UX-03 и spatial cutover
 незавершены до final acceptance.
 
-**Текущий gate: Phase C PAUSED на HV-01** до bounded implementation 09.6,
-external review/acceptance и manual recheck. Допустимый destructive development
-cutover/reset не требует сохранения старых Blueprint records; historical
-evidence и `C-*` findings сохраняются. P-UX-13/14/15 остаются IMPLEMENTED;
-их complete-configuration Blueprint и version-centric update descriptions
-фиксируют прежнюю реализацию, superseded target-wise template/module workflow
-из 09.6. Новый redesign не закрывает их ожидающие ручные проверки автоматически.
+**HV-01 PASSED (06.11.2026).** Оставшиеся проверки и блокеры Phase C перечислены в [реестр 11-05](11-05-phase-c-acceptance-closure.md#statusindex-layer).
+P-UX-13/14/15 реализованы для прежнего Blueprint workflow. Их заменяющие
+сценарии 09.6 требуют отдельной ручной проверки.
 
 После снятия этого gate дальнейшее прохождение stand идёт небольшими user-visible шагами с
 остановкой на первом существенном finding; после bounded fix и merge

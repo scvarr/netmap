@@ -29,7 +29,7 @@ standalone/multi-user application. L2 не начинается до второ�
 кабелей. [Контракт справочников](../product/user-reference-catalogs.md) фиксирует
 отдельную поверхность «Справочники» и создание значений непосредственно из форм.
 Это необходимая pre-L2 product capability, а не IMPLEMENTED возможность;
-порядок Phase A–I и gates не меняется. Phase C PAUSED; HV-01 NOT PASSED.
+порядок Phase A–I и gates не меняется. HV-01 PASSED; Phase C остаётся открытой.
 
 ## Последовательный порядок
 
@@ -55,36 +55,7 @@ and is not a future target prerequisite or library direction.
   подключения» and «Сетевые порты» columns, and counts for the current
   immutable PortBlockVersion without one version-details load per row.
 
-Current execution position: **Phase C — PAUSED at hardware template/module redesign.**
-Direct-slot foundation, multi-panel editing, spatial tools, panel copy, ordered
-naming, and pairwise continuity (D2) are implemented; Port Block application
-surfaces are removed. Manual HV-01 revealed that small differences between
-instances of one base server must not require separate complete templates.
-The authoritative [09.6 hardware template/module contract](../architecture/blueprints/09-06-hardware-template-module-contract.md)
-therefore supersedes the complete-configuration target of 09.4/09.5.
-Creation and module installation/removal are implemented in main (09.6-A;
-separate final external acceptance unverified). Base draft/check (09.6-C),
-BaseTemplateRevision publication (D1) and safe PhysicalObject updates (D2) are
-implemented, externally accepted and merged.
-09.6-E1 (редактирование ModuleTemplate, сохранённые черновики и проверка влияния):
-**IMPLEMENTED / ACCEPTED / MERGED**, итоговый SHA
-`b96dc43303b8925d8973e7e2078a6d93540add98`.
-E2 — **IMPLEMENTED / ACCEPTED / MERGED**; E3 — **IMPLEMENTED**, внешняя приёмка ожидается.
-Phase C остаётся **PAUSED**, HV-01 — **не PASSED**; перед возобновлением нужна
-ручная повторная проверка, см. [11-04](11-04-phase-c-representative-l1-testbed.md).
-
-После E2/E3 предусмотрено отдельное согласованное продуктовое направление
-**09.6-F — OPEN**, ещё не реализованное:
-
-- F1: геометрия и графический редактор шаблонов модулей.
-- F2: визуальная компоновка установленных модулей внутри PhysicalObject.
-
-Деление F1/F2 предварительное; подробные контракты реализации ещё не согласованы.
-Продуктовые границы и инварианты зафиксированы в
-[контракте 09.6](../architecture/blueprints/09-06-hardware-template-module-contract.md).
-09.6-F не смешивается с E2/E3, Dense Map LOD, технологиями конечных точек
-или существующими замечаниями Phase C и не закрывает их. Технологии конечных
-точек и плотное представление карты остаются OPEN; Phase C не завершена.
+**HV-01 PASSED (06.11.2026).** Оставшиеся проверки и блокеры Phase C перечислены в [реестр 11-05](11-05-phase-c-acceptance-closure.md#statusindex-layer).
 
 В spatial strand P-UX-03A/B/C/D реализованы, ручная проверка P-UX-03D
 пройдена. Bounded Cable route follow-up из 11-08 завершён. Следующий spatial
@@ -283,5 +254,3 @@ contract.
 
 Этот roadmap самостоятельно является source of truth для execution order. Новые
 bounded findings могут появляться в review, но не изменяют roadmap молча.
-
-Current status: E2 IMPLEMENTED / ACCEPTED / MERGED (cf3a0c35f0a89ca0e0f0fa2e54fe561463c0fbbe). E3 IMPLEMENTED, external acceptance pending. F1/F2 OPEN. Phase C PAUSED; HV-01 not PASSED.
