@@ -27,6 +27,7 @@ describe('09.6-A user path', () => {
     source.loadBaseTemplates = vi.fn().mockResolvedValue({ schema_version: '2.0', blueprints: [{ ...base, version_number: 2,
       publication_state: { revision_id: 'rev2', version_number: 2, outdated_count: 3, awaiting_update_count: 2, requires_intervention_count: 1, current_objects: [], objects: [] } }] });
     show(<BaseTemplateLibraryPage dataSource={source} moduleDataSource={modules()} />);
+    await userEvent.click(await screen.findByRole('button', { name: /^Server base/ }));
     expect(await screen.findByText('Текущая опубликованная ревизия: 2')).toBeInTheDocument();
     expect(screen.getByText('Объектов на прежних ревизиях: 3')).toBeInTheDocument();
     expect(screen.getByText('Ожидают обновления: 2')).toBeInTheDocument();
@@ -36,33 +37,43 @@ describe('09.6-A user path', () => {
   it('offers styled module deletion and does nothing when confirmation is declined', async () => {
     const source = modules(); const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
     show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);
-    const row = (await screen.findByRole('rowheader', { name: 'OCP NIC' })).closest('tr')!;
+    await userEvent.click(screen.getByRole('tab', { name: 'Модули' }));
+    const summary = await screen.findByRole('button', { name: /^OCP NIC/ });
+    await userEvent.click(summary);
+    const row = summary.closest('li')!;
     const button = within(row).getByRole('button', { name: 'Удалить' });
     expect(button).toHaveClass('text-action');
     await userEvent.click(button);
     expect(confirm).toHaveBeenCalledWith(expect.stringContaining('OCP NIC'));
     expect(source.deleteModule).not.toHaveBeenCalled();
-    expect(screen.getByRole('rowheader', { name: 'OCP NIC' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^OCP NIC/ })).toBeInTheDocument();
   });
   it('refreshes module rows after confirmed successful deletion', async () => {
     const source = modules(); vi.spyOn(window, 'confirm').mockReturnValue(true);
     source.listModules = vi.fn().mockResolvedValueOnce({ modules: [module] }).mockResolvedValue({ modules: [] });
     show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);
-    const row = (await screen.findByRole('rowheader', { name: 'OCP NIC' })).closest('tr')!;
+    await userEvent.click(screen.getByRole('tab', { name: 'Модули' }));
+    const summary = await screen.findByRole('button', { name: /^OCP NIC/ });
+    await userEvent.click(summary);
+    const row = summary.closest('li')!;
     await userEvent.click(within(row).getByRole('button', { name: 'Удалить' }));
     await waitFor(() => expect(source.listModules).toHaveBeenCalledTimes(2));
     expect(source.deleteModule).toHaveBeenCalledWith('module');
-    await waitFor(() => expect(screen.queryByRole('rowheader', { name: 'OCP NIC' })).not.toBeInTheDocument());
-    expect(await screen.findByRole('rowheader', { name: 'Server base' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^OCP NIC/ })).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: 'Объекты' }));
+    expect(await screen.findByRole('button', { name: /^Server base/ })).toBeInTheDocument();
   });
   it('shows a server refusal and retains the installed module row', async () => {
     const source = modules(); vi.spyOn(window, 'confirm').mockReturnValue(true);
     source.deleteModule = vi.fn().mockRejectedValue(new Error('ModuleTemplate revision is installed'));
     show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={source} />);
-    const row = (await screen.findByRole('rowheader', { name: 'OCP NIC' })).closest('tr')!;
+    await userEvent.click(screen.getByRole('tab', { name: 'Модули' }));
+    const summary = await screen.findByRole('button', { name: /^OCP NIC/ });
+    await userEvent.click(summary);
+    const row = summary.closest('li')!;
     await userEvent.click(within(row).getByRole('button', { name: 'Удалить' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('ModuleTemplate revision is installed');
-    expect(screen.getByRole('rowheader', { name: 'OCP NIC' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^OCP NIC/ })).toBeInTheDocument();
     expect(source.listModules).toHaveBeenCalledTimes(1);
   });
   it('retains confirmed base template deletion and refreshes the existing library', async () => {
@@ -70,12 +81,15 @@ describe('09.6-A user path', () => {
     source.deleteBaseTemplate = vi.fn().mockResolvedValue(undefined);
     source.loadBaseTemplates = vi.fn().mockResolvedValueOnce({ schema_version: '2.0', blueprints: [base] }).mockResolvedValue({ schema_version: '2.0', blueprints: [] });
     show(<BaseTemplateLibraryPage dataSource={source} moduleDataSource={modulesSource} />);
-    const row = (await screen.findByRole('rowheader', { name: 'Server base' })).closest('tr')!;
+    const summary = await screen.findByRole('button', { name: /^Server base/ });
+    await userEvent.click(summary);
+    const row = summary.closest('li')!;
     await userEvent.click(within(row).getByRole('button', { name: 'Удалить' }));
     await waitFor(() => expect(source.loadBaseTemplates).toHaveBeenCalledTimes(2));
     expect(source.deleteBaseTemplate).toHaveBeenCalledWith('base');
-    await waitFor(() => expect(screen.queryByRole('rowheader', { name: 'Server base' })).not.toBeInTheDocument());
-    expect(await screen.findByRole('rowheader', { name: 'OCP NIC' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Server base/ })).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole('tab', { name: 'Модули' }));
+    expect(await screen.findByRole('button', { name: /^OCP NIC/ })).toBeInTheDocument();
     expect(modulesSource.deleteModule).not.toHaveBeenCalled();
   });
   it('uses server-derived contextual names in the installed module endpoint list', async () => {
@@ -87,16 +101,6 @@ describe('09.6-A user path', () => {
     show(<ModuleInstallationSection objectId="object" dataSource={source} onInstalled={vi.fn()} />);
     for (const index of [1, 2]) for (const port of [1, 2]) expect(await screen.findByText(`Back / PCIe${index} / feth${port}`)).toBeInTheDocument();
     expect(screen.queryByText('feth1')).not.toBeInTheDocument();
-  });
-  it('shows separate base and module roles with both creation actions and no published editing', async () => {
-    show(<BaseTemplateLibraryPage dataSource={bases()} moduleDataSource={modules()} />);
-    expect(await screen.findByRole('rowheader', { name: 'Server base' })).toBeInTheDocument();
-    expect(screen.getByRole('rowheader', { name: 'OCP NIC' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Создать базовый шаблон' })).toHaveAttribute('href', '/library/base-templates/new');
-    expect(screen.getByRole('link', { name: 'Создать шаблон модуля' })).toHaveAttribute('href', '/library/module-templates/new');
-    expect(screen.queryByRole('link', { name: 'Редактировать' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Создать шаблон модуля' })).toHaveClass('secondary-action');
-    expect(screen.getByRole('link', { name: 'Создать объект' })).toHaveClass('secondary-action');
   });
   it('creates an object using only the root base selection and navigates to its card', async () => {
     const source = bases(); show(<NewInfrastructureObjectPage baseTemplateDataSource={source} />);

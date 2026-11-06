@@ -866,3 +866,42 @@ a { color: inherit; }
 .base-template-inspector__technical { margin-block: 4px 8px; }
 .base-template-inspector__technical summary { cursor: pointer; }
 .base-template-inspector__technical pre { white-space: pre-wrap; }
+
+/* Compact template library */
+.template-library-list {
+  display: grid;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+.template-library-summary {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 4px 16px;
+  padding: 8px 12px;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.template-library-summary strong { flex: 1 1 10rem; }
+.template-library-summary > span { color: #a9bcba; }
+.template-library-summary > .template-library-warning { color: #f0b5ae; }
+.template-library-detail { padding: 10px 12px 12px; }
+.template-library-detail .blueprint-preview-viewport {
+  height: clamp(160px, 30vh, 230px);
+  max-width: 640px;
+}
+.template-library-facts, .template-library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-top: 10px;
+}
+.template-library-facts { color: #a9bcba; font-size: 12px; }
+.blueprint-library-page .catalog-tabs button:focus-visible {
+  outline: 2px solid #55e5b5;
+  outline-offset: 2px;
+}

@@ -1,23 +1,200 @@
-import { ModuleGeometryEditor } from '../components/ModuleGeometryEditor';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { BlueprintPreview } from '../components/BlueprintPreview';
+import { BlueprintPreviewViewport } from '../components/BlueprintPreview';
 import { PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
-import type { BaseTemplateDataSource, BaseTemplateListDocument, BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
+import type { BaseTemplateDataSource, BaseTemplateListItem, BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 import { hardwareModuleDataSource, type HardwareModuleDataSource, type ModuleTemplate } from '../topology/hardwareModules';
 
-export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwareModuleDataSource }: { dataSource: BaseTemplateDataSource; moduleDataSource?: HardwareModuleDataSource }) {
-  const { t } = useI18n(); const [bases, setBases] = useState<BaseTemplateListDocument>(); const [modules, setModules] = useState<ModuleTemplate[]>(); const [details, setDetails] = useState<Record<string, BaseTemplateRevisionDocument>>({}); const [error, setError] = useState(''); const [retry, setRetry] = useState(0);
-  useEffect(() => { let active = true; setError(''); setBases(undefined); setModules(undefined); void Promise.all([dataSource.loadBaseTemplates(), moduleDataSource.listModules()]).then(async ([b, m]) => { const d = await Promise.all(b.blueprints.map(i => dataSource.loadBaseTemplateRevision(i.blueprint_ref.entity_id, i.version_ref.entity_id))); if(active) { setBases(b); setModules(m.modules); setDetails(Object.fromEntries(d.map(i => [i.blueprint_ref.entity_id, i]))); } }).catch(e => { if(active) setError(t('hardware.failed', { error: String(e) })); }); return () => { active = false; }; }, [dataSource, moduleDataSource, retry, t]);
-  const remove = async (id: string, name: string) => { if(!window.confirm(t('blueprint.library.deleteConfirm', { name }))) return; try { await dataSource.deleteBaseTemplate?.(id); setRetry(v => v + 1); } catch(e) { setError(t('hardware.failed', { error: String(e) })); } };
-  const removeModule = async (id: string, name: string) => { if(!window.confirm(t('hardware.deleteModuleConfirm', { name }))) return; try { await moduleDataSource.deleteModule(id); setRetry(v => v + 1); } catch(e) { setError(t('hardware.failed', { error: String(e) })); } };
-  return <PageShell className="catalog-page blueprint-library-page"><PageHeader title={t('hardware.templates')} eyebrow={t('blueprint.library.section')} actions={<><Link className="primary-action" to="/library/base-templates/new">{t('hardware.newBase')}</Link><Link className="secondary-action" to="/library/module-templates/new">{t('hardware.newModule')}</Link></>} />
-    {error && <p role="alert">{error} <button type="button" className="secondary-action" onClick={() => setRetry(v => v + 1)}>{t('action.retry')}</button></p>}
-    {!bases && !error && <p>{t('create.blueprintsLoading')}</p>}
-    <section aria-label={t('hardware.base')}><h2>{t('hardware.base')}</h2>{bases?.blueprints.length === 0 && <p>{t('blueprint.library.empty')}</p>}<table className="blueprint-library-table"><thead><tr><th>{t('hardware.name')}</th><th>{t('hardware.base')}</th><th>{t('blueprint.library.actions')}</th></tr></thead><tbody>
-      {bases?.blueprints.map(b => { const d = details[b.blueprint_ref.entity_id]; return <tr key={b.blueprint_ref.entity_id}><th scope="row">{b.name}{b.publication_state && <><p>{t('publication.revision', { number: b.version_number })}</p><p>{t('publication.outdated', { count: b.publication_state.outdated_count })}</p><p>{t('publication.awaiting', { count: b.publication_state.awaiting_update_count })}</p><p>{t('publication.intervention', { count: b.publication_state.requires_intervention_count })}</p></>}</th><td>{d && <BlueprintPreview body={d.body} panels={d.panels} slots={d.slots} internalLinks={d.internal_links} label={b.name} viewportWidth={140} viewportHeight={70} />}{b.slot_count} · {t('physical.ports')}; {d?.bays?.length ?? 0} · {t('hardware.bays')}</td><td>{dataSource.loadDraft && <Link className="secondary-action" to={`/library/base-templates/${b.blueprint_ref.entity_id}/edit`}>{t('review.edit')}</Link>}<Link className="secondary-action" to={`/infrastructure/objects/new?blueprint=${encodeURIComponent(b.blueprint_ref.entity_id)}`}>{t('blueprint.library.createObject')}</Link>{dataSource.deleteBaseTemplate && <button type="button" className="text-action" onClick={() => void remove(b.blueprint_ref.entity_id, b.name)}>{t('hardware.remove')}</button>}</td></tr>; })}
-    </tbody></table></section>
-    <section aria-label={t('hardware.module')}><h2>{t('hardware.module')}</h2><table className="blueprint-library-table"><thead><tr><th>{t('hardware.name')}</th><th>{t('hardware.compatibility')}</th><th>{t('physical.ports')}</th><th>{t('blueprint.library.actions')}</th></tr></thead><tbody>{modules?.map(m => <tr key={m.template_id}><th scope="row">{m.name}{m.publication_state && <><p>{t('publication.revision', { number: m.publication_state.version_number })}</p><p>{t('publication.awaiting', { count: m.publication_state.awaiting_update_count })}</p><p>{t('publication.intervention', { count: m.publication_state.requires_intervention_count })}</p></>}</th><td>{m.compatibility}</td><td>{m.endpoints.length}<ModuleGeometryEditor geometry={m.geometry} endpoints={m.endpoints} /></td><td><Link className="text-action" to={`/library/module-templates/${m.template_id}/edit`}>{t('review.edit')}</Link><button type="button" className="text-action" onClick={() => void removeModule(m.template_id, m.name)}>{t('hardware.remove')}</button></td></tr>)}</tbody></table></section>
+const tabs = ['objects', 'modules'] as const;
+type Tab = typeof tabs[number];
+type Load<T> = { status: 'loading' } | { status: 'ready'; data: T } | { status: 'failed'; error: string };
+type Publication = Pick<NonNullable<BaseTemplateListItem['publication_state']>, 'outdated_count' | 'awaiting_update_count' | 'requires_intervention_count'>;
+
+function PublicationWarnings({ state }: { state?: Publication }) {
+  const { t } = useI18n();
+  if (!state) return null;
+  const warnings = [
+    ['publication.outdated', state.outdated_count],
+    ['publication.awaiting', state.awaiting_update_count],
+    ['publication.intervention', state.requires_intervention_count],
+  ] as const;
+  return warnings.filter(([, count]) => count > 0).map(([key, count]) =>
+    <span className="template-library-warning" key={key}>{t(key, { count })}</span>);
+}
+
+function TemplateRow({ name, metadata, ports, publication, expanded, onToggle, children }: {
+  name: string; metadata: string; ports: number; publication?: Publication;
+  expanded: boolean; onToggle: () => void; children: ReactNode;
+}) {
+  const { t } = useI18n();
+  const detailId = useId();
+  return <li className="template-library-row">
+    <button type="button" className="secondary-action template-library-summary"
+      aria-expanded={expanded} aria-controls={detailId} onClick={onToggle}>
+      <strong><span aria-hidden="true">{expanded ? '▾' : '▸'} </span>{name}</strong>
+      <span>{metadata}</span>
+      <span>{t('physical.portCount', { count: ports })}</span>
+      <PublicationWarnings state={publication} />
+    </button>
+    <div id={detailId} hidden={!expanded} className="template-library-detail">
+      {expanded && children}
+    </div>
+  </li>;
+}
+
+function ModulePreview({ module }: { module: ModuleTemplate }) {
+  const { geometry, endpoints, name } = module;
+  const panel = { panel_key: 'body', panel_number: 1, display_name: name, x: 0, y: 0, width: geometry.width, height: geometry.height };
+  const slots = endpoints.flatMap(endpoint => {
+    const position = geometry.endpoints[endpoint.key];
+    return position ? [{ ...endpoint, panel_key: panel.panel_key, rendered_position: position }] : [];
+  });
+  return <BlueprintPreviewViewport label={name} scale={1} panels={[panel]} slots={slots}
+    body={{ kind: 'RECTANGLE', width: geometry.width, height: geometry.height, fill_color: geometry.fill_color }} />;
+}
+
+export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwareModuleDataSource }: {
+  dataSource: BaseTemplateDataSource; moduleDataSource?: HardwareModuleDataSource;
+}) {
+  const { t } = useI18n();
+  const id = useId();
+  const [tab, setTab] = useState<Tab>('objects');
+  const [expanded, setExpanded] = useState<Partial<Record<Tab, string>>>({});
+  const [bases, setBases] = useState<Load<BaseTemplateListItem[]>>({ status: 'loading' });
+  const [modules, setModules] = useState<Load<ModuleTemplate[]>>({ status: 'loading' });
+  const [deleteError, setDeleteError] = useState('');
+  const [reload, setReload] = useState(0);
+  const generation = useRef(0);
+  const [previews, setPreviews] = useState<Record<string, Load<BaseTemplateRevisionDocument>>>({});
+
+  useEffect(() => {
+    let active = true;
+    setBases({ status: 'loading' });
+    setModules({ status: 'loading' });
+    setExpanded(previous => ({ modules: previous.modules }));
+    setPreviews({});
+    void dataSource.loadBaseTemplates().then(
+      result => { if (active) setBases({ status: 'ready', data: result.blueprints }); },
+      error => { if (active) setBases({ status: 'failed', error: String(error) }); },
+    );
+    void moduleDataSource.listModules().then(
+      result => { if (active) setModules({ status: 'ready', data: result.modules }); },
+      error => { if (active) setModules({ status: 'failed', error: String(error) }); },
+    );
+    return () => {
+      active = false;
+      generation.current += 1;
+    };
+  }, [dataSource, moduleDataSource, reload]);
+
+  function loadPreview(base: BaseTemplateListItem, key: string) {
+    const requestedGeneration = generation.current;
+    const save = (result: Load<BaseTemplateRevisionDocument>) => {
+      if (generation.current === requestedGeneration) {
+        setPreviews(previous => ({ ...previous, [key]: result }));
+      }
+    };
+    save({ status: 'loading' });
+    void dataSource.loadBaseTemplateRevision(base.blueprint_ref.entity_id, base.version_ref.entity_id).then(
+      data => save({ status: 'ready', data }),
+      error => save({ status: 'failed', error: String(error) }),
+    );
+  }
+
+  async function remove(confirmMessage: string, action: () => Promise<unknown>) {
+    if (!window.confirm(confirmMessage)) return;
+    setDeleteError('');
+    try {
+      await action();
+      setReload(value => value + 1);
+    } catch (error) {
+      setDeleteError(String(error));
+    }
+  }
+
+  const isObjects = tab === 'objects';
+  const list = isObjects ? bases : modules;
+  return <PageShell className="catalog-page blueprint-library-page">
+    <PageHeader title={t('hardware.templates')} eyebrow={t('blueprint.library.section')} actions={
+      <Link className="primary-action" to={isObjects ? '/library/base-templates/new' : '/library/module-templates/new'}>
+        {t(isObjects ? 'hardware.newBase' : 'hardware.newModule')}
+      </Link>
+    } />
+    <div className="catalog-tabs" role="tablist" aria-label={t('hardware.templates')}>
+      {tabs.map(item => <button key={item} type="button" className="secondary-action" role="tab" id={`${id}-${item}`}
+        aria-controls={`${id}-${item}-panel`} aria-selected={tab === item} tabIndex={tab === item ? 0 : -1}
+        onClick={() => setTab(item)} onKeyDown={event => {
+          const next = event.key === 'Home' ? 'objects' : event.key === 'End' ? 'modules'
+            : ['ArrowLeft', 'ArrowRight'].includes(event.key) ? (item === 'objects' ? 'modules' : 'objects') : undefined;
+          if (!next) return;
+          event.preventDefault();
+          setTab(next);
+          document.getElementById(`${id}-${next}`)?.focus();
+        }}>{t(item === 'objects' ? 'templateLibrary.objects' : 'templateLibrary.modules')}</button>)}
+    </div>
+    {deleteError && <p role="alert">{t('hardware.failed', { error: deleteError })}</p>}
+    {tabs.map(item => <section key={item} role="tabpanel" id={`${id}-${item}-panel`}
+      aria-labelledby={`${id}-${item}`} hidden={item !== tab}>
+      {item === tab && <>
+        {list.status === 'loading' && <p role="status">{t('templateLibrary.loading')}</p>}
+        {list.status === 'failed' && <p role="alert">{t('hardware.failed', { error: list.error })}{' '}
+          <button type="button" className="secondary-action" onClick={() => setReload(value => value + 1)}>{t('action.retry')}</button>
+        </p>}
+        {list.status === 'ready' && (list.data.length === 0 ? <p>{t('blueprint.library.empty')}</p> :
+          <ul className="template-library-list">
+            {isObjects && bases.status === 'ready' && bases.data.map(base => {
+              const templateId = base.blueprint_ref.entity_id;
+              const key = JSON.stringify([templateId, base.version_ref.entity_id]);
+              const open = expanded.objects === key;
+              const preview = previews[key];
+              const revision = preview?.status === 'ready' ? preview.data : undefined;
+              const type = base.default_physical_object_class?.trim();
+              const unspecified = !type || /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(type);
+              return <TemplateRow key={key} name={base.name} ports={base.slot_count} publication={base.publication_state}
+                metadata={unspecified ? t('blueprint.library.notSpecified') : type}
+                expanded={open} onToggle={() => {
+                  setExpanded({ ...expanded, objects: open ? undefined : key });
+                  if (!open && !preview) loadPreview(base, key);
+                }}>
+                {preview?.status === 'loading' && <p role="status">{t('templateLibrary.previewLoading')}</p>}
+                {preview?.status === 'failed' && <p role="alert">{t('templateLibrary.previewFailed', { error: preview.error })}{' '}
+                  <button type="button" className="secondary-action" onClick={() => loadPreview(base, key)}>{t('action.retry')}</button>
+                </p>}
+                {revision && <BlueprintPreviewViewport scale={1} label={base.name} body={revision.body} panels={revision.panels}
+                  slots={revision.slots} internalLinks={revision.internal_links} />}
+                <div className="template-library-facts">
+                  <span>{t('publication.revision', { number: base.version_number })}</span>
+                  {revision && <span>{t('templateLibrary.places', { count: revision.bays?.length ?? 0 })}</span>}
+                </div>
+                <div className="template-library-actions">
+                  {dataSource.loadDraft && <Link className="secondary-action" to={`/library/base-templates/${templateId}/edit`}>{t('review.edit')}</Link>}
+                  <Link className="secondary-action" to={`/infrastructure/objects/new?blueprint=${encodeURIComponent(templateId)}`}>{t('blueprint.library.createObject')}</Link>
+                  {dataSource.deleteBaseTemplate && <button type="button" className="text-action"
+                    onClick={() => void remove(t('blueprint.library.deleteConfirm', { name: base.name }), () => dataSource.deleteBaseTemplate!(templateId))}>{t('hardware.remove')}</button>}
+                </div>
+              </TemplateRow>;
+            })}
+            {!isObjects && modules.status === 'ready' && modules.data.map(module => {
+              const open = expanded.modules === module.template_id;
+              return <TemplateRow key={module.template_id} name={module.name} metadata={module.compatibility}
+                ports={module.endpoints.length} publication={module.publication_state} expanded={open}
+                onToggle={() => setExpanded({ ...expanded, modules: open ? undefined : module.template_id })}>
+                <ModulePreview module={module} />
+                <div className="template-library-facts">
+                  <span>{t('templateLibrary.compatibility', { value: module.compatibility })}</span>
+                  <span>{t('physical.portCount', { count: module.endpoints.length })}</span>
+                  {module.publication_state && <span>{t('publication.revision', { number: module.publication_state.version_number })}</span>}
+                </div>
+                <div className="template-library-actions">
+                  <Link className="secondary-action" to={`/library/module-templates/${module.template_id}/edit`}>{t('review.edit')}</Link>
+                  <button type="button" className="text-action"
+                    onClick={() => void remove(t('hardware.deleteModuleConfirm', { name: module.name }), () => moduleDataSource.deleteModule(module.template_id))}>{t('hardware.remove')}</button>
+                </div>
+              </TemplateRow>;
+            })}
+          </ul>)}
+      </>}
+    </section>)}
   </PageShell>;
 }
