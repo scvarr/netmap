@@ -1,3 +1,4 @@
+import type { PortType } from './PortTypeSelect';
 import { EndpointMarker } from './EndpointMarker';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
@@ -5,6 +6,7 @@ import type { BlueprintBody, BaseInternalLink, BlueprintSlot, PresentationPanel 
 import { isPlacedBay, type ModuleBay } from '../topology/hardwareModules';
 
 interface Props {
+  portTypes?: PortType[];
   body: BlueprintBody;
   panels: PresentationPanel[];
   slots: BlueprintSlot[];
@@ -15,7 +17,7 @@ interface Props {
 
 const padding = 20;
 
-export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays = [], label }: Props) {
+export function BlueprintPreview({ portTypes, body, panels, slots, internalLinks = [], bays = [], label }: Props) {
   const { t } = useI18n();
   const container = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
@@ -104,7 +106,7 @@ export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays
               stroke="#b6dfd3" opacity=".8" vectorEffect="non-scaling-stroke" /> : null;
           })}
           {markers.map(port => <g key={port.key} data-slot-key={port.key}>
-            <EndpointMarker kind={port.kind} label={port.display_name} cx={port.x} cy={port.y} r={port.radius / scale}
+            <EndpointMarker fill={portTypes?.find(type => type.id === port.port_type_id)?.color} kind={port.kind} label={port.display_name} cx={port.x} cy={port.y} r={port.radius / scale}
               stroke="#1c3135" strokeWidth={port.radius * .4 / scale} />
           </g>)}
         </svg>

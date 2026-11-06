@@ -1,8 +1,9 @@
+import type { PortType } from './PortTypeSelect';
 import { EndpointMarker } from './EndpointMarker';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import type { ModuleGeometry, ModuleEndpoint } from '../topology/hardwareModules';
-export function ModuleGeometryEditor({ geometry, endpoints, onChange, selectedKeys, onSelectionChange }: { selectedKeys?: Set<string>; onSelectionChange?: (keys: Set<string>) => void; geometry: ModuleGeometry; endpoints: ModuleEndpoint[]; onChange?: (g: ModuleGeometry) => void }) {
+export function ModuleGeometryEditor({ portTypes, geometry, endpoints, onChange, selectedKeys, onSelectionChange }: { portTypes?: PortType[]; selectedKeys?: Set<string>; onSelectionChange?: (keys: Set<string>) => void; geometry: ModuleGeometry; endpoints: ModuleEndpoint[]; onChange?: (g: ModuleGeometry) => void }) {
  const { t } = useI18n(); const [localSelected, setLocalSelected] = useState<Set<string>>(new Set()); const selected = new Set(endpoints.filter(e => (selectedKeys ?? localSelected).has(e.key)).map(e => e.key)); const select = onSelectionChange ?? setLocalSelected; const [zoom, setZoom] = useState(1);
  const svg = useRef<SVGSVGElement>(null);
  const [viewport, setViewport] = useState({ width: 640, height: 360 });
@@ -48,6 +49,6 @@ export function ModuleGeometryEditor({ geometry, endpoints, onChange, selectedKe
  if (!onChange || event.button !== 0) return; event.preventDefault(); event.stopPropagation(); const toggle=event.shiftKey||event.ctrlKey||event.metaKey; const keys=toggle||selected.has(e.key)?new Set(selected):new Set<string>(); if(toggle&&keys.has(e.key)) keys.delete(e.key); else keys.add(e.key); select(keys); if(!keys.has(e.key))return; drag.current={...point(event.clientX,event.clientY),geometry,keys:[...keys]};svg.current?.setPointerCapture(event.pointerId);
  }}>
  {e.kind === 'NETWORK_PORT' && <circle cx={p.x*geometry.width} cy={p.y*geometry.height} r={5 / scale} fill="transparent" stroke="transparent" strokeWidth={1.5} vectorEffect="non-scaling-stroke"><title>{e.display_name}</title></circle>}
- <EndpointMarker kind={e.kind} label={e.display_name} cx={p.x*geometry.width} cy={p.y*geometry.height} r={5 / scale} stroke="#152d30" strokeWidth={1.5} vectorEffect="non-scaling-stroke"/><text x={p.x*geometry.width} y={p.y*geometry.height-12 / scale} fontSize={12 / scale} fill="#e7f4f1" stroke="#071315" strokeWidth={3 / scale} paintOrder="stroke" textAnchor={p.x < .15 ? "start" : p.x > .85 ? "end" : "middle"}>{e.display_name}</text></g>;})}
+ <EndpointMarker fill={portTypes?.find(type => type.id === e.port_type_id)?.color} kind={e.kind} label={e.display_name} cx={p.x*geometry.width} cy={p.y*geometry.height} r={5 / scale} stroke="#152d30" strokeWidth={1.5} vectorEffect="non-scaling-stroke"/><text x={p.x*geometry.width} y={p.y*geometry.height-12 / scale} fontSize={12 / scale} fill="#e7f4f1" stroke="#071315" strokeWidth={3 / scale} paintOrder="stroke" textAnchor={p.x < .15 ? "start" : p.x > .85 ? "end" : "middle"}>{e.display_name}</text></g>;})}
  </svg></div></section>;
 }

@@ -1,6 +1,8 @@
 """Targeted direct-slot Blueprint API and materialization contracts."""
 import uuid
 
+from tests.port_type_fixtures import ensure_port_type_id
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import insert, select
@@ -18,7 +20,7 @@ def panel(key: str = "panel-1", number: int = 1, name: str = "Панель 1", x
 
 
 def slot(key: str, kind: str = "CONNECTION_POINT", panel_key: str = "panel-1", x: float = .2, y: float = .3, name: str | None = None) -> dict:
-    return {"key": key, "display_name": name or key, "kind": kind, "panel_key": panel_key, "rendered_position": {"x": x, "y": y}}
+    return {"key": key, "display_name": name or key, "port_type_id": ensure_port_type_id(), "kind": kind, "panel_key": panel_key, "rendered_position": {"x": x, "y": y}}
 
 
 def create_blueprint(slots: list[dict], links: list[dict] | None = None, *, name: str = "Blueprint", body: dict | None = None, **_: object) -> tuple[str, str]:
@@ -100,7 +102,7 @@ def test_slot_cannot_reference_a_panel_from_another_blueprint_version():
     with pytest.raises(IntegrityError), SessionLocal.begin() as session:
         session.execute(insert(BuiltInEndpointDefinition).values(
             id=uuid.uuid4(), base_revision_id=uuid.UUID(second_id),
-            slot_key="foreign-panel", display_name="Foreign", kind="CONNECTION_POINT",
+            slot_key="foreign-panel", port_type_id=uuid.UUID(ensure_port_type_id()), display_name="Foreign", kind="CONNECTION_POINT",
             panel_key="panel-1", position_x=.5, position_y=.5,
         ))
     assert first_id != second_id

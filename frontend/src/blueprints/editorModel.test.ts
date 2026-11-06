@@ -6,13 +6,13 @@ import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes
 describe('selected-slot copy to panel', () => {
   const fixture = () => {
     const initial = newBlueprintEditorState();
-    const source = addEndpoints(initial, 'NETWORK_PORT', 3, initial.activePanelKey);
+    const source = addEndpoints(initial, 'NETWORK_PORT', 3, initial.activePanelKey, 'test-type');
     source.name = 'Copy device';
     source.slots[0] = { ...source.slots[0], display_name: 'MGMT', rendered_position: { x: .25, y: .75 } };
-    source.slots[1] = { ...source.slots[1], kind: 'CONNECTION_POINT', display_name: 'UPLINK-A', rendered_position: { x: .1234567, y: .7654321 } };
+    source.slots[1] = { ...source.slots[1], port_type_id: 'test-type', kind: 'CONNECTION_POINT', display_name: 'UPLINK-A', rendered_position: { x: .1234567, y: .7654321 } };
     const destination = addPanel(source, 'right');
     destination.panels[1] = { ...destination.panels[1], width: 25, height: 190 };
-    const populated = addEndpoints(destination, 'CONNECTION_POINT', 2, destination.activePanelKey);
+    const populated = addEndpoints(destination, 'CONNECTION_POINT', 2, destination.activePanelKey, 'test-type');
     return { ...populated, activePanelKey: source.activePanelKey, individualLinks: [{ from_slot_key: source.slots[0].key, to_slot_key: source.slots[2].key }] };
   };
   it.each([1, 3])('copies %i sources with independent keys, destination defaults and exact geometry', (count) => {
@@ -29,13 +29,13 @@ describe('selected-slot copy to panel', () => {
     expect(new Set(result.state.slots.map((slot) => slot.key)).size).toBe(state.slots.length + count);
     copies.forEach((copy, index) => {
       expect(copy.key).not.toBe(sources[index].key);
-      expect(copy).toEqual({ key: result.copiedKeys[index], display_name: `2-${3 + index}`, kind: sources[index].kind, panel_key: destination, rendered_position: sources[index].rendered_position });
+      expect(copy).toEqual({ key: result.copiedKeys[index], display_name: `2-${3 + index}`, kind: sources[index].kind, port_type_id: sources[index].port_type_id, panel_key: destination, rendered_position: sources[index].rendered_position });
       expect(copy.rendered_position).not.toBe(sources[index].rendered_position);
     });
     expect(result.state.nextLocalNumberByPanel[destination]).toBe(3 + count);
     expect(result.state.nextLocalNumberByPanel[state.activePanelKey]).toBe(state.nextLocalNumberByPanel[state.activePanelKey]);
     expect(result.state.individualLinks).toBe(state.individualLinks);
-    expect(addEndpoints(result.state, 'NETWORK_PORT', 1, destination).slots.at(-1)?.display_name).toBe(`2-${3 + count}`);
+    expect(addEndpoints(result.state, 'NETWORK_PORT', 1, destination, 'test-type').slots.at(-1)?.display_name).toBe(`2-${3 + count}`);
   });
   it('uses the transient destination allocator without compacting existing names, and resets when empty', () => {
     const state = fixture(); const destination = state.panels[1].panel_key; const keys = new Set([state.slots[0].key]);
@@ -54,8 +54,8 @@ describe('selected-slot copy to panel', () => {
   });
   it.each([false, true])('leaves the entire state unchanged on overflow (continuity %s)', (continuity) => {
     const state = fixture(); const destination = state.panels[1].panel_key;
-    const filler = addEndpoints({ ...state, activePanelKey: destination }, 'NETWORK_PORT', 256, destination);
-    const full = addEndpoints(filler, 'NETWORK_PORT', 141, destination);
+    const filler = addEndpoints({ ...state, activePanelKey: destination }, 'NETWORK_PORT', 256, destination, 'test-type');
+    const full = addEndpoints(filler, 'NETWORK_PORT', 141, destination, 'test-type');
     const source = { ...full, activePanelKey: state.activePanelKey }; const before = structuredClone(source);
     const result = copySelectionToPanel(source, new Set(state.slots.slice(0, 3).map((slot) => slot.key)), destination, continuity);
     expect(result).toEqual({ state: source, copiedKeys: [], error: 'capacity' });
@@ -76,7 +76,7 @@ describe('selected-slot copy to panel', () => {
 describe('direct Blueprint slots', () => {
   it('moves only panel origin, preserving identity and local endpoints, and adds from edited geometry', () => {
     const initial = newBlueprintEditorState();
-    const withSlot = { ...initial, slots: [{ key: 'a', display_name: '1-1', kind: 'NETWORK_PORT' as const, panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .7 } }] };
+    const withSlot = { ...initial, slots: [{ key: 'a', display_name: '1-1', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .7 } }] };
     const moved = setPanelRectangle(withSlot, initial.activePanelKey, panelGestureGeometry(initial.panels[0], [], 'move', -30, -45, 7, 40).rectangle);
     expect(moved.panels[0]).toEqual({ ...initial.panels[0], x: -30, y: -45 });
     expect(moved.slots).toEqual(withSlot.slots);
@@ -139,22 +139,22 @@ describe('direct Blueprint slots', () => {
     expect(third.panels[1].panel_number).toBe(3);
     expect(third.nextPanelNumber).toBe(4);
     expect(createBlueprintRequest({ ...third, name: 'Device' }).request?.panels.map((panel) => panel.panel_number)).toEqual([1, 3]);
-    const withThird = addEndpoints(third, 'NETWORK_PORT', 2, third.activePanelKey);
+    const withThird = addEndpoints(third, 'NETWORK_PORT', 2, third.activePanelKey, 'test-type');
     expect(withThird.slots.map((slot) => slot.display_name)).toEqual(['3-1', '3-2']);
     expect(deleteActivePanel(withThird)).toBe(withThird);
     const firstKey = initial.activePanelKey;
-    const withFirst = addEndpoints({ ...withThird, activePanelKey: firstKey }, 'NETWORK_PORT', 1, firstKey);
+    const withFirst = addEndpoints({ ...withThird, activePanelKey: firstKey }, 'NETWORK_PORT', 1, firstKey, 'test-type');
     expect(withFirst.slots.at(-1)?.display_name).toBe('1-1');
     const clearedThird = removeEndpoints(withFirst, new Set(withThird.slots.map((slot) => slot.key)));
-    const nextThird = addEndpoints({ ...clearedThird, activePanelKey: third.activePanelKey }, 'NETWORK_PORT', 1, third.activePanelKey);
+    const nextThird = addEndpoints({ ...clearedThird, activePanelKey: third.activePanelKey }, 'NETWORK_PORT', 1, third.activePanelKey, 'test-type');
     expect(nextThird.slots.at(-1)?.display_name).toBe('3-1');
     expect(nextThird.nextLocalNumberByPanel[firstKey]).toBe(2);
   });
   it('adds distinct opaque identities and bounded deterministic positions on the panel', () => {
     const initial = newBlueprintEditorState();
     vi.stubGlobal('crypto', { randomUUID: vi.fn().mockReturnValueOnce('a').mockReturnValueOnce('b').mockReturnValueOnce('c') });
-    const front = addEndpoints(initial, 'NETWORK_PORT', 2, initial.panels[0].panel_key);
-    const both = addEndpoints(front, 'CONNECTION_POINT', 1, initial.panels[0].panel_key);
+    const front = addEndpoints(initial, 'NETWORK_PORT', 2, initial.panels[0].panel_key, 'test-type');
+    const both = addEndpoints(front, 'CONNECTION_POINT', 1, initial.panels[0].panel_key, 'test-type');
     expect(both.slots.map((slot) => slot.key)).toEqual(['a', 'b', 'c']);
     expect(both.slots.map((slot) => slot.display_name)).toEqual(['1-1', '1-2', '1-3']);
     expect(both.slots[0].rendered_position).not.toEqual(both.slots[1].rendered_position);
@@ -168,8 +168,8 @@ describe('direct Blueprint slots', () => {
       version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v1' },
       version_number: 1, next_panel_number: 2, name: 'Panel', body: { kind: 'RECTANGLE', width: 100, height: 40 }, panels: [{ panel_key: 'panel-1', panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 100, height: 40 }],
       slots: [
-        { key: 'opaque-a', display_name: 'P1', kind: 'CONNECTION_POINT', panel_key: 'panel-1', rendered_position: { x: .2, y: .3 } },
-        { key: 'opaque-b', display_name: 'N1', kind: 'NETWORK_PORT', panel_key: 'panel-1', rendered_position: { x: .8, y: .7 } },
+        { key: 'opaque-a', display_name: 'P1', port_type_id: 'test-type', kind: 'CONNECTION_POINT', panel_key: 'panel-1', rendered_position: { x: .2, y: .3 } },
+        { key: 'opaque-b', display_name: 'N1', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: 'panel-1', rendered_position: { x: .8, y: .7 } },
       ], internal_links: [{ from_slot_key: 'opaque-a', to_slot_key: 'opaque-b' }],
     };
     const state = hydrateBlueprintEditorState(document);
@@ -189,7 +189,7 @@ describe('direct Blueprint slots', () => {
       schema_version: '2.0', blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' },
       version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v' },
       version_number: 2, next_panel_number: 5, name: 'Device', body: { kind: 'RECTANGLE', width: 230, height: 80 },
-      panels: [second, first], slots: [{ key: 's', display_name: '2-4', kind: 'NETWORK_PORT', panel_key: 'second', rendered_position: { x: .2, y: .3 } }], internal_links: [],
+      panels: [second, first], slots: [{ key: 's', display_name: '2-4', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: 'second', rendered_position: { x: .2, y: .3 } }], internal_links: [],
     });
     expect(state.activePanelKey).toBe(first.panel_key);
     expect(state.nextPanelNumber).toBe(5);
@@ -200,9 +200,9 @@ describe('direct Blueprint slots', () => {
   it('keeps the sequence and existing names after partial deletion across endpoint kinds', () => {
     const initial = newBlueprintEditorState();
     const key = initial.panels[0].panel_key;
-    const three = addEndpoints(initial, 'NETWORK_PORT', 3, key);
+    const three = addEndpoints(initial, 'NETWORK_PORT', 3, key, 'test-type');
     const removed = removeEndpoints(three, new Set([three.slots[1].key]));
-    const next = addEndpoints(removed, 'CONNECTION_POINT', 1, key);
+    const next = addEndpoints(removed, 'CONNECTION_POINT', 1, key, 'test-type');
     expect(next.slots.map((slot) => slot.display_name)).toEqual(['1-1', '1-3', '1-4']);
     expect(next.slots.slice(0, 2).map((slot) => slot.key)).toEqual([three.slots[0].key, three.slots[2].key]);
   });
@@ -210,10 +210,10 @@ describe('direct Blueprint slots', () => {
   it('restarts default names after the last endpoint is deleted with new slot identity', () => {
     const initial = newBlueprintEditorState();
     const key = initial.panels[0].panel_key;
-    const created = addEndpoints(addEndpoints(initial, 'NETWORK_PORT', 2, key), 'CONNECTION_POINT', 1, key);
+    const created = addEndpoints(addEndpoints(initial, 'NETWORK_PORT', 2, key, 'test-type'), 'CONNECTION_POINT', 1, key, 'test-type');
     const cleared = removeEndpoints(created, new Set(created.slots.map((slot) => slot.key)));
     expect(cleared.slots).toEqual([]);
-    const next = addEndpoints(cleared, 'NETWORK_PORT', 2, key);
+    const next = addEndpoints(cleared, 'NETWORK_PORT', 2, key, 'test-type');
     expect(next.slots.map((slot) => slot.display_name)).toEqual(['1-1', '1-2']);
     expect(created.slots.every((slot) => !next.slots.some((newSlot) => newSlot.key === slot.key))).toBe(true);
   });
@@ -221,10 +221,10 @@ describe('direct Blueprint slots', () => {
 
 describe('endpoint selection geometry', () => {
   const base = (): BlueprintEditorState => ({ ...newBlueprintEditorState(), slots: [
-    { key: 'a', display_name: 'Alpha', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .1, y: .2 } },
-    { key: 'b', display_name: 'Beta', kind: 'CONNECTION_POINT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .4, y: .6 } },
-    { key: 'c', display_name: 'Gamma', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .9, y: .8 } },
-    { key: 'rear', display_name: 'Rear', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .3, y: .3 } },
+    { key: 'a', display_name: 'Alpha', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .1, y: .2 } },
+    { key: 'b', display_name: 'Beta', port_type_id: 'test-type', kind: 'CONNECTION_POINT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .4, y: .6 } },
+    { key: 'c', display_name: 'Gamma', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .9, y: .8 } },
+    { key: 'rear', display_name: 'Rear', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .3, y: .3 } },
   ], individualLinks: [{ from_slot_key: 'a', to_slot_key: 'rear' }, { from_slot_key: 'b', to_slot_key: 'c' }] });
   const all = new Set(['a', 'b', 'c']);
   const coordinates = (state: BlueprintEditorState) => state.slots.slice(0, 3).map((slot) => slot.rendered_position);
@@ -305,7 +305,7 @@ describe('endpoint selection geometry', () => {
   });
   it('keeps 14 newly added endpoints distinct when a horizontal row becomes a vertical line', () => {
     const initial = newBlueprintEditorState();
-    const start = addEndpoints(initial, 'NETWORK_PORT', 14, initial.panels[0].panel_key);
+    const start = addEndpoints(initial, 'NETWORK_PORT', 14, initial.panels[0].panel_key, 'test-type');
     const keys = new Set(start.slots.map((slot) => slot.key));
     expect(new Set(start.slots.map((slot) => slot.rendered_position.y)).size).toBe(1);
     const vertical = alignSelectionLine(start, keys, 'vertical');
@@ -396,7 +396,7 @@ describe('endpoint selection geometry', () => {
   });
   it('keeps two rows visibly separate on a 10:1 body', () => {
     const initial = newBlueprintEditorState();
-    const start = addEndpoints(initial, 'NETWORK_PORT', 4, initial.panels[0].panel_key);
+    const start = addEndpoints(initial, 'NETWORK_PORT', 4, initial.panels[0].panel_key, 'test-type');
     const keys = new Set(start.slots.map((slot) => slot.key));
     const metrics = { minGapX: 18 / 850, minGapY: 18 / 85, insetX: 8 / 850, insetY: 8 / 85 };
     const result = layoutSelectionTwoRows(start, keys, metrics);
@@ -411,9 +411,9 @@ describe('endpoint selection geometry', () => {
 
 describe('endpoint drag snapping', () => {
   const slots = [
-    { key: 'moving-a', display_name: 'A', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .15, y: .1 } },
-    { key: 'moving-b', display_name: 'B', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .25, y: .1 } },
-    { key: 'stationary', display_name: 'C', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .7, y: .4 } },
+    { key: 'moving-a', display_name: 'A', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .15, y: .1 } },
+    { key: 'moving-b', display_name: 'B', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .25, y: .1 } },
+    { key: 'stationary', display_name: 'C', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'panel-1' as const, rendered_position: { x: .7, y: .4 } },
   ];
   const moving = new Set(['moving-a', 'moving-b']);
   it('snaps to nearest stationary Y within a screen-derived threshold', () => {
@@ -441,7 +441,7 @@ describe('endpoint drag snapping', () => {
 
 
 describe('ordered bulk naming pure operations', () => {
-  const fixture = () => { const initial = newBlueprintEditorState(); initial.name = 'Device'; const state = addEndpoints(initial, 'NETWORK_PORT', 4, initial.activePanelKey); return { ...state, individualLinks: [{ from_slot_key: state.slots[0].key, to_slot_key: state.slots[1].key }] }; };
+  const fixture = () => { const initial = newBlueprintEditorState(); initial.name = 'Device'; const state = addEndpoints(initial, 'NETWORK_PORT', 4, initial.activePanelKey, 'test-type'); return { ...state, individualLinks: [{ from_slot_key: state.slots[0].key, to_slot_key: state.slots[1].key }] }; };
   it('toggles and reorders without holes or crossing boundaries', () => {
     let keys: string[] = []; for (const key of ['a', 'b', 'c']) keys = toggleOrderedKey(keys, key);
     expect(keys).toEqual(['a', 'b', 'c']); expect(toggleOrderedKey(keys, 'b')).toEqual(['a', 'c']);
@@ -457,7 +457,7 @@ describe('ordered bulk naming pure operations', () => {
     expect(result.slots.map(({ display_name: _, ...slot }) => slot)).toEqual(state.slots.map(({ display_name: _, ...slot }) => slot));
     expect(result.slots[1]).toBe(state.slots[1]); expect(result.slots[3]).toBe(state.slots[3]);
     expect(result.individualLinks).toBe(state.individualLinks); expect(result.panels).toBe(state.panels); expect(result.nextLocalNumberByPanel).toBe(state.nextLocalNumberByPanel);
-    expect(addEndpoints(result, 'NETWORK_PORT', 1, state.activePanelKey).slots.at(-1)!.display_name).toBe('1-5');
+    expect(addEndpoints(result, 'NETWORK_PORT', 1, state.activePanelKey, 'test-type').slots.at(-1)!.display_name).toBe('1-5');
     const request = createBlueprintRequest(result).request!; expect(request.slots.map((slot) => slot.display_name)).toEqual(result.slots.map((slot) => slot.display_name));
     expect(Object.keys(result).sort()).toEqual(Object.keys(state).sort()); expect(JSON.stringify(request)).not.toMatch(/ordered|prefix|start|step|recipe/);
   });
@@ -466,7 +466,7 @@ describe('ordered bulk naming pure operations', () => {
     expect(bulkNamePreview(state, keys, parameters)).toBeUndefined(); expect(applyBulkNames(state, keys, parameters)).toBe(state);
   });
   it('rejects unknown, duplicate and cross-panel keys atomically', () => {
-    const state = fixture(); const other = addPanel(state, 'right'); const both = addEndpoints(other, 'NETWORK_PORT', 1, other.activePanelKey);
+    const state = fixture(); const other = addPanel(state, 'right'); const both = addEndpoints(other, 'NETWORK_PORT', 1, other.activePanelKey, 'test-type');
     for (const keys of [['missing'], [both.slots.at(-1)!.key, state.slots[0].key], [both.slots.at(-1)!.key, both.slots.at(-1)!.key]]) expect(applyBulkNames(both, keys, { mask: '#', start: '1', step: '1' })).toBe(both);
   });
 });
@@ -475,7 +475,7 @@ describe('ordered bulk naming pure operations', () => {
 describe('general pairwise continuity', () => {
   const fixture = () => {
     const initial = newBlueprintEditorState(); initial.name = 'Patch';
-    return { ...initial, slots: ['a', 'b', 'c', 'd'].map((key) => ({ key, display_name: key, kind: 'CONNECTION_POINT' as const, panel_key: initial.activePanelKey, rendered_position: { x: .5, y: .5 } })) };
+    return { ...initial, slots: ['a', 'b', 'c', 'd'].map((key) => ({ key, display_name: key, port_type_id: 'test-type', kind: 'CONNECTION_POINT' as const, panel_key: initial.activePanelKey, rendered_position: { x: .5, y: .5 } })) };
   };
   it.each([false, true])('uses exact captured order, reverse B=%s, preserving everything except links', (reverse) => {
     const state = fixture(); state.individualLinks = [{ from_slot_key: 'a', to_slot_key: 'b' }];
@@ -516,7 +516,7 @@ describe('general pairwise continuity', () => {
 });
 
 describe('C-UX-12 mask and spatial order', () => {
-  const fixture = () => { const state = newBlueprintEditorState(); return addEndpoints(state, 'NETWORK_PORT', 4, state.activePanelKey); };
+  const fixture = () => { const state = newBlueprintEditorState(); return addEndpoints(state, 'NETWORK_PORT', 4, state.activePanelKey, 'test-type'); };
   it.each([['##','1','1',['01','02','03']], ['1-#','1','2',['1-1','1-3','1-5']]])('previews %s', (mask,start,step,expected) => {
     const state=fixture(); const keys=state.slots.slice(0,3).map(s=>s.key);
     expect(bulkNamePreview(state,keys,{mask,start,step})?.map(s=>s.display_name)).toEqual(expected);
@@ -542,9 +542,9 @@ describe('C-UX-12 mask and spatial order', () => {
 describe('C-COR-02 bounded endpoint geometry', () => {
   const fixture = () => {
     let state = newBlueprintEditorState();
-    state = addEndpoints(state, 'CONNECTION_POINT', 48, state.activePanelKey);
+    state = addEndpoints(state, 'CONNECTION_POINT', 48, state.activePanelKey, 'test-type');
     state = addPanel(state, 'below');
-    state = addEndpoints(state, 'CONNECTION_POINT', 48, state.activePanelKey);
+    state = addEndpoints(state, 'CONNECTION_POINT', 48, state.activePanelKey, 'test-type');
     state.individualLinks = [{ from_slot_key: state.slots[0].key, to_slot_key: state.slots[48].key }];
     return state;
   };

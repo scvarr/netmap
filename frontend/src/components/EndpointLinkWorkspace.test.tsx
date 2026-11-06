@@ -8,10 +8,10 @@ import { EndpointLinkWorkspace } from './EndpointLinkWorkspace';
 
 function setup(count = 2) {
   let initial = newBlueprintEditorState();
-  initial = addEndpoints(initial, 'CONNECTION_POINT', count, initial.activePanelKey);
+  initial = addEndpoints(initial, 'CONNECTION_POINT', count, initial.activePanelKey, 'test-type');
   const first = initial.activePanelKey;
   initial = addPanel(initial, 'below');
-  initial = addEndpoints(initial, 'CONNECTION_POINT', count, initial.activePanelKey);
+  initial = addEndpoints(initial, 'CONNECTION_POINT', count, initial.activePanelKey, 'test-type');
   initial.activePanelKey = first;
   initial.slots[0].display_name = '10'; initial.slots[1].display_name = '2';
   let latest = initial;

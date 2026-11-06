@@ -88,13 +88,16 @@ class ConfiguredPhysicalObjectDetailsResolver:
         if row is None: return None, {}
         instance, version, blueprint = row
         mappings = self.repository.session.execute(select(BuiltInEndpointMapping, BuiltInEndpointDefinition).join(BuiltInEndpointDefinition, BuiltInEndpointDefinition.id == BuiltInEndpointMapping.definition_id).where(BuiltInEndpointMapping.configuration_id == instance.id)).all()
-        slots = {mapping.connection_point_id: BlueprintSlotMetadata(slot_key=slot.slot_key, kind=slot.kind) for mapping, slot in mappings}
+        slots = {mapping.connection_point_id: BlueprintSlotMetadata(slot_key=slot.slot_key, kind=slot.kind, port_type_id=slot.port_type_id) for mapping, slot in mappings}
         from app.hardware_catalog import HardwareCatalog
         for bay in HardwareCatalog(self.repository.session).configuration_document(object_id)["bays"]:
             installation = bay["installation"]
             if installation:
                 for endpoint in installation["endpoints"]:
-                    slots[uuid.UUID(endpoint["connection_point_id"])] = BlueprintSlotMetadata(slot_key=f"{installation['id']}:{endpoint['key']}", kind=endpoint["kind"])
+                    slots[uuid.UUID(endpoint["connection_point_id"])] = BlueprintSlotMetadata(
+                        slot_key=f"{installation['id']}:{endpoint['key']}", kind=endpoint["kind"],
+                        port_type_id=endpoint["port_type_id"],
+                    )
         return ObjectConfigurationProvenance(blueprint_ref=BlueprintLibraryRef(entity_type="BaseTemplate", entity_id=blueprint.id), version_ref=BlueprintLibraryRef(entity_type="BaseTemplateRevision", entity_id=version.id), version_number=version.version_number), slots
 
     @staticmethod

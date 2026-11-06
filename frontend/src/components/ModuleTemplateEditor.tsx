@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { PortTypeNotice, PortTypeSelect, usePortTypes } from './PortTypeSelect';
+import type { BlueprintSlotKind } from '../topology/baseTemplateTypes';
 import { useI18n } from '../i18n';
 import { ModuleGeometryEditor } from './ModuleGeometryEditor';
 import { moduleEndpointPositions, type ModuleTemplateInput } from '../topology/hardwareModules';
@@ -22,6 +24,10 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
   value: ModuleTemplateInput; onChange: (value: ModuleTemplateInput) => void; disabled?: boolean;
 }) {
   const { t } = useI18n();
+  const catalog = usePortTypes();
+  const [portTypeId, setPortTypeId] = useState('');
+  const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
+  const [count, setCount] = useState(1);
   const [selection, setSelection] = useState<Set<string>>(() => new Set(value.endpoints.slice(0, 1).map(e => e.key)));
   const selected = new Set(value.endpoints.filter(e => selection.has(e.key)).map(e => e.key));
   const active = value.endpoints.find(e => selected.has(e.key));
@@ -33,9 +39,25 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
       <label>{t('hardware.compatibility')}<input required value={value.compatibility} onChange={e => onChange({ ...value, compatibility: e.target.value })} /></label>
       <h2>{t('moduleReview.endpoints')}</h2>
       <p role="status">{t('blueprint.layout.selected', { count: selected.size })}</p>
-      <button type="button" className="secondary-action" onClick={() => {
-        const key = crypto.randomUUID(); changeEndpoints([...value.endpoints, { key, display_name: '', kind: 'NETWORK_PORT' }]); setSelection(new Set([key]));
+      <PortTypeNotice {...catalog} />
+      <label>{t('blueprint.endpoint.kind')}<select value={kind} onChange={event => setKind(event.target.value as BlueprintSlotKind)}>
+        <option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option>
+        <option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option>
+      </select></label>
+      <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} />
+      <label>{t('blueprint.endpoint.count')}<input type="number" min={1} max={256} value={count} onChange={event => setCount(Number(event.target.value))} /></label>
+      <button type="button" className="secondary-action" disabled={
+        !catalog.types?.some(type => type.id === portTypeId && type.is_active) || !Number.isInteger(count) || count < 1 || count > 256
+      } onClick={() => {
+        const added = Array.from({ length: count }, (_, index) => ({
+          key: crypto.randomUUID(), display_name: count === 1 ? '' : String(value.endpoints.length + index + 1), kind, port_type_id: portTypeId,
+        }));
+        changeEndpoints([...value.endpoints, ...added]);
+        setSelection(new Set(added.map(endpoint => endpoint.key)));
       }}>{t('hardware.addEndpoint')}</button>
+      {selected.size > 1 && <PortTypeSelect bulk types={catalog.types} value="" onChange={id =>
+        changeEndpoints(value.endpoints.map(endpoint => selected.has(endpoint.key) ? { ...endpoint, port_type_id: id } : endpoint))
+      } />}
       <div className="module-template-editor__ports">
         {value.endpoints.map((endpoint, index) => <div className="module-template-editor__port-row" key={endpoint.key} data-selected={selected.has(endpoint.key)}>
           <input type="checkbox" checked={selected.has(endpoint.key)} aria-label={t('moduleGeometry.select', { name: endpoint.display_name || String(index + 1) })} onChange={() => {
@@ -48,6 +70,9 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
       {active && (() => { const endpoint = active; const index = value.endpoints.indexOf(endpoint); return <fieldset className="endpoint-group">
           <legend>{t('moduleGeometry.portDetails')}</legend>
           <label>{t('hardware.name')}<input required value={endpoint.display_name} onChange={e => changeEndpoints(value.endpoints.map(d => d.key === endpoint.key ? { ...d, display_name: e.target.value } : d))} /></label>
+          <PortTypeSelect types={catalog.types} value={endpoint.port_type_id} onChange={id =>
+            changeEndpoints(value.endpoints.map(item => item.key === endpoint.key ? { ...item, port_type_id: id } : item))
+          } />
           <label>{t('blueprint.endpoint.kind')}<select value={endpoint.kind} onChange={e => changeEndpoints(value.endpoints.map(d => d.key === endpoint.key ? { ...d, kind: e.target.value as typeof d.kind } : d))}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <div className="blueprint-editor-controls__row">{(['x', 'y'] as const).map(axis => <CoordinateInput key={`${endpoint.key}:${axis}`} label={t(axis === 'x' ? 'moduleGeometry.x' : 'moduleGeometry.y')} value={value.geometry.endpoints[endpoint.key][axis]} onCommit={coordinate => {
             onChange({ ...value, geometry: { ...value.geometry, endpoints: { ...value.geometry.endpoints,
@@ -59,6 +84,6 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
           <button type="button" onClick={() => changeEndpoints(value.endpoints.filter(d => d.key !== endpoint.key))}>{t('hardware.remove')}</button></div>
         </fieldset>; })()}
     </aside>
-    <ModuleGeometryEditor geometry={value.geometry} endpoints={value.endpoints} selectedKeys={selected} onSelectionChange={setSelection} onChange={disabled ? undefined : geometry => onChange({ ...value, geometry })} />
+    <ModuleGeometryEditor portTypes={catalog.types} geometry={value.geometry} endpoints={value.endpoints} selectedKeys={selected} onSelectionChange={setSelection} onChange={disabled ? undefined : geometry => onChange({ ...value, geometry })} />
   </fieldset>;
 }

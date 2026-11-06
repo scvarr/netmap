@@ -7,7 +7,7 @@ import type { BlueprintSlot } from '../topology/baseTemplateTypes';
 import { BlueprintCompositionCanvas } from './BlueprintCompositionCanvas';
 
 const slot = (index: number, x = .5, y = .5): BlueprintSlot => ({
-  key: `slot-${index}`, display_name: `Port ${index}`, kind: 'NETWORK_PORT', panel_key: 'panel-1',
+  key: `slot-${index}`, display_name: `Port ${index}`, port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: 'panel-1',
   rendered_position: { x, y },
 });
 
@@ -151,7 +151,7 @@ describe('Blueprint endpoint screen-space markers', () => {
     } as DOMRect);
     const { container } = render(<I18nProvider><BlueprintCompositionCanvas
       body={{ width: ratio, height: 1, fillColor: '#123' }} panels={[{ panel_key: "panel-1", panel_number: 1, display_name: "Панель 1", x: 0, y: 0, width: ratio, height: 1 }]} activePanelKey="panel-1" onActivatePanel={vi.fn()}
-      slots={[slot(1), { ...slot(2, .75, .5), kind: 'CONNECTION_POINT' }]} links={[]} selectedKeys={new Set(['slot-2'])}
+      slots={[slot(1), { ...slot(2, .75, .5), port_type_id: 'test-type', kind: 'CONNECTION_POINT' }]} links={[]} selectedKeys={new Set(['slot-2'])}
       onSelect={vi.fn()} onMarquee={vi.fn()} onTranslate={vi.fn()} onContextMenu={vi.fn()}
     /></I18nProvider>);
     const canvas = container.querySelector('svg')!;

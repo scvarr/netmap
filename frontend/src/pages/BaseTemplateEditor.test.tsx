@@ -2,17 +2,26 @@ import styles from '../styles.css?raw';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { addEndpoints, addPanel, createBlueprintRequest, hydrateBlueprintEditorState } from '../blueprints/editorModel';
 import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 import { newBlueprintEditorState, BaseTemplateEditor } from './BaseTemplateEditor';
 
+const catalog = [
+  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true },
+  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true },
+];
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json(catalog)));
+});
+afterEach(() => vi.unstubAllGlobals());
+
 describe('numeric active-panel size', () => {
   const setup = (multi = true, dimensions?: { width: number; height: number }) => {
     const source = newBlueprintEditorState(); source.name = 'Device';
     if (dimensions) source.panels[0] = { ...source.panels[0], ...dimensions };
-    const endpoints = addEndpoints(source, 'NETWORK_PORT', 1, source.activePanelKey);
+    const endpoints = addEndpoints(source, 'NETWORK_PORT', 1, source.activePanelKey, 'test-type');
     const state = multi ? { ...addPanel(endpoints, 'right'), activePanelKey: source.activePanelKey } : endpoints;
     state.panels[0] = { ...state.panels[0], x: -10, y: -20 };
     const save = vi.fn().mockResolvedValue(undefined);
@@ -158,9 +167,9 @@ describe('numeric active-panel size', () => {
 describe('authoring workspace contextual region', () => {
   it.each([{}, { ctrlKey: true }, { metaKey: true }])('selects an inactive endpoint in one primary gesture, replacing the old panel selection (%j)', async (modifiers) => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
-    const source = addEndpoints(initial, 'NETWORK_PORT', 2, initial.activePanelKey);
+    const source = addEndpoints(initial, 'NETWORK_PORT', 2, initial.activePanelKey, 'test-type');
     const second = addPanel(source, 'right');
-    const both = addEndpoints(second, 'CONNECTION_POINT', 1, second.activePanelKey);
+    const both = addEndpoints(second, 'CONNECTION_POINT', 1, second.activePanelKey, 'test-type');
     const state = { ...both, activePanelKey: source.activePanelKey }; const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={state} onSave={save} /></MemoryRouter></I18nProvider>);
     const click = (key: string, flags = {}) => { fireEvent.pointerDown(document.querySelector(`[data-slot-key="${key}"]`)!, { button: 0, ...flags }); fireEvent.pointerUp(document.querySelector('svg')!); };
@@ -181,7 +190,7 @@ describe('authoring workspace contextual region', () => {
   });
   it('retains the contextual rail and groups only the applicable tools for single/multiple selections', async () => {
     const initial = newBlueprintEditorState();
-    const source = addEndpoints(initial, 'NETWORK_PORT', 2, initial.activePanelKey);
+    const source = addEndpoints(initial, 'NETWORK_PORT', 2, initial.activePanelKey, 'test-type');
     const next = addPanel(source, 'right');
     const state = { ...next, activePanelKey: source.activePanelKey };
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
@@ -213,7 +222,7 @@ describe('authoring workspace contextual region', () => {
 describe('copy selection controls', () => {
   const fixture = (count = 3) => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
-    const source = addEndpoints(initial, 'NETWORK_PORT', count, initial.activePanelKey);
+    const source = addEndpoints(initial, 'NETWORK_PORT', count, initial.activePanelKey, 'test-type');
     source.slots[0] = { ...source.slots[0], display_name: 'MGMT', rendered_position: { x: .25, y: .75 } };
     const panels = addPanel(source, 'right');
     return { ...panels, activePanelKey: source.activePanelKey };
@@ -290,11 +299,13 @@ describe('copy selection controls', () => {
   it('hides copy for a single panel and disables the entire operation on capacity overflow', async () => {
     const initial = newBlueprintEditorState();
     const view = render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={initial} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     expect(screen.queryByRole('group', { name: 'Копировать выделение' })).toBeNull(); view.unmount();
     const state = fixture(2); const destination = state.panels[1].panel_key;
-    const populated = addEndpoints({ ...state, activePanelKey: destination }, 'NETWORK_PORT', 256, destination);
-    const full = addEndpoints(populated, 'NETWORK_PORT', 143, destination);
+    const populated = addEndpoints({ ...state, activePanelKey: destination }, 'NETWORK_PORT', 256, destination, 'test-type');
+    const full = addEndpoints(populated, 'NETWORK_PORT', 143, destination, 'test-type');
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={{ ...full, activePanelKey: state.activePanelKey }} onSave={save} /></MemoryRouter></I18nProvider>);
     for (const slot of state.slots) { fireEvent.pointerDown(document.querySelector(`[data-slot-key="${slot.key}"]`)!, { ctrlKey: true }); fireEvent.pointerUp(document.querySelector('svg')!); }
@@ -336,7 +347,7 @@ describe('minimal direct endpoint editor', () => {
   const renderEditor = () => render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
   it('shows exact local X/Y for one endpoint and refreshes them after drag and layout', async () => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
-    initial.slots = [{ key: 'a', display_name: 'A', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .3 } }];
+    initial.slots = [{ key: 'a', display_name: 'A', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .3 } }];
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
     expect(screen.queryByRole('group', { name: 'Положение выделения' })).toBeNull();
@@ -363,7 +374,7 @@ describe('minimal direct endpoint editor', () => {
 
   it('does not round stored local coordinates when a displayed numeric value is left unchanged', async () => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
-    initial.slots = [{ key: 'a', display_name: 'A', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .1234567, y: .7654321 } }];
+    initial.slots = [{ key: 'a', display_name: 'A', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .1234567, y: .7654321 } }];
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
     fireEvent.pointerDown(document.querySelector('[data-slot-key="a"]')!);
@@ -379,9 +390,9 @@ describe('minimal direct endpoint editor', () => {
   it('edits multi-selection center, clamps it, and clears controls on panel change', async () => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
     initial.slots = [
-      { key: 'a', display_name: 'A', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .2 } },
-      { key: 'b', display_name: 'B', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .4, y: .6 } },
-      { key: 'c', display_name: 'C', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .8, y: .8 } },
+      { key: 'a', display_name: 'A', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .2 } },
+      { key: 'b', display_name: 'B', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .4, y: .6 } },
+      { key: 'c', display_name: 'C', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: initial.activePanelKey, rendered_position: { x: .8, y: .8 } },
     ];
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
@@ -439,6 +450,8 @@ describe('minimal direct endpoint editor', () => {
     initial.name = 'Device';
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(1);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить слева' }));
@@ -446,6 +459,8 @@ describe('minimal direct endpoint editor', () => {
     expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(0);
     expect(screen.getByRole('button', { name: 'Панель 2' })).toHaveAttribute('aria-pressed', 'true');
     expect(document.querySelectorAll('[data-endpoint-name]')).toHaveLength(1);
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     expect(screen.getByRole('button', { name: 'Удалить пустую панель' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: /Порты и внутренние связи ·/ }));
@@ -468,6 +483,8 @@ describe('minimal direct endpoint editor', () => {
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={save} /></MemoryRouter></I18nProvider>);
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Panel');
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(2);
     const keys = [...document.querySelectorAll('[data-slot-key]')].map((node) => node.getAttribute('data-slot-key'));
@@ -502,11 +519,13 @@ describe('minimal direct endpoint editor', () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={save} /></MemoryRouter></I18nProvider>);
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Panel');
-    await userEvent.selectOptions(screen.getByLabelText('Тип'), 'CONNECTION_POINT');
+    await userEvent.selectOptions(screen.getByLabelText('Вид точки'), 'CONNECTION_POINT');
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     const request = createBlueprintRequest(save.mock.calls[0][0]).request!;
-    expect(request.slots).toEqual([expect.objectContaining({ kind: 'CONNECTION_POINT', panel_key: request.panels[0].panel_key, display_name: '1-1' })]);
+    expect(request.slots).toEqual([expect.objectContaining({ port_type_id: 'test-type', kind: 'CONNECTION_POINT', panel_key: request.panels[0].panel_key, display_name: '1-1' })]);
     expect(screen.queryByRole('button', { name: 'Задняя' })).not.toBeInTheDocument();
   });
   it('resizes the only panel through the existing dimensions controls', async () => {
@@ -527,6 +546,8 @@ describe('minimal direct endpoint editor', () => {
   it('selects the newly added set, toggles members, and keeps layout actions off the permanent surface', async () => {
     renderEditor();
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     expect(nodes.map((node) => node.getAttribute('data-selected'))).toEqual(['true', 'true', 'true']);
@@ -553,6 +574,8 @@ describe('minimal direct endpoint editor', () => {
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={save} /></MemoryRouter></I18nProvider>);
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Panel');
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     await userEvent.click(screen.getByRole('button', { name: /Порты и внутренние связи ·/ }));
     const aSide = within(screen.getByRole('region', { name: 'A' }));
@@ -590,6 +613,8 @@ describe('minimal direct endpoint editor', () => {
   it('drags an unselected endpoint alone and enables three-point tools only at three', async () => {
     renderEditor();
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     fireEvent.contextMenu(document.querySelector('[data-slot-key]')!);
     expect(screen.getByRole('menuitem', { name: 'В одну горизонтальную линию' }).hasAttribute('disabled')).toBe(false);
@@ -613,6 +638,8 @@ describe('minimal direct endpoint editor', () => {
   it('right-clicks the current selection, replaces it for an unselected endpoint, and positions without collapse', async () => {
     renderEditor();
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     fireEvent.contextMenu(nodes[0]);
@@ -644,6 +671,8 @@ describe('minimal direct endpoint editor', () => {
   it('clears selection on empty click and Escape, and Delete respects form focus', async () => {
     renderEditor();
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
@@ -670,9 +699,9 @@ describe('minimal direct endpoint editor', () => {
 
   it('shows only active snap guides during group drag and clears them on finish or cancel', () => {
     const state = { ...newBlueprintEditorState(), slots: [
-      { key: 'a', display_name: 'A', kind: 'NETWORK_PORT' as const, panel_key: 'one', rendered_position: { x: .1, y: .2 } },
-      { key: 'b', display_name: 'B', kind: 'NETWORK_PORT' as const, panel_key: 'one', rendered_position: { x: .2, y: .2 } },
-      { key: 'c', display_name: 'C', kind: 'NETWORK_PORT' as const, panel_key: 'one', rendered_position: { x: .6, y: .4 } },
+      { key: 'a', display_name: 'A', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'one', rendered_position: { x: .1, y: .2 } },
+      { key: 'b', display_name: 'B', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'one', rendered_position: { x: .2, y: .2 } },
+      { key: 'c', display_name: 'C', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'one', rendered_position: { x: .6, y: .4 } },
     ] };
     state.panels[0].panel_key = 'one';
     state.activePanelKey = 'one';
@@ -699,6 +728,8 @@ describe('minimal direct endpoint editor', () => {
   it('does not stack 14 new ports when aligning them into either line from the context menu', async () => {
     renderEditor();
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '14' } });
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     const centers = () => nodes.map((node) => {
@@ -718,6 +749,8 @@ describe('minimal direct endpoint editor', () => {
     state.panels[0] = { ...state.panels[0], width: 10, height: 1 };
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={state} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '4' } });
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
     Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 850, height: 550 }) });
@@ -730,7 +763,7 @@ describe('minimal direct endpoint editor', () => {
 
   it('offers an explicit horizontal or vertical distribution range and a full-body option', async () => {
     const state = { ...newBlueprintEditorState(), slots: [0, 1, 2, 3].map((index) => ({
-      key: `slot-${index}`, display_name: `Port ${index}`, kind: 'NETWORK_PORT' as const, panel_key: 'one',
+      key: `slot-${index}`, display_name: `Port ${index}`, port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: 'one',
       rendered_position: { x: .2 + index * .1, y: .3 + index * .05 },
     })) };
     state.panels[0].panel_key = 'one';
@@ -768,7 +801,7 @@ describe('minimal direct endpoint editor', () => {
 describe('unified naming entry', () => {
   it.each(['Create', 'Edit'])('uses ordered canvas selection in %s and clears it on ordinary open', (title) => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
-    const state = addEndpoints(initial, 'NETWORK_PORT', 3, initial.activePanelKey);
+    const state = addEndpoints(initial, 'NETWORK_PORT', 3, initial.activePanelKey, 'test-type');
     state.individualLinks = [{from_slot_key:state.slots[0].key,to_slot_key:state.slots[1].key}];
     const save = vi.fn().mockResolvedValue(undefined);
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title={title} description="" saveLabel="Save" initialState={state} onSave={save} /></MemoryRouter></I18nProvider>);
@@ -799,4 +832,40 @@ describe('unified naming entry', () => {
     fireEvent.contextMenu(document.querySelector('.blueprint-composition-canvas__body')!);
     expect(screen.queryByRole('menuitem',{name:'Массовое переименование'})).toBeNull();
   });
+});
+
+it('assigns one catalog type to a batch and updates its markers without changing keys or order', async () => {
+  const initial = newBlueprintEditorState();
+  initial.name = 'Switch';
+  const save = vi.fn().mockResolvedValue(undefined);
+  const { container } = render(<I18nProvider><MemoryRouter>
+    <BaseTemplateEditor title="Switch" description="" saveLabel="Save" initialState={initial} onSave={save} />
+  </MemoryRouter></I18nProvider>);
+  await screen.findByRole('option', { name: 'Copper · #336699' });
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Тип порта' }), 'test-type');
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Вид точки' }), 'CONNECTION_POINT');
+  fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+  const markers = () => [...container.querySelectorAll('[data-endpoint-marker]')];
+  expect(markers().map(marker => [marker.tagName, marker.getAttribute('fill')])).toEqual(
+    Array.from({ length: 3 }, () => ['circle', '#336699']),
+  );
+  const originalMarkers = markers();
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Назначить тип выбранным' }), 'fiber');
+  expect(markers()).toEqual(originalMarkers);
+  expect(markers().every(marker => marker.getAttribute('fill') === '#FFAA00')).toBe(true);
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+  const slots = save.mock.calls[0][0].slots as BaseTemplateRevisionDocument['slots'];
+  expect(slots.map(slot => [slot.display_name, slot.port_type_id])).toEqual([
+    ['1-1', 'fiber'], ['1-2', 'fiber'], ['1-3', 'fiber'],
+  ]);
+});
+
+it('links to the catalog and disables adding endpoints when all port types are archived', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json([{ ...catalog[0], is_active: false }])));
+  render(<I18nProvider><MemoryRouter>
+    <BaseTemplateEditor title="Switch" description="" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={vi.fn()} />
+  </MemoryRouter></I18nProvider>);
+  expect(await screen.findByRole('link', { name: 'Справочники → Типы портов' })).toHaveAttribute('href', '/catalogs/port-types');
+  expect(screen.getByRole('button', { name: 'Добавить порты / точки' })).toBeDisabled();
 });

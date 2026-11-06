@@ -48,7 +48,7 @@ def test_internal_link_cardinality_candidate_workspace_v6_round_trip():
     assert impact['classification'] == 'requires_intervention'
     assert impact['reasons'] == [reason]
     exported = package()
-    assert exported['format_version'] == 6
+    assert exported['format_version'] == 7
     candidate = exported['authoring']['BaseTemplateCandidate'][0]
     assert candidate['id'] == checked['review']['candidate_id']
     assert candidate['result'] == checked['review']['result']

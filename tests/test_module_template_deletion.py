@@ -1,3 +1,4 @@
+from tests.port_type_fixtures import ensure_port_type_id
 import uuid
 
 import pytest
@@ -14,7 +15,7 @@ def add_revision(template_id):
         session.add(revision)
         session.flush()
         session.add(ModuleEndpointDefinition(module_revision_id=revision.id, definition_key='new-port',
-                                             display_name='P3', kind='NETWORK_PORT', order_index=0))
+                                             display_name='P3', kind='NETWORK_PORT', port_type_id=uuid.UUID(ensure_port_type_id()), order_index=0))
         return revision.id
 
 

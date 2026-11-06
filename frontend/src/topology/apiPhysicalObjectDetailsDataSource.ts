@@ -94,7 +94,7 @@ export const parsePhysicalObjectDetailsDocument = (
     requireCount(item.direct_interface_binding_count, `${path}.direct_interface_binding_count`);
     if (item.ordering_key !== undefined) requireString(item.ordering_key, `${path}.ordering_key`);
     if (item.blueprint_slot !== undefined) {
-      requireObject(item.blueprint_slot, `${path}.blueprint_slot`); requireString(item.blueprint_slot.slot_key, `${path}.blueprint_slot.slot_key`);
+      requireObject(item.blueprint_slot, `${path}.blueprint_slot`); requireString(item.blueprint_slot.port_type_id, `${path}.blueprint_slot.port_type_id`); requireString(item.blueprint_slot.slot_key, `${path}.blueprint_slot.slot_key`);
       if (!['CONNECTION_POINT', 'NETWORK_PORT'].includes(String(item.blueprint_slot.kind))) malformed(`${path}.blueprint_slot.kind is invalid.`);
     }
     const validateItems = (items: unknown, name: string, validate: (entry: Record<string, unknown>, entryPath: string) => void): void => { if (items !== undefined) { if (!Array.isArray(items)) malformed(`${path}.${name} must be an array.`); (items as unknown[]).forEach((entry, entryIndex) => { const entryPath = `${path}.${name}[${entryIndex}]`; requireObject(entry, entryPath); validate(entry, entryPath); }); } };

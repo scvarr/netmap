@@ -1,3 +1,4 @@
+from tests.port_type_fixtures import ensure_port_type_id
 from tests.l1_builders import create_object_details
 import copy
 import json
@@ -50,8 +51,8 @@ def create_graph():
         'name': 'Test blueprint', 'body': {'kind': 'RECTANGLE', 'width': 100, 'height': 40},
         'panels': [{'panel_key': 'panel-1', 'panel_number': 1, 'display_name': 'Панель 1', 'x': 0, 'y': 0, 'width': 100, 'height': 40}],
         'slots': [
-            {'key': 'point-1', 'display_name': 'P1', 'kind': 'CONNECTION_POINT', 'panel_key': 'panel-1', 'rendered_position': {'x': .2, 'y': .3}},
-            {'key': 'port-1', 'display_name': 'N1', 'kind': 'NETWORK_PORT', 'panel_key': 'panel-1', 'rendered_position': {'x': .7, 'y': .8}},
+            {'key': 'point-1', 'display_name': 'P1', 'port_type_id': ensure_port_type_id(), 'kind': 'CONNECTION_POINT', 'panel_key': 'panel-1', 'rendered_position': {'x': .2, 'y': .3}},
+            {'key': 'port-1', 'display_name': 'N1', 'port_type_id': ensure_port_type_id(), 'kind': 'NETWORK_PORT', 'panel_key': 'panel-1', 'rendered_position': {'x': .7, 'y': .8}},
         ],
         'internal_links': [],
     })
@@ -84,7 +85,7 @@ def create_graph():
 def test_empty_export_and_roundtrip():
     empty = snapshot()
     assert empty['format'] == 'netmap-workspace'
-    assert empty['format_version'] == 6
+    assert empty['format_version'] == 7
     assert all(not rows for section in ('canonical', 'authoring', 'presentation') for rows in empty[section].values())
     assert empty['settings']['CableLabelSettings'] == [{'id': 1, 'unique_labels': False}]
     assert client.post('/v1/workspace/package', json=empty).status_code == 204

@@ -2,6 +2,8 @@
 import copy
 import uuid
 
+from tests.port_type_fixtures import ensure_port_type_id
+
 import pytest
 from sqlalchemy import select, delete
 from app import models as m
@@ -40,7 +42,7 @@ def test_skipped_revisions_identity_add_remove_and_retry():
     def edit(d):
         d['endpoints'].reverse()
         d['endpoints'][0]['display_name'] = 'Renamed'
-        d['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'Added', 'kind': 'NETWORK_PORT'})
+        d['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'Added', 'port_type_id': ensure_port_type_id(), 'kind': 'NETWORK_PORT'})
     target = revision(tid, edit)
     result = apply(tid)[0]
     assert result['status'] == 'updated'
@@ -98,7 +100,7 @@ def test_refusal_is_atomic(blocker):
 def test_partial_success_rollback_mixed_archive(monkeypatch):
     _, module, ids = setup_installations(2)
     tid = module['template_id']
-    revision(tid, lambda d: d['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'Added', 'kind': 'NETWORK_PORT'}))
+    revision(tid, lambda d: d['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'Added', 'port_type_id': ensure_port_type_id(), 'kind': 'NETWORK_PORT'}))
     original = ModuleReconciliation._add_endpoint
     def fail(self, config, installation, definition):
         result = original(self, config, installation, definition)
@@ -113,7 +115,7 @@ def test_partial_success_rollback_mixed_archive(monkeypatch):
     assert len({r['module_revision_id'] for r in after['authoring']['ModuleInstallation']}) == 2
     for key in ('ModuleInstallation', 'ModuleEndpointMapping'):
         assert [r for r in before['authoring'][key] if r.get('installation_id', r['id']) == str(ids[0])] == [r for r in after['authoring'][key] if r.get('installation_id', r['id']) == str(ids[0])]
-    assert after['format_version'] == 6
+    assert after['format_version'] == 7
     assert client.delete('/v1/workspace/dataset').status_code == 204
     response = client.post('/v1/workspace/package', json=after)
     assert response.status_code == 204, response.text

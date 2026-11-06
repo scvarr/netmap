@@ -11,6 +11,7 @@ from app import models as m
 from app.errors import ModelError, ValidationError
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.hardware_catalog import HardwareCatalog
+from app.port_types import validate_port_type_assignments
 from app.schemas import CreateBaseTemplateRequest, ModuleBayRequest
 
 
@@ -32,7 +33,7 @@ def published_definition(session, template_id, revision_id):
         "name": detail.name, "default_physical_object_class": detail.default_physical_object_class,
         "body": {"kind": detail.body_kind, "width": detail.width, "height": detail.height, "fill_color": detail.fill_color},
         "panels": [{k: getattr(p, k) for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height")} for p in detail.panels],
-        "slots": [{"key": s.slot_key, "display_name": s.display_name, "kind": s.kind, "panel_key": s.panel_key,
+        "slots": [{"key": s.slot_key, "display_name": s.display_name, "kind": s.kind, "port_type_id": s.port_type_id, "panel_key": s.panel_key,
                    "rendered_position": {"x": s.position_x, "y": s.position_y}} for s in detail.slots],
         "bays": [{k: getattr(b, k) for k in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for b in detail.bays],
         "internal_links": [{"from_slot_key": a, "to_slot_key": b} for a, b in detail.internal_links],
@@ -268,7 +269,9 @@ class BaseTemplateReview:
         draft = self._draft(template_id)
         if draft.generation != expected_generation:
             raise ModelError("Draft changed in another session; reopen before saving", {"reason": "DRAFT_CONFLICT"})
-        draft.definition = validate_definition(definition)
+        updated = validate_definition(definition)
+        validate_port_type_assignments(self.session, updated["slots"], draft.definition["slots"])
+        draft.definition = updated
         draft.generation += 1
         self.session.flush()
         return self.document(draft, self._latest_candidate(draft))

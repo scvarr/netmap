@@ -5,12 +5,30 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_session
-from app.models import PortType
+from app.errors import ValidationError
+from app.models import BaseTemplateCandidate, BaseTemplateDraft, ModuleTemplateCandidate, ModuleTemplateDraft, PortType
+
+
+def validate_port_type_assignments(session, endpoints, previous=()):
+    retained = {(endpoint["key"], endpoint["port_type_id"]) for endpoint in previous}
+    ids = {uuid.UUID(endpoint["port_type_id"]) for endpoint in endpoints
+           if (endpoint["key"], endpoint["port_type_id"]) not in retained}
+    if not ids:
+        return
+    # Serialize new assignments with both archiving and deletion.
+    types = {item.id: item for item in session.scalars(
+        select(PortType).where(PortType.id.in_(ids)).order_by(PortType.id)
+        .with_for_update(read=True).execution_options(populate_existing=True)
+    )}
+    if ids != types.keys():
+        raise ValidationError("Port type not found")
+    if any(not item.is_active for item in types.values()):
+        raise ValidationError("An archived port type cannot be newly assigned")
 
 
 class PortTypeInput(BaseModel):
@@ -103,5 +121,16 @@ def delete_port_type(port_type_id: uuid.UUID, session: DatabaseSession) -> None:
         raise HTTPException(404, "Port type not found")
     if item.is_active:
         raise HTTPException(409, "Archive the port type before deleting it")
+    # The catalog row lock excludes new assignments. Check all JSON snapshots
+    # in one statement so a draft-to-candidate transition cannot escape the check.
+    snapshot_usage = (
+        select(model.id).where(model.definition.contains({section: [{"port_type_id": str(port_type_id)}]})).exists()
+        for model, section in (
+            (BaseTemplateDraft, "slots"), (BaseTemplateCandidate, "slots"),
+            (ModuleTemplateDraft, "endpoints"), (ModuleTemplateCandidate, "endpoints"),
+        )
+    )
+    if session.scalar(select(or_(*snapshot_usage))):
+        raise HTTPException(409, "Port type is in use")
     session.delete(item)
     _commit(session)

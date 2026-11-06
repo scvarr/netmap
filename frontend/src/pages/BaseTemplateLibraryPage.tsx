@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { usePortTypes, type PortType } from '../components/PortTypeSelect';
 import { BlueprintPreview } from '../components/BlueprintPreview';
 import { PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
@@ -43,14 +44,14 @@ function TemplateRow({ name, metadata, ports, publication, expanded, onToggle, c
   </li>;
 }
 
-function ModulePreview({ module }: { module: ModuleTemplate }) {
+function ModulePreview({ module, portTypes }: { module: ModuleTemplate; portTypes?: PortType[] }) {
   const { geometry, endpoints, name } = module;
   const panel = { panel_key: 'body', panel_number: 1, display_name: name, x: 0, y: 0, width: geometry.width, height: geometry.height };
   const slots = endpoints.flatMap(endpoint => {
     const position = geometry.endpoints[endpoint.key];
     return position ? [{ ...endpoint, panel_key: panel.panel_key, rendered_position: position }] : [];
   });
-  return <BlueprintPreview label={name} panels={[panel]} slots={slots}
+  return <BlueprintPreview portTypes={portTypes} label={name} panels={[panel]} slots={slots}
     body={{ kind: 'RECTANGLE', width: geometry.width, height: geometry.height, fill_color: geometry.fill_color }} />;
 }
 
@@ -59,6 +60,7 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
 }) {
   const { t } = useI18n();
   const id = useId();
+  const { types: portTypes } = usePortTypes();
   const [tab, setTab] = useState<Tab>('objects');
   const [expanded, setExpanded] = useState<Partial<Record<Tab, string>>>({});
   const [bases, setBases] = useState<Load<BaseTemplateListItem[]>>({ status: 'loading' });
@@ -161,7 +163,7 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
                 {preview?.status === 'failed' && <p role="alert">{t('templateLibrary.previewFailed', { error: preview.error })}{' '}
                   <button type="button" className="secondary-action" onClick={() => loadPreview(base, key)}>{t('action.retry')}</button>
                 </p>}
-                {revision && <BlueprintPreview label={base.name} body={revision.body} panels={revision.panels}
+                {revision && <BlueprintPreview portTypes={portTypes} label={base.name} body={revision.body} panels={revision.panels}
                   slots={revision.slots} internalLinks={revision.internal_links} bays={revision.bays} />}
                 <div className="template-library-facts">
                   <span>{t('publication.revision', { number: base.version_number })}</span>
@@ -180,7 +182,7 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
               return <TemplateRow key={module.template_id} name={module.name} metadata={module.compatibility}
                 ports={module.endpoints.length} publication={module.publication_state} expanded={open}
                 onToggle={() => setExpanded({ ...expanded, modules: open ? undefined : module.template_id })}>
-                <ModulePreview module={module} />
+                <ModulePreview portTypes={portTypes} module={module} />
                 <div className="template-library-facts">
                   <span>{t('templateLibrary.compatibility', { value: module.compatibility })}</span>
                   <span>{t('physical.portCount', { count: module.endpoints.length })}</span>

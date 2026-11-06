@@ -1,14 +1,23 @@
 import userEvent from '@testing-library/user-event';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { EditModuleTemplatePage } from './EditModuleTemplatePage';
 import type { ModuleDraftDocument, ModuleReviewDataSource } from '../topology/hardwareModules';
 
+const catalog = [
+  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true },
+  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true },
+];
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json(catalog)));
+});
+afterEach(() => vi.unstubAllGlobals());
+
 const draft = (): ModuleDraftDocument => ({ template_id: 'module', source_revision_id: 'revision', generation: 3,
   definition: { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { first: { x: .3, y: .5 }, second: { x: .7, y: .5 } } }, name: 'Сохранённый модуль', compatibility: ' OCP3 ', endpoints: [
-    { key: 'first', display_name: 'P1', kind: 'NETWORK_PORT' }, { key: 'second', display_name: 'P2', kind: 'CONNECTION_POINT' },
+    { key: 'first', display_name: 'P1', port_type_id: 'test-type', kind: 'NETWORK_PORT' }, { key: 'second', display_name: 'P2', port_type_id: 'test-type', kind: 'CONNECTION_POINT' },
   ] }, review: null });
 const reviewed = (doc: ModuleDraftDocument): ModuleDraftDocument => ({ ...doc, review: {
   candidate_id: 'candidate', draft_generation: doc.generation, definition: doc.definition, current: true, created_at: '2026-10-17T10:00:00Z',
@@ -40,6 +49,8 @@ describe('module persisted draft and review', () => {
     fireEvent.change(await screen.findByDisplayValue('Сохранённый модуль'), { target: { value: 'Новое имя' } });
     fireEvent.change(screen.getByDisplayValue('P1'), { target: { value: 'Renamed' } });
     fireEvent.click(screen.getAllByRole('button', { name: 'Ниже' })[0]);
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    fireEvent.change(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], { target: { value: 'test-type' } });
     fireEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
     const inputs = screen.getAllByRole('textbox');
     fireEvent.change(inputs[inputs.length - 1], { target: { value: 'P3' } });
@@ -47,13 +58,17 @@ describe('module persisted draft and review', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
     await screen.findByText('Черновик сохранён');
     expect(source.saveDraft).toHaveBeenCalledWith('module', expect.objectContaining({ name: 'Новое имя', compatibility: ' OCP3 ', endpoints: [
-      { key: 'second', display_name: 'P2', kind: 'CONNECTION_POINT' }, { key: 'first', display_name: 'Renamed', kind: 'NETWORK_PORT' },
-      { key: expect.any(String), display_name: 'P3', kind: 'NETWORK_PORT' },
+      { key: 'second', display_name: 'P2', port_type_id: 'test-type', kind: 'CONNECTION_POINT' }, { key: 'first', display_name: 'Renamed', port_type_id: 'test-type', kind: 'NETWORK_PORT' },
+      { key: expect.any(String), display_name: 'P3', port_type_id: 'test-type', kind: 'NETWORK_PORT' },
     ] }), 3);
     const key = source.saveDraft.mock.calls[0][1].endpoints[2].key;
     expect(['first', 'second']).not.toContain(key);
-    view.unmount(); view = mount();
+    view.unmount();
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json([{ ...catalog[0], color: '#663399' }, catalog[1]])));
+    view = mount();
     await screen.findByDisplayValue('Новое имя');
+    await screen.findAllByRole('option', { name: 'Copper · #663399' });
+    expect(view.container.querySelectorAll('[data-endpoint-marker][fill="#663399"]')).toHaveLength(3);
     fireEvent.click(screen.getAllByRole('button', { name: 'Renamed' })[0]);
     expect(screen.getByDisplayValue('Renamed')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();

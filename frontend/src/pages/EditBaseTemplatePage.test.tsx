@@ -1,10 +1,17 @@
 import userEvent from '@testing-library/user-event';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { EditBaseTemplatePage } from './EditBaseTemplatePage';
 import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult } from '../topology/baseTemplateTypes';
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json([
+    { id: 'test-type', name: 'Copper', color: '#336699', is_active: true },
+  ])));
+});
+afterEach(() => vi.unstubAllGlobals());
 
 // jsdom does not implement the native dialog top layer.
 beforeAll(() => {
@@ -20,7 +27,7 @@ function openInspector() {
 const draft = (): BaseTemplateDraftDocument => ({ template_id: 'base', source_revision_id: 'published', generation: 2, review: null,
   definition: { name: 'Сохранённый черновик', default_physical_object_class: 'server', body: { kind: 'RECTANGLE', width: 160, height: 60, fill_color: '#28565a' },
     panels: [{ panel_key: 'panel', panel_number: 1, display_name: 'Front', x: 0, y: 0, width: 160, height: 60 }],
-    slots: [{ key: 'endpoint', display_name: 'MGMT', kind: 'NETWORK_PORT', panel_key: 'panel', rendered_position: { x: .2, y: .5 } }],
+    slots: [{ key: 'endpoint', display_name: 'MGMT', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: 'panel', rendered_position: { x: .2, y: .5 } }],
     internal_links: [], bays: [{ bay_key: 'stable-bay', display_name: 'OCP bay', compatibility: 'OCP3', panel_key: 'panel', x: .2, y: .1, width: .6, height: .8 }] } });
 const withReview = (doc: BaseTemplateDraftDocument): BaseTemplateDraftDocument => ({ ...doc, review: {
   candidate_id: 'candidate', draft_generation: doc.generation, definition: doc.definition, current: true, created_at: '2026-10-16T12:00:00Z',
@@ -33,7 +40,7 @@ function setup(document = draft()) {
     loadDraft: vi.fn(async () => structuredClone(persisted)),
     saveDraft: vi.fn(async (_id, definition, generation) => {
       // Server schema serialization normalizes field order on newly created endpoints.
-      definition = { ...definition, slots: definition.slots.map((s: BaseTemplateDraftDocument['definition']['slots'][number]) => ({ key: s.key, display_name: s.display_name, kind: s.kind, panel_key: s.panel_key, rendered_position: s.rendered_position })) };
+      definition = { ...definition, slots: definition.slots.map((s: BaseTemplateDraftDocument['definition']['slots'][number]) => ({ key: s.key, display_name: s.display_name, kind: s.kind, port_type_id: s.port_type_id, panel_key: s.panel_key, rendered_position: s.rendered_position })) };
       persisted = { ...persisted, definition, generation: generation + 1, review: persisted.review ? { ...persisted.review, current: false } : null }; return structuredClone(persisted);
     }),
     checkDraft: vi.fn(async () => { persisted = withReview(persisted); return structuredClone(persisted); }),
@@ -305,6 +312,8 @@ describe('persisted base template review', () => {
     expect(screen.getByText('Проверка ещё не выполнена')).toBeVisible();
     expect(screen.getAllByText('OCP bay').length).toBeGreaterThan(0);
     fireEvent.change(screen.getByDisplayValue('Сохранённый черновик'), { target: { value: 'Changed draft' } });
+    await screen.findAllByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
     fireEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
@@ -407,6 +416,7 @@ it('shows a pending check and keeps candidate publication disabled until it reso
   source.checkDraft.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
   mount();
   const check = await screen.findByRole('button', { name: 'Проверить изменения' });
+  await waitFor(() => expect(check).toBeEnabled());
   fireEvent.click(check);
   expect(screen.getByText('Выполняется проверка изменений…')).toBeVisible();
   expect(check).toBeDisabled();

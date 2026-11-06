@@ -167,7 +167,7 @@ def test_saved_review_freshness_and_workspace_v6_roundtrip():
         alias.value = 'Changed after check'
     assert not open_draft(template_id)['review']['current']
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 6
+    assert package['format_version'] == 7
     assert len(package['authoring']['BaseTemplateDraft']) == 1
     assert len(package['authoring']['BaseTemplateCandidate']) == 1
     assert client.delete('/v1/workspace/dataset').status_code == 204

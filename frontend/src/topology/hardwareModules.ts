@@ -12,7 +12,7 @@ export interface LogicalModuleBay {
 }
 export type ModuleBay = PlacedModuleBay | LogicalModuleBay;
 export const isPlacedBay = (bay: ModuleBay): bay is PlacedModuleBay => bay.kind !== "LOGICAL";
-export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind }
+export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind; port_type_id: string }
 export interface ModuleGeometry { width: number; height: number; fill_color: string; endpoints: Record<string, { x: number; y: number }> }
 export const initialModuleGeometry = (): ModuleGeometry => ({ width: 240, height: 80, fill_color: "#64748b", endpoints: {} });
 export interface ModuleTemplateInput { geometry: ModuleGeometry; name: string; compatibility: string; endpoints: ModuleEndpoint[] }

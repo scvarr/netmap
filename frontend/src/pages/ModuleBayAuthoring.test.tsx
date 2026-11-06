@@ -79,7 +79,7 @@ describe('bay edge snapping and hundredth precision', () => {
     fireEvent.pointerUp(canvas());
   });
   it('ignores bay edges on another panel and endpoints, and normalizes an unsnapped drag', () => {
-    const { rectangle, canvas, field, save } = show({ panels: [panel, rear], bays: [moving, { ...neighbour, panel_key: 'two' }], slots: [{ key: 'point', display_name: 'Port', panel_key: 'one', kind: 'CONNECTION_POINT', rendered_position: { x: .5, y: .5 } }] });
+    const { rectangle, canvas, field, save } = show({ panels: [panel, rear], bays: [moving, { ...neighbour, panel_key: 'two' }], slots: [{ key: 'point', display_name: 'Port', panel_key: 'one', port_type_id: 'test-type', kind: 'CONNECTION_POINT', rendered_position: { x: .5, y: .5 } }] });
     fireEvent.pointerDown(rectangle(), { button: 0, clientX: 125, clientY: 50 }); fireEvent.pointerMove(canvas(), { clientX: 169, clientY: 68.5 });
     expect(field('x')).toHaveValue(.29); expect(field('y')).toHaveValue(.29);
     expect(canvas().querySelector('[data-guide-x], [data-guide-y]')).toBeNull(); fireEvent.pointerUp(canvas());
@@ -228,7 +228,7 @@ describe('bay on the existing authoring canvas', () => {
     expect(save).toHaveBeenCalledWith(expect.objectContaining({ bays: [expect.objectContaining({ x: .4, width: .6 })] }));
   });
   it('keeps endpoint hit targets after bay rectangles and resize handles and allows endpoint selection', () => {
-    const { container, choose } = show({ slots: [{ key: 'port', panel_key: 'one', display_name: 'MGMT', kind: 'NETWORK_PORT', rendered_position: { x: .2, y: .2 } }] }); choose();
+    const { container, choose } = show({ slots: [{ key: 'port', panel_key: 'one', display_name: 'MGMT', port_type_id: 'test-type', kind: 'NETWORK_PORT', rendered_position: { x: .2, y: .2 } }] }); choose();
     const endpoint = container.querySelector('[data-slot-key]')!;
     const area = container.querySelector('[data-bay-key]')!;
     const handle = container.querySelector('[data-bay-resize="nw"]')!;

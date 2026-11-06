@@ -27,6 +27,7 @@ export interface BlueprintSlot {
   key: string;
   display_name: string;
   kind: BlueprintSlotKind;
+  port_type_id: string;
   panel_key: string;
   rendered_position: { x: number; y: number };
 }

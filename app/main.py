@@ -826,6 +826,7 @@ def get_object_blueprint_version(
         "slots": [
             {
                 "key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind,
+                "port_type_id": str(slot.port_type_id),
                 "panel_key": slot.panel_key,
                 "rendered_position": {"x": slot.position_x, "y": slot.position_y},
             }

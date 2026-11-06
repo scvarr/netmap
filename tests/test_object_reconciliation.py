@@ -2,6 +2,8 @@
 import copy
 import uuid
 
+from tests.port_type_fixtures import ensure_port_type_id
+
 import pytest
 from sqlalchemy import select
 
@@ -106,7 +108,7 @@ def add_dependency(session, obj, dependency):
     elif dependency == 'mapping':
         module = m.ModuleTemplate(name='Other'); session.add(module); session.flush()
         revision_ = m.ModuleTemplateRevision(geometry={'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'other': {'x': .5, 'y': .5}}}, template_id=module.id, version_number=1, name='Module', compatibility='OCP3'); session.add(revision_); session.flush()
-        definition = m.ModuleEndpointDefinition(module_revision_id=revision_.id, definition_key='other', display_name='Other', kind='NETWORK_PORT', order_index=0)
+        definition = m.ModuleEndpointDefinition(module_revision_id=revision_.id, definition_key='other', display_name='Other', kind='NETWORK_PORT', port_type_id=uuid.UUID(ensure_port_type_id()), order_index=0)
         config = session.scalar(select(m.ObjectConfiguration).where(m.ObjectConfiguration.physical_object_id == uuid.UUID(oid(obj))))
         bay = session.scalar(select(m.ModuleBay).where(m.ModuleBay.base_revision_id == config.base_revision_id))
         installation = m.ModuleInstallation(layout={'panel_key': bay.panel_key, 'x': .1, 'y': .1, 'width': .2, 'height': .2}, configuration_id=config.id, module_revision_id=revision_.id, bay_key=bay.bay_key, orientation='HORIZONTAL')

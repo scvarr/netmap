@@ -2,6 +2,8 @@
 import copy
 import uuid
 
+from tests.port_type_fixtures import ensure_port_type_id
+
 import pytest
 from sqlalchemy import event, select, text
 
@@ -52,7 +54,7 @@ def test_draft_identity_frozen_candidates_generation_and_no_runtime_writes():
     definition['name'] = ' Renamed draft '
     definition['endpoints'].reverse()
     definition['endpoints'][0]['display_name'] = ' New local name '
-    definition['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'Added', 'kind': 'CONNECTION_POINT'})
+    definition['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'Added', 'port_type_id': ensure_port_type_id(), 'kind': 'CONNECTION_POINT'})
     saved = save(template_id, draft, definition)
     assert saved['generation'] == draft['generation'] + 1
     assert open_draft(template_id)['definition'] == definition
@@ -229,7 +231,7 @@ def test_retained_endpoint_with_invalid_cardinality_requires_intervention(kind):
     base_id, payload = create_base()
     response = client.post('/v1/library/module-templates', json={
         'name': 'Module', 'compatibility': 'OCP3', 'geometry': {'width': 240, 'height': 80, 'fill_color': '#64748b', 'endpoints': {'retained': {'x': .5, 'y': .5}}},
-        'endpoints': [{'key': 'retained', 'display_name': 'P1', 'kind': kind}],
+        'endpoints': [{'key': 'retained', 'display_name': 'P1', 'port_type_id': ensure_port_type_id(), 'kind': kind}],
     })
     assert response.status_code == 201, response.text
     template_id = response.json()['template_id']
@@ -304,10 +306,10 @@ def test_workspace_roundtrip():
     definition = copy.deepcopy(draft['definition'])
     definition['endpoints'].reverse()
     definition['endpoints'][0]['display_name'] = 'Renamed'
-    definition['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'New', 'kind': 'CONNECTION_POINT'})
+    definition['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'New', 'port_type_id': ensure_port_type_id(), 'kind': 'CONNECTION_POINT'})
     checked = check(module['template_id'], save(module['template_id'], draft, definition))
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 6
+    assert package['format_version'] == 7
     assert client.delete('/v1/workspace/dataset').status_code == 204
     response = client.post('/v1/workspace/package', json=package)
     assert response.status_code == 204, response.text

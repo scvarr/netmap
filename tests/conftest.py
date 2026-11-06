@@ -92,7 +92,6 @@ def clean_database(request: pytest.FixtureRequest):
 
     require_confirmed_test_database()
     with SessionLocal.begin() as session:
-        session.execute(delete(PortType))
         session.execute(delete(MapCableRoute))
         session.execute(delete(MapViewPosition))
         session.execute(delete(MapPlacement))
@@ -110,6 +109,7 @@ def clean_database(request: pytest.FixtureRequest):
         session.execute(delete(PresentationPanel))
         session.execute(delete(BaseTemplateRevision))
         session.execute(delete(BaseTemplate))
+        session.execute(delete(PortType))
         session.execute(delete(PacketProcessingPlanAttachment))
         session.execute(delete(PacketProcessingPlanAttachmentSet))
         session.execute(delete(ProcessingEntryPoint))

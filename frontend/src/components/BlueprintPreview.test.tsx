@@ -10,7 +10,7 @@ const panel = (panel_key: string, x: number, y: number, width: number, height: n
 it('keeps all 48 ports and 24 links distinct on a low, two-sided CPP24-24 composition', async () => {
   const panels = [panel('front', 0, 0, 480, 16), panel('rear', 0, 28, 480, 16, 2)];
   const slots: BlueprintSlot[] = panels.flatMap(side => Array.from({ length: 24 }, (_, index) => ({
-    key: `${side.panel_key}-${index}`, panel_key: side.panel_key, kind: index % 2 ? 'CONNECTION_POINT' : 'NETWORK_PORT',
+    key: `${side.panel_key}-${index}`, panel_key: side.panel_key, port_type_id: 'test-type', kind: index % 2 ? 'CONNECTION_POINT' : 'NETWORK_PORT',
     display_name: `P${String(index + 1).padStart(2, '0')}`,
     rendered_position: { x: (index + .5) / 24, y: .5 },
   })));

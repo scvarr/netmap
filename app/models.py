@@ -516,6 +516,8 @@ class PresentationPanel(Base):
 
 class BuiltInEndpointDefinition(Base):
     __tablename__ = "built_in_endpoint_definitions"
+
+    port_type_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("port_types.id", ondelete="RESTRICT"), nullable=False, index=True)
     __table_args__ = (
         CheckConstraint("char_length(btrim(slot_key)) > 0", name="slot_key_not_blank"),
         CheckConstraint("char_length(btrim(display_name)) > 0", name="display_name_not_blank"),
@@ -665,6 +667,8 @@ class ModuleTemplateCandidate(Base):
 
 class ModuleEndpointDefinition(Base):
     __tablename__ = "module_endpoint_definitions"
+
+    port_type_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("port_types.id", ondelete="RESTRICT"), nullable=False, index=True)
     __table_args__ = (
         UniqueConstraint("module_revision_id", "definition_key", name="uq_module_endpoint_definition_key"),
         UniqueConstraint("module_revision_id", "order_index", name="uq_module_endpoint_definition_order"),

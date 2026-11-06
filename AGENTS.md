@@ -69,6 +69,17 @@ Testing workflow contract:
 - GitNexus `detect_changes` is a separate acceptance/change-inspection check;
   it does not, by itself, justify running the full suites.
 
+## Interface consistency
+
+- Before creating a page or form, inspect comparable existing components.
+- Reuse PageShell, PageHeader, Breadcrumbs, and existing styles for buttons,
+  fields, tables, and messages.
+- Follow the existing typography, control sizes, spacing, colors, and responsive behavior.
+- Reuse an available UI pattern instead of introducing a local styling system.
+  Add CSS classes only for behavior specific to the feature.
+- A general redesign requires a separate contract. Visual consistency with
+  existing screens is part of acceptance.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 

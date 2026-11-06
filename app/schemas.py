@@ -560,6 +560,7 @@ class ObjectConfigurationProvenance(BaseModel):
 
 
 class BlueprintSlotMetadata(BaseModel):
+    port_type_id: uuid.UUID
     model_config = ConfigDict(extra="forbid")
 
     slot_key: str = Field(min_length=1)
@@ -685,6 +686,7 @@ class BlueprintBody(BaseModel):
 
 
 class BuiltInEndpointDefinitionRequest(BaseModel):
+    port_type_id: uuid.UUID
     model_config = ConfigDict(extra="forbid")
 
     key: str = Field(min_length=1, max_length=255)
@@ -744,6 +746,7 @@ class ModuleBayRequest(BaseModel):
 
 
 class ModuleEndpointRequest(BaseModel):
+    port_type_id: uuid.UUID
     model_config = ConfigDict(extra="forbid")
     key: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
@@ -964,6 +967,7 @@ class BaseTemplateListDocument(BaseModel):
 
 
 class BaseTemplateSlotDocument(BaseModel):
+    port_type_id: uuid.UUID
     model_config = ConfigDict(extra="forbid")
 
     key: str = Field(min_length=1)

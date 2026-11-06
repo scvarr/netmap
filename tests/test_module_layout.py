@@ -77,7 +77,7 @@ def test_d2_retains_custom_layout_and_blocks_panel_move():
 def test_archive_roundtrip_and_corruption():
     _, obj, _, document = setup()
     current = package()
-    assert current['format_version'] == 6 and current['module_layout_version'] == 1
+    assert current['format_version'] == 7 and current['module_layout_version'] == 1
     parsed = validate_package(current)
     assert parsed['module_installations'][0]['layout'] == document['bays'][0]['installation']['layout']
     for bad in (None, {}, {**parsed['module_installations'][0]['layout'], 'width': 2}):

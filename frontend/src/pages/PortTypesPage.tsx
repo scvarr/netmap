@@ -3,16 +3,11 @@ import type { FormEvent } from 'react';
 import { useI18n } from '../i18n';
 import { Breadcrumbs, PageHeader, PageShell } from '../components/PageChrome';
 
-type PortTypeFields = {
-  name: string;
-  description: string | null;
-  color: string;
-  is_active: boolean;
-};
-type PortType = PortTypeFields & { id: string };
+import { portTypesUrl as endpoint, type PortType } from '../components/PortTypeSelect';
+
+type PortTypeFields = Omit<PortType, 'id'>;
 
 const emptyForm: PortTypeFields = { name: '', description: null, color: '#64748B', is_active: true };
-const endpoint = '/api/v1/port-types';
 const hex = /^#[0-9A-Fa-f]{6}$/;
 
 export function PortTypesPage() {
@@ -21,7 +16,7 @@ export function PortTypesPage() {
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<'request' | 'conflict' | 'invalid' | null>(null);
+  const [error, setError] = useState<'request' | 'conflict' | 'invalid' | 'inUse' | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -48,7 +43,9 @@ export function PortTypesPage() {
         ...(fields && { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) }),
       });
       if (!response.ok) {
-        setError(response.status === 409 ? 'conflict' : response.status === 422 ? 'invalid' : 'request');
+        const inUse = method === 'DELETE' && response.status === 409 &&
+          (await response.json()).detail === 'Port type is in use';
+        setError(inUse ? 'inUse' : response.status === 409 ? 'conflict' : response.status === 422 ? 'invalid' : 'request');
         return;
       }
       if (method === 'DELETE') {

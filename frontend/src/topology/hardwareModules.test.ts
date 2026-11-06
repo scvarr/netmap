@@ -8,7 +8,7 @@ describe('module template deletion API', () => {
   it('persists exact module input and sends generation for save and check', async () => {
     const fetch = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ generation: 4 }), { status: 200 }));
     vi.stubGlobal('fetch', fetch);
-    const definition = { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { 'stable-key': { x: .5, y: .5 } } }, name: ' Name ', compatibility: ' OCP3 ', endpoints: [{ key: 'stable-key', display_name: ' P1 ', kind: 'NETWORK_PORT' as const }] };
+    const definition = { geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { 'stable-key': { x: .5, y: .5 } } }, name: ' Name ', compatibility: ' OCP3 ', endpoints: [{ key: 'stable-key', display_name: ' P1 ', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const }] };
     await moduleReviewDataSource.loadDraft('module/id');
     await moduleReviewDataSource.saveDraft('module/id', definition, 3);
     await moduleReviewDataSource.checkDraft('module/id', 4);
@@ -38,7 +38,7 @@ describe('module template deletion API', () => {
 });
 
 it('allocates distinct positions without moving authored keys on add, rename or reorder', () => {
- const endpoints = ['a','b','c','d'].map(key => ({ key, display_name:key, kind:'NETWORK_PORT' as const }));
+ const endpoints = ['a','b','c','d'].map(key => ({ key, display_name:key, port_type_id:'test-type', kind:'NETWORK_PORT' as const }));
  const first = moduleEndpointPositions(endpoints.slice(0,2), { a:{x:.2,y:.3} });
  const all = moduleEndpointPositions(endpoints,first);
  expect(all.a).toEqual({x:.2,y:.3}); expect(all.b).toEqual(first.b);

@@ -6,7 +6,7 @@ import { ModuleGeometryEditor } from './ModuleGeometryEditor';
 import type { ModuleGeometry } from '../topology/hardwareModules';
 function Harness() {
  const [g,set] = useState<ModuleGeometry>({width:240,height:80,fill_color:'#64748b',endpoints:{a:{x:.1,y:.2},b:{x:.4,y:.6},c:{x:.9,y:.8}}});
- return <I18nProvider><ModuleGeometryEditor geometry={g} endpoints={['a','b','c'].map(key => ({key,display_name:key,kind:key === 'b' ? 'CONNECTION_POINT' : 'NETWORK_PORT'}))} onChange={set}/><output data-testid="geometry">{JSON.stringify(g)}</output></I18nProvider>;
+ return <I18nProvider><ModuleGeometryEditor geometry={g} endpoints={['a','b','c'].map(key => ({key,display_name:key,port_type_id:'test-type',kind:key === 'b' ? 'CONNECTION_POINT' : 'NETWORK_PORT'}))} onChange={set}/><output data-testid="geometry">{JSON.stringify(g)}</output></I18nProvider>;
 }
 const value = () => JSON.parse(screen.getByTestId('geometry').textContent!);
 describe('module geometry', () => {
@@ -53,7 +53,7 @@ describe('module geometry', () => {
 
 it.each([[5,20],[20,5],[10,1],[1,1]])('fits %s × %s with screen-sized glyphs and unchanged model', (width,height) => {
  const geometry = {width,height,fill_color:'#64748b',endpoints:{a:{x:0,y:0},b:{x:1,y:1}}};
- render(<I18nProvider><ModuleGeometryEditor geometry={geometry} endpoints={['a','b'].map(key=>({key,display_name:key,kind:key === 'b' ? 'CONNECTION_POINT' : 'NETWORK_PORT'}))}/></I18nProvider>);
+ render(<I18nProvider><ModuleGeometryEditor geometry={geometry} endpoints={['a','b'].map(key=>({key,display_name:key,port_type_id:'test-type',kind:key === 'b' ? 'CONNECTION_POINT' : 'NETWORK_PORT'}))}/></I18nProvider>);
  const svg=screen.getByLabelText('Геометрия модуля',{selector:'svg'});
  const [x,y,w,h]=svg.getAttribute('viewBox')!.split(' ').map(Number);
  expect(x).toBeLessThan(0); expect(y).toBeLessThan(0);

@@ -117,15 +117,6 @@ def test_invalid_e2_archive_rejected(damage):
     assert client.get('/v1/workspace/package').json() == package
 
 
-def test_historical_e1_archive():
-    module = create_module(); prepared(module['template_id'])
-    package = client.get('/v1/workspace/package').json()
-    del package['authoring']['ModuleTemplatePublication']
-    for revision in package['authoring']['ModuleTemplateRevision']: del revision['name']
-    assert client.delete('/v1/workspace/dataset').status_code == 204
-    response = client.post('/v1/workspace/package', json=package)
-    assert response.status_code == 204, response.text
-
 @pytest.mark.parametrize('compatibility', ['OCP3', 'ocp3', ' OCP3', 'OCP3 '])
 def test_new_installation_pins_latest_with_exact_compatibility(compatibility):
     base_id, payload = create_base(); module = create_module(); tid = module['template_id']

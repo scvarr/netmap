@@ -44,7 +44,7 @@ const parseSlot = (value: unknown, path: string): BlueprintSlot => {
   const slot = requireObject(value, path); const rendered = requireObject(slot.rendered_position, `${path}.rendered_position`);
   if (slot.kind !== 'CONNECTION_POINT' && slot.kind !== 'NETWORK_PORT') malformed(`${path}.kind is unsupported.`);
   if (typeof rendered.x !== 'number' || typeof rendered.y !== 'number' || !Number.isFinite(rendered.x) || !Number.isFinite(rendered.y) || rendered.x < 0 || rendered.x > 1 || rendered.y < 0 || rendered.y > 1) malformed(`${path}.rendered_position is invalid.`);
-  return { key: requireString(slot.key, `${path}.key`), display_name: requireString(slot.display_name, `${path}.display_name`), kind: slot.kind as BlueprintSlotKind, panel_key: requireString(slot.panel_key, `${path}.panel_key`), rendered_position: { x: rendered.x as number, y: rendered.y as number } };
+  return { key: requireString(slot.key, `${path}.key`), display_name: requireString(slot.display_name, `${path}.display_name`), kind: slot.kind as BlueprintSlotKind, port_type_id: requireString(slot.port_type_id, `${path}.port_type_id`), panel_key: requireString(slot.panel_key, `${path}.panel_key`), rendered_position: { x: rendered.x as number, y: rendered.y as number } };
 };
 
 const parsePanel = (value: unknown, path: string): PresentationPanel => {

@@ -1,11 +1,18 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { hardwareModuleDataSource } from '../topology/hardwareModules';
 import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 import { BaseTemplateLibraryPage } from './BaseTemplateLibraryPage';
+
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json([
+    { id: 'test-type', name: 'Copper', color: '#335577', is_active: true },
+  ])));
+});
+afterEach(() => vi.unstubAllGlobals());
 
 const revision: BaseTemplateRevisionDocument = {
   schema_version: '2.0',
@@ -14,7 +21,7 @@ const revision: BaseTemplateRevisionDocument = {
   name: 'Server', version_number: 2, next_panel_number: 2,
   body: { kind: 'RECTANGLE', width: 160, height: 60 },
   panels: [{ panel_key: 'rear', panel_number: 1, display_name: 'Rear', x: 10, y: 20, width: 160, height: 60 }],
-  slots: [{ key: 'eth', display_name: 'Eth', kind: 'NETWORK_PORT', panel_key: 'rear', rendered_position: { x: .25, y: .5 } }],
+  slots: [{ key: 'eth', display_name: 'Eth', port_type_id: 'test-type', kind: 'NETWORK_PORT', panel_key: 'rear', rendered_position: { x: .25, y: .5 } }],
   internal_links: [],
   bays: [{ kind: 'LOGICAL', bay_key: 'bay', panel_key: 'rear', display_name: 'Bay', compatibility: 'OCP3' }],
 };
@@ -23,7 +30,7 @@ const second = { ...listed, blueprint_ref: { ...listed.blueprint_ref, entity_id:
 const module = {
   template_id: 'nic', revision_id: 'nic-rev', name: 'NIC', compatibility: 'OCP3',
   geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { p1: { x: .3, y: .5 }, p2: { x: .7, y: .75 } } },
-  endpoints: [{ key: 'p1', display_name: 'P1', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', kind: 'CONNECTION_POINT' as const }],
+  endpoints: [{ key: 'p1', display_name: 'P1', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', port_type_id: 'test-type', kind: 'CONNECTION_POINT' as const }],
   publication_state: { revision_id: 'nic-rev', version_number: 3, outdated_count: 0, awaiting_update_count: 0, requires_intervention_count: 1, installations: [] },
 };
 
@@ -92,7 +99,7 @@ it('loads a base revision only on keyboard disclosure and reuses it after closin
   const svg = await screen.findByRole('img', { name: 'Server' });
   expect(svg).toHaveAttribute('viewBox', '10 20 160 60');
   const square = svg.querySelector('[data-slot-key="eth"] rect[data-endpoint-marker]')!;
-  expect(square).toHaveAttribute('fill', '#60d4c9');
+  expect(square).toHaveAttribute('fill', '#335577');
   expect(Number(square.getAttribute('x')) + Number(square.getAttribute('width')) / 2).toBeCloseTo(50);
   expect(Number(square.getAttribute('y')) + Number(square.getAttribute('height')) / 2).toBeCloseTo(50);
   expect(screen.getByText('Модульных мест: 1')).toBeVisible();
@@ -116,7 +123,7 @@ it('uses module list geometry and exposes the published revision and editor on d
   expect(svg).toHaveAttribute('viewBox', '0 0 240 80');
   expect(svg.querySelector('rect')).toHaveAttribute('fill', '#64748b');
   const square = svg.querySelector('[data-slot-key="p1"] rect[data-endpoint-marker]')!;
-  expect(square).toHaveAttribute('fill', '#60d4c9');
+  expect(square).toHaveAttribute('fill', '#335577');
   expect(Number(square.getAttribute('x')) + Number(square.getAttribute('width')) / 2).toBeCloseTo(72);
   expect(Number(square.getAttribute('y')) + Number(square.getAttribute('height')) / 2).toBeCloseTo(40);
   expect(svg.querySelector('[data-slot-key="p2"] circle')).toHaveAttribute('cx', '168');

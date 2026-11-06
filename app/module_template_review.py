@@ -9,6 +9,7 @@ from app.base_template_review import BaseTemplateReview, endpoint_dependencies
 from app.device_catalog import DISPLAY_ALIAS_KEY
 from app.errors import ModelError, ValidationError
 from app.hardware_catalog import HardwareCatalog
+from app.port_types import validate_port_type_assignments
 from app.schemas import CreateModuleTemplateRequest
 
 
@@ -142,7 +143,9 @@ class ModuleTemplateReview:
         draft = self._draft(template_id, lock=True)
         if draft.generation != expected_generation:
             raise ModelError("Draft changed in another session; reopen before saving", {"reason": "DRAFT_CONFLICT"})
-        draft.definition = validate_definition(definition)
+        updated = validate_definition(definition)
+        validate_port_type_assignments(self.session, updated["endpoints"], draft.definition["endpoints"])
+        draft.definition = updated
         draft.generation += 1
         self.session.flush()
         return self.document(draft, self._latest_candidate(draft))

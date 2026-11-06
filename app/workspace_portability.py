@@ -22,7 +22,7 @@ from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 6
+FORMAT_VERSION = 7
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -69,7 +69,7 @@ ENTITIES = (
     ("authoring", "BaseTemplateCandidate", "BaseTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "BaseTemplatePublication", "BaseTemplatePublication", "id revision_id"),
     ("authoring", "PresentationPanel", "PresentationPanel", "id base_revision_id panel_key panel_number display_name x y width height"),
-    ("authoring", "BuiltInEndpointDefinition", "BuiltInEndpointDefinition", "id base_revision_id slot_key display_name kind panel_key position_x position_y"),
+    ("authoring", "BuiltInEndpointDefinition", "BuiltInEndpointDefinition", "id base_revision_id slot_key display_name kind panel_key position_x position_y port_type_id"),
     ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id"),
     ("authoring", "ObjectConfiguration", "ObjectConfiguration", "id base_revision_id physical_object_id"),
     ("authoring", "BuiltInEndpointMapping", "BuiltInEndpointMapping", "id configuration_id definition_id connection_point_id network_interface_id"),
@@ -79,7 +79,7 @@ ENTITIES = (
     ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name compatibility geometry"),
     ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
-    ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind"),
+    ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind port_type_id"),
     ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id module_revision_id bay_key orientation layout"),
     ("authoring", "ModuleEndpointMapping", "ModuleEndpointMapping", "id installation_id definition_id connection_point_id network_interface_id"),
     ("presentation", "SavedMap", "SavedMap", "id name created_at updated_at"),
@@ -244,6 +244,14 @@ def validate_package(package: object) -> dict:
     _validate_hardware_configuration(result)
     _validate_template_reviews(result)
     _validate_module_template_reviews(result)
+    port_type_ids = {row["id"] for row in result["port_types"]}
+    for prefix, section in (("base", "slots"), ("module", "endpoints")):
+        for state in ("drafts", "candidates"):
+            for row in result[f"{prefix}_template_{state}"]:
+                for endpoint in row["definition"][section]:
+                    type_id = uuid.UUID(endpoint["port_type_id"])
+                    if type_id not in port_type_ids or str(type_id) != endpoint["port_type_id"]:
+                        raise PackageError("Template definition requires a canonical UUID of an existing port type")
     return result
 
 
@@ -260,7 +268,7 @@ def _validate_module_template_reviews(rows):
     for revision in revisions.values():
         try:
             validate_definition({"name": revision["name"], "compatibility": revision["compatibility"], "geometry": revision["geometry"], "endpoints": [
-                {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"]}
+                {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"], "port_type_id": str(e["port_type_id"])}
                 for e in rows["module_endpoint_definitions"] if e["module_revision_id"] == revision["id"]]})
         except (SchemaError, TypeError) as exc:
             raise PackageError("Invalid module revision geometry") from exc
@@ -269,7 +277,7 @@ def _validate_module_template_reviews(rows):
         revision = revisions[receipt["revision_id"]]
         source = revisions[candidate["source_revision_id"]]
         actual = {"name": revision["name"], "compatibility": revision["compatibility"], "geometry": revision["geometry"], "endpoints": [
-            {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"]}
+            {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"], "port_type_id": str(e["port_type_id"])}
             for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]}
         if (revision["template_id"] != candidate["template_id"] or source["template_id"] != candidate["template_id"]
                 or revision["version_number"] != source["version_number"] + 1 or actual != candidate["definition"]):
@@ -328,7 +336,7 @@ def _validate_template_reviews(rows):
             "name": revision["name"], "default_physical_object_class": revision["default_physical_object_class"],
             "body": {"kind": revision["body_kind"], "width": revision["width"], "height": revision["height"], "fill_color": revision["fill_color"]},
             "panels": [{k: p[k] for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height")} for p in rows["presentation_panels"] if p["base_revision_id"] == revision["id"]],
-            "slots": [{"key": s["slot_key"], "display_name": s["display_name"], "kind": s["kind"], "panel_key": s["panel_key"], "rendered_position": {"x": s["position_x"], "y": s["position_y"]}} for s in rows["built_in_endpoint_definitions"] if s["base_revision_id"] == revision["id"]],
+            "slots": [{"key": s["slot_key"], "display_name": s["display_name"], "kind": s["kind"], "port_type_id": str(s["port_type_id"]), "panel_key": s["panel_key"], "rendered_position": {"x": s["position_x"], "y": s["position_y"]}} for s in rows["built_in_endpoint_definitions"] if s["base_revision_id"] == revision["id"]],
             "bays": [{k: b[k] for k in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
         }
         keys = {s["id"]: s["slot_key"] for s in rows["built_in_endpoint_definitions"]}

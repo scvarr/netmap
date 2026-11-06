@@ -282,7 +282,7 @@ export const copySelectionToPanel = (state: BlueprintEditorState, keys: Readonly
   const next = nextEndpointNumber(state, panel);
   const sources = state.slots.filter((slot) => keys.has(slot.key));
   const copies = sources.map((source, index): BlueprintSlot => ({
-    key: crypto.randomUUID(), kind: source.kind, panel_key: destinationPanelKey,
+    key: crypto.randomUUID(), kind: source.kind, port_type_id: source.port_type_id, panel_key: destinationPanelKey,
     display_name: `${panel.panel_number}-${next + index}`,
     rendered_position: { ...source.rendered_position },
   }));
@@ -297,7 +297,7 @@ export const copySelectionToPanel = (state: BlueprintEditorState, keys: Readonly
 };
 
 /** UUIDs are opaque and independent of names, position, panel, and selection. */
-export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKind, count: number, panelKey: string): BlueprintEditorState => {
+export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKind, count: number, panelKey: string, portTypeId: string): BlueprintEditorState => {
   if (panelKey !== state.activePanelKey || !Number.isInteger(count) || count < 1 || count > 256 || !hasEndpointCapacity(state, panelKey, count)) return state;
   const panel = state.panels.find((item) => item.panel_key === panelKey);
   if (!panel) return state;
@@ -308,7 +308,7 @@ export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKin
     const column = ordinal % 20;
     const row = Math.floor(ordinal / 20);
     return {
-      key: crypto.randomUUID(), kind, panel_key: panelKey,
+      key: crypto.randomUUID(), kind, port_type_id: portTypeId, panel_key: panelKey,
       display_name: `${panel.panel_number}-${next + index}`,
       rendered_position: { x: (column + .5) / 20, y: (row + .5) / 20 },
     };

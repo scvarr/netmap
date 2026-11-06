@@ -1,3 +1,4 @@
+import type { PortType } from './PortTypeSelect';
 import { EndpointMarker } from './EndpointMarker';
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import type { BaseInternalLink, BlueprintSlot, PresentationPanel } from '../topology/baseTemplateTypes';
@@ -7,6 +8,7 @@ import { isPlacedBay, type PlacedModuleBay as ModuleBay } from '../topology/hard
 import { bayGestureGeometry, type BayRectangle } from '../blueprints/moduleBayGeometry';
 
 interface Props {
+  portTypes?: PortType[];
   body: { width: number; height: number; fillColor: string }; panels: PresentationPanel[]; activePanelKey: string;
   slots: BlueprintSlot[]; links: BaseInternalLink[]; selectedKeys: ReadonlySet<string>;
   orderedKeys?: readonly string[]; highlightedKey?: string;
@@ -32,7 +34,7 @@ export function endpointMarkerRadii(scale: number) {
   };
 }
 
-export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel, onPanelGeometry, orderedKeys, highlightedKey, bays: allBays = [], selectedBayKey, onSelectBay, onBayGeometry }: Props) {
+export function BlueprintCompositionCanvas({ portTypes, body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel, onPanelGeometry, orderedKeys, highlightedKey, bays: allBays = [], selectedBayKey, onSelectBay, onBayGeometry }: Props) {
   const bays = allBays.filter(isPlacedBay);
   const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null);
@@ -198,7 +200,7 @@ export function BlueprintCompositionCanvas({ body, panels, activePanelKey, slots
       gesture.current = toggle ? undefined : { kind: 'move', key: slot.key, keys: selected ? new Set(selectedKeys) : new Set([slot.key]), start: position(event), applied: { x: 0, y: 0 }, slots: visible, moved: false };
     }}>
       <circle data-endpoint-hit-target cx={point.x} cy={point.y} r={marker.hit} fill="transparent" pointerEvents="all" />
-      <EndpointMarker kind={slot.kind} label={slot.display_name} cx={point.x} cy={point.y} r={selected ? marker.selected : marker.regular} stroke={highlightedKey === slot.key ? '#ff7b22' : selected ? '#fff' : '#1c3135'} strokeWidth={highlightedKey === slot.key ? 5 : 2} vectorEffect="non-scaling-stroke" />
+      <EndpointMarker fill={portTypes?.find(type => type.id === slot.port_type_id)?.color} kind={slot.kind} label={slot.display_name} cx={point.x} cy={point.y} r={selected ? marker.selected : marker.regular} stroke={highlightedKey === slot.key ? '#ff7b22' : selected ? '#fff' : '#1c3135'} strokeWidth={highlightedKey === slot.key ? 5 : 2} vectorEffect="non-scaling-stroke" />
       <text data-endpoint-name pointerEvents="none" x={point.x} y={point.y + 13 / canvasScale} textAnchor="middle" style={{ fontSize: 8.5 / canvasScale }} fontSize={8.5 / canvasScale} fill="#fff" stroke="#102326" strokeWidth={2 / canvasScale} paintOrder="stroke"><title>{slot.display_name}</title>{(() => {
         const nearest = Math.min(...slots.filter(other => other.key !== slot.key && other.panel_key === slot.panel_key && Math.abs(points.get(other.key)!.y - point.y) * canvasScale < 16).map(other => Math.abs(points.get(other.key)!.x - point.x) * canvasScale), 160);
         const chars = Math.max(0, Math.floor((nearest - 5) / 6));
