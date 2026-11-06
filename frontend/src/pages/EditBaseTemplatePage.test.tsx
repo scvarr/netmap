@@ -77,6 +77,9 @@ it('authors exact logical groups and keeps their individual bays through draft r
   expect(screen.getByRole('alert')).toHaveTextContent('непустую');
   create('new', '0');
   expect(screen.getByRole('alert')).toHaveTextContent('от 1');
+  create('new', '1025');
+  expect(screen.getByRole('alert')).toHaveTextContent('не более 1024');
+  expect(creation.getByLabelText('Количество мест')).toHaveValue('1025');
   const first = await save(1);
   expect(first.map(bay => [bay.panel_key, bay.compatibility])).toEqual([
     ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'ocp3'], ['panel', ' OCP3 '], ['rear', 'OCP3'],
@@ -98,13 +101,19 @@ it('authors exact logical groups and keeps their individual bays through draft r
     expect(screen.getByRole('alert')).toHaveTextContent('от 0');
   }
   expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();
-  apply('3');
+  apply('1025');
+  expect(screen.getByRole('alert')).toHaveTextContent('не более 1024');
+  expect(count()).toHaveValue('1025');
+  expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();
+  apply('1024');
   const grown = await save(2);
+  const grownGroup = grown.filter(bay => bay.kind === 'LOGICAL' && bay.panel_key === 'panel' && bay.compatibility === 'OCP3');
+  expect(grownGroup).toHaveLength(1024);
   expect(grown.slice(0, first.length)).toEqual(first);
   expect(new Set(grown.map(bay => bay.bay_key)).size).toBe(grown.length);
-  const smallest = [grown[1], grown[2], grown[6]].sort((a, b) => a.bay_key < b.bay_key ? -1 : 1)[0];
+  const smallest = grownGroup.sort((a, b) => a.bay_key < b.bay_key ? -1 : 1)[0];
   apply('1');
-  expect(await save(3)).toEqual(grown.filter(bay => ![grown[1], grown[2], grown[6]].includes(bay) || bay === smallest));
+  expect(await save(3)).toEqual(grown.filter(bay => !grownGroup.includes(bay) || bay === smallest));
   fireEvent.click(group.getByRole('button', { name: 'Удалить группу' }));
   expect(await save(4)).toEqual([placed, ...first.slice(3)]);
   fireEvent.click(screen.getByRole('button', { name: 'Проверить изменения' }));

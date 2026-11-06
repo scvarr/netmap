@@ -11,6 +11,7 @@ interface Props {
 }
 
 const groupKey = (panel: string, compatibility: string) => JSON.stringify([panel, compatibility]);
+const MAX_LOGICAL_PLACES_PER_GROUP = 1024;
 
 export function LogicalModulePlacesEditor({ panels, activePanelKey, bays, onChange }: Props) {
   const { t } = useI18n();
@@ -26,6 +27,10 @@ export function LogicalModulePlacesEditor({ panels, activePanelKey, bays, onChan
 
   const apply = (panel: string, compatibility: string, rawCount: string, creating = false) => {
     const count = Number(rawCount);
+    if (/^\d+$/.test(rawCount) && count > MAX_LOGICAL_PLACES_PER_GROUP) {
+      setError(t('logicalPlaces.countLimit', { max: MAX_LOGICAL_PLACES_PER_GROUP }));
+      return false;
+    }
     if (!/^\d+$/.test(rawCount) || !Number.isSafeInteger(count) || (creating && count === 0)) {
       setError(t(creating ? 'logicalPlaces.positiveCount' : 'logicalPlaces.invalidCount'));
       return false;
