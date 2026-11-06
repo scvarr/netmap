@@ -782,7 +782,6 @@ a { color: inherit; }
 .base-template-details summary { padding: 8px 12px; cursor: pointer; font-size: 13px; }
 .base-template-details summary:hover { background: #173034; }
 .base-template-details summary:focus-visible { outline: 2px solid #69bfb2; outline-offset: 2px; }
-.base-template-details__body { max-height: 240px; overflow-y: auto; padding: 0 12px 8px; }
 .base-template-edit-page > .blueprint-composer--authoring-workspace { flex: none; min-height: 0; margin-top: 0; }
 .base-template-edit-page .blueprint-composer__workspace { height: auto; }
 .base-template-edit-page .blueprint-composer__properties,
@@ -844,3 +843,26 @@ a { color: inherit; }
 .module-installation-table select { width: auto; max-width: 15rem; margin: 0; padding: 4px 6px; }
 .module-installation-table summary { cursor: pointer; }
 .module-installation-table ul { margin: 4px 0; padding-inline-start: 18px; }
+.base-template-review__status { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.base-template-review__status p { margin: 0; }
+.base-template-review__status [data-tone="positive"] { color: #a2d5bb; }
+.base-template-review__status [data-tone="warning"] { color: #ffd38b; }
+.base-template-inspector {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #466268;
+  border-radius: 12px;
+  background: #102426;
+  color: #e4efef;
+}
+.base-template-inspector[open] { display: flex; flex-direction: column; }
+.base-template-inspector::backdrop { background: #071315bb; }
+.base-template-inspector__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #466268; }
+.base-template-inspector__header h2 { margin: 0; }
+.base-template-inspector__body { overflow: auto; overscroll-behavior: contain; padding: 0 20px 20px; overflow-wrap: anywhere; }
+.base-template-inspector__body .base-template-details { margin-block: 8px; }
+.base-template-inspector__technical { margin-block: 4px 8px; }
+.base-template-inspector__technical summary { cursor: pointer; }
+.base-template-inspector__technical pre { white-space: pre-wrap; }

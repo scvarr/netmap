@@ -1,9 +1,20 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { EditBaseTemplatePage } from './EditBaseTemplatePage';
 import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult } from '../topology/baseTemplateTypes';
+
+// jsdom does not implement the native dialog top layer.
+beforeAll(() => {
+  HTMLDialogElement.prototype.showModal ??= function () { this.open = true; };
+  HTMLDialogElement.prototype.close ??= function () { this.open = false; };
+});
+
+function openInspector() {
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть инспектор' }));
+  return screen.getByRole('dialog', { name: 'Инспектор изменений шаблона' });
+}
 
 const draft = (): BaseTemplateDraftDocument => ({ template_id: 'base', source_revision_id: 'published', generation: 2, review: null,
   definition: { name: 'Сохранённый черновик', default_physical_object_class: 'server', body: { kind: 'RECTANGLE', width: 160, height: 60, fill_color: '#28565a' },
@@ -134,32 +145,28 @@ describe('persisted base template review', () => {
     ],
   } });
 
-  it('bounds large disclosures, preserves edits and exposes summary counts', async () => {
-    const doc = withReview(outdated());
-    doc.publication_state!.objects = Array.from({ length: 200 }, (_, i) => ({ ...doc.publication_state!.objects[0], physical_object_id: `object-${i}`, display_name: `Object ${i}` }));
-    doc.publication_state!.outdated_count = 200;
-    const { mount } = setup(doc);
-    const view = mount();
+  it('keeps the editor compact and restores focus and unsaved edits after closing', async () => {
+    const { mount, source } = setup(withReview(outdated()));
+    mount();
     const name = await screen.findByDisplayValue('Сохранённый черновик');
-    expect(screen.getByText('Объектов на прежних ревизиях: 200')).toBeInTheDocument();
-    expect(screen.getByText('Ожидают обновления: 1')).toBeInTheDocument();
-    expect(screen.getByText('Требуют вмешательства: 1')).toBeInTheDocument();
-    const objects = screen.getByText(/^Физические объекты/).closest('details')!;
-    const impacts = screen.getByText(/Изменения: 1 · Объекты: 1/).closest('details')!;
-    expect(objects.open).toBe(false);
-    expect(impacts.open).toBe(false);
-    expect(objects.querySelector('.base-template-details__body')).not.toBeNull();
+    expect(await screen.findByText(/Проверено объектов: 1/)).toHaveTextContent('Проверено объектов: 1 · Потенциально безопасно: 1 · Требуют вмешательства: 0');
+    expect(screen.getByRole('status')).toHaveAttribute('data-tone', 'positive');
+    expect(screen.queryByText('Safe object')).not.toBeInTheDocument();
     fireEvent.change(name, { target: { value: 'Keep local work' } });
-    for (const details of [objects, impacts]) {
-      fireEvent.click(details.querySelector('summary')!);
-      expect(details.open).toBe(true);
-      fireEvent.click(details.querySelector('summary')!);
-      expect(details.open).toBe(false);
-    }
+    const dialog = openInspector();
+    const close = within(dialog).getByRole('button', { name: 'Закрыть' });
+    expect(close).toHaveFocus();
+    expect(within(dialog).getByText(/Проверка устарела/)).toBeVisible();
+    fireEvent(dialog, new Event('cancel', { cancelable: true }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Открыть инспектор' })).toHaveFocus();
     expect(screen.getByDisplayValue('Keep local work')).toBe(name);
-    expect(view.container.querySelector('.blueprint-composer__canvas-wrap')).toBeInTheDocument();
+    fireEvent.click(within(openInspector()).getByRole('button', { name: 'Закрыть' }));
+    expect(screen.getByDisplayValue('Keep local work')).toBe(name);
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+    expect(source.publishCandidate).not.toHaveBeenCalled();
+    expect(source.reconcileObjects).not.toHaveBeenCalled();
   });
 
   it('keeps periodic revalidation pending until the server confirms freshness', async () => {
@@ -173,7 +180,7 @@ describe('persisted base template review', () => {
       source.loadDraft.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
       await act(async () => { vi.advanceTimersByTime(15000); });
       expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
-      expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Потенциально безопасно: 1/)).not.toBeInTheDocument();
       const stale = withReview(draft()); stale.review!.current = false;
       await act(async () => { resolve(stale); });
       expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
@@ -184,23 +191,24 @@ describe('persisted base template review', () => {
     const { source, mount } = setup(outdated());
     let view = mount();
     const run = await screen.findByRole('button', { name: 'Обновить совместимые объекты' });
-    fireEvent.click(screen.getByText(/^Физические объекты/));
+    fireEvent.click(within(openInspector()).getByRole('button', { name: 'Закрыть' }));
     expect(source.reconcileObjects).not.toHaveBeenCalled();
     fireEvent.click(run);
     expect(run).toBeDisabled();
-    fireEvent.click(await screen.findByText(/^Результаты обновления объектов/));
+    await screen.findByText(/^Результаты обновления объектов/);
     expect(source.reconcileObjects).toHaveBeenCalledExactlyOnceWith('base');
-    expect(screen.getByText(/Обновлён/)).toBeInTheDocument();
-    expect(screen.getAllByText(/Актуален/).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/канонические соединения, пользовательские имена или данные/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Обновлено: 1 · Уже актуальны: 1 · Требуют вмешательства: 1/)).toBeVisible();
+    const dialog = within(openInspector());
+    expect(dialog.getByRole('heading', { name: /Результаты обновления объектов/ })).toBeVisible();
+    expect(dialog.queryByText(/Потенциально безопасное автоматическое обновление/)).not.toBeInTheDocument();
+    expect(dialog.getAllByText(/канонические соединения, пользовательские имена или данные/)[0]).toBeVisible();
     await screen.findByText('Ожидают обновления: 0');
     view.unmount(); view = mount();
     await screen.findByText('Объектов на прежних ревизиях: 1');
-    expect(screen.queryByText(/^Результаты обновления объектов/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText(/^Физические объекты/));
-    expect(screen.getAllByText(/Актуален/)).toHaveLength(2);
-    expect(screen.getByText(/канонические соединения, пользовательские имена или данные/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Blocked object' })).toHaveAttribute('href', '/infrastructure/objects/blocked');
+    const reopened = within(openInspector());
+    expect(reopened.queryByRole('heading', { name: /Результаты обновления объектов/ })).not.toBeInTheDocument();
+    expect(reopened.queryByText('Current object')).not.toBeInTheDocument();
+    expect(reopened.getByRole('link', { name: 'Blocked object' })).toHaveAttribute('href', '/infrastructure/objects/blocked');
     view.unmount();
   });
 
@@ -215,7 +223,7 @@ describe('persisted base template review', () => {
     expect(screen.getByDisplayValue('Keep unsaved draft')).toBeInTheDocument();
     await waitFor(() => expect(run).toBeEnabled());
     fireEvent.click(run);
-    fireEvent.click(await screen.findByText(/^Результаты обновления объектов/));
+    await screen.findByText(/^Результаты обновления объектов/);
     expect(screen.getByDisplayValue('Keep unsaved draft')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
   });
@@ -282,6 +290,7 @@ describe('persisted base template review', () => {
     const { source, mount } = setup();
     let view = mount();
     expect(await screen.findByDisplayValue('Сохранённый черновик')).toBeInTheDocument();
+    expect(screen.getByText('Проверка ещё не выполнена')).toBeVisible();
     expect(screen.getAllByText('OCP bay').length).toBeGreaterThan(0);
     fireEvent.change(screen.getByDisplayValue('Сохранённый черновик'), { target: { value: 'Changed draft' } });
     fireEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
@@ -291,12 +300,12 @@ describe('persisted base template review', () => {
     expect(source.saveDraft).toHaveBeenCalledWith('base', expect.objectContaining({ name: 'Changed draft', bays: [expect.objectContaining({ bay_key: 'stable-bay' })] }), 2);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Проверить изменения' }));
-    expect(await screen.findByText('Потенциально безопасное автоматическое обновление')).toBeInTheDocument();
+    expect(await screen.findByText(/Потенциально безопасно: 1/)).toBeInTheDocument();
     view.unmount(); view = mount();
     expect(await screen.findByDisplayValue('Changed draft')).toBeInTheDocument();
-    expect(await screen.findByText('Потенциально безопасное автоматическое обновление')).toBeInTheDocument();
+    expect(await screen.findByText(/Потенциально безопасно: 1/)).toBeInTheDocument();
     fireEvent.change(screen.getByDisplayValue('Changed draft'), { target: { value: 'Unsaved' } });
-    expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Потенциально безопасно: 1/)).not.toBeInTheDocument();
     view.unmount();
   });
 
@@ -305,7 +314,7 @@ describe('persisted base template review', () => {
     const { source, mount } = setup(document); source.saveDraft.mockRejectedValueOnce(new Error('Save unavailable'));
     mount();
     const name = await screen.findByDisplayValue('Сохранённый черновик');
-    expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Потенциально безопасно: 1/)).not.toBeInTheDocument();
     fireEvent.change(name, { target: { value: 'Keep unsaved edits' } });
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
     expect(await screen.findByText('Error: Save unavailable')).toBeInTheDocument();
@@ -316,11 +325,80 @@ describe('persisted base template review', () => {
   it('revalidates when returning to the page and hides conclusions after object changes', async () => {
     const { source, mount } = setup(withReview(draft()));
     mount();
-    expect(await screen.findByText('Потенциально безопасное автоматическое обновление')).toBeInTheDocument();
+    expect(await screen.findByText(/Потенциально безопасно: 1/)).toBeInTheDocument();
     const stale = withReview(draft()); stale.review!.current = false;
     source.loadDraft.mockResolvedValueOnce(stale);
     fireEvent.focus(window);
     await waitFor(() => expect(source.loadDraft).toHaveBeenCalledTimes(2));
-    await waitFor(() => expect(screen.queryByText('Потенциально безопасное автоматическое обновление')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(/Потенциально безопасно: 1/)).not.toBeInTheDocument());
   });
+});
+
+it('shows zero checked objects without claiming a successful update', async () => {
+  const doc = withReview(draft());
+  doc.review!.result.objects = [];
+  setup(doc).mount();
+  expect(await screen.findByText(/Проверено объектов: 0/)).toBeVisible();
+  const dialog = within(openInspector());
+  expect(dialog.getByText('Физических объектов этого шаблона пока нет.')).toBeVisible();
+  expect(dialog.queryByText(/Результаты обновления объектов/)).not.toBeInTheDocument();
+});
+
+it('describes exact logical changes and keeps technical keys behind disclosure', async () => {
+  const doc = withReview(draft());
+  const logical = (bay_key: string, compatibility: string) => ({
+    bay_key, compatibility, panel_key: 'panel', kind: 'LOGICAL' as const,
+    display_name: 'Место', x: null, y: null, width: null, height: null,
+  });
+  doc.definition.bays = [logical('first', 'OCP3'), logical('second', 'OCP3'), logical('lower', 'ocp3'), logical('spaced', ' OCP3 ')];
+  const key = '26b90ecf-f4e2-45e2-8229-f1812d09183b';
+  doc.review!.result.changes = [
+    ...[key, 'fourth', 'fifth'].map(bay => ({ section: 'bays', key: bay, operation: 'removed', before: logical(bay, 'OCP3') })),
+    ...doc.definition.bays.slice(2).map(bay => ({ section: 'bays', key: bay.bay_key, operation: 'added', after: bay })),
+    { section: 'slots', key: 'endpoint', operation: 'changed' },
+    { section: 'slots', key: 'unresolved', operation: 'removed' },
+    { section: 'internal_links', key: ['endpoint', 'unresolved'], operation: 'removed' },
+  ];
+  const safe = doc.review!.result.objects[0];
+  safe.display_name = 'Safe server';
+  doc.review!.result.objects.push({
+    ...safe, physical_object_id: 'blocked', display_name: 'Blocked server', classification: 'requires_intervention',
+    reasons: [{ code: 'INSUFFICIENT_COMPATIBLE_CAPACITY', compatibility: 'OCP3', installation_id: key }],
+  });
+  const { source, mount } = setup(doc);
+  mount();
+  const status = await screen.findByText(/Проверено объектов: 2/);
+  expect(status).toHaveAttribute('data-tone', 'warning');
+  expect(status).toHaveTextContent('Потенциально безопасно: 1 · Требуют вмешательства: 1');
+  const dialog = within(openInspector());
+  const group = dialog.getByText('Модульные места · Front / "OCP3" · 5 → 2 (−3)');
+  expect(dialog.getByText('Модульные места · Front / "ocp3" · 0 → 1 (+1)')).toBeVisible();
+  expect(dialog.getByText('Модульные места · Front / " OCP3 " · 0 → 1 (+1)')).toBeVisible();
+  expect(dialog.getByText('Изменено · Встроенные конечные точки · MGMT')).toBeVisible();
+  expect(dialog.getByText('Удалено · Встроенные конечные точки')).toBeVisible();
+  expect(dialog.getByText(/MGMT ↔ Конечная точка без доступного имени/)).toBeVisible();
+  expect(dialog.getByRole('link', { name: 'Blocked server' })).toBeVisible();
+  expect(dialog.getByText(/Недостаточно совместимых отсеков.*OCP3/)).toBeVisible();
+  expect(dialog.getByText(/остаётся на прежней ревизии/)).toBeVisible();
+  expect(dialog.queryByText('Safe server')).not.toBeInTheDocument();
+  fireEvent.click(dialog.getByText('Потенциально безопасное автоматическое обновление · 1'));
+  expect(await dialog.findByRole('link', { name: 'Safe server' })).toBeVisible();
+  expect(dialog.queryByText(new RegExp(key))).not.toBeInTheDocument();
+  fireEvent.click(within(group).getByText('Технические сведения'));
+  expect(await dialog.findByText(new RegExp(key))).toBeVisible();
+  expect(source.loadBaseTemplateRevision).not.toHaveBeenCalled();
+});
+
+it('shows a pending check and keeps candidate publication disabled until it resolves', async () => {
+  const { source, mount } = setup();
+  let resolve!: (doc: BaseTemplateDraftDocument) => void;
+  source.checkDraft.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  mount();
+  const check = await screen.findByRole('button', { name: 'Проверить изменения' });
+  fireEvent.click(check);
+  expect(screen.getByText('Выполняется проверка изменений…')).toBeVisible();
+  expect(check).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeDisabled();
+  await act(async () => { resolve(withReview(draft())); });
+  expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled();
 });

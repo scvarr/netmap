@@ -112,7 +112,13 @@ export interface BaseTemplateDataSource {
   createPhysicalObject?(baseTemplateId: string, request: { display_name: string; location_id?: string }): Promise<BaseTemplateInstantiationDocument>;
 }
 
-export interface TemplateStructuralChange { section: string; key: string | string[]; operation: string }
+export interface TemplateStructuralChange {
+  section: string;
+  key: string | string[];
+  operation: string;
+  before?: unknown;
+  after?: unknown;
+}
 export interface TemplateImpactReason { code: string; key?: string | string[]; endpoint_name?: string; dependencies?: string[]; compatibility?: string; installation_id?: string; connection_ids?: string[] }
 export interface BaseTemplateReviewDocument {
   candidate_id: string; draft_generation: number; definition: CreateBaseTemplateRequest; current: boolean; created_at: string;
