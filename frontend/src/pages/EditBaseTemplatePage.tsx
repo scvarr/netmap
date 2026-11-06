@@ -112,7 +112,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
           {t(reviewStatus === 'review.stale' ? 'changeInspector.stale' : reviewStatus)}{current && !checking && <> · {t('changeInspector.checked', { count: review.result.objects.length })} · {t('changeInspector.safe', { count: safe })} · {t('changeInspector.blocked', { count: intervention })}</>}
         </div>
         {reconciliation && <p role="status">{t('reconciliation.results')} · {reconciliationCounts(reconciliation, t)}</p>}
-        <button ref={inspectorTrigger} type="button" onClick={() => setInspectorOpen(true)}>{t('changeInspector.open')}</button>
+        <button className="secondary-action" ref={inspectorTrigger} type="button" onClick={() => setInspectorOpen(true)}>{t('changeInspector.open')}</button>
       </div>
     </section>}
     {document && inspectorOpen && <BaseTemplateChangeInspector document={document} reviewStatus={reviewStatus}

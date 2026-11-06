@@ -184,7 +184,7 @@ export function BaseTemplateChangeInspector({ document, reviewStatus, showPrevie
     onCancel={event => { event.preventDefault(); dialog.current?.close(); onClose(); }}>
     <header className="base-template-inspector__header">
       <h2 id={title}>{t('changeInspector.title')}</h2>
-      <button ref={close} type="button" onClick={() => { dialog.current?.close(); onClose(); }}>{t('action.close')}</button>
+      <button className="secondary-action" ref={close} type="button" onClick={() => { dialog.current?.close(); onClose(); }}>{t('action.close')}</button>
     </header>
     <div className="base-template-inspector__body">
       <p>{review?.definition.name ?? document.definition.name}</p>
