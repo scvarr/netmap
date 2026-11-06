@@ -812,14 +812,13 @@ final assignment, existing F2b interaction and workspace v5 import. Exact
 compatibility, capacity=1, locking, expected-state 409, canonical materialization,
 MODULE_LAYOUT_PANEL_CONFLICT and INSUFFICIENT_COMPATIBLE_CAPACITY remain in force.
 Frontend enables installation without drawing an empty LOGICAL rectangle.
-Count-based authoring — OPEN.
 This core supersedes the earlier representation/migration OPEN entries only;
 external inspection and HV-01 acceptance remain outstanding.
 
 
 ## HV-01-UX-02C — Logical Module Installation
 
-**IMPLEMENTED / EXTERNAL REVIEW PENDING. Count-based authoring — OPEN.
+**IMPLEMENTED / EXTERNAL REVIEW PENDING.
 Phase C — PAUSED. HV-01 — NOT PASSED.**
 
 Initial layout uses all LOGICAL places of the pinned base revision on the owning
@@ -848,3 +847,18 @@ markers. Only the obsolete LOGICAL installation import prohibition is removed.
 Saved layout, bay_key, pinned revisions, installation IDs, endpoint mappings,
 canonical IDs, connections, metadata and frozen review provenance round-trip
 unchanged. No snapshots or applied Alembic revisions are rewritten.
+
+## HV-01-UX-02D — Logical Places Count Authoring
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING. Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+BaseTemplate Editor derives LOGICAL groups from individual bays by exact
+(panel_key, compatibility). Each new bay has a unique opaque bay_key and a
+display_name. Growth appends missing bays. Reduction removes the highest
+bay_keys in lexicographic order, preserving every surviving bay record.
+Zero removes the group. PLACED bays retain their separate geometry editor.
+
+Count operations write individual bays through the existing draft, review,
+and publication flow. Objects stay pinned until explicit reconciliation.
+D2 retains its assignment, exact compatibility, capacity and final layout
+panel checks. Unsafe objects keep their pinned revision and require intervention.

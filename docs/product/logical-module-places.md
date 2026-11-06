@@ -2,11 +2,11 @@
 
 ## Статус и границы
 
-**HV-01-UX-02B — IMPLEMENTED / EXTERNAL REVIEW PENDING. HV-01-UX-02C — IMPLEMENTED / EXTERNAL REVIEW PENDING. Count-based authoring — OPEN.
+**HV-01-UX-02B — IMPLEMENTED / EXTERNAL REVIEW PENDING. HV-01-UX-02C — IMPLEMENTED / EXTERNAL REVIEW PENDING.
 Phase C — PAUSED. HV-01 — NOT PASSED.**
 
 Основание: main `34e9e392048c94fbcbb345d22907914d63bd8d35`.
-Целевая count-based семантика остаётся OPEN; реализованная граница runtime описана в UX-02B/UX-02C ниже.
+Редактирование количества реализовано в UX-02D. Границы runtime описаны в UX-02B/UX-02C ниже.
 Действующие IMPLEMENTED F1/F2a/F2b, D2 и E1/E2/E3 остаются описаны в
 [09.6](../architecture/blueprints/09-06-hardware-template-module-contract.md).
 Документ заменяет обязательность графического создания каждого ModuleBay в
@@ -46,8 +46,8 @@ PhysicalObject показывает свободную, занятую и общ
 ## Обязательные инварианты реализации
 
 - Увеличение количества добавляет новые ключи, сохраняя существующие. Уменьшение
-  не перенумеровывает и не пересоздаёт оставшиеся места. Конкретный выбор
-  удаляемых ключей требует отдельного решения; изменение числа не разрешает
+  не перенумеровывает и не пересоздаёт оставшиеся места. Сначала удаляются
+  наибольшие bay_key в лексикографическом порядке. Изменение числа не разрешает
   удалить занятую установку. Смена панели/совместимости проверяется как
   структурное изменение, а не безусловное редактирование агрегированного числа.
 - Обновление base сохраняет ModuleInstallation.id, pinned module revision,
@@ -127,8 +127,8 @@ IDs, pinned revisions, индивидуальные ключи мест, install
 
 Риски: потеря ключей при count-based редактировании, потеря пустых rectangles,
 пересчёт пользовательского layout, неявный latest revision, обход panel conflict
-и неоднозначный archive profile. Миграция и initial placement реализованы в UX-02B/UX-02C; count-based authoring остаётся OPEN. Docs-only результат не подтверждает миграционную совместимость и не
-заменяет внешнее inspection итогового diff или ручную HV-01 приёмку.
+и неоднозначный archive profile. Миграция и initial placement реализованы в
+UX-02B/UX-02C. Для UX-02D требуется внешняя проверка итогового diff.
 
 ## HV-01-UX-02B — Logical Module Places Core
 
@@ -152,14 +152,13 @@ final assignment, existing F2b interaction and workspace v5 import. Exact
 compatibility, capacity=1, locking, expected-state 409, canonical materialization,
 MODULE_LAYOUT_PANEL_CONFLICT and INSUFFICIENT_COMPATIBLE_CAPACITY remain in force.
 Frontend enables installation without drawing an empty LOGICAL rectangle.
-Count-based authoring — OPEN.
 This core supersedes the earlier representation/migration OPEN entries only;
 external inspection and HV-01 acceptance remain outstanding.
 
 
 ## HV-01-UX-02C — Logical Module Installation
 
-**IMPLEMENTED / EXTERNAL REVIEW PENDING. Count-based authoring — OPEN.
+**IMPLEMENTED / EXTERNAL REVIEW PENDING.
 Phase C — PAUSED. HV-01 — NOT PASSED.**
 
 Initial layout uses all LOGICAL places of the pinned base revision on the owning
@@ -188,3 +187,21 @@ markers. Only the obsolete LOGICAL installation import prohibition is removed.
 Saved layout, bay_key, pinned revisions, installation IDs, endpoint mappings,
 canonical IDs, connections, metadata and frozen review provenance round-trip
 unchanged. No snapshots or applied Alembic revisions are rewritten.
+
+## HV-01-UX-02D — Logical Places Count Authoring
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING. Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+В редакторе BaseTemplate откройте «Модульные места», выберите панель,
+введите совместимость и положительное целое количество, затем нажмите
+«Создать группу». Для существующей группы доступны «Применить количество»
+и «Удалить группу». Регистр и пробелы различают группы даже на одной панели.
+
+При увеличении создаются только недостающие места с новыми opaque bay_key и
+именами. При уменьшении сначала удаляются наибольшие bay_key в
+лексикографическом порядке. Ноль удаляет группу. Сохранившиеся места
+сохраняют все поля. Отсеки PLACED редактируются на полотне отдельно.
+
+Сохраните черновик, проверьте изменения и опубликуйте ревизию. После уменьшения
+проверьте, можно ли отдельно применить ревизию к объектам. При отказе D2
+объект остаётся на прежней pinned revision.

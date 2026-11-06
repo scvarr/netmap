@@ -968,7 +968,6 @@ final assignment, existing F2b interaction and workspace v5 import. Exact
 compatibility, capacity=1, locking, expected-state 409, canonical materialization,
 MODULE_LAYOUT_PANEL_CONFLICT and INSUFFICIENT_COMPATIBLE_CAPACITY remain in force.
 Frontend enables installation without drawing an empty LOGICAL rectangle.
-Count-based authoring — OPEN.
 This core supersedes the earlier representation/migration OPEN entries only;
 external inspection and HV-01 acceptance remain outstanding.
 
@@ -986,7 +985,7 @@ Status remains IMPLEMENTED / EXTERNAL REVIEW PENDING; Phase C PAUSED, HV-01 NOT 
 
 ## HV-01-UX-02C — Logical Module Installation
 
-**IMPLEMENTED / EXTERNAL REVIEW PENDING. Count-based authoring — OPEN.
+**IMPLEMENTED / EXTERNAL REVIEW PENDING.
 Phase C — PAUSED. HV-01 — NOT PASSED.**
 
 Initial layout uses all LOGICAL places of the pinned base revision on the owning
@@ -1023,3 +1022,16 @@ UX-02C validation: Docker/PostgreSQL targeted backend 65 passed
 were not run. GitNexus detect_changes reports CRITICAL reach through shared
 configuration reads, installation, D2 and archive validation, without partial or
 truncated flags. External final diff inspection and manual HV-01 remain pending.
+
+## HV-01-UX-02D — Logical Places Count Authoring
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING. Phase C — PAUSED. HV-01 — NOT PASSED.**
+
+BaseTemplate count authoring is available for exact LOGICAL groups per panel
+and compatibility string. Increasing a count adds individual bays and
+decreasing it removes the highest bay_keys first. Draft save, review and
+publication preserve the separation from explicit object reconciliation.
+The acceptance check covers retained bay identities, PLACED editing, safe D2
+relocation with preserved installation identity, endpoints and layout, and
+insufficient capacity with the object still pinned to its prior revision.
+External diff inspection and manual acceptance remain pending.

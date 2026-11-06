@@ -1,5 +1,6 @@
 import { EndpointLinkWorkspace } from '../components/EndpointLinkWorkspace';
 import { ModuleBaysEditor } from '../components/ModuleBaysEditor';
+import { LogicalModulePlacesEditor } from '../components/LogicalModulePlacesEditor';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
@@ -217,6 +218,8 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         <section className="blueprint-composer__section blueprint-composer__links"><h2>{t('blueprint.composition.links')}</h2>
           <button ref={linksEntry} type="button" className="secondary-action" onClick={() => { setMenu(undefined); setDistributionAxis(undefined); setWorkspaceSelection(undefined); setLinksOpen(true); }}>{t('endpointWorkspace.title')} · {editor.individualLinks.length}</button>
         </section>
+        <LogicalModulePlacesEditor panels={editor.panels} activePanelKey={panelKey} bays={editor.bays ?? []}
+          onChange={bays => setEditor(old => ({ ...old, bays }))} />
         {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
         <button type="button" className="primary-action" disabled={saveDisabled} onClick={() => void save()}>{saveLabel}</button>
       </section>

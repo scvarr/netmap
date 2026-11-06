@@ -69,6 +69,38 @@ def test_d2_logical_assignment_preserves_installation():
     assert [{**i, 'bay_key': ''} for i in after['authoring']['ModuleInstallation']] == [{**i, 'bay_key': ''} for i in before['authoring']['ModuleInstallation']]
 
 
+@pytest.mark.parametrize('remaining', [0, 1])
+def test_logical_count_reduction_reconciles_only_when_capacity_remains(remaining):
+    payload = base_payload()
+    bay = logical(payload['bays'][0])
+    payload['bays'] = [{**bay, 'bay_key': key} for key in ('a', 'z')]
+    base, _ = create_base(payload)
+    obj = create_object(base)['physical_object_ref']['entity_id']
+    module = create_module()
+    installed = install(obj, module['template_id'], 'z')
+    assert installed.status_code == 201, installed.text
+    configuration = f'/v1/topology/physical-objects/{obj}/configuration'
+    pinned = client.get(configuration).json()
+    before = package()
+    target = revision(base, lambda d: d.update(bays=[b for b in d['bays'] if remaining and b['bay_key'] == 'a']))
+    assert client.get(configuration).json() == pinned
+    assert package()['canonical'] == before['canonical']
+
+    result = reconcile(base)[obj]
+    after = package()
+    assert after['canonical'] == before['canonical']
+    original = before['authoring']['ModuleInstallation'][0]
+    if remaining:
+        assert result['status'] == 'updated'
+        assert client.get(configuration).json()['base_revision_id'] == target
+        assert after['authoring']['ModuleInstallation'] == [{**original, 'bay_key': 'a'}]
+    else:
+        assert result['status'] == 'requires_intervention'
+        assert any(reason['code'] == 'INSUFFICIENT_COMPATIBLE_CAPACITY' for reason in result['reasons'])
+        assert client.get(configuration).json() == pinned
+        assert after['authoring']['ModuleInstallation'] == [original]
+
+
 def test_forward_migration_preserves_existing_rectangles():
     import importlib.util
     import sqlalchemy as sa

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
@@ -47,6 +47,72 @@ function setup(document = draft()) {
   const mount = () => render(<I18nProvider><MemoryRouter initialEntries={['/library/base-templates/base/edit']}><Routes><Route path="/library/base-templates/:templateId/edit" element={<EditBaseTemplatePage dataSource={source as BaseTemplateDataSource} />} /></Routes></MemoryRouter></I18nProvider>);
   return { source, mount };
 }
+
+it('authors exact logical groups and keeps their individual bays through draft review', async () => {
+  const doc = draft();
+  const placed = doc.definition.bays![0];
+  doc.definition.panels.push({ ...doc.definition.panels[0], panel_key: 'rear', panel_number: 2, display_name: 'Rear', x: 160 });
+  const { mount, source } = setup(doc);
+  const view = mount();
+  fireEvent.click(await screen.findByText('Модульные места · 0'));
+  const creation = within(screen.getByRole('group', { name: 'Создать группу' }));
+  const create = (compatibility: string, count: string, panel = 'panel') => {
+    fireEvent.change(creation.getByLabelText('Панель'), { target: { value: panel } });
+    fireEvent.change(creation.getByLabelText('Совместимость'), { target: { value: compatibility } });
+    fireEvent.change(creation.getByLabelText('Количество мест'), { target: { value: count } });
+    fireEvent.click(creation.getByRole('button', { name: 'Создать группу' }));
+  };
+  const save = async (calls: number): Promise<NonNullable<BaseTemplateDraftDocument['definition']['bays']>> => {
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
+    await waitFor(() => expect(source.saveDraft).toHaveBeenCalledTimes(calls));
+    return (await source.saveDraft.mock.results[calls - 1].value).definition.bays!;
+  };
+  create('OCP3', '2');
+  create('ocp3', '1');
+  create(' OCP3 ', '1');
+  create('OCP3', '1', 'rear');
+  create('OCP3', '3');
+  expect(screen.getByRole('alert')).toHaveTextContent('уже существует');
+  create('  ', '1');
+  expect(screen.getByRole('alert')).toHaveTextContent('непустую');
+  create('new', '0');
+  expect(screen.getByRole('alert')).toHaveTextContent('от 1');
+  const first = await save(1);
+  expect(first.map(bay => [bay.panel_key, bay.compatibility])).toEqual([
+    ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'ocp3'], ['panel', ' OCP3 '], ['rear', 'OCP3'],
+  ]);
+  expect(first.slice(1).every(bay => bay.kind === 'LOGICAL' && [bay.x, bay.y, bay.width, bay.height].every(value => value === null))).toBe(true);
+  expect(view.container.querySelectorAll('[data-bay-key]')).toHaveLength(1);
+  view.unmount();
+  mount();
+  fireEvent.click(await screen.findByText('Модульные места · 4'));
+  const group = within(screen.getByRole('group', { name: '1 · Front / "OCP3"' }));
+  const count = () => group.getByLabelText('Количество мест');
+  const apply = (value: string) => {
+    fireEvent.change(count(), { target: { value } });
+    fireEvent.click(group.getByRole('button', { name: 'Применить количество' }));
+  };
+  expect(count()).toHaveValue('2');
+  for (const invalid of ['', '-1', '1.5']) {
+    apply(invalid);
+    expect(screen.getByRole('alert')).toHaveTextContent('от 0');
+  }
+  expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeEnabled();
+  apply('3');
+  const grown = await save(2);
+  expect(grown.slice(0, first.length)).toEqual(first);
+  expect(new Set(grown.map(bay => bay.bay_key)).size).toBe(grown.length);
+  const smallest = [grown[1], grown[2], grown[6]].sort((a, b) => a.bay_key < b.bay_key ? -1 : 1)[0];
+  apply('1');
+  expect(await save(3)).toEqual(grown.filter(bay => ![grown[1], grown[2], grown[6]].includes(bay) || bay === smallest));
+  fireEvent.click(group.getByRole('button', { name: 'Удалить группу' }));
+  expect(await save(4)).toEqual([placed, ...first.slice(3)]);
+  fireEvent.click(screen.getByRole('button', { name: 'Проверить изменения' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Опубликовать' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Опубликовать' }));
+  await waitFor(() => expect(source.publishCandidate).toHaveBeenCalledWith('base', 'candidate'));
+  expect(source.reconcileObjects).not.toHaveBeenCalled();
+});
 
 describe('persisted base template review', () => {
   const outdated = (): BaseTemplateDraftDocument => ({ ...draft(), publication_state: {
