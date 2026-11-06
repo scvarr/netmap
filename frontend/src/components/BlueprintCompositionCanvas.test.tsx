@@ -151,7 +151,7 @@ describe('Blueprint endpoint screen-space markers', () => {
     } as DOMRect);
     const { container } = render(<I18nProvider><BlueprintCompositionCanvas
       body={{ width: ratio, height: 1, fillColor: '#123' }} panels={[{ panel_key: "panel-1", panel_number: 1, display_name: "Панель 1", x: 0, y: 0, width: ratio, height: 1 }]} activePanelKey="panel-1" onActivatePanel={vi.fn()}
-      slots={[slot(1), slot(2, .75, .5)]} links={[]} selectedKeys={new Set(['slot-2'])}
+      slots={[slot(1), { ...slot(2, .75, .5), kind: 'CONNECTION_POINT' }]} links={[]} selectedKeys={new Set(['slot-2'])}
       onSelect={vi.fn()} onMarquee={vi.fn()} onTranslate={vi.fn()} onContextMenu={vi.fn()}
     /></I18nProvider>);
     const canvas = container.querySelector('svg')!;
@@ -161,11 +161,15 @@ describe('Blueprint endpoint screen-space markers', () => {
     const regular = container.querySelector('[data-slot-key="slot-1"] [data-endpoint-marker]')!;
     const selected = container.querySelector('[data-slot-key="slot-2"] [data-endpoint-marker]')!;
     const hit = container.querySelector('[data-slot-key="slot-1"] [data-endpoint-hit-target]')!;
-    expect(Number(regular.getAttribute('r')) * scale * 2).toBeCloseTo(10);
+    expect(regular.tagName).toBe('rect');
+    expect(regular).toHaveAttribute('fill', '#60d4c9');
+    expect(selected.tagName).toBe('circle');
+    expect(selected).toHaveAttribute('fill', '#f2d081');
+    expect(Number(regular.getAttribute('width')) * scale * Math.SQRT2).toBeCloseTo(10);
     expect(Number(selected.getAttribute('r')) * scale * 2).toBeCloseTo(12);
     expect(Number(hit.getAttribute('r')) * scale * 2).toBeCloseTo(22);
-    expect(regular.getAttribute('cx')).toBe('500');
-    expect(regular.getAttribute('cy')).toBe(String(viewHeight / 2));
+    expect(Number(regular.getAttribute('x')) + Number(regular.getAttribute('width')) / 2).toBeCloseTo(500);
+    expect(Number(regular.getAttribute('y')) + Number(regular.getAttribute('height')) / 2).toBeCloseTo(viewHeight / 2);
   });
 
   it('uses the same marker size for a 52 endpoint wide body', () => {
@@ -179,8 +183,8 @@ describe('Blueprint endpoint screen-space markers', () => {
     /></I18nProvider>);
     const markers = container.querySelectorAll('[data-endpoint-marker]');
     expect(markers).toHaveLength(52);
-    expect(new Set([...markers].map((marker) => marker.getAttribute('r'))).size).toBe(1);
-    expect(Number(markers[0].getAttribute('r')) * .7 * 2).toBeCloseTo(10);
+    expect(new Set([...markers].map((marker) => marker.getAttribute('width'))).size).toBe(1);
+    expect(Number(markers[0].getAttribute('width')) * .7 * Math.SQRT2).toBeCloseTo(10);
   });
 });
 
@@ -217,10 +221,10 @@ it('C-COR-02 keeps an outlying endpoint inside the selectable SVG viewport', () 
   const svg = container.querySelector('svg')!;
   const marker = container.querySelector('[data-endpoint-marker]')!;
   const height = Number(svg.getAttribute('viewBox')!.split(' ')[3]);
-  expect(Number(marker.getAttribute('cx'))).toBeGreaterThan(0);
-  expect(Number(marker.getAttribute('cx'))).toBeLessThan(1000);
-  expect(Number(marker.getAttribute('cy'))).toBeGreaterThan(0);
-  expect(Number(marker.getAttribute('cy'))).toBeLessThan(height);
+  expect(Number(marker.getAttribute('x')) + Number(marker.getAttribute('width')) / 2).toBeGreaterThan(0);
+  expect(Number(marker.getAttribute('x')) + Number(marker.getAttribute('width')) / 2).toBeLessThan(1000);
+  expect(Number(marker.getAttribute('y')) + Number(marker.getAttribute('height')) / 2).toBeGreaterThan(0);
+  expect(Number(marker.getAttribute('y')) + Number(marker.getAttribute('height')) / 2).toBeLessThan(height);
   fireEvent.pointerDown(container.querySelector('[data-slot-key]')!, { button: 0, pointerId: 1 });
   expect(onSelect).toHaveBeenCalledWith('slot-1', false);
 });

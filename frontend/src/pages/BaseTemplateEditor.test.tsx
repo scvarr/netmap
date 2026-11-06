@@ -570,12 +570,12 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.pointerUp(canvas);
     expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(2);
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
-    const before = nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    const before = nodes.map((node) => Number(node.querySelector('[data-endpoint-hit-target]')!.getAttribute('cx')));
     fireEvent.pointerDown(nodes[0], { clientX: 25, clientY: 9.375 });
     expect(document.querySelector('.blueprint-composition-canvas__marquee')).toBeNull();
     fireEvent.pointerMove(canvas, { clientX: 125, clientY: 9.375 });
     fireEvent.pointerUp(canvas);
-    const after = nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    const after = nodes.map((node) => Number(node.querySelector('[data-endpoint-hit-target]')!.getAttribute('cx')));
     expect(after[0] - before[0]).toBeCloseTo(100);
     expect(after[1] - before[1]).toBeCloseTo(100);
     expect(after[2]).toBeCloseTo(before[2]);
@@ -601,12 +601,12 @@ describe('minimal direct endpoint editor', () => {
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     fireEvent.pointerDown(nodes[0], { clientX: 25, clientY: 9.375 });
     fireEvent.pointerUp(canvas);
-    const before = nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    const before = nodes.map((node) => Number(node.querySelector('[data-endpoint-hit-target]')!.getAttribute('cx')));
     fireEvent.pointerDown(nodes[1], { clientX: 75, clientY: 9.375 });
     expect(nodes.map((node) => node.getAttribute('data-selected'))).toEqual(['false', 'true']);
     fireEvent.pointerMove(canvas, { clientX: 175, clientY: 9.375 });
     fireEvent.pointerUp(canvas);
-    const after = nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    const after = nodes.map((node) => Number(node.querySelector('[data-endpoint-hit-target]')!.getAttribute('cx')));
     expect(after).toEqual([before[0], before[1] + 100]);
   });
 
@@ -630,15 +630,15 @@ describe('minimal direct endpoint editor', () => {
     expect(screen.queryByRole('menu')).toBeNull();
     fireEvent.pointerDown(nodes[0], { ctrlKey: true });
     fireEvent.contextMenu(nodes[0]);
-    const before = nodes.slice(0, 2).map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    const before = nodes.slice(0, 2).map((node) => Number(node.querySelector('[data-endpoint-hit-target]')!.getAttribute('cx')));
     await userEvent.click(screen.getByRole('menuitem', { name: 'По центру горизонтали' }));
-    const after = nodes.slice(0, 2).map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    const after = nodes.slice(0, 2).map((node) => Number(node.querySelector('[data-endpoint-hit-target]')!.getAttribute('cx')));
     expect((after[0] + after[1]) / 2).toBeCloseTo(500);
     expect(after[1] - after[0]).toBeCloseTo(before[1] - before[0]);
     expect(screen.queryByRole('menu')).toBeNull();
     fireEvent.contextMenu(nodes[0]);
     await userEvent.click(screen.getByRole('menuitem', { name: 'В одну вертикальную линию' }));
-    expect(Number(nodes[0].querySelector('[data-endpoint-marker]')!.getAttribute('cx'))).toBeCloseTo(Number(nodes[1].querySelector('[data-endpoint-marker]')!.getAttribute('cx')));
+    expect(Number(nodes[0].querySelector('[data-endpoint-hit-target]')!.getAttribute('cx'))).toBeCloseTo(Number(nodes[1].querySelector('[data-endpoint-hit-target]')!.getAttribute('cx')));
   });
 
   it('clears selection on empty click and Escape, and Delete respects form focus', async () => {
@@ -702,7 +702,7 @@ describe('minimal direct endpoint editor', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     const centers = () => nodes.map((node) => {
-      const marker = node.querySelector('[data-endpoint-marker]')!;
+      const marker = node.querySelector('[data-endpoint-hit-target]')!;
       return `${marker.getAttribute('cx')},${marker.getAttribute('cy')}`;
     });
     fireEvent.contextMenu(nodes[0]);
@@ -723,7 +723,7 @@ describe('minimal direct endpoint editor', () => {
     Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 850, height: 550 }) });
     fireEvent.contextMenu(document.querySelector('[data-slot-key]')!);
     await userEvent.click(screen.getByRole('menuitem', { name: 'В два ряда' }));
-    const ys = [...new Set([...document.querySelectorAll('[data-endpoint-marker]')].map((marker) => Number(marker.getAttribute('cy'))))].sort((a, b) => a - b);
+    const ys = [...new Set([...document.querySelectorAll('[data-endpoint-hit-target]')].map((marker) => Number(marker.getAttribute('cy'))))].sort((a, b) => a - b);
     expect(ys).toHaveLength(2);
     expect((ys[1] - ys[0]) * .85).toBeGreaterThanOrEqual(18 - 1e-9);
   });
@@ -739,7 +739,7 @@ describe('minimal direct endpoint editor', () => {
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
     Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
-    const values = (axis: 'cx' | 'cy') => nodes.map((node) => Number(node.querySelector('[data-endpoint-marker]')!.getAttribute(axis)));
+    const values = (axis: 'cx' | 'cy') => nodes.map((node) => Number(node.querySelector('[data-endpoint-hit-target]')!.getAttribute(axis)));
     fireEvent.pointerDown(nodes[0]);
     fireEvent.pointerUp(canvas);
     for (const node of nodes.slice(1)) fireEvent.pointerDown(node, { ctrlKey: true });

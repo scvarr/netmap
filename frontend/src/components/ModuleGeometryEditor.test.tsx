@@ -6,7 +6,7 @@ import { ModuleGeometryEditor } from './ModuleGeometryEditor';
 import type { ModuleGeometry } from '../topology/hardwareModules';
 function Harness() {
  const [g,set] = useState<ModuleGeometry>({width:240,height:80,fill_color:'#64748b',endpoints:{a:{x:.1,y:.2},b:{x:.4,y:.6},c:{x:.9,y:.8}}});
- return <I18nProvider><ModuleGeometryEditor geometry={g} endpoints={['a','b','c'].map(key => ({key,display_name:key,kind:'NETWORK_PORT'}))} onChange={set}/><output data-testid="geometry">{JSON.stringify(g)}</output></I18nProvider>;
+ return <I18nProvider><ModuleGeometryEditor geometry={g} endpoints={['a','b','c'].map(key => ({key,display_name:key,kind:key === 'b' ? 'CONNECTION_POINT' : 'NETWORK_PORT'}))} onChange={set}/><output data-testid="geometry">{JSON.stringify(g)}</output></I18nProvider>;
 }
 const value = () => JSON.parse(screen.getByTestId('geometry').textContent!);
 describe('module geometry', () => {
@@ -25,7 +25,7 @@ describe('module geometry', () => {
  Object.defineProperty(globalThis,'PointerEvent',{configurable:true,value:MouseEvent});
  SVGSVGElement.prototype.setPointerCapture=()=>{};
  expect(fireEvent.pointerDown(screen.getByRole('button',{name:'a'}))).toBe(false);
- expect(screen.getByRole('button',{name:'a'}).querySelector('circle')).toHaveAttribute('fill','white'); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
+ expect(screen.getByRole('button',{name:'a'}).querySelector('rect[data-endpoint-marker]')).toHaveAttribute('fill','#60d4c9'); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
  fireEvent.pointerDown(screen.getByRole('button',{name:'b'}),{shiftKey:true}); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
  fireEvent.pointerDown(screen.getByRole('button',{name:'c'}),{shiftKey:true}); fireEvent.pointerUp(screen.getByLabelText('Геометрия модуля',{selector:'svg'}));
  fireEvent.click(screen.getByRole('button',{name:'Распределить по горизонтали'}));
@@ -53,7 +53,7 @@ describe('module geometry', () => {
 
 it.each([[5,20],[20,5],[10,1],[1,1]])('fits %s × %s with screen-sized glyphs and unchanged model', (width,height) => {
  const geometry = {width,height,fill_color:'#64748b',endpoints:{a:{x:0,y:0},b:{x:1,y:1}}};
- render(<I18nProvider><ModuleGeometryEditor geometry={geometry} endpoints={['a','b'].map(key=>({key,display_name:key,kind:'NETWORK_PORT'}))}/></I18nProvider>);
+ render(<I18nProvider><ModuleGeometryEditor geometry={geometry} endpoints={['a','b'].map(key=>({key,display_name:key,kind:key === 'b' ? 'CONNECTION_POINT' : 'NETWORK_PORT'}))}/></I18nProvider>);
  const svg=screen.getByLabelText('Геометрия модуля',{selector:'svg'});
  const [x,y,w,h]=svg.getAttribute('viewBox')!.split(' ').map(Number);
  expect(x).toBeLessThan(0); expect(y).toBeLessThan(0);
@@ -62,10 +62,13 @@ it.each([[5,20],[20,5],[10,1],[1,1]])('fits %s × %s with screen-sized glyphs an
  expect(w/h).toBeCloseTo(640/360);
  expect(width*scale).toBeLessThanOrEqual(640*.72+.001);
  expect(height*scale).toBeLessThanOrEqual(360*.72+.001);
- for(const circle of svg.querySelectorAll('circle')) {
-   expect(Number(circle.getAttribute('r'))*scale).toBeCloseTo(5);
-   expect(circle.getAttribute('vector-effect')).toBe('non-scaling-stroke');
- }
+ const square = svg.querySelector('rect[data-endpoint-marker]')!;
+ const circle = svg.querySelector('circle[data-endpoint-marker]')!;
+ expect(Number(square.getAttribute('width')) * scale * Math.SQRT2).toBeCloseTo(10);
+ expect(Number(circle.getAttribute('r')) * scale).toBeCloseTo(5);
+ expect(circle).toHaveAttribute('fill', '#f2d081');
+ expect(square).toHaveAttribute('vector-effect', 'non-scaling-stroke');
+ expect(circle).toHaveAttribute('vector-effect', 'non-scaling-stroke');
  for(const text of svg.querySelectorAll('text')) expect(Number(text.getAttribute('font-size'))*scale).toBeCloseTo(12);
  expect(geometry.endpoints).toEqual({a:{x:0,y:0},b:{x:1,y:1}});
 });

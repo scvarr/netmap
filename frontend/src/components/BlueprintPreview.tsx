@@ -1,3 +1,4 @@
+import { EndpointMarker } from './EndpointMarker';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import type { BlueprintBody, BaseInternalLink, BlueprintSlot, PresentationPanel } from '../topology/baseTemplateTypes';
@@ -10,12 +11,11 @@ interface Props {
   internalLinks?: BaseInternalLink[];
   bays?: ModuleBay[];
   label: string;
-  variant?: 'base' | 'module';
 }
 
 const padding = 20;
 
-export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays = [], label, variant = 'base' }: Props) {
+export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays = [], label }: Props) {
   const { t } = useI18n();
   const container = useRef<HTMLDivElement>(null);
   const viewport = useRef<HTMLDivElement>(null);
@@ -56,18 +56,24 @@ export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays
   const top = Math.min(...rectangles.map(rect => rect.y), ...ports.map(port => port.y));
   const width = Math.max(...rectangles.map(rect => rect.x + rect.width), ...ports.map(port => port.x)) - left;
   const height = Math.max(...rectangles.map(rect => rect.y + rect.height), ...ports.map(port => port.y)) - top;
-  const scale = zoom * Math.min(Math.max(1, available.width - 2 * padding - 2) / width,
+  const fitScale = Math.min(Math.max(1, available.width - 2 * padding - 2) / width,
     Math.max(1, available.height - 2 * padding - 2) / height);
+  const scale = zoom * fitScale;
   const screenWidth = width * scale;
   const screenHeight = height * scale;
 
-  // Limit marker diameter by the nearest distinct position, including ports on other panels.
+  // Size dense markers at fit so zoom changes spacing but preserves screen size.
   const markers = ports.map(port => {
     let radius = 5;
     for (const other of ports) {
       const distance = Math.hypot(other.x - port.x, other.y - port.y);
-      if (distance > 0) radius = Math.min(radius, distance * scale / 3);
+      if (distance > 0) radius = Math.min(radius, distance * fitScale / 3);
     }
+    const panel = panelsByKey.get(port.panel_key)!;
+    const clearance = Math.min(port.x - panel.x, panel.x + panel.width - port.x,
+      port.y - panel.y, panel.y + panel.height - port.y);
+    // Ports authored on an edge still need a visible marker centered on that edge.
+    if (clearance > 0) radius = Math.min(radius, clearance * fitScale / 1.2);
     return { ...port, radius };
   });
   return <div ref={container} className="blueprint-preview">
@@ -98,9 +104,8 @@ export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays
               stroke="#b6dfd3" opacity=".8" vectorEffect="non-scaling-stroke" /> : null;
           })}
           {markers.map(port => <g key={port.key} data-slot-key={port.key}>
-            <circle cx={port.x} cy={port.y} r={port.radius / scale}
-              fill={variant === 'module' ? '#fff' : port.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'}
-              stroke="#1c3135" strokeWidth={port.radius * .4 / scale}><title>{port.display_name}</title></circle>
+            <EndpointMarker kind={port.kind} label={port.display_name} cx={port.x} cy={port.y} r={port.radius / scale}
+              stroke="#1c3135" strokeWidth={port.radius * .4 / scale} />
           </g>)}
         </svg>
       </div>

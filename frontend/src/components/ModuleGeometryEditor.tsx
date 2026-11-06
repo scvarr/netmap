@@ -1,3 +1,4 @@
+import { EndpointMarker } from './EndpointMarker';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import type { ModuleGeometry, ModuleEndpoint } from '../topology/hardwareModules';
@@ -45,6 +46,8 @@ export function ModuleGeometryEditor({ geometry, endpoints, onChange, selectedKe
  <rect width={geometry.width} height={geometry.height} fill={geometry.fill_color} stroke="currentColor" vectorEffect="non-scaling-stroke" onPointerDown={() => select(new Set())}/>
  {endpoints.map(e => {const p=geometry.endpoints[e.key]; return p && <g key={e.key} className={onChange ? "module-geometry__port" : undefined} role="button" aria-label={e.display_name} aria-pressed={selected.has(e.key)} tabIndex={onChange ? 0 : undefined} onKeyDown={event => { if (!onChange || !['Enter', ' '].includes(event.key)) return; event.preventDefault(); const keys = event.shiftKey ? new Set(selected) : new Set<string>(); if (keys.has(e.key)) keys.delete(e.key); else keys.add(e.key); select(keys); }} onPointerDown={event => {
  if (!onChange || event.button !== 0) return; event.preventDefault(); event.stopPropagation(); const toggle=event.shiftKey||event.ctrlKey||event.metaKey; const keys=toggle||selected.has(e.key)?new Set(selected):new Set<string>(); if(toggle&&keys.has(e.key)) keys.delete(e.key); else keys.add(e.key); select(keys); if(!keys.has(e.key))return; drag.current={...point(event.clientX,event.clientY),geometry,keys:[...keys]};svg.current?.setPointerCapture(event.pointerId);
- }}><circle cx={p.x*geometry.width} cy={p.y*geometry.height} r={5 / scale} fill="white" stroke="#152d30" strokeWidth={1.5} vectorEffect="non-scaling-stroke"/><text x={p.x*geometry.width} y={p.y*geometry.height-12 / scale} fontSize={12 / scale} fill="#e7f4f1" stroke="#071315" strokeWidth={3 / scale} paintOrder="stroke" textAnchor={p.x < .15 ? "start" : p.x > .85 ? "end" : "middle"}>{e.display_name}</text></g>;})}
+ }}>
+ {e.kind === 'NETWORK_PORT' && <circle cx={p.x*geometry.width} cy={p.y*geometry.height} r={5 / scale} fill="transparent" stroke="transparent" strokeWidth={1.5} vectorEffect="non-scaling-stroke"><title>{e.display_name}</title></circle>}
+ <EndpointMarker kind={e.kind} label={e.display_name} cx={p.x*geometry.width} cy={p.y*geometry.height} r={5 / scale} stroke="#152d30" strokeWidth={1.5} vectorEffect="non-scaling-stroke"/><text x={p.x*geometry.width} y={p.y*geometry.height-12 / scale} fontSize={12 / scale} fill="#e7f4f1" stroke="#071315" strokeWidth={3 / scale} paintOrder="stroke" textAnchor={p.x < .15 ? "start" : p.x > .85 ? "end" : "middle"}>{e.display_name}</text></g>;})}
  </svg></div></section>;
 }

@@ -50,7 +50,7 @@ function ModulePreview({ module }: { module: ModuleTemplate }) {
     const position = geometry.endpoints[endpoint.key];
     return position ? [{ ...endpoint, panel_key: panel.panel_key, rendered_position: position }] : [];
   });
-  return <BlueprintPreview label={name} variant="module" panels={[panel]} slots={slots}
+  return <BlueprintPreview label={name} panels={[panel]} slots={slots}
     body={{ kind: 'RECTANGLE', width: geometry.width, height: geometry.height, fill_color: geometry.fill_color }} />;
 }
 

@@ -1,3 +1,4 @@
+import { EndpointMarker } from './EndpointMarker';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BlueprintPresentation } from '../topology/types';
 import { panelCompositionBounds } from '../topology/blueprintDisplaySize';
@@ -121,7 +122,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
         } else setDraft({ ...l, x: Math.max(0, Math.min(1-l.width, l.x+dx)), y: Math.max(0, Math.min(1-l.height, l.y+dy)) });
       }} onPointerUp={() => { gesture.current = undefined; }} onPointerCancel={() => { gesture.current = undefined; }}>
       <rect data-panel-key={panel.panel_key} width={panel.width} height={panel.height} fill={image.body.fill_color ?? '#18383a'} stroke="#64748b" vectorEffect="non-scaling-stroke"><title>{panel.display_name}</title></rect>
-      {image.slots.filter(s => s.panel_key === panel.panel_key && !modulePorts.has(s.connection_point_id)).map(s => <circle key={s.connection_point_id} data-builtin-endpoint-id={s.connection_point_id} cx={s.panel_local_position.x * panel.width} cy={s.panel_local_position.y * panel.height} r={4 / scale} fill="#38bdf8" stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke"><title>{s.display_name}</title></circle>)}
+      {image.slots.filter(s => s.panel_key === panel.panel_key && !modulePorts.has(s.connection_point_id)).map(s => <EndpointMarker key={s.connection_point_id} kind={s.kind} label={s.display_name} data-builtin-endpoint-id={s.connection_point_id} cx={s.panel_local_position.x * panel.width} cy={s.panel_local_position.y * panel.height} r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
       {config!.bays.filter(b => b.panel_key === panel.panel_key).map(b => {
         const i = b.installation; const l = i?.id === selected && draft ? draft : i?.layout;
         const begin = (e: React.PointerEvent<SVGElement>, resize: boolean) => {
@@ -136,7 +137,7 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           {b.kind !== "LOGICAL" && <rect x={b.x * panel.width} y={b.y * panel.height} width={b.width * panel.width} height={b.height * panel.height} fill="none" stroke="#94a3b8" strokeDasharray="4 3" vectorEffect="non-scaling-stroke"><title>{b.display_name}</title></rect>}
           {i && l && <g>
             <rect data-installation-id={i.id} onPointerDown={e => begin(e, false)} x={l.x * panel.width} y={l.y * panel.height} width={l.width * panel.width} height={l.height * panel.height} fill={i.fill_color} stroke={editing && selected === i.id ? '#f59e0b' : 'none'} strokeWidth={1.5} vectorEffect="non-scaling-stroke"><title>{i.name}</title></rect>
-            {i.endpoints.map(e => <circle key={e.connection_point_id} data-endpoint-id={e.connection_point_id} pointerEvents="none" cx={(l.x + (e.x-i.layout.x)/i.layout.width*l.width)*panel.width} cy={(l.y + (e.y-i.layout.y)/i.layout.height*l.height)*panel.height} r={4 / scale} fill="white" stroke="black" strokeWidth={1} vectorEffect="non-scaling-stroke"><title>{e.contextual_display_name}</title></circle>)}
+            {i.endpoints.map(e => <EndpointMarker key={e.connection_point_id} kind={e.kind} label={e.contextual_display_name} data-endpoint-id={e.connection_point_id} pointerEvents="none" cx={(l.x + (e.x-i.layout.x)/i.layout.width*l.width)*panel.width} cy={(l.y + (e.y-i.layout.y)/i.layout.height*l.height)*panel.height} r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}
             {editing && selected === i.id && <rect aria-label={t('layout.resize')} onPointerDown={e => begin(e, true)} x={(l.x+l.width)*panel.width-4/scale} y={(l.y+l.height)*panel.height-4/scale} width={8/scale} height={8/scale} fill="#f59e0b" style={{ cursor: 'nwse-resize' }} />}
           </g>}
         </g>;

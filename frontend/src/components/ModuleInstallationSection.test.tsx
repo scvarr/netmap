@@ -142,9 +142,10 @@ describe('ModuleInstallationSection uninstall', () => {
 it('renders the installed body and canonical port at projected coordinates', async () => {
   show(source());
   const image = await screen.findByRole('img', { name: 'Back' });
-  const port = image.querySelector('[data-endpoint-id="point"]');
-  expect(port).toHaveAttribute('cx', '120');
-  expect(port).toHaveAttribute('cy', '40');
+  const port = image.querySelector('rect[data-endpoint-id="point"]')!;
+  expect(Number(port.getAttribute('x')) + Number(port.getAttribute('width')) / 2).toBeCloseTo(120);
+  expect(Number(port.getAttribute('y')) + Number(port.getAttribute('height')) / 2).toBeCloseTo(40);
+  expect(port.querySelector('title')).toBeInTheDocument();
   expect(image.querySelector('[fill="#123456"]')).toHaveAttribute('width', '180');
 });
 
@@ -189,7 +190,9 @@ it('keeps normal view inert; selects, clamps drag, projects ports, cancels and e
   expect(Number(body.getAttribute('y'))).toBeCloseTo(160);
   expect(screen.getByLabelText('Изменить размер')).toBeInTheDocument();
   const port = document.querySelector('[data-endpoint-id]')!;
-  expect(Number(port.getAttribute('cx'))).toBeCloseTo(480);
+  expect(port.tagName).toBe('rect');
+  expect(port).toHaveAttribute('fill', '#60d4c9');
+  expect(Number(port.getAttribute('x')) + Number(port.getAttribute('width')) / 2).toBeCloseTo(480);
   expect(screen.getByText('Есть несохранённые изменения')).toBeInTheDocument();
   expect(data.saveLayout).not.toHaveBeenCalled();
   await userEvent.click(screen.getByText('Отменить правки'));
@@ -239,7 +242,7 @@ it.each([[600, 1, 140], [1, 600, 360], [600, 200, 150]])('fits %s × %s panels i
     { ...presentation.panels[0], width, height },
     { ...presentation.panels[0], panel_key: 'front', display_name: 'Front', x: width + 10, width, height },
   ];
-  presentation.slots = [{ slot_key: 'builtin', display_name: 'Built in', kind: 'NETWORK_PORT', panel_key: 'front', panel_local_position: { x: .5, y: .5 }, rendered_position: { x: .5, y: .5 }, external_attachment: { x: 0, y: .5, side: 'LEFT' }, connection_point_id: 'builtin' }];
+  presentation.slots = [{ slot_key: 'builtin', display_name: 'Built in', kind: 'CONNECTION_POINT', panel_key: 'front', panel_local_position: { x: .5, y: .5 }, rendered_position: { x: .5, y: .5 }, external_attachment: { x: 0, y: .5, side: 'LEFT' }, connection_point_id: 'builtin' }];
   show(data, vi.fn(), presentation);
   const back = await screen.findByRole('img', { name: 'Back' });
   expect(screen.getByRole('img', { name: 'Front' }).querySelector('[stroke-dasharray]')).toBeInTheDocument();
@@ -255,10 +258,14 @@ it.each([[600, 1, 140], [1, 600, 360], [600, 200, 150]])('fits %s × %s panels i
   expect(y + viewHeight).toBeGreaterThan(height);
   const scale = 800 / viewWidth;
   for (const port of document.querySelectorAll('[data-endpoint-id], [data-builtin-endpoint-id]')) {
-    expect(Number(port.getAttribute('r')) * scale).toBeCloseTo(4);
+    const radius = port.tagName === 'rect'
+      ? Number(port.getAttribute('width')) / Math.SQRT2 : Number(port.getAttribute('r'));
+    expect(radius * scale).toBeCloseTo(4);
     expect(port).toHaveAttribute('vector-effect', 'non-scaling-stroke');
   }
   const builtin = screen.getByRole('img', { name: 'Front' }).querySelector('[data-builtin-endpoint-id="builtin"]');
+  expect(builtin?.tagName).toBe('circle');
+  expect(builtin).toHaveAttribute('fill', '#f2d081');
   expect(Number(builtin?.getAttribute('cx'))).toBeCloseTo(width / 2);
   expect(Number(builtin?.getAttribute('cy'))).toBeCloseTo(height / 2);
   expect(back.querySelector('[data-installation-id]')).toHaveAttribute('data-installation-id', 'stable-installation-id');
@@ -353,7 +360,7 @@ it('reads a logical place without drawing a rectangle and enables installation',
   fireEvent.change(screen.getAllByRole('combobox')[0], { target: { value: 'template' } });
   expect(document.querySelector('button.primary-action')).toBeEnabled();
   expect(document.querySelectorAll('svg rect')).toHaveLength(1);
-  expect(document.querySelectorAll('svg circle')).toHaveLength(0);
+  expect(document.querySelectorAll('svg [data-endpoint-marker]')).toHaveLength(0);
   expect(document.querySelector('svg')?.outerHTML).not.toMatch(/NaN|undefined/);
   expect(data.installModule).not.toHaveBeenCalled();
 });

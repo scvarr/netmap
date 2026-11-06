@@ -23,7 +23,7 @@ const second = { ...listed, blueprint_ref: { ...listed.blueprint_ref, entity_id:
 const module = {
   template_id: 'nic', revision_id: 'nic-rev', name: 'NIC', compatibility: 'OCP3',
   geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { p1: { x: .3, y: .5 }, p2: { x: .7, y: .75 } } },
-  endpoints: [{ key: 'p1', display_name: 'P1', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', kind: 'NETWORK_PORT' as const }],
+  endpoints: [{ key: 'p1', display_name: 'P1', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', kind: 'CONNECTION_POINT' as const }],
   publication_state: { revision_id: 'nic-rev', version_number: 3, outdated_count: 0, awaiting_update_count: 0, requires_intervention_count: 1, installations: [] },
 };
 
@@ -91,8 +91,10 @@ it('loads a base revision only on keyboard disclosure and reuses it after closin
   await user.keyboard('{Enter}');
   const svg = await screen.findByRole('img', { name: 'Server' });
   expect(svg).toHaveAttribute('viewBox', '10 20 160 60');
-  expect(svg.querySelector('[data-slot-key="eth"] circle')).toHaveAttribute('cx', '50');
-  expect(svg.querySelector('[data-slot-key="eth"] circle')).toHaveAttribute('cy', '50');
+  const square = svg.querySelector('[data-slot-key="eth"] rect[data-endpoint-marker]')!;
+  expect(square).toHaveAttribute('fill', '#60d4c9');
+  expect(Number(square.getAttribute('x')) + Number(square.getAttribute('width')) / 2).toBeCloseTo(50);
+  expect(Number(square.getAttribute('y')) + Number(square.getAttribute('height')) / 2).toBeCloseTo(50);
   expect(screen.getByText('Модульных мест: 1')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Изменить шаблон' })).toHaveAttribute('href', '/library/base-templates/server/edit');
   expect(screen.getByRole('link', { name: 'Создать объект' })).toHaveAttribute('href', '/infrastructure/objects/new?blueprint=server');
@@ -113,15 +115,17 @@ it('uses module list geometry and exposes the published revision and editor on d
   const svg = screen.getByRole('img', { name: 'NIC' });
   expect(svg).toHaveAttribute('viewBox', '0 0 240 80');
   expect(svg.querySelector('rect')).toHaveAttribute('fill', '#64748b');
-  expect(svg.querySelector('[data-slot-key="p1"] circle')).toHaveAttribute('cx', '72');
-  expect(svg.querySelector('[data-slot-key="p1"] circle')).toHaveAttribute('cy', '40');
+  const square = svg.querySelector('[data-slot-key="p1"] rect[data-endpoint-marker]')!;
+  expect(square).toHaveAttribute('fill', '#60d4c9');
+  expect(Number(square.getAttribute('x')) + Number(square.getAttribute('width')) / 2).toBeCloseTo(72);
+  expect(Number(square.getAttribute('y')) + Number(square.getAttribute('height')) / 2).toBeCloseTo(40);
   expect(svg.querySelector('[data-slot-key="p2"] circle')).toHaveAttribute('cx', '168');
   expect(svg.querySelector('[data-slot-key="p2"] circle')).toHaveAttribute('cy', '60');
-  expect(svg.querySelectorAll('circle')).toHaveLength(2);
+  expect(svg.querySelectorAll('[data-endpoint-marker]')).toHaveLength(2);
   expect(svg.querySelectorAll('text')).toHaveLength(0);
   await user.click(within(summary.closest('li')!).getByRole('button', { name: 'Приблизить' }));
   expect(svg.querySelectorAll('text')).toHaveLength(0);
-  expect([...svg.querySelectorAll('circle title')].map(title => title.textContent)).toEqual(['P1', 'P2']);
+  expect([...svg.querySelectorAll('[data-endpoint-marker] title')].map(title => title.textContent)).toEqual(['P1', 'P2']);
   expect(within(svg).queryByRole('button')).not.toBeInTheDocument();
   expect(screen.getByText('Текущая опубликованная ревизия: 3')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Изменить шаблон' })).toHaveAttribute('href', '/library/module-templates/nic/edit');
