@@ -69,6 +69,13 @@ export function AppShell() {
             </NavLink>
           </div>
           <div className="shell-nav__group">
+            <span className="shell-nav__group-label">{t('portTypes.section')}</span>
+            <NavLink className={navClassName} to="/catalogs/port-types" title={t('portTypes.title')} data-tooltip={t('portTypes.title')}>
+              <span className="shell-nav__icon" aria-hidden="true">▣</span>
+              <span className="shell-nav__label">{t('portTypes.title')}</span>
+            </NavLink>
+          </div>
+          <div className="shell-nav__group">
             <span className="shell-nav__group-label">{t('workspace.section')}</span>
             <NavLink className={navClassName} to="/settings/data" title={t('workspace.title')} data-tooltip={t('workspace.title')}>
               <span className="shell-nav__icon" aria-hidden="true">⚙</span>

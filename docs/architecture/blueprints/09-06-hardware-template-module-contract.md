@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-**Current status (2026-11-06): HV-01 PASSED.** E1/E2/E3 and F1/F2a/F2b are
+**Current status (2026-11-06): HV-01 PASSED. Phase C remains open.** E1/E2/E3 and F1/F2a/F2b are
 implemented and merged. Logical module places, installation and count authoring
 (UX-02A–D) are merged. See the
 [acceptance record and current register](../../plans/11-05-phase-c-acceptance-closure.md#statusindex-layer)

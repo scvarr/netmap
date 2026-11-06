@@ -1,4 +1,4 @@
-"""Persisted review diagnostics must remain readable in workspace v5."""
+"""Persisted review diagnostics must remain readable in workspace v6."""
 import ast
 import copy
 import inspect
@@ -30,7 +30,7 @@ def test_every_generated_review_reason_is_accepted_by_persisted_schema():
     assert generated <= set(get_args(BaseTemplateImpactReason.model_fields['code'].annotation))
 
 
-def test_internal_link_cardinality_candidate_workspace_v5_round_trip():
+def test_internal_link_cardinality_candidate_workspace_v6_round_trip():
     from tests.test_hardware_configuration import client
     template_id, _ = create_base()
     obj = create_object(template_id)
@@ -48,7 +48,7 @@ def test_internal_link_cardinality_candidate_workspace_v5_round_trip():
     assert impact['classification'] == 'requires_intervention'
     assert impact['reasons'] == [reason]
     exported = package()
-    assert exported['format_version'] == 5
+    assert exported['format_version'] == 6
     candidate = exported['authoring']['BaseTemplateCandidate'][0]
     assert candidate['id'] == checked['review']['candidate_id']
     assert candidate['result'] == checked['review']['result']

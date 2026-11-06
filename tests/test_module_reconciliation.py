@@ -113,7 +113,7 @@ def test_partial_success_rollback_mixed_archive(monkeypatch):
     assert len({r['module_revision_id'] for r in after['authoring']['ModuleInstallation']}) == 2
     for key in ('ModuleInstallation', 'ModuleEndpointMapping'):
         assert [r for r in before['authoring'][key] if r.get('installation_id', r['id']) == str(ids[0])] == [r for r in after['authoring'][key] if r.get('installation_id', r['id']) == str(ids[0])]
-    assert after['format_version'] == 5
+    assert after['format_version'] == 6
     assert client.delete('/v1/workspace/dataset').status_code == 204
     response = client.post('/v1/workspace/package', json=after)
     assert response.status_code == 204, response.text

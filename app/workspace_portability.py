@@ -1,4 +1,4 @@
-"""Version 5 exchange contract for the current implicit workspace dataset.
+"""Version 6 exchange contract for the current implicit workspace dataset.
 
 The public names and fields below are deliberately fixed independently of table
 names. A storage change must adapt this mapping or introduce a new format version.
@@ -16,10 +16,13 @@ from sqlalchemy.sql.sqltypes import JSON
 
 from app.database import Base
 from app import models
+from app.port_types import PortTypeInput
+from app.schemas import ModuleBayRequest
+from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 5
+FORMAT_VERSION = 6
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -86,6 +89,7 @@ ENTITIES = (
     ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements"),
     ("presentation", "MapCableRoute", "MapCableRoute", "id map_id variant_id cable_id view_key waypoints"),
     ("presentation", "MapTextAnnotation", "MapTextAnnotation", "id map_id text position text_color font_size"),
+    ("settings", "PortType", "PortType", "id name description color is_active"),
     ("settings", "CableLabelSettings", "CableLabelSettings", "id unique_labels"),
     ("settings", "CableLabelTemplate", "CableLabelTemplate", "id name description pattern start_at"),
     ("settings", "CableLabelHistory", "CableLabelHistory", "id label cable_id assigned_at released_at"),
@@ -167,136 +171,44 @@ def validate_package(package: object) -> dict:
         raise PackageError("Not a NetMap workspace package")
     if type(package.get("format_version")) is not int or package["format_version"] != FORMAT_VERSION:
         raise PackageError("Unsupported NetMap workspace format_version")
-    if set(package) - {"module_geometry_version", "module_layout_version", "module_places_version"} != {"format", "format_version", "canonical", "authoring", "presentation", "settings"}:
+    profiles = ("module_geometry_version", "module_layout_version", "module_places_version")
+    sections = ("canonical", "authoring", "presentation", "settings")
+    if set(package) != {"format", "format_version", *profiles, *sections}:
         raise PackageError("Incomplete or unknown package sections")
-    # Accept only a complete historical profile or a complete F1 profile.
-    import copy
-    from app.module_geometry import initial_geometry, extend_definition
-    package = copy.deepcopy(package)
-    authoring = package["authoring"]
-    if not isinstance(authoring, dict):
-        raise PackageError("Invalid authoring section")
-    places_version = package.get("module_places_version")
-    if "module_places_version" in package and (type(places_version) is not int or places_version != 1 or package.get("module_layout_version") != 1):
-        raise PackageError("Invalid module places profile")
-    from app.schemas import ModuleBayRequest
-    from pydantic import ValidationError as SchemaError
-    bay_records = authoring.get("ModuleBay", [])
-    if not isinstance(bay_records, list):
-        raise PackageError("Invalid ModuleBay collection")
-    for bay in bay_records:
-        if not isinstance(bay, dict):
-            raise PackageError("Invalid bay record")
-        if places_version == 1:
-            if "kind" not in bay:
-                raise PackageError("Incomplete module places profile")
-        else:
-            if "kind" in bay:
-                raise PackageError("Module places require module_places_version=1")
-            bay["kind"] = "PLACED"
-        try:
-            ModuleBayRequest.model_validate({k: v for k, v in bay.items() if k in ModuleBayRequest.model_fields})
-        except SchemaError as error:
-            raise PackageError("Invalid ModuleBay kind or rectangle") from error
-        if bay["kind"] == "LOGICAL":
-            for coordinate in ("x", "y", "width", "height"):
-                bay.setdefault(coordinate, None)
-    for name in ("ModuleTemplateRevision", "ModuleTemplateDraft", "ModuleTemplateCandidate"):
-        records = authoring.get(name, [])
-        if not isinstance(records, list) or any(not isinstance(r, dict) for r in records):
-            raise PackageError(f"Invalid {name} collection or record")
-        if name != "ModuleTemplateRevision" and any(not isinstance(r.get("definition"), dict) for r in records):
-            raise PackageError(f"Invalid {name} definition")
-    if any(not isinstance(r.get("result"), dict) or not isinstance(r["result"].get("changes"), list)
-           or any(not isinstance(c, dict) for c in r["result"]["changes"])
-           for r in authoring.get("ModuleTemplateCandidate", [])):
-        raise PackageError("Invalid module candidate analysis")
-    geometry_records = [*authoring.get("ModuleTemplateRevision", []),
-                        *(r.get("definition", {}) for name in ("ModuleTemplateDraft", "ModuleTemplateCandidate") for r in authoring.get(name, []))]
-    if any(not isinstance(r, dict) for r in geometry_records):
-        raise PackageError("Invalid module geometry profile")
-    flags = ["geometry" in r for r in geometry_records]
-    if "module_geometry_version" in package and (type(package["module_geometry_version"]) is not int or package["module_geometry_version"] != 1 or not all(flags)):
-        raise PackageError("Invalid or incomplete F1 geometry profile")
-    if any(flags) and package.get("module_geometry_version") != 1:
-        raise PackageError("F1 geometry requires module_geometry_version=1")
-    if any(flags) and not all(flags):
-        raise PackageError("Mixed historical and F1 module geometry profiles")
-    f1_evidence = any(c.get("section") == "geometry" for r in authoring.get("ModuleTemplateCandidate", []) for c in r.get("result", {}).get("changes", []))
-    if f1_evidence and not all(flags):
-        raise PackageError("F1 published geometry is missing")
-    if flags and not any(flags):
-        for revision in authoring.get("ModuleTemplateRevision", []):
-            endpoints = sorted((e for e in authoring.get("ModuleEndpointDefinition", []) if e["module_revision_id"] == revision["id"]), key=lambda e: e["order_index"])
-            revision["geometry"] = initial_geometry(e["definition_key"] for e in endpoints)
-        for name in ("ModuleTemplateDraft", "ModuleTemplateCandidate"):
-            for row in authoring.get(name, []):
-                row["definition"] = extend_definition(row["definition"])
-    from app.module_layout import initial_layout
-    installs = authoring.get("ModuleInstallation", [])
-    if not isinstance(installs, list) or any(not isinstance(i, dict) for i in installs):
-        raise PackageError("Invalid installations")
-    if "module_layout_version" in package:
-        if (type(package["module_layout_version"]) is not int or package["module_layout_version"] != 1
-                or package.get("module_geometry_version") != 1 or any("layout" not in i for i in installs)):
-            raise PackageError("Incomplete F2a profile")
-    else:
-        if any("layout" in i for i in installs):
-            raise PackageError("F2a layout requires module_layout_version=1")
-        try:
-            configs = {r["id"]: r for r in authoring["ObjectConfiguration"]}
-            revisions = {r["id"]: r for r in authoring["ModuleTemplateRevision"]}
-            bays = {(r["base_revision_id"], r["bay_key"]): r for r in authoring["ModuleBay"]}
-            panels = {(r["base_revision_id"], r["panel_key"]): r for r in authoring["PresentationPanel"]}
-            for i in installs:
-                revision_id = configs[i["configuration_id"]]["base_revision_id"]
-                bay = bays[revision_id, i["bay_key"]]
-                i["layout"] = initial_layout(bay, revisions[i["module_revision_id"]]["geometry"], i["orientation"], panels[revision_id, bay["panel_key"]])
-        except (KeyError, TypeError, ValueError, ZeroDivisionError) as error:
-            raise PackageError("Invalid historical module layout inputs") from error
+    if any(type(package[key]) is not int or package[key] != 1 for key in profiles):
+        raise PackageError("Unsupported module profile")
+
     specs = _specs()
     result = {}
-    # Exact 09.6-C v5 profile: no publication collection and no revision names.
-    # This is an archive import contract, not an authoring/runtime fallback.
-    historical_c = isinstance(package["authoring"], dict) and "BaseTemplatePublication" not in package["authoring"]
-    pre_e2 = isinstance(package["authoring"], dict) and "ModuleTemplatePublication" not in package["authoring"]
-    module_review_names = {"ModuleTemplateDraft", "ModuleTemplateCandidate"}
-    pre_e1 = isinstance(package["authoring"], dict) and not module_review_names.intersection(package["authoring"])
-    if pre_e1 and not pre_e2:
-        raise PackageError("E2 archive requires module review collections")
-    for section in ("canonical", "authoring", "presentation", "settings"):
+    for section in sections:
         expected = {name for part, name, _, _ in specs if part == section}
-        if pre_e2 and section == "authoring":
-            expected.remove("ModuleTemplatePublication")
-        if historical_c and section == "authoring":
-            expected.remove("BaseTemplatePublication")
-        if pre_e1 and section == "authoring":
-            expected -= module_review_names
         if not isinstance(package[section], dict) or set(package[section]) != expected:
             raise PackageError(f"Incomplete {section} section")
     for section, name, model, fields in specs:
-        absent = (pre_e2 and name == "ModuleTemplatePublication") or (historical_c and name == "BaseTemplatePublication") or (pre_e1 and name in module_review_names)
-        records = [] if absent else package[section][name]
+        records = package[section][name]
         if not isinstance(records, list):
             raise PackageError(f"{name} must be a list")
         columns = {column.key: column for column in model.__table__.columns}
         parsed = []
         ids = set()
-        historical_revision = (historical_c and name == "BaseTemplateRevision") or (pre_e2 and name == "ModuleTemplateRevision")
-        expected_fields = set(fields) - {"name"} if historical_revision else set(fields)
-        template_names = {r["id"]: r["name"] for r in result["module_templates" if name == "ModuleTemplateRevision" else "base_templates"]} if historical_revision else {}
+        expected_fields = set(fields)
         for record in records:
+            if model is models.ModuleBay and isinstance(record, dict) and record.get("kind") == "LOGICAL":
+                record = {"x": None, "y": None, "width": None, "height": None, **record}
             if not isinstance(record, dict) or set(record) != expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
-            row = {field: _decode(record[field], columns[field], f"{name}.{field}") for field in fields if field in expected_fields}
-            if historical_revision:
-                # C could publish only the initial revision. Do not disguise a
-                # D1 archive stripped of its receipts/names as a C export.
-                if row["version_number"] != 1:
-                    raise PackageError("09.6-C archive can contain only initial base revisions")
-                if row["template_id"] not in template_names:
-                    raise PackageError("BaseTemplateRevision.template_id refers to a missing entity")
-                row["name"] = template_names[row["template_id"]]
+            row = {field: _decode(record[field], columns[field], f"{name}.{field}") for field in fields}
+            if model is models.PortType:
+                try:
+                    port_type = PortTypeInput.model_validate({k: v for k, v in row.items() if k != "id"})
+                except ValidationError as error:
+                    raise PackageError("Invalid PortType record") from error
+                row.update(port_type.model_dump())
+            if model is models.ModuleBay:
+                try:
+                    ModuleBayRequest.model_validate({k: row[k] for k in ModuleBayRequest.model_fields if k in row})
+                except ValidationError as error:
+                    raise PackageError("Invalid ModuleBay kind or rectangle") from error
             if row["id"] in ids:
                 raise PackageError(f"Duplicate {name} ID")
             ids.add(row["id"])

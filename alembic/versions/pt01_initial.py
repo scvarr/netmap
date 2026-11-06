@@ -1,16 +1,12 @@
-"""current_schema_initialization
+"""Initial PT-01 schema for an empty PostgreSQL database."""
 
-Revision ID: 0001
-Revises:
-Create Date: 2026-10-05 08:24:52.651826
-"""
 from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
-revision: str = '0001'
+revision: str = 'pt01_initial'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -138,6 +134,7 @@ def upgrade() -> None:
     sa.Column('width', sa.Float(), nullable=False),
     sa.Column('height', sa.Float(), nullable=False),
     sa.Column('fill_color', sa.String(length=7), nullable=True),
+    sa.Column('name', sa.String(255), nullable=False),
     sa.CheckConstraint("body_kind = 'RECTANGLE'", name=op.f('ck_base_template_revisions_rectangle_only')),
     sa.CheckConstraint("fill_color IS NULL OR fill_color ~ '^#[0-9A-Fa-f]{6}$'", name=op.f('ck_base_template_revisions_fill_color_hex')),
     sa.CheckConstraint('height > 0', name=op.f('ck_base_template_revisions_height_positive')),
@@ -197,6 +194,8 @@ def upgrade() -> None:
     sa.Column('template_id', sa.UUID(), nullable=False),
     sa.Column('version_number', sa.Integer(), nullable=False),
     sa.Column('compatibility', sa.String(length=255), nullable=False),
+    sa.Column('name', sa.String(255), nullable=False),
+    sa.Column('geometry', postgresql.JSONB(), nullable=False),
     sa.CheckConstraint('version_number > 0 AND char_length(btrim(compatibility)) > 0', name=op.f('ck_module_template_revisions_revision_valid')),
     sa.ForeignKeyConstraint(['template_id'], ['module_templates.id'], name=op.f('fk_module_template_revisions_template_id_module_templates'), ondelete='RESTRICT'),
     sa.PrimaryKeyConstraint('id', name=op.f('pk_module_template_revisions')),
@@ -561,10 +560,12 @@ def upgrade() -> None:
     sa.Column('display_name', sa.String(length=255), nullable=False),
     sa.Column('compatibility', sa.String(length=255), nullable=False),
     sa.Column('panel_key', sa.String(length=255), nullable=False),
-    sa.Column('x', sa.Float(), nullable=False),
-    sa.Column('y', sa.Float(), nullable=False),
-    sa.Column('width', sa.Float(), nullable=False),
-    sa.Column('height', sa.Float(), nullable=False),
+    sa.Column('x', sa.Float(), nullable=True),
+    sa.Column('y', sa.Float(), nullable=True),
+    sa.Column('width', sa.Float(), nullable=True),
+    sa.Column('height', sa.Float(), nullable=True),
+    sa.Column('kind', sa.String(16), server_default='PLACED', nullable=False),
+    sa.CheckConstraint("(kind = 'LOGICAL' AND x IS NULL AND y IS NULL AND width IS NULL AND height IS NULL) OR (kind = 'PLACED' AND x IS NOT NULL AND y IS NOT NULL AND width IS NOT NULL AND height IS NOT NULL)", name=op.f('ck_module_bays_bay_representation')),
     sa.CheckConstraint('char_length(btrim(bay_key)) > 0 AND char_length(btrim(display_name)) > 0 AND char_length(btrim(compatibility)) > 0', name=op.f('ck_module_bays_bay_strings_not_blank')),
     sa.CheckConstraint('x >= 0 AND y >= 0 AND width > 0 AND height > 0 AND x + width <= 1 AND y + height <= 1', name=op.f('ck_module_bays_rectangle_inside_panel')),
     sa.ForeignKeyConstraint(['base_revision_id', 'panel_key'], ['presentation_panels.base_revision_id', 'presentation_panels.panel_key'], name=op.f('fk_module_bays_base_revision_id_presentation_panels'), ondelete='RESTRICT'),
@@ -578,6 +579,7 @@ def upgrade() -> None:
     sa.Column('module_revision_id', sa.UUID(), nullable=False),
     sa.Column('bay_key', sa.String(length=255), nullable=False),
     sa.Column('orientation', sa.String(length=16), nullable=False),
+    sa.Column('layout', postgresql.JSONB(), nullable=False),
     sa.CheckConstraint("orientation IN ('HORIZONTAL', 'VERTICAL')", name=op.f('ck_module_installations_orientation_valid')),
     sa.ForeignKeyConstraint(['configuration_id'], ['object_configurations.id'], name=op.f('fk_module_installations_configuration_id_object_configurations'), ondelete='RESTRICT'),
     sa.ForeignKeyConstraint(['module_revision_id'], ['module_template_revisions.id'], name=op.f('fk_module_installations_module_revision_id_module_template_revisions'), ondelete='RESTRICT'),
@@ -680,11 +682,75 @@ def upgrade() -> None:
     sa.UniqueConstraint('variant_id', 'cable_id', 'view_key', name='uq_map_cable_routes_variant_cable_view')
     )
     op.create_index('ix_map_cable_routes_cable_id', 'map_cable_routes', ['cable_id'], unique=False)
+    for name in ("base_template_drafts", "base_template_candidates"):
+        columns = [
+            sa.Column("id", sa.UUID(), primary_key=True),
+            sa.Column("template_id", sa.UUID(), sa.ForeignKey("base_templates.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("source_revision_id", sa.UUID(), sa.ForeignKey("base_template_revisions.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("definition", postgresql.JSONB(), nullable=False),
+        ]
+        if name == "base_template_drafts":
+            columns.extend([sa.Column("generation", sa.Integer(), nullable=False), sa.UniqueConstraint("template_id")])
+        else:
+            columns.extend([
+                sa.Column("draft_generation", sa.Integer(), nullable=False),
+                sa.Column("result", postgresql.JSONB(), nullable=False),
+                sa.Column("input_fingerprint", sa.String(64), nullable=False),
+                sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            ])
+        op.create_table(name, *columns)
+
+    op.create_table(
+        "base_template_publications",
+        sa.Column("id", sa.UUID(), sa.ForeignKey("base_template_candidates.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column("revision_id", sa.UUID(), sa.ForeignKey("base_template_revisions.id", ondelete="CASCADE"), nullable=False, unique=True),
+    )
+
+    for name in ("module_template_drafts", "module_template_candidates"):
+        columns = [
+            sa.Column("id", sa.UUID(), primary_key=True),
+            sa.Column("template_id", sa.UUID(), sa.ForeignKey("module_templates.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("source_revision_id", sa.UUID(), sa.ForeignKey("module_template_revisions.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("definition", postgresql.JSONB(), nullable=False),
+        ]
+        if name == "module_template_drafts":
+            columns.extend([sa.Column("generation", sa.Integer(), nullable=False), sa.UniqueConstraint("template_id")])
+        else:
+            columns.extend([
+                sa.Column("draft_generation", sa.Integer(), nullable=False),
+                sa.Column("result", postgresql.JSONB(), nullable=False),
+                sa.Column("input_fingerprint", sa.String(64), nullable=False),
+                sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            ])
+        op.create_table(name, *columns)
+
+    op.create_table(
+        "module_template_publications",
+        sa.Column("id", sa.UUID(), sa.ForeignKey("module_template_candidates.id", ondelete="CASCADE"), primary_key=True),
+        sa.Column("revision_id", sa.UUID(), sa.ForeignKey("module_template_revisions.id", ondelete="CASCADE"), nullable=False, unique=True),
+    )
+
+    op.create_table(
+        "port_types",
+        sa.Column("id", sa.UUID(), primary_key=True),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("color", sa.String(7), nullable=False),
+        sa.Column("is_active", sa.Boolean(), nullable=False),
+        sa.CheckConstraint("name <> ''", name="nonempty_name"),
+        sa.CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
+    )
+    op.create_index("uq_port_types_normalized_name", "port_types", [sa.text("lower(name)")], unique=True)
+
     op.execute("INSERT INTO cable_label_settings (id, unique_labels) VALUES (1, false)")
     # ### end Alembic commands ###
 
 
 def downgrade() -> None:
+    op.drop_table("port_types")
+    for prefix in ("module", "base"):
+        for suffix in ("publications", "candidates", "drafts"):
+            op.drop_table(f"{prefix}_template_{suffix}")
     # ### commands auto generated by Alembic - please adjust! ###
     op.drop_index('ix_map_cable_routes_cable_id', table_name='map_cable_routes')
     op.drop_table('map_cable_routes')

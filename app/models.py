@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 from enum import StrEnum
 
+import sqlalchemy as sa
 from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import CIDR, INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -1299,3 +1300,17 @@ class ModuleTemplatePublication(Base):
     __tablename__ = "module_template_publications"
     id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_candidates.id", ondelete="CASCADE"), primary_key=True)
     revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="CASCADE"), unique=True, nullable=False)
+
+class PortType(Base):
+    __tablename__ = "port_types"
+    __table_args__ = (
+        Index("uq_port_types_normalized_name", func.lower(sa.text("name")), unique=True),
+        CheckConstraint("name <> ''", name="nonempty_name"),
+        CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(sa.Text)
+    color: Mapped[str] = mapped_column(String(7), nullable=False)
+    is_active: Mapped[bool] = mapped_column(nullable=False)

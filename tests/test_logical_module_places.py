@@ -101,30 +101,6 @@ def test_logical_count_reduction_reconciles_only_when_capacity_remains(remaining
         assert after['authoring']['ModuleInstallation'] == [original]
 
 
-def test_forward_migration_preserves_existing_rectangles():
-    import importlib.util
-    import sqlalchemy as sa
-    from alembic.migration import MigrationContext
-    from alembic.operations import Operations
-    from app.database import engine
-    spec = importlib.util.spec_from_file_location('places_migration', 'alembic/versions/0008_logical_module_places.py')
-    migration = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(migration)
-    with engine.connect() as connection:
-        transaction = connection.begin()
-        connection.execute(sa.text('CREATE SCHEMA migration_places_test'))
-        connection.execute(sa.text('SET LOCAL search_path TO migration_places_test'))
-        connection.execute(sa.text('CREATE TABLE module_bays (bay_key text PRIMARY KEY, display_name text, compatibility text, panel_key text, x float NOT NULL, y float NOT NULL, width float NOT NULL, height float NOT NULL)'))
-        connection.execute(sa.text("INSERT INTO module_bays VALUES ('opaque', ' Bay ', ' OCP ', 'panel', .1, .2, .3, .4)"))
-        before = connection.execute(sa.text('SELECT * FROM module_bays')).mappings().one()
-        migration.op = Operations(MigrationContext.configure(connection))
-        migration.upgrade()
-        after = dict(connection.execute(sa.text('SELECT * FROM module_bays')).mappings().one())
-        assert after.pop('kind') == 'PLACED'
-        assert after == dict(before)
-        transaction.rollback()
-
-
 @pytest.mark.parametrize('change', [None, 'display_name', 'x', 'compatibility', 'logical'])
 def test_pre_kind_draft_check_compares_semantics_and_preserves_snapshots(change):
     from sqlalchemy import select
@@ -209,7 +185,7 @@ def test_workspace_accepts_logical_missing_or_null_coordinates():
     assert validate_package(archive)['module_bays'][0]['kind'] == 'LOGICAL'
 
 
-def test_historical_placed_profile_restores_saved_layout_and_frozen_snapshots():
+def test_placed_archive_restores_saved_layout_and_frozen_snapshots():
     from app.database import SessionLocal
     from app import models as m
     from tests.test_base_template_review import open_draft, check
@@ -220,24 +196,10 @@ def test_historical_placed_profile_restores_saved_layout_and_frozen_snapshots():
         session.get(m.ModuleInstallation, uuid.UUID(installation['id'])).layout = custom
     check(base, open_draft(base))
     current = package()
-    historical = copy.deepcopy(current)
-    del historical['module_places_version']
-    for bay in historical['authoring']['ModuleBay']: del bay['kind']
-    for name in ('BaseTemplateDraft', 'BaseTemplateCandidate'):
-        for row in historical['authoring'][name]:
-            for bay in row['definition']['bays']: bay.pop('kind', None)
-    untouched = copy.deepcopy(historical)
-    validate_package(historical)
-    assert historical == untouched
     assert client.delete('/v1/workspace/dataset').status_code == 204
-    assert client.post('/v1/workspace/package', json=historical).status_code == 204
+    assert client.post('/v1/workspace/package', json=current).status_code == 204
     exported = package()
-    expected = copy.deepcopy(historical)
-    expected['module_places_version'] = 1
-    for bay in expected['authoring']['ModuleBay']: bay['kind'] = 'PLACED'
-    assert exported == expected
-    assert exported['canonical'] == current['canonical']
-    assert exported['authoring']['ModuleInstallation'] == current['authoring']['ModuleInstallation']
+    assert exported == current
     configuration = client.get(f'/v1/topology/physical-objects/{obj}/configuration').json()
     assert configuration['bays'][0]['installation']['layout'] == custom
     assert {e['connection_point_id'] for e in configuration['bays'][0]['installation']['endpoints']} == {e['connection_point_id'] for e in installation['endpoints']}

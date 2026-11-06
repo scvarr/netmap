@@ -2,8 +2,9 @@
 
 ## Статус и границы
 
-**HV-01-UX-02B — IMPLEMENTED / EXTERNAL REVIEW PENDING. HV-01-UX-02C — IMPLEMENTED / EXTERNAL REVIEW PENDING.
-Phase C — PAUSED. HV-01 — NOT PASSED.**
+**UX-02B–D включены в main. HV-01 — PASSED (06.11.2026). Phase C остаётся открытой.**
+
+Датированные статусы ниже относятся к контрольным точкам реализации.
 
 Основание: main `34e9e392048c94fbcbb345d22907914d63bd8d35`.
 Редактирование количества реализовано в UX-02D. Границы runtime описаны в UX-02B/UX-02C ниже.

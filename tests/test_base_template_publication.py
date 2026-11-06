@@ -232,7 +232,7 @@ def test_library_revision_and_status_share_one_nonblocking_snapshot(monkeypatch)
     assert item['publication_state']['outdated_count'] == 1
 
 
-def test_published_workspace_v5_roundtrip_preserves_receipt_and_rebased_draft():
+def test_published_workspace_v6_roundtrip_preserves_receipt_and_rebased_draft():
     template_id, _ = create_base()
     create_object(template_id)
     checked = prepared(template_id)
@@ -240,7 +240,7 @@ def test_published_workspace_v5_roundtrip_preserves_receipt_and_rebased_draft():
     create_object(template_id)
     draft = open_draft(template_id)
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 5
+    assert package['format_version'] == 6
     assert client.delete('/v1/workspace/dataset').status_code == 204
     assert client.post('/v1/workspace/package', json=package).status_code == 204
     assert client.get('/v1/workspace/package').json() == package

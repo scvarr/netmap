@@ -365,9 +365,10 @@ operations. Это не означает проектирование event sour
 
 Phase C clean acceptance выявила обязательную для текущего implicit default
 workspace возможность: экспортировать persisted dataset, полностью очистить его
-через UI и восстановить package в пустой dataset. Первый bounded implementation
-использует JSON package `netmap-workspace` версии 1 с отдельными разделами
-canonical facts, authoring/provenance, presentation и settings. IDs сохраняются;
+через UI и восстановить package в пустой dataset. Текущий JSON package
+`netmap-workspace` версии 6 содержит разделы canonical facts,
+authoring/provenance, presentation и settings. В `settings.PortType` хранятся
+типы портов, включая архивные. UUID сохраняются;
 import в непустой dataset отклоняется, reset не удаляет schema/migrations.
 Это lifecycle текущего single-workspace dataset, а не persisted
 `NetworkWorkspace`, workspace selector, ACL или общий workspace import.

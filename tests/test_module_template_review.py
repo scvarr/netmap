@@ -298,7 +298,7 @@ def test_concurrent_initialization_and_stale_writer():
             ModuleTemplateReview(stale).save(template_id, draft['definition'], draft['generation'])
 
 
-def test_workspace_roundtrip_and_pre_e1_v5():
+def test_workspace_roundtrip():
     _, module, _ = setup_installations(1)
     draft = open_draft(module['template_id'])
     definition = copy.deepcopy(draft['definition'])
@@ -307,20 +307,12 @@ def test_workspace_roundtrip_and_pre_e1_v5():
     definition['endpoints'].append({'key': str(uuid.uuid4()), 'display_name': 'New', 'kind': 'CONNECTION_POINT'})
     checked = check(module['template_id'], save(module['template_id'], draft, definition))
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 5
+    assert package['format_version'] == 6
     assert client.delete('/v1/workspace/dataset').status_code == 204
     response = client.post('/v1/workspace/package', json=package)
     assert response.status_code == 204, response.text
     assert client.get('/v1/workspace/package').json() == package
     assert open_draft(module['template_id'])['review'] == checked['review']
-    del package['authoring']['ModuleTemplatePublication']
-    for revision in package['authoring']['ModuleTemplateRevision']:
-        del revision['name']
-    for key in ('ModuleTemplateDraft', 'ModuleTemplateCandidate'):
-        del package['authoring'][key]
-    assert client.delete('/v1/workspace/dataset').status_code == 204
-    assert client.post('/v1/workspace/package', json=package).status_code == 204
-    assert not client.get('/v1/workspace/package').json()['authoring']['ModuleTemplateDraft']
 
 
 def test_unused_module_deletion_cascades_review_records():

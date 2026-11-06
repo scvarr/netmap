@@ -74,18 +74,12 @@ def test_d2_retains_custom_layout_and_blocks_panel_move():
     assert package() == before
 
 
-def test_archive_current_historical_and_corruption():
+def test_archive_roundtrip_and_corruption():
     _, obj, _, document = setup()
     current = package()
-    assert current['format_version'] == 5 and current['module_layout_version'] == 1
+    assert current['format_version'] == 6 and current['module_layout_version'] == 1
     parsed = validate_package(current)
     assert parsed['module_installations'][0]['layout'] == document['bays'][0]['installation']['layout']
-    historical = copy.deepcopy(current)
-    del historical['module_places_version']
-    for b in historical['authoring']['ModuleBay']: del b['kind']
-    del historical['module_layout_version']
-    for i in historical['authoring']['ModuleInstallation']: del i['layout']
-    assert validate_package(historical)['module_installations'] == parsed['module_installations']
     for bad in (None, {}, {**parsed['module_installations'][0]['layout'], 'width': 2}):
         corrupt = copy.deepcopy(current)
         corrupt['authoring']['ModuleInstallation'][0]['layout'] = bad
@@ -108,43 +102,6 @@ def test_aspect_and_rotation():
         ratio = layout['width'] * panel['width'] / (layout['height'] * panel['height'])
         assert ratio == pytest.approx(3 if orientation == 'HORIZONTAL' else 1/3)
     assert endpoint_position({'x': .1, 'y': .2, 'width': .3, 'height': .4}, {'x': .9, 'y': .1}, 'VERTICAL') == pytest.approx((.37, .56))
-
-
-def test_0007_backfills_existing_installations():
-    import os
-    import subprocess
-    import sqlalchemy as sa
-    from app.database import engine
-    from app.workspace_portability import _tables_in_dependency_order
-    setup()
-    parsed = validate_package(package())
-    database = 'f2a_migration_' + uuid.uuid4().hex
-    admin = sa.create_engine(engine.url, isolation_level='AUTOCOMMIT')
-    with admin.connect() as c: c.exec_driver_sql(f'CREATE DATABASE {database}')
-    url = engine.url.set(database=database)
-    isolated = sa.create_engine(url)
-    env = {**os.environ, 'DATABASE_URL': url.render_as_string(hide_password=False)}
-    try:
-        subprocess.run(['alembic', 'upgrade', '0006'], env=env, check=True, capture_output=True)
-        metadata = sa.MetaData()
-        metadata.reflect(isolated)
-        with isolated.begin() as c:
-            for table in _tables_in_dependency_order():
-                rows = parsed[table.name]
-                if table.name == 'cable_label_settings':
-                    c.execute(metadata.tables[table.name].delete())
-                if rows:
-                    c.execute(metadata.tables[table.name].insert(), [{k: v for k, v in r.items() if k != 'layout'} if table.name == 'module_installations' else r for r in rows])
-        subprocess.run(['alembic', 'upgrade', 'head'], env=env, check=True, capture_output=True)
-        with isolated.connect() as c:
-            row = c.execute(sa.text('SELECT id, layout FROM module_installations')).mappings().one()
-            assert row['id'] == parsed['module_installations'][0]['id']
-            assert row['layout'] == parsed['module_installations'][0]['layout']
-            assert c.scalar(sa.text('SELECT count(*) FROM connection_points')) == len(parsed['connection_points'])
-    finally:
-        isolated.dispose()
-        with admin.connect() as c: c.exec_driver_sql(f'DROP DATABASE {database} WITH (FORCE)')
-        admin.dispose()
 
 
 @pytest.mark.parametrize('replace_key', [True, False])

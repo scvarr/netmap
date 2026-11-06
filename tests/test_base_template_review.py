@@ -157,7 +157,7 @@ def test_occupied_bay_capacity_and_deterministic_placement(capacity):
     assert client.get(f'/v1/topology/physical-objects/{object_id}/configuration').json() == before
 
 
-def test_saved_review_freshness_and_workspace_v5_roundtrip():
+def test_saved_review_freshness_and_workspace_v6_roundtrip():
     template_id, _ = create_base()
     obj = create_object(template_id)
     checked = check(template_id, open_draft(template_id))
@@ -167,7 +167,7 @@ def test_saved_review_freshness_and_workspace_v5_roundtrip():
         alias.value = 'Changed after check'
     assert not open_draft(template_id)['review']['current']
     package = client.get('/v1/workspace/package').json()
-    assert package['format_version'] == 5
+    assert package['format_version'] == 6
     assert len(package['authoring']['BaseTemplateDraft']) == 1
     assert len(package['authoring']['BaseTemplateCandidate']) == 1
     assert client.delete('/v1/workspace/dataset').status_code == 204

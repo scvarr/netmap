@@ -46,6 +46,7 @@ from app.physical_object_deletion import PhysicalObjectDeletionCatalog
 from app.repository import CanonicalRepository
 from app.resolver import L1Resolver
 from app.saved_map_catalog import SavedMapCatalog
+from app.port_types import router as port_type_router
 from app.workspace_portability import PackageError, export_package, import_package, reset_dataset
 from app.base_template_review import BaseTemplateReview, publication_state
 from app.module_template_review import ModuleTemplateReview
@@ -157,6 +158,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message
 logger = logging.getLogger("netmap")
 
 app = FastAPI(title="NetMap", version="0.1.0")
+app.include_router(port_type_router)
 install_listener(engine)
 app.middleware("http")(instrument_request)
 
