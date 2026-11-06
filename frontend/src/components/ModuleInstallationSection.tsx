@@ -44,10 +44,11 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   const [draft, setDraft] = useState<ModuleInstallation['layout']>();
   const gesture = useRef<{ x: number; y: number; layout: ModuleInstallation['layout']; resize: boolean } | undefined>(undefined);
   const viewport = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 800, height: 360 });
+  const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
     const element = viewport.current!;
-    const update = () => { if (element.clientWidth && element.clientHeight) setSize({ width: element.clientWidth, height: element.clientHeight }); };
+    // Height is an output of the layout. Only width feeds back into it.
+    const update = () => setWidth(element.clientWidth);
     update();
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update);
     observer?.observe(element);
@@ -57,8 +58,13 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
   // Do not combine a stale projection with a different configuration revision.
   const image = presentation && config?.base_revision_id === presentation.version_ref.entity_id ? presentation : undefined;
   const groups = config && groupBays(config, image, collator);
-  const bounds = image ? panelCompositionBounds(image.panels) : undefined;
-  const scale = bounds ? Math.min(Math.max(1, size.width - 40) / bounds.width, Math.max(1, size.height - 40) / bounds.height) : 1;
+  const bounds = image?.panels.length ? panelCompositionBounds(image.panels) : undefined;
+  const contentWidth = Math.max(1, width - 40);
+  const verticalPadding = editing ? 40 : 24;
+  const height = bounds
+    ? editing ? 360 : Math.min(360, Math.max(140, Math.ceil(contentWidth * bounds.height / bounds.width + verticalPadding)))
+    : undefined;
+  const scale = bounds && height ? Math.min(contentWidth / bounds.width, (height - verticalPadding) / bounds.height) : 1;
   const modulePorts = new Set(config?.bays.flatMap(b => b.installation?.endpoints.map(e => e.connection_point_id) ?? []));
   const selectedBay = config?.bays.find(b => b.installation?.id === selected);
   const installed = selectedBay?.installation;
@@ -99,9 +105,9 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
     </div>}
     {error && <p role="alert">{error} {!editing && <button type="button" className="secondary-action" onClick={() => setRetry(v => v + 1)}>{t('action.retry')}</button>}</p>}
     {!config && !error && <p>{t('create.blueprintsLoading')}</p>}
-    <div ref={viewport} style={{ width: '100%', height: 360, minWidth: 0 }}>
-    {config && !image && <p role="status">{t('layout.presentationUnavailable')}</p>}
-    {image && bounds && <svg role="img" aria-label={t('blueprint.editor.preview')} width="100%" height="100%" viewBox={`${bounds.x - (size.width / scale - bounds.width) / 2} ${bounds.y - (size.height / scale - bounds.height) / 2} ${size.width / scale} ${size.height / scale}`} preserveAspectRatio="xMidYMid meet">
+    <div ref={viewport} style={{ width: '100%', height, minWidth: 0 }}>
+    {config && !bounds && <p role="status">{t('layout.presentationUnavailable')}</p>}
+    {image && bounds && height && width > 0 && <svg role="img" aria-label={t('blueprint.editor.preview')} width="100%" height="100%" viewBox={`${bounds.x - (width / scale - bounds.width) / 2} ${bounds.y - (height / scale - bounds.height) / 2} ${width / scale} ${height / scale}`} preserveAspectRatio="xMidYMid meet">
     {image.panels.map(panel => <svg key={panel.panel_key} role="img" aria-label={panel.display_name} viewBox={`0 0 ${panel.width} ${panel.height}`} x={panel.x} y={panel.y} width={panel.width} height={panel.height} overflow="visible" style={{ touchAction: editing ? 'none' : 'auto' }}
       onPointerMove={e => {
         const g = gesture.current; if (!g || !editing || pending) return;

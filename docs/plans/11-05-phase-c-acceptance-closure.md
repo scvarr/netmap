@@ -1053,3 +1053,15 @@ ordering with `bay_key` as the tie-breaker. Occupied rows show the installed
 orientation and collapsed port details. Free rows offer compact installation
 controls. Manual UX recheck on the same object and external diff inspection
 remain pending.
+
+### HV-01-UX-03 corrective — Adaptive Preview Height
+
+Manual UX recheck found that the fixed 360 px preview left excessive vertical
+space around wide, low equipment and pushed the module table down. The view
+now fits the pinned panel composition to the container width with a 140–360 px
+height and small vertical margins. F2b editing retains its 360 px workspace.
+When the pinned presentation is unavailable, the diagnostic appears without
+reserving canvas height.
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING. Phase C — PAUSED. HV-01 — NOT PASSED.**
+Manual UX recheck on `HV01-TEST-SRV1` remains required.

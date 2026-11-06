@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
 import type { HardwareConfiguration, HardwareModuleDataSource } from '../topology/hardwareModules';
 import { ModuleInstallationSection } from './ModuleInstallationSection';
@@ -19,7 +19,12 @@ function show(dataSource: HardwareModuleDataSource, onInstalled = vi.fn(), prese
   render(<I18nProvider><ModuleInstallationSection objectId="object" presentation={presentation} dataSource={dataSource} onInstalled={onInstalled} /></I18nProvider>);
   return onInstalled;
 }
-beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
+beforeEach(() => {
+  localStorage.clear();
+  vi.restoreAllMocks();
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
+});
+afterEach(() => vi.unstubAllGlobals());
 
 function tableBayKeys() {
   return Array.from(screen.getByRole('table').querySelectorAll('[data-bay-key]'), row => row.getAttribute('data-bay-key'));
@@ -221,7 +226,7 @@ it.each(['server error', '409 layout changed'])('retains reset draft on %s and a
 });
 
 
-it.each([[600, 1], [1, 600], [600, 200]])('fits all panels and keeps NIC-2GE ports at four screen pixels for %s × %s', async (width, height) => {
+it.each([[600, 1, 140], [1, 600, 360], [600, 200, 150]])('fits %s × %s panels in a %s px preview and keeps port radii at four screen pixels', async (width, height, previewHeight) => {
   const data = source();
   const config = structuredClone(occupied);
   const installation = config.bays[0].installation!;
@@ -240,11 +245,22 @@ it.each([[600, 1], [1, 600], [600, 200]])('fits all panels and keeps NIC-2GE por
   expect(screen.getByRole('img', { name: 'Front' }).querySelector('[stroke-dasharray]')).toBeInTheDocument();
   expect(document.querySelectorAll('[data-panel-key]')).toHaveLength(2);
   expect(document.querySelectorAll('[data-endpoint-id]')).toHaveLength(2);
-  const scale = Math.min(760 / (width * 2 + 10), 320 / height);
+  const preview = screen.getByRole('img', { name: 'Предпросмотр схемы' });
+  expect(preview.parentElement).toHaveStyle({ height: `${previewHeight}px` });
+  const [x, y, viewWidth, viewHeight] = preview.getAttribute('viewBox')!.split(' ').map(Number);
+  expect(viewWidth / viewHeight).toBeCloseTo(800 / previewHeight);
+  expect(x).toBeLessThan(0);
+  expect(y).toBeLessThan(0);
+  expect(x + viewWidth).toBeGreaterThan(width * 2 + 10);
+  expect(y + viewHeight).toBeGreaterThan(height);
+  const scale = 800 / viewWidth;
   for (const port of document.querySelectorAll('[data-endpoint-id], [data-builtin-endpoint-id]')) {
     expect(Number(port.getAttribute('r')) * scale).toBeCloseTo(4);
     expect(port).toHaveAttribute('vector-effect', 'non-scaling-stroke');
   }
+  const builtin = screen.getByRole('img', { name: 'Front' }).querySelector('[data-builtin-endpoint-id="builtin"]');
+  expect(Number(builtin?.getAttribute('cx'))).toBeCloseTo(width / 2);
+  expect(Number(builtin?.getAttribute('cy'))).toBeCloseTo(height / 2);
   expect(back.querySelector('[data-installation-id]')).toHaveAttribute('data-installation-id', 'stable-installation-id');
   expect(data.saveLayout).toBeUndefined();
 });
@@ -253,6 +269,37 @@ it('refuses to mix another base revision with the current configuration', async 
   show(source(), vi.fn(), { ...basePresentation, version_ref: { ...basePresentation.version_ref, entity_id: 'latest-published' } });
   await screen.findByText('FC25Gb-2');
   expect(document.querySelector('[data-panel-key]')).not.toBeInTheDocument();
+  expect(screen.getByRole('status').parentElement?.style.height).toBe('');
+});
+
+it('tracks container width across view and editing without resetting the table', async () => {
+  let notifyResize!: () => void;
+  vi.stubGlobal('ResizeObserver', class {
+    constructor(callback: () => void) { notifyResize = callback; }
+    observe() {}
+    disconnect() {}
+  });
+  const { panel } = await editingSource();
+  const preview = panel.parentElement!;
+  const viewport = preview.parentElement!;
+  const order = tableBayKeys();
+  const summary = screen.getByText('Порты');
+  await userEvent.click(summary);
+  expect(viewport).toHaveStyle({ height: '278px' });
+
+  vi.mocked(Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth')!.get!).mockReturnValue(300);
+  act(() => notifyResize());
+  expect(viewport).toHaveStyle({ height: '140px' });
+  const compactViewBox = preview.getAttribute('viewBox');
+
+  await userEvent.click(screen.getByText('Корректировать расположение'));
+  expect(viewport).toHaveStyle({ height: '360px' });
+  expect(preview.getAttribute('viewBox')).not.toBe(compactViewBox);
+  await userEvent.click(screen.getByText('Завершить корректировку'));
+  expect(viewport).toHaveStyle({ height: '140px' });
+  expect(preview).toHaveAttribute('viewBox', compactViewBox);
+  expect(summary.parentElement).toHaveAttribute('open');
+  expect(tableBayKeys()).toEqual(order);
 });
 
 
