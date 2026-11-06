@@ -70,42 +70,64 @@ export function PortTypesPage() {
     void mutate(editingId ? 'PUT' : 'POST', editingId, form);
   }
 
-  return <PageShell className="catalog-page">
+  return <PageShell className="catalog-page port-types-page">
     <Breadcrumbs label={t('portTypes.title')} items={[{ label: t('portTypes.section') }, { label: t('portTypes.title') }]} />
     <PageHeader eyebrow={t('portTypes.section')} title={t('portTypes.title')} />
-    {error && <p role="alert">{t(`portTypes.${error}`)}</p>}
-    {items === null && !error && <p role="status">{t('workspace.working')}</p>}
-    <section className="catalog-surface">
+    {error && <p className="catalog-note catalog-note--gap" role="alert">{t(`portTypes.${error}`)}</p>}
+    {items === null && !error && <p className="catalog-note" role="status">{t('workspace.working')}</p>}
+    <section className="creation-form-surface">
       <form onSubmit={save}>
-        <fieldset disabled={busy || items === null}>
+        <fieldset className="port-types-form" disabled={busy || items === null}>
           <legend>{t(editingId ? 'portTypes.edit' : 'portTypes.create')}</legend>
-          <label>{t('portTypes.name')} <input required maxLength={255} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
-          <label>{t('portTypes.description')} <input value={form.description ?? ''} onChange={(event) => setForm({ ...form, description: event.target.value || null })} /></label>
-          <label>{t('portTypes.palette')} <input type="color" value={hex.test(form.color) ? form.color : emptyForm.color} onChange={(event) => setForm({ ...form, color: event.target.value.toUpperCase() })} /></label>
-          <label>HEX <input required pattern="#[0-9A-Fa-f]{6}" maxLength={7} value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} /></label>
-          <button className="primary-action" type="submit">{t('portTypes.save')}</button>
-          {editingId && <button className="secondary-action" type="button" onClick={resetForm}>{t('portTypes.cancel')}</button>}
+          <div className="port-types-form__fields">
+            <label>{t('portTypes.name')} <input required maxLength={255} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label>
+            <label>{t('portTypes.description')} <input value={form.description ?? ''} onChange={(event) => setForm({ ...form, description: event.target.value || null })} /></label>
+          </div>
+          <div className="blueprint-editor-color">
+            <label>{t('portTypes.palette')} <input type="color" value={hex.test(form.color) ? form.color : emptyForm.color} onChange={(event) => setForm({ ...form, color: event.target.value.toUpperCase() })} /></label>
+            <label>HEX <input required pattern="#[0-9A-Fa-f]{6}" maxLength={7} value={form.color} onChange={(event) => setForm({ ...form, color: event.target.value })} /></label>
+          </div>
+          <div className="port-types-form__actions">
+            <button className="primary-action" type="submit">{t('portTypes.save')}</button>
+            {editingId && <button className="secondary-action" type="button" onClick={resetForm}>{t('portTypes.cancel')}</button>}
+          </div>
         </fieldset>
       </form>
     </section>
-    {items?.length === 0 && <p>{t('portTypes.empty')}</p>}
-    {!!items?.length && <section className="catalog-surface" aria-label={t('portTypes.title')}>
-      <ul>
-        {[...items].sort((a, b) => a.name.localeCompare(b.name)).map(({ id, ...fields }) => (
-          <li key={id}>
-            <span aria-hidden="true" style={{ display: 'inline-block', width: '1em', height: '1em', border: '1px solid currentColor', backgroundColor: fields.color }} />{' '}
-            <strong>{fields.name}</strong> <code>{fields.color}</code> · {t(fields.is_active ? 'portTypes.active' : 'portTypes.archived')}
-            {fields.description && <p>{fields.description}</p>}
-            <div>
-              <button className="secondary-action" type="button" disabled={busy} onClick={() => { setEditingId(id); setForm(fields); setError(null); }}>{t('portTypes.edit')}</button>
-              <button className="secondary-action" type="button" disabled={busy} onClick={() => void mutate('PUT', id, { ...fields, is_active: !fields.is_active })}>{t(fields.is_active ? 'portTypes.archive' : 'portTypes.restore')}</button>
-              {!fields.is_active && <button className="danger-action" type="button" disabled={busy} onClick={() => {
-                if (window.confirm(t('portTypes.deleteConfirm'))) void mutate('DELETE', id);
-              }}>{t('portTypes.delete')}</button>}
-            </div>
-          </li>
-        ))}
-      </ul>
+    {items?.length === 0 && <p className="catalog-note">{t('portTypes.empty')}</p>}
+    {!!items?.length && <section className="catalog-surface catalog-table-wrap" aria-label={t('portTypes.title')}>
+      <table className="catalog-table">
+        <thead>
+          <tr>
+            <th scope="col">{t('portTypes.name')}</th>
+            <th scope="col">{t('blueprint.editor.color')}</th>
+            <th scope="col">{t('catalog.status')}</th>
+            <th scope="col"><span className="sr-only">{t('catalog.actions')}</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...items].sort((a, b) => a.name.localeCompare(b.name)).map(({ id, ...fields }) => (
+            <tr key={id}>
+              <td>
+                <strong>{fields.name}</strong>
+                {fields.description && <small>{fields.description}</small>}
+              </td>
+              <td><span className="port-types-swatch">
+                <span aria-hidden="true" style={{ backgroundColor: fields.color }} />
+                <span>{fields.color}</span>
+              </span></td>
+              <td>{t(fields.is_active ? 'portTypes.active' : 'portTypes.archived')}</td>
+              <td><div className="catalog-table__actions">
+                <button className="secondary-action" type="button" disabled={busy} onClick={() => { setEditingId(id); setForm(fields); setError(null); }}>{t('portTypes.edit')}</button>
+                <button className="secondary-action" type="button" disabled={busy} onClick={() => void mutate('PUT', id, { ...fields, is_active: !fields.is_active })}>{t(fields.is_active ? 'portTypes.archive' : 'portTypes.restore')}</button>
+                {!fields.is_active && <button className="danger-action" type="button" disabled={busy} onClick={() => {
+                  if (window.confirm(t('portTypes.deleteConfirm'))) void mutate('DELETE', id);
+                }}>{t('portTypes.delete')}</button>}
+              </div></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </section>}
   </PageShell>;
 }
