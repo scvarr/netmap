@@ -1,46 +1,139 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import type { BlueprintBody, BaseInternalLink, BlueprintSlot, PresentationPanel } from '../topology/baseTemplateTypes';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import { blueprintThumbnailGeometry } from '../topology/blueprintThumbnailGeometry';
+import type { BlueprintBody, BaseInternalLink, BlueprintSlot, PresentationPanel } from '../topology/baseTemplateTypes';
+import { isPlacedBay, type ModuleBay } from '../topology/hardwareModules';
 
-interface BlueprintPreviewProps { body: BlueprintBody; panels: PresentationPanel[]; slots: BlueprintSlot[]; internalLinks?: BaseInternalLink[]; label?: string; style?: CSSProperties; viewportWidth?: number; viewportHeight?: number; }
-const pointFor = (slot: BlueprintSlot, panels: PresentationPanel[]) => {
-  const panel = panels.find((item) => item.panel_key === slot.panel_key);
-  if (!panel) throw new Error(`Unknown Blueprint panel ${slot.panel_key}`);
-  return { x: panel.x + slot.rendered_position.x * panel.width, y: panel.y + slot.rendered_position.y * panel.height };
-};
-
-/** Non-interactive, intrinsic-aspect library thumbnail. */
-export function BlueprintPreview({ body, panels, slots, internalLinks = [], label, style, viewportWidth = 120, viewportHeight = 120 }: BlueprintPreviewProps) {
-  const { t } = useI18n();
-  const geometry = blueprintThumbnailGeometry(panels, { width: viewportWidth, height: viewportHeight });
-  const points = new Map(slots.map((slot) => [slot.key, pointFor(slot, panels)]));
-  return <div className="blueprint-thumbnail" style={{ width: viewportWidth, height: viewportHeight, ...style }} data-testid="blueprint-thumbnail" data-preview-width={geometry.width} data-preview-height={geometry.height}>
-    <svg className="blueprint-preview" style={{ width: geometry.width, height: geometry.height }} viewBox={`${geometry.originX} ${geometry.originY} ${geometry.intrinsicWidth} ${geometry.intrinsicHeight}`} role="img" aria-label={label ?? t('blueprint.editor.preview')} preserveAspectRatio="xMidYMid meet" data-ratio={geometry.intrinsicWidth / geometry.intrinsicHeight}>
-      {panels.map((panel) => <rect key={panel.panel_key} className="blueprint-preview__body" data-panel-key={panel.panel_key} x={panel.x} y={panel.y} width={panel.width} height={panel.height} rx={Math.min(panel.width, panel.height) * .04} fill={body.fill_color || '#18383a'} />)}
-      {internalLinks.map((link) => { const from = points.get(link.from_slot_key); const to = points.get(link.to_slot_key); return from && to ? <line key={`${link.from_slot_key}-${link.to_slot_key}`} className="blueprint-preview__link" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null; })}
-      {slots.map((slot) => { const point = points.get(slot.key)!; return <g key={slot.key} data-slot-key={slot.key}><circle className={`blueprint-preview__port blueprint-preview__port--${slot.kind.toLowerCase()}`} cx={point.x} cy={point.y} r={Math.max(geometry.intrinsicWidth, geometry.intrinsicHeight) * .018} /><title>{slot.display_name}</title></g>; })}
-    </svg>
-  </div>;
+interface Props {
+  body: BlueprintBody;
+  panels: PresentationPanel[];
+  slots: BlueprintSlot[];
+  internalLinks?: BaseInternalLink[];
+  bays?: ModuleBay[];
+  label: string;
+  variant?: 'base' | 'module';
 }
 
-interface BlueprintPreviewViewportProps extends Omit<BlueprintPreviewProps, 'style' | 'viewportWidth' | 'viewportHeight'> { scale: number; }
+interface Box { left: number; top: number; right: number; bottom: number }
 
-export function BlueprintPreviewViewport({ body, scale, ...preview }: BlueprintPreviewViewportProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [bounds, setBounds] = useState({ width: 0, height: 0 });
+const padding = 20;
+const fontSize = 11;
+const intersects = (a: Box, b: Box) =>
+  a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+export function BlueprintPreview({ body, panels, slots, internalLinks = [], bays = [], label, variant = 'base' }: Props) {
+  const { t } = useI18n();
+  const container = useRef<HTMLDivElement>(null);
+  const viewport = useRef<HTMLDivElement>(null);
+  const [available, setAvailable] = useState({ width: 768, height: 440 });
+  const [zoom, setZoom] = useState(1);
+
   useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) return undefined;
-    const update = () => setBounds({ width: element.clientWidth, height: element.clientHeight });
+    const element = container.current!;
+    const update = () => {
+      if (element.clientWidth > 0) {
+        setAvailable({ width: element.clientWidth, height: Math.min(window.innerHeight * .55, 480) });
+      }
+    };
     update();
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(update);
     observer?.observe(element);
-    return () => observer?.disconnect();
+    window.addEventListener('resize', update);
+    return () => { observer?.disconnect(); window.removeEventListener('resize', update); };
   }, []);
-  const viewportWidth = Math.max(1, (bounds.width - 32) * scale);
-  const viewportHeight = Math.max(1, (bounds.height - 32) * scale);
-  return <div ref={ref} className="blueprint-preview-viewport" data-preview-scale={scale}>
-    <BlueprintPreview {...preview} body={body} viewportWidth={viewportWidth} viewportHeight={viewportHeight} />
+
+  const panelsByKey = new Map(panels.map(panel => [panel.panel_key, panel]));
+  const ports = slots.map(slot => {
+    const panel = panelsByKey.get(slot.panel_key)!;
+    return {
+      ...slot,
+      x: panel.x + slot.rendered_position.x * panel.width,
+      y: panel.y + slot.rendered_position.y * panel.height,
+    };
+  });
+  const portsByKey = new Map(ports.map(port => [port.key, port]));
+  const placedBays = bays.filter(isPlacedBay).map(bay => {
+    const panel = panelsByKey.get(bay.panel_key)!;
+    return { ...bay, x: panel.x + bay.x * panel.width, y: panel.y + bay.y * panel.height,
+      width: bay.width * panel.width, height: bay.height * panel.height };
+  });
+  const rectangles = [...panels, ...placedBays];
+  const left = Math.min(...rectangles.map(rect => rect.x), ...ports.map(port => port.x));
+  const top = Math.min(...rectangles.map(rect => rect.y), ...ports.map(port => port.y));
+  const width = Math.max(...rectangles.map(rect => rect.x + rect.width), ...ports.map(port => port.x)) - left;
+  const height = Math.max(...rectangles.map(rect => rect.y + rect.height), ...ports.map(port => port.y)) - top;
+  const scale = zoom * Math.min(Math.max(1, available.width - 2 * padding - 2) / width,
+    Math.max(1, available.height - 2 * padding - 2) / height);
+  const screenWidth = width * scale;
+  const screenHeight = height * scale;
+
+  // Limit marker diameter by the nearest distinct position, including ports on other panels.
+  const markers = ports.map(port => {
+    let radius = 5;
+    for (const other of ports) {
+      const distance = Math.hypot(other.x - port.x, other.y - port.y);
+      if (distance > 0) radius = Math.min(radius, distance * scale / 3);
+    }
+    return { ...port, radius, px: (port.x - left) * scale, py: (port.y - top) * scale };
+  });
+  const occupied: Box[] = markers.map(({ px, py, radius }) => {
+    const extent = radius * 1.2;
+    return { left: px - extent, right: px + extent, top: py - extent, bottom: py + extent };
+  });
+  const labels = markers.flatMap(marker => {
+    const { px, py, radius, display_name: name } = marker;
+    // An em per character conservatively reserves room for the monospace label and its halo.
+    const halfWidth = Array.from(name).length * fontSize / 2 + 2;
+    if (halfWidth * 2 > screenWidth + 2 * padding - 4) return [];
+    const center = Math.max(halfWidth - padding + 2, Math.min(px, screenWidth + padding - halfWidth - 2));
+    const offset = radius * 1.2 + 3;
+    const below = py + offset;
+    const above = py - offset - fontSize - 4;
+    for (const y of variant === 'module' ? [above, below] : [below, above]) {
+      const box = { left: center - halfWidth, right: center + halfWidth, top: y, bottom: y + fontSize + 4 };
+      if (box.top < -padding || box.bottom > screenHeight + padding || occupied.some(other => intersects(box, other))) continue;
+      occupied.push(box);
+      return [{ key: marker.key, name, x: left + center / scale, y: top + (y + 2) / scale }];
+    }
+    return [];
+  });
+
+  return <div ref={container} className="blueprint-preview">
+    <div className="blueprint-preview__controls" role="group" aria-label={t('moduleGeometry.zoom')}>
+      <button type="button" className="secondary-action" aria-label={t('moduleGeometry.zoomIn')}
+        disabled={zoom === 8} onClick={() => setZoom(value => Math.min(8, value * 2))}>+</button>
+      <button type="button" className="secondary-action" aria-label={t('moduleGeometry.zoomOut')}
+        disabled={zoom === 1} onClick={() => setZoom(value => Math.max(1, value / 2))}>−</button>
+      <button type="button" className="secondary-action" disabled={zoom === 1} onClick={() => {
+        setZoom(1);
+        if (viewport.current) { viewport.current.scrollLeft = 0; viewport.current.scrollTop = 0; }
+      }}>{t('moduleGeometry.fit')}</button>
+    </div>
+    <div ref={viewport} className="blueprint-preview__viewport" tabIndex={zoom > 1 ? 0 : undefined} aria-label={label} role="region">
+      <div className="blueprint-preview__surface" style={{ padding, minWidth: screenWidth + 2 * padding }}>
+        <svg role="img" aria-label={label} viewBox={`${left} ${top} ${width} ${height}`}
+          width={screenWidth} height={screenHeight} preserveAspectRatio="xMidYMid meet">
+          {panels.map(panel => <rect key={panel.panel_key} data-panel-key={panel.panel_key} x={panel.x} y={panel.y}
+            width={panel.width} height={panel.height} fill={body.fill_color || '#18383a'} stroke="#6ba89b"
+            vectorEffect="non-scaling-stroke"><title>{panel.display_name}</title></rect>)}
+          {placedBays.map(bay => <rect key={bay.bay_key} data-bay-key={bay.bay_key} x={bay.x} y={bay.y}
+            width={bay.width} height={bay.height} fill="#85cdbb" fillOpacity=".12" stroke="#85cdbb"
+            strokeDasharray="6 3" vectorEffect="non-scaling-stroke"><title>{bay.display_name}</title></rect>)}
+          {internalLinks.map(link => {
+            const from = portsByKey.get(link.from_slot_key);
+            const to = portsByKey.get(link.to_slot_key);
+            return from && to ? <line key={`${from.key}:${to.key}`} x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+              stroke="#b6dfd3" opacity=".8" vectorEffect="non-scaling-stroke" /> : null;
+          })}
+          {markers.map(port => <g key={port.key} data-slot-key={port.key}>
+            <circle cx={port.x} cy={port.y} r={port.radius / scale}
+              fill={variant === 'module' ? '#fff' : port.kind === 'NETWORK_PORT' ? '#60d4c9' : '#f2d081'}
+              stroke="#1c3135" strokeWidth={port.radius * .4 / scale}><title>{port.display_name}</title></circle>
+          </g>)}
+          {labels.map(port => <text key={port.key} data-port-label={port.key} x={port.x} y={port.y}
+            textAnchor="middle" dominantBaseline="hanging" fontSize={fontSize / scale} fill="#fff"
+            stroke="#102326" strokeWidth={2 / scale} paintOrder="stroke">{port.name}</text>)}
+        </svg>
+      </div>
+    </div>
   </div>;
 }

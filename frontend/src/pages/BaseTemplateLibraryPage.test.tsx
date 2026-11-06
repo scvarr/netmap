@@ -22,8 +22,8 @@ const listed = { ...revision, default_physical_object_class: 'server', slot_coun
 const second = { ...listed, blueprint_ref: { ...listed.blueprint_ref, entity_id: 'other' }, name: 'Other', default_physical_object_class: null };
 const module = {
   template_id: 'nic', revision_id: 'nic-rev', name: 'NIC', compatibility: 'OCP3',
-  geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { p1: { x: .3, y: .5 } } },
-  endpoints: [{ key: 'p1', display_name: 'P1', kind: 'NETWORK_PORT' as const }],
+  geometry: { width: 240, height: 80, fill_color: '#64748b', endpoints: { p1: { x: .3, y: .5 }, p2: { x: .7, y: .75 } } },
+  endpoints: [{ key: 'p1', display_name: 'P1', kind: 'NETWORK_PORT' as const }, { key: 'p2', display_name: 'P2', kind: 'NETWORK_PORT' as const }],
   publication_state: { revision_id: 'nic-rev', version_number: 3, outdated_count: 0, awaiting_update_count: 0, requires_intervention_count: 1, installations: [] },
 };
 
@@ -67,7 +67,7 @@ it('shows only the active compact list and creation link, with keyboard tab navi
   expect(summary).not.toBeInTheDocument();
   const nic = await screen.findByRole('button', { name: /^NIC/ });
   expect(nic).toHaveTextContent('OCP3');
-  expect(nic).toHaveTextContent('Портов: 1');
+  expect(nic).toHaveTextContent('Портов: 2');
   expect(nic).toHaveTextContent('Требуют вмешательства: 1');
   expect(nic).not.toHaveTextContent('Ожидают обновления: 0');
   expect(screen.getByRole('link', { name: 'Создать шаблон модуля' })).toHaveAttribute('href', '/library/module-templates/new');
@@ -115,6 +115,11 @@ it('uses module list geometry and exposes the published revision and editor on d
   expect(svg.querySelector('rect')).toHaveAttribute('fill', '#64748b');
   expect(svg.querySelector('[data-slot-key="p1"] circle')).toHaveAttribute('cx', '72');
   expect(svg.querySelector('[data-slot-key="p1"] circle')).toHaveAttribute('cy', '40');
+  expect(svg.querySelector('[data-slot-key="p2"] circle')).toHaveAttribute('cx', '168');
+  expect(svg.querySelector('[data-slot-key="p2"] circle')).toHaveAttribute('cy', '60');
+  expect(svg.querySelectorAll('circle')).toHaveLength(2);
+  expect(svg.querySelector('[data-port-label="p1"]')).toHaveTextContent('P1');
+  expect(svg.querySelector('[data-port-label="p2"]')).toHaveTextContent('P2');
   expect(within(svg).queryByRole('button')).not.toBeInTheDocument();
   expect(screen.getByText('Текущая опубликованная ревизия: 3')).toBeVisible();
   expect(screen.getByRole('link', { name: 'Изменить шаблон' })).toHaveAttribute('href', '/library/module-templates/nic/edit');

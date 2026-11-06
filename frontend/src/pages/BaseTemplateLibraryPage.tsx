@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { BlueprintPreviewViewport } from '../components/BlueprintPreview';
+import { BlueprintPreview } from '../components/BlueprintPreview';
 import { PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
 import type { BaseTemplateDataSource, BaseTemplateListItem, BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
@@ -50,7 +50,7 @@ function ModulePreview({ module }: { module: ModuleTemplate }) {
     const position = geometry.endpoints[endpoint.key];
     return position ? [{ ...endpoint, panel_key: panel.panel_key, rendered_position: position }] : [];
   });
-  return <BlueprintPreviewViewport label={name} scale={1} panels={[panel]} slots={slots}
+  return <BlueprintPreview label={name} variant="module" panels={[panel]} slots={slots}
     body={{ kind: 'RECTANGLE', width: geometry.width, height: geometry.height, fill_color: geometry.fill_color }} />;
 }
 
@@ -161,8 +161,8 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
                 {preview?.status === 'failed' && <p role="alert">{t('templateLibrary.previewFailed', { error: preview.error })}{' '}
                   <button type="button" className="secondary-action" onClick={() => loadPreview(base, key)}>{t('action.retry')}</button>
                 </p>}
-                {revision && <BlueprintPreviewViewport scale={1} label={base.name} body={revision.body} panels={revision.panels}
-                  slots={revision.slots} internalLinks={revision.internal_links} />}
+                {revision && <BlueprintPreview label={base.name} body={revision.body} panels={revision.panels}
+                  slots={revision.slots} internalLinks={revision.internal_links} bays={revision.bays} />}
                 <div className="template-library-facts">
                   <span>{t('publication.revision', { number: base.version_number })}</span>
                   {revision && <span>{t('templateLibrary.places', { count: revision.bays?.length ?? 0 })}</span>}
