@@ -37,6 +37,11 @@ ModuleTemplate выбирают существующий тип и при отс
 Остальные справочники и технические характеристики PortType остаются OPEN;
 порядок Phase A–I и gates не меняется. HV-01 PASSED; Phase C остаётся открытой.
 
+P-UX-21 — **OPEN / PRODUCT DIRECTION AGREED**, реализация не начата;
+[контракт карты](11-06-clean-start-ui-polish.md#p-ux-21) согласован отдельно.
+Он не входит в P-UX-03E и не блокирует его; C-VIS-02 остаётся OPEN.
+Порядок: P-UX-03E → продолжение Phase C → bounded Phase D fixes.
+
 ## Последовательный порядок
 
 ### Phase A — Known L1 correctness / workflow completion
@@ -249,7 +254,7 @@ representative data scale. После успешного gate объявить `
 
 Для справочников отдельно OPEN: технические характеристики PortType и ограничения
 их изменения, состав остальных справочников и правила технической совместимости.
-Ручная визуальная проверка PT-03 остаётся OPEN. Серия не закрывает Phase C,
+**PT-03 MANUAL RECHECK PASSED (09.11.2026).** Серия не закрывает Phase C,
 Phase D, C-CAP-01 или L1 PRODUCT COMPLETE. Текущий Workspace JSON — v7.
 
 Открыты exact phase/milestone decomposition; auth provider; ACL/storage;

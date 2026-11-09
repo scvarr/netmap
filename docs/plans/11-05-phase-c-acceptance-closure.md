@@ -19,9 +19,13 @@ bounded milestone.
 ### Текущий итог PT-series
 
 PT-01/02/03 — **IMPLEMENTED / ACCEPTED / MERGED**;
-[контракт справочников](../product/user-reference-catalogs.md). Ручная визуальная
-проверка PT-03 остаётся OPEN. Серия не закрывает Phase C, Phase D или C-CAP-01.
+[контракт справочников](../product/user-reference-catalogs.md). **PT-03 MANUAL RECHECK PASSED (09.11.2026)** подтверждена пользователем. Серия не закрывает Phase C, Phase D или C-CAP-01.
 Текущий Workspace JSON — v7; результаты проверок v5 ниже — исторические факты.
+
+P-UX-21 — **OPEN / PRODUCT DIRECTION AGREED**, реализация не начата;
+[контракт представления PhysicalObject](11-06-clean-start-ui-polish.md#p-ux-21).
+Он не входит в P-UX-03E, не блокирует его и не закрывает C-VIS-02.
+Порядок: P-UX-03E → продолжение Phase C → bounded Phase D fixes.
 
 ### Ручная приёмка HV-01 — 06.11.2026
 

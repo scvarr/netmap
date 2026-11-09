@@ -890,7 +890,7 @@ panel checks. Unsafe objects keep their pinned revision and require intervention
 ## PT-03 — Runtime presentation
 
 **IMPLEMENTED / ACCEPTED / MERGED.**
-Ручная визуальная проверка PT-03 остаётся OPEN; она не подменяется external review.
+**PT-03 MANUAL RECHECK PASSED (09.11.2026).** Пользователь подтвердил цвета и формы портов в шаблонах и на физической карте; изменение цвета используемого PortType без публикации новой ревизии; сохранение цвета после перезагрузки; корректное отображение портов установленных модулей; сохранение названия и цвета архивного PortType.
 
 L1 projection carries `port_type_id` from pinned BaseTemplate and installed
 ModuleTemplate endpoint mappings. Runtime Map and physical object port tables
