@@ -38,7 +38,7 @@
   - [[plans/stabilization/10-02-stabilization-backlog|10.2 Stabilization backlog]]
   - [[reviews/10-03-performance-baseline|10.3 Performance baseline и бюджеты]]
 
-- [Пользовательские справочники и границы L1](product/user-reference-catalogs.md) — согласованное pre-L2 продуктовое направление; реализация OPEN.
+- [Пользовательские справочники и границы L1](product/user-reference-catalogs.md) — PortType: PT-01/02/03 IMPLEMENTED / ACCEPTED / MERGED; остальные справочники OPEN.
 
 ## Базовые принципы
 

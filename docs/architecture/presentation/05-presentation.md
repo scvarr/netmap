@@ -1506,7 +1506,11 @@ underlying identities.
 Saved Maps, а L2 — через semantic aggregation/collapse.
 
 
-### PT-03 — User port types (IMPLEMENTED)
+### PT-03 — User port types (IMPLEMENTED / ACCEPTED / MERGED)
+
+Ручная визуальная проверка PT-03 остаётся OPEN. PortType — пользовательское
+определение; изменение названия или цвета не требует новой ревизии шаблона
+и не меняет canonical topology. Отображение включает установленные модули.
 
 Physical Map and object port tables resolve current PortType names/colors by
 UUID from pinned template endpoint mappings. One catalog read per screen includes

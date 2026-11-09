@@ -60,7 +60,9 @@ candidates сохраняют UUID в JSON-определениях. Серве�
 Архивирование сохраняет действующие назначения и закрывает новые.
 
 Форма определяется структурным видом, цвет редактора и preview — текущим
-значением в каталоге. Опубликованные определения сохраняют только UUID.
+значением в каталоге. Опубликованные определения сохраняют только UUID, без копирования изменяемых
+характеристик PortType. Опубликованные ревизии неизменяемы. Редакторы поддерживают
+массовое назначение типа; смена назначения проходит штатный lifecycle ревизий.
 Смена UUID видна при сравнении определений. Существующие объекты и установки
 получают назначение через явное обновление pinned revision и endpoint mappings.
 При прежних ключах и структурных видах сохраняются идентичность endpoint и
@@ -69,6 +71,12 @@ candidates сохраняют UUID в JSON-определениях. Серве�
 
 Workspace v7 сохраняет назначения, каталог и provenance. PT-03 реализован. Технические
 характеристики портов и C-CAP-01 остаются OPEN.
+
+## Исторические checkpoints 09.6
+
+Ниже сохранены контракты и результаты прежних проверок, включая Workspace v5
+и прежние статусы HV-01/Phase C. Они не задают текущий статус: HV-01 PASSED
+06.11.2026, Phase C OPEN; текущий Workspace JSON — v7.
 
 ## Implemented boundary: 09.6-A
 
@@ -121,7 +129,7 @@ Workspace v7 сохраняет назначения, каталог и provenan
   upgrades, published-edit actions and template-less equipment creation API/UI
   are removed. Low-level canonical test builders remain permitted.
 
-Workspace exchange is **v5 only**, explicitly including base templates and
+At this historical checkpoint, Workspace exchange was **v5 only**, explicitly including base templates and
 revisions, panels, built-in definitions and internal links, bays, module
 templates and revisions, ordered module definitions, configurations,
 installations, both endpoint mapping tables, persisted base drafts and frozen
@@ -881,7 +889,8 @@ panel checks. Unsafe objects keep their pinned revision and require intervention
 
 ## PT-03 — Runtime presentation
 
-**IMPLEMENTED / EXTERNAL REVIEW PENDING.**
+**IMPLEMENTED / ACCEPTED / MERGED.**
+Ручная визуальная проверка PT-03 остаётся OPEN; она не подменяется external review.
 
 L1 projection carries `port_type_id` from pinned BaseTemplate and installed
 ModuleTemplate endpoint mappings. Runtime Map and physical object port tables

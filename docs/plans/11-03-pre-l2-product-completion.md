@@ -28,7 +28,9 @@ standalone/multi-user application. L2 не начинается до второ�
 без изменения application code ради новых типов оборудования, портов или
 кабелей. [Контракт справочников](../product/user-reference-catalogs.md) фиксирует
 отдельную поверхность «Справочники» и создание значений непосредственно из форм.
-Это необходимая pre-L2 product capability, а не IMPLEMENTED возможность;
+PT-01/02/03 — IMPLEMENTED / ACCEPTED / MERGED: справочник PortType, обязательные
+назначения в BaseTemplate/ModuleTemplate и отображение актуальных названия/цвета.
+Остальные справочники и технические характеристики PortType остаются OPEN;
 порядок Phase A–I и gates не меняется. HV-01 PASSED; Phase C остаётся открытой.
 
 ## Последовательный порядок
@@ -241,9 +243,10 @@ representative data scale. После успешного gate объявить `
 
 ## OPEN
 
-Для справочников отдельно OPEN: модель хранения, точный набор первой
-реализации, semantics ссылок из immutable revisions, удаление/обновление
-используемых значений и будущие правила технической совместимости.
+Для справочников отдельно OPEN: технические характеристики PortType и ограничения
+их изменения, состав остальных справочников и правила технической совместимости.
+Ручная визуальная проверка PT-03 остаётся OPEN. Серия не закрывает Phase C,
+Phase D, C-CAP-01 или L1 PRODUCT COMPLETE. Текущий Workspace JSON — v7.
 
 Открыты exact phase/milestone decomposition; auth provider; ACL/storage;
 sharing semantics; optional collaboration/portability scope; generic scene
