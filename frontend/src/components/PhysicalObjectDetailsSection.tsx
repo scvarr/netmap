@@ -1,3 +1,4 @@
+import { RuntimePortTypes, RuntimePortLabel } from './RuntimePortTypes';
 import { useEffect, useRef, useState } from 'react';
 import type {
   ConnectionPointDetails,
@@ -255,7 +256,7 @@ const PortRow = ({
   cableLabelDataSource,
 }: PortRowProps) => {
   const { t } = useI18n(); return <tr>
-    <th scope="row">{displayPointLabel(point, t('physical.point', { id: '' }).trim())}</th>
+    <th scope="row"><RuntimePortLabel point={point} label={displayPointLabel(point, t('physical.point', { id: '' }).trim())} /></th>
     <td>{statusLabel(point, t)}</td><td>{attachmentLabel(point, t)}</td><td>{interfaceLabel(point)}</td>
     <td><PortActions point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} cableLabelDataSource={cableLabelDataSource} /></td>
   </tr>;
@@ -285,7 +286,7 @@ export const PhysicalBaseTemplateOverview = ({ provenance, baseTemplateDataSourc
   return <span>{name || t('hardware.base')}</span>;
 };
 
-export function PhysicalObjectDetailsSection({
+function PhysicalObjectDetailsContent({
   node,
   dataSource,
   topologyNodes = [],
@@ -383,7 +384,7 @@ export function PhysicalObjectDetailsSection({
           )}
           {state.document.connection_points.length ? (() => {
             const points = sortedConnectionPoints(state.document.connection_points, t('physical.point', { id: '' }).trim()); const channels = pairedChannels(points);
-            if (channels) return <div className="ports-table-wrap"><h4>{t('physical.channels')}</h4><table className="ports-table"><thead><tr><th>{t('physical.channel')}</th><th>{t('physical.port')} A</th><th>{t('physical.connectionA')}</th><th>{t('physical.actionsA')}</th><th>{t('physical.port')} B</th><th>{t('physical.connectionB')}</th><th>{t('physical.actionsB')}</th></tr></thead><tbody>{channels.map(([left, right], index) => <tr key={left.connection_point_ref.entity_id}><th scope="row">{index + 1}</th><td>{displayPointLabel(left, t('physical.point', { id: '' }).trim())}</td><td>{attachmentLabel(left, t)}</td><td><PortActions point={left} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td><td>{displayPointLabel(right, t('physical.point', { id: '' }).trim())}</td><td>{attachmentLabel(right, t)}</td><td><PortActions point={right} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td></tr>)}</tbody></table></div>;
+            if (channels) return <div className="ports-table-wrap"><h4>{t('physical.channels')}</h4><table className="ports-table"><thead><tr><th>{t('physical.channel')}</th><th>{t('physical.port')} A</th><th>{t('physical.connectionA')}</th><th>{t('physical.actionsA')}</th><th>{t('physical.port')} B</th><th>{t('physical.connectionB')}</th><th>{t('physical.actionsB')}</th></tr></thead><tbody>{channels.map(([left, right], index) => <tr key={left.connection_point_ref.entity_id}><th scope="row">{index + 1}</th><td><RuntimePortLabel point={left} label={displayPointLabel(left, t('physical.point', { id: '' }).trim())} /></td><td>{attachmentLabel(left, t)}</td><td><PortActions point={left} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td><td><RuntimePortLabel point={right} label={displayPointLabel(right, t('physical.point', { id: '' }).trim())} /></td><td>{attachmentLabel(right, t)}</td><td><PortActions point={right} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td></tr>)}</tbody></table></div>;
             return <div className="ports-table-wrap"><table className="ports-table"><thead><tr><th>{t('physical.port')}</th><th>{t('physical.status')}</th><th>{t('physical.connectedTo')}</th><th>{t('physical.interface')}</th><th>{t('physical.actions')}</th></tr></thead><tbody>{points.map((point) => <PortRow key={point.connection_point_ref.entity_id} point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} cableLabelDataSource={cableLabelDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} />)}</tbody></table></div>;
           })() : <p className="device-details-state">{t('physical.noPoints')}</p>}
           <details className="technical-details physical-object-details__technical">
@@ -395,4 +396,8 @@ export function PhysicalObjectDetailsSection({
       )}
     </section>
   );
+}
+
+export function PhysicalObjectDetailsSection(props: PhysicalObjectDetailsSectionProps) {
+  return <RuntimePortTypes><PhysicalObjectDetailsContent {...props} /></RuntimePortTypes>;
 }

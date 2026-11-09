@@ -1,3 +1,4 @@
+import { RuntimePortTypes } from '../components/RuntimePortTypes';
 import { ReactFlowProvider, type XYPosition } from "@xyflow/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -248,7 +249,7 @@ function MapToolbarDropdown({ label, value, options, onChange }: { label: string
   </div>;
 }
 
-export function MapPage({
+function MapPageContent({
   dataSource,
   savedMapDataSource,
   locationDataSource,
@@ -2207,4 +2208,8 @@ export function MapPage({
       </section></div>}
     </main>
   );
+}
+
+export function MapPage(props: MapPageProps) {
+  return <RuntimePortTypes><MapPageContent {...props} /></RuntimePortTypes>;
 }

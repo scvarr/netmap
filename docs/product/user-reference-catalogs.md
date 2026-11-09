@@ -98,7 +98,7 @@ Workspace JSON v7 хранит справочник в `settings.PortType` и с
 
 ## Контракт PT-02
 
-**IMPLEMENTED / EXTERNAL REVIEW PENDING.**
+**IMPLEMENTED / ACCEPTED / MERGED.**
 
 Каждое определение порта BaseTemplate и ModuleTemplate ссылается на PortType
 по UUID независимо от структурного вида. Активный тип доступен для нового
@@ -109,8 +109,7 @@ Workspace JSON v7 хранит справочник в `settings.PortType` и с
 Редакторы и preview разрешают актуальные название и цвет из каталога. Редакторы
 поддерживают массовое создание и назначение. Создание типа выполняется в
 «Справочники → Типы портов». Переименование и смена цвета оставляют ревизии и
-каноническую топологию неизменными. PT-03 (цвета runtime Map и карточек объектов)
-и технические характеристики портов остаются OPEN.
+каноническую топологию неизменными. PT-03 реализован; технические характеристики портов остаются OPEN.
 
 ## Отдельная граница cardinality
 
@@ -135,3 +134,17 @@ cardinality автоматически. Это направление не за�
 
 - Модель и состав следующих справочников.
 - Ограничения технической совместимости и workspace/access scope Phase F.
+
+
+## PT-03 — Runtime presentation
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING.**
+
+L1 projection carries `port_type_id` from pinned BaseTemplate and installed
+ModuleTemplate endpoint mappings. Runtime Map and physical object port tables
+resolve current name/color from one catalog read per screen, including archived
+types. NETWORK_PORT is square; CONNECTION_POINT is circular. Manual untyped
+points remain neutral. State outlines/highlights and interaction handlers remain
+independent of type color. Reloading the screen reads current catalog values;
+no new template publication is required. Technical characteristics remain OPEN.
+Canonical topology, geometry, connectivity and persistence contracts are unchanged.

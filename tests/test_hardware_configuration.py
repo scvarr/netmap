@@ -266,3 +266,31 @@ def test_baseline_schema_is_current_and_seeded():
     from app.models import CableLabelSettings
     with SessionLocal() as session:
         assert session.get(CableLabelSettings, 1) is not None
+
+
+def test_runtime_port_types_follow_pinned_base_and_module_without_port_queries():
+    from sqlalchemy import event
+    from tests.test_l1_physical_projection_e2e import projection_query, node_by_object
+
+    template_id, payload = create_base()
+    module = create_module()
+    obj = create_object(template_id)
+    object_id = obj['physical_object_ref']['entity_id']
+    installed = install(object_id, module['template_id'], payload['bays'][0]['bay_key'])
+    assert installed.status_code == 201
+    expected = {obj['slots'][0]['connection_point_ref']['entity_id']: payload['slots'][0]['port_type_id']}
+    expected.update({e['connection_point_id']: e['port_type_id'] for e in installed.json()['bays'][0]['installation']['endpoints']})
+    before = counts()
+    statements = []
+    def capture(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+    event.listen(engine, 'before_cursor_execute', capture)
+    try:
+        response = client.post('/v1/topology/projection', json=projection_query([object_id]))
+    finally:
+        event.remove(engine, 'before_cursor_execute', capture)
+    assert response.status_code == 200, response.text
+    presentation = node_by_object(response.json(), object_id)['attributes']['blueprint_presentation']
+    assert {s['connection_point_id']: s['port_type_id'] for s in presentation['slots']} == expected
+    assert counts() == before
+    assert not any('FROM port_type' in statement for statement in statements)

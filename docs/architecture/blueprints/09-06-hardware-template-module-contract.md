@@ -50,7 +50,7 @@ representative acceptance and disposition of the remaining `C-*` findings.
 
 ## PT-02 — Назначение пользовательских типов портов
 
-**IMPLEMENTED / EXTERNAL REVIEW PENDING.**
+**IMPLEMENTED / ACCEPTED / MERGED.**
 
 Определения endpoint BaseTemplate и ModuleTemplate сохраняют обязательный
 `port_type_id` из [справочника PortType](../../product/user-reference-catalogs.md).
@@ -67,7 +67,7 @@ candidates сохраняют UUID в JSON-определениях. Серве�
 установки, связи и кабели. Имя, цвет и активность каталога не меняют ревизии
 или канонические записи.
 
-Workspace v7 сохраняет назначения, каталог и provenance. PT-03, технические
+Workspace v7 сохраняет назначения, каталог и provenance. PT-03 реализован. Технические
 характеристики портов и C-CAP-01 остаются OPEN.
 
 ## Implemented boundary: 09.6-A
@@ -877,3 +877,17 @@ Count operations write individual bays through the existing draft, review,
 and publication flow. Objects stay pinned until explicit reconciliation.
 D2 retains its assignment, exact compatibility, capacity and final layout
 panel checks. Unsafe objects keep their pinned revision and require intervention.
+
+
+## PT-03 — Runtime presentation
+
+**IMPLEMENTED / EXTERNAL REVIEW PENDING.**
+
+L1 projection carries `port_type_id` from pinned BaseTemplate and installed
+ModuleTemplate endpoint mappings. Runtime Map and physical object port tables
+resolve current name/color from one catalog read per screen, including archived
+types. NETWORK_PORT is square; CONNECTION_POINT is circular. Manual untyped
+points remain neutral. State outlines/highlights and interaction handlers remain
+independent of type color. Reloading the screen reads current catalog values;
+no new template publication is required. Technical characteristics remain OPEN.
+Canonical topology, geometry, connectivity and persistence contracts are unchanged.

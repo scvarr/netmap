@@ -584,12 +584,12 @@ class ConfiguredTopologyProjectionResolver:
                     continue
                 for endpoint in installation["endpoints"]:
                     key = f"{installation['id']}:{endpoint['key']}"
-                    slot = SimpleNamespace(slot_key=key, display_name=endpoint["local_display_name"], kind=endpoint["kind"], panel_key=bay["panel_key"], position_x=endpoint["x"], position_y=endpoint["y"])
+                    slot = SimpleNamespace(slot_key=key, port_type_id=endpoint["port_type_id"], display_name=endpoint["local_display_name"], kind=endpoint["kind"], panel_key=bay["panel_key"], position_x=endpoint["x"], position_y=endpoint["y"])
                     mapping = SimpleNamespace(connection_point_id=endpoint["connection_point_id"], network_interface_id=endpoint["network_interface_id"])
                     instance_rows.append((mapping, slot))
             geometry = derive_port_geometry([slot for _, slot in instance_rows], panels_by_version[version.id])
             for mapping, slot in instance_rows:
-                item = {"slot_key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "panel_key": slot.panel_key, "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None, **geometry[slot.slot_key]}
+                item = {"slot_key": slot.slot_key, "port_type_id": str(slot.port_type_id), "display_name": slot.display_name, "kind": slot.kind, "panel_key": slot.panel_key, "connection_point_id": str(mapping.connection_point_id), "network_interface_id": str(mapping.network_interface_id) if mapping.network_interface_id is not None else None, **geometry[slot.slot_key]}
                 slots_by_instance[instance.id].append(item)
         return {instance.physical_object_id: {"blueprint_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "BaseTemplate", "entity_id": str(blueprint.id)}, "version_ref": {"ref_type": "LIBRARY_RECORD", "entity_type": "BaseTemplateRevision", "entity_id": str(version.id)}, "body": {"kind": version.body_kind, "width": version.width, "height": version.height, "fill_color": version.fill_color}, "panels": [{"panel_key": panel.panel_key, "panel_number": panel.panel_number, "display_name": panel.display_name, "x": panel.x, "y": panel.y, "width": panel.width, "height": panel.height} for panel in panels_by_version[version.id]], "slots": slots_by_instance[instance.id]} for instance, version, blueprint in by_instance.values()}
     def _physical_candidates(

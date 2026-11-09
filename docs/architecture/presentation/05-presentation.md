@@ -1504,3 +1504,13 @@ underlying identities.
 
 Концептуально L1 масштабируется прежде всего через spatial hierarchy и детальные
 Saved Maps, а L2 — через semantic aggregation/collapse.
+
+
+### PT-03 — User port types (IMPLEMENTED)
+
+Physical Map and object port tables resolve current PortType names/colors by
+UUID from pinned template endpoint mappings. One catalog read per screen includes
+archived types. NETWORK_PORT uses a square, CONNECTION_POINT a circle; manual
+untyped endpoints stay neutral. Wiring/trace states use outlines, glow and opacity
+without replacing the user color. Reloading the screen refreshes the catalog.
+This derived display is not topology evidence and changes no SavedMap state.

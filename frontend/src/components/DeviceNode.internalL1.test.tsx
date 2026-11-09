@@ -197,3 +197,28 @@ describe('DeviceNode internal L1 overlay', () => {
     expect(screen.getByTitle('Front 01 · CONNECTION_POINT')).toHaveClass('blueprint-map-node__port');
   });
 });
+
+
+it('resolves current archived types for base and module glyphs while preserving actions and states', async () => {
+  const { RuntimePortTypes } = await import('./RuntimePortTypes');
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => [{ id: 'type', name: 'Archived copper', color: '#123456', is_active: false }] } as Response);
+  const click = vi.fn();
+  const slots = projection.attributes.blueprint_presentation.slots.map((slot, index) => ({ ...slot, port_type_id: 'type', slot_key: index ? 'installation:port' : slot.slot_key, kind: index ? 'NETWORK_PORT' : 'CONNECTION_POINT' }));
+  const props = { data: { projection: { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots } } }, physicalPortStates: { 'front-01': 'source', 'rear-01': 'unavailable' }, onPhysicalPortClick: click }, selected: true, width: 300 } as any;
+  const view = render(<RuntimePortTypes><DeviceNode {...props} /></RuntimePortTypes>);
+  const circle = await screen.findByTitle('Front 01 · Archived copper');
+  const square = screen.getByTitle('Rear 01 · Archived copper');
+  expect(circle).toHaveStyle({ backgroundColor: '#123456' });
+  expect(square).toHaveStyle({ backgroundColor: '#123456' });
+  expect(circle).toHaveClass('blueprint-map-node__port--connection_point', 'blueprint-map-node__port--wiring-source');
+  expect(square).toHaveClass('blueprint-map-node__port--network_port', 'blueprint-map-node__port--wiring-unavailable');
+  fireEvent.keyDown(circle, { key: 'Enter' });
+  fireEvent.click(square);
+  expect(click).toHaveBeenCalledTimes(1);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  view.unmount();
+  fetchMock.mockResolvedValue({ ok: true, json: async () => [{ id: 'type', name: 'Renamed', color: '#ABCDEF', is_active: false }] } as Response);
+  render(<RuntimePortTypes><DeviceNode {...props} /></RuntimePortTypes>);
+  expect(await screen.findByTitle('Front 01 · Renamed')).toHaveStyle({ backgroundColor: '#ABCDEF' });
+  fetchMock.mockRestore();
+});

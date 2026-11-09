@@ -11,7 +11,7 @@ export interface BlueprintPresentation {
   version_ref: { ref_type: 'LIBRARY_RECORD'; entity_type: 'BaseTemplateRevision'; entity_id: string };
     body: { kind: 'RECTANGLE'; width: number; height: number; fill_color?: string | null };
     panels: Array<{ panel_key: string; panel_number: number; display_name: string; x: number; y: number; width: number; height: number }>;
-    slots: Array<{ slot_key: string; display_name: string; kind: 'CONNECTION_POINT' | 'NETWORK_PORT'; panel_key: string; panel_local_position: { x: number; y: number }; rendered_position: { x: number; y: number }; external_attachment: { x: number; y: number; side: 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM' }; connection_point_id: string; network_interface_id?: string | null }>;
+    slots: Array<{ port_type_id?: string; slot_key: string; display_name: string; kind: 'CONNECTION_POINT' | 'NETWORK_PORT'; panel_key: string; panel_local_position: { x: number; y: number }; rendered_position: { x: number; y: number }; external_attachment: { x: number; y: number; side: 'LEFT' | 'RIGHT' | 'TOP' | 'BOTTOM' }; connection_point_id: string; network_interface_id?: string | null }>;
 }
 export interface PhysicalEndpointPair { from_connection_point_id: string; from_member_index: number; to_connection_point_id: string; to_member_index: number; connection_id: string; connection_member_id: string; cable_ref?: ProjectionSourceRef; cable_display_name?: string; }
 export interface PhysicalInternalL1Link extends PhysicalEndpointPair { source_refs: ProjectionSourceRef[]; }
