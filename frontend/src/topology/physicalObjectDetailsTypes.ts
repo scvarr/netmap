@@ -9,6 +9,7 @@ export interface PhysicalObjectDetails {
 }
 
 export interface ConnectionPointDetails {
+  panel_context?: { panel_name: string; port_name: string; module_name?: string; bay_name?: string };
   canonical_label?: string;
   connection_point_ref: ProjectionSourceRef;
   label: string;

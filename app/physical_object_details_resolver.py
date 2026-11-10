@@ -39,8 +39,10 @@ class ConfiguredPhysicalObjectDetailsResolver:
             bindings_by_point[binding.point_id].append(PhysicalBindingRecord(binding.id, binding.interface_id, binding.point_id, binding.point_member))
         interface_ids = {binding.interface_id for values in bindings_by_point.values() for binding in values}
         interface_aliases = EndpointNames(self.repository.session).network_interfaces(list(interface_ids))
-        provenance, slots = self._blueprint_instance(physical_object_id)
+        provenance, slots, contexts = self._blueprint_instance(physical_object_id)
         details = [self._point_details(point, point_aliases.get(point.point_id), incident, point_by_id, point_aliases, object_aliases, bindings_by_point[point.point_id], interface_aliases, slots.get(point.point_id), cables_by_connection, canonical_aliases.get(point.point_id)) for point in points]
+        for detail in details:
+            detail.panel_context = contexts.get(detail.connection_point_ref.entity_id)
         details.sort(key=lambda value: self._natural_key(value.ordering_key))
         owners = tuple(owner for owner in self.repository.get_network_interface_physical_owners() if owner.physical_object_id == physical_object_id)
         object_alias = object_aliases.get(physical_object_id)
@@ -85,20 +87,30 @@ class ConfiguredPhysicalObjectDetailsResolver:
 
     def _blueprint_instance(self, object_id):
         row = self.repository.session.execute(select(ObjectConfiguration, BaseTemplateRevision, BaseTemplate).join(BaseTemplateRevision, BaseTemplateRevision.id == ObjectConfiguration.base_revision_id).join(BaseTemplate, BaseTemplate.id == BaseTemplateRevision.template_id).where(ObjectConfiguration.physical_object_id == object_id)).one_or_none()
-        if row is None: return None, {}
+        if row is None: return None, {}, {}
         instance, version, blueprint = row
         mappings = self.repository.session.execute(select(BuiltInEndpointMapping, BuiltInEndpointDefinition).join(BuiltInEndpointDefinition, BuiltInEndpointDefinition.id == BuiltInEndpointMapping.definition_id).where(BuiltInEndpointMapping.configuration_id == instance.id)).all()
         slots = {mapping.connection_point_id: BlueprintSlotMetadata(slot_key=slot.slot_key, kind=slot.kind, port_type_id=slot.port_type_id) for mapping, slot in mappings}
         from app.hardware_catalog import HardwareCatalog
-        for bay in HardwareCatalog(self.repository.session).configuration_document(object_id)["bays"]:
+        from app.schemas import EndpointPanelContext
+        configuration = HardwareCatalog(self.repository.session).configuration_document(object_id)
+        panels = {panel["panel_key"]: panel["display_name"] for panel in configuration["panels"]}
+        contexts = {mapping.connection_point_id: EndpointPanelContext(
+            panel_name=panels[slot.panel_key], port_name=slot.display_name,
+        ) for mapping, slot in mappings}
+        for bay in configuration["bays"]:
             installation = bay["installation"]
             if installation:
                 for endpoint in installation["endpoints"]:
+                    contexts[uuid.UUID(endpoint["connection_point_id"])] = EndpointPanelContext(
+                        panel_name=endpoint["panel_display_name"], port_name=endpoint["local_display_name"],
+                        module_name=installation["name"], bay_name=endpoint["bay_display_name"],
+                    )
                     slots[uuid.UUID(endpoint["connection_point_id"])] = BlueprintSlotMetadata(
                         slot_key=f"{installation['id']}:{endpoint['key']}", kind=endpoint["kind"],
                         port_type_id=endpoint["port_type_id"],
                     )
-        return ObjectConfigurationProvenance(blueprint_ref=BlueprintLibraryRef(entity_type="BaseTemplate", entity_id=blueprint.id), version_ref=BlueprintLibraryRef(entity_type="BaseTemplateRevision", entity_id=version.id), version_number=version.version_number), slots
+        return ObjectConfigurationProvenance(blueprint_ref=BlueprintLibraryRef(entity_type="BaseTemplate", entity_id=blueprint.id), version_ref=BlueprintLibraryRef(entity_type="BaseTemplateRevision", entity_id=version.id), version_number=version.version_number), slots, contexts
 
     @staticmethod
     def _label(alias: DisplayAliasRecord | None, entity_type: str, entity_id: uuid.UUID) -> str: return alias.value if alias else f"{entity_type} {str(entity_id)[:8]}"

@@ -600,7 +600,17 @@ class ExternalPhysicalAttachmentDetails(BaseModel):
     cable_label: str | None = None
 
 
+class EndpointPanelContext(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    panel_name: str = Field(min_length=1)
+    port_name: str = Field(min_length=1)
+    module_name: str | None = None
+    bay_name: str | None = None
+
+
 class ConnectionPointDetails(BaseModel):
+    panel_context: EndpointPanelContext | None = None
     canonical_label: str | None = None
     model_config = ConfigDict(extra="forbid")
 

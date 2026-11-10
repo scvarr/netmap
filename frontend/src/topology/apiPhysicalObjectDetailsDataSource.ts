@@ -88,6 +88,11 @@ export const parsePhysicalObjectDetailsDocument = (
     requireObject(item, path);
     validateRef(item.connection_point_ref, `${path}.connection_point_ref`);
     validateLabel(item, path);
+    if (item.panel_context !== undefined) {
+      requireObject(item.panel_context, `${path}.panel_context`);
+      for (const key of ['panel_name', 'port_name']) requireString(item.panel_context[key], `${path}.panel_context.${key}`);
+      for (const key of ['module_name', 'bay_name']) validateOptionalLabel(item.panel_context[key], `${path}.panel_context.${key}`);
+    }
     requireCount(item.cardinality, `${path}.cardinality`, 1);
     requireCount(item.incident_connection_count, `${path}.incident_connection_count`);
     requireCount(item.external_connection_count, `${path}.external_connection_count`);

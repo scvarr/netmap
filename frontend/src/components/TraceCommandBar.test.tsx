@@ -51,3 +51,38 @@ describe('L1 trace port natural ordering', () => {
     expect(trace).toHaveBeenCalledWith({ from_physical_object_id: one, to_physical_object_id: two, from_connection_point_id: 'p2b', to_connection_point_id: 'p2a' });
   });
 });
+
+
+it.each([false, true])('qualifies both selectors from panel context and preserves exact IDs (reverse: %s)', async (reverse) => {
+  const entries = [
+    ['rear10', 'REAR', '10'], ['front10', 'FRONT', '10'], ['front2b', 'FRONT', '2'],
+    ['front1', 'FRONT', '1'], ['rear1', 'REAR', '1'], ['front2a', 'FRONT', '2'],
+    ['module2', 'FRONT', '1', 'Bay 2', 'NIC'], ['module1', 'FRONT', '1', 'Bay 1', 'NIC'],
+  ];
+  if (reverse) entries.reverse();
+  const trace = vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>();
+  const loadDetails = vi.fn((id: string) => {
+    const document = details(id, entries.map(([key]) => [key, 'unqualified']));
+    return Promise.resolve({ ...document, connection_points: [
+      ...document.connection_points.map((port, index) => ({ ...port, panel_context: {
+        panel_name: entries[index][1], port_name: entries[index][2], bay_name: entries[index][3], module_name: entries[index][4],
+      } })), ...details(id, [['loose', 'Loose 7']]).connection_points,
+    ] });
+  });
+  render(<Harness trace={trace} loadDetails={loadDetails} />);
+  await chooseObjects();
+  for (const label of ['Порт источника', 'Порт назначения']) {
+    const select = screen.getByLabelText(label);
+    await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(10));
+    const options = within(select).getAllByRole('option') as HTMLOptionElement[];
+    expect(options.map((option) => option.textContent)).toEqual([
+      'Любой порт', 'Loose 7', 'FRONT/1', 'FRONT/Bay 1/NIC/1', 'FRONT/Bay 2/NIC/1',
+      'FRONT/2', 'FRONT/2', 'FRONT/10', 'REAR/1', 'REAR/10',
+    ]);
+    expect(options.filter((option) => option.textContent === 'FRONT/2').map((option) => option.value)).toEqual(['front2a', 'front2b']);
+  }
+  await userEvent.selectOptions(screen.getByLabelText('Порт источника'), 'module2');
+  await userEvent.selectOptions(screen.getByLabelText('Порт назначения'), 'rear1');
+  await run();
+  expect(trace).toHaveBeenCalledWith({ from_physical_object_id: one, to_physical_object_id: two, from_connection_point_id: 'module2', to_connection_point_id: 'rear1' });
+});

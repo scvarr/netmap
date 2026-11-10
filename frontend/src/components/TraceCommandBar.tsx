@@ -22,11 +22,23 @@ const sortedEquipment = (items: CatalogInventoryEquipmentItem[]) => [...items].s
 
 function PortRefinement({ endpoint, objectId, state, selectedPortId, onSelect }: { endpoint: 'source' | 'destination'; objectId: string; state: EndpointPortState; selectedPortId: string; onSelect: (id: string) => void }) {
   const { t } = useI18n();
+  const qualifiedName = (port: ConnectionPointDetails) => port.panel_context
+    ? `${port.panel_context.panel_name}/${port.panel_context.port_name}` : port.label;
+  const counts = new Map<string, number>();
+  for (const port of state.ports) counts.set(qualifiedName(port), (counts.get(qualifiedName(port)) ?? 0) + 1);
+  const portName = (port: ConnectionPointDetails) => {
+    const context = port.panel_context;
+    return context && counts.get(qualifiedName(port))! > 1 && (context.bay_name || context.module_name)
+      ? [context.panel_name, context.bay_name, context.module_name, context.port_name].filter(Boolean).join('/')
+      : qualifiedName(port);
+  };
   const ports = [...state.ports].sort((left, right) =>
-    portLabelOrder.compare(left.label, right.label)
+    portLabelOrder.compare(left.panel_context?.panel_name ?? '', right.panel_context?.panel_name ?? '')
+    || portLabelOrder.compare(left.panel_context?.port_name ?? left.label, right.panel_context?.port_name ?? right.label)
+    || portLabelOrder.compare(portName(left), portName(right))
     || left.connection_point_ref.entity_id.localeCompare(right.connection_point_ref.entity_id, 'en'));
   const label = t(endpoint === 'source' ? 'trace.sourcePort' : 'trace.destinationPort');
-  return <label>{label}<select aria-label={label} value={selectedPortId} onChange={(event) => onSelect(event.target.value)} disabled={!objectId || state.objectId !== objectId}><option value="">{t('trace.anyPort')}</option>{ports.map((port) => <option key={port.connection_point_ref.entity_id} value={port.connection_point_ref.entity_id}>{port.label}</option>)}</select>{state.error && <small className="trace-command__refinement-error">{t('trace.portLoadFailed', { error: state.error })}</small>}</label>;
+  return <label>{label}<select aria-label={label} value={selectedPortId} onChange={(event) => onSelect(event.target.value)} disabled={!objectId || state.objectId !== objectId}><option value="">{t('trace.anyPort')}</option>{ports.map((port) => <option key={port.connection_point_ref.entity_id} value={port.connection_point_ref.entity_id}>{portName(port)}</option>)}</select>{state.error && <small className="trace-command__refinement-error">{t('trace.portLoadFailed', { error: state.error })}</small>}</label>;
 }
 
 export function TraceCommandBar({ catalogInventoryDataSource, physicalObjectDetailsDataSource, traceDataSource, traceArtifact, selectedBranchId, onSelectedBranchId, onTraceArtifact }: TraceCommandBarProps) {

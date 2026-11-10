@@ -64,6 +64,7 @@ L2/L3 authoring/trace workbench, operational collection и multi-user прило
 ## Реализовано, но требует отдельной ручной проверки
 
 C-UX-15 IMPLEMENTED / RECHECK PENDING: естественный порядок портов L1 trace,
+реальные имена панелей/портов и модульный контекст при совпадении;
 «Любой порт» первым, дубликаты сохраняют canonical IDs; адресные automated tests.
 Ручная проверка и внешняя инспекция FINAL diff ожидаются. C-UX-01/12/13/14 имеют отдельный
 RECHECK PENDING. HV-01 не заменяет проверки визуальной компоновки F2b,

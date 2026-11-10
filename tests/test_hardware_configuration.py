@@ -294,3 +294,36 @@ def test_runtime_port_types_follow_pinned_base_and_module_without_port_queries()
     assert {s['connection_point_id']: s['port_type_id'] for s in presentation['slots']} == expected
     assert counts() == before
     assert not any('FROM port_type' in statement for statement in statements)
+
+
+def test_trace_panel_context_uses_configured_panels_and_installed_modules_without_map():
+    payload = base_payload()
+    front = payload['panels'][0]
+    front['display_name'] = 'FRONT'
+    rear = {**front, 'panel_key': str(uuid.uuid4()), 'panel_number': 2, 'display_name': 'REAR'}
+    payload['panels'].append(rear)
+    payload['slots'][0]['display_name'] = '1'
+    payload['slots'].append({**payload['slots'][0], 'key': str(uuid.uuid4()), 'panel_key': rear['panel_key']})
+    payload['bays'][0]['display_name'] = 'PCIe1'
+    payload['bays'].append({**payload['bays'][0], 'bay_key': str(uuid.uuid4()), 'display_name': 'PCIe2'})
+    template_id, _ = create_base(payload)
+    object_id = create_object(template_id)['physical_object_ref']['entity_id']
+    module = create_module(names=('1', '10', '2'))
+    installed_ids = set()
+    for bay in payload['bays']:
+        response = install(object_id, module['template_id'], bay['bay_key'])
+        assert response.status_code == 201, response.text
+        installed_ids.update(e['connection_point_id'] for b in response.json()['bays'] if b['installation'] for e in b['installation']['endpoints'])
+    response = client.get(f'/v1/topology/physical-objects/{object_id}')
+    assert response.status_code == 200, response.text
+    points = response.json()['connection_points']
+    assert len(points) == 8
+    built_in = [p for p in points if p['connection_point_ref']['entity_id'] not in installed_ids]
+    assert {p['panel_context']['panel_name'] for p in built_in} == {'FRONT', 'REAR'}
+    assert {p['panel_context']['port_name'] for p in built_in} == {'1'}
+    modules = [p for p in points if p['connection_point_ref']['entity_id'] in installed_ids]
+    assert len(modules) == 6
+    assert {p['panel_context']['bay_name'] for p in modules} == {'PCIe1', 'PCIe2'}
+    assert {p['panel_context']['module_name'] for p in modules} == {module['name']}
+    assert {p['panel_context']['port_name'] for p in modules} == {'1', '2', '10'}
+    assert all(p['panel_context']['panel_name'] == 'FRONT' for p in modules)

@@ -62,3 +62,11 @@ describe('ApiPhysicalObjectDetailsDataSource', () => {
     expect(() => parsePhysicalObjectDetailsDocument({ ...result, connection_points: [{ ...result.connection_points[0], external_physical_attachments: [{ kind: 'GUESS', connection_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Connection', entity_id: 'c' }, evidence_refs: [] }] }] })).toThrow(/kind/);
   });
 });
+
+
+it('preserves factual panel context and rejects malformed context', () => {
+  const panel_context = { panel_name: 'REAR', port_name: '1', bay_name: 'PCIe2', module_name: 'NIC' };
+  const document = { ...physicalObjectDocument, connection_points: [{ ...physicalObjectDocument.connection_points[0], panel_context }] };
+  expect(parsePhysicalObjectDetailsDocument(document).connection_points[0].panel_context).toEqual(panel_context);
+  expect(() => parsePhysicalObjectDetailsDocument({ ...document, connection_points: [{ ...document.connection_points[0], panel_context: { ...panel_context, panel_name: 1 } }] })).toThrow(/panel_name/);
+});
