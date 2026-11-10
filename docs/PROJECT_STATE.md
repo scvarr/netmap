@@ -49,6 +49,13 @@
 - **C-COR-02 VERIFIED**: пользователь 10.11.2026 подтвердил распределение у
   границ панели, отклонение невозможной операции без частичных изменений,
   сохранение и повторное открытие.
+- **C-VIS-03 VERIFIED**: foreground SVG перекрывал маркеры DeviceNode
+  фиксированной заливкой; теперь foreground использует общий каталог PortType,
+  включая архивные типы. Wiring-подсветка отделена от базового цвета.
+  Адресные автоматические проверки пройдены. External review реализации
+  daff76edce19424c6ba72004ee4b41f5b0d8772d и ручная приёмка пройдены
+  10.11.2026: пользователь подтвердил сохранение цветов после операций
+  с кабелями и в проверенных режимах карты.
 - Export/reset/import текущего implicit workspace через настройки данных.
   Текущий Workspace JSON **v7** (`app/workspace_portability.py`), с geometry,
   layout и logical module places version 1. Это не persisted multi-workspace UI.
@@ -66,12 +73,6 @@ L2/L3 authoring/trace workbench, operational collection и multi-user прило
 нет. Продуктовая реализация L2 начинается только после L1 PRODUCT COMPLETE.
 
 ## Реализовано, но требует отдельной ручной проверки
-
-**C-VIS-03 IMPLEMENTED / RECHECK PENDING**: foreground-маркеры физической карты
-используют общий каталог PortType, включая архивные типы; wiring-подсветка
-не заменяет базовую заливку. Адресные автоматические проверки покрывают оба
-слоя, Cable lifecycle, trace и порядок catalog/projection; ручные сценарии
-Cable create/delete, L1 trace, wiring и SavedMap variants ещё не подтверждены.
 
 C-UX-01/12/13/14 имеют отдельный
 RECHECK PENDING. HV-01 не заменяет проверки визуальной компоновки F2b,
