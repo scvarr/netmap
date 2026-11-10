@@ -16,13 +16,17 @@ interface TraceCommandBarProps {
 
 interface EndpointPortState { objectId: string; ports: ConnectionPointDetails[]; error: string | null; }
 const emptyPorts = (): EndpointPortState => ({ objectId: '', ports: [], error: null });
+const portLabelOrder = new Intl.Collator('ru', { numeric: true, sensitivity: 'base' });
 const warningText = (warning: Record<string, unknown>) => JSON.stringify(warning);
 const sortedEquipment = (items: CatalogInventoryEquipmentItem[]) => [...items].sort((left, right) => left.label.localeCompare(right.label, undefined, { numeric: true, sensitivity: 'base' }));
 
 function PortRefinement({ endpoint, objectId, state, selectedPortId, onSelect }: { endpoint: 'source' | 'destination'; objectId: string; state: EndpointPortState; selectedPortId: string; onSelect: (id: string) => void }) {
   const { t } = useI18n();
+  const ports = [...state.ports].sort((left, right) =>
+    portLabelOrder.compare(left.label, right.label)
+    || left.connection_point_ref.entity_id.localeCompare(right.connection_point_ref.entity_id, 'en'));
   const label = t(endpoint === 'source' ? 'trace.sourcePort' : 'trace.destinationPort');
-  return <label>{label}<select aria-label={label} value={selectedPortId} onChange={(event) => onSelect(event.target.value)} disabled={!objectId || state.objectId !== objectId}><option value="">{t('trace.anyPort')}</option>{state.ports.map((port) => <option key={port.connection_point_ref.entity_id} value={port.connection_point_ref.entity_id}>{port.label}</option>)}</select>{state.error && <small className="trace-command__refinement-error">{t('trace.portLoadFailed', { error: state.error })}</small>}</label>;
+  return <label>{label}<select aria-label={label} value={selectedPortId} onChange={(event) => onSelect(event.target.value)} disabled={!objectId || state.objectId !== objectId}><option value="">{t('trace.anyPort')}</option>{ports.map((port) => <option key={port.connection_point_ref.entity_id} value={port.connection_point_ref.entity_id}>{port.label}</option>)}</select>{state.error && <small className="trace-command__refinement-error">{t('trace.portLoadFailed', { error: state.error })}</small>}</label>;
 }
 
 export function TraceCommandBar({ catalogInventoryDataSource, physicalObjectDetailsDataSource, traceDataSource, traceArtifact, selectedBranchId, onSelectedBranchId, onTraceArtifact }: TraceCommandBarProps) {

@@ -42,9 +42,9 @@ Phase C и Phase D не завершены. Performance blocker можно ис�
 | C-UX-12 | Проверить массовое именование, spatial order, обнаруживаемость и сохранение | RECHECK PENDING | Исправление реализовано |
 | C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
 | C-UX-14 | Проверить понятность Change Inspector и точность больших сводок impact | RECHECK PENDING | Реализован; HV-01 не заменяет UX recheck |
-| C-UX-15 | Natural ordering trace port selector: «Любой порт» первым, 1,2,…10; дубликаты отдельны | OPEN | Сортировка equipment уже есть; это другой список |
+| C-UX-15 | Natural ordering trace port selector: «Любой порт» первым, 1,2,…10; дубликаты отдельны | IMPLEMENTED / RECHECK PENDING | Адресные automated tests; ручная проверка и внешняя инспекция FINAL diff ожидаются |
 | C-UX-16 | Undo/Redo draft waypoint operations и delete в панели | PRODUCT DECISION PENDING | История отсутствует; delete через инспектор есть; final toolbar/hotkeys открыты |
-| C-COR-02 | Полный manual recheck distribute у границ панели, невозможная операция и reload | RECHECK PENDING | Исправление реализовано; высокий приоритет |
+| C-COR-02 | Полный manual recheck distribute у границ панели, невозможная операция и reload | VERIFIED | Пользователь 10.11.2026 подтвердил границы панели, атомарное отклонение невозможной операции, сохранение и повторное открытие |
 | C-VIS-01 | Trace виден поверх обычных совпадающих/пересекающихся routes, соседний Cable не evidence | OPEN | Плотная карта; channel-specific часть зависит от C-UX-10 |
 | C-VIS-02 | Исследовать и устранить различия runtime marker sizes, проверить zoom | OPEN | Низкий приоритет; PT-03 не закрывает |
 | C-CAP-01 | Truthful FANOUT-1x24 от authoring до одного multichannel Cable и member trace | OPEN | Promoted Phase D; не подменять 24 фиктивными входами/кабелями |

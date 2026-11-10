@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { useState } from 'react'; import userEvent from '@testing-library/user-event'; import { describe, expect, it, vi } from 'vitest';
 import { TraceCommandBar } from './TraceCommandBar';
 import type { PhysicalObjectL1TraceArtifact, PhysicalObjectL1TraceQuery } from '../topology/physicalObjectL1TraceTypes';
@@ -20,4 +20,34 @@ describe('TraceCommandBar exact ConnectionPoint refinement', () => {
   it('clears a stale exact port immediately when its PhysicalObject changes', async () => { const trace = vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>(); const loadDetails = vi.fn((id: string) => Promise.resolve(details(id, [[id === one ? sourcePort : targetPort, 'Port']]))); render(<Harness trace={trace} loadDetails={loadDetails} />); await chooseObjects(); await userEvent.selectOptions(await screen.findByLabelText('Порт источника'), sourcePort); await userEvent.selectOptions(screen.getByLabelText('Откуда'), three); expect(screen.getByLabelText('Порт источника')).toHaveValue(''); });
   it('ignores stale details responses for a replaced endpoint', async () => { let resolveOne!: (value: ReturnType<typeof details>) => void; const first = new Promise<ReturnType<typeof details>>((resolve) => { resolveOne = resolve; }); const trace = vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>(); const loadDetails = vi.fn((id: string) => id === one ? first : Promise.resolve(details(id, [[targetPort, 'Current Port']]))); render(<Harness trace={trace} loadDetails={loadDetails} />); await openTrace(); await userEvent.selectOptions(await screen.findByLabelText('Откуда'), one); await userEvent.selectOptions(screen.getByLabelText('Откуда'), three); await screen.findByRole('option', { name: 'Current Port' }); resolveOne(details(one, [[sourcePort, 'Stale Port']])); await waitFor(() => expect(screen.queryByRole('option', { name: 'Stale Port' })).not.toBeInTheDocument()); });
   it('allows unconstrained tracing after port details fail and changing a port alone never traces', async () => { const trace = vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>(); const loadDetails = vi.fn((id: string) => id === one ? Promise.reject(new Error('offline')) : Promise.resolve(details(id, [[targetPort, 'Free port']]))); render(<Harness trace={trace} loadDetails={loadDetails} />); await chooseObjects(); expect(await screen.findByText(/Не удалось загрузить порты: offline/)).toBeInTheDocument(); await userEvent.selectOptions(await screen.findByLabelText('Порт назначения'), targetPort); expect(trace).not.toHaveBeenCalled(); await run(); expect(trace).toHaveBeenCalledWith({ from_physical_object_id: one, to_physical_object_id: two, to_connection_point_id: targetPort }); });
+});
+
+
+describe('L1 trace port natural ordering', () => {
+  it.each([false, true])('keeps Any port first and duplicate endpoints deterministic (reversed input: %s)', async (reverse) => {
+    const ports: Array<[string, string]> = [
+      ['p11', '11'], ['p2b', '2'], ['p10', '10'], ['p3', '3'], ['p1', '1'], ['p2a', '2'],
+      ['eth10', 'eth1/10'], ['eth2', 'eth1/2'],
+    ];
+    if (reverse) ports.reverse();
+    const trace = vi.fn<(query: PhysicalObjectL1TraceQuery) => Promise<PhysicalObjectL1TraceArtifact>>();
+    render(<Harness trace={trace} loadDetails={vi.fn((id: string) => Promise.resolve(details(id, ports)))} />);
+    await chooseObjects();
+    for (const label of ['Порт источника', 'Порт назначения']) {
+      const select = screen.getByLabelText(label);
+      await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(9));
+      const options = within(select).getAllByRole('option') as HTMLOptionElement[];
+      expect(options.map((option) => option.textContent)).toEqual(['Любой порт', '1', '2', '2', '3', '10', '11', 'eth1/2', 'eth1/10']);
+      expect(options.map((option) => option.value)).toEqual(['', 'p1', 'p2a', 'p2b', 'p3', 'p10', 'p11', 'eth2', 'eth10']);
+    }
+    await userEvent.selectOptions(screen.getByLabelText('Порт источника'), 'p2b');
+    await userEvent.selectOptions(screen.getByLabelText('Порт назначения'), 'p2a');
+    expect(trace).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Свернуть' }));
+    await openTrace();
+    expect(screen.getByLabelText('Порт источника')).toHaveValue('p2b');
+    expect(screen.getByLabelText('Порт назначения')).toHaveValue('p2a');
+    await run();
+    expect(trace).toHaveBeenCalledWith({ from_physical_object_id: one, to_physical_object_id: two, from_connection_point_id: 'p2b', to_connection_point_id: 'p2a' });
+  });
 });

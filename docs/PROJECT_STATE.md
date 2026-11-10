@@ -42,6 +42,9 @@
 - L1 trace из карты и physical trace API с exact evidence; Cable highlight
   не выводится из пересечения линий. **C-COR-01, C-UX-08 replacement VERIFIED**;
   **C-UX-07 и C-UX-11 VERIFIED**.
+- **C-COR-02 VERIFIED**: пользователь 10.11.2026 подтвердил распределение у
+  границ панели, отклонение невозможной операции без частичных изменений,
+  сохранение и повторное открытие.
 - Export/reset/import текущего implicit workspace через настройки данных.
   Текущий Workspace JSON **v7** (`app/workspace_portability.py`), с geometry,
   layout и logical module places version 1. Это не persisted multi-workspace UI.
@@ -60,8 +63,9 @@ L2/L3 authoring/trace workbench, operational collection и multi-user прило
 
 ## Реализовано, но требует отдельной ручной проверки
 
-C-COR-02: исправление распределения endpoints реализовано; полный manual recheck
-у границ панели и reload ещё ожидается. C-UX-01/12/13/14 имеют отдельный
+C-UX-15 IMPLEMENTED / RECHECK PENDING: естественный порядок портов L1 trace,
+«Любой порт» первым, дубликаты сохраняют canonical IDs; адресные automated tests.
+Ручная проверка и внешняя инспекция FINAL diff ожидаются. C-UX-01/12/13/14 имеют отдельный
 RECHECK PENDING. HV-01 не заменяет проверки визуальной компоновки F2b,
 управления портами ModuleTemplate, pinned preview, адаптивной высоты таблицы
 установок и faithful library preview. P-UX-07/08/11 и заменяющие сценарии
@@ -72,7 +76,7 @@ P-UX-13/14/15 требуют применимого ручного покрыт�
 Phase C **OPEN**, Phase D не завершена, **L1 PRODUCT COMPLETE не достигнут**.
 Не реализованы truthful FANOUT-1x24 authoring и multichannel connect через UI
 (C-CAP-01), Location cable channels/comb (C-UX-10), route Undo/Redo (C-UX-16),
-natural ordering trace port selector (C-UX-15), P-UX-21/22.
+P-UX-21/22.
 Открыты independent placement Height, rename объекта и другие C-UX проверки;
 соседние завершённые UX milestones их автоматически не закрывают.
 
