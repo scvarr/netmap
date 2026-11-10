@@ -2,7 +2,7 @@
 
 [Текущее состояние](PROJECT_STATE.md) · [Контракты](ARCHITECTURE.md) · [Решения](OPEN_DECISIONS.md)
 
-OPEN — отсутствует необходимая реализация; RECHECK PENDING — исправление есть,
+VERIFIED — контракт реализован и принят; OPEN — отсутствует необходимая реализация; RECHECK PENDING — исправление есть,
 нужна проверка; PRODUCT DECISION PENDING — контракт ещё не выбран; BLOCKED —
 конкретная зависимость. Приоритет не задан, если явно не указан.
 Для ручных проверок зависимость — доступный Docker stand с representative data;
@@ -27,14 +27,35 @@ OPEN — отсутствует необходимая реализация; REC
 Phase C и Phase D не завершены. Performance blocker можно исправлять раньше по
 зависимости, не меняя порядок gates.
 
+## Обязательность и очередь без изменения Phase A–I
+
+Обязательные условия **L1 PRODUCT COMPLETE**: завершить gates C/D, затем E–I;
+Phase F включает persisted NetworkWorkspace, auth/access/sharing/activity;
+Phase H — PERF-002/003/004/005 («до L2: ДА»), актуальные измерения и явно
+promoted blockers; Phase I — итоговая приёмка. Backend L2/L3 core этого не заменяет.
+
+Необходимая работа C/D: representative L1 acceptance, конкретные остатки
+RECHECK ниже, truthful multichannel C-CAP-01; CAT-D сначала требует решения
+о минимальном составе. C-CAP-01 один, его строка в C — finding для Phase D.
+Для C-UX-03/05/06/09/10, C-VIS-01/02 сохраняются findings, но обязательность каждого
+как blocker C и точный bounded scope требуют решения: список применимых C-*
+не означает автоматического MUST для любой обсуждавшейся capability.
+
+Необязательные для текущего gate улучшения: performance/maintenance пункты
+с «до L2: НЕТ», archive measurement/compression; повышение их обязательности
+требует решения. P-UX-21 имеет согласованное направление, но статус обязательного
+blocker не установлен. Для P-UX-22, C-UX-16, дополнительных справочников и
+будущих slices контракт/обязательность уточняются отдельно. CAT-E остаётся
+работой Phase E, CAT-F зависит от Phase F; это не blockers начала Phase C.
+
 ## Remaining Phase C
 
 | ID | Остаток / критерий завершения | Статус | Зависимости / приоритет |
 | --- | --- | --- | --- |
 | C-UX-01 | Проверить Location tree/create/reparent произвольной глубины | RECHECK PENDING | P-UX-18 реализован |
-| C-UX-02 | Проверить штатное создание из BaseTemplate, отсутствие обычного ручного обхода и initial Location | OPEN | HV-01 покрывает только часть; replacement P-UX-14 |
-| C-UX-03 | Понятные FRONT/REAR как физические стороны, без input/output смысла | OPEN | Шаблоны/карта, reload |
-| C-UX-04 | Явное переименование объекта во всех представлениях с сохранением IDs/связей | OPEN | P-UX-15 не реализует rename |
+| C-UX-02 | Штатное создание PhysicalObject из BaseTemplate с выбором initial Location, без обходных ручных операций | VERIFIED | Пользователь 10.11.2026 подтвердил неоднократную успешную проверку; только этот контракт |
+| C-UX-03 | Явные FRONT/REAR как физические стороны, без input/output смысла | OPEN | Произвольные panel labels есть; отдельная семантика сторон этим не доказана. Уточнить, достаточно ли labels, затем проверить шаблон/карту/reload |
+| C-UX-04 | Rename из списка объектов реализован; проверить новое имя в карточке, карте/инспекторе, поиске и trace после переходов и reload; IDs, подключения и placements неизменны | RECHECK PENDING | API и клиентские тесты есть; обновление всех зависимых представлений вручную не подтверждено |
 | C-UX-05 | Guides границ/центров и равных интервалов при drag | OPEN | Presentation-only, без auto-layout |
 | C-UX-06 | Независимые Width/Height placement через карту/карточку; порты следуют телу | OPEN | Единый presentation contract; не менять template geometry |
 | C-UX-09 | Derived preview в компактном выборе BaseTemplate и ручная различимость | OPEN | Таблица есть, preview при создании отсутствует |
@@ -55,10 +76,17 @@ HV-01 PASSED, PT-01/02/03 приняты, P-UX-03E принят и merged — н
 
 Дополнительное ручное покрытие (RECHECK PENDING):
 
-- P-UX-07: RU terminology; P-UX-08: shared page shell; P-UX-11: bounded editor viewport.
-- P-UX-13/14/15: заменяющие BaseTemplate create/picker/initial Location/object tabs
-  сценарии. Проверить без восстановления obsolete Blueprint workflow.
-- P-UX-19: отдельный пользовательский проход preview/conflicts/atomic Location series.
+- P-UX-07: проверить понятность RU terminology в текущих формах и карте;
+  P-UX-08: согласованность PageShell/header/loading/error на переходах между страницами;
+  P-UX-11: только viewport ModuleTemplate и остальных редакторов, кроме BaseTemplate
+  (его большие данные и полезная площадь проверяются один раз в C-UX-13).
+- P-UX-13/14/15 не отдельная очередь: create/initial Location закрыты C-UX-02;
+  компактный picker preview — C-UX-09; rename — только остаток C-UX-04.
+  Остался RECHECK PENDING переходов обзор/физика/интерфейсы карточки: правильный
+  объект, данные и возврат после reload. Obsolete Blueprint workflow не восстанавливать.
+- P-UX-19: только preview/conflicts/atomic Location series и reload; дерево/create/reparent
+  проверяются один раз в C-UX-01. Массовые endpoint naming/order — только C-UX-12;
+  viewport BaseTemplate — только C-UX-13; Change Inspector — только C-UX-14.
 - F2b composition; ModuleTemplate endpoint controls и pinned preview; адаптивная
   высота installation table; library faithful preview. HV-01 не доказал все visual cases.
 - P-UX-10: применимость async page-chrome сценария к текущей библиотеке проверить;
@@ -78,7 +106,7 @@ members/evidence -> export/reset/import/reload. Synthetic stand не утвер�
 
 ## Remaining Phase D и справочники
 
-C-CAP-01 — OPEN: template endpoint cardinality/member mapping, материализация и
+C-CAP-01 (единый пункт, ссылка из Phase C) — OPEN: template endpoint cardinality/member mapping, материализация и
 UI multichannel connect должны выражать один вход с 24 каналами, internal fanout
 и точный trace выбранного канала после reload. Не вводить Fanout entity ради формы.
 
@@ -122,9 +150,9 @@ runtime, разделяя resolver/SQL/serialization/frontend и SMALL/MEDIUM/PO
 | PERF-008 | OPEN: projection scope pushdown/N+1 | PERF-001; rows/parameters масштабируются scope; semantic equivalence | MEDIUM / НЕТ |
 | PERF-009 | OPEN: serialization cost/size | PERF-001; measured split, согласованный bounded response без потери evidence | MEDIUM / НЕТ |
 | PERF-010 | OPEN: точечные route subscriptions вместо O(N) | Проверить актуальный route component, доказать устранение лишних updates | LOW / НЕТ |
-| PERF-011 | OPEN: aggregate library counts/latest | Применить к Base/Module templates; bounded queries с тем же порядком | LOW / НЕТ |
+| PERF-011 | OPEN: aggregate BaseTemplate counts/latest и bounded Module endpoint reads | Base list делает per-item queries; Module latest уже scalar subquery, не реализовывать повторно; измерить оставшиеся reads | LOW / НЕТ |
 | API-002 | PRODUCT DECISION PENDING: единая NOT_FOUND read семантика | Сначала контракт; не менять HTTP statuses автоматически | LOW / НЕТ |
-| FE-002 | RECHECK PENDING: защита create-map от double submit | Проверить один POST и disabled pending; не дублировать существующий guard | LOW / НЕТ |
+| FE-002 | OPEN: защита create-map от double submit отсутствует в текущем create handler/dialog | Добавить pending guard и disabled; один POST, refresh retry без повторной mutation | LOW / НЕТ |
 | FE-003 | RECHECK PENDING: scene keys layout store | Проверить изоляцию active callers; удалённые paths не восстанавливать | LOW / НЕТ |
 | MAINT-002 | BLOCKED: разбиение main.py при расширении L2 API | После L1 PRODUCT COMPLETE и конкретного L2 scope; сохранить API | LOW / НЕТ |
 
@@ -134,3 +162,39 @@ upgrade/delete/slot API и не являются обязательной реа
 CORR-001 (глубокие passive paths) — RECHECK PENDING: проверить текущий iterative
 resolver на глубокой легальной цепи; criteria — без RecursionError и потери evidence;
 LOW, не автоматически до L2. CONC-001/API-001/FE-001/LOC-001 завершены и не возвращены.
+
+## Основания DOC-RECON-02 (10.11.2026)
+
+Сверка с base `a0f9b8d522121668ae6bdc0b489cc02352a0be3d`; тесты только прочитаны,
+не запускались. Ручная приёмка в этой сверке добавлена только для C-UX-02.
+
+- C-UX-02/09: `frontend/src/pages/NewInfrastructureObjectPage.tsx`,
+  `frontend/src/topology/apiBaseTemplateDataSource.ts`, `app/main.py`:
+  выбор BaseTemplate и Location, create API; таблица выбора без derived preview.
+- C-UX-04: `frontend/src/pages/InfrastructureObjectsPage.tsx` и `.test.tsx`
+  (rename, authoritative inventory refresh включая cable endpoint labels, ошибки);
+  `frontend/src/topology/apiPhysicalObjectDisplayNameWriteDataSource.ts` и `.test.ts`;
+  `PUT /v1/topology/physical-objects/{physical_object_id}/display-name`,
+  `app/device_catalog.py`, `tests/test_physical_object_display_name_e2e.py`
+  (alias update, неизменность point/connection/placement IDs, validation).
+  Эти проверки не доказывают обновление всех открытых UI views.
+- Location tree/series: `app/location_catalog.py`, `tests/test_locations_e2e.py`;
+  naming/viewport/impact: `frontend/src/pages/BaseTemplateEditor.tsx`,
+  `BaseTemplateChangeInspector.tsx`, `app/base_template_review.py`.
+  Визуальные остатки HV-01 сохраняются отдельно от lifecycle acceptance.
+- PERF-005: `MapPage.tsx` запускает logical projection effect и в physical view;
+  PERF-010: `FloatingTopologyEdge.tsx` использует `useNodes`; PERF-011:
+  `app/hardware_catalog.py` — Base per-item counts/latest, Module latest уже aggregate.
+- FE-002: в `MapPage.tsx` create не имеет pending guard, кнопка создания не disabled
+  на время POST; guard variant creation не закрывает map creation.
+- PERF-007/FE-003: `TopologyCanvas.tsx`, `topology/layout.ts`, `layoutStore.ts`
+  содержат authoritative positions и scene scope; остаются isolation/fallback/time-to-map.
+
+Остальные OPEN performance — задачи измерения и устранения оставшейся стоимости,
+а не заявление об отсутствии всей оптимизации. Сначала текущий baseline для
+PERF-002/003/004/008/009; только затем bounded fix по выявленному hotspot.
+C-UX-05: guides в composition editor уже есть, остаток — runtime drag и равные
+интервалы; не повторять editor guides. C-UX-06 — именно независимая placement
+Height, не отсутствие template/body geometry. C-UX-10 — shared channel/comb,
+не существующие boundary anchors/snapping. C-VIS-01/02 — проверяемые visual findings,
+не доказанная причина дефекта и не повод переоткрыть PT-03/C-VIS-03.

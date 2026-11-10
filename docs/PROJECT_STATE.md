@@ -60,6 +60,15 @@
   Текущий Workspace JSON **v7** (`app/workspace_portability.py`), с geometry,
   layout и logical module places version 1. Это не persisted multi-workspace UI.
 
+- **C-UX-02 VERIFIED**: штатное создание PhysicalObject из BaseTemplate с выбором
+  initial Location, без обходных ручных операций. Пользователь 10.11.2026 подтвердил
+  неоднократную успешную проверку. Это не приёмка picker preview или иных сценариев.
+- Rename PhysicalObject доступен в списке оборудования: клиент вызывает
+  `PUT /v1/topology/physical-objects/{physical_object_id}/display-name`;
+  тесты покрывают обновление inventory и сохранение identity/связей.
+  **C-UX-04 RECHECK PENDING**: карточка, карта/инспектор, поиск и trace после
+  переходов и reload; ручная согласованность всех views пока не подтверждена.
+
 ## Реализовано в canonical/resolver core, но не как полный UI продукта
 
 Backend содержит L1 member-aware connectivity, interface realization,
@@ -74,19 +83,20 @@ L2/L3 authoring/trace workbench, operational collection и multi-user прило
 
 ## Реализовано, но требует отдельной ручной проверки
 
-C-UX-01/12/13/14 имеют отдельный
+C-UX-01/04/12/13/14 имеют отдельный
 RECHECK PENDING. HV-01 не заменяет проверки визуальной компоновки F2b,
 управления портами ModuleTemplate, pinned preview, адаптивной высоты таблицы
 установок и faithful library preview. P-UX-07/08/11 и заменяющие сценарии
-P-UX-13/14/15 требуют применимого ручного покрытия. Подробнее — BACKLOG.
+P-UX-13/14/15 сведены к C-UX-02/04/09 и проверке переходов вкладок, без повторного create acceptance. Подробнее — BACKLOG.
 
 ## Отсутствует и текущие ограничения
 
 Phase C **OPEN**, Phase D не завершена, **L1 PRODUCT COMPLETE не достигнут**.
 Не реализованы truthful FANOUT-1x24 authoring и multichannel connect через UI
 (C-CAP-01), Location cable channels/comb (C-UX-10), route Undo/Redo (C-UX-16),
-P-UX-21/22.
-Открыты independent placement Height, rename объекта и другие C-UX проверки;
+P-UX-21; контракт P-UX-22 ещё требует решения.
+Открыты independent placement Height и другие C-UX findings; rename реализован,
+осталась ручная проверка обновления зависимых представлений (C-UX-04);
 соседние завершённые UX milestones их автоматически не закрывают.
 
 C-VIS-01 (trace поверх пересекающихся линий) и C-VIS-02 (неодинаковый размер
@@ -105,3 +115,13 @@ workspace_portability, module_reconciliation и frontend routes/data sources.
 исторический формат, не текущий export. Старый OPEN C-UX-14 заменён актуальным
 IMPLEMENTED / RECHECK PENDING. Неподтверждённые manual результаты не объявлены
 успешными. Исторические fixture archives сохраняются вместе с тестами.
+
+## Условия завершения и границы обязательности
+
+L1 PRODUCT COMPLETE требует gates C/D → E → F → G → H → I, включая persisted
+workspace/auth/access/sharing/activity и обязательные PERF-002/003/004/005.
+Состав необходимых fixes C/D и вопросы обязательности отдельных UX findings
+явно разделены в [BACKLOG](BACKLOG.md).
+Необязательные улучшения с «до L2: НЕТ» и будущие product decisions не становятся
+blockers автоматически. Нового roadmap эта сверка не вводит.
+FE-002 уточнён как OPEN: guard создания variant не защищает создание карты.
