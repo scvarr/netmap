@@ -1,0 +1,94 @@
+# Текущее состояние NetMap
+
+Срез актуального main на 10.11.2026. Это состояние продукта, не журнал разработки.
+Контракты: [ARCHITECTURE](ARCHITECTURE.md); оставшаяся работа: [BACKLOG](BACKLOG.md);
+обсуждения: [OPEN_DECISIONS](OPEN_DECISIONS.md).
+
+## Реализовано и доступно пользователю
+
+- Canonical L1: PhysicalObject, ConnectionPoint, NetworkInterface, физические
+  bindings, Connection/ConnectionMember и Cable. Карточка объекта разделена на
+  обзор, физику и интерфейсы. Обычный connect/disconnect и bulk pairing работают
+  с ordinary endpoints cardinality=1; это не полное multichannel authoring.
+- BaseTemplate и ModuleTemplate: библиотеки, создание и редактирование,
+  persisted drafts, проверка candidate, impact review, публикация immutable
+  revision, создание объектов и установка модулей, анализ и безопасное обновление
+  объектов/установок. Недостаточная совместимая ёмкость требует вмешательства,
+  без потери конфигурации. **HV-01 PASSED**.
+- Геометрия оборудования: панели, порты, module body geometry, composition layout,
+  ручная компоновка установок, логические модульные места с count/capacity.
+  Установленный модуль — конфигурация объекта, не отдельный PhysicalObject.
+- **PT-01/02/03 IMPLEMENTED / ACCEPTED / MERGED**. Справочник PortType,
+  обязательный выбор активного типа для template endpoints; название и цвет
+  читаются из актуального справочника, включая архивные используемые записи.
+  NETWORK_PORT квадратный, CONNECTION_POINT круглый. PT-03 manual recheck PASSED.
+  Новые PortType создаются в разделе «Справочники», не внутри редактора шаблона.
+- Locations: произвольная canonical hierarchy, поиск и выбор родителя,
+  назначение объекту, дерево с collapse/expand, массовое создание дочерней серии
+  с preview и атомарным сохранением. Location.type — открытая optional строка.
+- SavedMap и именованные MapPresentationVariant: placements, отдельные позиции
+  физических/логических видов, presentation routes, text annotations.
+  Spatial P-UX-03A–E реализован; **P-UX-03E ACCEPTED / MERGED / MANUAL RECHECK PASSED**.
+  Derived Location frames, unary path labels, recursive collapse, выбор видимых
+  непосредственных элементов, group move с collision rejection и route transform.
+- Редактор кабельного маршрута: transient draft, Save/Cancel, добавление,
+  перемещение и удаление waypoints через инспектор, snapping к чужой геометрии,
+  angle/length assistance, числовое изменение длины сегмента, boundary anchors.
+  Выбор другого элемента не теряет draft; выход из карты отменяет несохранённое.
+  Полной Undo/Redo истории нет.
+- Массовые операции: ordered port pairing с обязательным preview и одной
+  canonical transaction; шаблоны Cable labels; массовое именование и spatial
+  order endpoints, выравнивание/распределение в редакторах.
+- L1 trace из карты и physical trace API с exact evidence; Cable highlight
+  не выводится из пересечения линий. **C-COR-01, C-UX-08 replacement VERIFIED**;
+  **C-UX-07 и C-UX-11 VERIFIED**.
+- Export/reset/import текущего implicit workspace через настройки данных.
+  Текущий Workspace JSON **v7** (`app/workspace_portability.py`), с geometry,
+  layout и logical module places version 1. Это не persisted multi-workspace UI.
+
+## Реализовано в canonical/resolver core, но не как полный UI продукта
+
+Backend содержит L1 member-aware connectivity, interface realization,
+L2 contexts/bindings/encapsulation, configured/effective forwarding и FDB,
+L3 routing/next-hop/reachability, security, NAT, policy routing и packet-flow
+orchestration. Реализацию задают `app/*resolver.py`, модели и соответствующие
+backend tests. Наличие core не означает продуктовую готовность L2/L3.
+
+Logical SavedMap и bounded interface/L2 actions существуют; полноценного
+L2/L3 authoring/trace workbench, operational collection и multi-user приложения
+нет. Продуктовая реализация L2 начинается только после L1 PRODUCT COMPLETE.
+
+## Реализовано, но требует отдельной ручной проверки
+
+C-COR-02: исправление распределения endpoints реализовано; полный manual recheck
+у границ панели и reload ещё ожидается. C-UX-01/12/13/14 имеют отдельный
+RECHECK PENDING. HV-01 не заменяет проверки визуальной компоновки F2b,
+управления портами ModuleTemplate, pinned preview, адаптивной высоты таблицы
+установок и faithful library preview. P-UX-07/08/11 и заменяющие сценарии
+P-UX-13/14/15 требуют применимого ручного покрытия. Подробнее — BACKLOG.
+
+## Отсутствует и текущие ограничения
+
+Phase C **OPEN**, Phase D не завершена, **L1 PRODUCT COMPLETE не достигнут**.
+Не реализованы truthful FANOUT-1x24 authoring и multichannel connect через UI
+(C-CAP-01), Location cable channels/comb (C-UX-10), route Undo/Redo (C-UX-16),
+natural ordering trace port selector (C-UX-15), P-UX-21/22.
+Открыты independent placement Height, rename объекта и другие C-UX проверки;
+соседние завершённые UX milestones их автоматически не закрывают.
+
+C-VIS-01 (trace поверх пересекающихся линий) и C-VIS-02 (неодинаковый размер
+маркеров на runtime map) остаются OPEN. Причина C-VIS-02 не установлена.
+Boundary route re-entry одного Location не поддерживается. Общие каналы,
+endpoint-relative route sections, MapReference, physical occupancy, дополнительные
+справочники и характеристики PortType — будущие возможности.
+MapComposite и MapRegion удалены, поддерживаемыми моделями не являются.
+
+## Основания и разрешённые противоречия
+
+Проверены `app/models.py`, `app/main.py`, physical_connections,
+workspace_portability, module_reconciliation и frontend routes/data sources.
+Старый README отрицал wiring и описывал MapRegion — эти сведения устарели.
+Старые NOT PASSED HV-01 заменены итогом PASSED; v5 в validation records —
+исторический формат, не текущий export. Старый OPEN C-UX-14 заменён актуальным
+IMPLEMENTED / RECHECK PENDING. Неподтверждённые manual результаты не объявлены
+успешными. Исторические fixture archives сохраняются вместе с тестами.

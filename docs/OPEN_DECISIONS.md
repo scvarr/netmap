@@ -1,0 +1,190 @@
+# Открытые продуктовые и архитектурные решения
+
+[Состояние](PROJECT_STATE.md) · [Контракты](ARCHITECTURE.md) · [Работы](BACKLOG.md)
+
+Перечисленные направления обсуждались; незаданные schema/API/UX здесь не выбираются.
+Принятый target не равен реализации. Разработка идёт по Phase A–I.
+
+### P-UX-21 — представление PhysicalObject на карте
+
+**Статус: OPEN / PRODUCT DIRECTION AGREED. Реализация не начата.**
+
+Согласованное продуктовое направление для runtime Map:
+
+1. Большой внешний контур на пользовательском эскизе обозначает Location,
+   а не корпус PhysicalObject.
+2. Отдельная горизонтальная полоса заголовка сверху убирается. Корпус визуально
+   разделяется на левую вертикальную область названия PhysicalObject,
+   центральную область оборудования и правую область дополнительной информации.
+3. Непосредственный Location может отображаться справа, если его подпись не
+   пересекается с кабельными линиями. Если правая область занята, Location
+   допускается показывать под названием объекта слева. Точные правила выбора
+   расположения подписи и обработки пересечений остаются OPEN.
+4. Существующий spatial contract
+   одиночных Location chains и derived path labels сохраняется. Это presentation
+   context; новая модель принадлежности объектов не вводится.
+5. Расположение и координаты портов, принадлежность панелям и модулям сохраняются.
+   Маркеры портов должны стать визуально компактнее, по примеру редакторов
+   шаблонов; область взаимодействия с портом при этом не уменьшается.
+6. Формы NETWORK_PORT/CONNECTION_POINT и цвета PortType сохраняют
+   контракт PT-03.
+7. Кабельные маршруты не перестраиваются ради декоративных подписей.
+8. Canonical topology, endpoint identity, connections, trace evidence, SavedMap
+   и Location hierarchy не меняют семантику.
+9. P-UX-21 не входит в P-UX-03E. Это отдельная будущая реализация;
+   C-VIS-02 не закрывается автоматически.
+
+### P-UX-22 — Взаимодействие с объектами на физической карте
+
+**Статус: OPEN / PRODUCT DISCUSSION. Продуктовый контракт ещё не утверждён полностью.**
+
+Наблюдения и направления будущего UX-обсуждения:
+
+- Текущий курсор перемещения слишком крупный.
+- Действие левой кнопки мыши не всегда очевидно: перемещается карта или элемент
+  под курсором.
+- При наведении на интерактивный объект желательно подсвечивать его контур.
+- При наведении на порт желательно подсвечивать конкретный порт и показывать
+  специализированный компактный курсор.
+- Визуальная реакция должна отражать реальную доступность действия.
+- Необходимо рассмотреть режимы выбора, перемещения карты и редактирования.
+
+Конкретные режимы и горячие клавиши не утверждены. Space+drag, средняя кнопка
+мыши и отдельные инструменты остаются вариантами будущего UX-обсуждения.
+P-UX-22 — отдельная будущая работа вне P-UX-03E.
+
+
+### C-UX-16 — История изменений и инструменты редактора трасс
+
+**OPEN / PRODUCT DIRECTION.** При редактировании трассы нет доступных
+пользователю Undo/Redo, а удаление выбранной точки недостаточно заметно.
+Удаление выбранного waypoint уже реализовано через QuickInspector; повторно
+реализовывать его не требуется. Отдельной полноценной истории Undo/Redo нет.
+
+**Целевое направление (реализация сейчас не выполняется).**
+
+1. Undo отменяет последнее изменение геометрии в текущей сессии редактирования;
+   Redo повторяет отменённое изменение.
+2. История охватывает добавление, перемещение, числовое редактирование и удаление
+   waypoints. Новое изменение после Undo сбрасывает доступную ветку Redo.
+3. Удаление выбранного обычного waypoint доступно непосредственно в панели
+   редактирования маршрута. Кнопки отражают доступность действия.
+4. История изменяет только transient draft. Save выполняет существующую persisted
+   запись; Cancel возвращает сохранённую геометрию.
+5. Существующие ограничения Location boundary anchors сохраняются.
+6. Canonical Cable, Connection, endpoints, trace evidence и SavedMap schema
+   не меняются.
+7. Горячие клавиши и окончательная композиция панели остаются OPEN для
+   отдельного UX-контракта.
+
+C-UX-16 не входит в C-UX-11 и не переоткрывает его. Завершённые milestones
+11-08 не реализуют эту историю.
+
+## C-UX-10 — Location cable channels
+
+Согласовано: пользователь выбирает два Location, channel привязан к их границам
+и имеет редактируемый промежуточный общий участок; порт A -> граница A -> channel
+-> граница B -> порт B. Это presentation SavedMap/variant, не canonical CableBundle.
+Canonical Cables независимы; channel не доказывает физический путь. Требуются
+общая направляющая, автоматическая comb-прокладка и количество Cable на общем
+участке; trace одного Cable не делает весь общий участок его evidence.
+
+Необходимая boundary видима, если ровно один endpoint channel принадлежит subtree;
+unary simplification её не скрывает. Между двумя детьми граница родителя не
+обязательна. Explicit collapse родителя приоритетен: внутренние channels скрыты,
+пересекающие представлены на внешней границе без раскрытия детей. Geometry
+сохраняется и восстанавливается рекурсивно. Это будущая семантика, не current renderer.
+
+Открыты persistence/API/DTO/lifecycle и связь Cable с channel; назначение/снятие,
+редактирование подводов/common section/anchors; nested/partial collapse и Location
+без renderable bounds; hierarchy changes/deletion/copy variants; поиск и выбор
+между несколькими channels; алгоритм comb. Waypoint snapping не реализует channel.
+Зависимость — отдельный bounded milestone после решений, не пересмотр C-UX-11.
+
+## Справочники и техническая совместимость
+
+PT-01/02/03 завершены. Согласовано: reusable user-defined values, выбор из
+«Справочников», current name/color независимо от immutable template revision.
+Открыты дополнительные типы оборудования/кабелей, классификации, технические
+характеристики PortType (technology/speed/connector), compatibility catalog,
+создание типов прямо из форм, immutable fields и правила блокировки изменений
+используемых типов, безопасное deletion/archive/update. Не подменять cardinality
+или member mapping классификацией; не вводить закрытую hardware taxonomy.
+Phase D определяет минимальные L1 classifications, E — UX, F — workspace/access.
+
+## Endpoint-relative route sections
+
+Обсуждались waypoints относительно ConnectionPoint: непрерывный prefix/suffix
+одного endpoint, между системами координат elastic segment; допускается несколько
+relative points. Это presentation, не новая connectivity. Persistence/API/schema
+и UX открыты; не часть P-UX-03E и не принятый implementation milestone.
+
+## Spatial и оборудование
+
+Ordered child layout (rack units/chassis/shelves), physical occupancy нескольких
+мест, selector-based collapse, reusable Location series templates, arbitrary
+nonphysical grouping — открытые отдельные capabilities. Current Location assignment
+остаётся single immediate Location, не many-to-many; geometry не доказывает occupancy.
+MapReference — будущая composition/navigation независимых SavedMaps с drill-down
+и canonical-derived crossings, не Location/containment или простой hyperlink-object.
+Scene schema/persistence, interaction и milestone placement не выбраны.
+Nested modules, CPU/RAM/disks/PSU inventory и mechanical compatibility не реализованы;
+scope/need открыты. Dense runtime map LOD остаётся отдельным измеряемым решением;
+PT-03 уже решает базовые shape/color, не требует повторного проектирования.
+
+## Workspace, multi-user и история
+
+Согласовано: NetworkWorkspace — application isolation boundary над network core;
+SavedMap — presentation внутри dataset, EvaluationView — coherent read, не workspace.
+Persisted isolation/auth/access/sharing/activity нужны до L2 (Phase F), exact
+bounded decomposition открыта. Auth provider, roles/groups/ACL inheritance,
+SQLAlchemy scope и storage/schema strategy, provisioning/archive/soft-delete,
+sharing permissions/public links, query/UI и release gate не выбраны.
+Fork/merge/compare/rebase, copy-on-write, database-per-workspace, packages,
+comments/annotations, map cloning/templates и общая portability не становятся MUST
+автоматически. Текущий v7 export/reset/import не закрывает эту family.
+
+Generic activity: append-only mutation journal, global feed и per-entity projection,
+не event sourcing и не source of truth topology. Actor/workspace attribution после
+соответствующих foundations; CableLabelHistory уже отдельное domain exception.
+Открыты event taxonomy, persisted schema, before/after vs delta/snapshot,
+transaction/correlation, actor integration, indexing, retention, query/filter/UI
+и права чтения. Exact version/update alias rules нельзя переносить со старого
+Blueprint API на новый template lifecycle без проверки текущего контракта.
+
+## Media/capability, diagnostics и operational data
+
+Согласовано различать stable media/configured component facts, capability,
+configured link state и observed/negotiated state. Nominal Cable capacity не
+равна interface capability, negotiated speed или throughput. Reusable profiles
+открыты по schema/storage/API; не фиксировать универсальное Cat6=10G правило.
+Path diagnostics могут учитывать transceiver/passive components/remote endpoint,
+lanes/PHY/medium, не только ConnectionPoint.speed. Wireless/transport modelling,
+capacity chain/bottleneck и standards scope требуют product use case; порядок
+после обязательных gates уточняется отдельно.
+
+Observations/collectors отделены от canonical truth: source/time/freshness/evidence,
+явное reconciliation при conflict/drift. Historical/timeline support, scheduling,
+observation storage, Dynamic Map query language/membership persistence и сохранение
+layout остаются открытыми. Collector не запускается только ради одной карты.
+Health overlays и problem-only modes — направления, не окончательные enums/API.
+Secrets SNMP/API/SSH/monitoring — application secrets; VIEW не даёт credentials,
+обычный workspace export не переносит их открытым текстом. Secrets storage и
+permissions источников не выбраны.
+
+## Дополнительные границы решений
+
+- Степень/валидация физических points по типам, реальные пути Cable через
+  промежуточные Locations, история переподключений и temporal states остаются
+  открытыми; presentation channels не являются физическим inventory.
+- Массовый multichannel member mapping и степень FANOUT authoring зависят от
+  C-CAP-01. Canonical foundation есть; exact template/API решение не выбрано.
+- Поиск всего оборудования и свободного порта для создания связи независимо от
+  текущей карты — future product direction; map click остаётся быстрым способом.
+- Application compression: сначала размеры текущего v7 и ZIP/GZIP, затем решение
+  о собственном формате; старый v5 размер не основание архитектуры.
+- RoutingPolicy/PACKET_MARK storage/predicate domains, direct-next-hop PBR,
+  redirect, VRF leaking и effective observations требуют отдельного product scope;
+  наличие backend resolvers не означает весь предполагаемый UI/persistence.
+- API-002 missing-resource semantics, performance budgets и LOD выбираются на
+  текущих измерениях и контрактах, не ради старой формы тестов.
