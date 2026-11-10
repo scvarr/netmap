@@ -4,7 +4,7 @@
 
 Этот документ — актуальный обязательный реестр всех замечаний, обнаруженных
 при первой representative Phase C приёмке, и порядок их последующей ручной
-проверки. В реестре остаются все замечания `C-UX-01` ... `C-UX-15`,
+проверки. В реестре остаются все замечания `C-UX-01` ... `C-UX-16`,
 `C-COR-01`, `C-CAP-01` и `C-VIS-01`; замечание не считается необязательным
 только потому, что его исправление относится к Phase D или более позднему
 bounded milestone.
@@ -95,16 +95,17 @@ workflow. Такое supersession записывается прямо в finding
 | `C-UX-05` | `OPEN` | — |
 | `C-UX-06` | `OPEN` | `P-UX-17` явно оставляет independent Height вне scope |
 | `C-UX-07` | `VERIFIED` | 10.11.2026 пользователь подтвердил Location group move и collision rejection; ROUTE-01 MANUAL RECHECK PASSED. Canonical subtree displacement contract сохранён. |
-| `C-COR-01` | `SUPERSEDED / RECHECK PENDING` | MapComposite удалён; отдельно проверить выбор и взаимодействие с членами Location subtree после P-UX-03E. |
-| `C-UX-08` | `SUPERSEDED / RECHECK PENDING` | Membership заменён Location placement; отдельно проверить изменение состава и сохранение после reload; отдельный recheck после P-UX-03E. |
+| `C-COR-01` | `SUPERSEDED / REPLACEMENT RECHECK VERIFIED (10.11.2026)` | Пользователь подтвердил Location-driven interaction; исходный MapComposite workflow не восстанавливался. |
+| `C-UX-08` | `SUPERSEDED / REPLACEMENT RECHECK VERIFIED (10.11.2026)` | Проверены изменение Location существующего объекта, grouping, collapse и reload без пересоздания. |
 | `C-UX-09` | `OPEN` | В `NewInfrastructureObjectPage` реализована компактная таблица выбора BaseTemplate. Графического предпросмотра в сценарии создания пока нет. Preview в `BaseTemplateLibraryPage` доступен отдельно. Остаётся ручная проверка различимости шаблонов при создании объекта. |
 | `C-CAP-01` | `OPEN` | Promoted semantic gap; bounded Phase D fix ещё не принят |
 | `C-UX-10` | `OPEN` | Есть контракт Location cable channels и инструменты waypoints/snapping; автоматический comb и общий направляющий участок требуют реализации и проверки. |
-| `C-UX-11` | `IMPLEMENTED / RECHECK PENDING` | P-UX-03D реализован и проверен в своём scope; проверить waypoint lifecycle для внутренних и пересекающих границу маршрутов при перемещении и после reload. |
+| `C-UX-11` | `VERIFIED (10.11.2026)` | Проверены waypoint lifecycle, Cancel/Save/reload и перемещения оборудования/Location; internal/external/boundary semantics сохранены. |
 | `C-UX-12` | `IMPLEMENTED / RECHECK PENDING` | Массовое именование и spatial order merged (84de939, 3744a82, 51ab092); проверить обнаруживаемость, порядок и сохранение. |
 | `C-UX-13` | `IMPLEMENTED / RECHECK PENDING` | Компоновка BaseTemplate editor merged (a3ba352); проверить рабочую область вручную. |
 | `C-UX-14` | `IMPLEMENTED / RECHECK PENDING` | BaseTemplate Change Inspector merged; D2 подтверждает исходы анализа. Проверить понимание последствий через UI. |
 | `C-UX-15` | `OPEN` | В L1 trace port selector отсутствует natural ordering; «Любой порт» первым, номера 1,2,…10,11 и буквенно-цифровые имена в естественном порядке, одинаковые названия сохраняются отдельными записями. |
+| `C-UX-16` | `OPEN / PRODUCT DIRECTION` | [История изменений и инструменты редактора трасс](#c-ux-16--история-изменений-и-инструменты-редактора-трасс); отдельно от C-UX-11. |
 | `C-VIS-01` | `OPEN` | — |
 | `C-COR-02` | `IMPLEMENTED / RECHECK PENDING` | Распределение точек за пределы панели; высокий приоритет |
 | `C-VIS-02` | `OPEN` | b27f9ca унифицирует формы в редакторах и preview. Исправление размеров в runtime Map и ручной recheck исходного случая не подтверждены. |
@@ -124,7 +125,7 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
 ### Остаток Phase C
 
 - Закрыт HV-01. P-UX-03D, P-UX-20 и P-UX-03E прошли свои ручные проверки;
-  P-UX-03E принят и merged. C-UX-07 VERIFIED; остальные
+  P-UX-03E принят и merged. C-UX-07 и C-UX-11 VERIFIED; C-COR-01 и C-UX-08 replacement recheck VERIFIED; остальные
   связанные C-* требуют собственных сценариев, как указано в таблице.
 - Реализованные исправления и заменяющие сценарии перечислены в таблице.
   Для C-COR-02 отдельно воспроизвести распределение у границ панели и проверить
@@ -154,7 +155,8 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
   представления. Существующие неизменяемые версии остаются неизменяемыми.
 - `C-COR-01` и `C-UX-08` описывают findings старого MapComposite workflow,
   superseded target architecture. Их старые remediation steps неактуальны;
-  findings остаются `OPEN` до replacement Location-driven manual recheck.
+  replacement Location-driven manual recheck подтверждён 10.11.2026;
+  исходный workflow не восстанавливался.
 - `C-CAP-01` — отдельный семантический пробел, а не расширение обычного
   1:1 patch-panel сценария. Новая каноническая сущность `Fanout/Splitter` не
   вводится.
@@ -174,7 +176,7 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
   штатный путь создания без `Blueprint` отсутствует.
 
 Порядок не является новым планом работ: superseded MapComposite findings
-ожидают replacement Location-driven recheck; остальные исправления
+прошли replacement Location-driven recheck; остальные исправления
 проверяются в порядке, удобном для конкретной ограниченной задачи, с учётом
 зависимостей выше.
 
@@ -588,7 +590,12 @@ subtree на одинаковое смещение, внутренняя ком�
 
 **Статус границы.** Прежний workflow выбора каналов раскрытых MapComposite
 superseded целевой Location-driven архитектурой. Реализация P-UX-03A удалила
-MapComposite; finding остаётся OPEN до replacement manual recheck.
+MapComposite. **SUPERSEDED / REPLACEMENT RECHECK VERIFIED (10.11.2026).**
+Пользователь подтвердил выбор PhysicalObject внутри раскрытых Location, работу
+с портами, контекстные действия, выбор Cable и доступность редактора маршрутов,
+взаимодействие при nested/collapsed Location, отсутствие блокировки соседних
+видимых объектов и восстановление после reload. L1 trace, endpoints и Location
+assignment неизменны. Проверен заменяющий workflow; исходный не восстанавливался.
 
 Старый сценарий проверки каналов composite сохранён только как historical
 provenance и не является текущим acceptance workflow.
@@ -607,15 +614,16 @@ boundary evidence и canonical topology до/после.
 **Критерий replacement recheck.** После reload все перечисленные действия
 доступны, frame/proxy не перехватывает interaction с видимым объектом, а
 canonical topology, Location assignment и Cable evidence не меняются. Это
-manual recheck replacement workflow, а не установление `VERIFIED` до
-явного подтверждения.
+подтверждённый manual recheck replacement workflow.
 
 ### C-UX-08 — Устаревшее membership MapComposite
 
 **Статус границы.** Прежний workflow редактирования membership MapComposite
-superseded Location-driven моделью. Не добавлять replacement capability и не
-объявлять finding VERIFIED. Finding остаётся OPEN до replacement manual
-recheck.
+superseded Location-driven моделью.
+**SUPERSEDED / REPLACEMENT RECHECK VERIFIED (10.11.2026).** Пользователь
+подтвердил изменение Location существующего PhysicalObject, автоматическую
+перегруппировку на карте, корректный collapse и сохранение после reload
+без удаления или пересоздания объекта. Manual MapComposite membership не возвращается.
 
 Старое ручное добавление и удаление объектов из membership MapComposite не
 является будущим требованием. Grouping membership теперь следует только из
@@ -741,10 +749,15 @@ MapCableRoute. Прокладка каждого из 24 однотипных м
 
 ### C-UX-11 — Реакция сохранённого маршрута на перемещение
 
-**Исправить.** Закрывать совместно с `P-UX-03D`: реализовать contract
+**VERIFIED (10.11.2026).** Пользователь подтвердил открытие существующей Cable
+route, изменение промежуточного waypoint, восстановление исходной геометрии
+через Cancel, сохранение через Save и reload, корректное обновление маршрута
+при перемещении оборудования и Location. Endpoints и physical connection
+сохраняются. Автоматическая оптимизация или прокладка маршрутов не заявляется.
+
+**Принятый contract `P-UX-03D`.** Сохраняется семантика
 internal/external/boundary Cable при перемещении Location subtree, включая
 сохранённые routes, временный boundary anchor и atomic positions + routes write.
-До implementation и manual recheck finding остаётся OPEN.
 
 **Граница `11-04`.** `MapCableRoute` остаётся состоянием представления
 `SavedMap`; канонические `Cable`, `Connection`, endpoints и L1 trace не
@@ -796,6 +809,32 @@ internal/external/boundary Cable при перемещении Location subtree,
 1, 2, 10, 11, смешанными именами P2/P10 и двумя отдельными портами с одинаковым
 названием. Проверить порядок, первую опцию «Любой порт» и независимый выбор
 обоих одноимённых портов. В P-UX-03E исправление не выполняется.
+
+### C-UX-16 — История изменений и инструменты редактора трасс
+
+**OPEN / PRODUCT DIRECTION.** При редактировании трассы нет доступных
+пользователю Undo/Redo, а удаление выбранной точки недостаточно заметно.
+Удаление выбранного waypoint уже реализовано через QuickInspector; повторно
+реализовывать его не требуется. Отдельной полноценной истории Undo/Redo нет.
+
+**Целевое направление (реализация сейчас не выполняется).**
+
+1. Undo отменяет последнее изменение геометрии в текущей сессии редактирования;
+   Redo повторяет отменённое изменение.
+2. История охватывает добавление, перемещение, числовое редактирование и удаление
+   waypoints. Новое изменение после Undo сбрасывает доступную ветку Redo.
+3. Удаление выбранного обычного waypoint доступно непосредственно в панели
+   редактирования маршрута. Кнопки отражают доступность действия.
+4. История изменяет только transient draft. Save выполняет существующую persisted
+   запись; Cancel возвращает сохранённую геометрию.
+5. Существующие ограничения Location boundary anchors сохраняются.
+6. Canonical Cable, Connection, endpoints, trace evidence и SavedMap schema
+   не меняются.
+7. Горячие клавиши и окончательная композиция панели остаются OPEN для
+   отдельного UX-контракта.
+
+C-UX-16 не входит в C-UX-11 и не переоткрывает его. Завершённые milestones
+[11-08](11-08-cable-route-editor-completion.md) не реализуют эту историю.
 
 ## Итоговая чистая повторная Phase C приёмка
 
@@ -1287,3 +1326,16 @@ checkpoints выше сохранены как исторические запи
 C-COR-01, C-UX-08 и C-UX-11 сохраняют отдельные ручные rechecks.
 Phase C OPEN; следующее направление — её продолжение. Порядок Phase A–I
 не меняется; L1 PRODUCT COMPLETE не достигнут.
+
+## DOC-PHASE-C-UX — ручная перепроверка 10.11.2026
+
+После исторических checkpoints DOC-SPATIAL пользователь отдельно подтвердил
+C-COR-01 и C-UX-08: **SUPERSEDED / REPLACEMENT RECHECK VERIFIED (10.11.2026)**;
+C-UX-11: **VERIFIED (10.11.2026)**. Evidence приведён в соответствующих findings
+и текущем индексе. C-COR-02 уже реализован и объединён; прежние тесты остаются
+историческим evidence, полный ручной acceptance scenario ещё RECHECK PENDING.
+Повторный implementation milestone для него не создаётся.
+
+C-UX-16 зарегистрирован OPEN / PRODUCT DIRECTION без реализации. Phase C OPEN;
+L1 PRODUCT COMPLETE не достигнут. C-UX-10, C-UX-15, C-CAP-01, C-VIS-02,
+P-UX-21 и P-UX-22 остаются OPEN. Порядок Phase A–I не меняется.
