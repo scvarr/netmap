@@ -106,16 +106,6 @@ endpoint-relative route sections, MapReference, physical occupancy, дополн
 справочники и характеристики PortType — будущие возможности.
 MapComposite и MapRegion удалены, поддерживаемыми моделями не являются.
 
-## Основания и разрешённые противоречия
-
-Проверены `app/models.py`, `app/main.py`, physical_connections,
-workspace_portability, module_reconciliation и frontend routes/data sources.
-Старый README отрицал wiring и описывал MapRegion — эти сведения устарели.
-Старые NOT PASSED HV-01 заменены итогом PASSED; v5 в validation records —
-исторический формат, не текущий export. Старый OPEN C-UX-14 заменён актуальным
-IMPLEMENTED / RECHECK PENDING. Неподтверждённые manual результаты не объявлены
-успешными. Исторические fixture archives сохраняются вместе с тестами.
-
 ## Условия завершения и границы обязательности
 
 L1 PRODUCT COMPLETE требует gates C/D → E → F → G → H → I, включая persisted

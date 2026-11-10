@@ -56,10 +56,10 @@ blocker не установлен. Для P-UX-22, C-UX-16, дополнител
 | C-UX-02 | Штатное создание PhysicalObject из BaseTemplate с выбором initial Location, без обходных ручных операций | VERIFIED | Пользователь 10.11.2026 подтвердил неоднократную успешную проверку; только этот контракт |
 | C-UX-03 | Явные FRONT/REAR как физические стороны, без input/output смысла | OPEN | Произвольные panel labels есть; отдельная семантика сторон этим не доказана. Уточнить, достаточно ли labels, затем проверить шаблон/карту/reload |
 | C-UX-04 | Rename из списка объектов реализован; проверить новое имя в карточке, карте/инспекторе, поиске и trace после переходов и reload; IDs, подключения и placements неизменны | RECHECK PENDING | API и клиентские тесты есть; обновление всех зависимых представлений вручную не подтверждено |
-| C-UX-05 | Guides границ/центров и равных интервалов при drag | OPEN | Presentation-only, без auto-layout |
-| C-UX-06 | Независимые Width/Height placement через карту/карточку; порты следуют телу | OPEN | Единый presentation contract; не менять template geometry |
+| C-UX-05 | Runtime guides границ/центров и равных интервалов при drag | OPEN | Composition editor guides уже есть; они не закрывают runtime guides. Presentation-only, без auto-layout |
+| C-UX-06 | Независимые Width/Height placement через карту/карточку; порты следуют телу | OPEN | Independent placement Height отсутствует; template/body geometry уже есть и не меняется |
 | C-UX-09 | Derived preview в компактном выборе BaseTemplate и ручная различимость | OPEN | Таблица есть, preview при создании отсутствует |
-| C-UX-10 | Location cable channels, общая направляющая и comb; счётчик и exact trace | OPEN | Решения persistence/UX/geometry; OPEN_DECISIONS |
+| C-UX-10 | Location cable channels, общая направляющая и comb; счётчик и exact trace | OPEN | Boundary anchors/snapping уже есть, но не заменяют shared channels/comb; решения persistence/UX/geometry — OPEN_DECISIONS |
 | C-UX-12 | Проверить массовое именование, spatial order, обнаруживаемость и сохранение | RECHECK PENDING | Исправление реализовано |
 | C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
 | C-UX-14 | Проверить понятность Change Inspector и точность больших сводок impact | RECHECK PENDING | Реализован; HV-01 не заменяет UX recheck |
@@ -162,39 +162,3 @@ upgrade/delete/slot API и не являются обязательной реа
 CORR-001 (глубокие passive paths) — RECHECK PENDING: проверить текущий iterative
 resolver на глубокой легальной цепи; criteria — без RecursionError и потери evidence;
 LOW, не автоматически до L2. CONC-001/API-001/FE-001/LOC-001 завершены и не возвращены.
-
-## Основания DOC-RECON-02 (10.11.2026)
-
-Сверка с base `a0f9b8d522121668ae6bdc0b489cc02352a0be3d`; тесты только прочитаны,
-не запускались. Ручная приёмка в этой сверке добавлена только для C-UX-02.
-
-- C-UX-02/09: `frontend/src/pages/NewInfrastructureObjectPage.tsx`,
-  `frontend/src/topology/apiBaseTemplateDataSource.ts`, `app/main.py`:
-  выбор BaseTemplate и Location, create API; таблица выбора без derived preview.
-- C-UX-04: `frontend/src/pages/InfrastructureObjectsPage.tsx` и `.test.tsx`
-  (rename, authoritative inventory refresh включая cable endpoint labels, ошибки);
-  `frontend/src/topology/apiPhysicalObjectDisplayNameWriteDataSource.ts` и `.test.ts`;
-  `PUT /v1/topology/physical-objects/{physical_object_id}/display-name`,
-  `app/device_catalog.py`, `tests/test_physical_object_display_name_e2e.py`
-  (alias update, неизменность point/connection/placement IDs, validation).
-  Эти проверки не доказывают обновление всех открытых UI views.
-- Location tree/series: `app/location_catalog.py`, `tests/test_locations_e2e.py`;
-  naming/viewport/impact: `frontend/src/pages/BaseTemplateEditor.tsx`,
-  `BaseTemplateChangeInspector.tsx`, `app/base_template_review.py`.
-  Визуальные остатки HV-01 сохраняются отдельно от lifecycle acceptance.
-- PERF-005: `MapPage.tsx` запускает logical projection effect и в physical view;
-  PERF-010: `FloatingTopologyEdge.tsx` использует `useNodes`; PERF-011:
-  `app/hardware_catalog.py` — Base per-item counts/latest, Module latest уже aggregate.
-- FE-002: в `MapPage.tsx` create не имеет pending guard, кнопка создания не disabled
-  на время POST; guard variant creation не закрывает map creation.
-- PERF-007/FE-003: `TopologyCanvas.tsx`, `topology/layout.ts`, `layoutStore.ts`
-  содержат authoritative positions и scene scope; остаются isolation/fallback/time-to-map.
-
-Остальные OPEN performance — задачи измерения и устранения оставшейся стоимости,
-а не заявление об отсутствии всей оптимизации. Сначала текущий baseline для
-PERF-002/003/004/008/009; только затем bounded fix по выявленному hotspot.
-C-UX-05: guides в composition editor уже есть, остаток — runtime drag и равные
-интервалы; не повторять editor guides. C-UX-06 — именно независимая placement
-Height, не отсутствие template/body geometry. C-UX-10 — shared channel/comb,
-не существующие boundary anchors/snapping. C-VIS-01/02 — проверяемые visual findings,
-не доказанная причина дефекта и не повод переоткрыть PT-03/C-VIS-03.
