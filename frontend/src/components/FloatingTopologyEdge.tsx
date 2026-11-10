@@ -1,3 +1,4 @@
+import { useRuntimePortTypes } from './RuntimePortTypes';
 import {
   BaseEdge,
   Position,
@@ -355,22 +356,24 @@ function ForegroundPortMarkers({ physicalPortStates, bulkPortNumbers }: { physic
 }
 
 function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers }: { nodeId: string; physicalPortStates?: Record<string, ForegroundPortState>; bulkPortNumbers?: Record<string, number> }) {
+  const portTypes = useRuntimePortTypes();
   const node = useInternalNode<DeviceFlowNode>(nodeId);
   // A collapsed Location proxy is a presentation anchor, never a PhysicalObject with ports.
   if (!node || node.data.locationProxy || !node.data.projection || node.data.projection.kind !== 'PHYSICAL_OBJECT') return null;
   const projection = node.data.projection;
   const blueprint = projection.attributes.blueprint_presentation;
   const ports = blueprint
-    ? blueprint.slots.map((slot) => ({ id: slot.connection_point_id, network: slot.kind === 'NETWORK_PORT' }))
-    : genericConnectionPoints(projection).map((point) => ({ id: point.connection_point_id, network: false }));
+    ? blueprint.slots.map((slot) => ({ id: slot.connection_point_id, network: slot.kind === 'NETWORK_PORT', portTypeId: slot.port_type_id }))
+    : genericConnectionPoints(projection).map((point) => ({ id: point.connection_point_id, network: false, portTypeId: undefined }));
   return <g className="cable-route-port-markers" pointerEvents="none">
     {ports.map((port) => {
       const endpoint = getRenderedConnectionPoint(projection, rectangle(node), port.id);
+      const fill = portTypes?.find((type) => type.id === port.portTypeId)?.color ?? '#18383a';
       const state = physicalPortStates?.[port.id];
       const className = `cable-route-port-marker${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
       return endpoint && <g key={port.id}>{port.network
-        ? <rect className={className} x={endpoint.x - 3.5} y={endpoint.y - 3.5} width={7} height={7} rx={1} pointerEvents="none" />
-        : <circle className={className} cx={endpoint.x} cy={endpoint.y} r={3.5} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
+        ? <rect className={className} style={{ fill }} data-connection-point-id={port.id} x={endpoint.x - 3.5} y={endpoint.y - 3.5} width={7} height={7} rx={1} pointerEvents="none" />
+        : <circle className={className} style={{ fill }} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={3.5} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
     })}
   </g>;
 }

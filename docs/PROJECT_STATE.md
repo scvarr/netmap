@@ -67,6 +67,12 @@ L2/L3 authoring/trace workbench, operational collection и multi-user прило
 
 ## Реализовано, но требует отдельной ручной проверки
 
+**C-VIS-03 IMPLEMENTED / RECHECK PENDING**: foreground-маркеры физической карты
+используют общий каталог PortType, включая архивные типы; wiring-подсветка
+не заменяет базовую заливку. Адресные автоматические проверки покрывают оба
+слоя, Cable lifecycle, trace и порядок catalog/projection; ручные сценарии
+Cable create/delete, L1 trace, wiring и SavedMap variants ещё не подтверждены.
+
 C-UX-01/12/13/14 имеют отдельный
 RECHECK PENDING. HV-01 не заменяет проверки визуальной компоновки F2b,
 управления портами ModuleTemplate, pinned preview, адаптивной высоты таблицы
