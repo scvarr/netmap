@@ -61,7 +61,7 @@ Logical/Physical, состояние уже существующей пусто�
 ### P-UX-03 — hierarchical Location presentation
 
 **Статус: P-UX-03A/B/C/D IMPLEMENTED; P-UX-03D manual recheck passed;
-P-UX-03E IMPLEMENTATION PENDING.**
+P-UX-03E IMPLEMENTED / ACCEPTED / MERGED / MANUAL RECHECK PASSED (10.11.2026).**
 
 **Замечание.** После создания первой карты spatial workflow должен показывать
 canonical Location hierarchy как управляемую иерархическую сцену, а не только
@@ -76,17 +76,10 @@ MapComposite как целевых capabilities. `SavedMap` сохраняет �
 Canonical Location остаётся source of truth; development-stage Region и
 MapComposite удалены в P-UX-03A.
 
-P-UX-03 реализован последовательно по P-UX-03A–P-UX-03D. P-UX-03D прошёл
-manual recheck; весь P-UX-03 остаётся открытым до P-UX-03E final spatial
-acceptance.
-
-Ручная acceptance P-UX-03D выявила bounded Cable route editor usability
-findings. Follow-up из 11-08 завершён в C-ROUTE-01/02/03 и C-CABLE-01.
-Следующий spatial шаг — P-UX-03E final spatial acceptance и dead-code cleanup;
-весь P-UX-03 остаётся незавершённым до его собственного acceptance. Findings
-зафиксированы в
-[[plans/11-08-cable-route-editor-completion|11.8 Cable route editor
-completion]]. Это не меняет canonical Location semantics.
+P-UX-03 завершён в scope P-UX-03A–P-UX-03E. SEL-01 и ROUTE-01 приняты и
+объединены; C-UX-07 VERIFIED. Cable route follow-up из
+[[plans/11-08-cable-route-editor-completion|11.8 Cable route editor completion]]
+завершён. Это не меняет canonical Location semantics и не закрывает Phase C.
 
 ### P-UX-19 — массовое создание дочерних Locations
 
@@ -116,9 +109,9 @@ Locations открывалось полностью раскрытым и не �
 узел и сохраняет состояния его descendants. Состояние раскрытия живёт только
 в React в пределах текущего открытия страницы и сохраняется при обновлении
 списка после mutations. `LocationParentPicker` имеет отдельную модель и не
-входит в P-UX-20. Manual recheck P-UX-20 пройдена. P-UX-03E остаётся pending;
-его spatial acceptance остаётся pending; общий Phase C проход приостановлен
-на HV-01 до implementation и manual recheck 09.6.
+входит в P-UX-20. Manual recheck P-UX-20 пройдена.
+P-UX-03E принят и merged, manual recheck пройдена 10.11.2026; HV-01 PASSED.
+Оставшиеся проверки Phase C перечислены в реестре 11-05.
 
 Manual visual recheck после merge проверила initial collapsed tree, global
 expand/collapse и subtree controls; поведение визуально принято пользователем.
@@ -447,8 +440,8 @@ export/reset/import lifecycle текущего implicit workspace: без нег
 ACL/fork или общий import в новый `NetworkWorkspace`.
 существующие `C-*` findings не закрываются автоматически. P-UX-03: milestones
 A/B/C/D реализованы, ручная перепроверка D пройдена, Cable route follow-up из
-11-08 завершён. P-UX-03E остаётся pending; весь P-UX-03 и spatial cutover
-незавершены до final acceptance.
+11-08 завершён. P-UX-03E — **IMPLEMENTED / ACCEPTED / MERGED / MANUAL RECHECK PASSED (10.11.2026)**;
+SEL-01 и ROUTE-01 приняты и объединены, C-UX-07 VERIFIED. Phase C OPEN.
 
 **HV-01 PASSED (06.11.2026).** Оставшиеся проверки и блокеры Phase C перечислены в [реестр 11-05](11-05-phase-c-acceptance-closure.md#statusindex-layer).
 P-UX-13/14/15 реализованы для прежнего Blueprint workflow. Их заменяющие
@@ -467,26 +460,53 @@ testbed]].
 
 **Статус: OPEN / PRODUCT DIRECTION AGREED. Реализация не начата.**
 
-Согласованный продуктовый контракт:
+Согласованное продуктовое направление для runtime Map:
 
-1. Большой внешний контур на пользовательском эскизе обозначает Location.
-   Внутри расположен PhysicalObject; внешний контур не является корпусом оборудования.
-2. Название PhysicalObject по умолчанию отображается на левой плашке корпуса.
-3. Справа допускается зеркальное отображение названия только при отсутствии
-   кабельных линий, пересекающих область правой плашки. Точный механизм
-   определения пересечений остаётся OPEN.
-4. Текущие расположение портов, координаты, принадлежность панелям и модулям сохраняются.
-5. В runtime Map маркеры портов должны стать визуально компактнее, по примеру
-   редакторов шаблонов. Размер графического маркера отделяется от удобной области взаимодействия.
+1. Большой внешний контур на пользовательском эскизе обозначает Location,
+   а не корпус PhysicalObject.
+2. Отдельная горизонтальная полоса заголовка сверху убирается. Корпус визуально
+   разделяется на левую вертикальную область названия PhysicalObject,
+   центральную область оборудования и правую область дополнительной информации.
+3. Непосредственный Location может отображаться справа, если его подпись не
+   пересекается с кабельными линиями. Если правая область занята, Location
+   допускается показывать под названием объекта слева. Точные правила выбора
+   расположения подписи и обработки пересечений остаются OPEN.
+4. Существующий [spatial contract](../architecture/presentation/09-spatial-location-mapreference-contract.md#dynamic-location-frame)
+   одиночных Location chains и derived path labels сохраняется. Это presentation
+   context; новая модель принадлежности объектов не вводится.
+5. Расположение и координаты портов, принадлежность панелям и модулям сохраняются.
+   Маркеры портов должны стать визуально компактнее, по примеру редакторов
+   шаблонов; область взаимодействия с портом при этом не уменьшается.
 6. Формы NETWORK_PORT/CONNECTION_POINT и цвета PortType сохраняют
    [контракт PT-03](../product/user-reference-catalogs.md#pt-03--runtime-presentation).
-7. Кабельные маршруты не должны искусственно перестраиваться ради декоративных подписей.
+7. Кабельные маршруты не перестраиваются ради декоративных подписей.
 8. Canonical topology, endpoint identity, connections, trace evidence, SavedMap
    и Location hierarchy не меняют семантику.
-9. P-UX-21 не входит в P-UX-03E и не блокирует его. Отдельная реализация
-   будет согласована позднее.
-10. Существующее C-VIS-02 не закрывается автоматически.
+9. P-UX-21 не входит в P-UX-03E. Это отдельная будущая реализация;
+   C-VIS-02 не закрывается автоматически.
 
-Порядок остаётся: P-UX-03E → продолжение Phase C → bounded Phase D fixes.
-Phase A–I не переупорядочиваются; Phase C, Phase D и L1 PRODUCT COMPLETE
-не объявляются завершёнными.
+<a id="p-ux-22"></a>
+
+### P-UX-22 — Взаимодействие с объектами на физической карте
+
+**Статус: OPEN / PRODUCT DISCUSSION. Продуктовый контракт ещё не утверждён полностью.**
+
+Наблюдения и направления будущего UX-обсуждения:
+
+- Текущий курсор перемещения слишком крупный.
+- Действие левой кнопки мыши не всегда очевидно: перемещается карта или элемент
+  под курсором.
+- При наведении на интерактивный объект желательно подсвечивать его контур.
+- При наведении на порт желательно подсвечивать конкретный порт и показывать
+  специализированный компактный курсор.
+- Визуальная реакция должна отражать реальную доступность действия.
+- Необходимо рассмотреть режимы выбора, перемещения карты и редактирования.
+
+Конкретные режимы и горячие клавиши не утверждены. Space+drag, средняя кнопка
+мыши и отдельные инструменты остаются вариантами будущего UX-обсуждения.
+P-UX-22 — отдельная будущая работа вне P-UX-03E.
+
+Следующее направление — продолжение Phase C, затем bounded Phase D fixes.
+Phase A–I не переупорядочиваются; Phase C остаётся OPEN,
+L1 PRODUCT COMPLETE не достигнут. C-UX-15 и C-CAP-01 остаются OPEN;
+C-COR-01, C-UX-08 и C-UX-11 сохраняют отдельные ручные проверки по реестру 11-05.

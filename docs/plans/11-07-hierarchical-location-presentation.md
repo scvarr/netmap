@@ -3,7 +3,7 @@
 ## Статус и граница
 
 Это компактный последовательный implementation plan для spatial cutover.
-NetMap pre-production; P-UX-19 и P-UX-03A/B/C/D реализованы, P-UX-03E — **IMPLEMENTED / MANUAL RECHECK PASSED (10.11.2026); EXTERNAL REVIEW PENDING**. Не
+NetMap pre-production; P-UX-19 и P-UX-03A/B/C/D реализованы, P-UX-03E — **IMPLEMENTED / ACCEPTED / MERGED / MANUAL RECHECK PASSED (10.11.2026)**. Не
 объединять их в одну implementation task и не объявлять выполненными до
 targeted validation и, где указано, manual acceptance.
 
@@ -89,11 +89,11 @@ geometry assistance и feedback угла/расстояния. Видимые ro
 
 ### P-UX-03E — Spatial acceptance and dead-code cleanup
 
-**IMPLEMENTED / MANUAL RECHECK PASSED (10.11.2026); EXTERNAL REVIEW PENDING.**
+**IMPLEMENTED / ACCEPTED / MERGED / MANUAL RECHECK PASSED (10.11.2026).**
 Пользователь подтвердил PASS: hierarchical Location collapse, независимость
 variants, Location group move, collision rejection и L1 trace через collapsed
 Location. Corrective `P-UX-03E-SEL-01` и `P-UX-03E-ROUTE-01` — **MANUAL RECHECK
-PASSED**. Итоговый branch diff требует внешней инспекции до acceptance.
+PASSED (10.11.2026) / ACCEPTED / MERGED**.
 
 - SEL-01: переключение variant удаляет прежний URL focus; selection сохраняется
   только для доступного видимого объекта. Скрытый collapse-ом объект снимается
@@ -107,7 +107,10 @@ PASSED**. Итоговый branch diff требует внешней инспе�
 - Targeted validation и ограничения проверок зафиксированы в 11.5. Новое замечание
   `C-UX-15` (natural port ordering в L1 trace selector) остаётся OPEN без реализации.
 
-Этот результат не закрывает Phase C. `P-UX-21` и `C-CAP-01` остаются OPEN.
+Этот результат не закрывает Phase C. `P-UX-21`, `P-UX-22` и `C-CAP-01` остаются OPEN.
+P-UX-21/22 — отдельные будущие работы вне P-UX-03E;
+[UX-направления](11-06-clean-start-ui-polish.md#p-ux-21) не закрывают C-VIS-02.
+Следующее направление — продолжение Phase C; L1 PRODUCT COMPLETE не достигнут.
 Replacement rechecks `C-COR-01` и `C-UX-08` не выводятся автоматически из общего
 spatial PASS; для них требуется подтверждение конкретных interaction/assignment
 сценариев. `C-UX-11` сохраняет отдельный waypoint-lifecycle recheck.

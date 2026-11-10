@@ -40,7 +40,10 @@ ModuleTemplate выбирают существующий тип и при отс
 P-UX-21 — **OPEN / PRODUCT DIRECTION AGREED**, реализация не начата;
 [контракт карты](11-06-clean-start-ui-polish.md#p-ux-21) согласован отдельно.
 Он не входит в P-UX-03E и не блокирует его; C-VIS-02 остаётся OPEN.
-Порядок: P-UX-03E → продолжение Phase C → bounded Phase D fixes.
+P-UX-22 — **OPEN / PRODUCT DISCUSSION**; [взаимодействие на карте](11-06-clean-start-ui-polish.md#p-ux-22) ещё обсуждается.
+P-UX-21 и P-UX-22 — отдельные будущие работы вне P-UX-03E.
+Следующее направление — продолжение Phase C, затем bounded Phase D fixes.
+Phase C остаётся OPEN; L1 PRODUCT COMPLETE не достигнут.
 
 ## Последовательный порядок
 
@@ -69,9 +72,10 @@ and is not a future target prerequisite or library direction.
 **HV-01 PASSED (06.11.2026).** Оставшиеся проверки и блокеры Phase C перечислены в [реестр 11-05](11-05-phase-c-acceptance-closure.md#statusindex-layer).
 
 В spatial strand P-UX-03A/B/C/D реализованы, ручная проверка P-UX-03D
-пройдена. Bounded Cable route follow-up из 11-08 завершён. Следующий spatial
-шаг — P-UX-03E final spatial acceptance/dead-code cleanup; до его собственного
-acceptance он остаётся pending. Это не завершает spatial cutover или Phase C.
+пройдена. Bounded Cable route follow-up из 11-08 завершён.
+P-UX-03E — **IMPLEMENTED / ACCEPTED / MERGED / MANUAL RECHECK PASSED (10.11.2026)**.
+SEL-01 и ROUTE-01 приняты и объединены; C-UX-07 VERIFIED. Spatial acceptance
+завершена в своём scope; Phase C остаётся OPEN.
 
 Первоначальная representative Phase C discovery уже выполнена: `C-*` findings
 зафиксированы и остаются обязательным списком для контроля. Текущий active
@@ -79,10 +83,10 @@ clean repeat начинается с пустой тестовой БД и ис�
 synthetic scenario из 11-04; пользовательский проход идёт небольшими UI-шагами
 с остановкой на первом существенном finding, bounded fix, review/merge и
 повтором того же шага на сохранённом стенде.
-`P-UX-01` ... `P-UX-20` — findings этого прохода; их реализация и ручная
+`P-UX-01` ... `P-UX-22` — findings этого прохода; их реализация и ручная
 проверка ведутся в [[plans/11-06-clean-start-ui-polish|11.6 Clean-start UI
 polish]], а статус `C-*` — в [[plans/11-05-phase-c-acceptance-closure|11.5
-Phase C acceptance closure]]. P-UX-03E остаётся pending. Новый fixture не
+Phase C acceptance closure]]. P-UX-03E принят и merged. Новый fixture не
 начинает Phase D и не закрывает `C-CAP-01`.
 
 Promoted semantic gaps, включая `C-CAP-01`, закрываются через Phase D. Это не
@@ -90,8 +94,7 @@ Promoted semantic gaps, включая `C-CAP-01`, закрываются чер
 Phase C acceptance выполняется после необходимых обязательных fixes; только
 после него Phase C считается закрытой. Spatial presentation следует
 [[plans/11-07-hierarchical-location-presentation|11.7 plan]]: P-UX-03A/B/C/D
-реализованы, P-UX-03D manual recheck пройдена, P-UX-03E остаётся следующим
-pending spatial шагом. Cable route editor follow-up из
+реализованы, P-UX-03D manual recheck пройдена, P-UX-03E принят и merged. Cable route editor follow-up из
 [[plans/11-08-cable-route-editor-completion|11.8 plan]] завершён. Общий порядок
 Phase E–I не меняется.
 
@@ -100,7 +103,7 @@ Phase E–I не меняется.
 1. `Cable.3`: optional mutable Cable label, deterministic fallback, clear,
    Cable-specific write boundary; label не меняет Cable identity, Connection,
    endpoints, routes или trace. Cable Details не создается только ради label.
-2. **B.2 — hierarchical Location presentation — implemented through P-UX-03A/B/C/D; final acceptance pending in P-UX-03E.** Current target contract находится в
+2. **B.2 — hierarchical Location presentation — IMPLEMENTED / ACCEPTED / MERGED through P-UX-03E; MANUAL RECHECK PASSED (10.11.2026).** Current target contract находится в
    [[architecture/presentation/09-spatial-location-mapreference-contract|09
    spatial document]] и строится вокруг canonical Location hierarchy, derived
    frames и presentation projection. MapComposite implementation superseded и

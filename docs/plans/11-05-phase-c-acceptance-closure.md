@@ -25,8 +25,12 @@ PT-01/02/03 — **IMPLEMENTED / ACCEPTED / MERGED**;
 P-UX-21 — **OPEN / PRODUCT DIRECTION AGREED**, реализация не начата;
 [контракт представления PhysicalObject](11-06-clean-start-ui-polish.md#p-ux-21).
 Он не входит в P-UX-03E, не блокирует его и не закрывает C-VIS-02.
-P-UX-03E — **IMPLEMENTED / MANUAL RECHECK PASSED (10.11.2026); EXTERNAL REVIEW PENDING**.
-Далее: external review branch diff → продолжение Phase C → bounded Phase D fixes.
+P-UX-03E — **IMPLEMENTED / ACCEPTED / MERGED / MANUAL RECHECK PASSED (10.11.2026)**.
+SEL-01 и ROUTE-01 приняты и объединены.
+P-UX-22 — **OPEN / PRODUCT DISCUSSION**; [взаимодействие на карте](11-06-clean-start-ui-polish.md#p-ux-22) ещё обсуждается.
+P-UX-21 и P-UX-22 — отдельные будущие работы вне P-UX-03E.
+Далее: продолжение Phase C → bounded Phase D fixes. Phase C OPEN;
+L1 PRODUCT COMPLETE не достигнут.
 
 ### Ручная приёмка HV-01 — 06.11.2026
 
@@ -91,8 +95,8 @@ workflow. Такое supersession записывается прямо в finding
 | `C-UX-05` | `OPEN` | — |
 | `C-UX-06` | `OPEN` | `P-UX-17` явно оставляет independent Height вне scope |
 | `C-UX-07` | `VERIFIED` | 10.11.2026 пользователь подтвердил Location group move и collision rejection; ROUTE-01 MANUAL RECHECK PASSED. Canonical subtree displacement contract сохранён. |
-| `C-COR-01` | `SUPERSEDED / RECHECK PENDING` | MapComposite удалён; проверить выбор и взаимодействие с членами Location subtree в P-UX-03E. |
-| `C-UX-08` | `SUPERSEDED / RECHECK PENDING` | Membership заменён Location placement; проверить изменение состава и сохранение после reload в P-UX-03E. |
+| `C-COR-01` | `SUPERSEDED / RECHECK PENDING` | MapComposite удалён; отдельно проверить выбор и взаимодействие с членами Location subtree после P-UX-03E. |
+| `C-UX-08` | `SUPERSEDED / RECHECK PENDING` | Membership заменён Location placement; отдельно проверить изменение состава и сохранение после reload; отдельный recheck после P-UX-03E. |
 | `C-UX-09` | `OPEN` | В `NewInfrastructureObjectPage` реализована компактная таблица выбора BaseTemplate. Графического предпросмотра в сценарии создания пока нет. Preview в `BaseTemplateLibraryPage` доступен отдельно. Остаётся ручная проверка различимости шаблонов при создании объекта. |
 | `C-CAP-01` | `OPEN` | Promoted semantic gap; bounded Phase D fix ещё не принят |
 | `C-UX-10` | `OPEN` | Есть контракт Location cable channels и инструменты waypoints/snapping; автоматический comb и общий направляющий участок требуют реализации и проверки. |
@@ -120,12 +124,12 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
 ### Остаток Phase C
 
 - Закрыт HV-01. P-UX-03D, P-UX-20 и P-UX-03E прошли свои ручные проверки;
-  итоговый diff P-UX-03E ожидает external review. C-UX-07 VERIFIED; остальные
+  P-UX-03E принят и merged. C-UX-07 VERIFIED; остальные
   связанные C-* требуют собственных сценариев, как указано в таблице.
 - Реализованные исправления и заменяющие сценарии перечислены в таблице.
   Для C-COR-02 отдельно воспроизвести распределение у границ панели и проверить
   сохранение после повторного открытия. Ручной результат от 06.11 этого не покрывает.
-- До закрытия Phase C нужны clean rack-first repeat, external review P-UX-03E и ручные проверки
+- До закрытия Phase C нужны clean rack-first repeat и ручные проверки
   применимых C-* из таблицы. Для строк OPEN требуется устранить остающийся
   пробел или зафиксировать его перенос в соответствии с roadmap.
 - C-CAP-01 остаётся OPEN для Phase D до реализации и проверки truthful
@@ -1273,3 +1277,13 @@ variant isolation и rollback. Существующий wiring test `ApiSavedMap
 acknowledgement … malformed post-write response` ранее воспроизведён падающим
 на исходном HEAD; это unrelated test debt, исключённый из повторного targeted
 прогона. Его исправление не входит в P-UX-03E.
+
+## DOC-SPATIAL — согласование текущих статусов 10.11.2026
+
+P-UX-03E — **IMPLEMENTED / ACCEPTED / MERGED / MANUAL RECHECK PASSED (10.11.2026)**.
+SEL-01 и ROUTE-01 приняты и объединены; C-UX-07 VERIFIED. Прежние результаты
+checkpoints выше сохранены как исторические записи. P-UX-21 и P-UX-22 —
+отдельные будущие работы; C-UX-15, C-CAP-01 и C-VIS-02 остаются OPEN.
+C-COR-01, C-UX-08 и C-UX-11 сохраняют отдельные ручные rechecks.
+Phase C OPEN; следующее направление — её продолжение. Порядок Phase A–I
+не меняется; L1 PRODUCT COMPLETE не достигнут.

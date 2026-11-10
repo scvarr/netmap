@@ -5,7 +5,7 @@
 Это главный целевой contract hierarchical Location presentation NetMap.
 Целевой contract согласован; P-UX-03B expanded derived Location frames
 реализован. P-UX-03A удалил development-stage `MapComposite` и manual
-`MapRegion`; P-UX-03C/D реализованы, P-UX-03E — **IMPLEMENTED / MANUAL RECHECK PASSED (10.11.2026); EXTERNAL REVIEW PENDING**.
+`MapRegion`; P-UX-03C/D реализованы, P-UX-03E — **IMPLEMENTED / ACCEPTED / MERGED / MANUAL RECHECK PASSED (10.11.2026)**.
 
 NetMap pre-production. Если старые spatial models конфликтуют с этим
 contract, они удаляются; compatibility layers, converters, fallback readers и
@@ -108,6 +108,11 @@ Expanded frame bounds — union отображаемых объектов и ret
 небольшим одинаковым padding. Label лежит на границе frame и не резервирует
 отдельный header. Unary object label — только presentation context внутри
 существующего node header; он не меняет footprint или bounds родительского frame.
+Это текущая композиция. Будущее [P-UX-21](../../plans/11-06-clean-start-ui-polish.md#p-ux-21)
+убирает верхнюю полосу заголовка и уточняет размещение подписей внутри корпуса,
+сохраняя unary chains и derived path labels; правила выбора места и пересечений
+остаются OPEN. P-UX-21 и [P-UX-22](../../plans/11-06-clean-start-ui-polish.md#p-ux-22)
+не входят в принятый P-UX-03E и не меняют canonical assignment.
 
 Если дочерний Location свёрнут в компактный proxy, frame родителя вычисляется
 по этому текущему presentation, а не по скрытым развёрнутым объектам.
