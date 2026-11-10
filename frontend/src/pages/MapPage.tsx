@@ -723,7 +723,7 @@ function MapPageContent({
   }, [document, params]);
 
   useEffect(() => {
-    if (!document) return;
+    if (!document || !selection) return;
     setSelection((current) => {
       if (!current) return null;
       if (current.type === "edge")
@@ -737,10 +737,22 @@ function MapPageContent({
           ? current
           : null;
       const id = physicalObjectIdForSelection(current);
+      if (id && activeMap && locations && viewMode === "physical") {
+        let element: MapLocationDirectElementRef = { entity_type: "PhysicalObject", entity_id: id };
+        let locationId = activeMap.placements.find((placement) => placement.physical_object_ref.entity_id === id)?.location_ref?.entity_id;
+        const seen = new Set<string>();
+        while (locationId && !seen.has(locationId)) {
+          seen.add(locationId);
+          const state = activeMap.location_states?.find((item) => item.location_ref.entity_id === locationId);
+          if (state?.collapsed && !state.visible_direct_elements.some((ref) => ref.entity_type === element.entity_type && ref.entity_id === element.entity_id)) return null;
+          element = { entity_type: "Location", entity_id: locationId };
+          locationId = locations.find((location) => location.location_ref.entity_id === locationId)?.parent_location_ref?.entity_id;
+        }
+      }
       const node = id ? nodeForPhysicalObject(document.nodes, id) : null;
       return node ? { type: "node", item: node } : null;
     });
-  }, [document]);
+  }, [document, activeMap, locations, viewMode]);
 
   const create = async () => {
     if (!savedMapDataSource || !name.trim()) return;
@@ -1052,7 +1064,10 @@ function MapPageContent({
       return;
     }
     setWiring({ ...operation, status: "route-saving", error: null });
-    try { await savedMapDataSource.setCableRoute(operation.mapId, operation.canonicalResult.cable_ref.entity_id, routeNormalizerRef.current?.(operation.canonicalResult.cable_ref.entity_id, operation.draftWaypoints) ?? operation.draftWaypoints, operation.variantId); }
+    // Saved routes follow physical projection order (stable object UUIDs), not gesture order.
+    const waypoints = operation.source.physicalObjectId > operation.target.physicalObjectId
+      ? [...operation.draftWaypoints].reverse() : operation.draftWaypoints;
+    try { await savedMapDataSource.setCableRoute(operation.mapId, operation.canonicalResult.cable_ref.entity_id, routeNormalizerRef.current?.(operation.canonicalResult.cable_ref.entity_id, waypoints) ?? waypoints, operation.variantId); }
     catch { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "route-failed", error: null }); return; }
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
     try { if (await refreshWiringAfterRouteWrite(operation)) setWiring({ status: "idle" }); }
@@ -1809,7 +1824,7 @@ function MapPageContent({
               <span>{utilitySection === "layout" ? "Компоновка" : `Компоновка · ${activeVariant?.name ?? "—"}`}</span><span aria-hidden="true">{utilitySection === "layout" ? "‹" : "›"}</span>
             </button>
             {utilitySection === "layout" && <div className="map-utility-panel__content">
-              <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => { mapDetailRequest.current += 1; setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); return next; }); }} />
+              <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => { mapDetailRequest.current += 1; setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); next.delete("focus"); return next; }); }} />
               <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
             </div>}
           </section>

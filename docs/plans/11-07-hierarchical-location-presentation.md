@@ -3,7 +3,7 @@
 ## Статус и граница
 
 Это компактный последовательный implementation plan для spatial cutover.
-NetMap pre-production; P-UX-19 и P-UX-03A/B/C/D реализованы, P-UX-03E остаётся **IMPLEMENTATION PENDING**. Не
+NetMap pre-production; P-UX-19 и P-UX-03A/B/C/D реализованы, P-UX-03E — **IMPLEMENTED / MANUAL RECHECK PASSED (10.11.2026); EXTERNAL REVIEW PENDING**. Не
 объединять их в одну implementation task и не объявлять выполненными до
 targeted validation и, где указано, manual acceptance.
 
@@ -89,13 +89,28 @@ geometry assistance и feedback угла/расстояния. Видимые ro
 
 ### P-UX-03E — Spatial acceptance and dead-code cleanup
 
-**IMPLEMENTATION PENDING; READY / NEXT FOR EXECUTION.** 11-08 завершён;
-prerequisite cable-route findings закрыты implementation/review/manual recheck
-where applicable. Провести representative manual validation hierarchical
-collapse, nested frames, group move, collisions, exact boundary evidence и route
-semantics. Удалить оставшиеся obsolete helpers/styles/types, затем обновить
-связанные `C-*` statuses только после проверки. Сам P-UX-03E остаётся pending,
-и spatial cutover не завершён до его собственного acceptance.
+**IMPLEMENTED / MANUAL RECHECK PASSED (10.11.2026); EXTERNAL REVIEW PENDING.**
+Пользователь подтвердил PASS: hierarchical Location collapse, независимость
+variants, Location group move, collision rejection и L1 trace через collapsed
+Location. Corrective `P-UX-03E-SEL-01` и `P-UX-03E-ROUTE-01` — **MANUAL RECHECK
+PASSED**. Итоговый branch diff требует внешней инспекции до acceptance.
+
+- SEL-01: переключение variant удаляет прежний URL focus; selection сохраняется
+  только для доступного видимого объекта. Скрытый collapse-ом объект снимается
+  с выбора, инспектор следует фактическому selection.
+- ROUTE-01: wiring draft перед сохранением ориентируется по стабильному порядку
+  объектов physical projection; endpoints нормализации используют тот же порядок.
+  Boundary anchors сохраняют принадлежность своим Locations при reload/group move.
+  Уже ошибочно сохранённые routes автоматически не переписываются.
+- Удалены только подтверждённые obsolete test debt: неиспользуемые Region
+  helpers/mocks и hidden-composite test. Runtime spatial refactor не выполнялся.
+- Targeted validation и ограничения проверок зафиксированы в 11.5. Новое замечание
+  `C-UX-15` (natural port ordering в L1 trace selector) остаётся OPEN без реализации.
+
+Этот результат не закрывает Phase C. `P-UX-21` и `C-CAP-01` остаются OPEN.
+Replacement rechecks `C-COR-01` и `C-UX-08` не выводятся автоматически из общего
+spatial PASS; для них требуется подтверждение конкретных interaction/assignment
+сценариев. `C-UX-11` сохраняет отдельный waypoint-lifecycle recheck.
 
 ## No-legacy policy
 

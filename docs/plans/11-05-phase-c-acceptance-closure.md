@@ -4,7 +4,7 @@
 
 Этот документ — актуальный обязательный реестр всех замечаний, обнаруженных
 при первой representative Phase C приёмке, и порядок их последующей ручной
-проверки. В реестре остаются все замечания `C-UX-01` ... `C-UX-11`,
+проверки. В реестре остаются все замечания `C-UX-01` ... `C-UX-15`,
 `C-COR-01`, `C-CAP-01` и `C-VIS-01`; замечание не считается необязательным
 только потому, что его исправление относится к Phase D или более позднему
 bounded milestone.
@@ -25,7 +25,8 @@ PT-01/02/03 — **IMPLEMENTED / ACCEPTED / MERGED**;
 P-UX-21 — **OPEN / PRODUCT DIRECTION AGREED**, реализация не начата;
 [контракт представления PhysicalObject](11-06-clean-start-ui-polish.md#p-ux-21).
 Он не входит в P-UX-03E, не блокирует его и не закрывает C-VIS-02.
-Порядок: P-UX-03E → продолжение Phase C → bounded Phase D fixes.
+P-UX-03E — **IMPLEMENTED / MANUAL RECHECK PASSED (10.11.2026); EXTERNAL REVIEW PENDING**.
+Далее: external review branch diff → продолжение Phase C → bounded Phase D fixes.
 
 ### Ручная приёмка HV-01 — 06.11.2026
 
@@ -89,7 +90,7 @@ workflow. Такое supersession записывается прямо в finding
 | `C-UX-04` | `OPEN` | `P-UX-15` не реализует rename |
 | `C-UX-05` | `OPEN` | — |
 | `C-UX-06` | `OPEN` | `P-UX-17` явно оставляет independent Height вне scope |
-| `C-UX-07` | `IMPLEMENTED / RECHECK PENDING` | Групповой перенос Location реализован и P-UX-03D проверен; повторить сценарий с вложенными объектами и внешним кабелем в P-UX-03E. |
+| `C-UX-07` | `VERIFIED` | 10.11.2026 пользователь подтвердил Location group move и collision rejection; ROUTE-01 MANUAL RECHECK PASSED. Canonical subtree displacement contract сохранён. |
 | `C-COR-01` | `SUPERSEDED / RECHECK PENDING` | MapComposite удалён; проверить выбор и взаимодействие с членами Location subtree в P-UX-03E. |
 | `C-UX-08` | `SUPERSEDED / RECHECK PENDING` | Membership заменён Location placement; проверить изменение состава и сохранение после reload в P-UX-03E. |
 | `C-UX-09` | `OPEN` | В `NewInfrastructureObjectPage` реализована компактная таблица выбора BaseTemplate. Графического предпросмотра в сценарии создания пока нет. Preview в `BaseTemplateLibraryPage` доступен отдельно. Остаётся ручная проверка различимости шаблонов при создании объекта. |
@@ -99,6 +100,7 @@ workflow. Такое supersession записывается прямо в finding
 | `C-UX-12` | `IMPLEMENTED / RECHECK PENDING` | Массовое именование и spatial order merged (84de939, 3744a82, 51ab092); проверить обнаруживаемость, порядок и сохранение. |
 | `C-UX-13` | `IMPLEMENTED / RECHECK PENDING` | Компоновка BaseTemplate editor merged (a3ba352); проверить рабочую область вручную. |
 | `C-UX-14` | `IMPLEMENTED / RECHECK PENDING` | BaseTemplate Change Inspector merged; D2 подтверждает исходы анализа. Проверить понимание последствий через UI. |
+| `C-UX-15` | `OPEN` | В L1 trace port selector отсутствует natural ordering; «Любой порт» первым, номера 1,2,…10,11 и буквенно-цифровые имена в естественном порядке, одинаковые названия сохраняются отдельными записями. |
 | `C-VIS-01` | `OPEN` | — |
 | `C-COR-02` | `IMPLEMENTED / RECHECK PENDING` | Распределение точек за пределы панели; высокий приоритет |
 | `C-VIS-02` | `OPEN` | b27f9ca унифицирует формы в редакторах и preview. Исправление размеров в runtime Map и ручной recheck исходного случая не подтверждены. |
@@ -117,12 +119,13 @@ fixes where required → clean repeat Phase C acceptance gate**. `C-CAP-01`
 
 ### Остаток Phase C
 
-- Закрыт HV-01. P-UX-03D и P-UX-20 прошли свои ручные проверки; P-UX-03E
-  и проверки связанных C-* остаются отдельными. Новых VERIFIED среди C-* нет.
+- Закрыт HV-01. P-UX-03D, P-UX-20 и P-UX-03E прошли свои ручные проверки;
+  итоговый diff P-UX-03E ожидает external review. C-UX-07 VERIFIED; остальные
+  связанные C-* требуют собственных сценариев, как указано в таблице.
 - Реализованные исправления и заменяющие сценарии перечислены в таблице.
   Для C-COR-02 отдельно воспроизвести распределение у границ панели и проверить
   сохранение после повторного открытия. Ручной результат от 06.11 этого не покрывает.
-- До закрытия Phase C нужны clean rack-first repeat, P-UX-03E и ручные проверки
+- До закрытия Phase C нужны clean rack-first repeat, external review P-UX-03E и ручные проверки
   применимых C-* из таблицы. Для строк OPEN требуется устранить остающийся
   пробел или зафиксировать его перенос в соответствии с roadmap.
 - C-CAP-01 остаётся OPEN для Phase D до реализации и проверки truthful
@@ -556,6 +559,9 @@ Location-driven map presentation, endpoint и Cable.
 
 ### C-UX-07 — Перемещение Location subtree как группы
 
+**VERIFIED (10.11.2026).** Пользователь подтвердил group move, collision rejection
+и ROUTE-01 MANUAL RECHECK PASSED в P-UX-03E. Ниже сохранён проверенный contract.
+
 **Исправить.** Закрывать finding через `P-UX-03D`: интерактивный frame
 canonical Location перемещает весь canonical subtree текущего
 `MapPresentationVariant` одним delta, включая скрытые collapse-ом placements.
@@ -774,6 +780,18 @@ internal/external/boundary Cable при перемещении Location subtree,
 **Закрыто, если.** Весь выделенный `Cable` и его маршрут/evidence видимы
 поверх обычного и общего участка, соседние кабели не ошибочно подсвечены, а
 семантический результат trace и идентичность не меняются.
+
+### C-UX-15 — Естественная сортировка портов L1 trace
+
+**OPEN (10.11.2026).** В селекторе портов L1 trace отсутствует естественная
+сортировка номеров и названий. Требуется порядок `1,2,3,…10,11`, natural ordering
+буквенно-цифровых имён и «Любой порт» первым. Порты с одинаковым названием
+остаются отдельными selectable records с собственной identity; объединять их нельзя.
+
+**Ручная проверка будущего исправления.** Открыть L1 trace selector с номерами
+1, 2, 10, 11, смешанными именами P2/P10 и двумя отдельными портами с одинаковым
+названием. Проверить порядок, первую опцию «Любой порт» и независимый выбор
+обоих одноимённых портов. В P-UX-03E исправление не выполняется.
 
 ## Итоговая чистая повторная Phase C приёмка
 
@@ -1226,3 +1244,32 @@ hover и focus-visible. Статус ручной приёмки остаётс�
 Пользовательские классификации и цвета остаются **OPEN** до L2
 (см. [User Reference Catalogs](../product/user-reference-catalogs.md)).
 Требуются внешняя инспекция diff и ручная проверка фактического CPP24-24.
+
+
+## P-UX-03E — результаты 10.11.2026
+
+**IMPLEMENTED / MANUAL RECHECK PASSED; EXTERNAL REVIEW PENDING. Phase C OPEN.**
+Пользователь подтвердил PASS: hierarchical Location collapse, независимость
+variants, Location group move, collision rejection, L1 trace через collapsed
+Location. SEL-01 и ROUTE-01 — MANUAL RECHECK PASSED. Реализация и границы:
+[11.7](11-07-hierarchical-location-presentation.md#p-ux-03e--spatial-acceptance-and-dead-code-cleanup).
+
+Подтверждённый obsolete test debt удалён: Region helpers/mocks и hidden-composite
+test; действующие spatial механизмы и port/trace tests сохранены. SEL-01 сохраняет
+отсутствие selection и снимает скрытый selection. ROUTE-01 согласует направление
+wiring points и normalization endpoints с physical projection; ранее ошибочно
+сохранённые routes автоматически не переписываются. Canonical topology, identity,
+schema, variants и atomic positions/routes write boundary не менялись.
+
+C-UX-07 VERIFIED по явному manual evidence. C-COR-01 и C-UX-08 replacement
+interaction/assignment rechecks, а также полный C-UX-11 waypoint lifecycle не
+объявлены VERIFIED по одному общему spatial PASS. C-UX-15 зарегистрирован OPEN;
+P-UX-21 и C-CAP-01 остаются OPEN. Phase C не завершена.
+
+Targeted Docker validation: **136 frontend passed, 1 unrelated skipped;
+18 backend passed; TypeScript + production build passed**. Затронуты SavedMap/DeviceNode, wiring/canvas,
+boundary anchors и route rendering; backend Location group move, persistence,
+variant isolation и rollback. Существующий wiring test `ApiSavedMapDataSource
+acknowledgement … malformed post-write response` ранее воспроизведён падающим
+на исходном HEAD; это unrelated test debt, исключённый из повторного targeted
+прогона. Его исправление не входит в P-UX-03E.

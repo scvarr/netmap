@@ -5,7 +5,7 @@
 Это главный целевой contract hierarchical Location presentation NetMap.
 Целевой contract согласован; P-UX-03B expanded derived Location frames
 реализован. P-UX-03A удалил development-stage `MapComposite` и manual
-`MapRegion`; P-UX-03C/D реализованы, P-UX-03E остаётся **IMPLEMENTATION PENDING**.
+`MapRegion`; P-UX-03C/D реализованы, P-UX-03E — **IMPLEMENTED / MANUAL RECHECK PASSED (10.11.2026); EXTERNAL REVIEW PENDING**.
 
 NetMap pre-production. Если старые spatial models конфликтуют с этим
 contract, они удаляются; compatibility layers, converters, fallback readers и

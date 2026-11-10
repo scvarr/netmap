@@ -18,6 +18,18 @@ const apiResponse = (value: unknown, status = 200) => new Response(JSON.stringif
 afterEach(() => vi.unstubAllGlobals());
 
 describe('MapPage visual wiring', () => {
+  it.each([false, true])('persists wiring points in physical projection order, reversed gesture: %s', async (reverse) => {
+    const { setCableRoute, write } = renderPage();
+    await screen.findByTestId('canvas');
+    startWiring();
+    fireEvent.click(screen.getByRole('button', { name: reverse ? 'generic port' : 'blueprint port' }));
+    fireEvent.click(screen.getByRole('button', { name: 'pane 1' }));
+    fireEvent.click(screen.getByRole('button', { name: 'pane 2' }));
+    fireEvent.click(screen.getByRole('button', { name: reverse ? 'blueprint port' : 'generic port' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    await waitFor(() => expect(setCableRoute).toHaveBeenCalledWith('map-1', 'cable-1', reverse ? [{ x: 30, y: 40 }, { x: 10, y: 20 }] : [{ x: 10, y: 20 }, { x: 30, y: 40 }], VARIANT));
+    expect(write).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ source: expect.objectContaining({ connection_point_id: reverse ? 'b-cp' : 'a-cp' }), target: expect.objectContaining({ connection_point_id: reverse ? 'a-cp' : 'b-cp' }) }));
+  });
   it('keeps primary map controls usable while the transient trace dock opens and closes without saved-map writes', async () => {
     const { maps } = renderPage();
     await screen.findByTestId('canvas');

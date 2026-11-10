@@ -6,6 +6,7 @@ import type { TopologyProjectionDocument, TopologyProjectionNode } from '../topo
 import type { PresentationSceneDocument } from '../topology/presentationScene';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import { ApiSavedMapDataSource } from '../topology/apiSavedMapDataSource';
+import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 
 const { fitViewMock, getZoomMock, screenTransform } = vi.hoisted(() => ({
   fitViewMock: vi.fn(),
@@ -239,6 +240,33 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(body.boundary_routes).toHaveLength(1);
     expect(Object.keys(body.boundary_routes[0].moving_endpoint).sort()).toEqual(['x', 'y']);
     expect(Object.keys(body.boundary_routes[0].external_endpoint).sort()).toEqual(['x', 'y']);
+  });
+
+  it.each([false, true])('keeps two Location boundaries on their own endpoint sides through save and reload, reverse wiring: %s', async (reverse) => {
+    const ref = <T extends string,>(type: T, id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type: type, entity_id: id });
+    const objects: TopologyProjectionNode[] = ['a', 'a2', 'b', 'b2'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [ref('PhysicalObject', id)], attributes: {} }));
+    const positions = [0, 300, 1000, 1300];
+    const locations = ['A', 'B'].map((id) => ({ location_ref: ref('Location', id), name: id, type: null, parent_location_ref: null }));
+    const placements = objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: locations[index < 2 ? 0 : 1].location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: positions[index], y: 0, locked: false } } }));
+    const layoutEngine: TopologyLayoutEngine = async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: positions[index], y: 0 }, data: { projection } })), edges: scene.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, data: { cableNode: edge.cableNode, endpointPair: edge.endpointPair, projection: edge.projectionEdge } })) });
+    const routeNormalizerRef: { current: ((id: string, points: readonly MapCableRouteWaypoint[]) => MapCableRouteWaypoint[]) | null } = { current: null };
+    const wiringRoute = { source: { physicalObjectId: reverse ? 'b' : 'a', connectionPointId: reverse ? 'b-port' : 'a-port' }, target: { physicalObjectId: reverse ? 'a' : 'b', connectionPointId: reverse ? 'a-port' : 'b-port' }, waypoints: [], selectedWaypointIndex: null, onWaypointSelect: vi.fn(), onWaypointMove: vi.fn() };
+    const props = { selection: null, onSelectionChange: vi.fn(), layoutEngine, routeNormalizerRef, locationFrameInput: { locations, placements } };
+    const base = { ...documentFor('physical-two-locations'), nodes: objects, edges: [] };
+    const { rerender } = render(<TopologyCanvas {...props} document={base} wiringRoute={wiringRoute} />);
+    await screen.findByRole('button', { name: 'a' });
+    const saved = routeNormalizerRef.current!('cable', [{ x: 400, y: 72 }, { x: 700, y: 72 }]);
+    expect(saved.map((point) => point.anchor?.location_id ?? null)).toEqual([null, 'A', null, 'B']);
+    // JSON round-trip models the persisted representation; the new edge follows projection order.
+    const route = { cable_ref: ref('Cable', 'cable'), view: 'L1/PHYSICAL_OBJECT' as const, waypoints: JSON.parse(JSON.stringify(saved)) };
+    const pair = { from_connection_point_id: 'a-port', from_member_index: 1, to_connection_point_id: 'b-port', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member', cable_ref: ref('Cable', 'cable') };
+    const document = { ...base, edges: [{ id: 'ab', from_node_id: 'a', to_node_id: 'b', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [pair] } }] };
+    rerender(<TopologyCanvas {...props} document={document} cableRoutes={[route]} />);
+    const restored = JSON.parse((await screen.findByTestId('route-collapsed-cable:cable')).textContent!);
+    expect(restored).toEqual(saved);
+    expect(screen.getByTestId('endpoints-collapsed-cable:cable')).toHaveTextContent('a:b');
+    expect(restored.map((point: MapCableRouteWaypoint) => point.x)).toEqual([...restored.map((point: MapCableRouteWaypoint) => point.x)].sort((a, b) => a - b));
+    expect(routeNormalizerRef.current!('cable', restored)).toEqual(saved);
   });
 
   it('normalizes a saved route using the rendered Location frame before its one route write', async () => {

@@ -219,6 +219,35 @@ def test_explicit_anchor_of_moving_location_wins_over_other_location_anchor():
     assert membership == before[2] and hierarchy == before[3]
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+def test_two_location_route_save_reload_and_move_keep_endpoint_boundary_order(reverse):
+    ids = two_location_anchor_scene()
+    before = snapshot(ids)
+    cable_id = ids["cables"]["boundary"]
+    points = [{"x": 200, "y": 130}, *before[1][cable_id]]
+    if reverse:
+        points.reverse()
+    response = client.put(f'/v1/maps/{ids["map"]}/cable-routes/{cable_id}?variant_id={ids["variant"]}',
+                          json={"view": "physical", "waypoints": points})
+    assert response.status_code == 200, response.text
+    with SessionLocal.begin() as session:
+        copied_id = SavedMapCatalog(session).create_variant(ids["map"], "Copy", ids["variant"]).id
+    payload = nested_request(ids, reverse=reverse)
+    payload["footprints"].append({"physical_object_id": str(ids["objects"]["outside_b"]), "x": 1100, "y": 0, "width": 100, "height": 60})
+    response = move(ids, payload)
+    assert response.status_code == 204, response.text
+    detail = client.get(f'/v1/maps/{ids["map"]}?variant_id={ids["variant"]}').json()
+    restored = next(route["waypoints"] for route in detail["cable_routes"] if route["cable_ref"]["entity_id"] == str(cable_id))
+    oriented = list(reversed(restored)) if reverse else restored
+    assert [point.get("anchor", {}).get("location_id") for point in oriented] == [None, str(ids["room"]), None, str(ids["outside_location"])]
+    assert oriented[0] == {"x": 600, "y": 150}
+    assert oriented[-1] == before[1][cable_id][-1]
+    assert snapshot(ids)[2:] == before[2:]
+    with SessionLocal() as session:
+        copied = session.scalar(select(MapCableRoute).where(MapCableRoute.variant_id == copied_id, MapCableRoute.cable_id == cable_id))
+        assert copied.waypoints == points
+
+
 def test_duplicate_anchor_for_the_moving_location_rejects_without_partial_write():
     ids = two_location_anchor_scene()
     with SessionLocal.begin() as session:

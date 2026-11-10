@@ -538,7 +538,12 @@ export function TopologyCanvas({
     if (!endpoints && wiringRoute?.target) {
       const sourceNode = nodes.find((node) => physicalObjectIdForNode(node.data.projection) === wiringRoute.source.physicalObjectId);
       const targetNode = nodes.find((node) => physicalObjectIdForNode(node.data.projection) === wiringRoute.target?.physicalObjectId);
-      if (sourceNode && targetNode) endpoints = routeEndpoints(sourceNode, targetNode, wiringRoute.source.connectionPointId, wiringRoute.target.connectionPointId);
+      if (sourceNode && targetNode) {
+        const gesture = routeEndpoints(sourceNode, targetNode, wiringRoute.source.connectionPointId, wiringRoute.target.connectionPointId);
+        // The caller supplies persisted projection-order points even before the new Cable is projected.
+        endpoints = wiringRoute.source.physicalObjectId > wiringRoute.target.physicalObjectId
+          ? { source: gesture.target, target: gesture.source } : gesture;
+      }
     }
     return endpoints ? normalizeLocationBoundaryAnchors(endpoints.source, endpoints.target, resolveRouteWaypoints(waypoints), boundaryFrames) : [...waypoints];
   };

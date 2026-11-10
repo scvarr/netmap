@@ -74,14 +74,6 @@ describe('DeviceNode internal L1 overlay', () => {
     view.rerender(<DeviceNode {...({ data: { projection: { ...generic, kind: 'NETWORK_DEVICE' }, locationPresentationPath: 'U03' }, selected: false } as any)} />);
     expect(document.querySelector('.device-node__location')).toBeNull();
   });
-  it('marks an exact hidden-composite Blueprint port without changing unrelated ports', () => {
-    render(<DeviceNode {...({ data: { projection, hiddenCompositeConnectionPointIds: new Set(['front-01']) }, selected: false, width: 160 } as any)} />);
-    const hidden = document.querySelector('[data-connection-point-id="front-01"]')!;
-    const unrelated = document.querySelector('[data-connection-point-id="rear-01"]')!;
-    expect(hidden).toHaveClass('blueprint-map-node__port--hidden-composite-connection');
-    expect(hidden).toHaveAttribute('title', expect.stringContaining('Подключено к скрытому объекту внутри составного блока'));
-    expect(unrelated).not.toHaveClass('blueprint-map-node__port--hidden-composite-connection');
-  });
   it('keeps a short name like PC1 readable on a small Blueprint', () => {
     const small = { ...projection, label: 'PC1' };
     render(<DeviceNode {...({ data: { projection: small }, selected: false, width: 64 } as any)} />);
