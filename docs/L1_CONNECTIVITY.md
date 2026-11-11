@@ -1,8 +1,9 @@
-# L1 Connectivity — L1-CONTRACT-01
+# L1 Connectivity — L1-CONTRACT-02
 
-Ревизия обзора: L1-CONTRACT-01, 2026-11-11. Проверенная база:
-`31aa415ca1983af5a0a5270324d99b4bd58369a6` (HEAD и локальный main).
-Это инвентаризация и материал для согласования, не новая canonical schema и не
+Инвентаризация L1-CONTRACT-01 сохранена; её проверенная база:
+`31aa415ca1983af5a0a5270324d99b4bd58369a6` (историческая база инвентаризации).
+База консолидации L1-CONTRACT-02: `51353a99a900fb5a0a6bde10ea767f3a9529ff17`.
+Это инвентаризация и принятый продуктовый контракт, не новая canonical schema и не
 разрешение реализации. FANOUT-1x24 — representative пример независимых каналов.
 Действующий контракт: [ARCHITECTURE](ARCHITECTURE.md),
 [BACKLOG](BACKLOG.md), [OPEN_DECISIONS](OPEN_DECISIONS.md).
@@ -107,32 +108,47 @@ Cable — identity одного Connection с двумя points. Отсутст�
 поддержку одного многоконцевого кабеля. Не обходить это фиктивными endpoints,
 Cables или геометрическими линиями.
 
-## Проектные принципы для согласования
+## Принятые решения L1-O1–L1-O10 — DECIDED
 
-Количество каналов задаётся данными, без схем 1x2/1x8/1x24 в качестве предела.
-Trace сохраняет exact member identity и не дополняет частичный mapping догадками.
-Presentation не создаёт canonical connectivity. PortType, medium, connector и
-speed сами по себе не доказывают связь. Пользовательские классификации остаются
-открытыми. L1 не реализует неявно L2 switching, L3 forwarding или active conversion.
-Новые механики не становятся обязательными до L1 PRODUCT COMPLETE без отдельного
-продуктового решения; существующий C-CAP-01 остаётся OPEN Phase D.
+Продуктовый контракт L1-CONTRACT-02 от 11.11.2026. Это target, а не
+подтверждение соответствия текущих API, materialization, reconcile или trace.
+Доказательная инвентаризация выше сохраняет отдельные статусы реализации.
 
-## OPEN product/architecture decisions
+- **L1-O1:** L1 охватывает сетевые кабельные соединения меди и оптики.
+  Для меди канал — независимо подключаемая сетевая линия, для оптики — волокно.
+  Проводники RJ45 отдельно не моделируются. Количество каналов задаётся данными.
+- **L1-O2:** единый механизм соответствий для внутренних связей и внешних кабелей:
+  автоматическое прямое, обратное или заданное упорядочивание, обязательный preview,
+  ручная корректировка, частичные mappings, проверка занятости и атомарное сохранение.
+- **L1-O3:** member имеет не более одного внешнего и одного внутреннего соединения.
+  Разные members одного ConnectionPoint независимы. Конфликт не удаляет старую
+  связь автоматически. Исключения настоящих разветвителей вне базовой модели.
+- **L1-O4:** PON splitter остаётся в предметной области, но требует отдельного этапа.
+  Обычные ConnectionMember не имитируют деление. Оптический бюджет вне C-CAP-01.
+- **L1-O5:** физический кабель имеет одну Cable identity, включая несколько окончаний
+  с разным числом каналов. Многоконцевые сборки требуют расширения текущей
+  двухточечной модели; фиктивные Cable недопустимы.
+- **L1-O6:** BaseTemplate определяет физическую конструкцию и внутреннюю разводку.
+  Физическая переделка требует нового BaseTemplate и нового PhysicalObject;
+  индивидуальная переделка внутренней конструкции экземпляра не поддерживается.
+  Исправления описаний, имён и геометрии представления этим не ограничиваются.
+- **L1-O7:** изменение физической конструкции модуля требует нового ModuleTemplate.
+  Internal continuity модулей — отдельная задача реализации, не готовая возможность.
+- **L1-O8:** активное оборудование завершает L1 trace; автоматического transit между
+  портами нет. Пассивное продолжение требует явных внутренних связей.
+  L2 forwarding и active conversion не подменяют L1.
+- **L1-O9:** изменение физической конструкции создаёт новую identity оборудования;
+  внешняя перекоммутация сохраняет identity. Старые подключения автоматически
+  не переносятся. Исправления ошибочных данных — отдельный случай; частичная
+  потеря canonical dependencies недопустима.
+- **L1-O10:** отдельный канал возвращает точный подтверждённый canonical evidence путь.
+  Группа независимо оценивает members; полнота считается относительно явно заданных
+  ожидаемых соответствий. Резервные каналы автоматически не ошибка.
+  REACHABLE не означает измеренную исправность физической линии.
 
-Все вопросы требуют обсуждения ChatGPT и пользователя; альтернативы не выбраны.
-
-| ID / неоднозначность | Альтернативы | Последствия для canonical model | Последствия для trace | Минимальный пример |
-|---|---|---|---|---|
-| L1-O1: гранулярность канала | Волокно/пара/PHY lane по явному контракту пользователя | Определить смысл cardinality и bindings, не выводить из типа | Разный смысл exact member | RJ45 с четырьмя парами против одного Ethernet endpoint |
-| L1-O2: multichannel authoring | Явный список пар; генерация с обязательным подтверждением | Выбрать DTO/immutable definitions без смены identity по номеру | Проверять только сохранённые mappings | MPO-3 с перестановкой 1→3 |
-| L1-O3: занятость | Отдельные правила external/internal; общее ограничение по роли | Нужны согласованные invariants сверх локальной uniqueness | Запретить ложные ветви, сохранить pass-through | Rear member с internal и external link |
-| L1-O4: splitter | Ограничиться continuity; отдельно моделировать signal behavior | Решить достаточность Connections, не вводить schema заранее | Выход→выход, направление и потери требуют явного смысла | PLC 1:2 |
-| L1-O5: общий носитель/окончания | Не включать сейчас; согласовать identity многоконцевого cable/medium | Текущий Cable FK недостаточен для aggregate identity | Evidence общей среды и отдельных сегментов | Y breakout с тремя физическими концами |
-| L1-O6: internal provenance | Сохранять manual continuity; управлять template-owned mappings явно | Решить владение, removal и stable member IDs | Не терять/не создавать путь при reconcile | Удаление внутренней сварки из новой ревизии |
-| L1-O7: модульная continuity | Только endpoints; internal links модуля; связи base↔module | Определить scope definition keys и materialization | Evidence installation и точного member | Сменный пассивный кассетный модуль |
-| L1-O8: активная граница | Завершать L1; отдельный явно согласованный conversion contract | Не превращать active transit в обычную continuity | Отделить physical reachability от преобразования | Медный↔оптический converter |
-| L1-O9: lifecycle subset/capacity | Запрет изменения используемых members; явная intervention | Stable identity и atomic disconnect/reconcile | Сохранить старую доказательную адресацию | 24→12 при занятом member 20 |
-| L1-O10: полнота trace | Один путь; все пути; object any/all channels | Возможно достаточно derived artifact, schema не предрешена | REACHABLE одной пары не означает полное N:N | Два канала, один оборван |
+Нет фиксированной hardware taxonomy и специальных схем 1x24/1x48.
+PortType не определяет connectivity; presentation state не canonical topology.
+C-CAP-01 остаётся OPEN Phase D; L1 PRODUCT COMPLETE обязателен до L2/L3.
 
 ## Обязательные проверочные сценарии
 
@@ -148,22 +164,22 @@ speed сами по себе не доказывают связь. Пользо�
 | Один сигнал → несколько выходов | Граф выразим, физическая семантика OPEN | До решения нельзя принимать graph REACHABLE за signal split; проверить output→output смысл |
 | Кабель с несколькими окончаниями | Как один Cable корректно не выражен | После решения проверять общую cable identity и ветви; сейчас pair paths этого не доказывают |
 
-## Предварительные bounded milestones
+## Последовательность C-CAP-01 — OPEN implementation milestones
 
-1. **Согласование L1 контракта.** Зависит от этого обзора. Результат: решения по
-   L1-O1..O10 с явно включённым и отложенным scope; без новой реализации.
-2. **C-CAP-01: definitions и materialization.** После согласования независимых
-   каналов и provenance. Минимум: rear-N/front-N с точными mappings, stable IDs,
-   без фиктивных endpoints; N задаётся данными.
-3. **C-CAP-01: внешний multichannel write/lifecycle.** После definitions и правил
-   занятости. Минимум: один N:N Cable, permutation/subset, atomic create/delete,
-   explicit edit/reconcile intervention для используемых members.
-4. **C-CAP-01: UI и exact acceptance.** После API/lifecycle. Минимум: authoring,
-   reload и member trace для rear-24/front-24, permutation и incomplete mapping.
-5. **Отдельные promoted gaps при продуктовом решении.** Splitter, многоконцевой
-   Cable, общая среда и active conversion не объединяются автоматически с C-CAP-01.
-   Для каждого сначала отдельный контракт, затем минимальный реальный пример и
-   проверка отсутствия ложной continuity. Это не обязательства Phase A–I.
+Каждый этап требует отдельного implementation contract до выбора DTO, таблиц и
+миграций. Порядок 01 → 02 → 03 → 04 сохраняет небольшой scope каждого этапа.
+
+| Этап / цель | Границы | Зависимости | Инварианты | Минимальная приёмка |
+|---|---|---|---|---|
+| C-CAP-01-01: multichannel definitions/materialization | BaseTemplate capacity и internal mapping; ModuleTemplate continuity отдельная задача | L1-O1–O10; контракт provenance и безопасного reconcile | Stable IDs, immutable revisions, без instance overrides и потери dependencies | Data-driven N, rear-N → N front, permutation/subset после materialization и reload; конфликт reconcile атомарно отклоняется |
+| C-CAP-01-02: внешний write/occupancy/lifecycle | Один двухточечный multichannel Cable; create/edit/disconnect | 01; контракт internal/external roles | Одна Cable identity, occupancy по member, internal и external независимы; без автоматического удаления | N:N, permutation/subset; занятый member отклоняет всю операцию; свободный member того же point доступен; disconnect сохраняет internal continuity; reload |
+| C-CAP-01-03: пользовательский authoring | Общий механизм internal/external mappings и согласованный UI | 01 и 02; существующие UI patterns | Preview обязателен, сохранение атомарно, presentation не evidence | Прямой/обратный/заданный порядок, ручная коррекция, subset, conflict feedback и reload; без фиктивных портов/Cables |
+| C-CAP-01-04: exact trace и групповая приёмка | Member path/evidence, independent group evaluation; интеграционный цикл | 01–03; контракт ожидаемых соответствий | Нет неявного active transit, нет смешения members; REACHABLE не измерение | Rear-24/front-24 с одним внешним trunk, permutation, partial mapping, passive chain и active boundary после reload; резерв не ошибка, пропуск ожидаемой пары виден |
+
+Многоконцевые Cable, PON splitter и специфическая active conversion остаются
+отдельными будущими этапами с собственными контрактами, не входят в C-CAP-01.
+ModuleTemplate internal continuity также требует отдельного bounded implementation
+contract; её готовность не выводится из BaseTemplate и не закрывается этим планом.
 
 ## Проверка этой ревизии
 

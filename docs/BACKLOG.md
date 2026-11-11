@@ -204,8 +204,23 @@ CORR-001 (глубокие passive paths) — RECHECK PENDING: проверит�
 resolver на глубокой легальной цепи; criteria — без RecursionError и потери evidence;
 LOW, не автоматически до L2. CONC-001/API-001/FE-001/LOC-001 завершены и не возвращены.
 
-Ревизия [L1-CONTRACT-01 — Physical L1 Connectivity Model Review](L1_CONNECTIVITY.md):
-перед реализацией C-CAP-01 требуется согласование общего L1 контракта.
-C-CAP-01 остаётся OPEN Phase D; FANOUT-1x24 — пример независимых каналов,
-не предел модели. Новые механики не обязательны до L1 PRODUCT COMPLETE
-без отдельного продуктового решения. Обзор не выбирает canonical schema.
+Контракт [L1-CONTRACT-02](L1_CONNECTIVITY.md) закрепляет L1-O1–L1-O10 как DECIDED.
+C-CAP-01 остаётся OPEN Phase D, L1 PRODUCT COMPLETE обязателен до L2/L3.
+Решения не объявляют текущий core полным multichannel продуктом.
+
+## Последовательность C-CAP-01 — OPEN implementation milestones
+
+Каждый этап требует отдельного implementation contract до выбора DTO, таблиц и
+миграций. Порядок 01 → 02 → 03 → 04 сохраняет небольшой scope каждого этапа.
+
+| Этап / цель | Границы | Зависимости | Инварианты | Минимальная приёмка |
+|---|---|---|---|---|
+| C-CAP-01-01: multichannel definitions/materialization | BaseTemplate capacity и internal mapping; ModuleTemplate continuity отдельная задача | L1-O1–O10; контракт provenance и безопасного reconcile | Stable IDs, immutable revisions, без instance overrides и потери dependencies | Data-driven N, rear-N → N front, permutation/subset после materialization и reload; конфликт reconcile атомарно отклоняется |
+| C-CAP-01-02: внешний write/occupancy/lifecycle | Один двухточечный multichannel Cable; create/edit/disconnect | 01; контракт internal/external roles | Одна Cable identity, occupancy по member, internal и external независимы; без автоматического удаления | N:N, permutation/subset; занятый member отклоняет всю операцию; свободный member того же point доступен; disconnect сохраняет internal continuity; reload |
+| C-CAP-01-03: пользовательский authoring | Общий механизм internal/external mappings и согласованный UI | 01 и 02; существующие UI patterns | Preview обязателен, сохранение атомарно, presentation не evidence | Прямой/обратный/заданный порядок, ручная коррекция, subset, conflict feedback и reload; без фиктивных портов/Cables |
+| C-CAP-01-04: exact trace и групповая приёмка | Member path/evidence, independent group evaluation; интеграционный цикл | 01–03; контракт ожидаемых соответствий | Нет неявного active transit, нет смешения members; REACHABLE не измерение | Rear-24/front-24 с одним внешним trunk, permutation, partial mapping, passive chain и active boundary после reload; резерв не ошибка, пропуск ожидаемой пары виден |
+
+Многоконцевые Cable, PON splitter и специфическая active conversion остаются
+отдельными будущими этапами с собственными контрактами, не входят в C-CAP-01.
+ModuleTemplate internal continuity также требует отдельного bounded implementation
+contract; её готовность не выводится из BaseTemplate и не закрывается этим планом.
