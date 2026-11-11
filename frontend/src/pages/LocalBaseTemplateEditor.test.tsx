@@ -80,3 +80,12 @@ it.each([undefined, 'existing'])('cancels only local work for %s, with refusal a
  fireEvent.click(screen.getByText('Отмена')); expect(screen.getByRole('alert')).toBeInTheDocument(); expect(screen.getByLabelText('Название шаблона')).toHaveValue('Working');
  remove.mockRestore(); fireEvent.click(screen.getByText('Отмена')); view.unmount(); expect(localStorage.getItem(localDraftKey(id))).toBeNull();
 });
+
+it('blocks multichannel editing and copying without changing data', () => {
+ const s = state(); s.slots[0] = {...s.slots[0], kind:'CONNECTION_POINT', cardinality:4};
+ const save = vi.fn();
+ render(<I18nProvider><MemoryRouter><LocalBaseTemplateEditor initialState={s} title="Editor" description="" saveLabel="Save" onSave={save} /></MemoryRouter></I18nProvider>);
+ expect(screen.getByRole('alert')).toHaveTextContent('многоканальных');
+ expect(screen.queryByLabelText('Название шаблона')).toBeNull();
+ expect(s.slots[0].cardinality).toBe(4); expect(save).not.toHaveBeenCalled();
+});

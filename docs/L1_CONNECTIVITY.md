@@ -187,3 +187,28 @@ contract; её готовность не выводится из BaseTemplate и
 code/API/migrations не изменяются. Тесты приложения намеренно не запускаются.
 Перед commit обязательны проверка ссылок, git diff --check и GitNexus detect_changes;
 FINAL diff остаётся предметом внешней инспекции, не принят автоматически.
+
+
+## C-CAP-01-01 — definitions и materialization
+
+BaseTemplate endpoint definition хранит положительную `cardinality` (по умолчанию
+1; NETWORK_PORT только 1, верхний технический предел PostgreSQL int: 2147483647).
+Internal link хранит `member_mappings`: явные пары `from_member_index` /
+`to_member_index` относительно `from_slot_key` / `to_slot_key`. Отсутствующие
+mappings исторических 1:1 definitions означают пару 1→1. Порядок пар не задаёт
+связность. Повторная внутренняя занятость member запрещена во всём definition.
+Материализация создаёт canonical ConnectionPoint/Connection/ConnectionMember
+без Cable, в savepoint; resolver использует сохранённые индексы.
+
+Опубликованная физическая конструкция неизменна: endpoint keys/kind/cardinality,
+внутренняя разводка и keys/kind/compatibility module places требуют копии
+BaseTemplate. Сервер отклоняет structural publication независимо от наличия
+экземпляров. Reconcile разрешённых описательных/presentation изменений сохраняет
+canonical identities и connections; физическая миграция старых экземпляров
+запрещена. Координаты, цвет, подписи не входят в физическую сигнатуру.
+
+Существующий графический редактор блокирует edit/copy multichannel definitions
+с объяснением; API сохраняет mappings и cardinality, archive сохраняет их
+roundtrip. Генератора mappings нет. C-CAP-01 остаётся **OPEN Phase D**;
+C-CAP-01-02/03/04 не реализованы этим этапом. Внешний multichannel write,
+occupancy lifecycle, ModuleTemplate continuity и splitter вне scope.

@@ -41,11 +41,11 @@ def test_direct_slots_snapshot_and_materialization():
     template_id, version_id = create_blueprint(slots, [{"from_slot_key": "opaque-a", "to_slot_key": "opaque-b"}])
     detail = client.get(f"/v1/library/base-templates/{template_id}/versions/{version_id}")
     assert detail.status_code == 200, detail.text
-    assert sorted(detail.json()["slots"], key=lambda item: item["key"]) == slots
+    assert sorted(detail.json()["slots"], key=lambda item: item["key"]) == [{**s, "cardinality": 1} for s in slots]
     assert detail.json()["panels"] == [panel()]
     assert detail.json()["next_panel_number"] == 2
     assert "composition" not in detail.json()
-    assert detail.json()["internal_links"] == [{"from_slot_key": "opaque-a", "to_slot_key": "opaque-b"}]
+    assert detail.json()["internal_links"] == [{"from_slot_key": "opaque-a", "to_slot_key": "opaque-b", "member_mappings": [{"from_member_index": 1, "to_member_index": 1}]}]
     created = instantiate(template_id, version_id)
     assert len(created["slots"]) == 2
     assert len([item for item in created["slots"] if item.get("network_interface_ref") is not None]) == 1

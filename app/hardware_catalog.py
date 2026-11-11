@@ -77,7 +77,7 @@ class BlueprintVersionDetail:
     next_panel_number: int
     panels: tuple[PresentationPanel, ...]
     slots: tuple[BuiltInEndpointDefinition, ...]
-    internal_links: tuple[tuple[str, str], ...]
+    internal_links: tuple[tuple[str, str, list], ...]
     bays: tuple[ModuleBay, ...]
 
 
@@ -88,6 +88,8 @@ class HardwareCatalog:
         self.session = session
 
     def create_initial_version(self, query: object) -> CreatedBlueprint:
+        from app.schemas import CreateBaseTemplateRequest
+        query = CreateBaseTemplateRequest.model_validate(query.model_dump())
         validate_port_type_assignments(self.session, query.model_dump(mode="json")["slots"])
         blueprint = BaseTemplate(name=query.name)
         self.session.add(blueprint)
@@ -132,6 +134,7 @@ class HardwareCatalog:
                 slot_key=item.key,
                 display_name=item.display_name,
                 kind=item.kind,
+                cardinality=item.cardinality,
                 port_type_id=item.port_type_id,
                 panel_key=item.panel_key,
                 position_x=item.rendered_position.x,
@@ -158,6 +161,7 @@ class HardwareCatalog:
                 base_revision_id=version.id,
                 slot_a_id=slot_a.id,
                 slot_b_id=slot_b.id,
+                member_mappings=[dict(from_member_index=m.from_member_index, to_member_index=m.to_member_index) if slot_a.slot_key == link_query.from_slot_key else dict(from_member_index=m.to_member_index, to_member_index=m.from_member_index) for m in link_query.member_mappings],
             ))
         self.session.flush()
         for bay in query.bays:
@@ -223,7 +227,7 @@ class HardwareCatalog:
         ))
         keys_by_id = {slot.id: slot.slot_key for slot in slots}
         links = tuple(
-            (keys_by_id[link.slot_a_id], keys_by_id[link.slot_b_id])
+            (keys_by_id[link.slot_a_id], keys_by_id[link.slot_b_id], link.member_mappings)
             for link in self.session.scalars(
                 select(BaseInternalLink)
                 .where(BaseInternalLink.base_revision_id == version.id)
@@ -280,7 +284,11 @@ class HardwareCatalog:
         self.session.delete(blueprint)
 
 
-    def create_object(
+    def create_object(self, template_id, display_name, class_=None):
+        with self.session.begin_nested():
+            return self._create_object(template_id, display_name, class_)
+
+    def _create_object(
         self, template_id: uuid.UUID, display_name: str, class_: str | None = None,
     ) -> MaterializedObjectConfiguration:
         version = self.session.scalar(select(BaseTemplateRevision).where(BaseTemplateRevision.template_id == template_id).order_by(BaseTemplateRevision.version_number.desc()).limit(1))
@@ -311,7 +319,7 @@ class HardwareCatalog:
         self.session.flush()
         materialized: dict[uuid.UUID, MaterializedSlot] = {}
         for slot in slots:
-            point = repository.add_connection_point(physical_object.id, cardinality=1)
+            point = repository.add_connection_point(physical_object.id, cardinality=slot.cardinality)
             self._metadata(connection_point_id=point.id, key=DISPLAY_ALIAS_KEY, value=slot.display_name)
             interface_id: uuid.UUID | None = None
             if slot.kind == "NETWORK_PORT":
@@ -332,8 +340,8 @@ class HardwareCatalog:
             connection, _ = repository.add_connection(
                 materialized[link.slot_a_id].connection_point_id,
                 materialized[link.slot_b_id].connection_point_id,
-                cardinality=1,
-                members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
+                cardinality=len(link.member_mappings),
+                members=[ConnectionMemberInput(index=i, point_a_member=m["from_member_index"], point_b_member=m["to_member_index"]) for i, m in enumerate(link.member_mappings, 1)],
             )
             internal_connection_ids.append(connection.id)
         self.session.flush()

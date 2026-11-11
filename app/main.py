@@ -825,7 +825,7 @@ def get_object_blueprint_version(
         ],
         "slots": [
             {
-                "key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind,
+                "key": slot.slot_key, "display_name": slot.display_name, "kind": slot.kind, "cardinality": slot.cardinality,
                 "port_type_id": str(slot.port_type_id),
                 "panel_key": slot.panel_key,
                 "rendered_position": {"x": slot.position_x, "y": slot.position_y},
@@ -834,8 +834,8 @@ def get_object_blueprint_version(
         ],
         "bays": [{key: getattr(bay, key) for key in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for bay in version.bays],
         "internal_links": [
-            {"from_slot_key": left, "to_slot_key": right}
-            for left, right in version.internal_links
+            {"from_slot_key": left, "to_slot_key": right, "member_mappings": mappings}
+            for left, right, mappings in version.internal_links
         ],
     }
 

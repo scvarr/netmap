@@ -320,3 +320,12 @@ UX preview/editing и контракт группового результата
 Текущий SavedMap не обеспечивает независимое версионирование canonical topology.
 Хранение, сравнение, утверждение, переключение и разрешение конфликтов — OPEN;
 техническое решение и milestone placement не выбраны.
+
+
+## C-CAP-01-01 — definitions и materialization
+
+Реализованы cardinality и exact internal member mappings BaseTemplate,
+атомарная materialization и запрет публикации изменения физической конструкции.
+Контракт хранения и границы: [ARCHITECTURE](ARCHITECTURE.md#c-cap-01-01--definitions-и-materialization).
+Графический multichannel edit/copy блокируется без потери данных; API доступен.
+C-CAP-01 остаётся **OPEN Phase D**; C-CAP-01-02/03/04 не реализованы.

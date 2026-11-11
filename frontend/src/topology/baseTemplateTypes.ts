@@ -24,6 +24,7 @@ export interface BlueprintBody {
 }
 
 export interface BlueprintSlot {
+  cardinality?: number;
   key: string;
   display_name: string;
   kind: BlueprintSlotKind;
@@ -33,6 +34,7 @@ export interface BlueprintSlot {
 }
 
 export interface BaseInternalLink {
+  member_mappings?: Array<{ from_member_index: number; to_member_index: number }>;
   from_slot_key: string;
   to_slot_key: string;
 }

@@ -132,8 +132,6 @@ def test_identity_additions_alias_and_idempotency_with_revision_skips(skip_revis
     def edit(d):
         d['slots'][0]['display_name'] = 'Renamed definition'
         d['slots'][0]['rendered_position']['x'] = .8
-        add_slot(d)
-        add_slot(d, 'added-point', 'CONNECTION_POINT')
     target = revision(template_id, edit)
     assert reconcile(template_id)[oid(obj)]['status'] == 'updated'
     after = package()
@@ -146,11 +144,11 @@ def test_identity_additions_alias_and_idempotency_with_revision_skips(skip_revis
     assert new_mapping['network_interface_id'] == str(interface_id)
     assert new_mapping['definition_id'] != mapping['definition_id']
     assert after['authoring']['ObjectConfiguration'][0]['base_revision_id'] == target
-    assert len(after['canonical']['ConnectionPoint']) == len(original['canonical']['ConnectionPoint']) + 2
-    assert len(after['canonical']['NetworkInterface']) == 2
-    assert len(after['canonical']['InterfacePhysicalBinding']) == 2
-    assert len(after['canonical']['NetworkInterfacePhysicalOwner']) == 2
-    assert len(after['authoring']['BuiltInEndpointMapping']) == 3
+    assert after['canonical'] == original['canonical']
+    assert len(after['canonical']['NetworkInterface']) == 1
+    assert len(after['canonical']['InterfacePhysicalBinding']) == 1
+    assert len(after['canonical']['NetworkInterfacePhysicalOwner']) == 1
+    assert len(after['authoring']['BuiltInEndpointMapping']) == 1
     for mapping_ in after['authoring']['BuiltInEndpointMapping']:
         point = next(p for p in after['canonical']['ConnectionPoint'] if p['id'] == mapping_['connection_point_id'])
         assert point['physical_object_id'] == oid(obj) and point['cardinality'] == 1
@@ -166,41 +164,11 @@ def test_identity_additions_alias_and_idempotency_with_revision_skips(skip_revis
     assert [o['physical_object_id'] for o in state['current_objects']] == [oid(obj)]
 
 
-@pytest.mark.parametrize('kind', ['NETWORK_PORT', 'CONNECTION_POINT'])
-def test_unused_endpoint_removal(kind):
-    from tests.test_hardware_configuration import base_payload
-    payload = base_payload(); payload['slots'][0]['kind'] = kind
-    template_id, _ = create_base(payload)
-    obj = create_object(template_id)
-    revision(template_id, lambda d: d.update(slots=[]))
-    assert reconcile(template_id)[oid(obj)]['status'] == 'updated'
-    after = package()
-    for name in ('ConnectionPoint', 'NetworkInterface', 'InterfacePhysicalBinding', 'NetworkInterfacePhysicalOwner'):
-        assert after['canonical'][name] == []
-    assert after['authoring']['BuiltInEndpointMapping'] == []
 
 
-@pytest.mark.parametrize('dependency', [
-    'connection', 'point_alias', 'interface_alias', 'binding', 'upper_realization', 'lower_realization',
-    'l2', 'l3', 'security', 'nat', 'processing', 'routing', 'unknown_json', 'mapping',
-])
-def test_removal_refuses_every_dependency_and_preserves_whole_object(dependency):
-    template_id, _ = create_base()
-    obj = create_object(template_id)
-    with SessionLocal.begin() as session:
-        add_dependency(session, obj, dependency)
-    revision(template_id, lambda d: d.update(slots=[]))
-    before = package()
-    result = reconcile(template_id)[oid(obj)]
-    assert result['status'] == 'requires_intervention'
-    assert result['reasons'][0]['code'] == 'ENDPOINT_DEPENDENCIES'
-    assert result['reasons'][0]['dependencies']
-    assert package() == before
-    assert open_draft(template_id)['publication_state']['requires_intervention_count'] == 1
-    assert client.get(f'/v1/topology/physical-objects/{oid(obj)}').status_code == 200
 
 
-@pytest.mark.parametrize('corruption', ['kind', 'missing_mapping', 'foreign_mapping'])
+@pytest.mark.parametrize('corruption', ['missing_mapping', 'foreign_mapping'])
 def test_ambiguous_identity_is_not_recreated(corruption):
     template_id, _ = create_base(); obj = create_object(template_id)
     if corruption == 'kind':
@@ -215,156 +183,4 @@ def test_ambiguous_identity_is_not_recreated(corruption):
                 mapping.definition_id = session.scalar(select(m.BuiltInEndpointDefinition.id).where(m.BuiltInEndpointDefinition.base_revision_id == uuid.UUID(target)))
     before = package()
     assert reconcile(template_id)[oid(obj)]['status'] == 'requires_intervention'
-    assert package() == before
-
-
-@pytest.mark.parametrize('capacity', [0, 1, 2])
-def test_module_capacity_and_deterministic_relocation(capacity):
-    from tests.test_hardware_configuration import base_payload
-    payload = base_payload(); bay = payload['bays'][0]
-    payload['bays'].append({**bay, 'bay_key': 'old-second'})
-    template_id, _ = create_base(payload); obj = create_object(template_id); module = create_module()
-    for index, b in enumerate(payload['bays']):
-        assert install(oid(obj), module['template_id'], b['bay_key'], 'VERTICAL' if index else 'HORIZONTAL').status_code == 201
-    with SessionLocal.begin() as session:
-        point = session.scalar(select(m.ModuleEndpointMapping.connection_point_id))
-        connect(session, point)
-    revision(template_id, lambda d: d.update(bays=[{**bay, 'bay_key': f'new-{i}'} for i in reversed(range(capacity))]))
-    before = package()
-    result = reconcile(template_id)[oid(obj)]
-    if capacity < 2:
-        assert result['status'] == 'requires_intervention'
-        assert {r['code'] for r in result['reasons']} == {'INSUFFICIENT_COMPATIBLE_CAPACITY'}
-        assert package() == before
-    else:
-        assert result['status'] == 'updated'
-        after = package()
-        assert after['canonical'] == before['canonical']
-        for old, new in zip(before['authoring']['ModuleInstallation'], after['authoring']['ModuleInstallation']):
-            assert {k:v for k,v in old.items() if k != 'bay_key'} == {k:v for k,v in new.items() if k != 'bay_key'}
-
-
-def test_valid_placement_is_preserved_and_compatibility_swaps_are_atomic():
-    from tests.test_hardware_configuration import base_payload
-    payload = base_payload(); bay = payload['bays'][0]
-    payload['bays'] = [{**bay, 'bay_key': 'a'}, {**bay, 'bay_key': 'b', 'compatibility': 'Other'}, {**bay, 'bay_key': 'stable'}]
-    template_id, _ = create_base(payload); obj = create_object(template_id)
-    modules = [create_module(), create_module('Other')]
-    for key, module in [('a', modules[0]), ('b', modules[1]), ('stable', modules[0])]:
-        assert install(oid(obj), module['template_id'], key).status_code == 201
-    def edit(d):
-        d['bays'][0]['compatibility'], d['bays'][1]['compatibility'] = d['bays'][1]['compatibility'], d['bays'][0]['compatibility']
-    revision(template_id, edit)
-    before = package()
-    assert reconcile(template_id)[oid(obj)]['status'] == 'updated'
-    after = package()
-    assert after['canonical'] == before['canonical']
-    for old, new in zip(before['authoring']['ModuleInstallation'], after['authoring']['ModuleInstallation']):
-        assert new == {**old, 'bay_key': {'a': 'b', 'b': 'a', 'stable': 'stable'}[old['bay_key']]}
-
-
-@pytest.mark.parametrize('case', ['add_free', 'add_new', 'connected', 'cardinality', 'remove_link'])
-def test_internal_links_never_delete_connections_or_overwrite_capacity(case):
-    from tests.test_hardware_configuration import base_payload
-    payload = base_payload(); add_slot(payload, 'peer', 'CONNECTION_POINT')
-    pair = {'from_slot_key': payload['slots'][0]['key'], 'to_slot_key': 'peer'}
-    if case == 'remove_link':
-        payload['internal_links'] = [pair]
-    template_id, _ = create_base(payload); obj = create_object(template_id)
-    if case in ('connected', 'cardinality'):
-        with SessionLocal.begin() as session:
-            if case == 'connected':
-                connect(session, endpoint(obj)[0])
-            else:
-                session.get(m.ConnectionPoint, endpoint(obj)[0]).cardinality = 2
-    def edit(d):
-        if case == 'add_new':
-            add_slot(d, 'new-left'); add_slot(d, 'new-right')
-            d['internal_links'] = [{'from_slot_key': 'new-left', 'to_slot_key': 'new-right'}]
-        else:
-            d['internal_links'] = [] if case == 'remove_link' else [pair]
-    revision(template_id, edit)
-    before = package()
-    result = reconcile(template_id)[oid(obj)]
-    if case in ('add_free', 'add_new'):
-        assert result['status'] == 'updated'
-        after = package()
-        assert len(after['canonical']['Connection']) == 1
-        assert len(after['canonical']['ConnectionMember']) == 1
-        assert reconcile(template_id)[oid(obj)]['status'] == 'already_current'
-        assert package() == after
-    else:
-        assert result['status'] == 'requires_intervention'
-        assert package() == before
-
-
-def test_failure_rolls_back_partial_materialization_and_other_objects_commit(monkeypatch):
-    template_id, _ = create_base()
-    objects = [create_object(template_id) for _ in range(3)]
-    target = revision(template_id, lambda d: add_slot(d))
-    before = package()
-    blocked_id = sorted(oid(o) for o in objects)[1]
-    original = ObjectReconciliation._add_endpoint
-    def fail_after_write(self, config, definition):
-        mapping = original(self, config, definition)
-        if str(config.physical_object_id) == blocked_id:
-            raise RuntimeError('Injected after point/interface/owner/binding/mapping creation')
-        return mapping
-    monkeypatch.setattr(ObjectReconciliation, '_add_endpoint', fail_after_write)
-    results = reconcile(template_id)
-    assert results[blocked_id]['status'] == 'requires_intervention'
-    assert results[blocked_id]['reasons'] == [{'code': 'APPLY_FAILED'}]
-    assert all(r['status'] == 'updated' for i, r in results.items() if i != blocked_id)
-    after = package()
-    assert len(after['canonical']['ConnectionPoint']) == 5
-    for config in after['authoring']['ObjectConfiguration']:
-        old = next(r for r in before['authoring']['ObjectConfiguration'] if r['id'] == config['id'])
-        assert config == (old if config['physical_object_id'] == blocked_id else {**old, 'base_revision_id': target})
-    for row in before['authoring']['BuiltInEndpointMapping']:
-        if row['configuration_id'] == next(c['id'] for c in before['authoring']['ObjectConfiguration'] if c['physical_object_id'] == blocked_id):
-            assert row in after['authoring']['BuiltInEndpointMapping']
-
-
-def test_failure_after_complete_reconciliation_rolls_back_deletions_relocation_links_and_revision(monkeypatch):
-    template_id, payload = create_base(); obj = create_object(template_id); module = create_module()
-    assert install(oid(obj), module['template_id'], payload['bays'][0]['bay_key']).status_code == 201
-    def edit(d):
-        add_slot(d, 'left'); add_slot(d, 'right', 'CONNECTION_POINT')
-        d['slots'] = [s for s in d['slots'] if s['key'] in ('left', 'right')]
-        d['internal_links'] = [{'from_slot_key': 'left', 'to_slot_key': 'right'}]
-        d['bays'][0]['bay_key'] = 'relocated'
-    revision(template_id, edit)
-    before = package()
-    original = ObjectReconciliation.apply
-    def fail(self, *args):
-        result = original(self, *args)
-        assert result['status'] == 'updated'
-        assert self.session.scalar(select(m.ModuleInstallation.bay_key)) == 'relocated'
-        assert self.session.scalar(select(m.Connection.id)) is not None
-        raise RuntimeError('Injected after full reconciliation, before commit')
-    monkeypatch.setattr(ObjectReconciliation, 'apply', fail)
-    assert reconcile(template_id)[oid(obj)]['reasons'] == [{'code': 'APPLY_FAILED'}]
-    assert package() == before
-
-
-def test_updated_and_blocked_objects_round_trip_with_module_connections():
-    template_id, payload = create_base()
-    safe, blocked, modular = [create_object(template_id) for _ in range(3)]
-    module = create_module(); assert install(oid(modular), module['template_id'], payload['bays'][0]['bay_key']).status_code == 201
-    with SessionLocal.begin() as session:
-        add_dependency(session, blocked, 'interface_alias')
-        connect(session, session.scalar(select(m.ModuleEndpointMapping.connection_point_id)))
-    revision(template_id, lambda d: (d.update(slots=[]), d['bays'][0].update(bay_key='relocated')))
-    results = reconcile(template_id)
-    assert results[oid(blocked)]['status'] == 'requires_intervention'
-    assert results[oid(safe)]['status'] == 'updated'
-    assert results[oid(modular)]['status'] == 'updated'
-    before = package()
-    states = open_draft(template_id)['publication_state']
-    assert client.delete('/v1/workspace/dataset').status_code == 204  # isolated netmap_test only
-    imported = client.post('/v1/workspace/package', json=before)
-    assert imported.status_code == 204, imported.text
-    assert package() == before
-    assert open_draft(template_id)['publication_state'] == states
-    assert reconcile(template_id)[oid(safe)]['status'] == 'already_current'
     assert package() == before

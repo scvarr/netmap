@@ -60,6 +60,7 @@ export function LocalBaseTemplateEditor({ templateId, generation, seeded, onSave
     try { localStorage.removeItem(key); } catch { setStatus('error'); return; }
     enabled.current = false; navigate('/library/base-templates');
   };
+  if ([initial, props.initialState].some(state => state.slots.some(slot => (slot.cardinality ?? 1) !== 1) || state.individualLinks.some(link => link.member_mappings?.some(m => m.from_member_index !== 1 || m.to_member_index !== 1)))) return <p role="alert">{t('templateCopy.multichannelUnsupported')}</p>;
   return <>
     <p role={status === 'error' ? 'alert' : undefined} aria-live="polite">{t(status === 'error' ? 'localDraft.error' : status === 'saved' ? 'localDraft.saved' : 'localDraft.unsaved')}</p>
     {loaded.error === 'corrupt' && pending && <p role="alert">{t('localDraft.corrupt')}</p>}

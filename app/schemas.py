@@ -702,6 +702,7 @@ class BuiltInEndpointDefinitionRequest(BaseModel):
     key: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
+    cardinality: int = Field(default=1, ge=1, le=2147483647, strict=True)
     panel_key: str = Field(min_length=1, max_length=255)
     rendered_position: "BlueprintPosition"
 
@@ -724,11 +725,18 @@ class BlueprintPosition(BaseModel):
     y: FiniteFloat = Field(ge=0, le=1)
 
 
+class BaseInternalMemberMapping(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    from_member_index: int = Field(ge=1, le=2147483647, strict=True)
+    to_member_index: int = Field(ge=1, le=2147483647, strict=True)
+
+
 class BaseInternalLinkRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     from_slot_key: str = Field(min_length=1, max_length=255)
     to_slot_key: str = Field(min_length=1, max_length=255)
+    member_mappings: list[BaseInternalMemberMapping] = Field(default_factory=lambda: [BaseInternalMemberMapping(from_member_index=1, to_member_index=1)], min_length=1)
 
 
 class ModuleBayRequest(BaseModel):
@@ -826,6 +834,23 @@ class CreateBaseTemplateRequest(BaseModel):
             raise PydanticCustomError("blueprint_duplicate_slot_key", "Blueprint slot keys must be unique")
         if any(slot.panel_key not in {panel.panel_key for panel in self.panels} for slot in self.slots):
             raise PydanticCustomError("blueprint_unknown_panel", "Blueprint slot refers to an unknown panel")
+        slots = {slot.key: slot for slot in self.slots}
+        occupied = set()
+        pairs = set()
+        for slot in self.slots:
+            if slot.kind == "NETWORK_PORT" and slot.cardinality != 1:
+                raise PydanticCustomError("hardware_validation", "NETWORK_PORT cardinality must be 1")
+        for link in self.internal_links:
+            a, b = link.from_slot_key, link.to_slot_key
+            pair = tuple(sorted((a, b)))
+            if a == b or a not in slots or b not in slots or pair in pairs:
+                raise PydanticCustomError("hardware_validation", "Invalid or duplicate internal link endpoints")
+            pairs.add(pair)
+            for mapping in link.member_mappings:
+                for key, index in ((a, mapping.from_member_index), (b, mapping.to_member_index)):
+                    if index > slots[key].cardinality or (key, index) in occupied:
+                        raise PydanticCustomError("hardware_validation", "Internal member is out of range or already occupied")
+                    occupied.add((key, index))
         return self
 
 
@@ -843,7 +868,7 @@ class BaseTemplateStructuralChange(BaseModel):
 
 class BaseTemplateImpactReason(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "INSUFFICIENT_COMPATIBLE_CAPACITY", "MODULE_LAYOUT_PANEL_CONFLICT", "INTERNAL_LINK_CONNECTIONS", "INTERNAL_LINK_CARDINALITY", "IDENTITY_AND_DATA_PRESERVED"]
+    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "INSUFFICIENT_COMPATIBLE_CAPACITY", "MODULE_LAYOUT_PANEL_CONFLICT", "PHYSICAL_STRUCTURE_IMMUTABLE", "INTERNAL_LINK_CONNECTIONS", "INTERNAL_LINK_CARDINALITY", "IDENTITY_AND_DATA_PRESERVED"]
     key: str | list[str] | None = None
     endpoint_name: str | None = None
     dependencies: list[str] | None = None
@@ -983,6 +1008,7 @@ class BaseTemplateSlotDocument(BaseModel):
     key: str = Field(min_length=1)
     display_name: str = Field(min_length=1)
     kind: Literal["CONNECTION_POINT", "NETWORK_PORT"]
+    cardinality: int = Field(default=1, ge=1)
     panel_key: str = Field(min_length=1)
     rendered_position: dict[str, float]
 
@@ -991,11 +1017,8 @@ class PresentationPanelDocument(PresentationPanelRequest):
     pass
 
 
-class BaseTemplateInternalLinkDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    from_slot_key: str = Field(min_length=1)
-    to_slot_key: str = Field(min_length=1)
+class BaseTemplateInternalLinkDocument(BaseInternalLinkRequest):
+    pass
 
 
 class BaseTemplateRevisionDocument(BaseModel):

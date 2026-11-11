@@ -519,6 +519,7 @@ class BuiltInEndpointDefinition(Base):
 
     port_type_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("port_types.id", ondelete="RESTRICT"), nullable=False, index=True)
     __table_args__ = (
+        CheckConstraint("cardinality >= 1 AND (kind <> 'NETWORK_PORT' OR cardinality = 1)", name="endpoint_cardinality"),
         CheckConstraint("char_length(btrim(slot_key)) > 0", name="slot_key_not_blank"),
         CheckConstraint("char_length(btrim(display_name)) > 0", name="display_name_not_blank"),
         CheckConstraint("kind IN ('CONNECTION_POINT', 'NETWORK_PORT')", name="kind_supported"),
@@ -538,6 +539,7 @@ class BuiltInEndpointDefinition(Base):
     slot_key: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    cardinality: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     panel_key: Mapped[str] = mapped_column(String(255), nullable=False)
     position_x: Mapped[float] = mapped_column(Float, nullable=False)
     position_y: Mapped[float] = mapped_column(Float, nullable=False)
@@ -554,6 +556,7 @@ class BaseInternalLink(Base):
     base_revision_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False
     )
+    member_mappings: Mapped[list] = mapped_column(JSONB, nullable=False, default=lambda: [{"from_member_index": 1, "to_member_index": 1}], server_default='[{"from_member_index":1,"to_member_index":1}]')
     slot_a_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("built_in_endpoint_definitions.id", ondelete="RESTRICT"), nullable=False
     )

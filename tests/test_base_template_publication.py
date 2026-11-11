@@ -26,8 +26,7 @@ def prepared(template_id):
     definition['name'] = 'Published name'
     definition['body']['width'] = 210
     definition['panels'][0]['width'] = 210
-    definition['slots'].append({**definition['slots'][0], 'key': str(uuid.uuid4()), 'display_name': 'Added'})
-    definition['internal_links'] = [{'from_slot_key': definition['slots'][0]['key'], 'to_slot_key': definition['slots'][1]['key']}]
+    definition['slots'][0]['display_name'] = 'Renamed'
     return check(template_id, save(template_id, draft, definition))
 
 
@@ -85,7 +84,7 @@ def test_publication_preserves_old_objects_and_revisions_and_new_objects_pin_cur
     assert reopened['publication_state']['outdated_count'] == 1
     new = create_object(template_id)
     assert new['version_ref']['entity_id'] == publication['revision_id']
-    assert len(new['slots']) == 2
+    assert len(new['slots']) == 1
     assert open_draft(template_id)['publication_state']['outdated_count'] == 1
     # Retry after unrelated changes and later saved edits returns the receipt,
     # without freshness checks, a duplicate revision or draft rewind.
@@ -191,23 +190,12 @@ def test_partial_revision_failure_rolls_back_receipt_draft_and_revision(monkeypa
     assert publish(template_id, checked['review']['candidate_id']).status_code == 200
 
 
-def test_derived_update_status_distinguishes_waiting_and_intervention():
+def test_structural_removal_publication_is_rejected_with_user_dependencies():
     template_id, _ = create_base()
-    safe, intervention = [create_object(template_id) for _ in range(2)]
-    with SessionLocal.begin() as session:
-        alias = session.scalar(select(m.EntityMetadata).where(m.EntityMetadata.network_interface_id == uuid.UUID(intervention['slots'][0]['network_interface_ref']['entity_id'])))
-        alias.value = 'User data that must be retained'
+    create_object(template_id)
     draft = open_draft(template_id)
     checked = check(template_id, save(template_id, draft, {**draft['definition'], 'slots': []}))
-    assert publish(template_id, checked['review']['candidate_id']).status_code == 200
-    state = open_draft(template_id)['publication_state']
-    assert state['outdated_count'] == 2
-    assert state['awaiting_update_count'] == 1
-    assert state['requires_intervention_count'] == 1
-    by_id = {o['physical_object_id']: o for o in state['objects']}
-    assert by_id[safe['physical_object_ref']['entity_id']]['classification'] == 'potentially_safe'
-    assert by_id[intervention['physical_object_ref']['entity_id']]['classification'] == 'requires_intervention'
-    assert client.get('/v1/library/base-templates').json()['blueprints'][0]['publication_state'] == state
+    assert publish(template_id, checked['review']['candidate_id']).status_code == 409
 
 
 def test_library_revision_and_status_share_one_nonblocking_snapshot(monkeypatch):

@@ -33,11 +33,22 @@ def published_definition(session, template_id, revision_id):
         "name": detail.name, "default_physical_object_class": detail.default_physical_object_class,
         "body": {"kind": detail.body_kind, "width": detail.width, "height": detail.height, "fill_color": detail.fill_color},
         "panels": [{k: getattr(p, k) for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height")} for p in detail.panels],
-        "slots": [{"key": s.slot_key, "display_name": s.display_name, "kind": s.kind, "port_type_id": s.port_type_id, "panel_key": s.panel_key,
+        "slots": [{"key": s.slot_key, "display_name": s.display_name, "kind": s.kind, "cardinality": s.cardinality, "port_type_id": s.port_type_id, "panel_key": s.panel_key,
                    "rendered_position": {"x": s.position_x, "y": s.position_y}} for s in detail.slots],
         "bays": [{k: getattr(b, k) for k in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for b in detail.bays],
-        "internal_links": [{"from_slot_key": a, "to_slot_key": b} for a, b in detail.internal_links],
+        "internal_links": [{"from_slot_key": a, "to_slot_key": b, "member_mappings": mappings} for a, b, mappings in detail.internal_links],
     })
+
+
+def physical_structure(definition):
+    d = CreateBaseTemplateRequest.model_validate(definition).model_dump(mode="json")
+    slots = sorted((s["key"], s["kind"], s["cardinality"]) for s in d["slots"])
+    bays = sorted((b["bay_key"], b["compatibility"], b["kind"]) for b in d["bays"])
+    links = []
+    for link in d["internal_links"]:
+        for mapping in link["member_mappings"]:
+            links.append(tuple(sorted(((link["from_slot_key"], mapping["from_member_index"]), (link["to_slot_key"], mapping["to_member_index"])))))
+    return slots, bays, sorted(links)
 
 
 def structural_changes(before, after):
@@ -57,6 +68,9 @@ def structural_changes(before, after):
         return {tuple(sorted((l["from_slot_key"], l["to_slot_key"]))) for l in d["internal_links"]}
     for pair in sorted(links(before) ^ links(after)):
         changes.append({"section": "internal_links", "key": list(pair), "operation": "added" if pair in links(after) else "removed"})
+    if links(before) == links(after) and physical_structure(before)[2] != physical_structure(after)[2]:
+        for pair in sorted(links(before)):
+            changes.append({"section": "internal_links", "key": list(pair), "operation": "changed"})
     for key in ("name", "default_physical_object_class", "body"):
         if before[key] != after[key]:
             changes.append({"section": "properties", "key": key, "operation": "changed", "before": before[key], "after": after[key]})
@@ -341,6 +355,8 @@ class BaseTemplateReview:
         if candidate.input_fingerprint != self._inputs():
             stale("REVIEW_INPUTS_CHANGED")
         query = CreateBaseTemplateRequest.model_validate(candidate.definition)
+        if physical_structure(published_definition(self.session, template_id, latest.id)) != physical_structure(candidate.definition):
+            raise ModelError("Published physical structure is immutable. Create a template copy.", {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
         revision = HardwareCatalog(self.session)._create_version(template_id, latest.version_number + 1, query)
         self.session.get(m.BaseTemplate, template_id).name = query.name
         receipt = m.BaseTemplatePublication(id=candidate.id, revision_id=revision.id)

@@ -35,7 +35,7 @@ def test_draft_roundtrip_snapshot_identity_and_immutability():
     original_authoring = client.get('/v1/workspace/package').json()['authoring']
     draft = open_draft(template_id)
     assert draft['source_revision_id'] == obj['version_ref']['entity_id']
-    assert draft['definition']['slots'] == payload['slots']
+    assert draft['definition']['slots'] == [{**s, 'cardinality': 1} for s in payload['slots']]
     assert draft['definition']['panels'] == payload['panels']
     definition = copy.deepcopy(draft['definition'])
     definition['slots'][0]['display_name'] = 'Renamed'

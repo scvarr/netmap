@@ -69,8 +69,8 @@ ENTITIES = (
     ("authoring", "BaseTemplateCandidate", "BaseTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "BaseTemplatePublication", "BaseTemplatePublication", "id revision_id"),
     ("authoring", "PresentationPanel", "PresentationPanel", "id base_revision_id panel_key panel_number display_name x y width height"),
-    ("authoring", "BuiltInEndpointDefinition", "BuiltInEndpointDefinition", "id base_revision_id slot_key display_name kind panel_key position_x position_y port_type_id"),
-    ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id"),
+    ("authoring", "BuiltInEndpointDefinition", "BuiltInEndpointDefinition", "id base_revision_id slot_key display_name kind panel_key position_x position_y port_type_id cardinality"),
+    ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id member_mappings"),
     ("authoring", "ObjectConfiguration", "ObjectConfiguration", "id base_revision_id physical_object_id"),
     ("authoring", "BuiltInEndpointMapping", "BuiltInEndpointMapping", "id configuration_id definition_id connection_point_id network_interface_id"),
     ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name compatibility panel_key kind x y width height"),
@@ -195,6 +195,12 @@ def validate_package(package: object) -> dict:
         for record in records:
             if model is models.ModuleBay and isinstance(record, dict) and record.get("kind") == "LOGICAL":
                 record = {"x": None, "y": None, "width": None, "height": None, **record}
+            if isinstance(record, dict):
+                record = dict(record)
+                if name == "BuiltInEndpointDefinition":
+                    record.setdefault("cardinality", 1)
+                elif name == "BaseInternalLink":
+                    record.setdefault("member_mappings", [{"from_member_index": 1, "to_member_index": 1}])
             if not isinstance(record, dict) or set(record) != expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
             row = {field: _decode(record[field], columns[field], f"{name}.{field}") for field in fields}
@@ -336,11 +342,11 @@ def _validate_template_reviews(rows):
             "name": revision["name"], "default_physical_object_class": revision["default_physical_object_class"],
             "body": {"kind": revision["body_kind"], "width": revision["width"], "height": revision["height"], "fill_color": revision["fill_color"]},
             "panels": [{k: p[k] for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height")} for p in rows["presentation_panels"] if p["base_revision_id"] == revision["id"]],
-            "slots": [{"key": s["slot_key"], "display_name": s["display_name"], "kind": s["kind"], "port_type_id": str(s["port_type_id"]), "panel_key": s["panel_key"], "rendered_position": {"x": s["position_x"], "y": s["position_y"]}} for s in rows["built_in_endpoint_definitions"] if s["base_revision_id"] == revision["id"]],
+            "slots": [{"key": s["slot_key"], "display_name": s["display_name"], "kind": s["kind"], "cardinality": s["cardinality"], "port_type_id": str(s["port_type_id"]), "panel_key": s["panel_key"], "rendered_position": {"x": s["position_x"], "y": s["position_y"]}} for s in rows["built_in_endpoint_definitions"] if s["base_revision_id"] == revision["id"]],
             "bays": [{k: b[k] for k in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
         }
         keys = {s["id"]: s["slot_key"] for s in rows["built_in_endpoint_definitions"]}
-        actual["internal_links"] = [{"from_slot_key": keys[l["slot_a_id"]], "to_slot_key": keys[l["slot_b_id"]]} for l in rows["base_internal_links"] if l["base_revision_id"] == revision["id"]]
+        actual["internal_links"] = [{"from_slot_key": keys[l["slot_a_id"]], "to_slot_key": keys[l["slot_b_id"]], "member_mappings": l["member_mappings"]} for l in rows["base_internal_links"] if l["base_revision_id"] == revision["id"]]
         from app.base_template_review import structural_changes
         try:
             changes = structural_changes(validate_definition(definition), validate_definition(actual))
@@ -382,6 +388,23 @@ def _validate_hardware_configuration(rows):
     for link in rows["base_internal_links"]:
         if any(definitions[link[k]]["base_revision_id"] != link["base_revision_id"] for k in ("slot_a_id", "slot_b_id")):
             raise PackageError("Internal link definitions belong to another revision")
+    occupied = set()
+    for definition in definitions.values():
+        capacity = definition["cardinality"]
+        if type(capacity) is not int or capacity < 1 or (definition["kind"] == "NETWORK_PORT" and capacity != 1):
+            raise PackageError("Invalid endpoint cardinality")
+    for link in rows["base_internal_links"]:
+        if not isinstance(link["member_mappings"], list) or not link["member_mappings"]:
+            raise PackageError("Internal mappings must be nonempty")
+        for mapping in link["member_mappings"]:
+            if not isinstance(mapping, dict) or set(mapping) != {"from_member_index", "to_member_index"}:
+                raise PackageError("Invalid internal member mapping")
+            for key, field in (("slot_a_id", "from_member_index"), ("slot_b_id", "to_member_index")):
+                index = mapping[field]
+                member = (link["base_revision_id"], link[key], index)
+                if type(index) is not int or index < 1 or index > definitions[link[key]]["cardinality"] or member in occupied:
+                    raise PackageError("Internal member is invalid or occupied")
+                occupied.add(member)
     for installation in installations.values():
         config = configs[installation["configuration_id"]]
         bay = bays.get((config["base_revision_id"], installation["bay_key"]))

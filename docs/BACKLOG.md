@@ -224,3 +224,12 @@ C-CAP-01 остаётся OPEN Phase D, L1 PRODUCT COMPLETE обязателен
 отдельными будущими этапами с собственными контрактами, не входят в C-CAP-01.
 ModuleTemplate internal continuity также требует отдельного bounded implementation
 contract; её готовность не выводится из BaseTemplate и не закрывается этим планом.
+
+
+## C-CAP-01-01 — definitions и materialization
+
+Реализованы cardinality и exact internal member mappings BaseTemplate,
+атомарная materialization и запрет публикации изменения физической конструкции.
+Контракт хранения и границы: [ARCHITECTURE](ARCHITECTURE.md#c-cap-01-01--definitions-и-materialization).
+Графический multichannel edit/copy блокируется без потери данных; API доступен.
+C-CAP-01 остаётся **OPEN Phase D**; C-CAP-01-02/03/04 не реализованы.
