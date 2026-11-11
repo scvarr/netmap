@@ -799,7 +799,7 @@ describe('minimal direct endpoint editor', () => {
 
 
 describe('unified naming entry', () => {
-  it.each(['Create', 'Edit'])('uses ordered canvas selection in %s and clears it on ordinary open', (title) => {
+  it.each(['Create', 'Edit'])('uses ordered canvas selection in %s and retains naming order without selection on ordinary open', (title) => {
     const initial = newBlueprintEditorState(); initial.name = 'Device';
     const state = addEndpoints(initial, 'NETWORK_PORT', 3, initial.activePanelKey, 'test-type');
     state.individualLinks = [{from_slot_key:state.slots[0].key,to_slot_key:state.slots[1].key}];
@@ -826,7 +826,7 @@ describe('unified naming entry', () => {
     expect(keys.map(key=>saved.slots.find((s:typeof state.slots[number])=>s.key===key).display_name)).toEqual(['GE-05','GE-07']);
     fireEvent.click(screen.getByRole('button',{name:/Порты и внутренние связи/}));
     expect(screen.getAllByRole('checkbox').every(e=>!(e as HTMLInputElement).checked)).toBe(true);
-    expect(within(screen.getByRole('region',{name:'A'})).getByLabelText('Сортировка')).toHaveValue('name');
+    expect(within(screen.getByRole('region',{name:'A'})).getByLabelText('Сортировка')).toHaveValue('manual');
     fireEvent.click(screen.getByRole('button',{name:'Закрыть'}));
     fireEvent.keyDown(document,{key:'Escape'});
     fireEvent.contextMenu(document.querySelector('.blueprint-composition-canvas__body')!);

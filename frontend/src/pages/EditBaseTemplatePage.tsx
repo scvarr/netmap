@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { createBlueprintRequest, hydrateBlueprintEditorState, type BlueprintEditorState } from '../blueprints/editorModel';
-import { BaseTemplateEditor } from './BaseTemplateEditor';
+import { LocalBaseTemplateEditor as BaseTemplateEditor } from './LocalBaseTemplateEditor';
 import { PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
 import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult, CreateBaseTemplateRequest } from '../topology/baseTemplateTypes';
@@ -120,7 +120,7 @@ export function EditBaseTemplatePage({ dataSource }: { dataSource: BaseTemplateD
         setInspectorOpen(false);
         inspectorTrigger.current?.focus();
       }} />}
-    {initial && document && <BaseTemplateEditor key={templateId} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy || revalidating} onStateChange={changed} onSave={async state => {
+    {initial && document && <BaseTemplateEditor key={templateId} templateId={templateId} generation={document.generation} initialState={initial} title={t('review.edit')} description={t('review.description')} saveLabel={t('review.save')} saveDisabled={busy || revalidating} onStateChange={changed} onSave={async state => {
       if (busy || revalidating) return;
       const result = createBlueprintRequest(state); if (!result.request) throw new Error(result.errors.join(' '));
       setBusy(true); setError(''); setNotice('');

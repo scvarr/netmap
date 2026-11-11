@@ -6,7 +6,7 @@ import { I18nProvider } from '../i18n';
 import { EditBaseTemplatePage } from './EditBaseTemplatePage';
 import type { BaseTemplateDataSource, BaseTemplateDraftDocument, BaseTemplateReconciliationResult } from '../topology/baseTemplateTypes';
 
-beforeEach(() => {
+beforeEach(() => { localStorage.clear();
   vi.stubGlobal('fetch', vi.fn(async () => Response.json([
     { id: 'test-type', name: 'Copper', color: '#336699', is_active: true },
   ])));

@@ -6,6 +6,13 @@ export const localeStorageKey = 'netmap.locale';
 
 const messages = {
   ru: {
+    'localDraft.unsaved': 'Не сохранено', 'localDraft.saved': 'Сохранено локально',
+    'localDraft.error': 'Ошибка сохранения: локальная защита от потери изменений недоступна.',
+    'localDraft.corrupt': 'Локальный черновик повреждён и не применён.',
+    'localDraft.resume': 'Найден локальный черновик. Продолжить редактирование?',
+    'localDraft.conflict': 'Конфликт: серверный черновик изменился. Локальные изменения не применены. Чтобы загрузить серверную версию, откажитесь от локального черновика.',
+    'localDraft.continue': 'Продолжить редактирование', 'localDraft.restart': 'Начать заново',
+    'localDraft.confirm': 'Удалить локальный черновик? Несохранённые изменения будут потеряны.',
     "logicalPlaces.title": "Модульные места",
     "logicalPlaces.count": "Количество мест",
     "logicalPlaces.apply": "Применить количество",
@@ -201,6 +208,13 @@ const messages = {
     'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
+    'localDraft.unsaved': 'Unsaved', 'localDraft.saved': 'Saved locally',
+    'localDraft.error': 'Save error: local protection against losing changes is unavailable.',
+    'localDraft.corrupt': 'The local draft is damaged and has not been applied.',
+    'localDraft.resume': 'A local draft was found. Continue editing?',
+    'localDraft.conflict': 'Conflict: the server draft has changed. Local changes have not been applied. Discard the local draft to load the server version.',
+    'localDraft.continue': 'Continue editing', 'localDraft.restart': 'Start again',
+    'localDraft.confirm': 'Delete the local draft? Unsaved changes will be lost.',
     "logicalPlaces.title": "Module places",
     "logicalPlaces.count": "Place count",
     "logicalPlaces.apply": "Apply count",
@@ -399,8 +413,9 @@ const messages = {
 
 
 export type MessageKey = keyof typeof messages.ru;
-export const readStoredLocale = (storage: Pick<Storage, 'getItem'> | undefined = typeof window === 'undefined' ? undefined : window.localStorage): Locale => {
-  const value = storage?.getItem(localeStorageKey);
+export const readStoredLocale = (storage?: Pick<Storage, 'getItem'>): Locale => {
+  let value: string | null | undefined;
+  try { value = (storage ?? (typeof window === 'undefined' ? undefined : window.localStorage))?.getItem(localeStorageKey); } catch { return 'ru'; }
   return locales.includes(value as Locale) ? value as Locale : 'ru';
 };
 
@@ -411,7 +426,7 @@ const I18nContext = createContext<I18n>(defaultI18n);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(() => readStoredLocale());
-  useEffect(() => { document.documentElement.lang = locale; window.localStorage.setItem(localeStorageKey, locale); }, [locale]);
+  useEffect(() => { document.documentElement.lang = locale; try { window.localStorage.setItem(localeStorageKey, locale); } catch { /* Locale remains usable when browser storage is unavailable. */ } }, [locale]);
   const value = useMemo<I18n>(() => ({ locale, setLocale, t: (key, values) => format(messages[locale][key], values), collator: new Intl.Collator(locale, { numeric: true, sensitivity: 'base' }) }), [locale]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }

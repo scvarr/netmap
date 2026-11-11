@@ -1,6 +1,12 @@
 import type { BaseInternalLink, BlueprintSlot, BlueprintSlotKind, CreateBaseTemplateRequest, BaseTemplateRevisionDocument, PresentationPanel } from '../topology/baseTemplateTypes';
 
+export interface EndpointNamingSide {
+  panel: string; mode: 'name' | 'spatial' | 'manual'; order: string[];
+  horizontal: 'ltr' | 'rtl'; vertical: 'ttb' | 'btt';
+  naming: { mask: string; start: string; step: string };
+}
 export interface BlueprintEditorState {
+  endpointNaming?: EndpointNamingSide[];
   name: string; defaultClass: string; width: number; height: number; fillColor: string;
   bays?: import("../topology/hardwareModules").ModuleBay[];
   panels: PresentationPanel[]; slots: BlueprintSlot[]; individualLinks: BaseInternalLink[];

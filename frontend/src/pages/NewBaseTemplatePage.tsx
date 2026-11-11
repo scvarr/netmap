@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { createBlueprintRequest } from '../blueprints/editorModel';
-import { newBlueprintEditorState, BaseTemplateEditor } from './BaseTemplateEditor';
+import { newBlueprintEditorState } from './BaseTemplateEditor';
+import { LocalBaseTemplateEditor as BaseTemplateEditor } from './LocalBaseTemplateEditor';
 import type { BaseTemplateDataSource } from '../topology/baseTemplateTypes';
 import { useI18n } from '../i18n';
 import { Breadcrumbs, PageShell } from '../components/PageChrome';
