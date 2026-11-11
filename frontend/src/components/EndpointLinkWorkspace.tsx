@@ -24,7 +24,12 @@ export function presentedLinks(state: BlueprintEditorState, sides: { panel: stri
 
 export function EndpointLinkWorkspace({ state, onChange, onClose, initialSelectedKeys }: { state: BlueprintEditorState; initialSelectedKeys?: string[]; onChange: (state: BlueprintEditorState) => void; onClose: () => void }) {
   const { t } = useI18n();
-  const [sideState, setSides] = useState(() => (initialSelectedKeys?.length ? undefined : state.endpointNaming?.map(side => ({ ...side, selected: [] as string[] }))) ?? [state.activePanelKey, state.panels.find(p => p.panel_key !== state.activePanelKey)?.panel_key ?? state.activePanelKey].map((panel, index) => {
+  const [sideState, setSides] = useState(() => (initialSelectedKeys?.length ? undefined : state.endpointNaming?.map(side => {
+    const panel = state.panels.some(p => p.panel_key === side.panel) ? side.panel : state.activePanelKey;
+    const available = state.slots.filter(s => s.panel_key === panel).map(s => s.key);
+    const retained = side.order.filter(key => available.includes(key));
+    return { ...side, panel, order: [...retained, ...available.filter(key => !retained.includes(key))], selected: [] as string[] };
+  })) ?? [state.activePanelKey, state.panels.find(p => p.panel_key !== state.activePanelKey)?.panel_key ?? state.activePanelKey].map((panel, index) => {
     const selected = index === 0 ? (initialSelectedKeys ?? []).filter(key => state.slots.some(s => s.key === key && s.panel_key === panel)) : [];
     const available = state.slots.filter(s => s.panel_key === panel).map(s => s.key);
     return { panel, mode: (selected.length ? 'manual' : 'name') as 'name' | 'spatial' | 'manual', order: [...selected, ...available.filter(key => !selected.includes(key))], selected, horizontal: 'ltr' as 'ltr' | 'rtl', vertical: 'ttb' as 'ttb' | 'btt', naming: { mask: '#', start: '1', step: '1' } }; }));

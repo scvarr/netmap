@@ -98,3 +98,32 @@ describe('unified endpoint workspace', () => {
     fireEvent.click(s.side('B').getAllByRole('checkbox')[0]); fireEvent.click(screen.getByRole('button',{name:'Добавить связь'})); expect(s.latest().individualLinks).toHaveLength(2);
   });
 });
+
+it('reopens manual order with new ports, drops removed references and recovers deleted panels', () => {
+ const initial = newBlueprintEditorState();
+ let state = addEndpoints(initial, 'CONNECTION_POINT', 3, initial.activePanelKey, 'type');
+ const panel = state.activePanelKey;
+ const open = () => render(<I18nProvider><EndpointLinkWorkspace state={state} onChange={s => {state = s;}} onClose={() => {}} /></I18nProvider>);
+ let view = open();
+ const a = within(screen.getByRole('region', {name: 'A'}));
+ fireEvent.change(a.getByLabelText('Сортировка'), {target:{value:'manual'}});
+ fireEvent.click(a.getByRole('button', {name:'Ниже: 1'}));
+ fireEvent.change(a.getByLabelText('Маска (#, ##, GE-##)'), {target:{value:'GE-##'}});
+ const order = [...state.endpointNaming![0].order]; view.unmount();
+ state = addEndpoints(state, 'CONNECTION_POINT', 1, panel, 'type');
+ const added = state.slots.at(-1)!.key;
+ view = open();
+ const rows = () => [...screen.getByRole('region', {name:'A'}).querySelectorAll('[data-endpoint-row]')].map(e => e.getAttribute('data-endpoint-row'));
+ expect(rows()).toEqual([...order, added]);
+ expect(within(screen.getByRole('region', {name:'A'})).getByLabelText('Маска (#, ##, GE-##)')).toHaveValue('GE-##');
+ view.unmount();
+ state.slots = state.slots.filter(p => p.key !== order[1]);
+ view = open(); expect(rows()).toEqual([order[0], order[2], added]); view.unmount();
+ state = addPanel(state, 'right');
+ const replacement = state.activePanelKey;
+ state = addEndpoints(state, 'CONNECTION_POINT', 1, replacement, 'type');
+ state.panels = state.panels.filter(p => p.panel_key !== panel);
+ state.slots = state.slots.filter(p => p.panel_key === replacement);
+ view = open(); expect(rows()).toEqual(state.slots.map(p => p.key));
+ expect(state.endpointNaming![0].panel).toBe(replacement); view.unmount();
+});
