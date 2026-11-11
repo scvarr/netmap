@@ -1,6 +1,6 @@
 # Текущее состояние NetMap
 
-Срез актуального main на 10.11.2026. Это состояние продукта, не журнал разработки.
+Срез состояния продукта с решениями и ручной проверкой от 11.11.2026. Это состояние продукта, не журнал разработки.
 Контракты: [ARCHITECTURE](ARCHITECTURE.md); оставшаяся работа: [BACKLOG](BACKLOG.md);
 обсуждения: [OPEN_DECISIONS](OPEN_DECISIONS.md).
 
@@ -66,8 +66,10 @@
 - Rename PhysicalObject доступен в списке оборудования: клиент вызывает
   `PUT /v1/topology/physical-objects/{physical_object_id}/display-name`;
   тесты покрывают обновление inventory и сохранение identity/связей.
-  **C-UX-04 RECHECK PENDING**: карточка, карта/инспектор, поиск и trace после
-  переходов и reload; ручная согласованность всех views пока не подтверждена.
+  **C-UX-04 VERIFIED**: пользователь 11.11.2026 прошёл все шесть проверок:
+  rename оборудования с портами, Cable, Location и SavedMap; новое имя в списке,
+  карточке, карте и инспекторе; поиск и L1 trace; переходы, варианты карты и reload;
+  сохранение canonical IDs, подключений и placements; отсутствие дублирования.
 
 ## Реализовано в canonical/resolver core, но не как полный UI продукта
 
@@ -83,7 +85,7 @@ L2/L3 authoring/trace workbench, operational collection и multi-user прило
 
 ## Реализовано, но требует отдельной ручной проверки
 
-C-UX-01/04/12/13/14 имеют отдельный
+C-UX-01/12/13/14 имеют отдельный
 RECHECK PENDING. HV-01 не заменяет проверки визуальной компоновки F2b,
 управления портами ModuleTemplate, pinned preview, адаптивной высоты таблицы
 установок и faithful library preview. P-UX-07/08/11 и заменяющие сценарии
@@ -95,12 +97,27 @@ Phase C **OPEN**, Phase D не завершена, **L1 PRODUCT COMPLETE не д
 Не реализованы truthful FANOUT-1x24 authoring и multichannel connect через UI
 (C-CAP-01), Location cable channels/comb (C-UX-10), route Undo/Redo (C-UX-16),
 P-UX-21; контракт P-UX-22 ещё требует решения.
-Открыты independent placement Height и другие C-UX findings; rename реализован,
-осталась ручная проверка обновления зависимых представлений (C-UX-04);
-соседние завершённые UX milestones их автоматически не закрывают.
+C-UX-03 — NOT REQUIRED: произвольных названий панелей достаточно, отдельная
+FRONT/REAR-семантика не нужна; это не реализованная функция. C-UX-05 — OPEN:
+направляющие runtime map нужны относительно размещённых объектов; bounded UX
+открыт, отдельно от auto-layout. C-UX-06 — OPEN: Width/Height пока не реализовывать,
+повторно оценить после P-UX-21, не VERIFIED. C-UX-09 — OPEN: нужен раскрываемый
+графический preview при выборе BaseTemplate по примеру preview библиотеки.
+C-VIS-01 — OPEN: общий совпадающий подсвеченный участок допустим, но evidence
+отдельных Cables не смешивается и пересечение не доказывает connectivity.
+C-VIS-02 — OPEN: отдельное исправление отложено до повторной проверки после
+изменения маркеров P-UX-21; автоматически не закрывается.
 
-C-VIS-01 (trace поверх пересекающихся линий) и C-VIS-02 (неодинаковый размер
-маркеров на runtime map) остаются OPEN. Причина C-VIS-02 не установлена.
+Ближайшая очередь: BT-DRAFT-01 (OPEN / implementation not started), BT-COPY-01
+(OPEN), C-CAP-01 (OPEN), продолжение representative L1 acceptance. Согласованные
+границы BaseTemplate работ — в [BACKLOG](BACKLOG.md); это не смена gates A–I.
+C-CAP-01 — обязательный semantic gap Phase D: один задний вход с 24 адресуемыми
+каналами, 24 передних порта, exact internal mapping 1..24, один физический
+multichannel Cable и точный trace канала после reload. Foundation существует,
+но BaseTemplate authoring/materialization и обычный Cable UI ограничены cardinality=1.
+DTO/API, member mapping editing, lifecycle/reconcile и UX открыты; не IMPLEMENTED.
+Fanout entity, фиктивные порты и 24 искусственных Cable не подменяют этот сценарий.
+
 Boundary route re-entry одного Location не поддерживается. Общие каналы,
 endpoint-relative route sections, MapReference, physical occupancy, дополнительные
 справочники и характеристики PortType — будущие возможности.

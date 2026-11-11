@@ -37,7 +37,7 @@ promoted blockers; Phase I — итоговая приёмка. Backend L2/L3 co
 Необходимая работа C/D: representative L1 acceptance, конкретные остатки
 RECHECK ниже, truthful multichannel C-CAP-01; CAT-D сначала требует решения
 о минимальном составе. C-CAP-01 один, его строка в C — finding для Phase D.
-Для C-UX-03/05/06/09/10, C-VIS-01/02 сохраняются findings, но обязательность каждого
+C-UX-03 закрыт как NOT REQUIRED. Для C-UX-05/06/09/10, C-VIS-01/02 сохраняются findings, но обязательность каждого
 как blocker C и точный bounded scope требуют решения: список применимых C-*
 не означает автоматического MUST для любой обсуждавшейся capability.
 
@@ -48,17 +48,43 @@ blocker не установлен. Для P-UX-22, C-UX-16, дополнител
 будущих slices контракт/обязательность уточняются отдельно. CAT-E остаётся
 работой Phase E, CAT-F зависит от Phase F; это не blockers начала Phase C.
 
+## Ближайшая очередь реализации — решение 11.11.2026
+
+BT-DRAFT-01 → BT-COPY-01 → C-CAP-01 → продолжение representative L1 acceptance.
+Это очередь реализации, не изменение последовательности gates Phase A–I.
+L1 PRODUCT COMPLETE остаётся обязательным до продуктового L2/L3.
+
+### BT-DRAFT-01 — локальное автосохранение BaseTemplate
+
+**OPEN / implementation not started.** Автосохранение рабочего состояния в браузере
+при создании и редактировании; восстановление после F5, навигации и повторного
+открытия. Сохраняются порты, типы, имена, геометрия, внутренние связи и необходимые
+параметры редактора; нужны понятные состояния сохранения и ошибок.
+Локальный черновик не публикует серверную ревизию; существующий
+draft/candidate/publication lifecycle сохраняется.
+Для bounded implementation contract открыты число одновременно сохраняемых новых
+черновиков, точная стратегия восстановления, конфликт с изменившейся серверной
+generation, завершение и очистка локального черновика.
+
+### BT-COPY-01 — копирование BaseTemplate
+
+**OPEN.** «Создать копию» в библиотеке из опубликованной ревизии создаёт новый
+независимый BaseTemplate. Копируются определения, панели, порты, PortType refs,
+геометрия, внутренние связи и модульные места. Не копируются PhysicalObject,
+canonical endpoints, подключения и зависимости исходных экземпляров.
+Исходный шаблон не изменяется. Уточнение API/UX и реализации — отдельный milestone.
+
 ## Remaining Phase C
 
 | ID | Остаток / критерий завершения | Статус | Зависимости / приоритет |
 | --- | --- | --- | --- |
 | C-UX-01 | Проверить Location tree/create/reparent произвольной глубины | RECHECK PENDING | P-UX-18 реализован |
 | C-UX-02 | Штатное создание PhysicalObject из BaseTemplate с выбором initial Location, без обходных ручных операций | VERIFIED | Пользователь 10.11.2026 подтвердил неоднократную успешную проверку; только этот контракт |
-| C-UX-03 | Явные FRONT/REAR как физические стороны, без input/output смысла | OPEN | Произвольные panel labels есть; отдельная семантика сторон этим не доказана. Уточнить, достаточно ли labels, затем проверить шаблон/карту/reload |
-| C-UX-04 | Rename из списка объектов реализован; проверить новое имя в карточке, карте/инспекторе, поиске и trace после переходов и reload; IDs, подключения и placements неизменны | RECHECK PENDING | API и клиентские тесты есть; обновление всех зависимых представлений вручную не подтверждено |
-| C-UX-05 | Runtime guides границ/центров и равных интервалов при drag | OPEN | Composition editor guides уже есть; они не закрывают runtime guides. Presentation-only, без auto-layout |
-| C-UX-06 | Независимые Width/Height placement через карту/карточку; порты следуют телу | OPEN | Independent placement Height отсутствует; template/body geometry уже есть и не меняется |
-| C-UX-09 | Derived preview в компактном выборе BaseTemplate и ручная различимость | OPEN | Таблица есть, preview при создании отсутствует |
+| C-UX-03 | Отдельная FRONT/REAR-семантика не требуется; произвольных названий панелей достаточно | NOT REQUIRED | Решение 11.11.2026; закрыто без реализации отдельной функции |
+| C-UX-04 | Rename оборудования с портами, Cable, Location и SavedMap; новое имя в списке, карточке, карте и инспекторе; поиск и L1 trace; переходы, варианты карты и reload; IDs, подключения и placements сохранены, дубли отсутствуют | VERIFIED | Пользователь прошёл все шесть ручных проверок 11.11.2026 |
+| C-UX-05 | Runtime map guides нужны; ориентиры — уже размещённые объекты | OPEN | Точный bounded UX-контракт открыт; presentation-only, отдельно от auto-layout |
+| C-UX-06 | Независимые Width/Height пока не реализовывать | OPEN | Повторно оценить необходимость после P-UX-21; не VERIFIED |
+| C-UX-09 | Раскрываемый графический preview BaseTemplate непосредственно при выборе шаблона | OPEN | Ориентир — существующий preview библиотеки; реализация открыта |
 | C-UX-10 | Location cable channels, общая направляющая и comb; счётчик и exact trace | OPEN | Boundary anchors/snapping уже есть, но не заменяют shared channels/comb; решения persistence/UX/geometry — OPEN_DECISIONS |
 | C-UX-12 | Проверить массовое именование, spatial order, обнаруживаемость и сохранение | RECHECK PENDING | Исправление реализовано |
 | C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
@@ -66,8 +92,8 @@ blocker не установлен. Для P-UX-22, C-UX-16, дополнител
 | C-UX-15 | Natural ordering trace port selector: реальные panel/port labels и модульный контекст при совпадении; «Любой порт» первым, 1,2,…10; дубликаты отдельны | VERIFIED | Техническая реализация прошла external review (c4c04ed); пользователь 10.11.2026 подтвердил успешную ручную проверку |
 | C-UX-16 | Undo/Redo draft waypoint operations и delete в панели | PRODUCT DECISION PENDING | История отсутствует; delete через инспектор есть; final toolbar/hotkeys открыты |
 | C-COR-02 | Полный manual recheck distribute у границ панели, невозможная операция и reload | VERIFIED | Пользователь 10.11.2026 подтвердил границы панели, атомарное отклонение невозможной операции, сохранение и повторное открытие |
-| C-VIS-01 | Trace виден поверх обычных совпадающих/пересекающихся routes, соседний Cable не evidence | OPEN | Плотная карта; channel-specific часть зависит от C-UX-10 |
-| C-VIS-02 | Исследовать и устранить различия runtime marker sizes, проверить zoom | OPEN | Низкий приоритет; PT-03 не закрывает |
+| C-VIS-01 | Совпадающий общий подсвеченный участок допустим; canonical trace evidence отдельных Cables не смешивается | OPEN | Геометрическое пересечение не доказывает connectivity; реализация не объявляется завершённой |
+| C-VIS-02 | Отдельное исправление отложено; повторная проверка после изменения маркеров в P-UX-21 | OPEN | Не закрывается автоматически |
 | C-VIS-03 | Сохранение цветов PortType на физической карте при Cable create/delete, L1 trace и wiring; форма и подсветка независимы от базового цвета | VERIFIED | Foreground SVG перекрывал DeviceNode фиксированной заливкой; теперь читает общий runtime PortType catalog, включая архивные типы. Wiring использует обводку/свечение без замены заливки. Адресные автоматические проверки пройдены: оба слоя, Cable lifecycle, trace/route, wiring, порядок catalog/projection. External review реализации daff76edce19424c6ba72004ee4b41f5b0d8772d и ручная приёмка пройдены 10.11.2026; пользователь подтвердил сохранение цветов после операций с кабелями и в проверенных режимах карты |
 | C-CAP-01 | Truthful FANOUT-1x24 от authoring до одного multichannel Cable и member trace | OPEN | Promoted Phase D; не подменять 24 фиктивными входами/кабелями |
 
@@ -81,7 +107,7 @@ HV-01 PASSED, PT-01/02/03 приняты, P-UX-03E принят и merged — н
   P-UX-11: только viewport ModuleTemplate и остальных редакторов, кроме BaseTemplate
   (его большие данные и полезная площадь проверяются один раз в C-UX-13).
 - P-UX-13/14/15 не отдельная очередь: create/initial Location закрыты C-UX-02;
-  компактный picker preview — C-UX-09; rename — только остаток C-UX-04.
+  компактный picker preview — C-UX-09; rename — VERIFIED в C-UX-04.
   Остался RECHECK PENDING переходов обзор/физика/интерфейсы карточки: правильный
   объект, данные и возврат после reload. Obsolete Blueprint workflow не восстанавливать.
 - P-UX-19: только preview/conflicts/atomic Location series и reload; дерево/create/reparent
@@ -106,9 +132,16 @@ members/evidence -> export/reset/import/reload. Synthetic stand не утвер�
 
 ## Remaining Phase D и справочники
 
-C-CAP-01 (единый пункт, ссылка из Phase C) — OPEN: template endpoint cardinality/member mapping, материализация и
-UI multichannel connect должны выражать один вход с 24 каналами, internal fanout
-и точный trace выбранного канала после reload. Не вводить Fanout entity ради формы.
+C-CAP-01 (единый пункт, ссылка из Phase C) — OPEN, обязательный semantic gap Phase D.
+Canonical ConnectionPoint/Connection/ConnectionMember foundation существует, но
+BaseTemplate authoring, materialization и обычный Cable UI ограничены cardinality=1.
+Обязательный сценарий стенда: один задний многоканальный вход патч-панели,
+24 независимо адресуемых канала, 24 отдельных передних порта, exact internal
+member mapping 1..24, один физический многоканальный Cable и точный L1 trace
+отдельного канала после reload. Не создавать Fanout entity, фиктивные порты
+или 24 искусственных Cable для подмены одного физического.
+Точные DTO/API, редактирование member mappings, lifecycle/reconcile и UX — OPEN;
+foundation не означает IMPLEMENTED.
 
 CAT-D — PRODUCT DECISION PENDING: определить bounded состав необходимых
 классификаций портов/кабелей; реализовать и проверить reusable user-defined
