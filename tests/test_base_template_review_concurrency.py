@@ -56,7 +56,7 @@ def test_check_persists_one_snapshot_despite_committed_concurrent_changes(monkey
     with SessionLocal() as session:
         expected_fingerprint = session.get(m.BaseTemplateCandidate, uuid.UUID(first['review']['candidate_id'])).input_fingerprint
     definition = copy.deepcopy(first['definition'])
-    definition['slots'] = []
+    definition['slots'][0]['display_name'] = 'Presentation change'
     saved = save(template_id, first, definition)
     assert not saved['review']['current']
     interface_id = uuid.UUID(obj['slots'][0]['network_interface_ref']['entity_id'])
@@ -90,7 +90,7 @@ def test_check_persists_one_snapshot_despite_committed_concurrent_changes(monkey
     assert not open_draft(template_id)['review']['current']
     rechecked = check(template_id, checked)['review']
     by_object = {item['physical_object_id']: item for item in rechecked['result']['objects']}
-    assert by_object[obj['physical_object_ref']['entity_id']]['classification'] == 'requires_intervention'
+    assert by_object[obj['physical_object_ref']['entity_id']]['classification'] == 'potentially_safe'
     assert by_object[concurrent_objects[0]]['classification'] == 'potentially_safe'
     with SessionLocal() as session:
         assert session.get(m.BaseTemplateCandidate, uuid.UUID(rechecked['candidate_id'])).input_fingerprint != expected_fingerprint

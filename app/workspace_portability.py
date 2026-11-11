@@ -323,7 +323,7 @@ def _validate_template_reviews(rows):
     from app.base_template_review import validate_definition
     from app.schemas import BaseTemplateImpactResult
     from pydantic import ValidationError as SchemaError
-    from app.errors import ValidationError as DefinitionError
+    from app.errors import NetMapError as DefinitionError
     revisions = {r["id"]: r for r in rows["base_template_revisions"]}
     candidates = {r["id"]: r for r in rows["base_template_candidates"]}
     published_ids = [r["revision_id"] for r in rows["base_template_publications"]]
@@ -351,7 +351,7 @@ def _validate_template_reviews(rows):
         try:
             changes = structural_changes(validate_definition(definition), validate_definition(actual))
         except (SchemaError, DefinitionError, TypeError) as exc:
-            raise PackageError("Invalid publication definition") from exc
+            raise PackageError(f"Invalid publication definition: {getattr(exc, 'details', {}).get('reason', 'INVALID_DEFINITION')}") from exc
         if changes:
             raise PackageError("Published revision differs from frozen candidate")
     for table, generation in (("base_template_drafts", "generation"), ("base_template_candidates", "draft_generation")):
@@ -361,7 +361,7 @@ def _validate_template_reviews(rows):
             try:
                 validate_definition(row["definition"])
             except (SchemaError, DefinitionError, TypeError) as exc:
-                raise PackageError("Invalid review definition") from exc
+                raise PackageError(f"Invalid review definition: {getattr(exc, 'details', {}).get('reason', 'INVALID_DEFINITION')}") from exc
             if table == "base_template_candidates":
                 try:
                     BaseTemplateImpactResult.model_validate(row["result"])
@@ -403,7 +403,7 @@ def _validate_hardware_configuration(rows):
                 index = mapping[field]
                 member = (link["base_revision_id"], link[key], index)
                 if type(index) is not int or index < 1 or index > definitions[link[key]]["cardinality"] or member in occupied:
-                    raise PackageError("Internal member is invalid or occupied")
+                    raise PackageError("INTERNAL_MEMBER_OCCUPANCY: incompatible internal wiring; a member is invalid or already occupied. No automatic correction is performed.")
                 occupied.add(member)
     for installation in installations.values():
         config = configs[installation["configuration_id"]]

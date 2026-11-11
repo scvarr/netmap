@@ -46,9 +46,13 @@ def test_exact_materialization_reload_trace_archive(n, fanout):
     package = client.get('/v1/workspace/package').json()
     from app.workspace_portability import validate_package, import_package, reset_dataset
     validate_package(package)
+    archive = copy.deepcopy(package)
+    if n == 1:
+        for slot in archive['authoring']['BuiltInEndpointDefinition']: slot.pop('cardinality')
+        for link in archive['authoring']['BaseInternalLink']: link.pop('member_mappings')
     with SessionLocal.begin() as session:
         reset_dataset(session)
-        import_package(session, package)
+        import_package(session, archive)
     assert client.get('/v1/workspace/package').json() == package
 
 
@@ -80,8 +84,9 @@ def test_immutable_publication_and_allowed_reconcile():
     before=client.get('/v1/workspace/package').json()['canonical']
     draft=open_draft(tid)
     d=copy.deepcopy(draft['definition']);d['slots'][0]['cardinality']+=1
-    checked=check(tid,save(tid,draft,d))
-    assert publish(tid,checked['review']['candidate_id']).status_code==409
+    saved=save(tid,draft,d)
+    response=client.post(f'/v1/library/base-templates/{tid}/draft/check', params={'expected_generation': saved['generation']})
+    assert response.status_code==409,response.text
     draft=open_draft(tid);d=copy.deepcopy(draft['definition']);d['slots'][0]['cardinality']-=1
     d['name']='Presentation';d['slots'][0]['rendered_position']['x']=.3
     checked=check(tid,save(tid,draft,d))
@@ -98,11 +103,11 @@ def test_physical_changes_rejected_without_instances(change):
     if change=='add': d['slots'].append({**d['slots'][1], 'key':str(uuid.uuid4())})
     if change=='remove':
         removed=d['slots'].pop()['key'];d['internal_links']=[l for l in d['internal_links'] if removed not in (l['from_slot_key'],l['to_slot_key'])]
-    if change=='kind': d['slots'][1]['kind']='NETWORK_PORT'
+    if change=='kind': next(s for s in d['slots'] if s['cardinality']==1)['kind']='NETWORK_PORT'
     if change=='cardinality': d['slots'][0]['cardinality']+=1
-    if change=='mapping': d['internal_links']=d['internal_links'][:1];d['internal_links'][0]['member_mappings'][0]['from_member_index']=1 if d['internal_links'][0]['member_mappings'][0]['from_member_index']!=1 else 2
+    if change=='mapping': d['internal_links']=d['internal_links'][:1]; link=d['internal_links'][0]; field='from_member_index' if next(s for s in d['slots'] if s['key']==link['from_slot_key'])['cardinality']>1 else 'to_member_index';link['member_mappings'][0][field]=1 if link['member_mappings'][0][field]!=1 else 2
     if change=='bay': d['bays'][0]['compatibility']='different'
-    checked=check(tid,save(tid,draft,d))
-    response=publish(tid,checked['review']['candidate_id'])
+    saved=save(tid,draft,d)
+    response=client.post(f'/v1/library/base-templates/{tid}/draft/check', params={'expected_generation': saved['generation']})
     assert response.status_code==409,response.text
     assert response.json()['error']['details']['reason']=='PHYSICAL_STRUCTURE_IMMUTABLE'

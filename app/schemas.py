@@ -849,7 +849,7 @@ class CreateBaseTemplateRequest(BaseModel):
             for mapping in link.member_mappings:
                 for key, index in ((a, mapping.from_member_index), (b, mapping.to_member_index)):
                     if index > slots[key].cardinality or (key, index) in occupied:
-                        raise PydanticCustomError("hardware_validation", "Internal member is out of range or already occupied")
+                        raise PydanticCustomError("hardware_validation", "Internal member is out of range or already occupied", {"reason": "INTERNAL_MEMBER_OCCUPANCY" if (key, index) in occupied else "INTERNAL_MEMBER_OUT_OF_RANGE"})
                     occupied.add((key, index))
         return self
 

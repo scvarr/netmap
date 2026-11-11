@@ -194,8 +194,8 @@ def test_structural_removal_publication_is_rejected_with_user_dependencies():
     template_id, _ = create_base()
     create_object(template_id)
     draft = open_draft(template_id)
-    checked = check(template_id, save(template_id, draft, {**draft['definition'], 'slots': []}))
-    assert publish(template_id, checked['review']['candidate_id']).status_code == 409
+    from tests.test_base_template_review import assert_structure_rejected
+    assert_structure_rejected(template_id, save(template_id, draft, {**draft['definition'], 'slots': []}))
 
 
 def test_library_revision_and_status_share_one_nonblocking_snapshot(monkeypatch):

@@ -234,6 +234,16 @@ class HardwareCatalog:
                 .order_by(BaseInternalLink.id)
             )
         )
+        occupied = set()
+        for a, b, mappings in links:
+            for mapping in mappings:
+                for member in ((a, mapping["from_member_index"]), (b, mapping["to_member_index"])):
+                    if member in occupied:
+                        raise ModelError(
+                            "Сохранённая внутренняя разводка повторно использует один member и несовместима с O3. Автоматическая коррекция не выполняется.",
+                            {"reason": "INTERNAL_MEMBER_OCCUPANCY", "slot_key": member[0], "member_index": member[1]},
+                        )
+                    occupied.add(member)
         return BlueprintVersionDetail(
             template_id=blueprint.id,
             name=version.name,
@@ -294,6 +304,7 @@ class HardwareCatalog:
         version = self.session.scalar(select(BaseTemplateRevision).where(BaseTemplateRevision.template_id == template_id).order_by(BaseTemplateRevision.version_number.desc()).limit(1))
         if version is None:
             raise ValidationError("Base template was not found")
+        self.get_version_detail(template_id, version.id)
         version_id = version.id
         slots = tuple(self.session.scalars(
             select(BuiltInEndpointDefinition)

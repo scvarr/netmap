@@ -66,6 +66,7 @@ class ObjectReconciliation:
             m.EntityMetadata.physical_object_id == object_id, m.EntityMetadata.key == DISPLAY_ALIAS_KEY))
         result = {"physical_object_id": str(object_id), "display_name": label or str(object_id),
                   "source_revision_id": str(config.base_revision_id), "target_revision_id": str(latest.id)}
+        HardwareCatalog(session).get_version_detail(template_id, config.base_revision_id)
         if config.base_revision_id == latest.id:
             return {**result, "status": "already_current", "reasons": []}
 

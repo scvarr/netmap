@@ -212,3 +212,17 @@ canonical identities и connections; физическая миграция ст�
 roundtrip. Генератора mappings нет. C-CAP-01 остаётся **OPEN Phase D**;
 C-CAP-01-02/03/04 не реализованы этим этапом. Внешний multichannel write,
 occupancy lifecycle, ModuleTemplate continuity и splitter вне scope.
+
+
+C-CAP-01-01 corrective: `draft/check` сравнивает physical structure с опубликованной
+ревизией до создания candidate. Физические изменения возвращают
+`PHYSICAL_STRUCTURE_IMMUTABLE` с предложением создать копию; независимая защита
+в publish сохраняется для ранее выданных candidates и прямых API-вызовов.
+
+Историческая внутренняя разводка с повторной занятостью одного member несовместима
+с O3. Чтение/review/materialization возвращают доменную ошибку
+`INTERNAL_MEMBER_OCCUPANCY`; reconcile сообщает эту причину без изменения объекта.
+Импорт такого архива явно отклоняется до восстановления данных, в том числе при
+отсутствующих полях cardinality/mappings старого 1:1 формата. Links не удаляются,
+continuity не синтезируется, автоматической коррекции и splitter support нет.
+Корректные исторические 1:1 definitions остаются поддержаны. C-CAP-01 — OPEN Phase D.

@@ -27,6 +27,22 @@ def check(template_id, draft):
     return response.json()
 
 
+def assert_structure_rejected(template_id, draft):
+    response = client.post(f'/v1/library/base-templates/{template_id}/draft/check', params={'expected_generation': draft['generation']})
+    assert response.status_code == 409, response.text
+    assert response.json()['error']['details']['reason'] == 'PHYSICAL_STRUCTURE_IMMUTABLE'
+
+
+def analyze_saved_definition(template_id, draft):
+    # Local dependency diagnostics remain useful, but cannot authorize a
+    # publish-ready candidate for a physical change.
+    from app.base_template_review import analyze_object
+    from app.models import ObjectConfiguration, BaseTemplateRevision
+    with SessionLocal() as session:
+        configs = session.scalars(select(ObjectConfiguration).join(BaseTemplateRevision).where(BaseTemplateRevision.template_id == uuid.UUID(template_id))).all()
+        return [analyze_object(session, config, draft['definition']) for config in configs]
+
+
 def test_draft_roundtrip_snapshot_identity_and_immutability():
     template_id, payload = create_base()
     obj = create_object(template_id)
@@ -42,7 +58,6 @@ def test_draft_roundtrip_snapshot_identity_and_immutability():
     definition['slots'][0]['rendered_position']['x'] = .7
     definition['panels'][0]['width'] = 200
     definition['bays'][0]['display_name'] = 'Same bay identity'
-    definition['slots'].append({**definition['slots'][0], 'key': str(uuid.uuid4()), 'display_name': 'New'})
     draft = save(template_id, draft, definition)
     assert open_draft(template_id)['definition'] == definition
     canonical_before = client.get('/v1/workspace/package').json()['canonical']
@@ -51,7 +66,7 @@ def test_draft_roundtrip_snapshot_identity_and_immutability():
     assert review['current'] and review['definition'] == definition
     assert review['result']['objects'][0]['classification'] == 'potentially_safe'
     slot_changes = [c for c in review['result']['changes'] if c['section'] == 'slots']
-    assert {c['operation'] for c in slot_changes} == {'changed', 'added'}
+    assert {c['operation'] for c in slot_changes} == {'changed'}
     assert client.get(published_url).json() == original
     assert client.get('/v1/workspace/package').json()['canonical'] == canonical_before
     after_authoring = client.get('/v1/workspace/package').json()['authoring']
@@ -119,7 +134,8 @@ def test_removed_endpoint_dependencies_require_attention_and_are_per_object(depe
     definition = copy.deepcopy(draft['definition']); definition['slots'] = []
     draft = save(template_id, draft, definition)
     canonical = client.get('/v1/workspace/package').json()['canonical']
-    result = check(template_id, draft)['review']['result']['objects']
+    assert_structure_rejected(template_id, draft)
+    result = analyze_saved_definition(template_id, draft)
     by_object = {r['physical_object_id']: r for r in result}
     first = by_object[objects[0]['physical_object_ref']['entity_id']]
     assert first['classification'] == 'requires_intervention'
@@ -148,7 +164,8 @@ def test_occupied_bay_capacity_and_deterministic_placement(capacity):
     definition['bays'] = [{**payload['bays'][0], 'bay_key': f'opaque-{i}'} for i in reversed(range(capacity))]
     draft = save(template_id, draft, definition)
     before = client.get(f'/v1/topology/physical-objects/{object_id}/configuration').json()
-    result = check(template_id, draft)['review']['result']['objects'][0]
+    assert_structure_rejected(template_id, draft)
+    result = analyze_saved_definition(template_id, draft)[0]
     assert result['classification'] == ('potentially_safe' if capacity == 2 else 'requires_intervention')
     if capacity == 2:
         assert result['proposed_placements'] == dict(zip(installation_ids, ['opaque-0', 'opaque-1']))
@@ -221,9 +238,13 @@ def test_structural_changes_keep_keys_and_fail_closed_when_needed(change):
         for slot in definition['slots']:
             slot['panel_key'] = definition['panels'][0]['panel_key']
         definition['bays'][0]['panel_key'] = definition['panels'][0]['panel_key']
-    checked = check(template_id, save(template_id, draft, definition))
-    result = checked['review']['result']['objects'][0]
+    saved = save(template_id, draft, definition)
+    if change != 'remove_initial_panel':
+        assert_structure_rejected(template_id, saved)
+    else:
+        check(template_id, saved)
+    result = analyze_saved_definition(template_id, saved)[0]
     assert result['classification'] == ('potentially_safe' if change == 'remove_initial_panel' else 'requires_intervention')
     if change in ('kind', 'compatibility'):
         section = 'slots' if change == 'kind' else 'bays'
-        assert [c['operation'] for c in checked['review']['result']['changes'] if c['section'] == section] == ['changed']
+        assert [c['operation'] for c in result['changes'] if c['section'] == section] == ['changed']

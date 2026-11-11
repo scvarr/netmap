@@ -3,6 +3,7 @@ import copy
 import hashlib
 import json
 
+from pydantic import ValidationError as SchemaValidationError
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -16,7 +17,11 @@ from app.schemas import CreateBaseTemplateRequest, ModuleBayRequest
 
 
 def validate_definition(value):
-    definition = CreateBaseTemplateRequest.model_validate(value).model_dump(mode="json")
+    try:
+        definition = CreateBaseTemplateRequest.model_validate(value).model_dump(mode="json")
+    except SchemaValidationError as error:
+        reason = next((e.get("ctx", {}).get("reason") for e in error.errors() if e.get("ctx", {}).get("reason")), "INVALID_BASE_TEMPLATE_DEFINITION")
+        raise ModelError("Определение BaseTemplate несовместимо с текущим контрактом. Проверьте внутреннюю разводку; автоматическая коррекция не выполняется.", {"reason": reason}) from error
     keys = {s["key"] for s in definition["slots"]}
     pairs = set()
     for link in definition["internal_links"]:
@@ -257,6 +262,7 @@ class BaseTemplateReview:
         return self.session.scalar(select(m.BaseTemplateCandidate).where(m.BaseTemplateCandidate.template_id == draft.template_id).order_by(m.BaseTemplateCandidate.created_at.desc(), m.BaseTemplateCandidate.id.desc()).limit(1))
 
     def document(self, draft, candidate, input_fingerprint=None):
+        validate_definition(draft.definition)
         review = None
         if candidate:
             publication = self.session.get(m.BaseTemplatePublication, candidate.id)
@@ -297,6 +303,10 @@ class BaseTemplateReview:
         self.session.refresh(draft, with_for_update=True)
         if draft.generation != expected_generation:
             raise ModelError("Draft changed; reload before checking", {"reason": "DRAFT_CONFLICT"})
+        definition = validate_definition(draft.definition)
+        published = published_definition(self.session, template_id, draft.source_revision_id)
+        if physical_structure(published) != physical_structure(definition):
+            raise ModelError("Физическая конструкция опубликованного шаблона неизменна. Создайте копию шаблона.", {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
         fingerprint = self._inputs()
         configs = self.session.scalars(select(m.ObjectConfiguration).join(m.BaseTemplateRevision, m.ObjectConfiguration.base_revision_id == m.BaseTemplateRevision.id).where(m.BaseTemplateRevision.template_id == template_id).order_by(m.ObjectConfiguration.physical_object_id)).all()
         candidate = m.BaseTemplateCandidate(template_id=template_id, source_revision_id=draft.source_revision_id,
