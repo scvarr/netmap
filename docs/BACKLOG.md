@@ -203,3 +203,9 @@ upgrade/delete/slot API и не являются обязательной реа
 CORR-001 (глубокие passive paths) — RECHECK PENDING: проверить текущий iterative
 resolver на глубокой легальной цепи; criteria — без RecursionError и потери evidence;
 LOW, не автоматически до L2. CONC-001/API-001/FE-001/LOC-001 завершены и не возвращены.
+
+Ревизия [L1-CONTRACT-01 — Physical L1 Connectivity Model Review](L1_CONNECTIVITY.md):
+перед реализацией C-CAP-01 требуется согласование общего L1 контракта.
+C-CAP-01 остаётся OPEN Phase D; FANOUT-1x24 — пример независимых каналов,
+не предел модели. Новые механики не обязательны до L1 PRODUCT COMPLETE
+без отдельного продуктового решения. Обзор не выбирает canonical schema.

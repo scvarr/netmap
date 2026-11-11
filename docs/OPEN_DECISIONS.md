@@ -251,3 +251,9 @@ permissions источников не выбраны.
   наличие backend resolvers не означает весь предполагаемый UI/persistence.
 - API-002 missing-resource semantics, performance budgets и LOD выбираются на
   текущих измерениях и контрактах, не ради старой формы тестов.
+
+Ревизия [L1-CONTRACT-01 — Physical L1 Connectivity Model Review](L1_CONNECTIVITY.md):
+перед реализацией C-CAP-01 требуется согласование общего L1 контракта.
+C-CAP-01 остаётся OPEN Phase D; FANOUT-1x24 — пример независимых каналов,
+не предел модели. Новые механики не обязательны до L1 PRODUCT COMPLETE
+без отдельного продуктового решения. Обзор не выбирает canonical schema.
