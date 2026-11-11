@@ -70,3 +70,13 @@ it('does not clear newer work when an older server save finishes', async () => {
  await act(async () => done()); view.unmount();
  expect(readLocalDraft(localDraftKey('race')).draft?.state.name).toBe('Newer');
 });
+
+it.each([undefined, 'existing'])('cancels only local work for %s, with refusal and storage failure', async id => {
+ const view = mount(id, id ? 2 : undefined);
+ fireEvent.change(screen.getByLabelText('Название шаблона'), {target:{value:'Working'}});
+ const confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+ fireEvent.click(screen.getByText('Отмена')); expect(screen.getByLabelText('Название шаблона')).toHaveValue('Working');
+ confirm.mockReturnValue(true); const remove=vi.spyOn(Storage.prototype,'removeItem').mockImplementation(() => {throw Error('blocked');});
+ fireEvent.click(screen.getByText('Отмена')); expect(screen.getByRole('alert')).toBeInTheDocument(); expect(screen.getByLabelText('Название шаблона')).toHaveValue('Working');
+ remove.mockRestore(); fireEvent.click(screen.getByText('Отмена')); view.unmount(); expect(localStorage.getItem(localDraftKey(id))).toBeNull();
+});

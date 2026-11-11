@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BaseTemplateEditor } from './BaseTemplateEditor';
 import { useI18n } from '../i18n';
 import { readLocalDraft, localDraftKey } from '../blueprints/localDraft';
 import type { BlueprintEditorState } from '../blueprints/editorModel';
 
-type Props = ComponentProps<typeof BaseTemplateEditor> & { templateId?: string; generation?: number };
-export function LocalBaseTemplateEditor({ templateId, generation, onSave, onStateChange, ...props }: Props) {
+type Props = ComponentProps<typeof BaseTemplateEditor> & { templateId?: string; generation?: number; seeded?: boolean; onResume?: () => void };
+export function LocalBaseTemplateEditor({ templateId, generation, seeded, onSave, onStateChange, ...props }: Props) {
+  const navigate = useNavigate();
   const { t } = useI18n();
   const key = localDraftKey(templateId);
   const [loaded] = useState(() => readLocalDraft(key));
@@ -15,7 +17,7 @@ export function LocalBaseTemplateEditor({ templateId, generation, onSave, onStat
   const [status, setStatus] = useState<'unsaved' | 'saved' | 'error'>(loaded.error ? 'error' : loaded.draft ? 'saved' : 'unsaved');
   const [saving, setSaving] = useState(false);
   const latest = useRef<BlueprintEditorState>(initial);
-  const baseline = useRef(JSON.stringify(props.initialState));
+  const baseline = useRef(seeded ? '' : JSON.stringify(props.initialState));
   const persisted = useRef(loaded.draft ? JSON.stringify(loaded.draft.state) : '');
   const enabled = useRef(!pending);
   const currentGeneration = useRef(generation ?? null);
@@ -49,9 +51,14 @@ export function LocalBaseTemplateEditor({ templateId, generation, onSave, onStat
     if (!window.confirm(t('localDraft.confirm'))) return;
     try { localStorage.removeItem(key); }
     catch { setStatus('error'); return; }
-    persisted.current = ''; baseline.current = JSON.stringify(props.initialState);
+    persisted.current = ''; baseline.current = seeded ? '' : JSON.stringify(props.initialState);
     latest.current = props.initialState; setInitial(props.initialState);
     enabled.current = true; setPending(false); setStatus('unsaved');
+  };
+  const cancel = () => {
+    if ((pending || persisted.current || JSON.stringify(latest.current) !== baseline.current) && !window.confirm(t('localDraft.confirm'))) return;
+    try { localStorage.removeItem(key); } catch { setStatus('error'); return; }
+    enabled.current = false; navigate('/library/base-templates');
   };
   return <>
     <p role={status === 'error' ? 'alert' : undefined} aria-live="polite">{t(status === 'error' ? 'localDraft.error' : status === 'saved' ? 'localDraft.saved' : 'localDraft.unsaved')}</p>
@@ -60,8 +67,9 @@ export function LocalBaseTemplateEditor({ templateId, generation, onSave, onStat
       <p>{t(conflict ? 'localDraft.conflict' : 'localDraft.resume')}</p>
       {loaded.draft && !conflict && <button className="primary-action" onClick={() => { enabled.current = true; setPending(false); }}>{t('localDraft.continue')}</button>}
       <button className="secondary-action" onClick={discard}>{t('localDraft.restart')}</button>
+      <button className="secondary-action" onClick={cancel}>{t('templateCopy.cancel')}</button>
     </section> : <fieldset disabled={saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-      <BaseTemplateEditor {...props} initialState={initial} onStateChange={changed} onSave={async state => {
+      <BaseTemplateEditor {...props} onCancel={cancel} initialState={initial} onStateChange={changed} onSave={async state => {
         flush(); setSaving(true);
         const snapshot = JSON.stringify(state);
         try {

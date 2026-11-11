@@ -11,7 +11,7 @@ import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateT
 import { isPlacedBay, type PlacedModuleBay as ModuleBay } from '../topology/hardwareModules';
 import { duplicateModuleBay, normalizeBayGeometry } from '../blueprints/moduleBayGeometry';
 
-interface Props { title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; onStateChange?: (state: BlueprintEditorState) => void; saveDisabled?: boolean; }
+interface Props { onCancel?: () => void; title: string; description: string; saveLabel: string; onSave: (state: BlueprintEditorState) => Promise<void>; initialState: BlueprintEditorState; versionNotice?: string; onStateChange?: (state: BlueprintEditorState) => void; saveDisabled?: boolean; }
 export const newBlueprintEditorState = (): BlueprintEditorState => { const key = crypto.randomUUID(); return { name: '', defaultClass: '', width: 160, height: 60, fillColor: '#28565a', panels: [{ panel_key: key, panel_number: 1, display_name: 'Панель 1', x: 0, y: 0, width: 160, height: 60 }], slots: [], individualLinks: [], activePanelKey: key, nextPanelNumber: 2, nextLocalNumberByPanel: { [key]: 1 } }; };
 const validationKey = {
   nameRequired: 'blueprint.validation.nameRequired', panelNameRequired: 'blueprint.validation.panelNameRequired', dimensionsPositive: 'blueprint.validation.dimensionsPositive', colorFormat: 'blueprint.validation.colorFormat',
@@ -28,7 +28,7 @@ const menuSections = [
 type MenuAction = (typeof menuSections)[number]['actions'][number];
 const formatGeometryNumber = (value: number) => Number(value.toFixed(1));
 
-export function BaseTemplateEditor({ title, description, saveLabel, onSave, initialState, versionNotice, onStateChange, saveDisabled }: Props) {
+export function BaseTemplateEditor({ title, description, saveLabel, onSave, initialState, versionNotice, onStateChange, saveDisabled, onCancel }: Props) {
   const { t } = useI18n();
   const [editor, setEditor] = useState(initialState);
   useEffect(() => { onStateChange?.(editor); }, [editor, onStateChange]);
@@ -226,12 +226,14 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         <LogicalModulePlacesEditor panels={editor.panels} activePanelKey={panelKey} bays={editor.bays ?? []}
           onChange={bays => setEditor(old => ({ ...old, bays }))} />
         {error && <p role="alert" className="blueprint-editor__error">{error}</p>}
+        {onCancel && <button type="button" className="secondary-action" onClick={onCancel}>{t('templateCopy.cancel')}</button>}
         <button type="button" className="primary-action" disabled={saveDisabled} onClick={() => void save()}>{saveLabel}</button>
       </section>
       <section className="blueprint-composer__composition blueprint-composer__surface">
         <div className="blueprint-composer__chooser">
           <label>{t('blueprint.endpoint.kind')}<select value={kind} onChange={(e) => setKind(e.target.value as BlueprintSlotKind)}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
+          {catalog.types && editor.slots.some(slot => !activeTypeIds.has(slot.port_type_id)) && <p role="alert">{t('templateCopy.archived')}</p>}
           <PortTypeNotice {...catalog} />
           {selected.size > 1 && <PortTypeSelect bulk types={catalog.types} value="" onChange={id =>
             setEditor(old => ({ ...old, slots: old.slots.map(slot => selected.has(slot.key) ? { ...slot, port_type_id: id } : slot) }))

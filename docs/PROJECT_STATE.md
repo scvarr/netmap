@@ -108,8 +108,11 @@ C-VIS-01 — OPEN: общий совпадающий подсвеченный у
 C-VIS-02 — OPEN: отдельное исправление отложено до повторной проверки после
 изменения маркеров P-UX-21; автоматически не закрывается.
 
-Ближайшая очередь: BT-DRAFT-01 (OPEN / implementation not started), BT-COPY-01
-(OPEN), C-CAP-01 (OPEN), продолжение representative L1 acceptance. Согласованные
+BT-DRAFT-01 — IMPLEMENTED / ACCEPTED / MERGED: локальное автосохранение BaseTemplate.
+BT-COPY-01 — IMPLEMENTED / external inspection pending: независимая копия выбранной
+опубликованной ревизии, восстановление через BT-DRAFT-01, подтверждённая локальная
+отмена создания/копии/редактирования. Ручная проверка pending.
+Ближайшая очередь: C-CAP-01 (OPEN), продолжение representative L1 acceptance. Согласованные
 границы BaseTemplate работ — в [BACKLOG](BACKLOG.md); это не смена gates A–I.
 C-CAP-01 — обязательный semantic gap Phase D: один задний вход с 24 адресуемыми
 каналами, 24 передних порта, exact internal mapping 1..24, один физический

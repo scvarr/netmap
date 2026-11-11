@@ -170,6 +170,7 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
                   {revision && <span>{t('templateLibrary.places', { count: revision.bays?.length ?? 0 })}</span>}
                 </div>
                 <div className="template-library-actions">
+                  <Link className="secondary-action" to={`/library/base-templates/new?copyTemplate=${encodeURIComponent(templateId)}&copyRevision=${encodeURIComponent(base.version_ref.entity_id)}`}>{t('templateCopy.action')}</Link>
                   {dataSource.loadDraft && <Link className="secondary-action" to={`/library/base-templates/${templateId}/edit`}>{t('review.edit')}</Link>}
                   <Link className="secondary-action" to={`/infrastructure/objects/new?blueprint=${encodeURIComponent(templateId)}`}>{t('blueprint.library.createObject')}</Link>
                   {dataSource.deleteBaseTemplate && <button type="button" className="text-action"
