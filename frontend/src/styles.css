@@ -77,10 +77,10 @@ button { font: inherit; }
 .location-frame--drag-preview { border-style: dashed; border-color: #91e9cf; background: rgb(91 188 168 / .04); pointer-events: none; }
 .location-frame__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a6e9d8; font: 600 11px/16px ui-monospace, monospace; }
 .location-frame__actions { display: inline-flex; flex: 0 0 auto; gap: 3px; pointer-events: auto; }
-.location-action { display: inline-grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; padding: 0; border: 1px solid #3a7168; border-radius: 5px; color: #b5e9d9; background: #102b29; cursor: pointer; font: 700 15px/1 ui-monospace, monospace; }
+.location-action { display: inline-grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; padding: 0; border: 1px solid #3a7168; border-radius: 0; color: #b5e9d9; background: #102b29; cursor: pointer; font: 700 15px/1 ui-monospace, monospace; }
 .location-action:hover { border-color: #70cbb0; color: #e1fff2; background: #1a4139; }
 .location-action:focus-visible { outline: 2px solid #8de2c8; outline-offset: 2px; }
-.location-proxy { width: 100%; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 5px; min-width: 0; padding: 3px 4px 3px 8px; border: 1px solid #72cdb7; border-radius: 6px; background: #163d38; color: #dcfff4; font: 600 11px/1 ui-monospace, monospace; }
+.location-proxy { width: 100%; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 5px; min-width: 0; padding: 3px 4px 3px 8px; border: 1px solid #72cdb7; border-radius: 0; background: #163d38; color: #dcfff4; font: 600 11px/1 ui-monospace, monospace; }
 .location-proxy__label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .location-proxy__actions { display: inline-flex; flex: 0 0 auto; gap: 3px; }
 .location-proxy--traced { border-color: #f0bd66; box-shadow: 0 0 0 2px rgb(240 189 102 / .3); }
@@ -939,3 +939,11 @@ a { color: inherit; }
 .location-boundary-point { position: absolute; transform: translate(-50%, -50%); width: 14px; height: 14px; padding: 0; border: 2px solid #a6e9d8; border-radius: 0; background: #183e37; pointer-events: auto; touch-action: none; cursor: crosshair; }
 .location-frame__resize { position: absolute; right: -8px; bottom: -8px; pointer-events: auto; touch-action: none; cursor: nwse-resize; }
 .location-frame__save { position: absolute; top: 100%; left: 0; display: flex; gap: 4px; pointer-events: auto; }
+
+.location-frame__command { width: auto; padding: 0 7px; font: 600 11px/20px ui-monospace, monospace; }
+.location-frame__command:disabled { opacity: .45; cursor: default; }
+.location-frame__resize { width: 18px; height: 18px; padding: 0; }
+.location-frame__heading { max-width: none; }
+.location-frame__label { max-width: 220px; }
+
+.map-dialog__surface.map-location-dialog, .map-location-dialog button, .map-location-dialog .map-location-choice { border-radius: 0; }

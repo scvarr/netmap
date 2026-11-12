@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { layoutLocationFrames, translateFrameSubtree } from './locationFrameGeometry';
+import { layoutLocationFrames, translateFrameSubtree, editLocationFrames } from './locationFrameGeometry';
 import { resolveBoundaryWaypoint } from './locationBoundaryAnchors';
 import type { LocationDocument } from './locationTypes';
 const location = (id: string, parent?: string): LocationDocument => ({ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: id }, name: id, type: null, parent_location_ref: parent ? { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: parent } : null });
@@ -33,4 +33,18 @@ it('translates descendants together and resolves each boundary on its own moved 
   }
   expect(moved.get('821')).toEqual(frames.get('821'));
   expect(frames.get('823')).toEqual(before);
+});
+
+it('grows ancestors and pushes siblings without shrinking manually enlarged parents', () => {
+  const original = layoutLocationFrames(locations, new Map());
+  const before = structuredClone(original);
+  const leaf = original.get('U19')!;
+  expect(leaf.width).toBeLessThan(300); expect(leaf.height).toBeLessThan(100);
+  const changed = editLocationFrames(locations, original, 'U19', { ...leaf, x: leaf.x - 70, width: 400, height: 180 });
+  expect(inside(changed.frames.get('823')!, changed.frames.get('U19')!)).toBe(true);
+  expect(inside(changed.frames.get('808')!, changed.frames.get('823')!)).toBe(true);
+  expect(original).toEqual(before);
+  const current = changed.frames.get('U19')!;
+  const shrunk = editLocationFrames(locations, changed.frames, 'U19', { ...current, width: 140, height: 64 });
+  expect(shrunk.frames.get('808')!.width).toBe(changed.frames.get('808')!.width);
 });

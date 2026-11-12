@@ -37,9 +37,6 @@ def test_spatial_hierarchy_edit_reload_new_child_and_variants():
     assert client.post(f"/v1/maps/{map_id}/placements", json={"physical_object_id": obj, "x": 123, "y": 456}).status_code == 201
     placements = detail(map_id)["placements"]
     identities = {key: state["boundary_point_id"] for key, state in read().items()}
-    assert write(root, dict(initial[root], width=50)).status_code == 422
-    with SessionLocal() as session:
-        assert not list(session.scalars(select(MapLocationState).where(MapLocationState.variant_id == uuid.UUID(variant))))
     # Add editing room, then translate its subtree inside the expanded root.
     assert write(root, dict(initial[root], width=initial[root]["width"] + 600, height=initial[root]["height"] + 600)).status_code == 200
     before = frames()
@@ -57,6 +54,7 @@ def test_spatial_hierarchy_edit_reload_new_child_and_variants():
     copied = frames(copy)
     assert copied == frames()
     before = frames()
+    placements_before_root_move = detail(map_id)["placements"]
     assert write(root, dict(before[root], x=-300, y=250)).status_code == 200
     after = frames()
     dx, dy = -300 - before[root]["x"], 250 - before[root]["y"]
@@ -65,12 +63,15 @@ def test_spatial_hierarchy_edit_reload_new_child_and_variants():
         assert after[key]["y"] == before[key]["y"] + dy
     valid(after)
     assert frames(copy) == copied
-    assert detail(map_id)['placements'] == placements
+    current_position = detail(map_id)["placements"][0]["positions"]["L1/PHYSICAL_OBJECT"]
+    old_position = placements_before_root_move[0]["positions"]["L1/PHYSICAL_OBJECT"]
+    assert current_position["x"] == old_position["x"] + dx
+    assert current_position["y"] == old_position["y"] + dy
     assert {key: state["boundary_point_id"] for key, state in read().items()} == identities
-    # Reject child escape and parent shrink without changing any persisted record.
+    # Reject malformed geometry without changing any persisted record.
     with SessionLocal() as session:
         stored = [(s.location_id, dict(s.geometry)) for s in session.scalars(select(MapLocationState).order_by(MapLocationState.id))]
-    for key, bad in ((leaf, dict(after[leaf], x=999999)), (root, dict(after[root], width=50)), (room, dict(after[room], height=50))):
+    for key, bad in ((leaf, dict(after[leaf], offset=2)), (root, dict(after[root], width=0)), (room, dict(after[room], height=0))):
         assert write(key, bad).status_code == 422
         assert frames() == after
     assert write(str(uuid.uuid4()), after[leaf]).status_code == 422

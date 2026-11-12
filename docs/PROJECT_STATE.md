@@ -34,7 +34,11 @@
   виртуальная точка (map/Location UUIDv5); variant geometry с явным Save/Cancel,
   drag/resize, копированием и восстановлением. Corrective: иерархическое начальное
   размещение пустых рамок, вложение по canonical parent, атомарный перенос всей
-  ветви рамок без оборудования и ограничения resize/drag. Canonical path labels,
+  ветви рамок с размещённым оборудованием/routes, рост предков и безопасное
+  выделение места соседям. Назначение Location и добавление объекта согласуют
+  существующие placements во всех картах/variants; locks отклоняют всю операцию.
+  Компактные пустые frames, единый drag и явный Save/Cancel, локальный radius=0 UI,
+  непосредственные имена с canonical path в tooltip,
   recursive collapse прежней модели, выбор видимых
   непосредственных элементов, group move с collision rejection и route transform.
 - Редактор кабельного маршрута: transient draft, Save/Cancel, добавление,

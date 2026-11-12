@@ -49,12 +49,11 @@ import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { blueprintMapNameplateHeight } from "../topology/blueprintDisplaySize";
 import { nodeFootprint, type FlowRectangle } from "../topology/nodeFootprint";
-import { layoutLocationFrames, translateFrameSubtree } from '../topology/locationFrameGeometry';
+import { layoutLocationFrames, editLocationFrames } from '../topology/locationFrameGeometry';
 import { LocationFrameEditor } from "./LocationFrameEditor";
 import { deriveLocationPresentation, projectCollapsedEdges } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
-import type { LocationGroupMove, MapLocationState, MapPlacement } from "../topology/savedMapTypes";
-import { prepareLocationGroupMove, type GroupCableGeometry } from "../topology/locationGroupMove";
+import type { MapLocationState, MapPlacement } from "../topology/savedMapTypes";
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { MapTextAnnotationLayer } from "./MapTextAnnotationLayer";
 import { LocationProxyNode } from "./LocationProxyNode";
@@ -78,7 +77,7 @@ interface TopologyCanvasProps {
   /** New authoritative SavedMap placement snapshot, including variant switches and refreshes. */
   positionSnapshot?: readonly MapPlacement[];
   displayWidthOverrides?: Record<string, number>;
-  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; onGroupMove?: (locationId: string, move: LocationGroupMove) => void; onGroupMoveRejected?: (message: string) => void };
+  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; };
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
@@ -124,17 +123,6 @@ const hasRenderableBounds = (bounds: FlowRectangle) =>
   Number.isFinite(bounds.x) && Number.isFinite(bounds.y) &&
   Number.isFinite(bounds.width) && Number.isFinite(bounds.height) &&
   bounds.width > 0 && bounds.height > 0;
-
-interface FrameDrag {
-  pointerId: number;
-  locationId: string;
-  start: XYPosition;
-  bounds: FlowRectangle;
-}
-
-interface FrameDragPreview extends FrameDrag {
-  delta: XYPosition;
-}
 
 export function TopologyCanvas({
   document,
@@ -192,10 +180,9 @@ export function TopologyCanvas({
   const confirmedNodePositions = useRef(new Map<string, XYPosition>());
   const canvasRef = useRef<HTMLDivElement>(null);
   const focusedObjectKey = useRef<string | null>(null);
-  const frameDrag = useRef<FrameDrag | null>(null);
   const routeNormalizer = useRef<((cableId: string, waypoints: readonly MapCableRouteWaypoint[]) => MapCableRouteWaypoint[]) | null>(null);
+  const [frameUiZoom, setFrameUiZoom] = useState(1);
   const [frameEditPreview, setFrameEditPreview] = useState<{ scene: string; id: string; geometry: import('../topology/savedMapTypes').MapLocationGeometry } | null>(null);
-  const [frameDragPreview, setFrameDragPreview] = useState<FrameDragPreview | null>(null);
   const { fitBounds, fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
@@ -230,8 +217,6 @@ export function TopologyCanvas({
     const sceneChanged = appliedSceneKey.current !== presentationSceneKey;
     appliedSceneKey.current = presentationSceneKey;
     if (sceneChanged) {
-      frameDrag.current = null;
-      setFrameDragPreview(null);
       setProjection(null);
     }
     setLayoutError(null);
@@ -402,51 +387,12 @@ export function TopologyCanvas({
     : { frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map<string, string>() };
   const baseFrameGeometries = layoutLocationFrames(locationFrameInput?.locations ?? [], new Map(locationFrameInput?.states?.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : []) ?? []));
   const activeFrameEdit = frameEditPreview?.scene === presentationSceneKey && baseFrameGeometries.has(frameEditPreview.id) ? frameEditPreview : null;
-  const editedFrameGeometries = activeFrameEdit
-    ? translateFrameSubtree(locationFrameInput?.locations ?? [], baseFrameGeometries, activeFrameEdit.id, activeFrameEdit.geometry) : baseFrameGeometries;
+  const frameEdit = activeFrameEdit ? editLocationFrames(locationFrameInput?.locations ?? [], baseFrameGeometries, activeFrameEdit.id, activeFrameEdit.geometry) : { frames: baseFrameGeometries, translations: new Map<string, { x: number; y: number }>() };
+  const editedFrameGeometries = frameEdit.frames;
   locationPresentation.frames = locationPresentation.frames.map(frame => ({ ...frame, bounds: editedFrameGeometries.get(frame.locationId)! }));
   const renderableFrames = locationPresentation.frames.filter((frame) => hasRenderableBounds(frame.bounds));
   const boundaryFrames = renderableFrames.map((frame) => ({ locationId: frame.locationId, bounds: frame.bounds }));
   const resolveRouteWaypoints = (waypoints: readonly MapCableRouteWaypoint[]) => waypoints.map((point) => resolveBoundaryWaypoint(point, boundaryFrames));
-  const previewFrames = (() => {
-    if (!frameDragPreview || !locationFrameInput || !hasRenderableBounds(frameDragPreview.bounds) ||
-      !Number.isFinite(frameDragPreview.delta.x) || !Number.isFinite(frameDragPreview.delta.y) ||
-      !renderableFrames.some((frame) => frame.locationId === frameDragPreview.locationId)) return [];
-    const byLocationId = new Map(locationFrameInput.locations.map((location) => [location.location_ref.entity_id, location]));
-    const subtree = new Set([frameDragPreview.locationId]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const location of locationFrameInput.locations) {
-        const id = location.location_ref.entity_id;
-        if (!subtree.has(id) && location.parent_location_ref && subtree.has(location.parent_location_ref.entity_id)) {
-          subtree.add(id);
-          changed = true;
-        }
-      }
-    }
-    const movingObjects = new Set(locationFrameInput.placements.filter((placement) =>
-      placement.positions['L1/PHYSICAL_OBJECT'] && placement.location_ref && subtree.has(placement.location_ref.entity_id),
-    ).map((placement) => placement.physical_object_ref.entity_id));
-    const previewObjects = displayedPhysicalObjects.map((object) => movingObjects.has(object.physicalObjectId)
-      ? { ...object, rectangle: { ...object.rectangle, x: object.rectangle.x + frameDragPreview.delta.x, y: object.rectangle.y + frameDragPreview.delta.y } }
-      : object);
-    const future = deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, previewObjects, locationFrameInput.states ?? []);
-    const ancestors = new Set<string>();
-    let parentId = byLocationId.get(frameDragPreview.locationId)?.parent_location_ref?.entity_id;
-    while (parentId && !ancestors.has(parentId)) {
-      ancestors.add(parentId);
-      parentId = byLocationId.get(parentId)?.parent_location_ref?.entity_id;
-    }
-    const currentById = new Map(renderableFrames.map((frame) => [frame.locationId, frame]));
-    return future.frames.filter((frame) => {
-      const current = currentById.get(frame.locationId);
-      if (!current || !hasRenderableBounds(frame.bounds)) return false;
-      if (frame.locationId === frameDragPreview.locationId) return true;
-      return ancestors.has(frame.locationId) && (frame.bounds.x !== current.bounds.x || frame.bounds.y !== current.bounds.y ||
-        frame.bounds.width !== current.bounds.width || frame.bounds.height !== current.bounds.height);
-    });
-  })();
   const locationPathsByObjectId = new Map(locationPresentation.objectPaths.map((path) => [path.physicalObjectId, path.label]));
   const proxyNodeId = (locationId: string) => `location-proxy:${locationId}`;
   const hiddenNodeProxies = new Map(projection.nodes.flatMap((node) => {
@@ -535,6 +481,13 @@ export function TopologyCanvas({
     };
   });
 
+  for (const node of nodes) {
+    if (node.data.locationProxy) continue;
+    const objectId = physicalObjectIdForNode(node.data.projection);
+    const assigned = locationFrameInput?.placements.find(p => p.physical_object_ref.entity_id === objectId)?.location_ref?.entity_id;
+    const delta = assigned ? frameEdit.translations.get(assigned) : undefined;
+    if (delta) node.position = { x: node.position.x + delta.x, y: node.position.y + delta.y };
+  }
   const renderedNodeById = new Map(nodes.map((node) => [node.id, node]));
   const nodeBox = (node: DeviceFlowNode) => ({ x: node.position.x, y: node.position.y, width: node.measured?.width ?? node.width ?? 212, height: node.measured?.height ?? node.height ?? 144 });
   const routeEndpoints = (sourceNode: DeviceFlowNode, targetNode: DeviceFlowNode, sourcePointId?: string, targetPointId?: string) => {
@@ -664,68 +617,6 @@ export function TopologyCanvas({
     setLayoutRevision((revision) => revision + 1);
   };
 
-  const startFrameDrag = (event: PointerEvent<HTMLElement>, locationId: string, bounds: FlowRectangle) => {
-    if (!locationFrameInput?.onGroupMove || !hasRenderableBounds(bounds)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const drag = { pointerId: event.pointerId, locationId, start: screenToFlowPosition({ x: event.clientX, y: event.clientY }), bounds: { ...bounds } };
-    frameDrag.current = drag;
-    setFrameDragPreview({ ...drag, delta: { x: 0, y: 0 } });
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const updateFrameDrag = (event: PointerEvent<HTMLElement>) => {
-    const drag = frameDrag.current;
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    const point = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    const delta = { x: point.x - drag.start.x, y: point.y - drag.start.y };
-    if (Number.isFinite(delta.x) && Number.isFinite(delta.y)) setFrameDragPreview({ ...drag, delta });
-  };
-
-  const cancelFrameDrag = (event?: PointerEvent<HTMLElement>) => {
-    if (event && frameDrag.current?.pointerId !== event.pointerId) return;
-    frameDrag.current = null;
-    setFrameDragPreview(null);
-  };
-
-  const finishFrameDrag = (event: PointerEvent<HTMLElement>) => {
-    const drag = frameDrag.current;
-    if (!drag || event.pointerId !== drag.pointerId) return;
-    cancelFrameDrag();
-    if (!locationFrameInput?.onGroupMove) return;
-    const end = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    const delta = { x: end.x - drag.start.x, y: end.y - drag.start.y };
-    if ((!delta.x && !delta.y) || !Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return;
-    const rectangles = new Map(projection.nodes.flatMap((node) => {
-      const id = physicalObjectIdForNode(node.data.projection);
-      if (!id) return [];
-      return [[id, nodeFootprint(node)] as const];
-    }));
-    const originalNodes = new Map(projection.nodes.map((node) => [node.id, node]));
-    const displayedNodes = new Map(nodes.map((node) => [node.id, node]));
-    const cables: GroupCableGeometry[] = edges.flatMap((edge) => {
-      const cableId = edge.data?.cableNode && cableIdForNode(edge.data.cableNode);
-      const pair = edge.data?.endpointPair, original = edge.data?.projection;
-      if (!cableId || !pair || !original) return [];
-      const originalSource = originalNodes.get(original.from_node_id)?.data.projection;
-      const originalTarget = originalNodes.get(original.to_node_id)?.data.projection;
-      const sourceObjectId = originalSource && physicalObjectIdForNode(originalSource);
-      const targetObjectId = originalTarget && physicalObjectIdForNode(originalTarget);
-      const sourceNode = displayedNodes.get(edge.source), targetNode = displayedNodes.get(edge.target);
-      if (!sourceObjectId || !targetObjectId || !sourceNode || !targetNode) return [];
-      const box = (node: DeviceFlowNode) => ({ x: node.position.x, y: node.position.y, width: node.measured?.width ?? node.width ?? 212, height: node.measured?.height ?? node.height ?? 144 });
-      const floating = getFloatingEndpoints(box(sourceNode), box(targetNode));
-      const source = sourceNode.data.locationProxy ? floating.source : getRenderedConnectionPoint(sourceNode.data.projection, box(sourceNode), pair.from_connection_point_id) ?? floating.source;
-      const target = targetNode.data.locationProxy ? floating.target : getRenderedConnectionPoint(targetNode.data.projection, box(targetNode), pair.to_connection_point_id) ?? floating.target;
-      return [{ cableId, sourceObjectId, targetObjectId, source: { x: source.x, y: source.y }, target: { x: target.x, y: target.y }, savedWaypoints: cableRoutes?.find((route) => route.cable_ref.entity_id === cableId)?.waypoints }];
-    });
-    try {
-      const move = prepareLocationGroupMove(drag.locationId, delta, drag.bounds, locationFrameInput.locations, locationFrameInput.placements, rectangles, cables);
-      locationFrameInput.onGroupMove(drag.locationId, move);
-    } catch (reason) {
-      locationFrameInput.onGroupMoveRejected?.(reason instanceof Error ? reason.message : String(reason));
-    }
-  };
 
   return (
     <div
@@ -738,6 +629,7 @@ export function TopologyCanvas({
       ref={canvasRef}
     >
       <ReactFlow
+        onMove={(_, viewport) => setFrameUiZoom(viewport.zoom)}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -809,18 +701,17 @@ export function TopologyCanvas({
               const configureLabel = t('map.locationConfigureCollapse', { name: frame.label });
               return <LocationFrameEditor key={(locationFrameInput?.variantId ?? '') + frame.locationId} frame={frame}
                 state={(() => { const state = locationFrameInput?.states?.find(state => state.location_ref.entity_id === frame.locationId); return state ? { ...state, geometry: editedFrameGeometries.get(frame.locationId)! } : undefined; })()}
+                uiScale={Math.min(1, 1 / frameUiZoom)}
                 parentBounds={frame.parentLocationId ? editedFrameGeometries.get(frame.parentLocationId) : undefined}
-                childBounds={(locationFrameInput?.locations ?? []).filter(l => l.parent_location_ref?.entity_id === frame.locationId).map(l => editedFrameGeometries.get(l.location_ref.entity_id)!)}
+                childBounds={(locationFrameInput?.locations ?? []).filter(l => l.parent_location_ref?.entity_id === frame.locationId).map<FlowRectangle>(l => editedFrameGeometries.get(l.location_ref.entity_id)!).concat(displayedPhysicalObjects.filter(object => locationFrameInput?.placements.some(p => p.physical_object_ref.entity_id === object.physicalObjectId && p.location_ref?.entity_id === frame.locationId)).map(object => object.rectangle))}
                 disabled={Boolean(activeFrameEdit && activeFrameEdit.id !== frame.locationId)}
                 onDraft={geometry => setFrameEditPreview(geometry ? { scene: presentationSceneKey, id: frame.locationId, geometry } : null)}
                 screenToFlowPosition={screenToFlowPosition} onSave={locationFrameInput?.onGeometry}
                 actions={<span className="location-frame__actions">
                   <button type="button" className="location-action" aria-label={toggleLabel} title={toggleLabel} onClick={() => locationFrameInput?.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button>
                   <button type="button" className="location-action" aria-label={configureLabel} title={configureLabel} onClick={() => locationFrameInput?.onConfigure?.(frame.locationId)}>⚙</button>
-                  <button type="button" className="location-action" data-location-group-move={frame.locationId} title={frame.label} onPointerDown={(event) => startFrameDrag(event, frame.locationId, frame.bounds)} onPointerMove={updateFrameDrag} onPointerUp={finishFrameDrag} onPointerCancel={cancelFrameDrag}>↔</button>
                 </span>} />;
             })}
-            {previewFrames.map((frame) => <div key={frame.locationId} className="location-frame location-frame--drag-preview" data-preview-location-id={frame.locationId} aria-hidden="true" style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }} />)}
           </div>
         </ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (

@@ -28,6 +28,7 @@ class LocationCatalog:
         type_: str | None,
         parent_location_id: uuid.UUID | None,
     ) -> Location:
+        self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
         if parent_location_id is not None:
             self._require_location(parent_location_id, lock=True)
         location = Location(
@@ -37,6 +38,8 @@ class LocationCatalog:
         )
         self.session.add(location)
         self.session.flush()
+        from app.saved_map_catalog import SavedMapCatalog
+        SavedMapCatalog(self.session).synchronize_location_structure()
         return location
 
     @staticmethod
@@ -88,6 +91,7 @@ class LocationCatalog:
         self, parent_location_id: uuid.UUID, pattern: str, from_: int, to: int,
         step: int, type_: str | None,
     ) -> tuple[Location, ...]:
+        self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
         names, conflicts = self.preview_series(parent_location_id, pattern, from_, to, step, type_, lock=True)
         if conflicts:
             raise ValidationError("Location series conflicts with existing children", {"conflicts": conflicts})
@@ -95,6 +99,8 @@ class LocationCatalog:
         locations = tuple(Location(name=name, type=normalized_type, parent_location_id=parent_location_id) for name in names)
         self.session.add_all(locations)
         self.session.flush()
+        from app.saved_map_catalog import SavedMapCatalog
+        SavedMapCatalog(self.session).synchronize_location_structure()
         return locations
 
     def update(self, location_id: uuid.UUID, name: str, type_: str | None) -> Location:
@@ -109,7 +115,7 @@ class LocationCatalog:
         # so two valid independent writes cannot commit an indirect cycle.
         locations = {
             location.id: location
-            for location in self.session.scalars(select(Location).with_for_update())
+            for location in self.session.scalars(select(Location).order_by(Location.id).with_for_update())
         }
         location = locations.get(location_id)
         if location is None:
@@ -142,6 +148,8 @@ class LocationCatalog:
                 ancestor = locations[ancestor.parent_location_id]
             location.parent_location_id = parent.id
         self.session.flush()
+        from app.saved_map_catalog import SavedMapCatalog
+        SavedMapCatalog(self.session).synchronize_location_structure()
         return location
 
     def delete(self, location_id: uuid.UUID) -> None:
@@ -185,6 +193,7 @@ class LocationCatalog:
     def set_physical_object_location(
         self, physical_object_id: uuid.UUID, location_id: uuid.UUID | None
     ) -> PhysicalObject:
+        self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
         # Lock the Location before the object so delete and assignment cannot
         # silently pass each other and rely on an FK failure for correctness.
         if location_id is not None:
@@ -192,6 +201,8 @@ class LocationCatalog:
         physical_object = self._require_physical_object(physical_object_id, lock=True)
         physical_object.location_id = location_id
         self.session.flush()
+        from app.saved_map_catalog import SavedMapCatalog
+        SavedMapCatalog(self.session).place_assigned_object(physical_object_id)
         return physical_object
 
     def _require_location(self, location_id: uuid.UUID, *, lock: bool = False) -> Location:

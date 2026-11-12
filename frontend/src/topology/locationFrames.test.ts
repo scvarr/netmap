@@ -28,7 +28,7 @@ describe('independent Location presentation', () => {
     const populated = deriveLocationPresentation(locations, [placement('a', 'rack')], [shown('a', 10000, 20000)]);
     expect(empty.frames).toHaveLength(2);
     expect(populated.frames).toEqual(empty.frames);
-    expect(empty.frames.find(f => f.locationId === 'rack')).toMatchObject({ parentLocationId: 'U19', label: 'U19 / rack', depth: 1 });
+    expect(empty.frames.find(f => f.locationId === 'rack')).toMatchObject({ parentLocationId: 'U19', label: 'rack', canonicalPath: 'U19 / rack', depth: 1 });
   });
   it('uses variant geometry and preserves canonical placement', () => {
     const geometry = { x: -1, y: 4, width: 300, height: 120, edge: 'bottom' as const, offset: .4 };

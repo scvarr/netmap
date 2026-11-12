@@ -16,6 +16,7 @@ export interface LocationFrame {
   parentLocationId: string | null;
   pathLocationIds: string[];
   label: string;
+  canonicalPath?: string;
   depth: number;
   bounds: FlowRectangle;
 }
@@ -135,7 +136,7 @@ export function deriveLocationPresentation(
       parent = byId.get(parent)?.parent_location_ref?.entity_id;
     }
     const frame: LocationFrame = { locationId: id, parentLocationId: location.parent_location_ref?.entity_id ?? null,
-      pathLocationIds: [id], label: path.map(key => byId.get(key)!.name).join(' / '), depth, bounds };
+      pathLocationIds: [id], label: location.name, canonicalPath: path.map(key => byId.get(key)!.name).join(' / '), depth, bounds };
     frames.set(id, frame);
   };
   for (const location of locations) {

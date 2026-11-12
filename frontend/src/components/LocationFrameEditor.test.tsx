@@ -29,7 +29,7 @@ it('edits only frame presentation and saves explicitly, preserving point identit
   vi.unstubAllGlobals();
 });
 
-it('clamps child moves and parent resize to preserve padded containment', () => {
+it('allows child escape for ancestor expansion and preserves contained content when resizing', () => {
   vi.stubGlobal('PointerEvent', MouseEvent);
   HTMLElement.prototype.setPointerCapture = vi.fn();
   const geometry = { x: 20, y: 40, width: 400, height: 300, edge: 'right' as const, offset: .5 };
@@ -40,13 +40,24 @@ it('clamps child moves and parent resize to preserve padded containment', () => 
   const heading = container.querySelector('.location-frame__heading')!;
   fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
   fireEvent.pointerMove(heading, { clientX: -1000, clientY: -1000 });
-  fireEvent.pointerUp(heading);
   const frame = container.querySelector('.location-frame') as HTMLElement;
-  expect(frame.style.left).toBe('20px'); expect(frame.style.top).toBe('40px');
+  expect(frame.style.left).toBe('-980px'); expect(frame.style.top).toBe('-960px');
+  fireEvent.pointerCancel(heading);
   const resize = screen.getByLabelText('map.resizeLocation');
   fireEvent.pointerDown(resize, { clientX: 0, clientY: 0 });
   fireEvent.pointerMove(resize, { clientX: -1000, clientY: -1000 });
   fireEvent.pointerUp(resize);
   expect(frame.style.width).toBe('340px'); expect(frame.style.height).toBe('260px');
   vi.unstubAllGlobals();
+});
+
+it('uses compact styled controls, capped scale and a canonical path tooltip', () => {
+  const { container } = render(<LocationFrameEditor frame={{ locationId: 'U42', parentLocationId: '823', pathLocationIds: ['U42'], label: 'U42', canonicalPath: '808 / 823 / U42', depth: 2, bounds: { x: 0, y: 0, width: 140, height: 64 } }} uiScale={.5} screenToFlowPosition={p => p} actions={null} />);
+  const heading = container.querySelector('.location-frame__heading') as HTMLElement;
+  expect(heading).toHaveTextContent('U42');
+  expect(heading).not.toHaveTextContent('808');
+  expect(heading.title).toBe('808 / 823 / U42');
+  expect(heading.style.transform).toContain('scale(0.5)');
+  fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
+  for (const button of container.querySelectorAll('button')) expect(button.className).toMatch(/location-/);
 });

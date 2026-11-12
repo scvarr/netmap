@@ -129,12 +129,36 @@ afterEach(() => {
 });
 
 describe('TopologyCanvas async layout boundary', () => {
-  it('previews a parent translation with all nested empty frames without moving equipment', async () => {
+  it('uses one container gesture with equipment preview and explicit Save/Cancel', async () => {
+    const ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'U42' };
+    const object: TopologyProjectionNode = { id: 'PP1', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'PP1' }], attributes: {} };
+    const geometry = { x: 0, y: 0, width: 300, height: 240, edge: 'right' as const, offset: .5 };
+    const save = vi.fn().mockResolvedValue(undefined);
+    render(<TopologyCanvas document={{ ...documentFor('physical-container'), nodes: [object] }} selection={null} onSelectionChange={vi.fn()}
+      layoutEngine={async () => ({ nodes: [{ id: 'PP1', type: 'device', position: { x: 20, y: 40 }, data: { projection: object } }], edges: [] })}
+      locationFrameInput={{ locations: [{ location_ref: ref, name: 'U42', type: null, parent_location_ref: null }], placements: [{ physical_object_ref: object.source_refs[0], location_ref: ref, positions: { 'L1/PHYSICAL_OBJECT': { x: 20, y: 40, locked: false } } }], states: [{ location_ref: ref, collapsed: false, visible_direct_elements: [], geometry }], onGeometry: save }} />);
+    await screen.findByRole('button', { name: 'PP1' });
+    expect(globalThis.document.querySelector('[data-location-group-move]')).toBeNull();
+    const heading = globalThis.document.querySelector('.location-frame__heading') as HTMLElement;
+    heading.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(heading, { clientX: 100, clientY: 50 });
+    fireEvent.pointerUp(heading);
+    expect(screen.getByTestId('position-PP1')).toHaveTextContent('120,90');
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText('Отмена'));
+    expect(screen.getByTestId('position-PP1')).toHaveTextContent('20,40');
+    fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(heading, { clientX: 100, clientY: 50 });
+    fireEvent.pointerUp(heading);
+    fireEvent.click(screen.getByText('Сохранить'));
+    await waitFor(() => expect(save).toHaveBeenCalledWith('U42', { ...geometry, x: 100, y: 50 }));
+  });
+  it('previews a parent translation with all nested empty frames', async () => {
     const ref = (id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: id });
     const locations = ['808', '823', 'U19'].map((id, index, ids) => ({ location_ref: ref(id), name: id, type: null, parent_location_ref: index ? ref(ids[index - 1]) : null }));
-    const onGroupMove = vi.fn();
     render(<TopologyCanvas document={{ ...documentFor('physical-empty-hierarchy'), nodes: [] }} selection={null} onSelectionChange={vi.fn()}
-      layoutEngine={async () => ({ nodes: [], edges: [] })} locationFrameInput={{ locations, placements: [], onGroupMove }} />);
+      layoutEngine={async () => ({ nodes: [], edges: [] })} locationFrameInput={{ locations, placements: [] }} />);
     await waitFor(() => expect(globalThis.document.querySelectorAll('.location-frame')).toHaveLength(3));
     const frames = () => [...globalThis.document.querySelectorAll<HTMLElement>('.location-frame')];
     const before = frames().map(el => [parseFloat(el.style.left), parseFloat(el.style.top)]);
@@ -143,90 +167,11 @@ describe('TopologyCanvas async layout boundary', () => {
     fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
     fireEvent.pointerMove(heading, { clientX: 100, clientY: 50 });
     frames().forEach((el, index) => { expect(parseFloat(el.style.left)).toBe(before[index][0] + 100); expect(parseFloat(el.style.top)).toBe(before[index][1] + 50); });
-    expect(onGroupMove).not.toHaveBeenCalled();
     fireEvent.pointerCancel(heading);
     frames().forEach((el, index) => expect(parseFloat(el.style.left)).toBe(before[index][0]));
   });
-  it('shows the frame preview during drag and commits the pointerup displacement once', async () => {
-    const objects: TopologyProjectionNode[] = ['a', 'b'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
-    const document: TopologyProjectionDocument = { ...documentFor('physical-group'), nodes: objects };
-    const location_ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
-    const placements = objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: index * 300, y: 0, locked: false } } }));
-    const onGroupMove = vi.fn(), onCollapse = vi.fn(), onConfigure = vi.fn();
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: index * 300, y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref, name: 'Room', type: null, parent_location_ref: null }], placements, onGroupMove, onCollapse, onConfigure }} />);
-    await screen.findByRole('button', { name: 'a' });
-    expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeNull();
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Свернуть Room' }), { clientX: 10, clientY: 10 });
-    fireEvent.pointerUp(screen.getByRole('button', { name: 'Свернуть Room' }), { clientX: 50, clientY: 30 });
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Настроить сворачивание Room' }), { clientX: 10, clientY: 10 });
-    fireEvent.pointerUp(screen.getByRole('button', { name: 'Настроить сворачивание Room' }), { clientX: 50, clientY: 30 });
-    expect(onGroupMove).not.toHaveBeenCalled();
-    const heading = globalThis.document.querySelector('.location-frame__actions button:last-child') as HTMLElement;
-    expect(heading.closest('.location-frame__heading')).toHaveClass('nodrag', 'nopan');
-    expect(globalThis.document.querySelector('.location-frame__drag-handle')).toBeNull();
-    heading.setPointerCapture = vi.fn();
-    const frame = heading.closest('.location-frame') as HTMLElement;
-    const original = { left: Number.parseFloat(frame.style.left), top: Number.parseFloat(frame.style.top), width: frame.style.width, height: frame.style.height };
-    fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.pointerMove(heading, { pointerId: 1, clientX: 50, clientY: 30 });
-    const preview = globalThis.document.querySelector('.location-frame--drag-preview') as HTMLElement;
-    expect(preview).toBeInTheDocument();
-    expect(preview.style.left).toBe(`${original.left}px`);
-    expect(preview.style.top).toBe(`${original.top}px`);
-    expect(preview.style.width).toBe(original.width);
-    expect(preview.style.height).toBe(original.height);
-    expect(preview).toHaveAttribute('data-preview-location-id', 'room');
-    expect(preview).toBeEmptyDOMElement();
-    expect(onGroupMove).not.toHaveBeenCalled();
-    fireEvent.pointerUp(heading, { pointerId: 1, clientX: 70, clientY: 40 });
-    expect(onGroupMove).toHaveBeenCalledTimes(1);
-    expect(onGroupMove).toHaveBeenCalledWith('room', expect.objectContaining({ delta_x: 60, delta_y: 30 }));
-    expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeNull();
-  });
 
-  it('cancels a drag without a write or transient preview', async () => {
-    const objects: TopologyProjectionNode[] = ['a', 'b'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
-    const location_ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
-    const onGroupMove = vi.fn();
-    render(<TopologyCanvas document={{ ...documentFor('physical-cancel'), nodes: objects }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: index * 300, y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref, name: 'Room', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: index * 300, y: 0, locked: false } } })), onGroupMove }} />);
-    await screen.findByRole('button', { name: 'a' });
-    const heading = globalThis.document.querySelector('.location-frame__actions button:last-child') as HTMLElement;
-    heading.setPointerCapture = vi.fn();
-    fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.pointerMove(heading, { pointerId: 1, clientX: 80, clientY: 40 });
-    expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeInTheDocument();
-    fireEvent.pointerCancel(heading, { pointerId: 1 });
-    expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeNull();
-    fireEvent.pointerUp(heading, { pointerId: 1, clientX: 80, clientY: 40 });
-    expect(onGroupMove).not.toHaveBeenCalled();
-  });
-  it('commits one child group move with a saved boundary waypoint through the canvas gesture', async () => {
-    const objects: TopologyProjectionNode[] = ['child-a', 'child-b', 'sibling', 'outside'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
-    const parentRef = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'parent' };
-    const childRef = { ...parentRef, entity_id: 'child' }, outsideRef = { ...parentRef, entity_id: 'outside' };
-    const positions = [0, 300, 800, 1200];
-    const cableNode: TopologyProjectionNode = { id: 'boundary-cable', kind: 'CABLE', label: 'Boundary', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable' }], attributes: {} };
-    const boundaryEdge: any = { id: 'boundary-edge', from_node_id: 'child-a', to_node_id: 'outside', kind: 'L1_PHYSICAL_LINK', source_refs: [], attributes: {} };
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
-    vi.stubGlobal('fetch', fetchMock);
-    const api = new ApiSavedMapDataSource();
-    const apiId = '00000000-0000-4000-8000-000000000001';
-    const onGroupMove = vi.fn((_locationId: string, move: Parameters<ApiSavedMapDataSource['moveLocationGroup']>[3]) => { void api.moveLocationGroup(apiId, apiId, apiId, move); }), onGroupMoveRejected = vi.fn();
-    render(<TopologyCanvas document={{ ...documentFor('physical-child-cable'), nodes: objects, edges: [boundaryEdge] }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: positions[index], y: 300 }, data: { projection } })), edges: [{ id: 'boundary-edge', source: 'child-a', target: 'outside', data: { cableNode, projection: boundaryEdge, endpointPair: { from_connection_point_id: 'source', from_member_index: 1, to_connection_point_id: 'target', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member' } } }] })} cableRoutes={[{ cable_ref: cableNode.source_refs[0], view: 'L1/PHYSICAL_OBJECT', waypoints: [{ x: 300, y: 372 }, { x: 532, y: 372 }, { x: 900, y: 372 }] }]} locationFrameInput={{ locations: [{ location_ref: parentRef, name: 'Parent', type: null, parent_location_ref: null }, { location_ref: childRef, name: 'Child', type: null, parent_location_ref: parentRef }, { location_ref: outsideRef, name: 'Outside', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? childRef : index === 2 ? parentRef : outsideRef, positions: { 'L1/PHYSICAL_OBJECT': { x: positions[index], y: 300, locked: false } } })), onGroupMove, onGroupMoveRejected }} />);
-    await screen.findByRole('button', { name: 'child-a' });
-    const heading = globalThis.document.querySelector('.location-frame[data-location-id="child"] .location-frame__actions button:last-child') as HTMLElement;
-    heading.setPointerCapture = vi.fn();
-    fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
-    fireEvent.pointerMove(heading, { pointerId: 1, clientX: 2010, clientY: 10 });
-    fireEvent.pointerUp(heading, { pointerId: 1, clientX: 2010, clientY: 10 });
-    expect(onGroupMove).toHaveBeenCalledExactlyOnceWith('child', expect.objectContaining({ delta_x: 2000, delta_y: 0, boundary_routes: [expect.objectContaining({ cable_id: 'cable', moving_endpoint_is_source: true })] }));
-    expect(onGroupMoveRejected).not.toHaveBeenCalled();
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
-    expect(body.boundary_routes).toHaveLength(1);
-    expect(Object.keys(body.boundary_routes[0].moving_endpoint).sort()).toEqual(['x', 'y']);
-    expect(Object.keys(body.boundary_routes[0].external_endpoint).sort()).toEqual(['x', 'y']);
-  });
+
 
   it.each([false, true])('keeps two Location boundaries on their own endpoint sides through save and reload, reverse wiring: %s', async (reverse) => {
     const ref = <T extends string,>(type: T, id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type: type, entity_id: id });
@@ -262,7 +207,7 @@ describe('TopologyCanvas async layout boundary', () => {
     const onWaypointMove = vi.fn();
     const routeNormalizerRef: { current: ((id: string, points: readonly { x: number; y: number }[]) => { x: number; y: number; anchor?: unknown }[]) | null } = { current: null };
     const edge: any = { id: 'cable-edge', from_node_id: 'inside', to_node_id: 'outside', kind: 'L1_PHYSICAL_LINK', source_refs: [], attributes: {} };
-    render(<TopologyCanvas document={{ ...documentFor('physical-route-anchor'), nodes: objects, edges: [edge] }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: [0, 300, 1000][index], y: 0 }, data: { projection } })), edges: [{ id: 'cable-edge', source: 'inside', target: 'outside', data: { cableNode, projection: edge } }] })} routeNormalizerRef={routeNormalizerRef as any} cableRouteDraft={{ cableId: 'cable', waypoints: [{ x: 532, y: 72, anchor: { location_id: 'room', edge: 'right', offset: .5 } }], selectedWaypointIndex: null, onWaypointSelect: vi.fn(), onWaypointMove, onWaypointInsert: vi.fn() }} locationFrameInput={{ locations: [{ location_ref: room, name: 'Room', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? room : null, positions: { 'L1/PHYSICAL_OBJECT': { x: [0, 300, 1000][index], y: 0, locked: false } } })) }} />);
+    render(<TopologyCanvas document={{ ...documentFor('physical-route-anchor'), nodes: objects, edges: [edge] }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: [0, 300, 1000][index], y: 0 }, data: { projection } })), edges: [{ id: 'cable-edge', source: 'inside', target: 'outside', data: { cableNode, projection: edge } }] })} routeNormalizerRef={routeNormalizerRef as any} cableRouteDraft={{ cableId: 'cable', waypoints: [{ x: 532, y: 72, anchor: { location_id: 'room', edge: 'right', offset: .5 } }], selectedWaypointIndex: null, onWaypointSelect: vi.fn(), onWaypointMove, onWaypointInsert: vi.fn() }} locationFrameInput={{ states: [{ location_ref: room, collapsed: false, visible_direct_elements: [], geometry: { x: 0, y: 0, width: 300, height: 200, edge: 'right', offset: .5 } }], locations: [{ location_ref: room, name: 'Room', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? room : null, positions: { 'L1/PHYSICAL_OBJECT': { x: [0, 300, 1000][index], y: 0, locked: false } } })) }} />);
     await screen.findByRole('button', { name: 'inside' });
     await waitFor(() => expect(routeNormalizerRef.current).not.toBeNull());
     const result = routeNormalizerRef.current!('cable', [{ x: 100, y: 72 }, { x: 700, y: 72 }]);
@@ -273,38 +218,11 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(onWaypointMove.mock.calls[0][1].y).toBeLessThan(1000);
   });
 
-  it('dispatches parent and child frame drags by their own Location identity and reports a rejected child move', async () => {
-    const objects: TopologyProjectionNode[] = ['child-a', 'child-b', 'parent-a'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
-    const parentRef = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'parent' };
-    const childRef = { ...parentRef, entity_id: 'child' };
-    const positions = [0, 300, 800];
-    const onGroupMove = vi.fn(), onGroupMoveRejected = vi.fn();
-    render(<TopologyCanvas document={{ ...documentFor('physical-hierarchy'), nodes: objects }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: positions[index], y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref: parentRef, name: 'Parent', type: null, parent_location_ref: null }, { location_ref: childRef, name: 'Child', type: null, parent_location_ref: parentRef }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? childRef : parentRef, positions: { 'L1/PHYSICAL_OBJECT': { x: positions[index], y: 0, locked: false } } })), onGroupMove, onGroupMoveRejected }} />);
-    await screen.findByRole('button', { name: 'child-a' });
-    const drag = (id: string, endX: number) => {
-      const heading = globalThis.document.querySelector(`.location-frame[data-location-id="${id}"] .location-frame__actions button:last-child`) as HTMLElement;
-      expect(heading).toBeInTheDocument();
-      heading.setPointerCapture = vi.fn();
-      fireEvent.pointerDown(heading, { pointerId: 1, clientX: 10, clientY: 10 });
-      fireEvent.pointerMove(heading, { pointerId: 1, clientX: endX, clientY: 10 });
-      expect(globalThis.document.querySelector(`.location-frame--drag-preview[data-preview-location-id="${id}"]`)).toBeInTheDocument();
-      fireEvent.pointerUp(heading, { pointerId: 1, clientX: endX, clientY: 10 });
-    };
-    drag('child', 20);
-    expect(onGroupMove).toHaveBeenLastCalledWith('child', expect.objectContaining({ delta_x: 10 }));
-    drag('parent', 20);
-    expect(onGroupMove).toHaveBeenLastCalledWith('parent', expect.objectContaining({ delta_x: 10 }));
-    expect(onGroupMove).toHaveBeenCalledTimes(2);
-    drag('child', 810);
-    expect(onGroupMove).toHaveBeenCalledTimes(2);
-    expect(onGroupMoveRejected).toHaveBeenCalledTimes(1);
-    expect(onGroupMoveRejected).toHaveBeenCalledWith('Перемещение Location пересекает внешний объект.');
-  });
 
   it('keeps independent frames when equipment geometry is invalid', async () => {
     const objects: TopologyProjectionNode[] = ['a', 'b'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
     const location_ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
-    render(<TopologyCanvas document={{ ...documentFor('physical-invalid-frame'), nodes: objects }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: index === 0 ? Number.NaN : 300, y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref, name: 'Room', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: index === 0 ? Number.NaN : 300, y: 0, locked: false } } })), onGroupMove: vi.fn(), onCollapse: vi.fn(), onConfigure: vi.fn() }} />);
+    render(<TopologyCanvas document={{ ...documentFor('physical-invalid-frame'), nodes: objects }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: index === 0 ? Number.NaN : 300, y: 0 }, data: { projection } })), edges: [] })} locationFrameInput={{ locations: [{ location_ref, name: 'Room', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: index === 0 ? Number.NaN : 300, y: 0, locked: false } } })), onCollapse: vi.fn(), onConfigure: vi.fn() }} />);
     await screen.findByRole('button', { name: 'a' });
     expect(globalThis.document.querySelector('.location-frame')).toBeInTheDocument();
     expect(globalThis.document.querySelector('.location-frame__heading')).toBeInTheDocument();

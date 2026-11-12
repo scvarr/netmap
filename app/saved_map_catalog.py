@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.device_catalog import DeviceCatalog
-from app.location_frame_geometry import layout_location_frames, contains
+from app.location_frame_geometry import layout_location_frames, contains, overlaps, expand_location_frames
 from app.location_boundary_anchors import normalize_boundary_route
-from app.models import Cable, Connection, ConnectionPoint, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import ObjectConfiguration, PresentationPanel, Cable, Connection, ConnectionPoint, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -130,10 +130,10 @@ class SavedMapCatalog:
         geometry = MapLocationGeometry.model_validate(geometry).model_dump()
         self._require_map(map_id)
         self._require_variant(map_id, variant_id)
-        # Serialize all frame edits in this variant, including first writes.
+        # Lock canonical hierarchy before variants/positions, as assignment does.
+        locations = self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
         self.session.scalar(select(MapPresentationVariant).where(
             MapPresentationVariant.id == variant_id).with_for_update())
-        locations = self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
         parents = {loc.id: loc.parent_location_id for loc in locations}
         if location_id not in parents:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
@@ -150,13 +150,83 @@ class SavedMapCatalog:
         for key in subtree - {location_id}:
             frames[key] = {**frames[key], "x": frames[key]["x"] + dx, "y": frames[key]["y"] + dy}
         frames[location_id] = geometry
-        for key, parent in parents.items():
-            MapLocationGeometry.model_validate(frames[key])
-            if parent in frames and not contains(frames[parent], frames[key]):
-                raise ValidationError("Location frame must remain inside its canonical parent", {"location_id": str(key)})
+        records, footprints = self._physical_geometry(map_id, variant_id)
+        contents = {}
+        for position, object_id, assigned in records:
+            contents.setdefault(assigned, []).append({**footprints[object_id], "x": position.x + (dx if assigned in subtree else 0), "y": position.y + (dy if assigned in subtree else 0)})
+        translations = {key: (dx, dy) for key in subtree} if dx or dy else {}
+        protected = set(subtree)
+        parent = parents[location_id]
+        while parent is not None:
+            protected.add(parent)
+            parent = parents[parent]
+        frames = expand_location_frames(parents, frames, contents, protected=protected, translations=translations)
+        self._apply_container_translations(map_id, variant_id, parents, states, translations)
+        self._store_frames(variant_id, states, frames)
+        self._flush()
+
+    def _apply_container_translations(self, map_id, variant_id, parents, states, translations):
+        original = {state.location_id: state.geometry for state in states}
+        roots = [key for key in translations if translations[key] != (0, 0) and translations.get(parents[key]) != translations[key]]
+        for key in sorted(roots, key=lambda key: original[key]["y"], reverse=True):
+            records, footprints = self._physical_geometry(map_id, variant_id)
+            subtree = {key}
+            while True:
+                expanded = subtree | {child for child, parent in parents.items() if parent in subtree}
+                if expanded == subtree:
+                    break
+                subtree = expanded
+            moving = {object_id for _, object_id, assigned in records if assigned in subtree}
+            if moving:
+                dx, dy = translations[key]
+                self.move_location_group(map_id, variant_id, key, dx, dy, original[key],
+                                         list(footprints.values()), self._boundary_evidence(map_id, variant_id, moving, footprints))
+
+    def _physical_geometry(self, map_id, variant_id):
+        records = self.session.execute(select(MapViewPosition, MapPlacement.physical_object_id, PhysicalObject.location_id)
+            .join(MapPlacement, MapPlacement.id == MapViewPosition.placement_id)
+            .join(PhysicalObject, PhysicalObject.id == MapPlacement.physical_object_id)
+            .where(MapPlacement.map_id == map_id, MapViewPosition.variant_id == variant_id,
+                   MapViewPosition.view_key == MapViewKey.PHYSICAL).with_for_update(of=MapViewPosition)).all()
+        panels = {}
+        for object_id, panel in self.session.execute(select(ObjectConfiguration.physical_object_id, PresentationPanel)
+                .join(PresentationPanel, PresentationPanel.base_revision_id == ObjectConfiguration.base_revision_id)
+                .where(ObjectConfiguration.physical_object_id.in_([r[1] for r in records]))):
+            panels.setdefault(object_id, []).append(panel)
+        footprints = {}
+        for position, object_id, _ in records:
+            width, height = 212, 144
+            if object_id in panels:
+                bounds = panels[object_id]
+                width = position.display_width or 240
+                height = width * (max(p.y + p.height for p in bounds) - min(p.y for p in bounds)) / (max(p.x + p.width for p in bounds) - min(p.x for p in bounds))
+            footprints[object_id] = {"physical_object_id": object_id, "x": position.x, "y": position.y, "width": width, "height": height}
+        return records, footprints
+
+    def _boundary_evidence(self, map_id, variant_id, moving, footprints):
+        first, second = aliased(ConnectionPoint), aliased(ConnectionPoint)
+        rows = self.session.execute(select(Cable.id, first.physical_object_id, second.physical_object_id)
+            .join(Connection, Connection.id == Cable.connection_id)
+            .join(first, first.id == Connection.point_a_id).join(second, second.id == Connection.point_b_id)
+            .join(MapCableRoute, MapCableRoute.cable_id == Cable.id)
+            .where(MapCableRoute.map_id == map_id, MapCableRoute.variant_id == variant_id)).all()
+        evidence = []
+        for cable_id, a, b in rows:
+            a, b = sorted((a, b), key=str)
+            if (a in moving) == (b in moving):
+                continue
+            if a not in footprints or b not in footprints:
+                raise ValidationError("Boundary Cable endpoint geometry is unavailable", {"cable_id": str(cable_id)})
+            def center(key):
+                g = footprints[key]
+                return {"x": g["x"] + g["width"] / 2, "y": g["y"] + g["height"] / 2}
+            evidence.append({"cable_id": cable_id, "moving_endpoint_is_source": a in moving,
+                             "moving_endpoint": center(a if a in moving else b), "external_endpoint": center(b if a in moving else a)})
+        return evidence
+
+    def _store_frames(self, variant_id, states, frames):
         stored = {state.location_id: state for state in self.session.scalars(
             select(MapLocationState).where(MapLocationState.variant_id == variant_id))}
-        # Freeze the complete resolved layout atomically, including previously unsaved frames.
         for state in states:
             record = stored.get(state.location_id)
             if record is None:
@@ -164,13 +234,116 @@ class SavedMapCatalog:
                                           collapsed=state.collapsed, visible_direct_elements=state.visible_direct_elements)
                 self.session.add(record)
             record.geometry = frames[state.location_id]
+
+    def place_assigned_object(self, object_id, *, map_id=None, variant_id=None, relocate=True):
+        assignment = self.session.get(PhysicalObject, object_id).location_id
+        if assignment is None:
+            return
+        query = select(MapPlacement.map_id, MapViewPosition.variant_id).join(MapViewPosition).where(
+            MapPlacement.physical_object_id == object_id, MapViewPosition.view_key == MapViewKey.PHYSICAL)
+        if map_id is not None:
+            query = query.where(MapPlacement.map_id == map_id, MapViewPosition.variant_id == variant_id)
+        for target_map, target_variant in self.session.execute(query.order_by(MapViewPosition.variant_id)).all():
+            locations = self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
+            self.session.scalar(select(MapPresentationVariant).where(MapPresentationVariant.id == target_variant).with_for_update())
+            parents = {location.id: location.parent_location_id for location in locations}
+            states = self._location_states(target_variant)
+            frames = {state.location_id: dict(state.geometry) for state in states}
+            records, footprints = self._physical_geometry(target_map, target_variant)
+            position = next(pos for pos, key, _ in records if key == object_id)
+            original = footprints[object_id]
+            candidate = dict(original)
+            ancestors = {assignment}
+            parent = parents[assignment]
+            while parent is not None:
+                ancestors.add(parent)
+                parent = parents[parent]
+            descendants = {assignment}
+            while True:
+                expanded = descendants | {key for key, parent in parents.items() if parent in descendants}
+                if expanded == descendants:
+                    break
+                descendants = expanded
+            object_locations = {key: assigned for _, key, assigned in records}
+            # Sibling containers can be pushed with their contents. They must not
+            # force a new object to the far end of the entire map before expansion.
+            obstacles = [g for key, g in footprints.items() if key != object_id and
+                         (object_locations[key] is None or object_locations[key] in descendants or object_locations[key] in ancestors)]
+            obstacles += [g for key, g in frames.items() if key in descendants - {assignment}]
+            if relocate and (not contains(frames[assignment], candidate) or any(overlaps(candidate, o) for o in obstacles)):
+                candidate["x"], candidate["y"] = frames[assignment]["x"] + 20, frames[assignment]["y"] + 40
+                for _ in range(len(obstacles) + 1):
+                    conflicts = [o for o in obstacles if overlaps(candidate, o)]
+                    if not conflicts:
+                        break
+                    candidate["y"] = max(o["y"] + o["height"] + 20 for o in conflicts)
+            dx, dy = candidate["x"] - original["x"], candidate["y"] - original["y"]
+            if position.locked and (dx or dy):
+                raise ValidationError("Assigned object has a locked map position", {"physical_object_id": str(object_id)})
+            contents = {}
+            for pos, key, assigned in records:
+                contents.setdefault(assigned, []).append(candidate if key == object_id else footprints[key])
+            translations = {}
+            frames = expand_location_frames(parents, frames, contents, protected=ancestors, translations=translations)
+            self._apply_container_translations(target_map, target_variant, parents, states, translations)
+            _, final_footprints = self._physical_geometry(target_map, target_variant)
+            if any(overlaps(candidate, other) for key, other in final_footprints.items() if key != object_id):
+                raise ValidationError("PhysicalObject placement overlaps another object", {})
+            position.x, position.y = candidate["x"], candidate["y"]
+            if dx or dy:
+                self._translate_object_route_leads(target_map, target_variant, object_id, dx, dy)
+            self._store_frames(target_variant, states, frames)
+            self._flush()
+
+    def synchronize_location_structure(self):
+        """Canonical tree edits initialize presentation space, moving saved contents together."""
+        locations = self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
+        parents = {location.id: location.parent_location_id for location in locations}
+        variants = self.session.scalars(select(MapPresentationVariant).join(MapLocationState)
+            .where(MapLocationState.geometry.is_not(None)).distinct().order_by(MapPresentationVariant.id)).all()
+        for variant in variants:
+            self.session.scalar(select(MapPresentationVariant).where(MapPresentationVariant.id == variant.id).with_for_update())
+            states = self._location_states(variant.id)
+            frames = {state.location_id: dict(state.geometry) for state in states}
+            saved = {state.location_id: state.geometry for state in self.session.scalars(
+                select(MapLocationState).where(MapLocationState.variant_id == variant.id, MapLocationState.geometry.is_not(None)))}
+            translations = {key: (g["x"] - saved[key]["x"], g["y"] - saved[key]["y"])
+                            for key, g in frames.items() if key in saved and (g["x"], g["y"]) != (saved[key]["x"], saved[key]["y"])}
+            records, footprints = self._physical_geometry(variant.map_id, variant.id)
+            contents = {}
+            for _, object_id, assigned in records:
+                dx, dy = translations.get(assigned, (0, 0))
+                g = footprints[object_id]
+                contents.setdefault(assigned, []).append({**g, "x": g["x"] + dx, "y": g["y"] + dy})
+            frames = expand_location_frames(parents, frames, contents, translations=translations)
+            originals = [MapLocationState(location_id=state.location_id, geometry=saved.get(state.location_id, state.geometry)) for state in states]
+            self._apply_container_translations(variant.map_id, variant.id, parents, originals, translations)
+            self._store_frames(variant.id, states, frames)
         self._flush()
+
+    def _translate_object_route_leads(self, map_id, variant_id, object_id, dx, dy):
+        first, second = aliased(ConnectionPoint), aliased(ConnectionPoint)
+        rows = self.session.execute(select(MapCableRoute, first.physical_object_id, second.physical_object_id)
+            .join(Cable, Cable.id == MapCableRoute.cable_id).join(Connection, Connection.id == Cable.connection_id)
+            .join(first, first.id == Connection.point_a_id).join(second, second.id == Connection.point_b_id)
+            .where(MapCableRoute.map_id == map_id, MapCableRoute.variant_id == variant_id).with_for_update()).all()
+        for route, a, b in rows:
+            a, b = sorted((a, b), key=str)
+            if object_id not in (a, b):
+                continue
+            points = [dict(p) for p in (route.waypoints if object_id == a else reversed(route.waypoints))]
+            stop = next((i for i, p in enumerate(points) if p.get("anchor")), min(1, len(points)))
+            for point in points[:stop]:
+                point["x"] += dx
+                point["y"] += dy
+            route.waypoints = points if object_id == a else list(reversed(points))
 
     def _location_states(self, variant_id: uuid.UUID) -> tuple[MapLocationState, ...]:
         stored = {state.location_id: state for state in self.session.scalars(
             select(MapLocationState).where(MapLocationState.variant_id == variant_id))}
-        parents = dict(self.session.execute(select(Location.id, Location.parent_location_id).order_by(Location.id)).all())
-        frames = layout_location_frames(parents, {key: state.geometry for key, state in stored.items() if state.geometry is not None})
+        locations = self.session.scalars(select(Location).order_by(Location.id)).all()
+        parents = {location.id: location.parent_location_id for location in locations}
+        frames = layout_location_frames(parents, {key: state.geometry for key, state in stored.items() if state.geometry is not None}, {location.id: location.name for location in locations})
         return tuple(MapLocationState(
             variant_id=variant_id, location_id=key,
             collapsed=stored[key].collapsed if key in stored else False,
@@ -221,6 +394,7 @@ class SavedMapCatalog:
         ))
         self.session.add(placement)
         self._flush()
+        self.place_assigned_object(physical_object_id, map_id=map_id, variant_id=placement.view_positions[0].variant_id)
         return placement
 
     def move_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, x: float, y: float, display_width: float | None = None) -> MapPlacement:
@@ -246,6 +420,8 @@ class SavedMapCatalog:
             if display_width is not None:
                 position.display_width = display_width
         self._flush()
+        if view_key == MapViewKey.PHYSICAL:
+            self.place_assigned_object(physical_object_id, map_id=map_id, variant_id=variant.id, relocate=False)
         return placement
 
     def set_view_lock(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, locked: bool, variant_id: uuid.UUID | None = None) -> MapPlacement:
@@ -312,6 +488,7 @@ class SavedMapCatalog:
         footprints: list[dict[str, object]], boundary_routes: list[dict[str, object]],
     ) -> None:
         """Move one canonical Location subtree within one physical presentation variant."""
+        self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
         self._require_variant(map_id, variant_id)
         if self.session.get(Location, location_id) is None:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
@@ -323,7 +500,7 @@ class SavedMapCatalog:
             .join(MapPlacement, MapPlacement.id == MapViewPosition.placement_id)
             .join(PhysicalObject, PhysicalObject.id == MapPlacement.physical_object_id)
             .where(MapPlacement.map_id == map_id, MapViewPosition.variant_id == variant_id,
-                   MapViewPosition.view_key == MapViewKey.PHYSICAL).with_for_update()).all()
+                   MapViewPosition.view_key == MapViewKey.PHYSICAL).with_for_update(of=MapViewPosition)).all()
         positions = {object_id: position for position, object_id, _ in records}
         moving_ids = {object_id for _, object_id, canonical_location_id in records if canonical_location_id in location_ids}
         if not moving_ids:

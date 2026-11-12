@@ -106,28 +106,51 @@ MapTextAnnotation — отдельная presentation capability.
 C-UX-10-01: все canonical Locations доступны в каждой SavedMap, без membership
 и map isolation. Каждый Location имеет самостоятельный прямоугольный frame,
 включая пустой и unary; каждый дочерний frame находится внутри непосредственного
-canonical parent с отступом 20 и местом для заголовка 40. Path label дополняет вложение.
+canonical parent с отступом 20 и местом для заголовка 40. В заголовке непосредственное имя; полный canonical path доступен в tooltip.
 MapLocationState.geometry хранит x/y/width/height и edge/offset обязательной
 виртуальной точки отдельно для variant. До первого сохранения чтение возвращает
 детерминированную иерархическую компоновку (порядок по immutable ID), без записи
-в БД и без зависимости от оборудования. Соседи при инициализации не пересекаются.
+в БД и без зависимости от количества оборудования. Пустой Location — компактный
+горизонтальный frame высотой 64; ширина 140..360 учитывает имя и controls.
+Соседи при инициализации не пересекаются.
 Новый ребёнок размещается после существующих детей; предки расширяются,
 соседние ветви при необходимости получают место без пересечений. Это разрешённое
 начальное presentation размещение, а не canonical containment из координат.
+Create/series/reparent canonical Location согласуют уже сохранённые variant layouts:
+выделение места переносит затронутые соседние рамки вместе с оборудованием/routes
+в той же транзакции; locked конфликт не оставляет частичных canonical/presentation writes.
 Boundary identity — UUIDv5(namespace=SavedMap ID, name=Location ID), одна на пару
 map/Location, не зависит от variant/геометрии. Отдельного create/delete точки нет.
 Geometry PUT валидирует finite coordinates, положительные размеры и perimeter,
 Location и ownership variant до записи. Copy variant копирует геометрию;
 FK CASCADE удаляет presentation state при удалении variant/Location.
-Geometry PUT блокирует variant, переносит всю ветвь рамок одним delta и
-проверяет вложение всех рамок до записи. Resize, оставляющий детей снаружи,
-и выход ребёнка за границу родителя отклоняются (422), без частичных записей.
-Сохранение фиксирует всю разрешённую компоновку одной транзакцией и возвращает
-SavedMapDocument, чтобы клиент принял все затронутые frames без повторного write.
-UI: drag заголовка переносит рамку вместе с вложенными рамками; оборудование
-остаётся на месте. Drag ребёнка ограничен родителем, resize ограничен детьми
-и родителем. Resize и drag точки создают draft,
-Save явно сохраняет его, Cancel отменяет. Group move вызывается отдельной кнопкой.
+Geometry PUT блокирует canonical hierarchy и variant, переносит ветвь рамок
+вместе со всеми существующими L1 placements её subtree (включая скрытые).
+Существующий group-move core сохраняет внутренние free waypoints и внутренний
+prefix boundary route; внешний suffix не переносится. Обязательная точка
+Location и route anchors — разные presentation bindings.
+Расширение дочерней рамки/содержимого увеличивает предков, в том числе влево/вверх,
+не сжимая вручную увеличенные границы. При пересечении соседний контейнер получает
+место ниже вместе с содержимым; неподвижные объекты сохраняют позиции, когда это
+возможно. Locked placements, object collisions и неоднозначная boundary evidence
+отклоняют всю транзакцию. Недопустимый parent shrink не обрезает содержимое:
+размер сохраняется достаточным для детей и оборудования.
+Сохранение фиксирует frames, positions и routes одной транзакцией и возвращает
+SavedMapDocument. UI: единый drag заголовка создаёт preview рамок и оборудования,
+resize и drag точки также создают draft; Save явно сохраняет, Cancel отменяет.
+Отдельная кнопка group move убрана; core/API group move сохранён. Controls используют
+локальный NetMap style с radius=0; увеличение масштаба не раздувает кнопки/подписи.
+
+Назначение PhysicalObject Location согласует все существующие физические позиции
+этого объекта во всех SavedMaps/variants одной транзакцией. Добавление уже назначенного
+объекта и создание его physical variant position также размещают его в canonical
+Location. Размер объекта определяется pinned composition panels и display_width
+(обычный объект 212x144); свободное место выбирается детерминированно с учётом
+объектов/дочерних рамок, предки расширяются согласованно. Missing placements/positions
+не создаются назначением. При переносе одного объекта следуют free lead waypoints
+до первого route anchor; без anchor следует первый waypoint со стороны объекта.
+Canonical assignment задаётся только явной операцией, никогда координатами.
+Cable/Connection/endpoints не пересоздаются и не переподключаются.
 Collapse сохраняет прежнюю proxy-модель; channel-aware collapse не реализован.
 MapComposite/MapRegion не поддерживаются.
 
