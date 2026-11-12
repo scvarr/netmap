@@ -103,7 +103,7 @@ Membership общий для вариантов; topology и canonical Location 
 меняются переключением варианта. Physical и Logical scene coordinates независимы.
 MapTextAnnotation — отдельная presentation capability.
 
-Hierarchy берётся из canonical Locations, frames derived из текущей scene,
+CURRENT: hierarchy берётся из canonical Locations, frames derived из текущей scene,
 не persisted polygons. Expanded branching frame — union видимых непосредственных
 objects/retained child frames с padding; unary chain даёт compact path label.
 Пустому Location не придумываются bounds. Collapse рекурсивен: скрытое содержимое
@@ -117,9 +117,28 @@ subtree в активном variant, включая скрытые. Сервер
 member или collision отклоняет всё; отсутствующие позиции не создаются.
 Positions и затронутые routes сохраняются атомарно, без automatic re-layout.
 
+## C-UX-10 — TARGET виртуальной инфраструктуры
+
+[Основной контракт](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
+остаётся OPEN, не IMPLEMENTED. Каждый Location, включая пустой, получает ровно
+одну обязательную виртуальную точку со стабильной identity; это не ConnectionPoint.
+В пределах независимой карты одна неупорядоченная пара Location имеет не более
+одного прямого Channel. Инфраструктура не разделяется между картами; геометрия
+принадлежит presentation variant, schema/DTO/API остаются OPEN.
+
+Cable сохраняет реальные окончания и canonical identity. Его путь динамически
+составляется из индивидуальных подводов и общей геометрии Channel без копирования.
+Preview и подтверждение предшествуют persistent изменениям; ошибки не оставляют
+частичных изменений. Используемый Channel нельзя удалить; пустой сохраняется
+до ручного удаления. Перемещение оборудования сохраняет окончания и пересчитывает
+маршрут для новых непосредственных Location. Collapse скрывает структурные
+участки; проекция внешних каналов на общего родителя не создаёт persisted Channels.
+Expand восстанавливает геометрию без перезаписи. Пустой Location получает видимую
+presentation область. Ничто из этого не создаёт topology evidence или exact L1 path.
+
 ## Routes и boundary anchors
 
-MapCableRoute — presentation конкретного Cable в карте/variant. Internal route
+CURRENT: MapCableRoute — presentation конкретного Cable в карте/variant. Internal route
 (оба конца внутри subtree) переносит свободные waypoints; external не меняется;
 boundary route переносит внутренний prefix до выхода, сохраняя внешний suffix.
 Anchor следует derived frame. Без сохранённой route линия строится от endpoints.
