@@ -5,7 +5,9 @@ import type { FlowRectangle } from './nodeFootprint';
 
 // Flow units: clearance for border headings/cable leads, and sequence gaps.
 const CLEARANCE = 12;
-const HEADING_CLEARANCE = 24;
+// Two border headings need separation at 1x; equipment needs only half
+// a heading's height. uiScale caps headings at 1x, so zoom is not an input.
+const NESTED_HEADING_CLEARANCE = 24;
 const HORIZONTAL_GAP = 20;
 const MIN_HEIGHT = 32;
 
@@ -41,7 +43,7 @@ export function automaticLocationLayout(locations: readonly LocationDocument[], 
       const ai = order.indexOf(a), bi = order.indexOf(b);
       return (ai < 0 ? Infinity : ai) - (bi < 0 ? Infinity : bi) || a.localeCompare(b);
     });
-    let cursor = config?.direction === 'HORIZONTAL' ? CLEARANCE : HEADING_CLEARANCE, cross = 0;
+    let cursor = CLEARANCE, cross = 0;
     const horizontal = config?.direction === 'HORIZONTAL';
     const included: Array<[string, FlowRectangle]> = [];
     for (const key of keys) {
@@ -51,7 +53,9 @@ export function automaticLocationLayout(locations: readonly LocationDocument[], 
       if (location && settings.hide_empty && !count(child)) { hidden.add(child); continue; }
       if (state?.collapsed && !visible.has(key)) continue;
       const box = location ? measure(child) : { ...dimensions.get(child)!, x: 0, y: 0 };
-      const placed = { ...box, x: horizontal ? cursor : CLEARANCE, y: horizontal ? HEADING_CLEARANCE : cursor };
+      const top = id !== 'root' && location ? NESTED_HEADING_CLEARANCE : CLEARANCE;
+      if (!horizontal && !included.length) cursor = top;
+      const placed = { ...box, x: horizontal ? cursor : CLEARANCE, y: horizontal ? top : cursor };
       included.push([key, placed]);
       cursor += (horizontal ? box.width : box.height) + (horizontal ? HORIZONTAL_GAP : CLEARANCE);
       cross = Math.max(cross, horizontal ? box.height : box.width);
@@ -62,7 +66,8 @@ export function automaticLocationLayout(locations: readonly LocationDocument[], 
       if (horizontal) placed.height = cross; else placed.width = cross;
     }
     const extent = included.length ? cursor - (horizontal ? HORIZONTAL_GAP : CLEARANCE) + CLEARANCE : 2 * CLEARANCE;
-    const box = { x: 0, y: 0, width: Math.max(minWidth, horizontal ? extent : cross + 2 * CLEARANCE), height: Math.max(MIN_HEIGHT, horizontal ? cross + HEADING_CLEARANCE + CLEARANCE : extent) };
+    const bottom = Math.max(0, ...included.map(([, placed]) => placed.y + placed.height));
+    const box = { x: 0, y: 0, width: Math.max(minWidth, horizontal ? extent : cross + 2 * CLEARANCE), height: Math.max(MIN_HEIGHT, bottom + CLEARANCE) };
     frames.set(id, box);
     // Child coordinates are relative until the final top-down pass.
     for (const [key, placed] of included) if (key.startsWith('Location:')) frames.set(key.slice(9), placed); else positions.set(key.slice(15), placed);

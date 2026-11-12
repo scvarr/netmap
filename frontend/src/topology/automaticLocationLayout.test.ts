@@ -29,7 +29,7 @@ describe('automatic Location composition', () => {
     const result = deriveLocationPresentation(locations,placements,objects,[],{ ...settings,hide_empty: true });
     expect(result.frames.map(f => f.locationId).sort()).toEqual(['building','floor','room']);
     const layout = automaticLocationLayout(locations,placements,objects,[],{ ...settings, hide_empty: true });
-    expect(layout.frames.get('root')!.height).toBe(layout.frames.get('building')!.height + 36);
+    expect(layout.frames.get('root')!.height).toBe(layout.frames.get('building')!.height + 24);
   });
   it('retains full and partial collapse semantics and expands deterministically', () => {
     const state: MapLocationState = { location_ref: loc('room').location_ref, collapsed: true, visible_direct_elements: [] };
@@ -56,7 +56,7 @@ describe('compact cross-axis geometry', () => {
     if (direction === 'VERTICAL') {
       expect(empty.width).toBe(full.width);
       expect(empty.height).toBe(32);
-      expect(full.height).toBe(120);
+      expect(full.height).toBe(108);
     } else {
       expect(empty.height).toBe(full.height);
       expect(empty.width).toBe(100);
@@ -103,4 +103,27 @@ it('resolves route anchors against recomposed frames and preserves saved free ge
     expect(resolved[1]).toEqual(route[1]);
   }
   expect(JSON.stringify({ state, route })).toBe(before);
+});
+
+
+it.each([1, 3])('keeps border headings and full equipment footprints separate at %sx without changing layout', zoom => {
+  const tree = [loc('8'),loc('808','8'),loc('823','808'),loc('U42','823'),loc('U40','823')];
+  for (const direction of ['VERTICAL', 'HORIZONTAL'] as const) {
+    const config: AutomaticLocationLayout = { ...settings, containers: { '823': { direction, order: ['Location:U42','Location:U40'] } } };
+    const result = automaticLocationLayout(tree, [placement('PP1','U42')], [{ physicalObjectId: 'PP1', rectangle: { x: 0, y: 0, width: 240, height: 84 } }], [], config);
+    const headingHalfHeight = 12 * Math.min(1, 1 / zoom) * zoom;
+    for (const [parent, child] of [['8','808'],['808','823'],['823','U42']]) {
+      const p = result.frames.get(parent)!, c = result.frames.get(child)!;
+      expect(p.y * zoom + headingHalfHeight).toBeLessThanOrEqual(c.y * zoom - headingHalfHeight);
+    }
+    const rack = result.frames.get('U42')!, object = result.positions.get('PP1')!, sibling = result.frames.get('U40')!;
+    expect(object.y - rack.y).toBe(12);
+    expect(rack.height).toBe(108);
+    expect(rack.y * zoom + headingHalfHeight).toBeLessThanOrEqual(object.y * zoom);
+    expect(object.y + object.height).toBeLessThanOrEqual(rack.y + rack.height - 12);
+    if (direction === 'VERTICAL') {
+      expect(sibling.y - rack.y - rack.height).toBe(12);
+      expect((rack.y + rack.height) * zoom).toBeLessThanOrEqual(sibling.y * zoom - headingHalfHeight);
+    } else expect(sibling.x - rack.x - rack.width).toBe(20);
+  }
 });

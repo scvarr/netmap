@@ -432,8 +432,10 @@ hidden empty subtrees reserve no space. Empty frames have a 100-unit minimum
 width (increased for their label) and a 32-unit minimum height.
 
 Automatic-only spacing uses 12 flow units for side/bottom clearance and vertical
-sequence gaps, 24 above contents to separate border headings, and 20 between
-horizontal siblings, retaining the existing container interval. Frames alone
+sequence gaps, 24 only between nested border headings, and 20 between
+horizontal siblings, retaining the existing container interval. Equipment starts
+12 units below the border; no separate header row is reserved. The technical
+root has no heading. Geometry does not depend on viewport zoom. Frames alone
 stretch; contents are not scaled or distributed into spare space. Boundary
 identity, edge/offset and stored route/free waypoint data remain inputs;
 anchors resolve against the resulting frames. No settings, server contract,
