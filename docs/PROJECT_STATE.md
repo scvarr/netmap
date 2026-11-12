@@ -29,7 +29,7 @@
 - SavedMap и именованные MapPresentationVariant: placements, отдельные позиции
   физических/логических видов, presentation routes, text annotations.
   Spatial P-UX-03A–E реализован; **P-UX-03E ACCEPTED / MERGED / MANUAL RECHECK PASSED**.
-  C-UX-10-01 foundation (branch, external inspection pending): самостоятельные
+  C-UX-10-01 foundation (MERGED): самостоятельные
   прямоугольные Location frames, включая пустые/unary, и одна обязательная
   виртуальная точка (map/Location UUIDv5); variant geometry с явным Save/Cancel,
   drag/resize, копированием и восстановлением. Corrective: иерархическое начальное
@@ -148,3 +148,11 @@ workspace/auth/access/sharing/activity и обязательные PERF-002/003/
 Необязательные улучшения с «до L2: НЕТ» и будущие product decisions не становятся
 blockers автоматически. Нового roadmap эта сверка не вводит.
 FE-002 уточнён как OPEN: guard создания variant не защищает создание карты.
+
+- AUTO-LOC-01: IMPLEMENTED in milestone branch, external diff inspection required.
+  Explicit per-variant automatic Location composition: technical root, mixed child
+  order, horizontal/vertical direction, hide empty subtrees, existing full/partial
+  collapse, full equipment footprints and current-frame route anchors. Manual
+  variants retain their data and behavior. Settings survive variant copies and
+  workspace export/import. Targeted Docker validation: 138 frontend tests,
+  52 backend tests, TypeScript/Vite. No Channels or comb implementation.

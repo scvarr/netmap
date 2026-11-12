@@ -21,7 +21,18 @@ const annotationRef = (value: unknown, path: string): MapTextAnnotationRef => { 
 const annotation = (value: unknown, path: string): MapTextAnnotation => { const item = object(value, path); if (!Number.isFinite(item.font_size) || (item.font_size as number) <= 0) malformed(`${path}.font_size must be a positive finite number.`); return { annotation_ref: annotationRef(item.annotation_ref, `${path}.annotation_ref`), text: string(item.text, `${path}.text`), position: presentationPoint(item.position, `${path}.position`), text_color: color(item.text_color, `${path}.text_color`), font_size: item.font_size as number }; };
 const summary = (value: unknown, path: string): SavedMapSummary => { const item = object(value, path); return { map_ref: mapRef(item.map_ref, `${path}.map_ref`), name: string(item.name, `${path}.name`), created_at: string(item.created_at, `${path}.created_at`), updated_at: string(item.updated_at, `${path}.updated_at`) }; };
 const variantRef = (value: unknown, path: string): MapPresentationVariantRef => { const ref = object(value, path); if (ref.entity_type !== 'MapPresentationVariant') malformed(`${path}.entity_type must be MapPresentationVariant.`); return { entity_type: 'MapPresentationVariant', entity_id: uuid(ref.entity_id, `${path}.entity_id`) }; };
-const presentationVariant = (value: unknown, path: string): MapPresentationVariant => { const item = object(value, path); return { variant_ref: variantRef(item.variant_ref, `${path}.variant_ref`), name: string(item.name, `${path}.name`) }; };
+const automaticLayout = (value: unknown): import('./savedMapTypes').AutomaticLocationLayout | null | undefined => {
+  if (value === null || value === undefined) return value;
+  const item = object(value, 'automatic_layout');
+  if (typeof item.hide_empty !== 'boolean') malformed('automatic_layout.hide_empty must be boolean');
+  const containers = object(item.containers, 'automatic_layout.containers');
+  for (const entry of Object.values(containers)) {
+    const config = object(entry, 'layout container');
+    if (!['VERTICAL','HORIZONTAL'].includes(config.direction as string) || !Array.isArray(config.order) || !config.order.every(key => typeof key === 'string')) malformed('invalid layout container');
+  }
+  return item as unknown as import('./savedMapTypes').AutomaticLocationLayout;
+};
+const presentationVariant = (value: unknown, path: string): MapPresentationVariant => { const item = object(value, path); return { variant_ref: variantRef(item.variant_ref, `${path}.variant_ref`), name: string(item.name, `${path}.name`), automatic_layout: automaticLayout(item.automatic_layout) }; };
 const locationGeometry = (value: unknown, path: string): MapLocationGeometry => {
   const item = object(value, path);
   const x = number(item.x, path), y = number(item.y, path), width = number(item.width, path), height = number(item.height, path), offset = number(item.offset, path);
@@ -52,6 +63,11 @@ export class ApiSavedMapDataSource implements SavedMapDataSource {
   async loadMap(mapId: string, variantId?: string): Promise<SavedMap> { uuid(mapId, 'mapId'); const response = await fetch(`${this.endpoint}/${encodeURIComponent(mapId)}${variantId ? `?variant_id=${encodeURIComponent(variantId)}` : ''}`); if (!response.ok) throw await error(response); return parseMap(await response.json()); }
   async createPresentationVariant(mapId: string, name: string, sourceVariantId: string): Promise<MapPresentationVariant> { const response = await fetch(`${this.endpoint}/${encodeURIComponent(mapId)}/presentation-variants`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, source_variant_id: sourceVariantId }) }); if (!response.ok) throw await error(response); return presentationVariant(await response.json(), 'presentation variant'); }
   async deletePresentationVariant(mapId: string, variantId: string): Promise<void> { uuid(mapId, 'mapId'); uuid(variantId, 'variantId'); const response = await fetch(`${this.endpoint}/${encodeURIComponent(mapId)}/presentation-variants/${encodeURIComponent(variantId)}`, { method: 'DELETE' }); if (!response.ok) throw await error(response); }
+  async setAutomaticLayout(mapId: string, variantId: string, settings: import('./savedMapTypes').AutomaticLocationLayout | null): Promise<SavedMap> {
+    const response = await fetch(`${this.endpoint}/${mapId}/presentation-variants/${variantId}/automatic-layout`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
+    if (!response.ok) throw await error(response);
+    return parseMap(await response.json());
+  }
   async setLocationGeometry(mapId: string, variantId: string, locationId: string, geometry: MapLocationGeometry): Promise<SavedMap> {
     const response = await fetch(this.endpoint + '/' + mapId + '/presentation-variants/' + variantId + '/locations/' + locationId + '/geometry', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geometry) });
     if (!response.ok) throw await error(response);

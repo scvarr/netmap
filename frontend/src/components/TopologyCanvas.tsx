@@ -76,7 +76,7 @@ interface TopologyCanvasProps {
   /** New authoritative SavedMap placement snapshot, including variant switches and refreshes. */
   positionSnapshot?: readonly MapPlacement[];
   displayWidthOverrides?: Record<string, number>;
-  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; };
+  locationFrameInput?: { automatic?: import('../topology/savedMapTypes').AutomaticLocationLayout | null; locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; };
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
@@ -314,9 +314,9 @@ export function TopologyCanvas({
       ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, projection.nodes.flatMap(node => {
           const id = physicalObjectIdForNode(node.data.projection);
           return id ? [{ physicalObjectId: id, rectangle: nodeFootprint(node) }] : [];
-        }), locationFrameInput.states ?? []) : null;
+        }), locationFrameInput.states ?? [], locationFrameInput.automatic) : null;
     const bounds = [...(locations?.frames ?? []).map(frame => frame.bounds), ...(locations?.proxies ?? []).filter(proxy => !proxy.partial).map(proxy => proxy.bounds),
-      ...projection.nodes.filter(node => !locations?.hiddenObjectProxy.has(physicalObjectIdForNode(node.data.projection) ?? '')).map(node => nodeFootprint(node))];
+      ...projection.nodes.map(node => ({ ...node, position: locations?.automaticPositions?.get(physicalObjectIdForNode(node.data.projection) ?? '') ?? node.position })).filter(node => !locations?.hiddenObjectProxy.has(physicalObjectIdForNode(node.data.projection) ?? '')).map(node => nodeFootprint(node))];
     if (bounds.length && locations) {
       const x = Math.min(...bounds.map(b => b.x)), y = Math.min(...bounds.map(b => b.y));
       const right = Math.max(...bounds.map(b => b.x + b.width)), bottom = Math.max(...bounds.map(b => b.y + b.height));
@@ -379,9 +379,10 @@ export function TopologyCanvas({
       return [{ physicalObjectId, rectangle }];
     }) : [];
   const locationPresentation = showLocationPresentation && locationFrameInput
-    ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationFrameInput.states ?? [])
+    ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationFrameInput.states ?? [], locationFrameInput.automatic)
     : { frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map<string, string>() };
-  const baseFrameGeometries = layoutLocationFrames(locationFrameInput?.locations ?? [], new Map(locationFrameInput?.states?.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : []) ?? []));
+  const automatic = showLocationPresentation && locationFrameInput?.automatic;
+  const baseFrameGeometries = automatic ? new Map([...locationPresentation.frames, ...locationPresentation.proxies.filter(p => !p.partial)].map(f => [f.locationId, { ...f.bounds, edge: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.edge ?? 'right' as const, offset: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.offset ?? .5 }])) : layoutLocationFrames(locationFrameInput?.locations ?? [], new Map(locationFrameInput?.states?.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : []) ?? []));
   const activeFrameEdit = frameEditPreview?.scene === presentationSceneKey && baseFrameGeometries.has(frameEditPreview.id) ? frameEditPreview : null;
   const frameEdit = activeFrameEdit ? editLocationFrames(locationFrameInput?.locations ?? [], baseFrameGeometries, activeFrameEdit.id, activeFrameEdit.geometry) : { frames: baseFrameGeometries, translations: new Map<string, { x: number; y: number }>() };
   const editedFrameGeometries = frameEdit.frames;
@@ -402,7 +403,8 @@ export function TopologyCanvas({
   }));
   const nodes: DeviceFlowNode[] = projection.nodes.filter((node) => !hiddenNodeProxies.has(node.id)).map((node) => ({
     ...node,
-    draggable: draggableNodeIds ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id) : lockedNodeIds?.has(node.id) ? false : undefined,
+    position: locationPresentation.automaticPositions?.get(physicalObjectIdForNode(node.data.projection) ?? '') ?? node.position,
+    draggable: automatic ? false : draggableNodeIds ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id) : lockedNodeIds?.has(node.id) ? false : undefined,
     data: {
       ...node.data,
       locationPresentationPath: locationPathsByObjectId.get(physicalObjectIdForNode(node.data.projection) ?? ""),
@@ -414,7 +416,7 @@ export function TopologyCanvas({
       onPhysicalPortClick,
       onPhysicalPortContextMenu,
       onBlueprintDisplayResize,
-      blueprintResizeEnabled: Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
+      blueprintResizeEnabled: !automatic && Boolean(onBlueprintDisplayResize) && !lockedNodeIds?.has(node.id),
     },
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));
@@ -667,7 +669,7 @@ export function TopologyCanvas({
         }}
         minZoom={0.35}
         maxZoom={document.layer === "L1" ? 4 : 1.8}
-        nodesDraggable={!annotationMode && (
+        nodesDraggable={!automatic && !annotationMode && (
           Boolean(onPhysicalNodeDragStop) ||
           (!disableAutoLayout && document.layer === "L1")
         )}
@@ -699,7 +701,7 @@ export function TopologyCanvas({
               const collapsed = locationFrameInput?.states?.some((state) => state.location_ref.entity_id === frame.locationId && state.collapsed) ?? false;
               const toggleLabel = t(collapsed ? 'map.locationExpand' : 'map.locationCollapse', { name: frame.label });
               const configureLabel = t('map.locationConfigureCollapse', { name: frame.label });
-              return <LocationFrameEditor key={(locationFrameInput?.variantId ?? '') + frame.locationId} frame={frame}
+              return <LocationFrameEditor automatic={Boolean(automatic)} key={(locationFrameInput?.variantId ?? '') + frame.locationId} frame={frame}
                 state={(() => { const state = locationFrameInput?.states?.find(state => state.location_ref.entity_id === frame.locationId); return state ? { ...state, geometry: editedFrameGeometries.get(frame.locationId)! } : undefined; })()}
                 uiScale={Math.min(1, 1 / frameUiZoom)}
                 parentBounds={frame.parentLocationId ? editedFrameGeometries.get(frame.parentLocationId) : undefined}

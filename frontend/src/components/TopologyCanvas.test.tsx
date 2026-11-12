@@ -155,6 +155,23 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(globalThis.document.querySelectorAll('.location-proxy')).toHaveLength(0);
     expect([...globalThis.document.querySelectorAll<HTMLElement>('.location-frame')].map(node => node.style.cssText)).toEqual(expanded);
   });
+  it('uses automatic footprint positions and blocks manual frame gestures', async () => {
+    const ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'rack' };
+    const object: TopologyProjectionNode = { id: 'PP1', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'PP1' }], attributes: {} };
+    const save = vi.fn();
+    render(<TopologyCanvas document={{ ...documentFor('physical-container'), nodes: [object] }} selection={null} onSelectionChange={vi.fn()}
+      layoutEngine={async () => ({ nodes: [{ id: 'PP1', type: 'device', position: { x: 999, y: 999 }, data: { projection: object } }], edges: [] })}
+      locationFrameInput={{ automatic: { hide_empty: false, containers: {} }, locations: [{ location_ref: ref, name: 'Rack', type: null, parent_location_ref: null }], placements: [{ physical_object_ref: object.source_refs[0], location_ref: ref, positions: {} }], states: [{ location_ref: ref, collapsed: false, visible_direct_elements: [], geometry: { x: -900, y: 2000, width: 1000, height: 1000, edge: 'left', offset: .25 } }], onGeometry: save }} />);
+    await screen.findByRole('button', { name: 'PP1' });
+    expect(screen.getByTestId('position-PP1')).toHaveTextContent('40,88');
+    const heading = globalThis.document.querySelector('.location-frame__heading') as HTMLElement;
+    fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(heading, { clientX: 100, clientY: 50 });
+    fireEvent.pointerUp(heading);
+    expect(screen.queryByText('Сохранить')).not.toBeInTheDocument();
+    expect(screen.getByTestId('position-PP1')).toHaveTextContent('40,88');
+    expect(save).not.toHaveBeenCalled();
+  });
   it('uses one container gesture with equipment preview and explicit Save/Cancel', async () => {
     const ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'U42' };
     const object: TopologyProjectionNode = { id: 'PP1', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'PP1' }], attributes: {} };

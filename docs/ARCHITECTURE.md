@@ -399,3 +399,23 @@ continuity не синтезируется, автоматической кор�
 topology implicit workspace. Общие библиотеки не означают общую topology карт.
 MapPresentationVariant остаётся компоновкой одной сети. NetworkWorkspace отвечает
 за application isolation/права, не отменяя map ownership. Schema/FK/API не выбраны.
+
+### AUTO-LOC-01 — automatic Location composition
+
+L1 Physical variants explicitly opt into `automatic_layout` (nullable JSONB on
+MapPresentationVariant). Null retains the existing manual contract and data.
+Settings contain `hide_empty` and per-container direction plus an ordered mixed
+sequence of `Location:<id>` / `PhysicalObject:<id>`. `root` is a technical
+presentation container, never a canonical Location. Missing entries default to
+VERTICAL; unspecified/new children follow immutable-ID order. Copying a variant
+copies settings, collapse and routes independently.
+
+The frontend measures full rendered equipment footprints including nameplates,
+then composes frames bottom-up and places contents top-down with header/padding.
+Manual x/y/frame sizes are not automatic position inputs. Empty subtree detection
+uses current SavedMap placements; hiding removes its entire space. Full collapse
+uses a compact rectangle; partial-collapse visibility semantics remain unchanged.
+Boundary identity stays map/Location UUIDv5; edge/offset anchors resolve against
+current displayed frames. Routes remain variant-owned. Drag/resize/free movement
+are disabled in automatic mode; server rejects explicit geometry/position writes.
+Canonical assignment and connectivity remain independent of presentation.

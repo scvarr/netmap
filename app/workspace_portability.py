@@ -83,7 +83,7 @@ ENTITIES = (
     ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id module_revision_id bay_key orientation layout"),
     ("authoring", "ModuleEndpointMapping", "ModuleEndpointMapping", "id installation_id definition_id connection_point_id network_interface_id"),
     ("presentation", "SavedMap", "SavedMap", "id name created_at updated_at"),
-    ("presentation", "MapPresentationVariant", "MapPresentationVariant", "id map_id name"),
+    ("presentation", "MapPresentationVariant", "MapPresentationVariant", "id map_id name automatic_layout"),
     ("presentation", "MapPlacement", "MapPlacement", "id map_id physical_object_id"),
     ("presentation", "MapViewPosition", "MapViewPosition", "id placement_id variant_id view_key x y locked display_width"),
     ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements geometry manual_bounds"),
@@ -197,6 +197,9 @@ def validate_package(package: object) -> dict:
                 record = {"x": None, "y": None, "width": None, "height": None, **record}
             if isinstance(record, dict):
                 record = dict(record)
+                if name == "MapPresentationVariant":
+                    # Historical workspace snapshots preserve manual variants.
+                    record.setdefault("automatic_layout", None)
                 if name == "BuiltInEndpointDefinition":
                     record.setdefault("cardinality", 1)
                 elif name == "BaseInternalLink":

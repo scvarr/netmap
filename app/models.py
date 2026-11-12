@@ -117,6 +117,7 @@ class MapPresentationVariant(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    automatic_layout: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     saved_map: Mapped[SavedMap] = relationship(back_populates="presentation_variants")
     positions: Mapped[list["MapViewPosition"]] = relationship(back_populates="variant", passive_deletes=True)
     cable_routes: Mapped[list["MapCableRoute"]] = relationship(back_populates="variant", passive_deletes=True)

@@ -145,7 +145,7 @@ C-UX-16 не входит в C-UX-11 и не переоткрывает его. 
 
 ## C-UX-10 — Automatic Location Cable Channels
 
-C-UX-10-01 foundation реализован в milestone-ветке, ожидает внешней инспекции:
+C-UX-10-01 foundation объединён в main:
 самостоятельные прямоугольные frames всех canonical Locations на каждой карте
 со spatial вложением по canonical parent, единым переносом контейнера с
 оборудованием/routes и ростом предков; назначение Location согласует существующие
@@ -453,3 +453,7 @@ NetworkWorkspace. MapReference не даёт межкартовых canonical с
 Отдельный bounded map isolation milestone предшествует включению demo.
 MPO→LC breakout, PON splitter, SAS shelves и duplex fiber/interface realization
 остаются OPEN. C-CAP-01 OPEN Phase D; 02/03/04 не закрыты; gates A–I неизменны.
+
+AUTO-LOC-01 adds opt-in automatic composition of these frames per variant.
+Technical root, direction, mixed order and hide-empty settings are presentation
+only; they neither introduce Channel nor change the C-UX-10 channel target.

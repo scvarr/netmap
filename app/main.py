@@ -1,10 +1,10 @@
-from app.schemas import SaveModuleLayoutRequest
+from app.schemas import SaveModuleLayoutRequest, AutomaticLocationLayout
 import logging
 import json
 import uuid
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from sqlalchemy import text
@@ -218,7 +218,7 @@ def _saved_map_document(detail) -> dict[str, object]:
         "created_at": saved_map.created_at,
         "updated_at": saved_map.updated_at,
         "active_variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": detail.variant.id},
-        "variants": [{"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id}, "name": variant.name} for variant in detail.variants],
+        "variants": [{"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id}, "name": variant.name, "automatic_layout": variant.automatic_layout} for variant in detail.variants],
         "location_states": [{
             "location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id},
             "geometry": state.geometry,
@@ -517,6 +517,14 @@ def get_map_location_direct_elements(map_id: uuid.UUID, variant_id: uuid.UUID, l
     return SavedMapCatalog(session).direct_location_elements(map_id, variant_id, location_id)
 
 
+@app.put("/v1/maps/{map_id}/presentation-variants/{variant_id}/automatic-layout", response_model=SavedMapDocument)
+def set_automatic_location_layout(map_id: uuid.UUID, variant_id: uuid.UUID, query: AutomaticLocationLayout | None = Body(default=None), session: Session = Depends(get_session)):
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog.set_automatic_layout(map_id, variant_id, query.model_dump() if query else None)
+        return _saved_map_document(catalog.detail(map_id, variant_id))
+
+
 @app.post("/v1/maps/{map_id}/presentation-variants", response_model=MapPresentationVariantDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
 def create_map_presentation_variant(map_id: uuid.UUID, query: CreateMapPresentationVariantRequest, session: Session = Depends(get_session)) -> MapPresentationVariantDocument:
     with session.begin():
@@ -524,6 +532,7 @@ def create_map_presentation_variant(map_id: uuid.UUID, query: CreateMapPresentat
         return {
             "variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id},
             "name": variant.name,
+            "automatic_layout": variant.automatic_layout,
         }
 
 

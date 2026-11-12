@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass
 from math import isclose
 
@@ -66,7 +67,7 @@ class SavedMapCatalog:
     def create_variant(self, map_id: uuid.UUID, name: str, source_variant_id: uuid.UUID) -> MapPresentationVariant:
         self._require_map(map_id)
         source = self._require_variant(map_id, source_variant_id)
-        variant = MapPresentationVariant(map_id=map_id, name=name)
+        variant = MapPresentationVariant(map_id=map_id, name=name, automatic_layout=deepcopy(source.automatic_layout))
         self.session.add(variant)
         self._flush()
         source_positions = self.session.scalars(select(MapViewPosition).join(MapPlacement).where(
@@ -90,6 +91,25 @@ class SavedMapCatalog:
         ) for state in self._location_states(source.id))
         self._flush()
         return variant
+
+    def set_automatic_layout(self, map_id, variant_id, settings):
+        locations, variant = self._lock_physical_layout(map_id, variant_id)
+        if settings is not None:
+            parents = {str(location.id): str(location.parent_location_id) if location.parent_location_id else "root" for location in locations}
+            assignments = {str(key): str(parent) if parent else "root" for key, parent in self.session.execute(
+                select(PhysicalObject.id, PhysicalObject.location_id).join(MapPlacement, MapPlacement.physical_object_id == PhysicalObject.id).where(MapPlacement.map_id == map_id))}
+            for container, entry in settings["containers"].items():
+                if container != "root" and container not in parents:
+                    raise ValidationError("Unknown layout container")
+                order = entry["order"]
+                if len(order) != len(set(order)):
+                    raise ValidationError("Duplicate layout element")
+                for key in order:
+                    kind, _, identity = key.partition(":")
+                    if (parents if kind == "Location" else assignments if kind == "PhysicalObject" else {}).get(identity) != container:
+                        raise ValidationError("Layout element is not a direct child")
+        variant.automatic_layout = deepcopy(settings)
+        self._flush()
 
     def set_location_state(self, map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID, collapsed: bool, refs: list[dict[str, str]]) -> MapLocationState:
         self._require_map(map_id)
@@ -133,7 +153,9 @@ class SavedMapCatalog:
         from app.schemas import MapLocationGeometry
         geometry = MapLocationGeometry.model_validate(geometry).model_dump()
         self._require_map(map_id)
-        locations, _ = self._lock_physical_layout(map_id, variant_id)
+        locations, variant = self._lock_physical_layout(map_id, variant_id)
+        if variant.automatic_layout is not None:
+            raise ValidationError("Automatic layout geometry cannot be edited")
         parents = {loc.id: loc.parent_location_id for loc in locations}
         if location_id not in parents:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
@@ -260,6 +282,8 @@ class SavedMapCatalog:
         for target_map, target_variant in targets:
             self._require_variant(target_map, target_variant, lock=True)
         for target_map, target_variant in targets:
+            if self._require_variant(target_map, target_variant).automatic_layout is not None:
+                continue
             parents = {location.id: location.parent_location_id for location in locations}
             states = self._location_states(target_variant)
             frames = {state.location_id: dict(state.geometry) for state in states}
@@ -318,6 +342,8 @@ class SavedMapCatalog:
             .where(MapLocationState.geometry.is_not(None)).distinct().order_by(MapPresentationVariant.id)).all()
         for variant in variants:
             self.session.scalar(select(MapPresentationVariant).where(MapPresentationVariant.id == variant.id).with_for_update())
+            if variant.automatic_layout is not None:
+                continue
             states = self._location_states(variant.id)
             frames = {state.location_id: dict(state.geometry) for state in states}
             saved = {state.location_id: state.geometry for state in self.session.scalars(
@@ -427,6 +453,8 @@ class SavedMapCatalog:
             raise ValidationError("display_width is supported only by the physical map view", {"view_key": str(view_key)})
         if view_key == MapViewKey.PHYSICAL:
             _, variant = self._lock_physical_layout(map_id, variant_id)
+            if variant.automatic_layout is not None:
+                raise ValidationError("Automatic layout positions cannot be edited")
         else:
             variant = self._require_variant(map_id, variant_id)
         placement = self.session.scalar(select(MapPlacement).where(
@@ -518,7 +546,9 @@ class SavedMapCatalog:
         footprints: list[dict[str, object]], boundary_routes: list[dict[str, object]],
     ) -> None:
         """Move one canonical Location subtree within one physical presentation variant."""
-        self._lock_physical_layout(map_id, variant_id)
+        _, variant = self._lock_physical_layout(map_id, variant_id)
+        if variant.automatic_layout is not None:
+            raise ValidationError("Automatic layout geometry cannot be edited")
         if self.session.get(Location, location_id) is None:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
         subtree = select(Location.id).where(Location.id == location_id).cte("moving_locations", recursive=True)

@@ -253,10 +253,23 @@ class MapCableRouteDocument(BaseModel):
     waypoints: list[MapCableRouteWaypoint]
 
 
+class AutomaticLocationLayoutEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    direction: Literal["HORIZONTAL", "VERTICAL"] = "VERTICAL"
+    order: list[str] = Field(default_factory=list)
+
+
+class AutomaticLocationLayout(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    hide_empty: bool = False
+    containers: dict[str, AutomaticLocationLayoutEntry] = Field(default_factory=dict)
+
+
 class MapPresentationVariantDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
     variant_ref: MapPresentationVariantRef
     name: str
+    automatic_layout: AutomaticLocationLayout | None = None
 
 
 class MapLocationDirectElementRef(BaseModel):

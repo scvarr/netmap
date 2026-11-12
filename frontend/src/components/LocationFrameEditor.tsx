@@ -6,15 +6,15 @@ import { FRAME_HEADER, FRAME_PADDING } from '../topology/locationFrameGeometry';
 import type { FlowRectangle } from '../topology/nodeFootprint';
 import { useI18n } from '../i18n';
 
-export function LocationFrameEditor({ frame, state, screenToFlowPosition, onSave, actions, parentBounds, childBounds = [], onDraft, disabled, uiScale = 1 }: {
-  uiScale?: number;
+export function LocationFrameEditor({ automatic, frame, state, screenToFlowPosition, onSave, actions, parentBounds, childBounds = [], onDraft, disabled, uiScale = 1 }: {
+  automatic?: boolean; uiScale?: number;
   parentBounds?: FlowRectangle; childBounds?: readonly FlowRectangle[]; onDraft?: (geometry: MapLocationGeometry | null) => void; disabled?: boolean;
   frame: LocationFrame; state?: MapLocationState;
   screenToFlowPosition: (p: { x: number; y: number }) => { x: number; y: number };
   onSave?: (id: string, geometry: MapLocationGeometry) => Promise<void>; actions: ReactNode;
 }) {
   const { t } = useI18n();
-  const initial = state?.geometry ?? { ...frame.bounds, edge: 'right' as const, offset: .5 };
+  const initial = (automatic ? { ...frame.bounds, edge: state?.geometry?.edge ?? 'right', offset: state?.geometry?.offset ?? .5 } : state?.geometry) ?? { ...frame.bounds, edge: 'right' as const, offset: .5 };
   const [draft, setDraft] = useState<MapLocationGeometry | null>(null);
   const [selected, select] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -23,7 +23,7 @@ export function LocationFrameEditor({ frame, state, screenToFlowPosition, onSave
   const geometry = draft ?? initial;
   const point = resolveBoundaryWaypoint({ x: 0, y: 0, anchor: { location_id: frame.locationId, edge: geometry.edge, offset: geometry.offset } }, [{ locationId: frame.locationId, bounds: geometry }]);
   const start = (event: PointerEvent<HTMLElement>, mode: 'move' | 'resize' | 'point') => {
-    if (busy) return;
+    if (busy || automatic) return;
     event.stopPropagation(); event.preventDefault(); select(true);
     const p = screenToFlowPosition({ x: event.clientX, y: event.clientY });
     setDrag({ mode, ...p, geometry }); event.currentTarget.setPointerCapture(event.pointerId);
@@ -58,7 +58,7 @@ export function LocationFrameEditor({ frame, state, screenToFlowPosition, onSave
       <span onPointerDown={e => e.stopPropagation()}>{actions}</span>
     </span>
     <button type="button" className="location-boundary-point nodrag nopan" aria-label={t('map.boundaryPoint')} data-boundary-point-id={state?.boundary_point_id} style={{ left: point.x - geometry.x, top: point.y - geometry.y, transform: 'translate(-50%, -50%) scale(' + uiScale + ')' }} onPointerDown={e => start(e, 'point')} {...handlers} />
-    {selected && <>
+    {selected && !automatic && <>
       <button type="button" style={{ transform: "scale(" + uiScale + ")", transformOrigin: "center" }} className="location-action location-frame__resize nodrag nopan" aria-label={t('map.resizeLocation')} onPointerDown={e => start(e, 'resize')} {...handlers}>↘</button>
       <span style={{ transform: "scale(" + uiScale + ")", transformOrigin: "left top" }} className="location-frame__save nodrag nopan">
         <button type="button" className="location-action location-frame__command" disabled={busy || !draft || !onSave} onClick={async () => { setBusy(true); setError(''); try { await onSave?.(frame.locationId, geometry); setDraft(null); onDraft?.(null); select(false); } catch (e) { setError(String(e)); } finally { setBusy(false); } }}>{t('map.saveLocation')}</button>

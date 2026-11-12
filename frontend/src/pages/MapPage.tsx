@@ -1,3 +1,4 @@
+import { AutomaticLocationControls } from '../components/AutomaticLocationControls';
 import { RuntimePortTypes } from '../components/RuntimePortTypes';
 import { ReactFlowProvider, type XYPosition } from "@xyflow/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -1747,6 +1748,7 @@ function MapPageContent({
             </button>
             {utilitySection === "layout" && <div className="map-utility-panel__content">
               <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => { mapDetailRequest.current += 1; setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); next.delete("focus"); return next; }); }} />
+              {activeMap && locations && savedMapDataSource?.setAutomaticLayout && <AutomaticLocationControls key={activeMap.active_variant_ref.entity_id} map={activeMap} locations={locations} objectLabels={new Map((document?.nodes ?? []).flatMap(n => { const id = physicalObjectIdForNode(n); return id ? [[id, n.label] as const] : []; }))} onSave={async settings => { const updated = await savedMapDataSource.setAutomaticLayout!(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, settings); setMap(current => current?.map_ref.entity_id === updated.map_ref.entity_id && current.active_variant_ref.entity_id === updated.active_variant_ref.entity_id ? updated : current); }} />}
               <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
             </div>}
           </section>
@@ -2013,7 +2015,7 @@ function MapPageContent({
                   positionSnapshot={activeMap?.placements}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}
                   locationFrameInput={!legacy && viewMode === "physical" && activeMap && locations
-                    ? { variantId: activeMap.active_variant_ref.entity_id, onGeometry: async (locationId, geometry) => { const updated = await savedMapDataSource!.setLocationGeometry!(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, locationId, geometry); setMap(current => current?.map_ref.entity_id === updated.map_ref.entity_id && current.active_variant_ref.entity_id === updated.active_variant_ref.entity_id ? updated : current); }, locations, placements: activeMap.placements, states: activeMap.location_states ?? [], onCollapse: (locationId, collapsed) => { const state = locationStateFor(locationId); void writeLocationState(locationId, collapsed, state?.visible_direct_elements ?? []); }, onConfigure: openLocationConfig }
+                    ? { automatic: activeVariant?.automatic_layout, variantId: activeMap.active_variant_ref.entity_id, onGeometry: async (locationId, geometry) => { const updated = await savedMapDataSource!.setLocationGeometry!(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, locationId, geometry); setMap(current => current?.map_ref.entity_id === updated.map_ref.entity_id && current.active_variant_ref.entity_id === updated.active_variant_ref.entity_id ? updated : current); }, locations, placements: activeMap.placements, states: activeMap.location_states ?? [], onCollapse: (locationId, collapsed) => { const state = locationStateFor(locationId); void writeLocationState(locationId, collapsed, state?.visible_direct_elements ?? []); }, onConfigure: openLocationConfig }
                     : undefined}
                   directlyAttachedCableIds={directlyAttachedCables}
                   draggableNodeIds={!legacy ? draggableNodeIds : undefined}

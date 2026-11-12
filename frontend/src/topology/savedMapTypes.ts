@@ -3,7 +3,8 @@ import type { LocationRef } from './locationTypes';
 
 export interface SavedMapRef { entity_type: 'SavedMap'; entity_id: string }
 export interface MapPresentationVariantRef { entity_type: 'MapPresentationVariant'; entity_id: string }
-export interface MapPresentationVariant { variant_ref: MapPresentationVariantRef; name: string }
+export interface AutomaticLocationLayout { hide_empty: boolean; containers: Record<string, { direction: 'HORIZONTAL' | 'VERTICAL'; order: string[] }> }
+export interface MapPresentationVariant { automatic_layout?: AutomaticLocationLayout | null; variant_ref: MapPresentationVariantRef; name: string }
 export type SavedMapView = 'physical' | 'logical';
 export type SavedMapViewKey = 'L1/PHYSICAL_OBJECT' | 'L2/DEVICE';
 export interface MapViewPosition { x: number; y: number; locked: boolean; display_width?: number }
@@ -29,6 +30,7 @@ export interface MapLocationDirectElementChoice { ref: MapLocationDirectElementR
 export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; active_variant_ref: MapPresentationVariantRef; variants: MapPresentationVariant[]; location_states?: MapLocationState[]; placements: MapPlacement[]; cable_routes: MapCableRoute[]; text_annotations: MapTextAnnotation[] }
 export interface SavedMapSummary { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string }
 export interface SavedMapDataSource {
+  setAutomaticLayout?(mapId: string, variantId: string, settings: AutomaticLocationLayout | null): Promise<SavedMap>;
   listMaps(): Promise<SavedMapSummary[]>;
   createMap(name: string): Promise<SavedMap>;
   deleteMap(mapId: string): Promise<void>;

@@ -951,3 +951,9 @@ a { color: inherit; }
 .location-proxy { position: relative; }
 .location-proxy-anchor { width: 1px; height: 1px; visibility: hidden; pointer-events: none; }
 .location-boundary-point--compact { pointer-events: none; }
+
+.automatic-location-controls { display: grid; gap: 7px; min-width: 0; margin: 0; padding: 7px 0; border: 0; }
+.automatic-location-controls label { display: flex; gap: 6px; align-items: center; font-size: 11px; }
+
+.automatic-location-controls__row { display: flex; align-items: center; gap: 7px; font-size: 11px; }
+.automatic-location-controls__row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }

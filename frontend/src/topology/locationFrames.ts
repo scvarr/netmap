@@ -1,3 +1,5 @@
+import { automaticLocationLayout } from './automaticLocationLayout';
+import type { AutomaticLocationLayout } from './savedMapTypes';
 import { layoutLocationFrames } from './locationFrameGeometry';
 import type { LocationDocument } from './locationTypes';
 import type { MapLocationState, MapPlacement } from './savedMapTypes';
@@ -28,6 +30,7 @@ export interface ObjectLocationPath {
 }
 
 export interface LocationPresentation {
+  automaticPositions?: Map<string, FlowRectangle>;
   frames: LocationFrame[];
   objectPaths: ObjectLocationPath[];
   proxies: LocationProxy[];
@@ -53,7 +56,20 @@ export function deriveLocationPresentation(
   placements: readonly MapPlacement[],
   displayedObjects: readonly DisplayedPhysicalObject[],
   states: readonly MapLocationState[] = [],
+  automatic?: AutomaticLocationLayout | null,
 ): LocationPresentation {
+  if (automatic) {
+    const layout = automaticLocationLayout(locations, placements, displayedObjects, states, automatic);
+    const result = deriveLocationPresentation(locations.filter(l => !layout.hidden.has(l.location_ref.entity_id)), placements,
+      displayedObjects.map(o => ({ ...o, rectangle: layout.positions.get(o.physicalObjectId) ?? o.rectangle })),
+      locations.map(l => { const state = states.find(s => s.location_ref.entity_id === l.location_ref.entity_id); return {
+        location_ref: l.location_ref, collapsed: state?.collapsed ?? false, visible_direct_elements: state?.visible_direct_elements ?? [],
+        geometry: { ...(layout.frames.get(l.location_ref.entity_id) ?? { x: 0, y: 0, width: 100, height: 64 }), edge: state?.geometry?.edge ?? 'right', offset: state?.geometry?.offset ?? .5 },
+      }; }));
+    result.frames = result.frames.map(f => ({ ...f, bounds: layout.frames.get(f.locationId)! }));
+    result.proxies = result.proxies.map(p => { const b = layout.frames.get(p.locationId)!; return { ...p, bounds: p.partial ? { x: b.x + b.width, y: b.y + b.height / 2, width: 1, height: 1 } : b }; });
+    return { ...result, automaticPositions: layout.positions };
+  }
   const byId = new Map(locations.map((location) => [location.location_ref.entity_id, location]));
   const children = new Map<string, string[]>();
   for (const location of locations) {
