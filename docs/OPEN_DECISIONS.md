@@ -329,3 +329,17 @@ UX preview/editing и контракт группового результата
 Контракт хранения и границы: [ARCHITECTURE](ARCHITECTURE.md#c-cap-01-01--definitions-и-materialization).
 Графический multichannel edit/copy блокируется без потери данных; API доступен.
 C-CAP-01 остаётся **OPEN Phase D**; C-CAP-01-02/03/04 не реализованы.
+
+## L1-REFERENCE-01 — DECIDED TARGET / implementation OPEN
+
+[Полный контракт](L1_REFERENCE_NETWORK.md): независимые карты, CableType,
+переносимые определения и demo initialization приняты, но не реализованы.
+Уточнение прежнего workspace direction: CURRENT SavedMap — presentation над общей
+topology; TARGET карта владеет независимой сетью внутри application isolation
+NetworkWorkspace. MapReference не даёт межкартовых canonical соединений.
+Открыты DB schema/FK transition/API map isolation, JSON/versioning и UX импорта,
+сопоставление конфликтующих типов, controlled transition исторических Cable,
+защита используемой конструкции CableType и безопасная initialization/conflict policy.
+Отдельный bounded map isolation milestone предшествует включению demo.
+MPO→LC breakout, PON splitter, SAS shelves и duplex fiber/interface realization
+остаются OPEN. C-CAP-01 OPEN Phase D; 02/03/04 не закрыты; gates A–I неизменны.

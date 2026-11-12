@@ -304,3 +304,12 @@ C-CAP-01-01 corrective: `draft/check` сравнивает physical structure с
 отсутствующих полях cardinality/mappings старого 1:1 формата. Links не удаляются,
 continuity не синтезируется, автоматической коррекции и splitter support нет.
 Корректные исторические 1:1 definitions остаются поддержаны. C-CAP-01 — OPEN Phase D.
+
+## L1-REFERENCE-01 — DECIDED TARGET
+
+[Reference Network & Portability Contracts](L1_REFERENCE_NETWORK.md) закрепляет
+независимые карты, переносимые определения, CableType и безопасную demo initialization.
+Это TARGET, не IMPLEMENTED: текущий SavedMap остаётся presentation scope общей
+topology implicit workspace. Общие библиотеки не означают общую topology карт.
+MapPresentationVariant остаётся компоновкой одной сети. NetworkWorkspace отвечает
+за application isolation/права, не отменяя map ownership. Schema/FK/API не выбраны.

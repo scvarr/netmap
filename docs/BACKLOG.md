@@ -233,3 +233,13 @@ contract; её готовность не выводится из BaseTemplate и
 Контракт хранения и границы: [ARCHITECTURE](ARCHITECTURE.md#c-cap-01-01--definitions-и-materialization).
 Графический multichannel edit/copy блокируется без потери данных; API доступен.
 C-CAP-01 остаётся **OPEN Phase D**; C-CAP-01-02/03/04 не реализованы.
+
+## L1-REFERENCE-01 — принятый target, будущая реализация
+
+[Контракт и синтетический стенд](L1_REFERENCE_NETWORK.md): независимые карты,
+CableType, переносимые файлы определений и demo initialization — DECIDED TARGET,
+не IMPLEMENTED. Map isolation требует отдельного bounded milestone до demo loader.
+Portability требует собственного implementation contract отдельно от workspace v7.
+C-CAP-01 остаётся OPEN Phase D; C-CAP-01-02/03/04 не закрыты; Phase A–I без изменений.
+CAT-D: CableType как пользовательский справочник принят; состав технических полей
+и реализация остаются OPEN, остальные классификации этим решением не утверждены.
