@@ -3,6 +3,12 @@ import type { AutomaticLocationLayout, MapLocationState, MapPlacement } from './
 import type { DisplayedPhysicalObject } from './locationFrames';
 import type { FlowRectangle } from './nodeFootprint';
 
+// Flow units: clearance for border headings/cable leads, and sequence gaps.
+const CLEARANCE = 12;
+const HEADING_CLEARANCE = 24;
+const HORIZONTAL_GAP = 20;
+const MIN_HEIGHT = 32;
+
 /** Technical root is presentation only. Identity and canonical parents are inputs. */
 export function automaticLocationLayout(locations: readonly LocationDocument[], placements: readonly MapPlacement[], objects: readonly DisplayedPhysicalObject[], states: readonly MapLocationState[], settings: AutomaticLocationLayout) {
   const byId = new Map(locations.map(l => [l.location_ref.entity_id, l]));
@@ -35,7 +41,7 @@ export function automaticLocationLayout(locations: readonly LocationDocument[], 
       const ai = order.indexOf(a), bi = order.indexOf(b);
       return (ai < 0 ? Infinity : ai) - (bi < 0 ? Infinity : bi) || a.localeCompare(b);
     });
-    let cursor = 20, cross = 0;
+    let cursor = config?.direction === 'HORIZONTAL' ? CLEARANCE : HEADING_CLEARANCE, cross = 0;
     const horizontal = config?.direction === 'HORIZONTAL';
     const included: Array<[string, FlowRectangle]> = [];
     for (const key of keys) {
@@ -45,12 +51,18 @@ export function automaticLocationLayout(locations: readonly LocationDocument[], 
       if (location && settings.hide_empty && !count(child)) { hidden.add(child); continue; }
       if (state?.collapsed && !visible.has(key)) continue;
       const box = location ? measure(child) : { ...dimensions.get(child)!, x: 0, y: 0 };
-      const placed = { ...box, x: horizontal ? cursor : 20, y: horizontal ? 44 : cursor + 24 };
+      const placed = { ...box, x: horizontal ? cursor : CLEARANCE, y: horizontal ? HEADING_CLEARANCE : cursor };
       included.push([key, placed]);
-      cursor += (horizontal ? box.width : box.height) + 20;
+      cursor += (horizontal ? box.width : box.height) + (horizontal ? HORIZONTAL_GAP : CLEARANCE);
       cross = Math.max(cross, horizontal ? box.height : box.width);
     }
-    const box = { x: 0, y: 0, width: Math.max(minWidth, horizontal ? cursor : cross + 40), height: Math.max(64, horizontal ? cross + 64 : cursor + 24) };
+    // Only direct visible frames share a cross-axis size. Descendants retain
+    // their own independently measured groups; equipment is never stretched.
+    for (const [key, placed] of included) if (key.startsWith('Location:')) {
+      if (horizontal) placed.height = cross; else placed.width = cross;
+    }
+    const extent = included.length ? cursor - (horizontal ? HORIZONTAL_GAP : CLEARANCE) + CLEARANCE : 2 * CLEARANCE;
+    const box = { x: 0, y: 0, width: Math.max(minWidth, horizontal ? extent : cross + 2 * CLEARANCE), height: Math.max(MIN_HEIGHT, horizontal ? cross + HEADING_CLEARANCE + CLEARANCE : extent) };
     frames.set(id, box);
     // Child coordinates are relative until the final top-down pass.
     for (const [key, placed] of included) if (key.startsWith('Location:')) frames.set(key.slice(9), placed); else positions.set(key.slice(15), placed);

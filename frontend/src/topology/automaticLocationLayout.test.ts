@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { automaticLocationLayout } from './automaticLocationLayout';
+import { resolveBoundaryWaypoint } from './locationBoundaryAnchors';
 import { deriveLocationPresentation } from './locationFrames';
 import type { LocationDocument } from './locationTypes';
 import type { MapPlacement, MapLocationState, AutomaticLocationLayout } from './savedMapTypes';
@@ -28,7 +29,7 @@ describe('automatic Location composition', () => {
     const result = deriveLocationPresentation(locations,placements,objects,[],{ ...settings,hide_empty: true });
     expect(result.frames.map(f => f.locationId).sort()).toEqual(['building','floor','room']);
     const layout = automaticLocationLayout(locations,placements,objects,[],{ ...settings, hide_empty: true });
-    expect(layout.frames.get('root')!.height).toBe(layout.frames.get('building')!.height + 64);
+    expect(layout.frames.get('root')!.height).toBe(layout.frames.get('building')!.height + 36);
   });
   it('retains full and partial collapse semantics and expands deterministically', () => {
     const state: MapLocationState = { location_ref: loc('room').location_ref, collapsed: true, visible_direct_elements: [] };
@@ -41,4 +42,65 @@ describe('automatic Location composition', () => {
     expect(partial.proxies.find(p => p.locationId === 'room')?.partial).toBe(true);
     expect(automaticLocationLayout(locations,placements,objects,[],settings).positions.size).toBe(2);
   });
+});
+
+
+describe('compact cross-axis geometry', () => {
+  const tree = [loc('8'), loc('808','8'), loc('823','808'), loc('U42','823'), loc('U40','823')];
+  const equipment = [{ physicalObjectId: 'PP1', rectangle: { x: 900, y: 900, width: 240, height: 84 } }];
+  const members = [placement('PP1','U42')];
+  it.each(['VERTICAL', 'HORIZONTAL'] as const)('aligns direct frames in %s and preserves natural main-axis size', direction => {
+    const config = { ...settings, containers: { '823': { direction, order: ['Location:U42','Location:U40'] } } };
+    const result = automaticLocationLayout(tree, members, equipment, [], config);
+    const full = result.frames.get('U42')!, empty = result.frames.get('U40')!;
+    if (direction === 'VERTICAL') {
+      expect(empty.width).toBe(full.width);
+      expect(empty.height).toBe(32);
+      expect(full.height).toBe(120);
+    } else {
+      expect(empty.height).toBe(full.height);
+      expect(empty.width).toBe(100);
+      expect(full.width).toBe(264);
+      expect(empty.x - full.x - full.width).toBe(20);
+    }
+    expect(result.positions.get('PP1')).toMatchObject({ width: 240, height: 84 });
+    for (const [child, parent] of [['808','8'], ['823','808'], ['U42','823']]) {
+      const c = result.frames.get(child)!, p = result.frames.get(parent)!;
+      expect(c.x).toBeGreaterThanOrEqual(p.x + 12);
+      expect(c.y).toBeGreaterThanOrEqual(p.y + 24);
+      expect(c.x + c.width).toBeLessThanOrEqual(p.x + p.width - 12);
+      expect(c.y + c.height).toBeLessThanOrEqual(p.y + p.height - 12);
+    }
+    expect(automaticLocationLayout(tree, members, equipment, [], JSON.parse(JSON.stringify(config)))).toEqual(result);
+  });
+  it.each(['VERTICAL', 'HORIZONTAL'] as const)('includes equipment in the %s cross-axis maximum without stretching it', direction => {
+    const result = automaticLocationLayout([loc('p'),loc('c','p')], [placement('PP1','p')], equipment, [], { ...settings, containers: { p: { direction, order: [] } } });
+    expect(result.frames.get('c')![direction === 'VERTICAL' ? 'width' : 'height']).toBe(direction === 'VERTICAL' ? 240 : 84);
+    expect(result.positions.get('PP1')).toMatchObject({ width: 240, height: 84 });
+  });
+  it('reorders and hides empty frames without mutating variant inputs', () => {
+    const config: AutomaticLocationLayout = { hide_empty: true, containers: { '823': { direction: 'VERTICAL', order: ['Location:U40','Location:U42'] } } };
+    const before = JSON.stringify({ tree, members, equipment, config });
+    const hidden = automaticLocationLayout(tree, members, equipment, [], config);
+    expect(hidden.frames.has('U40')).toBe(false);
+    const shown = automaticLocationLayout(tree, members, equipment, [], { ...config, hide_empty: false });
+    expect(shown.frames.get('U40')!.y).toBeLessThan(shown.frames.get('U42')!.y);
+    expect(JSON.stringify({ tree, members, equipment, config })).toBe(before);
+  });
+});
+
+
+it('resolves route anchors against recomposed frames and preserves saved free geometry', () => {
+  const tree = [loc('p'), loc('c','p')];
+  const state: MapLocationState = { location_ref: loc('c').location_ref, boundary_point_id: 'stable-boundary', collapsed: false, visible_direct_elements: [], geometry: { x: 900, y: 800, width: 700, height: 600, edge: 'bottom', offset: .25 } };
+  const route = [{ x: 999, y: 888, anchor: { location_id: 'c', edge: 'bottom' as const, offset: .25 } }, { x: 321, y: 123 }];
+  const before = JSON.stringify({ state, route });
+  for (const direction of ['VERTICAL', 'HORIZONTAL'] as const) {
+    const presentation = deriveLocationPresentation(tree, [placement('a','p')], objects, [state], { ...settings, containers: { p: { direction, order: [] } } });
+    const frame = presentation.frames.find(f => f.locationId === 'c')!;
+    const resolved = route.map(w => resolveBoundaryWaypoint(w, presentation.frames));
+    expect(resolved[0]).toEqual({ x: frame.bounds.x + frame.bounds.width * .25, y: frame.bounds.y + frame.bounds.height, anchor: route[0].anchor });
+    expect(resolved[1]).toEqual(route[1]);
+  }
+  expect(JSON.stringify({ state, route })).toBe(before);
 });

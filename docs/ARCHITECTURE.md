@@ -419,3 +419,22 @@ Boundary identity stays map/Location UUIDv5; edge/offset anchors resolve against
 current displayed frames. Routes remain variant-owned. Drag/resize/free movement
 are disabled in automatic mode; server rejects explicit geometry/position writes.
 Canonical assignment and connectivity remain independent of presentation.
+
+### AUTO-LOC-02 — compact automatic geometry
+
+Automatic composition measures visible direct children bottom-up. VERTICAL
+aligns Location widths to the group's maximum required width; HORIZONTAL aligns
+Location heights to its maximum required height. Direct equipment participates
+in that maximum with its complete rendered footprint (including nameplate),
+but retains its own dimensions. Main-axis dimensions remain content-sized.
+Each nested group is measured independently, including full/partial collapse;
+hidden empty subtrees reserve no space. Empty frames have a 100-unit minimum
+width (increased for their label) and a 32-unit minimum height.
+
+Automatic-only spacing uses 12 flow units for side/bottom clearance and vertical
+sequence gaps, 24 above contents to separate border headings, and 20 between
+horizontal siblings, retaining the existing container interval. Frames alone
+stretch; contents are not scaled or distributed into spare space. Boundary
+identity, edge/offset and stored route/free waypoint data remain inputs;
+anchors resolve against the resulting frames. No settings, server contract,
+migrations or manual geometry change.
