@@ -130,6 +130,13 @@ Location и ownership variant до записи. Copy variant копирует �
 FK CASCADE удаляет presentation state при удалении variant/Location.
 Geometry PUT блокирует canonical hierarchy и variant, переносит ветвь рамок
 вместе со всеми существующими L1 placements её subtree (включая скрытые).
+Physical position/add, geometry и group move берут hierarchy `FOR SHARE`
+(Location ID order), затем свой variant `FOR UPDATE`, затем зависимые
+placements/positions, routes и frame state. Это не сериализует layout writes
+разных variants на hierarchy. Canonical assignment сохраняет hierarchy
+`FOR UPDATE` → PhysicalObject → все затронутые variants в UUID order →
+presentation rows. Hierarchy/variant locks получаются до position DML/flush;
+поздний повторный lock не заменяет предварительную блокировку.
 Существующий group-move core сохраняет внутренние free waypoints и внутренний
 prefix boundary route; внешний suffix не переносится. Обязательная точка
 Location и route anchors — разные presentation bindings.

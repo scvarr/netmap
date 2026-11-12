@@ -33,6 +33,17 @@ class SavedMapCatalog:
     def __init__(self, session: Session) -> None:
         self.session = session
 
+    def _lock_location_hierarchy(self):
+        # Presentation writers share the hierarchy; canonical tree/assignment
+        # writers take FOR UPDATE. Never first acquire this after position DML.
+        with self.session.no_autoflush:
+            return self.session.scalars(select(Location).order_by(Location.id)
+                .with_for_update(read=True).execution_options(populate_existing=True)).all()
+
+    def _lock_physical_layout(self, map_id, variant_id):
+        locations = self._lock_location_hierarchy()
+        return locations, self._require_variant(map_id, variant_id, lock=True)
+
     def create(self, name: str) -> SavedMap:
         if self.session.scalar(select(SavedMap.id).where(SavedMap.name == name)) is not None:
             raise ModelError("SavedMap name already exists", {"reason": "SAVED_MAP_NAME_CONFLICT", "name": name})
@@ -122,11 +133,7 @@ class SavedMapCatalog:
         from app.schemas import MapLocationGeometry
         geometry = MapLocationGeometry.model_validate(geometry).model_dump()
         self._require_map(map_id)
-        self._require_variant(map_id, variant_id)
-        # Lock canonical hierarchy before variants/positions, as assignment does.
-        locations = self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
-        self.session.scalar(select(MapPresentationVariant).where(
-            MapPresentationVariant.id == variant_id).with_for_update())
+        locations, _ = self._lock_physical_layout(map_id, variant_id)
         parents = {loc.id: loc.parent_location_id for loc in locations}
         if location_id not in parents:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
@@ -239,6 +246,7 @@ class SavedMapCatalog:
             record.manual_bounds = manual.get(state.location_id)
 
     def place_assigned_object(self, object_id, *, map_id=None, variant_id=None, relocate=True):
+        locations = self._lock_location_hierarchy()
         assignment = self.session.get(PhysicalObject, object_id).location_id
         if assignment is None:
             return
@@ -246,9 +254,12 @@ class SavedMapCatalog:
             MapPlacement.physical_object_id == object_id, MapViewPosition.view_key == MapViewKey.PHYSICAL)
         if map_id is not None:
             query = query.where(MapPlacement.map_id == map_id, MapViewPosition.variant_id == variant_id)
-        for target_map, target_variant in self.session.execute(query.order_by(MapViewPosition.variant_id)).all():
-            locations = self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
-            self.session.scalar(select(MapPresentationVariant).where(MapPresentationVariant.id == target_variant).with_for_update())
+        targets = self.session.execute(query.order_by(MapViewPosition.variant_id)).all()
+        # Assignment may affect several variants: acquire all variant locks in
+        # UUID order before touching any of their dependent presentation rows.
+        for target_map, target_variant in targets:
+            self._require_variant(target_map, target_variant, lock=True)
+        for target_map, target_variant in targets:
             parents = {location.id: location.parent_location_id for location in locations}
             states = self._location_states(target_variant)
             frames = {state.location_id: dict(state.geometry) for state in states}
@@ -389,6 +400,7 @@ class SavedMapCatalog:
         display_width: float | None = None, variant_id: uuid.UUID | None = None,
     ) -> MapPlacement:
         self._require_map(map_id)
+        _, variant = self._lock_physical_layout(map_id, variant_id)
         if self.session.get(PhysicalObject, physical_object_id) is None:
             raise ValidationError("PhysicalObject does not exist", {"physical_object_id": str(physical_object_id)})
         if self.session.scalar(select(MapPlacement.id).where(
@@ -399,7 +411,7 @@ class SavedMapCatalog:
             })
         placement = MapPlacement(map_id=map_id, physical_object_id=physical_object_id)
         placement.view_positions.append(MapViewPosition(
-            variant_id=self._require_variant(map_id, variant_id).id, view_key=MapViewKey.PHYSICAL, x=x, y=y, display_width=display_width
+            variant_id=variant.id, view_key=MapViewKey.PHYSICAL, x=x, y=y, display_width=display_width
         ))
         self.session.add(placement)
         self._flush()
@@ -413,7 +425,10 @@ class SavedMapCatalog:
     def set_view_position(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, x: float, y: float, display_width: float | None = None, variant_id: uuid.UUID | None = None) -> MapPlacement:
         if display_width is not None and view_key != MapViewKey.PHYSICAL:
             raise ValidationError("display_width is supported only by the physical map view", {"view_key": str(view_key)})
-        variant = self._require_variant(map_id, variant_id)
+        if view_key == MapViewKey.PHYSICAL:
+            _, variant = self._lock_physical_layout(map_id, variant_id)
+        else:
+            variant = self._require_variant(map_id, variant_id)
         placement = self.session.scalar(select(MapPlacement).where(
             MapPlacement.map_id == map_id, MapPlacement.physical_object_id == physical_object_id
         ).with_for_update())
@@ -503,8 +518,7 @@ class SavedMapCatalog:
         footprints: list[dict[str, object]], boundary_routes: list[dict[str, object]],
     ) -> None:
         """Move one canonical Location subtree within one physical presentation variant."""
-        self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
-        self._require_variant(map_id, variant_id)
+        self._lock_physical_layout(map_id, variant_id)
         if self.session.get(Location, location_id) is None:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
         subtree = select(Location.id).where(Location.id == location_id).cte("moving_locations", recursive=True)
@@ -652,9 +666,11 @@ class SavedMapCatalog:
     def _variants(self, map_id: uuid.UUID) -> tuple[MapPresentationVariant, ...]:
         return tuple(self.session.scalars(select(MapPresentationVariant).where(MapPresentationVariant.map_id == map_id).order_by(MapPresentationVariant.name, MapPresentationVariant.id)))
 
-    def _require_variant(self, map_id: uuid.UUID, variant_id: uuid.UUID | None) -> MapPresentationVariant:
+    def _require_variant(self, map_id: uuid.UUID, variant_id: uuid.UUID | None, *, lock: bool = False) -> MapPresentationVariant:
         query = select(MapPresentationVariant).where(MapPresentationVariant.map_id == map_id)
         query = query.where(MapPresentationVariant.name == "Основной") if variant_id is None else query.where(MapPresentationVariant.id == variant_id)
+        if lock:
+            query = query.with_for_update()
         variant = self.session.scalar(query)
         if variant is None: raise ValidationError("MapPresentationVariant does not exist on SavedMap", {"map_id": str(map_id), "variant_id": str(variant_id) if variant_id else None})
         return variant
