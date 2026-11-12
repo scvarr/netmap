@@ -28,3 +28,25 @@ it('edits only frame presentation and saves explicitly, preserving point identit
   await waitFor(() => expect(save).toHaveBeenCalledWith('room', { x: 50, y: 30, width: 380, height: 240, edge: 'bottom', offset: .5 }));
   vi.unstubAllGlobals();
 });
+
+it('clamps child moves and parent resize to preserve padded containment', () => {
+  vi.stubGlobal('PointerEvent', MouseEvent);
+  HTMLElement.prototype.setPointerCapture = vi.fn();
+  const geometry = { x: 20, y: 40, width: 400, height: 300, edge: 'right' as const, offset: .5 };
+  const { container } = render(<LocationFrameEditor frame={{ locationId: 'room', parentLocationId: 'root', pathLocationIds: ['room'], label: 'Room', depth: 1, bounds: geometry }}
+    parentBounds={{ x: 0, y: 0, width: 500, height: 400 }}
+    childBounds={[{ x: 40, y: 80, width: 300, height: 200 }]}
+    screenToFlowPosition={p => p} actions={null} />);
+  const heading = container.querySelector('.location-frame__heading')!;
+  fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
+  fireEvent.pointerMove(heading, { clientX: -1000, clientY: -1000 });
+  fireEvent.pointerUp(heading);
+  const frame = container.querySelector('.location-frame') as HTMLElement;
+  expect(frame.style.left).toBe('20px'); expect(frame.style.top).toBe('40px');
+  const resize = screen.getByLabelText('map.resizeLocation');
+  fireEvent.pointerDown(resize, { clientX: 0, clientY: 0 });
+  fireEvent.pointerMove(resize, { clientX: -1000, clientY: -1000 });
+  fireEvent.pointerUp(resize);
+  expect(frame.style.width).toBe('340px'); expect(frame.style.height).toBe('260px');
+  vi.unstubAllGlobals();
+});

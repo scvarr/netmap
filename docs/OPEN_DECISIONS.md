@@ -146,7 +146,8 @@ C-UX-16 не входит в C-UX-11 и не переоткрывает его. 
 ## C-UX-10 — Automatic Location Cable Channels
 
 C-UX-10-01 foundation реализован в milestone-ветке, ожидает внешней инспекции:
-самостоятельные прямоугольные frames всех canonical Locations на каждой карте,
+самостоятельные прямоугольные frames всех canonical Locations на каждой карте
+со spatial вложением по canonical parent (corrective),
 variant geometry и одна обязательная map-scoped виртуальная точка, Save/Cancel,
 перемещение/resize и копирование variant. Геометрия не меняет topology/hierarchy.
 C-UX-10 остаётся OPEN: Channels, составные Cable routes, comb и новый collapse

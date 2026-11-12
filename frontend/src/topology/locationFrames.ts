@@ -1,3 +1,4 @@
+import { layoutLocationFrames } from './locationFrameGeometry';
 import type { LocationDocument } from './locationTypes';
 import type { MapLocationState, MapPlacement } from './savedMapTypes';
 import type { FlowRectangle } from './nodeFootprint';
@@ -87,6 +88,7 @@ export function deriveLocationPresentation(
   const proxies = new Map<string, LocationProxy>();
   const hiddenObjectProxy = new Map<string, string>();
   const stateById = new Map(states.map((state) => [state.location_ref.entity_id, state]));
+  const geometryById = layoutLocationFrames(locations, new Map(states.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : [])));
   const subtreeObjects = new Map<string, DisplayedPhysicalObject[]>();
   const collect = (id: string, visiting = new Set<string>()): DisplayedPhysicalObject[] => {
     const cached = subtreeObjects.get(id);
@@ -125,9 +127,7 @@ export function deriveLocationPresentation(
       hidden.forEach((object) => hiddenObjectProxy.set(object.physicalObjectId, id));
     }
 
-    const geometry = state?.geometry;
-    const numericId = Number.parseInt(id.replaceAll('-', '').slice(-6), 16) || 0;
-    const bounds = geometry ?? { x: numericId % 16 * 360, y: (numericId >> 8) % 16 * 260, width: 300, height: 200 };
+    const bounds = geometryById.get(id)!;
     const path: string[] = [id];
     let parent = location.parent_location_ref?.entity_id;
     while (parent && byId.has(parent) && !path.includes(parent)) {

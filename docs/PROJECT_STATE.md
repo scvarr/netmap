@@ -32,7 +32,9 @@
   C-UX-10-01 foundation (branch, external inspection pending): самостоятельные
   прямоугольные Location frames, включая пустые/unary, и одна обязательная
   виртуальная точка (map/Location UUIDv5); variant geometry с явным Save/Cancel,
-  drag/resize, копированием и восстановлением. Canonical path labels,
+  drag/resize, копированием и восстановлением. Corrective: иерархическое начальное
+  размещение пустых рамок, вложение по canonical parent, атомарный перенос всей
+  ветви рамок без оборудования и ограничения resize/drag. Canonical path labels,
   recursive collapse прежней модели, выбор видимых
   непосредственных элементов, group move с collision rejection и route transform.
 - Редактор кабельного маршрута: transient draft, Save/Cancel, добавление,

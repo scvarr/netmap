@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.device_catalog import DeviceCatalog
+from app.location_frame_geometry import layout_location_frames, contains
 from app.location_boundary_anchors import normalize_boundary_route
 from app.models import Cable, Connection, ConnectionPoint, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
@@ -73,7 +74,7 @@ class SavedMapCatalog:
         ) for route in source_routes)
         self.session.add_all(MapLocationState(
             variant_id=variant.id, location_id=state.location_id, collapsed=state.collapsed,
-            geometry=dict(state.geometry or self.default_geometry(state.location_id)),
+            geometry=dict(state.geometry),
             visible_direct_elements=[dict(ref) for ref in state.visible_direct_elements],
         ) for state in self._location_states(source.id))
         self._flush()
@@ -124,36 +125,58 @@ class SavedMapCatalog:
             *({"ref": {"entity_type": "PhysicalObject", "entity_id": object_id}, "label": aliases[object_id].value if object_id in aliases else f"PhysicalObject {object_id}"} for object_id in object_ids),
         ]
 
-    @staticmethod
-    def default_geometry(location_id: uuid.UUID) -> dict:
-        value = location_id.int
-        return {"x": (value % 16) * 360, "y": ((value >> 8) % 16) * 260,
-                "width": 300, "height": 200, "edge": "right", "offset": 0.5}
-
     def set_location_geometry(self, map_id, variant_id, location_id, geometry):
         from app.schemas import MapLocationGeometry
         geometry = MapLocationGeometry.model_validate(geometry).model_dump()
         self._require_map(map_id)
         self._require_variant(map_id, variant_id)
-        if self.session.get(Location, location_id) is None:
+        # Serialize all frame edits in this variant, including first writes.
+        self.session.scalar(select(MapPresentationVariant).where(
+            MapPresentationVariant.id == variant_id).with_for_update())
+        locations = self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
+        parents = {loc.id: loc.parent_location_id for loc in locations}
+        if location_id not in parents:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
-        state = self.session.scalar(select(MapLocationState).where(
-            MapLocationState.variant_id == variant_id, MapLocationState.location_id == location_id).with_for_update())
-        if state is None:
-            state = MapLocationState(variant_id=variant_id, location_id=location_id,
-                                     collapsed=False, visible_direct_elements=[])
-            self.session.add(state)
-        state.geometry = geometry
+        states = self._location_states(variant_id)
+        frames = {state.location_id: dict(state.geometry) for state in states}
+        original = frames[location_id]
+        dx, dy = geometry["x"] - original["x"], geometry["y"] - original["y"]
+        subtree = {location_id}
+        while True:
+            expanded = subtree | {key for key, parent in parents.items() if parent in subtree}
+            if expanded == subtree:
+                break
+            subtree = expanded
+        for key in subtree - {location_id}:
+            frames[key] = {**frames[key], "x": frames[key]["x"] + dx, "y": frames[key]["y"] + dy}
+        frames[location_id] = geometry
+        for key, parent in parents.items():
+            MapLocationGeometry.model_validate(frames[key])
+            if parent in frames and not contains(frames[parent], frames[key]):
+                raise ValidationError("Location frame must remain inside its canonical parent", {"location_id": str(key)})
+        stored = {state.location_id: state for state in self.session.scalars(
+            select(MapLocationState).where(MapLocationState.variant_id == variant_id))}
+        # Freeze the complete resolved layout atomically, including previously unsaved frames.
+        for state in states:
+            record = stored.get(state.location_id)
+            if record is None:
+                record = MapLocationState(variant_id=variant_id, location_id=state.location_id,
+                                          collapsed=state.collapsed, visible_direct_elements=state.visible_direct_elements)
+                self.session.add(record)
+            record.geometry = frames[state.location_id]
         self._flush()
-        return state
 
     def _location_states(self, variant_id: uuid.UUID) -> tuple[MapLocationState, ...]:
         stored = {state.location_id: state for state in self.session.scalars(
             select(MapLocationState).where(MapLocationState.variant_id == variant_id))}
-        return tuple(stored.get(location_id) or MapLocationState(
-            variant_id=variant_id, location_id=location_id, collapsed=False,
-            visible_direct_elements=[], geometry=self.default_geometry(location_id)
-        ) for location_id in self.session.scalars(select(Location.id).order_by(Location.id)))
+        parents = dict(self.session.execute(select(Location.id, Location.parent_location_id).order_by(Location.id)).all())
+        frames = layout_location_frames(parents, {key: state.geometry for key, state in stored.items() if state.geometry is not None})
+        return tuple(MapLocationState(
+            variant_id=variant_id, location_id=key,
+            collapsed=stored[key].collapsed if key in stored else False,
+            visible_direct_elements=stored[key].visible_direct_elements if key in stored else [],
+            geometry=frames[key],
+        ) for key in parents)
 
     def _valid_location_refs(self, states: tuple[MapLocationState, ...]) -> dict[uuid.UUID, list[dict[str, str]]]:
         object_ids = {uuid.UUID(ref["entity_id"]) for state in states for ref in state.visible_direct_elements if ref["entity_type"] == "PhysicalObject"}

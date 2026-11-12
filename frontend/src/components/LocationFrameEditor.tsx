@@ -2,9 +2,12 @@ import { useState, type PointerEvent, type ReactNode } from 'react';
 import type { LocationFrame } from '../topology/locationFrames';
 import type { MapLocationGeometry, MapLocationState } from '../topology/savedMapTypes';
 import { projectBoundaryWaypoint, resolveBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
+import { FRAME_HEADER, FRAME_PADDING } from '../topology/locationFrameGeometry';
+import type { FlowRectangle } from '../topology/nodeFootprint';
 import { useI18n } from '../i18n';
 
-export function LocationFrameEditor({ frame, state, screenToFlowPosition, onSave, actions }: {
+export function LocationFrameEditor({ frame, state, screenToFlowPosition, onSave, actions, parentBounds, childBounds = [], onDraft, disabled }: {
+  parentBounds?: FlowRectangle; childBounds?: readonly FlowRectangle[]; onDraft?: (geometry: MapLocationGeometry | null) => void; disabled?: boolean;
   frame: LocationFrame; state?: MapLocationState;
   screenToFlowPosition: (p: { x: number; y: number }) => { x: number; y: number };
   onSave?: (id: string, geometry: MapLocationGeometry) => Promise<void>; actions: ReactNode;
@@ -31,11 +34,27 @@ export function LocationFrameEditor({ frame, state, screenToFlowPosition, onSave
     const g = drag.geometry;
     if (drag.mode === 'point') {
       const anchor = projectBoundaryWaypoint(frame.locationId, g, p).anchor!;
-      setDraft({ ...g, edge: anchor.edge, offset: anchor.offset });
-    } else setDraft(drag.mode === 'move' ? { ...g, x: g.x + dx, y: g.y + dy } : { ...g, width: Math.max(80, g.width + dx), height: Math.max(60, g.height + dy) });
+      const next = { ...g, edge: anchor.edge, offset: anchor.offset };
+      setDraft(next); onDraft?.(next);
+    } else {
+      let next = { ...g };
+      if (drag.mode === 'move') {
+        next.x += dx; next.y += dy;
+        if (parentBounds) {
+          next.x = Math.max(parentBounds.x + FRAME_PADDING, Math.min(parentBounds.x + parentBounds.width - FRAME_PADDING - g.width, next.x));
+          next.y = Math.max(parentBounds.y + FRAME_HEADER, Math.min(parentBounds.y + parentBounds.height - FRAME_PADDING - g.height, next.y));
+        }
+      } else {
+        const minWidth = Math.max(80, ...childBounds.map(c => c.x + c.width + FRAME_PADDING - g.x));
+        const minHeight = Math.max(60, ...childBounds.map(c => c.y + c.height + FRAME_PADDING - g.y));
+        next.width = Math.max(minWidth, Math.min(parentBounds ? parentBounds.x + parentBounds.width - FRAME_PADDING - g.x : Infinity, g.width + dx));
+        next.height = Math.max(minHeight, Math.min(parentBounds ? parentBounds.y + parentBounds.height - FRAME_PADDING - g.y : Infinity, g.height + dy));
+      }
+      setDraft(next); onDraft?.(next);
+    }
   };
-  const handlers = { onPointerMove: move, onPointerUp: () => setDrag(null), onPointerCancel: () => { setDrag(null); setDraft(null); } };
-  return <div className={'location-frame' + (selected ? ' location-frame--selected' : '')} data-location-id={frame.locationId} style={{ left: geometry.x, top: geometry.y, width: geometry.width, height: geometry.height }}>
+  const handlers = { onPointerMove: move, onPointerUp: () => setDrag(null), onPointerCancel: () => { setDrag(null); setDraft(null); onDraft?.(null); } };
+  return <div inert={disabled} className={'location-frame' + (selected ? ' location-frame--selected' : '')} data-location-id={frame.locationId} style={{ left: geometry.x, top: geometry.y, width: geometry.width, height: geometry.height }}>
     <span className="location-frame__heading nodrag nopan" onPointerDown={e => start(e, 'move')} {...handlers}>
       <span className="location-frame__label">{frame.label}</span>
       <span onPointerDown={e => e.stopPropagation()}>{actions}</span>
@@ -44,8 +63,8 @@ export function LocationFrameEditor({ frame, state, screenToFlowPosition, onSave
     {selected && <>
       <button type="button" className="location-frame__resize nodrag nopan" aria-label={t('map.resizeLocation')} onPointerDown={e => start(e, 'resize')} {...handlers}>↘</button>
       <span className="location-frame__save nodrag nopan">
-        <button type="button" disabled={busy || !draft || !onSave} onClick={async () => { setBusy(true); setError(''); try { await onSave?.(frame.locationId, geometry); setDraft(null); select(false); } catch (e) { setError(String(e)); } finally { setBusy(false); } }}>{t('map.saveLocation')}</button>
-        <button type="button" disabled={busy} onClick={() => { setDraft(null); select(false); }}>{t('map.cancelLocation')}</button>
+        <button type="button" disabled={busy || !draft || !onSave} onClick={async () => { setBusy(true); setError(''); try { await onSave?.(frame.locationId, geometry); setDraft(null); onDraft?.(null); select(false); } catch (e) { setError(String(e)); } finally { setBusy(false); } }}>{t('map.saveLocation')}</button>
+        <button type="button" disabled={busy} onClick={() => { setDraft(null); onDraft?.(null); select(false); }}>{t('map.cancelLocation')}</button>
         {error && <span role="alert">{error}</span>}
       </span>
     </>}

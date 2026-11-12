@@ -12,6 +12,14 @@ const response = (value: unknown, status = 200) => new Response(JSON.stringify(v
 describe('ApiSavedMapDataSource', () => {
   const fetchMock = vi.fn();
   beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); }); afterEach(() => vi.unstubAllGlobals());
+  it('returns the complete authoritative layout after an atomic frame edit', async () => {
+    fetchMock.mockResolvedValueOnce(response(body));
+    const geometry = { x: 0, y: 0, width: 500, height: 400, edge: 'right' as const, offset: .5 };
+    await expect(new ApiSavedMapDataSource().setLocationGeometry(mapId, variantId, objectId, geometry)).resolves.toMatchObject({ location_states: [], placements: body.placements });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].body).toBe(JSON.stringify(geometry));
+  });
+
   it('parses list, create and detail responses strictly', async () => { fetchMock.mockResolvedValueOnce(response({ maps: [body] })).mockResolvedValueOnce(response(body)).mockResolvedValueOnce(response(body)); const source = new ApiSavedMapDataSource(); await expect(source.listMaps()).resolves.toHaveLength(1); await expect(source.createMap('First')).resolves.toMatchObject({ name: 'First' }); await expect(source.loadMap(mapId)).resolves.toMatchObject({ placements: [{ positions: { 'L1/PHYSICAL_OBJECT': { x: 12, y: 34, locked: false } } }] }); });
   it('preserves the complete variant catalog while parsing different active variants', async () => {
     const copyId = '00000000-0000-4000-8000-000000000006';

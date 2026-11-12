@@ -49,6 +49,7 @@ import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { blueprintMapNameplateHeight } from "../topology/blueprintDisplaySize";
 import { nodeFootprint, type FlowRectangle } from "../topology/nodeFootprint";
+import { layoutLocationFrames, translateFrameSubtree } from '../topology/locationFrameGeometry';
 import { LocationFrameEditor } from "./LocationFrameEditor";
 import { deriveLocationPresentation, projectCollapsedEdges } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
@@ -193,6 +194,7 @@ export function TopologyCanvas({
   const focusedObjectKey = useRef<string | null>(null);
   const frameDrag = useRef<FrameDrag | null>(null);
   const routeNormalizer = useRef<((cableId: string, waypoints: readonly MapCableRouteWaypoint[]) => MapCableRouteWaypoint[]) | null>(null);
+  const [frameEditPreview, setFrameEditPreview] = useState<{ scene: string; id: string; geometry: import('../topology/savedMapTypes').MapLocationGeometry } | null>(null);
   const [frameDragPreview, setFrameDragPreview] = useState<FrameDragPreview | null>(null);
   const { fitBounds, fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
@@ -398,6 +400,11 @@ export function TopologyCanvas({
   const locationPresentation = showLocationPresentation && locationFrameInput
     ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationFrameInput.states ?? [])
     : { frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map<string, string>() };
+  const baseFrameGeometries = layoutLocationFrames(locationFrameInput?.locations ?? [], new Map(locationFrameInput?.states?.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : []) ?? []));
+  const activeFrameEdit = frameEditPreview?.scene === presentationSceneKey && baseFrameGeometries.has(frameEditPreview.id) ? frameEditPreview : null;
+  const editedFrameGeometries = activeFrameEdit
+    ? translateFrameSubtree(locationFrameInput?.locations ?? [], baseFrameGeometries, activeFrameEdit.id, activeFrameEdit.geometry) : baseFrameGeometries;
+  locationPresentation.frames = locationPresentation.frames.map(frame => ({ ...frame, bounds: editedFrameGeometries.get(frame.locationId)! }));
   const renderableFrames = locationPresentation.frames.filter((frame) => hasRenderableBounds(frame.bounds));
   const boundaryFrames = renderableFrames.map((frame) => ({ locationId: frame.locationId, bounds: frame.bounds }));
   const resolveRouteWaypoints = (waypoints: readonly MapCableRouteWaypoint[]) => waypoints.map((point) => resolveBoundaryWaypoint(point, boundaryFrames));
@@ -801,7 +808,11 @@ export function TopologyCanvas({
               const toggleLabel = t(collapsed ? 'map.locationExpand' : 'map.locationCollapse', { name: frame.label });
               const configureLabel = t('map.locationConfigureCollapse', { name: frame.label });
               return <LocationFrameEditor key={(locationFrameInput?.variantId ?? '') + frame.locationId} frame={frame}
-                state={locationFrameInput?.states?.find(state => state.location_ref.entity_id === frame.locationId)}
+                state={(() => { const state = locationFrameInput?.states?.find(state => state.location_ref.entity_id === frame.locationId); return state ? { ...state, geometry: editedFrameGeometries.get(frame.locationId)! } : undefined; })()}
+                parentBounds={frame.parentLocationId ? editedFrameGeometries.get(frame.parentLocationId) : undefined}
+                childBounds={(locationFrameInput?.locations ?? []).filter(l => l.parent_location_ref?.entity_id === frame.locationId).map(l => editedFrameGeometries.get(l.location_ref.entity_id)!)}
+                disabled={Boolean(activeFrameEdit && activeFrameEdit.id !== frame.locationId)}
+                onDraft={geometry => setFrameEditPreview(geometry ? { scene: presentationSceneKey, id: frame.locationId, geometry } : null)}
                 screenToFlowPosition={screenToFlowPosition} onSave={locationFrameInput?.onGeometry}
                 actions={<span className="location-frame__actions">
                   <button type="button" className="location-action" aria-label={toggleLabel} title={toggleLabel} onClick={() => locationFrameInput?.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button>

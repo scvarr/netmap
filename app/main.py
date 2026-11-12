@@ -221,7 +221,7 @@ def _saved_map_document(detail) -> dict[str, object]:
         "variants": [{"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id}, "name": variant.name} for variant in detail.variants],
         "location_states": [{
             "location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id},
-            "geometry": state.geometry or SavedMapCatalog.default_geometry(state.location_id),
+            "geometry": state.geometry,
             "boundary_point_id": uuid.uuid5(saved_map.id, str(state.location_id)),
             "collapsed": state.collapsed,
             "visible_direct_elements": detail.valid_location_refs[state.location_id],
@@ -500,13 +500,15 @@ def set_map_location_state(map_id: uuid.UUID, variant_id: uuid.UUID, location_id
         state = SavedMapCatalog(session).set_location_state(map_id, variant_id, location_id, query.collapsed, [
             {"entity_type": ref.entity_type, "entity_id": str(ref.entity_id)} for ref in query.visible_direct_elements
         ])
-        return {"location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id}, "geometry": state.geometry or SavedMapCatalog.default_geometry(location_id), "boundary_point_id": uuid.uuid5(map_id, str(location_id)), "collapsed": state.collapsed, "visible_direct_elements": state.visible_direct_elements}
+        return {"location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id}, "geometry": next(item.geometry for item in SavedMapCatalog(session)._location_states(variant_id) if item.location_id == location_id), "boundary_point_id": uuid.uuid5(map_id, str(location_id)), "collapsed": state.collapsed, "visible_direct_elements": state.visible_direct_elements}
 
 
-@app.put("/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{location_id}/geometry", response_model=MapLocationGeometry)
+@app.put("/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{location_id}/geometry", response_model=SavedMapDocument)
 def set_map_location_geometry(map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID, query: MapLocationGeometry, session: Session = Depends(get_session)):
     with session.begin():
-        return SavedMapCatalog(session).set_location_geometry(map_id, variant_id, location_id, query.model_dump()).geometry
+        catalog = SavedMapCatalog(session)
+        catalog.set_location_geometry(map_id, variant_id, location_id, query.model_dump())
+        return _saved_map_document(catalog.detail(map_id, variant_id))
 
 
 @app.get("/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{location_id}/direct-elements", response_model=list[MapLocationDirectElementChoice], responses={422: {"model": ErrorResponse}})

@@ -129,6 +129,24 @@ afterEach(() => {
 });
 
 describe('TopologyCanvas async layout boundary', () => {
+  it('previews a parent translation with all nested empty frames without moving equipment', async () => {
+    const ref = (id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: id });
+    const locations = ['808', '823', 'U19'].map((id, index, ids) => ({ location_ref: ref(id), name: id, type: null, parent_location_ref: index ? ref(ids[index - 1]) : null }));
+    const onGroupMove = vi.fn();
+    render(<TopologyCanvas document={{ ...documentFor('physical-empty-hierarchy'), nodes: [] }} selection={null} onSelectionChange={vi.fn()}
+      layoutEngine={async () => ({ nodes: [], edges: [] })} locationFrameInput={{ locations, placements: [], onGroupMove }} />);
+    await waitFor(() => expect(globalThis.document.querySelectorAll('.location-frame')).toHaveLength(3));
+    const frames = () => [...globalThis.document.querySelectorAll<HTMLElement>('.location-frame')];
+    const before = frames().map(el => [parseFloat(el.style.left), parseFloat(el.style.top)]);
+    const heading = frames()[0].querySelector('.location-frame__heading') as HTMLElement;
+    heading.setPointerCapture = vi.fn();
+    fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(heading, { clientX: 100, clientY: 50 });
+    frames().forEach((el, index) => { expect(parseFloat(el.style.left)).toBe(before[index][0] + 100); expect(parseFloat(el.style.top)).toBe(before[index][1] + 50); });
+    expect(onGroupMove).not.toHaveBeenCalled();
+    fireEvent.pointerCancel(heading);
+    frames().forEach((el, index) => expect(parseFloat(el.style.left)).toBe(before[index][0]));
+  });
   it('shows the frame preview during drag and commits the pointerup displacement once', async () => {
     const objects: TopologyProjectionNode[] = ['a', 'b'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
     const document: TopologyProjectionDocument = { ...documentFor('physical-group'), nodes: objects };

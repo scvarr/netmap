@@ -105,18 +105,28 @@ MapTextAnnotation — отдельная presentation capability.
 
 C-UX-10-01: все canonical Locations доступны в каждой SavedMap, без membership
 и map isolation. Каждый Location имеет самостоятельный прямоугольный frame,
-включая пустой и unary; hierarchy отображается canonical path label.
+включая пустой и unary; каждый дочерний frame находится внутри непосредственного
+canonical parent с отступом 20 и местом для заголовка 40. Path label дополняет вложение.
 MapLocationState.geometry хранит x/y/width/height и edge/offset обязательной
 виртуальной точки отдельно для variant. До первого сохранения чтение возвращает
-детерминированный стартовый прямоугольник по immutable Location ID, без записи
-в БД и без зависимости от оборудования. Начальные рамки могут пересекаться;
-геометрическое вложение не задаёт canonical containment.
+детерминированную иерархическую компоновку (порядок по immutable ID), без записи
+в БД и без зависимости от оборудования. Соседи при инициализации не пересекаются.
+Новый ребёнок размещается после существующих детей; предки расширяются,
+соседние ветви при необходимости получают место без пересечений. Это разрешённое
+начальное presentation размещение, а не canonical containment из координат.
 Boundary identity — UUIDv5(namespace=SavedMap ID, name=Location ID), одна на пару
 map/Location, не зависит от variant/геометрии. Отдельного create/delete точки нет.
 Geometry PUT валидирует finite coordinates, положительные размеры и perimeter,
 Location и ownership variant до записи. Copy variant копирует геометрию;
 FK CASCADE удаляет presentation state при удалении variant/Location.
-UI: drag заголовка переносит только рамку; resize и drag точки создают draft,
+Geometry PUT блокирует variant, переносит всю ветвь рамок одним delta и
+проверяет вложение всех рамок до записи. Resize, оставляющий детей снаружи,
+и выход ребёнка за границу родителя отклоняются (422), без частичных записей.
+Сохранение фиксирует всю разрешённую компоновку одной транзакцией и возвращает
+SavedMapDocument, чтобы клиент принял все затронутые frames без повторного write.
+UI: drag заголовка переносит рамку вместе с вложенными рамками; оборудование
+остаётся на месте. Drag ребёнка ограничен родителем, resize ограничен детьми
+и родителем. Resize и drag точки создают draft,
 Save явно сохраняет его, Cancel отменяет. Group move вызывается отдельной кнопкой.
 Collapse сохраняет прежнюю proxy-модель; channel-aware collapse не реализован.
 MapComposite/MapRegion не поддерживаются.

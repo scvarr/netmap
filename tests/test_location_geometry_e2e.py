@@ -23,7 +23,7 @@ def test_independent_frames_and_mandatory_identity():
     create_endpoint_cable(client, point, other_point)
     with SessionLocal() as session:
         identities = (list(session.scalars(select(Cable.id))), list(session.scalars(select(Connection.id))))
-    geometry = dict(x=-123.5, y=300, width=450, height=120, edge="bottom", offset=0.75)
+    geometry = dict(x=-123.5, y=300, width=450, height=400, edge="bottom", offset=0.75)
     url = f"/v1/maps/{first}/presentation-variants/{variant}/locations/{parent}/geometry"
     assert client.put(url, json=geometry).status_code == 200
     assert state(first)["geometry"] == geometry
@@ -31,7 +31,7 @@ def test_independent_frames_and_mandatory_identity():
     copy = client.post(f"/v1/maps/{first}/presentation-variants", json={"name": "Copy", "source_variant_id": variant}).json()["variant_ref"]["entity_id"]
     assert state(first, copy)["geometry"] == geometry
     assert state(first, copy)["boundary_point_id"] == original["boundary_point_id"]
-    updated = dict(geometry, width=80, edge="left", offset=0)
+    updated = dict(geometry, width=500, edge="left", offset=0)
     assert client.put(url, json=updated).status_code == 200
     assert state(first, copy)["geometry"] == geometry
     assert state(first)["geometry"] == updated
