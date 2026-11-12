@@ -65,15 +65,15 @@ site → F01 → serverroom → F01-R01, F01-R02, F01-R03.
 | F02-R01 | access: BT-ACCESS; patch02: BT-PATCH; odf02: BT-ODF24; pair02: BT-PAIR4 |
 | F01-R01 | srv1, srv2: BT-SERVER |
 | F01-R02 | storage: BT-STORAGE; shelf1, shelf2: BT-SHELF; nas: BT-NAS |
-| F01-R03 | core: BT-CORE; optical: BT-OPTICAL; sanA, sanB: BT-SAN; router: BT-ROUTER; firewall: BT-FW; mgmt: BT-MGMT; odf01: BT-ODF24; patch01: BT-PATCH; pair01: BT-PAIR4 |
+| F01-R03 | core: BT-CORE; optical: BT-OPTICAL; opticalSwitch: BT-OPTICAL-SWITCH; sanA, sanB: BT-SAN; router: BT-ROUTER; firewall: BT-FW; mgmt: BT-MGMT; odf01: BT-ODF24; patch01: BT-PATCH; pair01: BT-PAIR4 |
 
 ### Определения портов и модулей
 
 Все неоговорённые endpoints имеют capacity 1. NETWORK_PORT активен и имеет
 NetworkInterface; пассивные endpoints — CONNECTION_POINT без interface.
-PortType keys: pt-rj45, pt-fiber, pt-multipair, pt-fc. Тип не доказывает continuity.
+PortType keys: pt-rj45, pt-fiber, pt-multipair, pt-pair-terminal, pt-fc. Тип не доказывает continuity.
 CableType keys: ct-rj45 (4 пары, одна сетевая линия), ct-fiber24 (24 волокна),
-ct-fiber1 (одно волокно), ct-pair4 (4 независимые синтетические медные линии),
+ct-fiber1 (одно волокно), ct-pair4 (4 пары с независимыми пассивными окончаниями),
 ct-fc-line (синтетическая FC линия; не спецификация duplex optics).
 
 | BaseTemplate / ModuleTemplate | Порты, места и явная внутренняя continuity |
@@ -83,18 +83,23 @@ ct-fc-line (синтетическая FC линия; не спецификац�
 | BT-PATCH | front1..8, rear1..8 RJ45; rear i/1 ↔ front i/1 |
 | BT-ACCESS | eth1..8 RJ45 NETWORK_PORT; opt1..2 fiber NETWORK_PORT |
 | BT-ODF24 | rear capacity 24 fiber; front1..24 fiber; rear/i ↔ front i/1, 24 отдельных internal Connections |
-| BT-PAIR4 | rear capacity 4 multipair; front1..4 RJ45; rear/i ↔ front i/1 |
+| BT-PAIR4 | rear capacity 4 multipair; front1..4 pt-pair-terminal — пассивные окончания целых пар; rear/i ↔ front i/1 |
 | BT-SERVER | два места nic, hba с capacity/count для одной установки каждого; встроенный mgmt RJ45 NETWORK_PORT |
 | MT-NIC | eth1..2 RJ45 NETWORK_PORT; установка nic в каждом srv |
 | MT-HBA | a, b FC NETWORK_PORT; установка hba в каждом srv |
 | BT-STORAGE | controllerA.fcA/fcB и controllerB.fcA/fcB FC NETWORK_PORT; mgmt RJ45; контроллеры — явно именованные секции синтетического корпуса |
 | BT-SHELF | inventory-only корпус, физические SAS endpoints/связи не создаются |
 | BT-NAS | eth1..2 и mgmt RJ45 NETWORK_PORT |
-| BT-CORE | eth1..8 RJ45, opt1..2 fiber NETWORK_PORT |
-| BT-OPTICAL | in1..2, out1..2 fiber; in i/1 ↔ out i/1 |
+| BT-CORE | eth1..8 RJ45, opt1..4 fiber NETWORK_PORT |
+| BT-OPTICAL | пассивный оптический кросс: in1..2, out1..2 fiber CONNECTION_POINT; in i/1 ↔ out i/1 |
+| BT-OPTICAL-SWITCH | opt1..2 fiber NETWORK_PORT; internal continuity между портами отсутствует |
 | BT-SAN | fc1..8 FC NETWORK_PORT; mgmt RJ45 NETWORK_PORT |
 | BT-ROUTER, BT-FW | eth1..4 RJ45 NETWORK_PORT |
 | BT-MGMT | eth1..12 RJ45 NETWORK_PORT |
+
+Многопарный сценарий проверяет пассивную continuity целых пар между блоками,
+не RJ45 Ethernet и не проводники внутри RJ45. front1..4 — реальные пассивные
+окончания пар; дополнительные Ethernet patch cords к ним не создаются.
 
 ModuleTemplate internal continuity не требуется этим активным NIC/HBA;
 его поддержка не выводится из BaseTemplate materialization.
@@ -116,8 +121,8 @@ ModuleTemplate internal continuity не требуется этим активн
 | uplink01.i (1..2) | odf01.front i → optical.in i; ct-fiber1 |
 | core-opt.i (1..2) | optical.out i → core.opt i; ct-fiber1 |
 | multipair | pair02.rear → pair01.rear; один ct-pair4, 1→3, 3→1; members 2,4 свободны |
-| pair-feed | access.eth5 → pair02.front1; ct-rj45 |
-| pair-end | pair01.front3 → mgmt.eth1; ct-rj45 |
+| optical-switch-in | core.opt3 → opticalSwitch.opt1; ct-fiber1 |
+| optical-switch-out | opticalSwitch.opt2 → core.opt4; ct-fiber1 |
 | srv-eth.i (1..2) | srv i.nic.eth1 → patch01.rear i; ct-rj45 |
 | srv-core.i (1..2) | patch01.front i → core.eth i; ct-rj45 |
 | san-a.i (1..2) | srv i.hba.a → sanA.fc i; ct-fc-line |
@@ -139,10 +144,19 @@ Backbone 3..20 подключены как резервные волокна б�
 - pc.eth → access.eth1: REACHABLE через outlet и patch02, точные refs всех
   Connection/ConnectionMember/Cable и members; printer не попадает в evidence.
 - access.opt1 → core.opt2: REACHABLE через backbone 1→2 и optical канал 2;
-  access.opt1 → core.opt1 не имеет подтверждённого пути (UNKNOWN).
+  access.opt1 → core.opt1 не имеет подтверждённого пути (UNKNOWN). Evidence
+  успешного пути включает оба ODF, backbone member 1→2 и явный internal mapping
+  optical.in2/1→out2/1. core.opt3→opticalSwitch.opt1 и opticalSwitch.opt2→core.opt4
+  по отдельности REACHABLE; core.opt3→core.opt4 через opticalSwitch — UNKNOWN:
+  активные NETWORK_PORT завершают L1, transit, conversion и L2 forwarding не выводятся.
 - rear/i → front i/1 каждого ODF: только указанный member, без соседних front.
   Backbone member21 и multipair member2 не дают пути; это свободные каналы.
-- access.eth5 → mgmt.eth1: точный путь multipair 1→3; member3→1 независим.
+- pair02.front1/1 → pair01.front3/1: REACHABLE через internal rear/1,
+  один Cable multipair с mapping 1→3 и internal rear/3 противоположного блока.
+  Evidence содержит эти members, internal Connections и внешний Cable/Connection.
+  pair02.front3/1→pair01.front1/1 — отдельный путь mapping 3→1;
+  pair02.front1/1→pair01.front1/1 и pair02.front2/1→pair01.front2/1 — UNKNOWN, без
+  автоматического дополнения и без Ethernet-коммутаторов в evidence.
 - srv1.hba.a → sanA.fc1 и hba.b → sanB.fc1: отдельные evidence.
   Через SAN switch к storage L1 transit нет, как и через access/core/router/firewall.
   Физическая connected резервная B не означает автоматический failover или L2/L3.
