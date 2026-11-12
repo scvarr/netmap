@@ -957,3 +957,8 @@ a { color: inherit; }
 
 .automatic-location-controls__row { display: flex; align-items: center; gap: 7px; font-size: 11px; }
 .automatic-location-controls__row > span:first-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+.automatic-location-picker > .object-location-picker-tree { max-height: 240px; overflow: auto; margin: 0; font-size: 11px; }
+.automatic-location-picker .object-location-picker-tree__choice { padding: 5px 7px; }
+.automatic-location-picker .object-location-picker-tree__choice[aria-selected="true"] { border-color: #77d6bd; color: #b9f0dc; background: #1a4238; }
+.automatic-location-picker .object-location-path { display: block; margin: 7px 0 0; overflow-wrap: anywhere; font-size: 10px; }

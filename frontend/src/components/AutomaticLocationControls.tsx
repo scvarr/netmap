@@ -1,3 +1,4 @@
+import { AutomaticLocationPicker } from './AutomaticLocationPicker';
 import { useState } from 'react';
 import { useI18n } from '../i18n';
 import type { AutomaticLocationLayout, SavedMap } from '../topology/savedMapTypes';
@@ -24,7 +25,7 @@ export function AutomaticLocationControls({ map, locations, objectLabels, onSave
     <label><input type="checkbox" checked={Boolean(settings)} onChange={e => void save(e.target.checked ? { hide_empty: false, containers: {} } : null)} />{t('autoLocation.enabled')}</label>
     {settings && <>
       <label><input type="checkbox" checked={settings.hide_empty} onChange={e => void save({ ...settings, hide_empty: e.target.checked })} />{t('autoLocation.hideEmpty')}</label>
-      <select aria-label={t('autoLocation.container')} value={validContainer} onChange={e => setContainer(e.target.value)}><option value="root">{t('autoLocation.root')}</option>{locations.map(l => <option key={l.location_ref.entity_id} value={l.location_ref.entity_id}>{l.name}</option>)}</select>
+      <AutomaticLocationPicker locations={locations} selected={validContainer} onSelect={setContainer} />
       <select aria-label={t('autoLocation.direction')} value={entry.direction} onChange={e => update({ direction: e.target.value as typeof entry.direction })}><option value="VERTICAL">{t('autoLocation.vertical')}</option><option value="HORIZONTAL">{t('autoLocation.horizontal')}</option></select>
       {children.map((child, i) => <div className="automatic-location-controls__row" key={child.key}><span>{child.label}</span><span className="map-utility-panel__actions"><button type="button" aria-label={t('autoLocation.up')} disabled={!i} onClick={() => { const order = children.map(c => c.key); [order[i-1],order[i]] = [order[i],order[i-1]]; update({ order }); }}>↑</button><button type="button" aria-label={t('autoLocation.down')} disabled={i === children.length - 1} onClick={() => { const order = children.map(c => c.key); [order[i+1],order[i]] = [order[i],order[i+1]]; update({ order }); }}>↓</button></span></div>)}
     </>}

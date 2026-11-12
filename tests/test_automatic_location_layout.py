@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 
@@ -60,10 +61,36 @@ def test_automatic_opt_in_preserves_canonical_data_boundary_and_manual_state():
 
 def test_historical_manual_workspace_variant_remains_readable():
     from app.database import SessionLocal
-    from app.workspace_portability import export_package, validate_package
+    from app.workspace_portability import export_package, validate_package, import_package, reset_dataset
     client.post('/v1/maps', json={"name": "Historical manual"})
     with SessionLocal() as session:
         package = export_package(session)
     for variant in package['presentation']['MapPresentationVariant']:
         variant.pop('automatic_layout')
     validate_package(package)
+    with SessionLocal.begin() as session:
+        reset_dataset(session)
+        import_package(session, package)
+    assert client.get('/v1/maps').status_code == 200
+    with SessionLocal() as session:
+        restored = export_package(session)
+    assert all(variant['automatic_layout'] is None for variant in restored['presentation']['MapPresentationVariant'])
+
+
+@pytest.mark.parametrize("settings", [
+    [], "broken", {"containers": []}, {"hide_empty": {}},
+    {"containers": {"root": {"direction": "DIAGONAL"}}},
+    {"containers": {"root": {"order": [123]}}},
+    {"containers": {"root": {"unknown": True}}},
+])
+def test_workspace_rejects_corrupt_automatic_settings_before_import(settings):
+    from app.database import SessionLocal
+    from app.workspace_portability import export_package, validate_package, PackageError
+    created = client.post('/v1/maps', json={"name": "Keep this map"}).json()
+    with SessionLocal() as session:
+        package = export_package(session)
+    package['presentation']['MapPresentationVariant'][0]['automatic_layout'] = settings
+    with pytest.raises(PackageError, match=r"MapPresentationVariant.automatic_layout"):
+        validate_package(package)
+    assert client.post('/v1/workspace/package', json=package).status_code == 422
+    assert client.get('/v1/maps/' + created['map_ref']['entity_id']).json()['name'] == 'Keep this map'

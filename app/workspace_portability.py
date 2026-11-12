@@ -17,7 +17,7 @@ from sqlalchemy.sql.sqltypes import JSON
 from app.database import Base
 from app import models
 from app.port_types import PortTypeInput
-from app.schemas import ModuleBayRequest
+from app.schemas import ModuleBayRequest, AutomaticLocationLayout
 from pydantic import ValidationError
 
 
@@ -207,6 +207,11 @@ def validate_package(package: object) -> dict:
             if not isinstance(record, dict) or set(record) != expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
             row = {field: _decode(record[field], columns[field], f"{name}.{field}") for field in fields}
+            if model is models.MapPresentationVariant and row["automatic_layout"] is not None:
+                try:
+                    row["automatic_layout"] = AutomaticLocationLayout.model_validate(row["automatic_layout"]).model_dump()
+                except ValidationError as error:
+                    raise PackageError("Invalid MapPresentationVariant.automatic_layout settings") from error
             if model is models.PortType:
                 try:
                     port_type = PortTypeInput.model_validate({k: v for k, v in row.items() if k != "id"})
