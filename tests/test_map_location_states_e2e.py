@@ -57,14 +57,14 @@ def test_variant_location_state_validation_copy_stale_refs_and_cascade():
     assign(foreign, other)
     for object_id in (ups, switch):
         assert client.post(f'/v1/maps/{map_id}/placements', json={'physical_object_id': object_id, 'x': 1, 'y': 2}).status_code == 201
-    assert detail(map_id)['location_states'] == []
+    assert len(detail(map_id)['location_states']) == 5
     choices = client.get(f'/v1/maps/{map_id}/presentation-variants/{primary}/locations/{room}/direct-elements')
     assert choices.status_code == 200
     assert {tuple(choice['ref'].values()) for choice in choices.json()} == {('Location', rack), ('PhysicalObject', ups)}
     refs = [ref('PhysicalObject', ups), ref('Location', rack)]
     assert write(map_id, primary, room, refs=refs).status_code == 200
     assert write(map_id, primary, room, refs=refs).status_code == 200
-    assert detail(map_id)['location_states'][0]['visible_direct_elements'] == refs
+    assert next(s for s in detail(map_id)['location_states'] if s['location_ref']['entity_id'] == room)['visible_direct_elements'] == refs
     for invalid in [ref('Location', deep), ref('Location', foreign_child), ref('PhysicalObject', switch), ref('PhysicalObject', foreign)]:
         assert write(map_id, primary, room, refs=[invalid]).status_code == 422
     assert write(map_id, other_variant, room).status_code == 422
@@ -72,18 +72,18 @@ def test_variant_location_state_validation_copy_stale_refs_and_cascade():
     assert write(uuid.uuid4(), primary, room).status_code == 422
     assert write(map_id, primary, room, refs=[refs[0], refs[0]]).status_code == 422
     assert write(map_id, primary, room, collapsed=False, refs=refs).status_code == 200
-    assert detail(map_id)['location_states'][0]['visible_direct_elements'] == refs
+    assert next(s for s in detail(map_id)['location_states'] if s['location_ref']['entity_id'] == room)['visible_direct_elements'] == refs
     assert write(map_id, primary, room, refs=refs).status_code == 200
 
     copied = client.post(f'/v1/maps/{map_id}/presentation-variants', json={'name': 'Copy', 'source_variant_id': primary})
     assert copied.status_code == 201, copied.text
     copy_id = copied.json()['variant_ref']['entity_id']
-    assert detail(map_id, copy_id)['location_states'][0]['visible_direct_elements'] == refs
+    assert next(s for s in detail(map_id, copy_id)['location_states'] if s['location_ref']['entity_id'] == room)['visible_direct_elements'] == refs
     assert write(map_id, copy_id, room, refs=[]).status_code == 200
-    assert detail(map_id, primary)['location_states'][0]['visible_direct_elements'] == refs
-    assert detail(map_id, copy_id)['location_states'][0]['visible_direct_elements'] == []
+    assert next(s for s in detail(map_id, primary)['location_states'] if s['location_ref']['entity_id'] == room)['visible_direct_elements'] == refs
+    assert next(s for s in detail(map_id, copy_id)['location_states'] if s['location_ref']['entity_id'] == room)['visible_direct_elements'] == []
     assert client.put(f'/v1/locations/{rack}/parent', json={'parent_location_id': other}).status_code == 200
-    assert detail(map_id, primary)['location_states'][0]['visible_direct_elements'] == [refs[0]]
+    assert next(s for s in detail(map_id, primary)['location_states'] if s['location_ref']['entity_id'] == room)['visible_direct_elements'] == [refs[0]]
     for index in range(8):
         child = location(f'Extra {index}', room)
         assert write(map_id, primary, child, refs=[]).status_code == 200
@@ -93,7 +93,7 @@ def test_variant_location_state_validation_copy_stale_refs_and_cascade():
             statements.append(statement)
     event.listen(engine, 'before_cursor_execute', record)
     try:
-        assert len(detail(map_id, primary)['location_states']) == 9
+        assert len(detail(map_id, primary)['location_states']) == 13
     finally:
         event.remove(engine, 'before_cursor_execute', record)
     assert sum('FROM map_location_states' in statement for statement in statements) == 1

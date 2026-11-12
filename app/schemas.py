@@ -265,6 +265,16 @@ class MapLocationDirectElementRef(BaseModel):
     entity_id: uuid.UUID
 
 
+class MapLocationGeometry(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    x: float
+    y: float
+    width: float = Field(gt=0)
+    height: float = Field(gt=0)
+    edge: Literal["top", "right", "bottom", "left"]
+    offset: float = Field(ge=0, le=1)
+
+
 class SetMapLocationStateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     collapsed: bool
@@ -273,6 +283,8 @@ class SetMapLocationStateRequest(BaseModel):
 
 class MapLocationStateDocument(SetMapLocationStateRequest):
     location_ref: LocationRef
+    geometry: MapLocationGeometry
+    boundary_point_id: uuid.UUID
 
 
 class MapLocationDirectElementChoice(BaseModel):

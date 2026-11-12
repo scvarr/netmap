@@ -55,19 +55,7 @@ const union = (rectangles: readonly FlowRectangle[]): FlowRectangle => {
   return { x, y, width: right - x, height: bottom - y };
 };
 
-const frameBounds = (content: FlowRectangle): FlowRectangle => ({
-  x: content.x - LOCATION_FRAME_PADDING,
-  y: content.y - LOCATION_FRAME_PADDING,
-  width: content.width + LOCATION_FRAME_PADDING * 2,
-  height: content.height + LOCATION_FRAME_PADDING * 2,
-});
-
-type Representation =
-  | { kind: 'frame'; frame: LocationFrame; content: FlowRectangle; extent: FlowRectangle }
-  | { kind: 'object'; path: ObjectLocationPath; object: FlowRectangle; extent: FlowRectangle }
-  | { kind: 'proxy'; proxy: LocationProxy; extent: FlowRectangle };
-
-/** Canonical direct arity determines whether a populated Location has a frame. */
+/** All canonical Locations have independent presentation frames. */
 export function deriveLocationPresentation(
   locations: readonly LocationDocument[],
   placements: readonly MapPlacement[],
@@ -111,26 +99,23 @@ export function deriveLocationPresentation(
   };
   for (const location of locations) collect(location.location_ref.entity_id);
   const visiting = new Set<string>();
-  const visit = (id: string, depth: number): Representation | null => {
-    if (visiting.has(id)) return null; // Invalid cyclic catalogs provide no containment evidence.
+  const visit = (id: string, depth: number): void => {
+    if (visiting.has(id)) return; // Invalid cyclic catalogs provide no containment evidence.
     visiting.add(id);
     const location = byId.get(id)!;
     const state = stateById.get(id);
     const visible = new Set(state?.visible_direct_elements.map((ref) => `${ref.entity_type}:${ref.entity_id}`) ?? []);
     const hiddenChildren: string[] = [];
-    const childRepresentations = (children.get(id) ?? []).flatMap((childId) => {
-      if (state?.collapsed && !visible.has(`Location:${childId}`)) { hiddenChildren.push(childId); return []; }
-      const representation = visit(childId, depth + 1);
-      return representation ? [representation] : [];
-    });
+    for (const childId of children.get(id) ?? []) {
+      if (state?.collapsed && !visible.has('Location:' + childId)) hiddenChildren.push(childId);
+      else visit(childId, depth + 1);
+    }
     visiting.delete(id);
     const directObjects = direct.get(id) ?? [];
-    const objects = state?.collapsed ? directObjects.filter((object) => visible.has(`PhysicalObject:${object.physicalObjectId}`)) : directObjects;
     const hidden = state?.collapsed ? [
       ...directObjects.filter((object) => !visible.has(`PhysicalObject:${object.physicalObjectId}`)),
       ...hiddenChildren.flatMap((childId) => subtreeObjects.get(childId) ?? []),
     ] : [];
-    let proxyRepresentation: Representation | null = null;
     if (hidden.length) {
       const center = union(hidden.map((object) => object.rectangle));
       const width = proxyWidth(location.name);
@@ -138,58 +123,20 @@ export function deriveLocationPresentation(
       const proxy: LocationProxy = { locationId: id, pathLocationIds: [id], label: location.name, bounds, hiddenObjectCount: hidden.length };
       proxies.set(id, proxy);
       hidden.forEach((object) => hiddenObjectProxy.set(object.physicalObjectId, id));
-      proxyRepresentation = { kind: 'proxy', proxy, extent: bounds };
-    }
-    const represented = [...childRepresentations, ...(proxyRepresentation ? [proxyRepresentation] : [])];
-    const arity = objects.length + represented.length;
-    if (arity === 0) return null;
-
-    if (arity >= 2) {
-      const content = union([...objects.map((object) => object.rectangle), ...represented.map((child) => child.extent)]);
-      const frame: LocationFrame = {
-        locationId: id,
-        parentLocationId: location.parent_location_ref?.entity_id ?? null,
-        pathLocationIds: [id],
-        label: location.name,
-        depth,
-        bounds: frameBounds(content),
-      };
-      frames.set(id, frame);
-      return { kind: 'frame', frame, content, extent: frame.bounds };
     }
 
-    const child = represented[0];
-    if (child?.kind === 'frame') {
-      const label = `${location.name} / ${child.frame.label}`;
-      const frame = {
-        ...child.frame,
-        pathLocationIds: [id, ...child.frame.pathLocationIds],
-        label,
-        bounds: child.frame.bounds,
-      };
-      frames.set(frame.locationId, frame);
-      return { kind: 'frame', frame, content: child.content, extent: frame.bounds };
+    const geometry = state?.geometry;
+    const numericId = Number.parseInt(id.replaceAll('-', '').slice(-6), 16) || 0;
+    const bounds = geometry ?? { x: numericId % 16 * 360, y: (numericId >> 8) % 16 * 260, width: 300, height: 200 };
+    const path: string[] = [id];
+    let parent = location.parent_location_ref?.entity_id;
+    while (parent && byId.has(parent) && !path.includes(parent)) {
+      path.unshift(parent);
+      parent = byId.get(parent)?.parent_location_ref?.entity_id;
     }
-    if (child?.kind === 'proxy') {
-      if (child.proxy.locationId === id) return child;
-      const pathLocationIds = [id, ...child.proxy.pathLocationIds];
-      const label = pathLocationIds.map((pathId) => byId.get(pathId)!.name).join(' / ');
-      const width = proxyWidth(label);
-      const centerX = child.proxy.bounds.x + child.proxy.bounds.width / 2;
-      const proxy = { ...child.proxy, pathLocationIds, label, bounds: { ...child.proxy.bounds, x: centerX - width / 2, width } };
-      proxies.set(child.proxy.locationId, proxy);
-      return { kind: 'proxy', proxy, extent: proxy.bounds };
-    }
-    const object = child?.kind === 'object' ? child.object : objects[0].rectangle;
-    const physicalObjectId = child?.kind === 'object' ? child.path.physicalObjectId : objects[0].physicalObjectId;
-    const label = child?.kind === 'object' ? `${location.name} / ${child.path.label}` : location.name;
-    const path: ObjectLocationPath = {
-      physicalObjectId,
-      pathLocationIds: child?.kind === 'object' ? [id, ...child.path.pathLocationIds] : [id],
-      label,
-    };
-    objectPaths.set(physicalObjectId, path);
-    return { kind: 'object', path, object, extent: object };
+    const frame: LocationFrame = { locationId: id, parentLocationId: location.parent_location_ref?.entity_id ?? null,
+      pathLocationIds: [id], label: path.map(key => byId.get(key)!.name).join(' / '), depth, bounds };
+    frames.set(id, frame);
   };
   for (const location of locations) {
     const id = location.location_ref.entity_id;

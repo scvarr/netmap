@@ -49,6 +49,7 @@ import { useI18n } from "../i18n";
 import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { blueprintMapNameplateHeight } from "../topology/blueprintDisplaySize";
 import { nodeFootprint, type FlowRectangle } from "../topology/nodeFootprint";
+import { LocationFrameEditor } from "./LocationFrameEditor";
 import { deriveLocationPresentation, projectCollapsedEdges } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
 import type { LocationGroupMove, MapLocationState, MapPlacement } from "../topology/savedMapTypes";
@@ -76,7 +77,7 @@ interface TopologyCanvasProps {
   /** New authoritative SavedMap placement snapshot, including variant switches and refreshes. */
   positionSnapshot?: readonly MapPlacement[];
   displayWidthOverrides?: Record<string, number>;
-  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; states?: readonly MapLocationState[]; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; onGroupMove?: (locationId: string, move: LocationGroupMove) => void; onGroupMoveRejected?: (message: string) => void };
+  locationFrameInput?: { locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; onGroupMove?: (locationId: string, move: LocationGroupMove) => void; onGroupMoveRejected?: (message: string) => void };
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
@@ -193,7 +194,7 @@ export function TopologyCanvas({
   const frameDrag = useRef<FrameDrag | null>(null);
   const routeNormalizer = useRef<((cableId: string, waypoints: readonly MapCableRouteWaypoint[]) => MapCableRouteWaypoint[]) | null>(null);
   const [frameDragPreview, setFrameDragPreview] = useState<FrameDragPreview | null>(null);
-  const { fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
+  const { fitBounds, fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
   const presentationScene = useMemo(() => presentationSceneDocument(document), [document]);
@@ -323,7 +324,14 @@ export function TopologyCanvas({
     if (!shouldFit) return;
     fitAfterLayout.current = false;
     fittedSceneKey.current = presentationSceneKey;
-    void fitView({ duration: 300, maxZoom: 1.1, padding: 0.2 });
+    const frames = locationFrameInput && document.layer === 'L1' && document.detail_level === 'PHYSICAL_OBJECT'
+      ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, [], locationFrameInput.states ?? []).frames : [];
+    if (frames.length) {
+      const bounds = [...frames.map(frame => frame.bounds), ...projection.nodes.map(node => ({ ...node.position, width: node.width ?? 212, height: node.height ?? 144 }))];
+      const x = Math.min(...bounds.map(b => b.x)), y = Math.min(...bounds.map(b => b.y));
+      const right = Math.max(...bounds.map(b => b.x + b.width)), bottom = Math.max(...bounds.map(b => b.y + b.height));
+      void fitBounds({ x, y, width: right - x, height: bottom - y }, { padding: .2 });
+    } else void fitView({ duration: 300, maxZoom: 1.1, padding: 0.2 });
     requestAnimationFrame(() => {
       perfMark("map-interactive");
       perfMeasure("time-to-map", "document-received", "map-interactive");
@@ -792,12 +800,14 @@ export function TopologyCanvas({
               const collapsed = locationFrameInput?.states?.some((state) => state.location_ref.entity_id === frame.locationId && state.collapsed) ?? false;
               const toggleLabel = t(collapsed ? 'map.locationExpand' : 'map.locationCollapse', { name: frame.label });
               const configureLabel = t('map.locationConfigureCollapse', { name: frame.label });
-              return <div
-                key={frame.locationId}
-                className="location-frame"
-                data-location-id={frame.locationId}
-                style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }}
-              ><span className="location-frame__heading nodrag nopan" onPointerDown={locationFrameInput?.onGroupMove ? (event) => startFrameDrag(event, frame.locationId, frame.bounds) : undefined} onPointerMove={updateFrameDrag} onPointerUp={finishFrameDrag} onPointerCancel={cancelFrameDrag} onLostPointerCapture={cancelFrameDrag}><span className="location-frame__label">{frame.label}</span>{locationFrameInput?.onCollapse && locationFrameInput.onConfigure && <span className="location-frame__actions"><button className="location-action" type="button" aria-label={toggleLabel} title={toggleLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button><button className="location-action" type="button" aria-label={configureLabel} title={configureLabel} onPointerDown={(event) => event.stopPropagation()} onClick={() => locationFrameInput.onConfigure?.(frame.locationId)}>⚙</button></span>}</span></div>;
+              return <LocationFrameEditor key={(locationFrameInput?.variantId ?? '') + frame.locationId} frame={frame}
+                state={locationFrameInput?.states?.find(state => state.location_ref.entity_id === frame.locationId)}
+                screenToFlowPosition={screenToFlowPosition} onSave={locationFrameInput?.onGeometry}
+                actions={<span className="location-frame__actions">
+                  <button type="button" className="location-action" aria-label={toggleLabel} title={toggleLabel} onClick={() => locationFrameInput?.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button>
+                  <button type="button" className="location-action" aria-label={configureLabel} title={configureLabel} onClick={() => locationFrameInput?.onConfigure?.(frame.locationId)}>⚙</button>
+                  <button type="button" className="location-action" data-location-group-move={frame.locationId} title={frame.label} onPointerDown={(event) => startFrameDrag(event, frame.locationId, frame.bounds)} onPointerMove={updateFrameDrag} onPointerUp={finishFrameDrag} onPointerCancel={cancelFrameDrag}>↔</button>
+                </span>} />;
             })}
             {previewFrames.map((frame) => <div key={frame.locationId} className="location-frame location-frame--drag-preview" data-preview-location-id={frame.locationId} aria-hidden="true" style={{ left: frame.bounds.x, top: frame.bounds.y, width: frame.bounds.width, height: frame.bounds.height }} />)}
           </div>

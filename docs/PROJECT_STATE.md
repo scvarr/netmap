@@ -29,7 +29,11 @@
 - SavedMap и именованные MapPresentationVariant: placements, отдельные позиции
   физических/логических видов, presentation routes, text annotations.
   Spatial P-UX-03A–E реализован; **P-UX-03E ACCEPTED / MERGED / MANUAL RECHECK PASSED**.
-  Derived Location frames, unary path labels, recursive collapse, выбор видимых
+  C-UX-10-01 foundation (branch, external inspection pending): самостоятельные
+  прямоугольные Location frames, включая пустые/unary, и одна обязательная
+  виртуальная точка (map/Location UUIDv5); variant geometry с явным Save/Cancel,
+  drag/resize, копированием и восстановлением. Canonical path labels,
+  recursive collapse прежней модели, выбор видимых
   непосредственных элементов, group move с collision rejection и route transform.
 - Редактор кабельного маршрута: transient draft, Save/Cancel, добавление,
   перемещение и удаление waypoints через инспектор, snapping к чужой геометрии,

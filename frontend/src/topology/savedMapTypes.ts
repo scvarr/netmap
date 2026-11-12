@@ -23,7 +23,8 @@ export interface MapTextAnnotationRef { entity_type: 'MapTextAnnotation'; entity
 export interface MapTextAnnotation { annotation_ref: MapTextAnnotationRef; text: string; position: MapPresentationPoint; text_color: string; font_size: number }
 export interface MapTextAnnotationWrite { text: string; position: MapPresentationPoint; text_color: string; font_size: number }
 export interface MapLocationDirectElementRef { entity_type: 'PhysicalObject' | 'Location'; entity_id: string }
-export interface MapLocationState { location_ref: LocationRef; collapsed: boolean; visible_direct_elements: MapLocationDirectElementRef[] }
+export interface MapLocationGeometry { x: number; y: number; width: number; height: number; edge: 'top' | 'right' | 'bottom' | 'left'; offset: number }
+export interface MapLocationState { geometry?: MapLocationGeometry; boundary_point_id?: string; location_ref: LocationRef; collapsed: boolean; visible_direct_elements: MapLocationDirectElementRef[] }
 export interface MapLocationDirectElementChoice { ref: MapLocationDirectElementRef; label: string }
 export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; active_variant_ref: MapPresentationVariantRef; variants: MapPresentationVariant[]; location_states?: MapLocationState[]; placements: MapPlacement[]; cable_routes: MapCableRoute[]; text_annotations: MapTextAnnotation[] }
 export interface SavedMapSummary { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string }
@@ -35,6 +36,7 @@ export interface SavedMapDataSource {
   /** Acknowledges variant creation; load SavedMap separately for authoritative state. */
   createPresentationVariant?(mapId: string, name: string, sourceVariantId: string): Promise<MapPresentationVariant>;
   deletePresentationVariant?(mapId: string, variantId: string): Promise<void>;
+  setLocationGeometry?(mapId: string, variantId: string, locationId: string, geometry: MapLocationGeometry): Promise<void>;
   setLocationState?(mapId: string, variantId: string, locationId: string, state: Pick<MapLocationState, 'collapsed' | 'visible_direct_elements'>): Promise<void>;
   moveLocationGroup?(mapId: string, variantId: string, locationId: string, move: LocationGroupMove): Promise<void>;
   loadLocationDirectElements?(mapId: string, variantId: string, locationId: string): Promise<MapLocationDirectElementChoice[]>;

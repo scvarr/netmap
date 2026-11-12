@@ -145,6 +145,14 @@ C-UX-16 не входит в C-UX-11 и не переоткрывает его. 
 
 ## C-UX-10 — Automatic Location Cable Channels
 
+C-UX-10-01 foundation реализован в milestone-ветке, ожидает внешней инспекции:
+самостоятельные прямоугольные frames всех canonical Locations на каждой карте,
+variant geometry и одна обязательная map-scoped виртуальная точка, Save/Cancel,
+перемещение/resize и копирование variant. Геометрия не меняет topology/hierarchy.
+C-UX-10 остаётся OPEN: Channels, составные Cable routes, comb и новый collapse
+не реализованы.
+
+
 **OPEN: DECIDED TARGET, не IMPLEMENTED.** C-UX-10-CONTRACT — только
 продуктовый контракт; реализация требует отдельного bounded milestone и не
 пересматривает C-UX-11. Phase A–I и C-CAP-01 сохраняют статусы.
@@ -152,8 +160,9 @@ C-UX-16 не входит в C-UX-11 и не переоткрывает его. 
 ### CURRENT и владение
 
 CURRENT: MapCableRoute хранит индивидуальные waypoints; boundary anchors
-привязаны к текущим derived frames. Shared channels и автоматическое создание
-инфраструктуры отсутствуют. Derived frame без объектов не отображается.
+привязаны к самостоятельным Location frames (C-UX-10-01 foundation).
+Shared channels и автоматическое создание каналов отсутствуют. Пустые Location
+имеют frame и одну обязательную виртуальную точку.
 
 TARGET согласован с [независимыми картами](L1_REFERENCE_NETWORK.md#независимые-карты):
 Location и виртуальная инфраструктура принадлежат одной карте и не разделяются
@@ -243,7 +252,8 @@ Location. Expand полностью восстанавливает исходн�
 TARGET: пустой Location имеет видимую область для размещения обязательной точки
 и создания Channels до добавления оборудования. Геометрия пустого контейнера —
 presentation state, не canonical физические размеры помещения. Это отличие
-от CURRENT derived frame, а не утверждение о готовности renderer.
+от прежнего derived frame; frame/point foundation реализован в C-UX-10-01,
+создание Channels остаётся OPEN.
 
 ### OPEN implementation decisions
 

@@ -73,6 +73,7 @@ class SavedMapCatalog:
         ) for route in source_routes)
         self.session.add_all(MapLocationState(
             variant_id=variant.id, location_id=state.location_id, collapsed=state.collapsed,
+            geometry=dict(state.geometry or self.default_geometry(state.location_id)),
             visible_direct_elements=[dict(ref) for ref in state.visible_direct_elements],
         ) for state in self._location_states(source.id))
         self._flush()
@@ -123,8 +124,36 @@ class SavedMapCatalog:
             *({"ref": {"entity_type": "PhysicalObject", "entity_id": object_id}, "label": aliases[object_id].value if object_id in aliases else f"PhysicalObject {object_id}"} for object_id in object_ids),
         ]
 
+    @staticmethod
+    def default_geometry(location_id: uuid.UUID) -> dict:
+        value = location_id.int
+        return {"x": (value % 16) * 360, "y": ((value >> 8) % 16) * 260,
+                "width": 300, "height": 200, "edge": "right", "offset": 0.5}
+
+    def set_location_geometry(self, map_id, variant_id, location_id, geometry):
+        from app.schemas import MapLocationGeometry
+        geometry = MapLocationGeometry.model_validate(geometry).model_dump()
+        self._require_map(map_id)
+        self._require_variant(map_id, variant_id)
+        if self.session.get(Location, location_id) is None:
+            raise ValidationError("Location does not exist", {"location_id": str(location_id)})
+        state = self.session.scalar(select(MapLocationState).where(
+            MapLocationState.variant_id == variant_id, MapLocationState.location_id == location_id).with_for_update())
+        if state is None:
+            state = MapLocationState(variant_id=variant_id, location_id=location_id,
+                                     collapsed=False, visible_direct_elements=[])
+            self.session.add(state)
+        state.geometry = geometry
+        self._flush()
+        return state
+
     def _location_states(self, variant_id: uuid.UUID) -> tuple[MapLocationState, ...]:
-        return tuple(self.session.scalars(select(MapLocationState).where(MapLocationState.variant_id == variant_id).order_by(MapLocationState.location_id)))
+        stored = {state.location_id: state for state in self.session.scalars(
+            select(MapLocationState).where(MapLocationState.variant_id == variant_id))}
+        return tuple(stored.get(location_id) or MapLocationState(
+            variant_id=variant_id, location_id=location_id, collapsed=False,
+            visible_direct_elements=[], geometry=self.default_geometry(location_id)
+        ) for location_id in self.session.scalars(select(Location.id).order_by(Location.id)))
 
     def _valid_location_refs(self, states: tuple[MapLocationState, ...]) -> dict[uuid.UUID, list[dict[str, str]]]:
         object_ids = {uuid.UUID(ref["entity_id"]) for state in states for ref in state.visible_direct_elements if ref["entity_type"] == "PhysicalObject"}

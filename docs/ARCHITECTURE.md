@@ -103,13 +103,23 @@ Membership общий для вариантов; topology и canonical Location 
 меняются переключением варианта. Physical и Logical scene coordinates независимы.
 MapTextAnnotation — отдельная presentation capability.
 
-CURRENT: hierarchy берётся из canonical Locations, frames derived из текущей scene,
-не persisted polygons. Expanded branching frame — union видимых непосредственных
-objects/retained child frames с padding; unary chain даёт compact path label.
-Пустому Location не придумываются bounds. Collapse рекурсивен: скрытое содержимое
-и сохранённая геометрия не удаляются; proxy и boundary connectivity сохраняют
-exact canonical refs. Выбор видимых непосредственных элементов — presentation,
-не смена canonical membership. MapComposite/MapRegion не поддерживаются.
+C-UX-10-01: все canonical Locations доступны в каждой SavedMap, без membership
+и map isolation. Каждый Location имеет самостоятельный прямоугольный frame,
+включая пустой и unary; hierarchy отображается canonical path label.
+MapLocationState.geometry хранит x/y/width/height и edge/offset обязательной
+виртуальной точки отдельно для variant. До первого сохранения чтение возвращает
+детерминированный стартовый прямоугольник по immutable Location ID, без записи
+в БД и без зависимости от оборудования. Начальные рамки могут пересекаться;
+геометрическое вложение не задаёт canonical containment.
+Boundary identity — UUIDv5(namespace=SavedMap ID, name=Location ID), одна на пару
+map/Location, не зависит от variant/геометрии. Отдельного create/delete точки нет.
+Geometry PUT валидирует finite coordinates, положительные размеры и perimeter,
+Location и ownership variant до записи. Copy variant копирует геометрию;
+FK CASCADE удаляет presentation state при удалении variant/Location.
+UI: drag заголовка переносит только рамку; resize и drag точки создают draft,
+Save явно сохраняет его, Cancel отменяет. Group move вызывается отдельной кнопкой.
+Collapse сохраняет прежнюю proxy-модель; channel-aware collapse не реализован.
+MapComposite/MapRegion не поддерживаются.
 
 Group move переносит одинаковым delta все имеющиеся L1 позиции canonical
 subtree в активном variant, включая скрытые. Сервер заново разрешает subtree,
@@ -124,7 +134,8 @@ Positions и затронутые routes сохраняются атомарно
 одну обязательную виртуальную точку со стабильной identity; это не ConnectionPoint.
 В пределах независимой карты одна неупорядоченная пара Location имеет не более
 одного прямого Channel. Инфраструктура не разделяется между картами; геометрия
-принадлежит presentation variant, schema/DTO/API остаются OPEN.
+принадлежит presentation variant. Foundation frames/points реализован в C-UX-10-01;
+Channel schema/DTO/API остаются OPEN.
 
 Cable сохраняет реальные окончания и canonical identity. Его путь динамически
 составляется из индивидуальных подводов и общей геометрии Channel без копирования.
@@ -141,11 +152,11 @@ presentation область. Ничто из этого не создаёт topo
 CURRENT: MapCableRoute — presentation конкретного Cable в карте/variant. Internal route
 (оба конца внутри subtree) переносит свободные waypoints; external не меняется;
 boundary route переносит внутренний prefix до выхода, сохраняя внешний suffix.
-Anchor следует derived frame. Без сохранённой route линия строится от endpoints.
+Route anchor следует самостоятельному Location frame; это не обязательная точка Location. Без сохранённой route линия строится от endpoints.
 
 Waypoint — {x,y} либо {x,y,anchor:{location_id,edge,offset}}; edge top/right/bottom/left,
 offset 0..1. x/y у anchor — snapshot/fallback, renderable frame определяет binding.
-Frame bounds не сохраняются. Anchor drag ограничен периметром; явный anchor
+Frame bounds сохраняются в Location presentation state. Anchor drag ограничен периметром; явный anchor
 приоритетен перед повторным split того же Location, другие Locations независимы.
 Повторный выход/re-entry одного Location пока отклоняется. Сохранение нормализует
 пересечения без дублирования anchors. Чтение обычной route не мутирует storage;
