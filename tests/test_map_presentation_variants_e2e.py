@@ -64,6 +64,7 @@ def test_creating_a_layout_copy_clones_only_variant_specific_presentation_state(
     with SessionLocal() as session:
         assert session.scalar(select(func.count()).select_from(MapPlacement)) == 2
 
+    assert client.put(f"/v1/maps/{map_id}/placements/{left_id}/locks/physical?variant_id={copy_id}", json={"locked": False}).status_code == 200
     assert client.put(f"/v1/maps/{map_id}/placements/{left_id}/positions/physical?variant_id={copy_id}", json={"x": 99, "y": 98, "display_width": 444}).status_code == 200
     assert client.put(f"/v1/maps/{map_id}/cable-routes/{cable_id}?variant_id={copy_id}", json={"view": "physical", "waypoints": []}).status_code == 200
     source = client.get(f"/v1/maps/{map_id}?variant_id={source_id}").json()

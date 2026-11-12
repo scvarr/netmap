@@ -34,11 +34,9 @@ export interface LocationPresentation {
   hiddenObjectProxy: Map<string, string>;
 }
 
-export interface LocationProxy { locationId: string; pathLocationIds: string[]; label: string; bounds: FlowRectangle; hiddenObjectCount: number }
+export interface LocationProxy { locationId: string; pathLocationIds: string[]; label: string; bounds: FlowRectangle; hiddenObjectCount: number; partial?: boolean }
 
 const proxyWidth = (label: string): number => Math.max(100, Math.min(360, 74 + [...label].length * 7));
-const proxyHeight = 30;
-
 /** Only presentation endpoints change; each retained edge keeps its exact evidence and id. */
 export function projectCollapsedEdges<T extends { source: string; target: string }>(edges: readonly T[], hiddenNodeProxies: ReadonlyMap<string, string>): T[] {
   return edges.flatMap((edge) => {
@@ -48,14 +46,6 @@ export function projectCollapsedEdges<T extends { source: string; target: string
     return source === target && source.startsWith('location-proxy:') && !continuation ? [] : [{ ...edge, source, target }];
   });
 }
-
-const union = (rectangles: readonly FlowRectangle[]): FlowRectangle => {
-  const x = Math.min(...rectangles.map((rectangle) => rectangle.x));
-  const y = Math.min(...rectangles.map((rectangle) => rectangle.y));
-  const right = Math.max(...rectangles.map((rectangle) => rectangle.x + rectangle.width));
-  const bottom = Math.max(...rectangles.map((rectangle) => rectangle.y + rectangle.height));
-  return { x, y, width: right - x, height: bottom - y };
-};
 
 /** All canonical Locations have independent presentation frames. */
 export function deriveLocationPresentation(
@@ -108,6 +98,16 @@ export function deriveLocationPresentation(
     const location = byId.get(id)!;
     const state = stateById.get(id);
     const visible = new Set(state?.visible_direct_elements.map((ref) => `${ref.entity_type}:${ref.entity_id}`) ?? []);
+    const fullCollapse = Boolean(state?.collapsed && !state.visible_direct_elements.length);
+    if (fullCollapse) {
+      const bounds = geometryById.get(id)!;
+      const hidden = subtreeObjects.get(id) ?? [];
+      proxies.set(id, { locationId: id, pathLocationIds: [id], label: location.name,
+        bounds: { x: bounds.x, y: bounds.y, width: proxyWidth(location.name), height: 32 }, hiddenObjectCount: hidden.length });
+      hidden.forEach(object => hiddenObjectProxy.set(object.physicalObjectId, id));
+      visiting.delete(id);
+      return;
+    }
     const hiddenChildren: string[] = [];
     for (const childId of children.get(id) ?? []) {
       if (state?.collapsed && !visible.has('Location:' + childId)) hiddenChildren.push(childId);
@@ -120,10 +120,9 @@ export function deriveLocationPresentation(
       ...hiddenChildren.flatMap((childId) => subtreeObjects.get(childId) ?? []),
     ] : [];
     if (hidden.length) {
-      const center = union(hidden.map((object) => object.rectangle));
-      const width = proxyWidth(location.name);
-      const bounds = { x: center.x + center.width / 2 - width / 2, y: center.y + center.height / 2 - proxyHeight / 2, width, height: proxyHeight };
-      const proxy: LocationProxy = { locationId: id, pathLocationIds: [id], label: location.name, bounds, hiddenObjectCount: hidden.length };
+      const frame = geometryById.get(id)!;
+      const bounds = { x: frame.x + frame.width, y: frame.y + frame.height * .5, width: 1, height: 1 };
+      const proxy: LocationProxy = { locationId: id, pathLocationIds: [id], label: location.name, bounds, hiddenObjectCount: hidden.length, partial: true };
       proxies.set(id, proxy);
       hidden.forEach((object) => hiddenObjectProxy.set(object.physicalObjectId, id));
     }

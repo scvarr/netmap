@@ -24,7 +24,7 @@ export interface MapTextAnnotation { annotation_ref: MapTextAnnotationRef; text:
 export interface MapTextAnnotationWrite { text: string; position: MapPresentationPoint; text_color: string; font_size: number }
 export interface MapLocationDirectElementRef { entity_type: 'PhysicalObject' | 'Location'; entity_id: string }
 export interface MapLocationGeometry { x: number; y: number; width: number; height: number; edge: 'top' | 'right' | 'bottom' | 'left'; offset: number }
-export interface MapLocationState { geometry?: MapLocationGeometry; boundary_point_id?: string; location_ref: LocationRef; collapsed: boolean; visible_direct_elements: MapLocationDirectElementRef[] }
+export interface MapLocationState { manual_bounds?: { x: number; y: number; width: number; height: number }; geometry?: MapLocationGeometry; boundary_point_id?: string; location_ref: LocationRef; collapsed: boolean; visible_direct_elements: MapLocationDirectElementRef[] }
 export interface MapLocationDirectElementChoice { ref: MapLocationDirectElementRef; label: string }
 export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; active_variant_ref: MapPresentationVariantRef; variants: MapPresentationVariant[]; location_states?: MapLocationState[]; placements: MapPlacement[]; cable_routes: MapCableRoute[]; text_annotations: MapTextAnnotation[] }
 export interface SavedMapSummary { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string }
@@ -41,7 +41,7 @@ export interface SavedMapDataSource {
   moveLocationGroup?(mapId: string, variantId: string, locationId: string, move: LocationGroupMove): Promise<void>;
   loadLocationDirectElements?(mapId: string, variantId: string, locationId: string): Promise<MapLocationDirectElementChoice[]>;
   addPlacement(mapId: string, physicalObjectId: string, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
-  movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number, variantId?: string): Promise<void>;
+  movePosition(mapId: string, physicalObjectId: string, view: SavedMapView, x: number, y: number, displayWidth?: number, variantId?: string): Promise<SavedMap>;
   setPositionLock(mapId: string, physicalObjectId: string, view: SavedMapView, locked: boolean, variantId?: string): Promise<void>;
   removePlacement(mapId: string, physicalObjectId: string): Promise<void>;
   /** A successful resolution only acknowledges the route write; read SavedMap separately for authoritative state. */

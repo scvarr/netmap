@@ -132,6 +132,7 @@ class MapLocationState(Base):
     variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_presentation_variants.id", ondelete="CASCADE"), nullable=False)
     location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
     geometry: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    manual_bounds: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     collapsed: Mapped[bool] = mapped_column(nullable=False, server_default="false")
     visible_direct_elements: Mapped[list[dict[str, str]]] = mapped_column(JSONB, nullable=False, default=list)
     variant: Mapped[MapPresentationVariant] = relationship(back_populates="location_states")

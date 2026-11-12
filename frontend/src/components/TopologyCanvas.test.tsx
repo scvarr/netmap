@@ -129,6 +129,32 @@ afterEach(() => {
 });
 
 describe('TopologyCanvas async layout boundary', () => {
+  it('collapses nested empty containers to one compact boundary and restores expanded bounds', async () => {
+    const ref = (id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: id });
+    const ids = ['8', '808', '823', 'U42'];
+    const locations = ids.map((id, index) => ({ location_ref: ref(id), name: id, type: null, parent_location_ref: index ? ref(ids[index - 1]) : null }));
+    const geometry = { x: 20, y: 40, width: 400, height: 300, edge: 'bottom' as const, offset: .25 };
+    const states = ids.map(id => ({ location_ref: ref(id), collapsed: false, visible_direct_elements: [], geometry, boundary_point_id: 'point-' + id }));
+    const collapse = vi.fn();
+    const props = { document: { ...documentFor('physical-empty-collapse'), nodes: [] }, selection: null, onSelectionChange: vi.fn(), layoutEngine: async () => ({ nodes: [], edges: [] }) };
+    const view = render(<TopologyCanvas {...props} locationFrameInput={{ locations, placements: [], states, onCollapse: collapse }} />);
+    await waitFor(() => expect(globalThis.document.querySelectorAll('.location-frame')).toHaveLength(4));
+    const expanded = [...globalThis.document.querySelectorAll<HTMLElement>('.location-frame')].map(node => node.style.cssText);
+    view.rerender(<TopologyCanvas {...props} locationFrameInput={{ locations, placements: [], states: states.map(s => ({ ...s, collapsed: s.location_ref.entity_id === '8' || s.location_ref.entity_id === '823' })), onCollapse: collapse }} />);
+    expect(globalThis.document.querySelectorAll('.location-frame')).toHaveLength(0);
+    expect(globalThis.document.querySelectorAll('.location-proxy')).toHaveLength(1);
+    expect(globalThis.document.querySelector('[data-boundary-point-id="point-8"]')).toHaveStyle({ left: '25%', top: '100%' });
+    fireEvent.click(screen.getByRole('button', { name: 'Развернуть 8' }));
+    expect(collapse).toHaveBeenCalledWith('8', false);
+    view.rerender(<TopologyCanvas {...props} locationFrameInput={{ locations, placements: [], states: states.map(s => ({ ...s, collapsed: s.location_ref.entity_id === '823' })), onCollapse: collapse }} />);
+    expect(globalThis.document.querySelectorAll('.location-frame')).toHaveLength(2);
+    expect(globalThis.document.querySelectorAll('.location-proxy')).toHaveLength(1);
+    expect(globalThis.document.querySelector('.location-frame[data-location-id="823"]')).toBeNull();
+    expect(globalThis.document.querySelector('[data-boundary-point-id="point-823"]')).toBeInTheDocument();
+    view.rerender(<TopologyCanvas {...props} locationFrameInput={{ locations, placements: [], states, onCollapse: collapse }} />);
+    expect(globalThis.document.querySelectorAll('.location-proxy')).toHaveLength(0);
+    expect([...globalThis.document.querySelectorAll<HTMLElement>('.location-frame')].map(node => node.style.cssText)).toEqual(expanded);
+  });
   it('uses one container gesture with equipment preview and explicit Save/Cancel', async () => {
     const ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'U42' };
     const object: TopologyProjectionNode = { id: 'PP1', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'PP1' }], attributes: {} };
@@ -245,6 +271,8 @@ describe('TopologyCanvas async layout boundary', () => {
     const proxy = globalThis.document.querySelector('.location-proxy') as HTMLElement;
     expect(proxy).toHaveTextContent('Room');
     expect(proxy).not.toHaveTextContent('1');
+    expect(globalThis.document.querySelector('.location-frame[data-location-id="room"]')).toBeNull();
+    expect(globalThis.document.querySelectorAll('.location-proxy[data-location-id="room"]')).toHaveLength(1);
     expect(proxy).toHaveAttribute('title', 'Room — скрыто объектов: 1');
     const expand = screen.getAllByRole('button', { name: 'Развернуть Room' })[0];
     expect(expand).toHaveTextContent('+');

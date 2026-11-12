@@ -10,7 +10,7 @@ import type { PresentationSceneDocument } from './presentationScene';
 import type { MapCableRoute } from './savedMapTypes';
 import type { MapCableRouteWaypoint } from './savedMapTypes';
 import type { BoundaryFrame } from './locationBoundaryAnchors';
-import { blueprintNodeDisplayDimensions } from './blueprintDisplaySize';
+import { blueprintRenderedNodeDimensions } from './blueprintDisplaySize';
 
 export const LAYOUT_NODE_WIDTH = 212;
 export const LAYOUT_NODE_HEIGHT = 144;
@@ -26,7 +26,7 @@ const loadElk = (): Promise<ELK> => {
 
 export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
-  locationProxy?: { locationId: string; label: string; hiddenObjectCount: number; traced?: boolean; expandLabel?: string; configureLabel?: string; onExpand?: () => void; onConfigure?: () => void };
+  locationProxy?: { locationId: string; label: string; hiddenObjectCount: number; partial?: boolean; boundaryPointId?: string; boundaryEdge?: 'top' | 'right' | 'bottom' | 'left'; boundaryOffset?: number; traced?: boolean; expandLabel?: string; configureLabel?: string; onExpand?: () => void; onConfigure?: () => void };
   /** Physical SavedMap decoration derived from canonical Location context. */
   locationPresentationPath?: string;
   /** Temporary MapPage authoring state; deliberately separate from topology selection. */
@@ -173,7 +173,7 @@ export const toFlowProjection: TopologyLayoutEngine = async (scene) => {
   children: orderedNodes.map((node) => ({
       id: node.id,
       ...(node.attributes.blueprint_presentation
-        ? blueprintNodeDisplayDimensions(node.attributes.blueprint_presentation, undefined)
+        ? blueprintRenderedNodeDimensions(node.attributes.blueprint_presentation, undefined)
         : { width: LAYOUT_NODE_WIDTH, height: LAYOUT_NODE_HEIGHT }),
     })),
     edges: layoutEdges,
@@ -190,7 +190,7 @@ export const toFlowProjection: TopologyLayoutEngine = async (scene) => {
       id: projection.id,
       type: 'device' as const,
       ...(projection.attributes.blueprint_presentation
-        ? blueprintNodeDisplayDimensions(projection.attributes.blueprint_presentation, undefined)
+        ? blueprintRenderedNodeDimensions(projection.attributes.blueprint_presentation, undefined)
         : { width: undefined, height: undefined }),
       position: positions.get(projection.id) ?? { x: 0, y: 0 },
       data: { projection },

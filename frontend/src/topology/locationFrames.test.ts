@@ -42,3 +42,19 @@ describe('independent Location presentation', () => {
     expect(projectCollapsedEdges(edges, new Map([['a', 'location-proxy:room']]))[0]).toEqual({ id: 'cable', source: 'location-proxy:room', target: 'b' });
   });
 });
+
+it('keeps partial-collapse selections and gives the outer full collapse priority', () => {
+  const locations = [location('root'), location('chosen', 'root'), location('hidden', 'root')];
+  const placements = [placement('a', 'root'), placement('b', 'hidden')];
+  const objects = [shown('a', 20, 40), shown('b', 30, 140)];
+  const partial = deriveLocationPresentation(locations, placements, objects, [state('root', true, [{ entity_type: 'Location', entity_id: 'chosen' }, { entity_type: 'PhysicalObject', entity_id: 'a' }]), state('hidden', true)]);
+  expect(partial.frames.map(f => f.locationId).sort()).toEqual(['chosen', 'root']);
+  expect(partial.hiddenObjectProxy.has('a')).toBe(false);
+  expect(partial.hiddenObjectProxy.get('b')).toBe('root');
+  expect(partial.proxies).toHaveLength(1);
+  expect(partial.proxies[0].partial).toBe(true);
+  const full = deriveLocationPresentation(locations, placements, objects, [state('root', true), state('hidden', true)]);
+  expect(full.frames).toHaveLength(0);
+  expect(full.proxies.map(p => p.locationId)).toEqual(['root']);
+  expect(full.hiddenObjectProxy.get('b')).toBe('root');
+});

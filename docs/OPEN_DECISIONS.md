@@ -152,6 +152,10 @@ C-UX-10-01 foundation реализован в milestone-ветке, ожидае
 placements всех карт/variants (corrective),
 variant geometry и одна обязательная map-scoped виртуальная точка, Save/Cancel,
 перемещение/resize и копирование variant. Геометрия не меняет topology/hierarchy.
+Стабилизация foundation: полный authoritative ответ move (positions/frames/routes),
+автоматические bounds по полному rendered footprint с отдельным manual resize floor,
+полный collapse пустых/заполненных subtree в один компактный элемент с прежней точкой,
+expand без перезаписи expanded geometry и сохранение partial visible elements.
 C-UX-10 остаётся OPEN: Channels, составные Cable routes, comb и новый collapse
 не реализованы.
 

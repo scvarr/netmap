@@ -28,6 +28,19 @@ const projection = {
 };
 
 describe('DeviceNode internal L1 overlay', () => {
+  it.each([240, 480])('matches the full PP24 rendered bounds to the placement footprint at width %s', width => {
+    const blueprint = projection.attributes.blueprint_presentation;
+    const pp24 = { ...projection, attributes: { ...projection.attributes, blueprint_presentation: {
+      ...blueprint, body: { ...blueprint.body, width: 480, height: 44 },
+      panels: [{ ...blueprint.panels[0], width: 480, height: 44 }], slots: [],
+    } } };
+    render(<DeviceNode {...({ data: { projection: pp24 }, selected: false, width } as any)} />);
+    const card = screen.getByTestId('blueprint-map-node');
+    const footprint = nodeFootprint({ id: 'pp24', position: { x: 0, y: 0 }, width, data: { projection: pp24 } } as any);
+    expect(card).toHaveStyle({ width: `${footprint.width}px`, height: `${footprint.height}px` });
+    expect(footprint.height).toBe(width * 44 / 480 + 14);
+    expect(card.querySelector('.blueprint-map-node__nameplate')).toHaveStyle({ height: '14px' });
+  });
   it('uses local module names in spatial markers even when detached point names are contextual', () => {
     const slots = [1, 2].flatMap(installation => [1, 2].map(port => ({
       ...projection.attributes.blueprint_presentation.slots[0],

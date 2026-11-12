@@ -1226,53 +1226,23 @@ function MapPageContent({
   };
 
   const move = async (id: string, position: XYPosition) => {
-    if (!savedMapDataSource || !mapId) return;
+    if (!savedMapDataSource || !mapId || !activeMap) return;
     setError(null);
-    const targetMapId = mapId;
-    const positionKey = savedMapViewKey(viewMode);
-    const variantId = activeMap?.active_variant_ref.entity_id;
+    const targetMapId = mapId, targetVariantId = activeMap.active_variant_ref.entity_id;
+    const requestedVariant = selectedVariantId.current;
+    const stillSelected = () => selectedMapId.current === targetMapId && selectedVariantId.current === requestedVariant;
     try {
-      await savedMapDataSource.movePosition(
-        targetMapId,
-        id,
-        viewMode,
-        position.x,
-        position.y, undefined, variantId,
-      );
-      if (selectedMapId.current === targetMapId) {
-        setMap((current) =>
-          current?.map_ref.entity_id === targetMapId
-            ? {
-                ...current,
-                placements: current.placements.map((placement) =>
-                  placement.physical_object_ref.entity_id === id
-                    ? {
-                        ...placement,
-                        positions: {
-                          ...placement.positions,
-                          [positionKey]: {
-                            ...placement.positions[positionKey],
-                            ...position,
-                            locked: placement.positions[positionKey]?.locked ?? false,
-                          },
-                        },
-                      }
-                    : placement,
-                ),
-              }
-            : current,
-        );
-      }
+      const authoritative = await savedMapDataSource.movePosition(targetMapId, id, viewMode, position.x, position.y, undefined, targetVariantId);
+      if (stillSelected()) setMap(current => current?.map_ref.entity_id === targetMapId && current.active_variant_ref.entity_id === targetVariantId ? authoritative : current);
     } catch (reason) {
-      if (selectedMapId.current !== targetMapId) return;
+      if (!stillSelected()) return;
       setError(errorMessage(reason, t("map.moveFailed")));
+      // Restore the confirmed snapshot even if a read retry fails.
+      setAuthoritativePositionRevision(revision => revision + 1);
       try {
-        await reloadMap(targetMapId);
-      } catch {
-        // The original persistence error remains the bounded user-facing failure.
-      }
-      if (selectedMapId.current === targetMapId)
-        setAuthoritativePositionRevision((revision) => revision + 1);
+        const confirmed = await savedMapDataSource.loadMap(targetMapId, targetVariantId);
+        if (stillSelected()) setMap(current => current?.map_ref.entity_id === targetMapId && current.active_variant_ref.entity_id === targetVariantId ? confirmed : current);
+      } catch { /* Keep the confirmed local snapshot and the bounded write error. */ }
     }
   };
 
@@ -1287,19 +1257,21 @@ function MapPageContent({
       return current && blueprint ? [{ id, current, width: clampBlueprintDisplayWidth(displayWidth, blueprint) }] : [];
     });
     if (!writes.length) return;
+    const requestedVariant = selectedVariantId.current;
     try {
+      let authoritative: SavedMap | undefined;
       for (const write of writes)
-        await savedMapDataSource.movePosition(targetMapId, write.id, viewMode, write.current.x, write.current.y, write.width, variantId);
-      if (selectedMapId.current === targetMapId) setMap((existing) => existing?.map_ref.entity_id === targetMapId ? {
-        ...existing,
-        placements: existing.placements.map((placement) => {
-          const write = writes.find((item) => item.id === placement.physical_object_ref.entity_id);
-          return write ? { ...placement, positions: { ...placement.positions, [positionKey]: { ...placement.positions[positionKey]!, display_width: write.width } } } : placement;
-        }),
-      } : existing);
+        authoritative = await savedMapDataSource.movePosition(targetMapId, write.id, viewMode, write.current.x, write.current.y, write.width, variantId);
+      if (authoritative && selectedMapId.current === targetMapId && selectedVariantId.current === requestedVariant)
+        setMap(current => current?.map_ref.entity_id === targetMapId && current.active_variant_ref.entity_id === variantId ? authoritative! : current);
     } catch (reason) {
-      if (selectedMapId.current !== targetMapId) return;
-      try { await reloadMap(targetMapId); } catch { /* preserve persistence error */ }
+      if (selectedMapId.current !== targetMapId || selectedVariantId.current !== requestedVariant) return;
+      setAuthoritativePositionRevision(revision => revision + 1);
+      try {
+        const confirmed = await savedMapDataSource.loadMap(targetMapId, variantId);
+        if (selectedMapId.current === targetMapId && selectedVariantId.current === requestedVariant)
+          setMap(current => current?.map_ref.entity_id === targetMapId && current.active_variant_ref.entity_id === variantId ? confirmed : current);
+      } catch { /* preserve persistence error */ }
       throw reason;
     }
   };

@@ -132,8 +132,7 @@ def test_direct_elements_offer_only_placed_content_in_direct_canonical_branches(
         (empty_other_map, other_map_id), (sibling_other_map, other_map_id),
     ):
         assert client.post(f'/v1/maps/{target_map}/placements', json={'physical_object_id': object_id, 'x': 1, 'y': 2}).status_code == 201
-    for index in range(12):
-        location(f'Empty {index}', root)
+    extra_children = [location(f'Empty {index}', root) for index in range(12)]
     statements = []
     def record(_connection, _cursor, statement, _parameters, _context, _many):
         if statement.lstrip().lower().startswith(('select', 'with')):
@@ -145,6 +144,7 @@ def test_direct_elements_offer_only_placed_content_in_direct_canonical_branches(
         event.remove(engine, 'before_cursor_execute', record)
     assert response.status_code == 200, response.text
     assert {tuple(choice['ref'].values()) for choice in response.json()} == {
-        ('Location', populated), ('PhysicalObject', direct_placed),
+        ('Location', populated), ('Location', empty), ('PhysicalObject', direct_placed),
+        *(('Location', child) for child in extra_children),
     }
     assert len(statements) < 12

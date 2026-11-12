@@ -86,7 +86,7 @@ ENTITIES = (
     ("presentation", "MapPresentationVariant", "MapPresentationVariant", "id map_id name"),
     ("presentation", "MapPlacement", "MapPlacement", "id map_id physical_object_id"),
     ("presentation", "MapViewPosition", "MapViewPosition", "id placement_id variant_id view_key x y locked display_width"),
-    ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements geometry"),
+    ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements geometry manual_bounds"),
     ("presentation", "MapCableRoute", "MapCableRoute", "id map_id variant_id cable_id view_key waypoints"),
     ("presentation", "MapTextAnnotation", "MapTextAnnotation", "id map_id text position text_color font_size"),
     ("settings", "PortType", "PortType", "id name description color is_active"),

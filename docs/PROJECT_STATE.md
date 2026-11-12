@@ -39,7 +39,10 @@
   существующие placements во всех картах/variants; locks отклоняют всю операцию.
   Компактные пустые frames, единый drag и явный Save/Cancel, локальный radius=0 UI,
   непосредственные имена с canonical path в tooltip,
-  recursive collapse прежней модели, выбор видимых
+  authoritative positions/frames/routes сразу после move; content-aware bounds
+  включают blueprint nameplate, ручной resize сохраняется отдельным floor.
+  Полный collapse оставляет один компактный Location (также для пустого subtree),
+  expand восстанавливает expanded geometry; partial collapse сохраняет выбор видимых
   непосредственных элементов, group move с collision rejection и route transform.
 - Редактор кабельного маршрута: transient draft, Save/Cancel, добавление,
   перемещение и удаление waypoints через инспектор, snapping к чужой геометрии,

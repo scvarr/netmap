@@ -282,6 +282,7 @@ class SetMapLocationStateRequest(BaseModel):
 
 
 class MapLocationStateDocument(SetMapLocationStateRequest):
+    manual_bounds: GroupMoveRectangle | None = None
     location_ref: LocationRef
     geometry: MapLocationGeometry
     boundary_point_id: uuid.UUID

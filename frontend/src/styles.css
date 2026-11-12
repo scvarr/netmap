@@ -947,3 +947,7 @@ a { color: inherit; }
 .location-frame__label { max-width: 220px; }
 
 .map-dialog__surface.map-location-dialog, .map-location-dialog button, .map-location-dialog .map-location-choice { border-radius: 0; }
+
+.location-proxy { position: relative; }
+.location-proxy-anchor { width: 1px; height: 1px; visibility: hidden; pointer-events: none; }
+.location-boundary-point--compact { pointer-events: none; }

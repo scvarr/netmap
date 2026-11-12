@@ -84,3 +84,9 @@ export const blueprintObjectLabelFontSize = (
     Math.max(MIN_BLUEPRINT_LABEL_FONT_SIZE, Math.min(dimensions.width * 0.075, dimensions.height * 0.6)),
   );
 };
+
+/** Complete rendered card: pinned panel composition plus object nameplate. */
+export const blueprintRenderedNodeDimensions = (presentation: BlueprintPresentation, displayWidth: number | undefined) => {
+  const body = blueprintNodeDisplayDimensions(presentation, displayWidth);
+  return { width: body.width, height: body.height + blueprintMapNameplateHeight(presentation, displayWidth) };
+};

@@ -74,7 +74,7 @@ class SavedMapCatalog:
         ) for route in source_routes)
         self.session.add_all(MapLocationState(
             variant_id=variant.id, location_id=state.location_id, collapsed=state.collapsed,
-            geometry=dict(state.geometry),
+            geometry=dict(state.geometry), manual_bounds=dict(state.manual_bounds) if state.manual_bounds else None,
             visible_direct_elements=[dict(ref) for ref in state.visible_direct_elements],
         ) for state in self._location_states(source.id))
         self._flush()
@@ -108,20 +108,13 @@ class SavedMapCatalog:
         if self.session.get(Location, location_id) is None:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
         children = self.session.scalars(select(Location).where(Location.parent_location_id == location_id).order_by(Location.name, Location.id)).all()
-        subtree = select(Location.id.label("location_id"), Location.id.label("direct_child_id")).where(Location.parent_location_id == location_id).cte("location_subtree", recursive=True)
-        subtree = subtree.union_all(select(Location.id, subtree.c.direct_child_id).join(subtree, Location.parent_location_id == subtree.c.location_id))
-        populated_children = set(self.session.scalars(
-            select(subtree.c.direct_child_id).join(PhysicalObject, PhysicalObject.location_id == subtree.c.location_id)
-            .join(MapPlacement, MapPlacement.physical_object_id == PhysicalObject.id)
-            .where(MapPlacement.map_id == map_id).distinct()
-        ))
         object_ids = self.session.scalars(
             select(PhysicalObject.id).join(MapPlacement, MapPlacement.physical_object_id == PhysicalObject.id)
             .where(PhysicalObject.location_id == location_id, MapPlacement.map_id == map_id).order_by(PhysicalObject.id)
         ).all()
         aliases = DeviceCatalog(self.session).physical_object_display_aliases(list(object_ids))
         return [
-            *({"ref": {"entity_type": "Location", "entity_id": child.id}, "label": child.name} for child in children if child.id in populated_children),
+            *({"ref": {"entity_type": "Location", "entity_id": child.id}, "label": child.name} for child in children),
             *({"ref": {"entity_type": "PhysicalObject", "entity_id": object_id}, "label": aliases[object_id].value if object_id in aliases else f"PhysicalObject {object_id}"} for object_id in object_ids),
         ]
 
@@ -149,6 +142,13 @@ class SavedMapCatalog:
             subtree = expanded
         for key in subtree - {location_id}:
             frames[key] = {**frames[key], "x": frames[key]["x"] + dx, "y": frames[key]["y"] + dy}
+        manual = {state.location_id: dict(state.manual_bounds) for state in states if state.manual_bounds}
+        for key in subtree:
+            if key in manual:
+                manual[key]["x"] += dx
+                manual[key]["y"] += dy
+        if geometry["width"] != original["width"] or geometry["height"] != original["height"]:
+            manual[location_id] = {key: geometry[key] for key in ("x", "y", "width", "height")}
         frames[location_id] = geometry
         records, footprints = self._physical_geometry(map_id, variant_id)
         contents = {}
@@ -160,9 +160,9 @@ class SavedMapCatalog:
         while parent is not None:
             protected.add(parent)
             parent = parents[parent]
-        frames = expand_location_frames(parents, frames, contents, protected=protected, translations=translations)
+        frames = expand_location_frames(parents, frames, contents, protected=protected, translations=translations, manual_bounds=manual, names={loc.id: loc.name for loc in locations})
         self._apply_container_translations(map_id, variant_id, parents, states, translations)
-        self._store_frames(variant_id, states, frames)
+        self._store_frames(variant_id, states, frames, manual)
         self._flush()
 
     def _apply_container_translations(self, map_id, variant_id, parents, states, translations):
@@ -199,7 +199,9 @@ class SavedMapCatalog:
             if object_id in panels:
                 bounds = panels[object_id]
                 width = position.display_width or 240
-                height = width * (max(p.y + p.height for p in bounds) - min(p.y for p in bounds)) / (max(p.x + p.width for p in bounds) - min(p.x for p in bounds))
+                composition_width = max(p.x + p.width for p in bounds) - min(p.x for p in bounds)
+                height = width * (max(p.y + p.height for p in bounds) - min(p.y for p in bounds)) / composition_width
+                height += max(14, width * min(p.height for p in bounds) / composition_width * .12)
             footprints[object_id] = {"physical_object_id": object_id, "x": position.x, "y": position.y, "width": width, "height": height}
         return records, footprints
 
@@ -224,7 +226,7 @@ class SavedMapCatalog:
                              "moving_endpoint": center(a if a in moving else b), "external_endpoint": center(b if a in moving else a)})
         return evidence
 
-    def _store_frames(self, variant_id, states, frames):
+    def _store_frames(self, variant_id, states, frames, manual):
         stored = {state.location_id: state for state in self.session.scalars(
             select(MapLocationState).where(MapLocationState.variant_id == variant_id))}
         for state in states:
@@ -234,6 +236,7 @@ class SavedMapCatalog:
                                           collapsed=state.collapsed, visible_direct_elements=state.visible_direct_elements)
                 self.session.add(record)
             record.geometry = frames[state.location_id]
+            record.manual_bounds = manual.get(state.location_id)
 
     def place_assigned_object(self, object_id, *, map_id=None, variant_id=None, relocate=True):
         assignment = self.session.get(PhysicalObject, object_id).location_id
@@ -284,7 +287,8 @@ class SavedMapCatalog:
             for pos, key, assigned in records:
                 contents.setdefault(assigned, []).append(candidate if key == object_id else footprints[key])
             translations = {}
-            frames = expand_location_frames(parents, frames, contents, protected=ancestors, translations=translations)
+            manual = {state.location_id: dict(state.manual_bounds) for state in states if state.manual_bounds}
+            frames = expand_location_frames(parents, frames, contents, protected=ancestors, translations=translations, manual_bounds=manual, names={loc.id: loc.name for loc in locations})
             self._apply_container_translations(target_map, target_variant, parents, states, translations)
             _, final_footprints = self._physical_geometry(target_map, target_variant)
             if any(overlaps(candidate, other) for key, other in final_footprints.items() if key != object_id):
@@ -292,7 +296,7 @@ class SavedMapCatalog:
             position.x, position.y = candidate["x"], candidate["y"]
             if dx or dy:
                 self._translate_object_route_leads(target_map, target_variant, object_id, dx, dy)
-            self._store_frames(target_variant, states, frames)
+            self._store_frames(target_variant, states, frames, manual)
             self._flush()
 
     def synchronize_location_structure(self):
@@ -315,10 +319,15 @@ class SavedMapCatalog:
                 dx, dy = translations.get(assigned, (0, 0))
                 g = footprints[object_id]
                 contents.setdefault(assigned, []).append({**g, "x": g["x"] + dx, "y": g["y"] + dy})
-            frames = expand_location_frames(parents, frames, contents, translations=translations)
+            manual = {state.location_id: dict(state.manual_bounds) for state in states if state.manual_bounds}
+            for key, (dx, dy) in translations.items():
+                if key in manual:
+                    manual[key]["x"] += dx
+                    manual[key]["y"] += dy
+            frames = expand_location_frames(parents, frames, contents, translations=translations, manual_bounds=manual, names={loc.id: loc.name for loc in locations})
             originals = [MapLocationState(location_id=state.location_id, geometry=saved.get(state.location_id, state.geometry)) for state in states]
             self._apply_container_translations(variant.map_id, variant.id, parents, originals, translations)
-            self._store_frames(variant.id, states, frames)
+            self._store_frames(variant.id, states, frames, manual)
         self._flush()
 
     def _translate_object_route_leads(self, map_id, variant_id, object_id, dx, dy):
@@ -348,7 +357,7 @@ class SavedMapCatalog:
             variant_id=variant_id, location_id=key,
             collapsed=stored[key].collapsed if key in stored else False,
             visible_direct_elements=stored[key].visible_direct_elements if key in stored else [],
-            geometry=frames[key],
+            geometry=frames[key], manual_bounds=stored[key].manual_bounds if key in stored else None,
         ) for key in parents)
 
     def _valid_location_refs(self, states: tuple[MapLocationState, ...]) -> dict[uuid.UUID, list[dict[str, str]]]:
@@ -413,15 +422,21 @@ class SavedMapCatalog:
                 "map_id": str(map_id), "physical_object_id": str(physical_object_id),
             })
         position = next((item for item in placement.view_positions if item.view_key == view_key and item.variant_id == variant.id), None)
+        previous = (position.x, position.y) if position is not None else None
         if position is None:
             placement.view_positions.append(MapViewPosition(variant_id=variant.id, view_key=view_key, x=x, y=y, display_width=display_width))
         else:
+            if position.locked and (position.x != x or position.y != y or (display_width is not None and display_width != position.display_width)):
+                raise ValidationError("Map position is locked", {})
             position.x, position.y = x, y
             if display_width is not None:
                 position.display_width = display_width
         self._flush()
         if view_key == MapViewKey.PHYSICAL:
             self.place_assigned_object(physical_object_id, map_id=map_id, variant_id=variant.id, relocate=False)
+            if previous is not None and previous != (x, y):
+                self._translate_object_route_leads(map_id, variant.id, physical_object_id, x-previous[0], y-previous[1])
+                self._flush()
         return placement
 
     def set_view_lock(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, locked: bool, variant_id: uuid.UUID | None = None) -> MapPlacement:

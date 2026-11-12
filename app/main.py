@@ -222,6 +222,7 @@ def _saved_map_document(detail) -> dict[str, object]:
         "location_states": [{
             "location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id},
             "geometry": state.geometry,
+            "manual_bounds": state.manual_bounds,
             "boundary_point_id": uuid.uuid5(saved_map.id, str(state.location_id)),
             "collapsed": state.collapsed,
             "visible_direct_elements": detail.valid_location_refs[state.location_id],
@@ -565,8 +566,8 @@ def move_map_placement(map_id: uuid.UUID, physical_object_id: uuid.UUID, query: 
         return _map_placements_document(catalog.placements(map_id))
 
 
-@app.put("/v1/maps/{map_id}/placements/{physical_object_id}/positions/{view_key}", response_model=MapPlacementsDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
-def set_map_view_position(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: MoveMapPlacementRequest, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> MapPlacementsDocument:
+@app.put("/v1/maps/{map_id}/placements/{physical_object_id}/positions/{view_key}", response_model=SavedMapDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})
+def set_map_view_position(map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: Literal["physical", "logical"], query: MoveMapPlacementRequest, variant_id: uuid.UUID | None = None, session: Session = Depends(get_session)) -> SavedMapDocument:
     with session.begin():
         catalog = SavedMapCatalog(session)
         catalog.set_view_position(
@@ -575,7 +576,7 @@ def set_map_view_position(map_id: uuid.UUID, physical_object_id: uuid.UUID, view
             MapViewKey.PHYSICAL if view_key == "physical" else MapViewKey.LOGICAL,
             query.x, query.y, query.display_width, variant_id,
         )
-        return _map_placements_document(catalog.placements(map_id))
+        return _saved_map_document(catalog.detail(map_id, variant_id))
 
 
 @app.put("/v1/maps/{map_id}/placements/{physical_object_id}/locks/{view_key}", response_model=MapPlacementsDocument, response_model_exclude_none=True, responses={422: {"model": ErrorResponse}})

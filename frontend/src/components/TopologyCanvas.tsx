@@ -46,8 +46,7 @@ import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation"
 import { cableIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint, MapTextAnnotation } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
-import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
-import { blueprintMapNameplateHeight } from "../topology/blueprintDisplaySize";
+import { blueprintRenderedNodeDimensions } from "../topology/blueprintDisplaySize";
 import { nodeFootprint, type FlowRectangle } from "../topology/nodeFootprint";
 import { layoutLocationFrames, editLocationFrames } from '../topology/locationFrameGeometry';
 import { LocationFrameEditor } from "./LocationFrameEditor";
@@ -235,7 +234,7 @@ export function TopologyCanvas({
             const blueprint = node.data.projection.attributes.blueprint_presentation;
             const displayWidth = displayWidthOverrides?.[node.id];
             return blueprint && displayWidth !== undefined
-              ? { ...node, ...blueprintNodeDisplayDimensions(blueprint, displayWidth) }
+              ? { ...node, ...blueprintRenderedNodeDimensions(blueprint, displayWidth) }
               : node;
           }),
         };
@@ -272,7 +271,7 @@ export function TopologyCanvas({
         const blueprint = node.data.projection.attributes.blueprint_presentation;
         const displayWidth = displayWidthOverrides[node.id];
         return blueprint && displayWidth !== undefined
-          ? { ...node, ...blueprintNodeDisplayDimensions(blueprint, displayWidth) }
+          ? { ...node, ...blueprintRenderedNodeDimensions(blueprint, displayWidth) }
           : node;
       }),
     } : current);
@@ -311,10 +310,14 @@ export function TopologyCanvas({
     if (!shouldFit) return;
     fitAfterLayout.current = false;
     fittedSceneKey.current = presentationSceneKey;
-    const frames = locationFrameInput && document.layer === 'L1' && document.detail_level === 'PHYSICAL_OBJECT'
-      ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, [], locationFrameInput.states ?? []).frames : [];
-    if (frames.length) {
-      const bounds = [...frames.map(frame => frame.bounds), ...projection.nodes.map(node => ({ ...node.position, width: node.width ?? 212, height: node.height ?? 144 }))];
+    const locations = locationFrameInput && document.layer === 'L1' && document.detail_level === 'PHYSICAL_OBJECT'
+      ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, projection.nodes.flatMap(node => {
+          const id = physicalObjectIdForNode(node.data.projection);
+          return id ? [{ physicalObjectId: id, rectangle: nodeFootprint(node) }] : [];
+        }), locationFrameInput.states ?? []) : null;
+    const bounds = [...(locations?.frames ?? []).map(frame => frame.bounds), ...(locations?.proxies ?? []).filter(proxy => !proxy.partial).map(proxy => proxy.bounds),
+      ...projection.nodes.filter(node => !locations?.hiddenObjectProxy.has(physicalObjectIdForNode(node.data.projection) ?? '')).map(node => nodeFootprint(node))];
+    if (bounds.length && locations) {
       const x = Math.min(...bounds.map(b => b.x)), y = Math.min(...bounds.map(b => b.y));
       const right = Math.max(...bounds.map(b => b.x + b.width)), bottom = Math.max(...bounds.map(b => b.y + b.height));
       void fitBounds({ x, y, width: right - x, height: bottom - y }, { padding: .2 });
@@ -372,14 +375,7 @@ export function TopologyCanvas({
   const displayedPhysicalObjects = showLocationPresentation ? projection.nodes.flatMap((node) => {
       const physicalObjectId = physicalObjectIdForNode(node.data.projection);
       if (!physicalObjectId) return [];
-      const blueprint = node.data.projection.attributes.blueprint_presentation;
       const rectangle = nodeFootprint(node);
-      if (blueprint) {
-        const width = node.width ?? rectangle.width;
-        const composition = blueprintNodeDisplayDimensions(blueprint, width);
-        rectangle.width = width;
-        rectangle.height = composition.height + blueprintMapNameplateHeight(blueprint, width);
-      }
       return [{ physicalObjectId, rectangle }];
     }) : [];
   const locationPresentation = showLocationPresentation && locationFrameInput
@@ -390,8 +386,12 @@ export function TopologyCanvas({
   const frameEdit = activeFrameEdit ? editLocationFrames(locationFrameInput?.locations ?? [], baseFrameGeometries, activeFrameEdit.id, activeFrameEdit.geometry) : { frames: baseFrameGeometries, translations: new Map<string, { x: number; y: number }>() };
   const editedFrameGeometries = frameEdit.frames;
   locationPresentation.frames = locationPresentation.frames.map(frame => ({ ...frame, bounds: editedFrameGeometries.get(frame.locationId)! }));
+  locationPresentation.proxies = locationPresentation.proxies.map(proxy => {
+    const delta = frameEdit.translations.get(proxy.locationId);
+    return delta ? { ...proxy, bounds: { ...proxy.bounds, x: proxy.bounds.x + delta.x, y: proxy.bounds.y + delta.y } } : proxy;
+  });
   const renderableFrames = locationPresentation.frames.filter((frame) => hasRenderableBounds(frame.bounds));
-  const boundaryFrames = renderableFrames.map((frame) => ({ locationId: frame.locationId, bounds: frame.bounds }));
+  const boundaryFrames = [...renderableFrames, ...locationPresentation.proxies.filter(proxy => !proxy.partial)].map(frame => ({ locationId: frame.locationId, bounds: frame.bounds }));
   const resolveRouteWaypoints = (waypoints: readonly MapCableRouteWaypoint[]) => waypoints.map((point) => resolveBoundaryWaypoint(point, boundaryFrames));
   const locationPathsByObjectId = new Map(locationPresentation.objectPaths.map((path) => [path.physicalObjectId, path.label]));
   const proxyNodeId = (locationId: string) => `location-proxy:${locationId}`;
@@ -422,7 +422,7 @@ export function TopologyCanvas({
     id: proxyNodeId(proxy.locationId), type: 'locationProxy',
     position: { x: proxy.bounds.x, y: proxy.bounds.y }, width: proxy.bounds.width, height: proxy.bounds.height,
     draggable: false, selectable: false,
-    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
+    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
   });
   const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const savedRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"

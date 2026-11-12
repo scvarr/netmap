@@ -108,7 +108,11 @@ C-UX-10-01: все canonical Locations доступны в каждой SavedMap
 включая пустой и unary; каждый дочерний frame находится внутри непосредственного
 canonical parent с отступом 20 и местом для заголовка 40. В заголовке непосредственное имя; полный canonical path доступен в tooltip.
 MapLocationState.geometry хранит x/y/width/height и edge/offset обязательной
-виртуальной точки отдельно для variant. До первого сохранения чтение возвращает
+виртуальной точки отдельно для variant. Nullable manual_bounds хранит явно
+заданный resize прямоугольник как нижнюю границу занимаемой области; копируется
+с variant и переносится вместе с контейнером. Автоматические bounds пересчитываются
+по содержимому и могут сокращаться, сохраняя manual_bounds, детей и оборудование.
+До первого сохранения чтение возвращает
 детерминированную иерархическую компоновку (порядок по immutable ID), без записи
 в БД и без зависимости от количества оборудования. Пустой Location — компактный
 горизонтальный frame высотой 64; ширина 140..360 учитывает имя и controls.
@@ -144,14 +148,26 @@ resize и drag точки также создают draft; Save явно сох�
 Назначение PhysicalObject Location согласует все существующие физические позиции
 этого объекта во всех SavedMaps/variants одной транзакцией. Добавление уже назначенного
 объекта и создание его physical variant position также размещают его в canonical
-Location. Размер объекта определяется pinned composition panels и display_width
+Location. Размер объекта определяется pinned composition panels и display_width,
+включая фактически отрисованный nameplate (max(14, 12% высоты наименьшей панели));
+frontend collision/layout и backend используют полный footprint
 (обычный объект 212x144); свободное место выбирается детерминированно с учётом
 объектов/дочерних рамок, предки расширяются согласованно. Missing placements/positions
 не создаются назначением. При переносе одного объекта следуют free lead waypoints
 до первого route anchor; без anchor следует первый waypoint со стороны объекта.
 Canonical assignment задаётся только явной операцией, никогда координатами.
 Cable/Connection/endpoints не пересоздаются и не переподключаются.
-Collapse сохраняет прежнюю proxy-модель; channel-aware collapse не реализован.
+Position PUT возвращает полный authoritative SavedMapDocument: positions, frames
+и routes. Клиент применяет его только к исходным map/variant; ошибка восстанавливает
+подтверждённые позиции, без повторного write. Выход объекта за прежние bounds
+согласует рамки и соседние ветви атомарно, не меняя canonical assignment.
+Полный collapse показывает один компактный proxy с той же boundary identity,
+скрывая expanded frame, все дочерние frames, proxies и оборудование, включая
+пустые subtree. Expand восстанавливает persisted expanded geometry: compact bounds
+производны и не записываются. При partial collapse выбранные direct elements
+остаются видимыми внутри frame; скрытые endpoints используют невидимый route target
+без второго подписанного proxy. Direct children доступны и без оборудования.
+Внешний полный collapse приоритетен; channel-aware collapse не реализован.
 MapComposite/MapRegion не поддерживаются.
 
 Group move переносит одинаковым delta все имеющиеся L1 позиции canonical

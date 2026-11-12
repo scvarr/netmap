@@ -21,10 +21,10 @@ describe('node footprint presentation geometry', () => {
   it('uses display dimensions, not intrinsic body magnitude, for Blueprint-backed objects', () => {
     const wide = node('wide', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 480, height: 60 }, panels: [{ x: 0, y: 0, width: 480, height: 60 }], slots: [] } });
     const compact = node('compact', { x: 45, y: 0 }, { blueprint_presentation: { body: { width: 8, height: 1 }, panels: [{ x: 0, y: 0, width: 8, height: 1 }], slots: [] } });
-    expect(nodeFootprint(wide)).toMatchObject({ width: 240, height: 30 });
-    expect(nodeFootprint(compact)).toMatchObject({ width: 240, height: 30 });
-    expect(projectionNodeFootprint(wide.data.projection, { x: 5, y: 6 }, 320)).toMatchObject({ x: 5, y: 6, width: 320, height: 40 });
-    expect(footprintDimensionsForProjectionNode(compact.data.projection, 480)).toEqual({ width: 480, height: 60 });
+    expect(nodeFootprint(wide)).toMatchObject({ width: 240, height: 44 });
+    expect(nodeFootprint(compact)).toMatchObject({ width: 240, height: 44 });
+    expect(projectionNodeFootprint(wide.data.projection, { x: 5, y: 6 }, 320)).toMatchObject({ x: 5, y: 6, width: 320, height: 54 });
+    expect(footprintDimensionsForProjectionNode(compact.data.projection, 480)).toEqual({ width: 480, height: 74 });
   });
 
   it('uses the existing generic layout footprint and permits touching boundaries', () => {
@@ -37,15 +37,15 @@ describe('node footprint presentation geometry', () => {
   it('uses the full simultaneous panel composition footprint for collision and insertion geometry', () => {
     const composition = node('composition', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 8, height: 1 }, panels: [{ x: 0, y: 0, width: 8, height: 1 }, { x: 0, y: 1, width: 8, height: 1 }], slots: [] } });
     const footprint = nodeFootprint(composition);
-    expect(footprint).toMatchObject({ width: 240, height: 60 });
+    expect(footprint).toMatchObject({ width: 240, height: 74 });
     expect(rectanglesOverlap(footprint, { x: 0, y: 50, width: 240, height: 20 })).toBe(true);
-    expect(nearestFreePosition({ x: 0, y: 0 }, footprint, [{ x: 0, y: 0, width: 240, height: 60 }])).not.toEqual({ x: 0, y: 0 });
+    expect(nearestFreePosition({ x: 0, y: 0 }, footprint, [{ x: 0, y: 0, width: 240, height: 74 }])).not.toEqual({ x: 0, y: 0 });
   });
 
-  it('keeps the presentation nameplate out of Blueprint collision geometry', () => {
+  it('includes the actual rendered nameplate in Blueprint collision geometry', () => {
     const blueprint = node('blueprint', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 2, height: 1 }, panels: [{ x: 0, y: 0, width: 2, height: 1 }], slots: [] } });
     blueprint.measured = { width: 320, height: 179.2 };
-    expect(nodeFootprint(blueprint)).toMatchObject({ width: 320, height: 160 });
+    expect(nodeFootprint(blueprint)).toMatchObject({ width: 320, height: 179.2 });
   });
 });
 

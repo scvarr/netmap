@@ -93,8 +93,16 @@ def test_empty_export_and_roundtrip():
 
 
 def test_graph_export_reset_import_restores_all_persisted_state():
-    create_graph()
+    location, _, map_id = create_graph()
+    doc = client.get(f'/v1/maps/{map_id}').json()
+    location_id = location['location_ref']['entity_id']
+    variant = doc['active_variant_ref']['entity_id']
+    resized = client.put(f'/v1/maps/{map_id}/presentation-variants/{variant}/locations/{location_id}/geometry', json={
+        'x': 1000, 'y': 1000, 'width': 500, 'height': 200, 'edge': 'right', 'offset': .5,
+    })
+    assert resized.status_code == 200, resized.text
     before = snapshot()
+    assert before['presentation']['MapLocationState'][0]['manual_bounds'] == {'x': 1000, 'y': 1000, 'width': 500, 'height': 200}
     assert len(before['canonical']['PhysicalObject']) == 3
     assert len(before['canonical']['ConnectionMember']) == 1
     assert len(before['canonical']['InterfacePhysicalBinding']) >= 1

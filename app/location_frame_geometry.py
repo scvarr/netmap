@@ -61,12 +61,13 @@ def overlaps(a, b):
             a["y"] < b["y"] + b["height"] and a["y"] + a["height"] > b["y"])
 
 
-def expand_location_frames(parents, frames, contents=None, *, protected=None, translations=None):
-    """Grow ancestors without shrinking; push conflicting sibling containers down."""
+def expand_location_frames(parents, frames, contents=None, *, protected=None, translations=None, manual_bounds=None, names=None):
+    """Fit content while preserving manual bounds; push conflicting siblings down."""
     from app.errors import ValidationError
     from app.schemas import MapLocationGeometry
     from pydantic import ValidationError as SchemaValidationError
     result = {key: dict(g) for key, g in frames.items()}
+    floors = manual_bounds if manual_bounds is not None else {}
     content = {key: [dict(g) for g in values] for key, values in (contents or {}).items()}
     children = {key: [] for key in parents}
     groups = {}
@@ -81,12 +82,22 @@ def expand_location_frames(parents, frames, contents=None, *, protected=None, tr
         for child in children[key]:
             expand(child)
         g = result[key]
-        for c in [*(result[child] for child in children[key]), *content.get(key, [])]:
-            right = max(g["x"] + g["width"], c["x"] + c["width"] + PADDING)
-            bottom = max(g["y"] + g["height"], c["y"] + c["height"] + PADDING)
-            g["x"] = min(g["x"], c["x"] - PADDING)
-            g["y"] = min(g["y"], c["y"] - HEADER)
-            g["width"], g["height"] = right - g["x"], bottom - g["y"]
+        rects = [*(result[child] for child in children[key]), *content.get(key, [])]
+        minimum_width = max(140, min(360, 80 + len((names or {}).get(key, "")) * 7))
+        if rects:
+            left = min(c["x"] for c in rects) - PADDING
+            top = min(c["y"] for c in rects) - HEADER
+            right = max(c["x"] + c["width"] for c in rects) + PADDING
+            bottom = max(c["y"] + c["height"] for c in rects) + PADDING
+            g.update(x=left, y=top, width=max(minimum_width, right-left), height=max(64, bottom-top))
+        else:
+            g.update(width=minimum_width, height=64)
+        floor = floors.get(key)
+        if floor:
+            right = max(g["x"] + g["width"], floor["x"] + floor["width"])
+            bottom = max(g["y"] + g["height"], floor["y"] + floor["height"])
+            g["x"], g["y"] = min(g["x"], floor["x"]), min(g["y"], floor["y"])
+            g["width"], g["height"] = right-g["x"], bottom-g["y"]
         try:
             MapLocationGeometry.model_validate(g)
         except SchemaValidationError as error:
@@ -94,6 +105,8 @@ def expand_location_frames(parents, frames, contents=None, *, protected=None, tr
 
     def shift(key, dy):
         result[key]["y"] += dy
+        if key in floors:
+            floors[key]["y"] += dy
         for g in content.get(key, []):
             g["y"] += dy
         dx0, dy0 = translations.get(key, (0, 0))

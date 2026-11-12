@@ -102,7 +102,7 @@ def test_empty_move_child_expansion_and_no_parent_shrink():
     assert grown[child]["x"] < frames[child]["x"]
     assert move(map_id, variant, leaf, dict(grown[leaf], width=140, height=64)).status_code == 200
     _, reduced = state(map_id)
-    assert reduced[root] == grown[root] and reduced[child] == grown[child]
+    assert contains(reduced[root], reduced[child]) and contains(reduced[child], reduced[leaf])
     assert move(map_id, variant, root, dict(reduced[root], x=1000, y=700)).status_code == 200
     _, moved = state(map_id)
     dx, dy = 1000 - reduced[root]["x"], 700 - reduced[root]["y"]
