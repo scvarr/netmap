@@ -38,6 +38,7 @@ export interface SavedMapDataSource {
   /** Acknowledges variant creation; load SavedMap separately for authoritative state. */
   createPresentationVariant?(mapId: string, name: string, sourceVariantId: string): Promise<MapPresentationVariant>;
   deletePresentationVariant?(mapId: string, variantId: string): Promise<void>;
+  setLocationBoundaryPlacement?(mapId: string, variantId: string, locationId: string, placement: Pick<MapLocationGeometry, 'edge' | 'offset'>): Promise<SavedMap>;
   setLocationGeometry?(mapId: string, variantId: string, locationId: string, geometry: MapLocationGeometry): Promise<SavedMap>;
   setLocationState?(mapId: string, variantId: string, locationId: string, state: Pick<MapLocationState, 'collapsed' | 'visible_direct_elements'>): Promise<void>;
   moveLocationGroup?(mapId: string, variantId: string, locationId: string, move: LocationGroupMove): Promise<void>;

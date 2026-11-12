@@ -76,7 +76,7 @@ interface TopologyCanvasProps {
   /** New authoritative SavedMap placement snapshot, including variant switches and refreshes. */
   positionSnapshot?: readonly MapPlacement[];
   displayWidthOverrides?: Record<string, number>;
-  locationFrameInput?: { automatic?: import('../topology/savedMapTypes').AutomaticLocationLayout | null; locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; };
+  locationFrameInput?: { automatic?: import('../topology/savedMapTypes').AutomaticLocationLayout | null; locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onBoundaryPlacement?: (id: string, placement: Pick<import('../topology/savedMapTypes').MapLocationGeometry, 'edge' | 'offset'>) => Promise<void>; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; };
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
@@ -707,8 +707,8 @@ export function TopologyCanvas({
                 parentBounds={frame.parentLocationId ? editedFrameGeometries.get(frame.parentLocationId) : undefined}
                 childBounds={(locationFrameInput?.locations ?? []).filter(l => l.parent_location_ref?.entity_id === frame.locationId).map<FlowRectangle>(l => editedFrameGeometries.get(l.location_ref.entity_id)!).concat(displayedPhysicalObjects.filter(object => locationFrameInput?.placements.some(p => p.physical_object_ref.entity_id === object.physicalObjectId && p.location_ref?.entity_id === frame.locationId)).map(object => object.rectangle))}
                 disabled={Boolean(activeFrameEdit && activeFrameEdit.id !== frame.locationId)}
-                onDraft={geometry => setFrameEditPreview(geometry ? { scene: presentationSceneKey, id: frame.locationId, geometry } : null)}
-                screenToFlowPosition={screenToFlowPosition} onSave={locationFrameInput?.onGeometry}
+                onDraft={automatic ? undefined : geometry => setFrameEditPreview(geometry ? { scene: presentationSceneKey, id: frame.locationId, geometry } : null)}
+                screenToFlowPosition={screenToFlowPosition} onSave={locationFrameInput?.onGeometry} onSaveBoundary={locationFrameInput?.onBoundaryPlacement}
                 actions={<span className="location-frame__actions">
                   <button type="button" className="location-action" aria-label={toggleLabel} title={toggleLabel} onClick={() => locationFrameInput?.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button>
                   <button type="button" className="location-action" aria-label={configureLabel} title={configureLabel} onClick={() => locationFrameInput?.onConfigure?.(frame.locationId)}>⚙</button>

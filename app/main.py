@@ -95,7 +95,7 @@ from app.schemas import (
     LocationSeriesPreviewDocument,
     LocationSeriesCreatedDocument,
     MapPlacementsDocument,
-    MapLocationGeometry, MapTextAnnotationDocument, MapPresentationVariantDocument, MapLocationStateDocument, MapLocationDirectElementChoice, SetMapLocationStateRequest,
+    MapLocationBoundaryPlacement, MapLocationGeometry, MapTextAnnotationDocument, MapPresentationVariantDocument, MapLocationStateDocument, MapLocationDirectElementChoice, SetMapLocationStateRequest,
     L3ReachabilityArtifact,
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
@@ -502,6 +502,14 @@ def set_map_location_state(map_id: uuid.UUID, variant_id: uuid.UUID, location_id
             {"entity_type": ref.entity_type, "entity_id": str(ref.entity_id)} for ref in query.visible_direct_elements
         ])
         return {"location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id}, "geometry": next(item.geometry for item in SavedMapCatalog(session)._location_states(variant_id) if item.location_id == location_id), "boundary_point_id": uuid.uuid5(map_id, str(location_id)), "collapsed": state.collapsed, "visible_direct_elements": state.visible_direct_elements}
+
+
+@app.put("/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{location_id}/boundary-placement", response_model=SavedMapDocument, response_model_exclude_none=True)
+def set_map_location_boundary_placement(map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID, query: MapLocationBoundaryPlacement, session: Session = Depends(get_session)):
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog.set_location_boundary_placement(map_id, variant_id, location_id, query.model_dump())
+        return _saved_map_document(catalog.detail(map_id, variant_id))
 
 
 @app.put("/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{location_id}/geometry", response_model=SavedMapDocument, response_model_exclude_none=True)

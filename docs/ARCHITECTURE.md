@@ -440,3 +440,14 @@ stretch; contents are not scaled or distributed into spare space. Boundary
 identity, edge/offset and stored route/free waypoint data remain inputs;
 anchors resolve against the resulting frames. No settings, server contract,
 migrations or manual geometry change.
+
+
+Automatic Location boundary editing uses the variant-owned MapLocationState:
+`PUT .../locations/{location_id}/boundary-placement` accepts only edge/offset,
+validates finite offset in [0,1], and returns authoritative SavedMap state.
+It locks hierarchy, then variant, then state; only the boundary placement is
+updated. An absent geometry is materialized from its existing effective bounds;
+manual_bounds, equipment positions and cable routes are never written.
+Automatic frames remain derived; the geometry endpoint still rejects automatic
+frame edits. Point preview has Save/Cancel and error rollback. Boundary identity
+and independent cable route anchors are preserved. Manual editing is unchanged.

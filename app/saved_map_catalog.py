@@ -149,6 +149,27 @@ class SavedMapCatalog:
             *({"ref": {"entity_type": "PhysicalObject", "entity_id": object_id}, "label": aliases[object_id].value if object_id in aliases else f"PhysicalObject {object_id}"} for object_id in object_ids),
         ]
 
+    def set_location_boundary_placement(self, map_id, variant_id, location_id, placement):
+        from app.schemas import MapLocationBoundaryPlacement
+        placement = MapLocationBoundaryPlacement.model_validate(placement).model_dump()
+        self._require_map(map_id)
+        locations, _ = self._lock_physical_layout(map_id, variant_id)
+        if location_id not in {location.id for location in locations}:
+            raise ValidationError("Location does not exist", {"location_id": str(location_id)})
+        state = self.session.scalar(select(MapLocationState).where(
+            MapLocationState.variant_id == variant_id,
+            MapLocationState.location_id == location_id).with_for_update())
+        if state is None:
+            state = MapLocationState(variant_id=variant_id, location_id=location_id)
+            self.session.add(state)
+        # Materialize only this state's existing effective geometry if absent;
+        # automatic frames remain derived and no bounds are accepted from clients.
+        geometry = state.geometry
+        if geometry is None:
+            geometry = next(item.geometry for item in self._location_states(variant_id) if item.location_id == location_id)
+        state.geometry = {**geometry, **placement}
+        self._flush()
+
     def set_location_geometry(self, map_id, variant_id, location_id, geometry):
         from app.schemas import MapLocationGeometry
         geometry = MapLocationGeometry.model_validate(geometry).model_dump()

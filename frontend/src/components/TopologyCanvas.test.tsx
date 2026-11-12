@@ -163,13 +163,13 @@ describe('TopologyCanvas async layout boundary', () => {
       layoutEngine={async () => ({ nodes: [{ id: 'PP1', type: 'device', position: { x: 999, y: 999 }, data: { projection: object } }], edges: [] })}
       locationFrameInput={{ automatic: { hide_empty: false, containers: {} }, locations: [{ location_ref: ref, name: 'Rack', type: null, parent_location_ref: null }], placements: [{ physical_object_ref: object.source_refs[0], location_ref: ref, positions: {} }], states: [{ location_ref: ref, collapsed: false, visible_direct_elements: [], geometry: { x: -900, y: 2000, width: 1000, height: 1000, edge: 'left', offset: .25 } }], onGeometry: save }} />);
     await screen.findByRole('button', { name: 'PP1' });
-    expect(screen.getByTestId('position-PP1')).toHaveTextContent('40,88');
+    expect(screen.getByTestId('position-PP1')).toHaveTextContent('24,24');
     const heading = globalThis.document.querySelector('.location-frame__heading') as HTMLElement;
     fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
     fireEvent.pointerMove(heading, { clientX: 100, clientY: 50 });
     fireEvent.pointerUp(heading);
     expect(screen.queryByText('Сохранить')).not.toBeInTheDocument();
-    expect(screen.getByTestId('position-PP1')).toHaveTextContent('40,88');
+    expect(screen.getByTestId('position-PP1')).toHaveTextContent('24,24');
     expect(save).not.toHaveBeenCalled();
   });
   it('uses one container gesture with equipment preview and explicit Save/Cancel', async () => {

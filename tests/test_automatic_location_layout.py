@@ -94,3 +94,36 @@ def test_workspace_rejects_corrupt_automatic_settings_before_import(settings):
         validate_package(package)
     assert client.post('/v1/workspace/package', json=package).status_code == 422
     assert client.get('/v1/maps/' + created['map_ref']['entity_id']).json()['name'] == 'Keep this map'
+
+
+def test_boundary_placement_is_narrow_persistent_and_variant_owned():
+    import uuid
+    from tests.test_map_location_states_e2e import location
+    created = client.post('/v1/maps', json={"name": "Boundary auto"}).json()
+    map_id = created['map_ref']['entity_id']
+    variant = created['active_variant_ref']['entity_id']
+    loc = location("Boundary room")
+    base = f'/v1/maps/{map_id}/presentation-variants/{variant}'
+    assert client.put(base + '/automatic-layout', json={"hide_empty": False, "containers": {}}).status_code == 200
+    before = client.get(f'/v1/maps/{map_id}').json()
+    url = base + f'/locations/{loc}/boundary-placement'
+    for invalid in [{"edge": "diagonal", "offset": .5}, {"edge": "left", "offset": -1}, {"edge": "left", "offset": 1.1}, {"edge": "left", "offset": .5, "width": 100}]:
+        assert client.put(url, json=invalid).status_code == 422
+    response = client.put(url, json={"edge": "bottom", "offset": .25})
+    assert response.status_code == 200, response.text
+    after = response.json()
+    old = next(s for s in before['location_states'] if s['location_ref']['entity_id'] == loc)
+    new = next(s for s in after['location_states'] if s['location_ref']['entity_id'] == loc)
+    assert new == {**old, "geometry": {**old['geometry'], "edge": "bottom", "offset": .25}}
+    assert after['placements'] == before['placements']
+    assert after['cable_routes'] == before['cable_routes']
+    assert client.get(f'/v1/maps/{map_id}').json()['location_states'] == after['location_states']
+    copy = client.post(f'/v1/maps/{map_id}/presentation-variants', json={"name": "Boundary copy", "source_variant_id": variant}).json()
+    copy_id = copy['variant_ref']['entity_id']
+    copy_url = f'/v1/maps/{map_id}/presentation-variants/{copy_id}/locations/{loc}/boundary-placement'
+    assert client.put(copy_url, json={"edge": "left", "offset": .75}).status_code == 200
+    assert client.get(f'/v1/maps/{map_id}?variant_id={variant}').json()['location_states'] == after['location_states']
+    assert client.put(base + f'/locations/{loc}/geometry', json=new['geometry']).status_code == 422
+    assert client.put(base + f'/locations/{uuid.uuid4()}/boundary-placement', json={"edge": "top", "offset": 0}).status_code == 422
+    other = client.post('/v1/maps', json={"name": "Other boundary map"}).json()['map_ref']['entity_id']
+    assert client.put(url.replace(map_id, other), json={"edge": "top", "offset": 1}).status_code == 422

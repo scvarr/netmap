@@ -68,6 +68,11 @@ export class ApiSavedMapDataSource implements SavedMapDataSource {
     if (!response.ok) throw await error(response);
     return parseMap(await response.json());
   }
+  async setLocationBoundaryPlacement(mapId: string, variantId: string, locationId: string, placement: Pick<MapLocationGeometry, 'edge' | 'offset'>): Promise<SavedMap> {
+    const response = await fetch(this.endpoint + '/' + mapId + '/presentation-variants/' + variantId + '/locations/' + locationId + '/boundary-placement', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(placement) });
+    if (!response.ok) throw await error(response);
+    return parseMap(await response.json());
+  }
   async setLocationGeometry(mapId: string, variantId: string, locationId: string, geometry: MapLocationGeometry): Promise<SavedMap> {
     const response = await fetch(this.endpoint + '/' + mapId + '/presentation-variants/' + variantId + '/locations/' + locationId + '/geometry', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geometry) });
     if (!response.ok) throw await error(response);

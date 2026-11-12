@@ -61,3 +61,33 @@ it('uses compact styled controls, capped scale and a canonical path tooltip', ()
   fireEvent.pointerDown(heading, { clientX: 0, clientY: 0 });
   for (const button of container.querySelectorAll('button')) expect(button.className).toMatch(/location-/);
 });
+
+
+it('edits automatic boundary only, cancels, rolls back errors and saves edge/offset', async () => {
+  vi.stubGlobal('PointerEvent', MouseEvent);
+  HTMLElement.prototype.setPointerCapture = vi.fn();
+  const save = vi.fn().mockRejectedValueOnce(new Error('failed')).mockResolvedValue(undefined);
+  const geometry = { x: 10, y: 20, width: 300, height: 200, edge: 'right' as const, offset: .5 };
+  const props = { automatic: true, frame: { locationId: 'room', parentLocationId: null, pathLocationIds: ['room'], label: 'Room', depth: 0, bounds: geometry }, screenToFlowPosition: (p: { x: number; y: number }) => p, onSaveBoundary: save, actions: null };
+  const { container, rerender } = render(<LocationFrameEditor {...props} />);
+  const heading = container.querySelector('.location-frame__heading')!;
+  fireEvent.pointerDown(heading, { clientX: 10, clientY: 20 });
+  fireEvent.pointerMove(heading, { clientX: 100, clientY: 100 });
+  expect(screen.queryByText('map.saveLocation')).not.toBeInTheDocument();
+  const point = screen.getByLabelText('map.boundaryPoint');
+  const drag = () => { fireEvent.pointerDown(point, { clientX: 310, clientY: 120 }); fireEvent.pointerMove(point, { clientX: 85, clientY: 240 }); fireEvent.pointerUp(point); };
+  drag();
+  expect(point.style.top).toBe('200px'); expect(point.style.left).toBe('75px');
+  expect(screen.queryByLabelText('map.resizeLocation')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('map.cancelLocation'));
+  expect(point.style.left).toBe('300px');
+  drag(); fireEvent.click(screen.getByText('map.saveLocation'));
+  await screen.findByRole('alert');
+  expect(point.style.left).toBe('300px');
+  drag(); fireEvent.click(screen.getByText('map.saveLocation'));
+  await waitFor(() => expect(save).toHaveBeenLastCalledWith('room', { edge: 'bottom', offset: .25 }));
+  await waitFor(() => expect(screen.queryByText('map.saveLocation')).not.toBeInTheDocument());
+  rerender(<LocationFrameEditor {...props} state={{ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: 'room' }, collapsed: false, visible_direct_elements: [], geometry: { ...geometry, edge: 'bottom', offset: .25 } }} frame={{ ...props.frame, bounds: { ...geometry, width: 600, height: 400 } }} />);
+  expect(point.style.left).toBe('150px'); expect(point.style.top).toBe('400px');
+  vi.unstubAllGlobals();
+});

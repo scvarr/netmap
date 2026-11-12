@@ -278,6 +278,12 @@ class MapLocationDirectElementRef(BaseModel):
     entity_id: uuid.UUID
 
 
+class MapLocationBoundaryPlacement(BaseModel):
+    model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
+    edge: Literal["top", "right", "bottom", "left"]
+    offset: float = Field(ge=0, le=1)
+
+
 class MapLocationGeometry(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     x: float

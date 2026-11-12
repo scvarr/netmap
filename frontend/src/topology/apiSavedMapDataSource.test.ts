@@ -12,6 +12,12 @@ const response = (value: unknown, status = 200) => new Response(JSON.stringify(v
 describe('ApiSavedMapDataSource', () => {
   const fetchMock = vi.fn();
   beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock); }); afterEach(() => vi.unstubAllGlobals());
+  it('saves only boundary placement and returns authoritative variant state', async () => {
+    fetchMock.mockResolvedValueOnce(response(body));
+    await expect(new ApiSavedMapDataSource().setLocationBoundaryPlacement(mapId, variantId, objectId, { edge: 'left', offset: .25 })).resolves.toMatchObject({ location_states: [], placements: body.placements });
+    expect(fetchMock.mock.calls[0][0]).toBe(`/api/v1/maps/${mapId}/presentation-variants/${variantId}/locations/${objectId}/boundary-placement`);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ edge: 'left', offset: .25 });
+  });
   it('returns the complete authoritative layout after an atomic frame edit', async () => {
     fetchMock.mockResolvedValueOnce(response(body));
     const geometry = { x: 0, y: 0, width: 500, height: 400, edge: 'right' as const, offset: .5 };
