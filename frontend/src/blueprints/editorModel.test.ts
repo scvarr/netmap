@@ -77,7 +77,7 @@ describe('direct Blueprint slots', () => {
   it('moves only panel origin, preserving identity and local endpoints, and adds from edited geometry', () => {
     const initial = newBlueprintEditorState();
     const withSlot = { ...initial, slots: [{ key: 'a', display_name: '1-1', port_type_id: 'test-type', kind: 'NETWORK_PORT' as const, panel_key: initial.activePanelKey, rendered_position: { x: .2, y: .7 } }] };
-    const moved = setPanelRectangle(withSlot, initial.activePanelKey, panelGestureGeometry(initial.panels[0], [], 'move', -30, -45, 7, 40).rectangle);
+    const moved = setPanelRectangle(withSlot, initial.activePanelKey, panelGestureGeometry(initial.panels[0], [], 'move', -30, -45, 7, 40).rectangle, 'move');
     expect(moved.panels[0]).toEqual({ ...initial.panels[0], x: -30, y: -45 });
     expect(moved.slots).toEqual(withSlot.slots);
     const resized = setPanelRectangle(moved, initial.activePanelKey, { x: -30, y: -45, width: 240, height: 80 });
@@ -86,7 +86,8 @@ describe('direct Blueprint slots', () => {
     const request = createBlueprintRequest({ ...resized, name: 'Device' }).request!;
     expect(request.panels[0]).toMatchObject({ x: -30, y: -45, width: 240, height: 80 });
     expect(request.body).toMatchObject({ width: 240, height: 80 });
-    expect(request.slots[0].rendered_position).toEqual({ x: .2, y: .7 });
+    expect(request.slots[0].rendered_position.x).toBeCloseTo(32 / 240);
+    expect(request.slots[0].rendered_position.y).toBeCloseTo(42 / 80);
   });
 
   it.each([
@@ -587,5 +588,39 @@ describe('C-COR-02 bounded endpoint geometry', () => {
     expect(repaired.slots[48].rendered_position).toEqual({ x: .5, y: 0 });
     expect(repaired.individualLinks).toBe(state.individualLinks);
     expect(removeEndpoints(state, keys).slots.some(item => item.key === slot.key)).toBe(false);
+  });
+});
+
+
+describe('BASE-UX-01 panel trim', () => {
+  const fixture = () => {
+    const initial = newBlueprintEditorState();
+    const state = addEndpoints(initial, 'NETWORK_PORT', 48, initial.activePanelKey, 'test-type');
+    state.name = 'Trim';
+    state.slots = state.slots.map((slot, i) => ({ ...slot, rendered_position: { x: .1 + (i % 24) * .025, y: i < 24 ? .3 : .6 } }));
+    state.bays = [{ kind: 'PLACED', bay_key: 'bay', panel_key: state.activePanelKey, display_name: 'Bay', compatibility: 'test', x: .75, y: .2, width: .1, height: .4 }];
+    return state;
+  };
+  it.each(['n','ne','e','se','s','sw','w','nw'] as const)('preserves absolute geometry, identity and publication through %s trim', handle => {
+    const state = fixture();
+    const rectangle = panelGestureGeometry(state.panels[0], [], handle, handle.includes('w') ? 5 : -5, handle.includes('n') ? 5 : -5, 0, 1).rectangle;
+    const next = setPanelRectangle(state, state.activePanelKey, rectangle);
+    expect(next).not.toBe(state);
+    next.slots.forEach((slot,i) => {
+      expect(rectangle.x + slot.rendered_position.x * rectangle.width).toBeCloseTo(state.slots[i].rendered_position.x * 160);
+      expect(rectangle.y + slot.rendered_position.y * rectangle.height).toBeCloseTo(state.slots[i].rendered_position.y * 60);
+      expect(slot.key).toBe(state.slots[i].key); expect(slot.port_type_id).toBe('test-type');
+    });
+    const bay = next.bays![0]; if (bay.kind !== 'PLACED') throw Error('placed');
+    expect(rectangle.x + bay.x * rectangle.width).toBeCloseTo(120);
+    expect(bay.width * rectangle.width).toBeCloseTo(16);
+    expect(bay.height * rectangle.height).toBeCloseTo(24);
+    const request = createBlueprintRequest(next).request!;
+    expect(request.slots).toHaveLength(48);
+    expect(next.individualLinks).toBe(state.individualLinks);
+  });
+  it('rejects intersecting a port footprint or the far edge of a bay atomically', () => {
+    const state = fixture();
+    for (const rectangle of [{ x: 0, y: 0, width: 130, height: 60 }, { x: 16, y: 0, width: 144, height: 60 }, { x: 0, y: 20, width: 160, height: 40 }]) expect(setPanelRectangle(state, state.activePanelKey, rectangle)).toBe(state);
   });
 });

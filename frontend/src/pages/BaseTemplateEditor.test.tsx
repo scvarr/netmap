@@ -77,7 +77,7 @@ describe('numeric active-panel size', () => {
     const saved = save.mock.calls[0][0];
     expect(saved.panels[0].width).toBeCloseTo(exact, 12); expect(saved.panels[0].width).not.toBe(3.3);
     expect(saved.panels[0]).toMatchObject({ x: state.panels[0].x, y: state.panels[0].y, height: 20 });
-    expect(saved.slots).toEqual(state.slots);
+    expect(saved.slots[0].rendered_position.x * saved.panels[0].width).toBeCloseTo(state.slots[0].rendered_position.x * state.panels[0].width);
     const request = createBlueprintRequest(saved).request!;
     expect(request.panels[0].width).toBe(saved.panels[0].width); expect(request.body.width).toBe(saved.panels[0].width);
   });
@@ -102,19 +102,20 @@ describe('numeric active-panel size', () => {
     const saved = save.mock.calls[2][0];
     expect(saved.panels).toEqual([{ ...state.panels[0], [axis]: 400.1 }, state.panels[1]]);
     expect([...document.querySelectorAll('[data-panel-key]')].map((node) => node.getAttribute('data-panel-key'))).toEqual([state.panels[1].panel_key, state.activePanelKey]);
-    expect(saved.slots).toEqual(state.slots); expect(saved.individualLinks).toEqual(state.individualLinks);
+    expect(saved.slots[0].rendered_position[axis === 'width' ? 'x' : 'y'] * saved.panels[0][axis]).toBeCloseTo(state.slots[0].rendered_position[axis === 'width' ? 'x' : 'y'] * state.panels[0][axis]); expect(saved.individualLinks).toEqual(state.individualLinks);
     const request = createBlueprintRequest(saved).request!;
-    expect(request.panels).toEqual(saved.panels); expect(request.slots[0].rendered_position).toEqual(state.slots[0].rendered_position);
+    expect(request.panels).toEqual(saved.panels); expect(request.slots[0].rendered_position).toEqual(saved.slots[0].rendered_position);
     expect(request.body).toMatchObject(axis === 'width' ? { width: 400.1, height: 80 } : { width: 330, height: 400.1 });
     expect(body(axis)).toHaveValue(400.1);
   });
 
-  it.each(['width', 'height'] as const)('accepts positive %s below one on blur without snapping or an arbitrary minimum', async (axis) => {
+  it.each(['width', 'height'] as const)('rejects %s below one when it would cross an existing port', async (axis) => {
     const { state, save } = setup(); const input = size(axis);
     await userEvent.clear(input); await userEvent.type(input, '0.125'); await userEvent.tab();
-    expect(input).toHaveValue(.1);
+    expect(input).toHaveValue(state.panels[0][axis]);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(save.mock.calls[0][0].panels).toEqual([{ ...state.panels[0], [axis]: .1 }, state.panels[1]]);
+    expect(save.mock.calls[0][0].panels).toEqual(state.panels);
+    expect(screen.getByText(/Граница пересекает/)).toBeInTheDocument();
   });
 
   it.each([true, false].flatMap((multi) => ['', 'NaN', 'Infinity', '1e', '0', '-2', '0.04'].map((raw) => ({ multi, raw }))))('rejects invalid input $raw on Enter and blur (multi=$multi)', ({ multi, raw }) => {
@@ -148,7 +149,7 @@ describe('numeric active-panel size', () => {
     expect(size('width')).toHaveValue(233.5); expect(size('height')).toHaveValue(93);
     fireEvent.pointerUp(canvas);
     expect(size('width')).toHaveValue(233.5); expect(size('height')).toHaveValue(93);
-    expect(save.mock.calls[0][0].slots).toEqual(state.slots);
+    expect(save.mock.calls[0][0].slots[0].rendered_position.x * save.mock.calls[0][0].panels[0].width).toBeCloseTo(state.slots[0].rendered_position.x * state.panels[0].width);
   });
 
   it('hides panel size controls for a single panel and keeps body dimension editing', () => {
@@ -182,7 +183,7 @@ describe('authoring workspace contextual region', () => {
     expect(screen.getByLabelText('Название')).toHaveValue(target.display_name);
     expect(within(screen.getByRole('group', { name: 'Положение выделения' })).getByLabelText('X')).toHaveValue(target.rendered_position.x);
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(save.mock.calls[0][0].slots).toEqual(state.slots); expect(save.mock.calls[0][0].panels).toEqual(state.panels);
+    expect(save.mock.calls[0][0].slots[0].rendered_position.x * save.mock.calls[0][0].panels[0].width).toBeCloseTo(state.slots[0].rendered_position.x * state.panels[0].width); expect(save.mock.calls[0][0].panels).toEqual(state.panels);
     fireEvent.pointerDown(document.querySelector(`[data-panel-key="${source.activePanelKey}"] .blueprint-composition-canvas__body`)!, { button: 0 });
     fireEvent.pointerUp(document.querySelector('svg')!);
     expect(screen.getByRole('button', { name: 'Панель 1' })).toHaveAttribute('aria-pressed', 'true');
@@ -868,4 +869,21 @@ it('links to the catalog and disables adding endpoints when all port types are a
   </MemoryRouter></I18nProvider>);
   expect(await screen.findByRole('link', { name: 'Справочники → Типы портов' })).toHaveAttribute('href', '/catalogs/port-types');
   expect(screen.getByRole('button', { name: 'Добавить порты / точки' })).toBeDisabled();
+});
+
+
+it('BASE-UX-01 keeps zoom out of saved model and draft notifications', () => {
+  const state = newBlueprintEditorState(); state.name = 'Zoom';
+  const save = vi.fn().mockResolvedValue(undefined), onStateChange = vi.fn();
+  render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Zoom" description="" saveLabel="Save" initialState={state} onSave={save} onStateChange={onStateChange} /></MemoryRouter></I18nProvider>);
+  const notifications = onStateChange.mock.calls.length;
+  for (const zoom of [2,4,8]) {
+    fireEvent.click(screen.getByRole('button', { name: 'Увеличить' }));
+    expect(screen.getByText(`${zoom}×`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls.at(-1)![0]).toEqual(state);
+  }
+  expect(onStateChange).toHaveBeenCalledTimes(notifications);
+  fireEvent.click(screen.getByRole('button', { name: 'Вписать в область' }));
+  expect(screen.getByText('1×')).toBeInTheDocument();
 });

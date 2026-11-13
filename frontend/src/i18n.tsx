@@ -6,6 +6,8 @@ export const localeStorageKey = 'netmap.locale';
 
 const messages = {
   ru: {
+    'blueprint.zoom.title': 'Масштаб редактора', 'blueprint.zoom.in': 'Увеличить', 'blueprint.zoom.out': 'Уменьшить', 'blueprint.zoom.fit': 'Вписать в область',
+    'blueprint.panel.trimRejected': 'Граница пересекает порт или модульный отсек. Размер панели не изменён.',
     'map.portGeometryUnsupported': 'Геометрия портов требует ширины больше 960. Исправьте геометрию шаблона.',
     'map.portGeometryCoincident': 'Центры портов совпадают. Раздельное отображение невозможно: исправьте шаблон.',
     'autoLocation.enabled': 'Автоматическая компоновка',
@@ -228,6 +230,8 @@ const messages = {
     'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
+    'blueprint.zoom.title': 'Editor zoom', 'blueprint.zoom.in': 'Zoom in', 'blueprint.zoom.out': 'Zoom out', 'blueprint.zoom.fit': 'Fit to area',
+    'blueprint.panel.trimRejected': 'The boundary intersects a port or module bay. Panel size unchanged.',
     'map.portGeometryUnsupported': 'Port geometry requires more than the supported width of 960. Correct the template geometry.',
     'map.portGeometryCoincident': 'Port centres coincide. Separate rendering is impossible: correct the template geometry.',
     'autoLocation.enabled': 'Automatic layout',

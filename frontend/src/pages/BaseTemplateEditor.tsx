@@ -30,6 +30,8 @@ const formatGeometryNumber = (value: number) => Number(value.toFixed(1));
 
 export function BaseTemplateEditor({ title, description, saveLabel, onSave, initialState, versionNotice, onStateChange, saveDisabled, onCancel }: Props) {
   const { t } = useI18n();
+  const [zoom, setZoom] = useState(1);
+  const [trimRejected, setTrimRejected] = useState(false);
   const [editor, setEditor] = useState(initialState);
   useEffect(() => { onStateChange?.(editor); }, [editor, onStateChange]);
   const [selectedBayKey, setSelectedBayKey] = useState<string>();
@@ -55,8 +57,9 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     if (currentPanelSizeDraft?.axis === axis && raw.trim() && Number.isFinite(requested) && requested > 0 && value > 0) {
       setEditor((old) => {
         const panel = old.panels.find((item) => item.panel_key === panelKey)!;
-        const next = setPanelRectangle(old, panelKey, { x: panel.x, y: panel.y, width: panel.width, height: panel.height, [axis]: value });
-        return old.panels.length === 1 ? { ...next, [axis]: value } : next;
+        const next = setPanelRectangle(old, panelKey, { x: panel.x, y: panel.y, width: panel.width, height: panel.height, [axis]: value }, 'resize', (normalizedPixels('x', 7) ?? (1 / panel.width)) * panel.width);
+        setTrimRejected(next === old);
+        return next !== old && old.panels.length === 1 ? { ...next, [axis]: value } : next;
       });
     }
     setPanelSizeDraft(undefined);
@@ -146,7 +149,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     const rect = canvasWrap.current?.querySelector('svg')?.getBoundingClientRect();
     const viewHeight = 1000 * bounds.height / bounds.width;
     const scale = rect && Math.min(rect.width / 1000, rect.height / viewHeight);
-    return scale && Number.isFinite(scale) && scale > 0 ? pixels / (scale * (axis === 'x' ? activePanel.width : activePanel.height) * 1000 / bounds.width) : undefined;
+    return scale && Number.isFinite(scale) && scale > 0 ? pixels * zoom / (scale * (axis === 'x' ? activePanel.width : activePanel.height) * 1000 / bounds.width) : undefined;
   };
   const presentationInset = (axis: 'x' | 'y') => Math.min(.49, normalizedPixels(axis, 8) ?? .02);
   const layoutMetrics = () => ({
@@ -253,14 +256,20 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <button type="button" className="secondary-action" onClick={addBay}>{t('hardware.addBay')}</button>
           <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey) || editor.bays?.some(bay => bay.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
         </div>
+        <div className="blueprint-composer__panel-actions" role="group" aria-label={t('blueprint.zoom.title')}>
+          <button type="button" className="secondary-action" disabled={zoom <= 1} aria-label={t('blueprint.zoom.out')} onClick={() => setZoom(value => Math.max(1, value / 2))}>−</button><span>{zoom}×</span>
+          <button type="button" className="secondary-action" disabled={zoom >= 8} aria-label={t('blueprint.zoom.in')} onClick={() => setZoom(value => Math.min(8, value * 2))}>+</button>
+          <button type="button" className="secondary-action" onClick={() => { setZoom(1); const viewport = canvasWrap.current?.querySelector('.blueprint-composer__viewport'); if (viewport) { viewport.scrollLeft = 0; viewport.scrollTop = 0; } }}>{t('blueprint.zoom.fit')}</button>
+        </div>
+        {trimRejected && <p role="status" className="blueprint-editor__error">{t('blueprint.panel.trimRejected')}</p>}
         <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
-          <BlueprintCompositionCanvas portTypes={catalog.types} bays={editor.bays} selectedBayKey={selectedBayKey} onSelectBay={selectBay} onBayGeometry={changeBay} key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelectedBayKey(undefined); setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle) => setEditor((old) => setPanelRectangle(old, key, rectangle))} onContextMenu={(key, clientX, clientY) => {
+          <div className="blueprint-composer__viewport" onScroll={() => setMenu(undefined)}><BlueprintCompositionCanvas zoom={zoom} portTypes={catalog.types} bays={editor.bays} selectedBayKey={selectedBayKey} onSelectBay={selectBay} onBayGeometry={changeBay} key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelectedBayKey(undefined); setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle, mode, portPadding) => setEditor((old) => { const next = setPanelRectangle(old, key, rectangle, mode, portPadding); setTrimRejected(next === old); return next; })} onContextMenu={(key, clientX, clientY) => {
             if (key && !selected.has(key)) setSelected(new Set([key]));
             if (!key && selected.size === 0) { setMenu(undefined); return; }
             const rect = canvasWrap.current!.getBoundingClientRect();
             setDistributionAxis(undefined);
             setMenu({ x: Math.max(0, Math.min(clientX - rect.left, rect.width - 320)), y: Math.max(0, Math.min(clientY - rect.top, rect.height - 280)) });
-          }} />
+          }} /></div>
           {menu && <div className="blueprint-composer__context-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
             <button type="button" role="menuitem" disabled={!selected.size} onClick={() => { setWorkspaceSelection([...selected]); setLinksOpen(true); setMenu(undefined); }}>{t('blueprint.naming.open')}</button>
             {menuSections.map((section) => <div key={section.label} className={`blueprint-composer__context-section blueprint-composer__context-section--${section.label}`}>

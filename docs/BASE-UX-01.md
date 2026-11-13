@@ -1,0 +1,13 @@
+# BASE-UX-01 — Panel Trim and Editor Zoom
+
+Branch: `feat/base-ux-01-panel-trim-zoom`; base: `e5a4e6db7e1fe2d31087db102a9e1dfa1c4a6b28`.
+
+Panel resize preserves composition-space port centres and placed-bay rectangles by recalculating panel-relative coordinates. All eight drag handles and numeric dimensions use `setPanelRectangle`. Numeric dimensions keep the top-left corner fixed. Panel move explicitly keeps the previous relative geometry. Slot keys, port types, links and bay keys are preserved. Logical module places have no rectangle to transform.
+
+Resize is rejected atomically if an edge crosses a port marker footprint or any part of a placed bay. The editor displays a translated status message. Marker padding is seven fit-view pixels converted to composition units (including selected marker stroke); existing edge clipping is not worsened. Labels and invisible hit targets are not physical port footprints. No content is deleted or automatically repositioned.
+
+Zoom steps are fit (1×), 2×, 4× and 8×. The entire SVG viewport grows within a bounded two-axis scroll area; controls, properties and context menus stay outside the scrolling SVG. Markers and annotations use the fit-view presentation scale. Pointer coordinates use the actual SVG screen rectangle, including its scrolled offset. Panel and bay gesture deltas also account for scrolling during a gesture. Fit resets scroll offsets. Zoom is React view state outside `BlueprintEditorState`; changing zoom alone emits no draft change and saves identical model data. Layout commands continue to use fit-view metrics.
+
+Validation uses targeted frontend tests in Docker: model tests cover 48 ports in two rows, all eight trims, occupied-area rejection, identity, links and publication serialization; canvas tests cover 1×/2×/4×/8× selection, dragging and marquee with scroll offsets; editor tests cover numeric sizing and zoom-independent save/draft notifications. Existing local draft/recovery and publication page tests are included. No backend contract or canonical topology changed.
+
+TypeScript/Vite build passes (existing large-chunk warning). All 202 targeted tests across six files pass in the sequential Docker run. One parallel run timed out in an existing publication revalidation test while the build was running; the sequential rerun passed all six files. GitNexus detect_changes ran against this worktree and reported HIGH risk in the known editor dependency cone; graph discovery was supplemented with direct caller inspection. Real-browser visual inspection and external FINAL branch-diff inspection remain acceptance steps; DOM tests do not establish native scrollbar, F5 or pointer hit-testing behaviour in a browser.

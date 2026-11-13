@@ -88,9 +88,25 @@ export const panelGestureGeometry = (
   const snappedY = sy && (north ? top === sy.guide : bottom === sy.guide) ? sy.guide : undefined;
   return { rectangle: { x: left, y: top, width: right - left, height: bottom - top }, guides: { x: snappedX, y: snappedY } };
 };
-export const setPanelRectangle = (state: BlueprintEditorState, key: string, rectangle: PanelRectangle): BlueprintEditorState => ({
-  ...state, panels: state.panels.map((panel) => panel.panel_key === key ? { ...panel, ...rectangle } : panel),
-});
+/** Resize trims in composition coordinates; move keeps panel-relative geometry. */
+export const setPanelRectangle = (state: BlueprintEditorState, key: string, rectangle: PanelRectangle, mode: 'move' | 'resize' = 'resize', portPadding = 1): BlueprintEditorState => {
+  const panel = state.panels.find(item => item.panel_key === key);
+  if (!panel || !Object.values(rectangle).every(Number.isFinite) || rectangle.width <= 0 || rectangle.height <= 0) return state;
+  const resized = mode !== 'move';
+  const position = (x: number, y: number) => ({ x: (panel.x + x * panel.width - rectangle.x) / rectangle.width, y: (panel.y + y * panel.height - rectangle.y) / rectangle.height });
+  const slots = resized ? state.slots.map(slot => slot.panel_key === key ? { ...slot, rendered_position: position(slot.rendered_position.x, slot.rendered_position.y) } : slot) : state.slots;
+  const bays = resized ? state.bays?.map(bay => bay.panel_key === key && bay.kind === 'PLACED' ? { ...bay, ...position(bay.x, bay.y), width: bay.width * panel.width / rectangle.width, height: bay.height * panel.height / rectangle.height } : bay) : state.bays;
+  // Markers are presentation geometry. The caller supplies their fit-view radius
+  // in composition units. Do not worsen any pre-existing edge clipping.
+  const crossesPort = state.slots.some(slot => {
+    if (slot.panel_key !== key) return false;
+    const x = panel.x + slot.rendered_position.x * panel.width;
+    const y = panel.y + slot.rendered_position.y * panel.height;
+    return rectangle.x > Math.max(panel.x, x - portPadding) + 1e-10 || rectangle.y > Math.max(panel.y, y - portPadding) + 1e-10 || rectangle.x + rectangle.width < Math.min(panel.x + panel.width, x + portPadding) - 1e-10 || rectangle.y + rectangle.height < Math.min(panel.y + panel.height, y + portPadding) - 1e-10;
+  });
+  if (resized && (crossesPort || bays?.some(bay => bay.panel_key === key && bay.kind === 'PLACED' && (bay.x < -1e-10 || bay.y < -1e-10 || bay.x + bay.width > 1 + 1e-10 || bay.y + bay.height > 1 + 1e-10)))) return state;
+  return { ...state, slots, bays, panels: state.panels.map(item => item.panel_key === key ? { ...item, ...rectangle } : item) };
+};
 export const compositionBounds = (panels: PresentationPanel[]) => ({
   x: Math.min(...panels.map((panel) => panel.x)), y: Math.min(...panels.map((panel) => panel.y)),
   width: Math.max(...panels.map((panel) => panel.x + panel.width)) - Math.min(...panels.map((panel) => panel.x)),

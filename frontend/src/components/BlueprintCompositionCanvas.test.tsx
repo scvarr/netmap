@@ -111,7 +111,7 @@ describe('Blueprint endpoint screen-space markers', () => {
     expect(container.querySelector('[data-panel-guide-x]')).toBeNull();
     expect(container.querySelector('[data-panel-guide-y]')).toBeNull();
     fireEvent.pointerMove(canvas, { clientX: 205, clientY: 150 });
-    expect(onPanelGeometry).toHaveBeenLastCalledWith('panel-2', { x: 0, y: 10, width: 100, height: 80 });
+    expect(onPanelGeometry).toHaveBeenLastCalledWith('panel-2', { x: 0, y: 10, width: 100, height: 80 }, 'move', 1.4);
     expect(container.querySelector('[data-panel-guide-x]')).toHaveAttribute('x1', '0');
     fireEvent.pointerCancel(canvas);
     expect(container.querySelector('[data-panel-guide-x]')).toBeNull();
@@ -227,4 +227,35 @@ it('C-COR-02 keeps an outlying endpoint inside the selectable SVG viewport', () 
   expect(Number(marker.getAttribute('y')) + Number(marker.getAttribute('height')) / 2).toBeLessThan(height);
   fireEvent.pointerDown(container.querySelector('[data-slot-key]')!, { button: 0, pointerId: 1 });
   expect(onSelect).toHaveBeenCalledWith('slot-1', false);
+});
+
+
+it.each([1, 2, 4, 8])('BASE-UX-01 maps port selection, drag and marquee at %sx with scroll offsets', zoom => {
+  let left = -250; const top = -100;
+  vi.spyOn(SVGSVGElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ left, top, width: 1000 * zoom, height: 800 * zoom } as DOMRect));
+  const onSelect = vi.fn(), onTranslate = vi.fn(), onMarquee = vi.fn(), onBayGeometry = vi.fn(), onPanelGeometry = vi.fn(), onContextMenu = vi.fn();
+  const { container } = render(<I18nProvider><BlueprintCompositionCanvas zoom={zoom} bays={[{ kind: 'PLACED', bay_key: 'bay', panel_key: 'panel-1', display_name: 'Bay', compatibility: 'test', x: .1, y: .1, width: .2, height: .2 }]} onBayGeometry={onBayGeometry} onPanelGeometry={onPanelGeometry}
+    body={{ width: 100, height: 80, fillColor: '#123456' }} panels={[{ panel_key: 'panel-1', panel_number: 1, display_name: 'One', x: 0, y: 0, width: 100, height: 80 }]}
+    activePanelKey="panel-1" slots={[slot(1)]} links={[]} selectedKeys={new Set()} onSelect={onSelect} onTranslate={onTranslate} onMarquee={onMarquee} onActivatePanel={vi.fn()} onContextMenu={onContextMenu} /> </I18nProvider>);
+  const svg = container.querySelector('svg')!;
+  fireEvent.pointerDown(container.querySelector('[data-slot-key]')!, { button: 0, clientX: left + 500 * zoom, clientY: top + 400 * zoom });
+  expect(onSelect).toHaveBeenCalledWith('slot-1', false);
+  left -= 50 * zoom;
+  fireEvent.pointerMove(svg, { clientX: left + 600 * zoom, clientY: top + 400 * zoom });
+  expect(onTranslate).toHaveBeenLastCalledWith(new Set(['slot-1']), expect.closeTo(.1), 0);
+  fireEvent.pointerUp(svg);
+  fireEvent.pointerDown(container.querySelector('.blueprint-composition-canvas__body')!, { button: 0, clientX: left + 300 * zoom, clientY: top + 200 * zoom });
+  fireEvent.pointerMove(svg, { clientX: left + 700 * zoom, clientY: top + 600 * zoom });
+  fireEvent.pointerUp(svg);
+  expect(onMarquee).toHaveBeenCalledWith(['slot-1']);
+  fireEvent.pointerDown(container.querySelector('[data-bay-key]')!, { button: 0, clientX: left + 100 * zoom, clientY: top + 80 * zoom });
+  fireEvent.pointerMove(svg, { clientX: left + 200 * zoom, clientY: top + 80 * zoom });
+  expect(onBayGeometry).toHaveBeenLastCalledWith('bay', expect.objectContaining({ x: expect.closeTo(.2), y: .1 }));
+  fireEvent.pointerUp(svg);
+  fireEvent.pointerDown(container.querySelector('[data-panel-resize="e"]')!, { button: 0, clientX: left + 1000 * zoom, clientY: top + 400 * zoom });
+  fireEvent.pointerMove(svg, { clientX: left + 1100 * zoom, clientY: top + 400 * zoom });
+  expect(onPanelGeometry).toHaveBeenLastCalledWith('panel-1', { x: 0, y: 0, width: 110, height: 80 }, 'resize', expect.closeTo(.7));
+  fireEvent.pointerUp(svg);
+  fireEvent.contextMenu(container.querySelector('[data-slot-key]')!, { clientX: 123, clientY: 234 });
+  expect(onContextMenu).toHaveBeenCalledWith('slot-1', 123, 234);
 });
