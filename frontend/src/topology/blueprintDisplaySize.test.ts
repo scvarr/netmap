@@ -22,8 +22,31 @@ describe('Blueprint composition display dimensions', () => {
   });
   it('keeps dense endpoints apart while bounding display width', () => {
     const dense = presentation([{ ...first, width: 240, height: 48 }], Array.from({ length: 16 }, (_, index) => ({ x: (index + .5) / 16, y: .5 })));
-    expect(minimumBlueprintDisplayWidth(dense)).toBe(224);
-    expect(clampBlueprintDisplayWidth(20, dense)).toBe(224);
+    expect(minimumBlueprintDisplayWidth(dense)).toBeCloseTo(160);
+    expect(clampBlueprintDisplayWidth(20, dense)).toBeCloseTo(160);
     expect(clampBlueprintDisplayWidth(2000)).toBe(960);
+  });
+});
+
+describe('compact port geometry', () => {
+  it.each(['CONNECTION_POINT', 'NETWORK_PORT'] as const)('separates 48 %s markers in two rows and resolves old widths without mutation', kind => {
+    const dense = presentation([first], Array.from({ length: 48 }, (_, i) => ({ x: (i % 24 + .5) / 24, y: i < 24 ? .25 : .75 })));
+    dense.slots.forEach(slot => { slot.kind = kind; });
+    const before = JSON.stringify(dense);
+    const minimum = minimumBlueprintDisplayWidth(dense);
+    expect(minimum).toBeCloseTo(240);
+    expect(blueprintNodeDisplayDimensions(dense, 40).width).toBe(minimum);
+    expect(clampBlueprintDisplayWidth(40, dense)).toBe(minimum);
+    expect(JSON.stringify(dense)).toBe(before);
+  });
+  it('does not cap the density minimum at 240', () => {
+    const dense = presentation([first], [{ x: .1, y: .5 }, { x: .12, y: .5 }]);
+    expect(minimumBlueprintDisplayWidth(dense)).toBeCloseTo(500);
+  });
+  it('reports geometry outside the supported range instead of clamping it', () => {
+    const dense = presentation([first], [{ x: .1, y: .5 }, { x: .101, y: .5 }]);
+    expect(() => clampBlueprintDisplayWidth(240, dense)).toThrow('map.portGeometryUnsupported');
+    dense.slots[1].panel_local_position = { ...dense.slots[0].panel_local_position };
+    expect(() => minimumBlueprintDisplayWidth(dense)).toThrow('map.portGeometryCoincident');
   });
 });

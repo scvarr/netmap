@@ -6,7 +6,7 @@ import { displayNodeLabel, physicalClassPresentation } from '../topology/present
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import { internalL1Segments } from '../topology/internalL1Presentation';
 import { InternalL1Continuity } from './InternalL1Continuity';
-import { blueprintMapNameplateHeight, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
+import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, blueprintMapNameplateHeight, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
@@ -22,7 +22,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
     return { role: 'button' as const, tabIndex: state === 'unavailable' ? -1 : 0, 'aria-label': `Порт ${label}`, 'aria-disabled': state === 'unavailable' || undefined, onClick: (event: React.MouseEvent) => { event.stopPropagation(); if (state !== 'unavailable' && objectId) data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); }, onContextMenu: (event: React.MouseEvent) => { event.preventDefault(); event.stopPropagation(); if (objectId) data.onPhysicalPortContextMenu?.({ physicalObjectId: objectId, connectionPointId, label }, { x: event.clientX, y: event.clientY }); }, onKeyDown: (event: React.KeyboardEvent) => { if ((event.key === 'Enter' || event.key === ' ') && state !== 'unavailable' && objectId) { event.preventDefault(); data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); } } };
   };
   if (physical && blueprint) {
-    const displayWidth = width ?? blueprintNodeDisplayDimensions(blueprint, undefined).width;
+    const displayWidth = blueprintNodeDisplayDimensions(blueprint, width).width;
     const displayHeight = blueprintNodeDisplayDimensions(blueprint, displayWidth).height;
     const nameplateHeight = blueprintMapNameplateHeight(blueprint, displayWidth);
     const bounds = panelCompositionBounds(blueprint.panels);
@@ -53,7 +53,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       {blueprint.panels.map((panel) => {
         return <section key={panel.panel_key} className="blueprint-map-node__panel" data-testid={`blueprint-panel-${panel.panel_key}`} style={{ left: `${(panel.x - bounds.x) / bounds.width * 100}%`, top: `${(panel.y - bounds.y) / bounds.height * 100}%`, width: `${panel.width / bounds.width * 100}%`, height: `${panel.height / bounds.height * 100}%`, background: blueprint.body.fill_color ?? '#18383a' }}>
           <div className="blueprint-map-node__panel-surface" title={panel.display_name}>
-            {blueprint.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => { const portType = portTypes?.find(type => type.id === slot.port_type_id); const style = { backgroundColor: portType?.color ?? '#18383a', left: `${slot.panel_local_position.x * 100}%`, top: `${slot.panel_local_position.y * 100}%`, transform: 'translate(-50%, -50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${portType?.name ?? slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)} />; })}
+            {blueprint.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => { const portType = portTypes?.find(type => type.id === slot.port_type_id); const style = { '--port-size': `${BLUEPRINT_PORT_SIZE}px`, '--port-stroke': `${BLUEPRINT_PORT_STROKE}px`, backgroundColor: portType?.color ?? '#18383a', left: `${slot.panel_local_position.x * 100}%`, top: `${slot.panel_local_position.y * 100}%`, transform: 'translate(-50%, -50%)' }; const state = data.physicalPortStates?.[slot.connection_point_id]; return <span key={slot.connection_point_id} className={`blueprint-map-node__port blueprint-map-node__port--${slot.kind.toLowerCase()}${traceHighlightedConnectionPointIds.has(slot.connection_point_id) ? ' blueprint-map-node__port--trace-highlighted' : ''}${data.wiringContinuationConnectionPointIds?.has(slot.connection_point_id) ? ' blueprint-map-node__port--wiring-continuation' : ''}${state ? ` blueprint-map-node__port--wiring-${state}` : ''}`} style={style} data-connection-point-id={slot.connection_point_id} title={`${slot.display_name} · ${portType?.name ?? slot.kind}`} {...portProps(slot.connection_point_id, slot.display_name)}><span className="blueprint-map-node__port-label">{slot.display_name}</span></span>; })}
           </div>
         </section>;
       })}

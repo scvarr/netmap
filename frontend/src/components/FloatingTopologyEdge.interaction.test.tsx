@@ -35,7 +35,7 @@ const blueprintNode = (id: string, x: number, physicalObjectId: string, slot: { 
     kind: 'PHYSICAL_OBJECT',
     label: id,
     source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: physicalObjectId }],
-    attributes: { blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: `${id}-bp` }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: `${id}-v` }, body: { kind: 'RECTANGLE', width: 100, height: 100 }, slots: [{ slot_key: slot.connectionPointId, display_name: slot.connectionPointId, kind: slot.kind, connection_point_id: slot.connectionPointId, rendered_position: { x: slot.renderedX, y: .5 }, external_attachment: { x: slot.attachmentX, y: .5, side: slot.side } }] } },
+    attributes: { blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: `${id}-bp` }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: `${id}-v` }, body: { kind: 'RECTANGLE', width: 100, height: 100 }, panels: [{ panel_key: 'panel', panel_number: 1, display_name: 'Panel', x: 0, y: 0, width: 100, height: 100 }], slots: [{ slot_key: slot.connectionPointId, display_name: slot.connectionPointId, kind: slot.kind, connection_point_id: slot.connectionPointId, panel_key: 'panel', panel_local_position: { x: slot.renderedX, y: .5 }, rendered_position: { x: slot.renderedX, y: .5 }, external_attachment: { x: slot.attachmentX, y: .5, side: slot.side } }] } },
   } },
 });
 
@@ -290,8 +290,8 @@ describe('direct cable route edge interaction', () => {
         const marker = label?.parentElement?.querySelector(shape);
         expect(label).toBeInTheDocument();
         expect(marker).toBeInTheDocument();
-        const centerX = shape === 'rect' ? Number(marker?.getAttribute('x')) + 3.5 : Number(marker?.getAttribute('cx'));
-        const centerY = shape === 'rect' ? Number(marker?.getAttribute('y')) + 3.5 : Number(marker?.getAttribute('cy'));
+        const centerX = shape === 'rect' ? Number(marker?.getAttribute('x')) + Number(marker?.getAttribute('width')) / 2 : Number(marker?.getAttribute('cx'));
+        const centerY = shape === 'rect' ? Number(marker?.getAttribute('y')) + Number(marker?.getAttribute('height')) / 2 : Number(marker?.getAttribute('cy'));
         expect(Number(label?.getAttribute('x'))).toBe(centerX);
         expect(Number(label?.getAttribute('y'))).toBe(centerY - 8);
         expect(label).toHaveAttribute('text-anchor', 'middle');
@@ -311,7 +311,7 @@ describe('direct cable route edge interaction', () => {
       const { container } = render(<ForegroundCableRoutes edges={[edge] as any} physicalPortStates={{ 'source-port': 'source', 'target-port': 'destination' }} />);
       const markers = container.querySelectorAll('.cable-route-port-marker');
       expect(markers).toHaveLength(2);
-      expect(markers[0]).toHaveAttribute('x', '21.5');
+      expect(markers[0]).toHaveAttribute('x', '22.25');
       expect(markers[0].tagName).toBe('rect');
       expect(markers[0]).toHaveClass('cable-route-port-marker--network', 'cable-route-port-marker--wiring-source');
       expect(markers[0]).toHaveAttribute('pointer-events', 'none');

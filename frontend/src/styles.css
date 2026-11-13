@@ -118,7 +118,7 @@ button { font: inherit; }
 .cable-route-length-action { cursor: text; text-decoration: underline; text-underline-offset: 2px; }.cable-route-length-input { box-sizing: border-box; border: 1px solid #f0bd66; border-radius: 3px; background: #172629; color: #fff0bd; text-align: center; font-family: ui-monospace, "Cascadia Code", monospace; outline: none; }.cable-route-length-input:focus { border-color: #fff0bd; }.cable-route-length-input--invalid { border-color: #ff8279; }
 .cable-routes-foreground { position: absolute; z-index: 1001; width: 1px; height: 1px; overflow: visible; pointer-events: none; }.cable-route-foreground--normal { stroke: #52676b; stroke-width: 1.5; opacity: 1; }.cable-route-foreground--attached { stroke: #35c99c; stroke-width: 3; filter: drop-shadow(0 0 2px rgb(53 201 156 / .65)); }.cable-route-foreground--selected { stroke: #54e3b4; stroke-width: 3.5; opacity: 1; }.cable-route-foreground--traced { stroke: #f0bd66; stroke-width: 4; opacity: 1; }.cable-route-foreground--editing, .wiring-route-preview { filter: drop-shadow(0 0 2px #8d7aff); }.cable-route-port-marker { fill: #18383a; stroke: #e6fffb; stroke-width: 1.25; }
 .cable-route-port-marker--wiring-eligible { stroke: #7be6ff; stroke-width: 2; filter: drop-shadow(0 0 2px #147d94); }.cable-route-port-marker--wiring-source { stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 3px #d65cff); }.cable-route-port-marker--wiring-destination { stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 3px #54e3b4); }.cable-route-port-marker--wiring-unavailable { opacity: .35; }
-.device-node:hover, .device-node--selected { border-color: #55e5b5; box-shadow: 0 0 0 2px rgba(85, 229, 181, .12), 0 14px 32px rgba(0, 0, 0, .3); transform: translateY(-2px); }
+.device-node:hover, .device-node--selected { border-color: #55e5b5; box-shadow: 0 0 0 2px rgba(85, 229, 181, .12), 0 14px 32px rgba(0, 0, 0, .3);  }
 .device-node--trace-highlighted { border-color: #f0bd66; box-shadow: 0 0 0 3px rgba(240, 189, 102, .2), 0 14px 32px rgba(0, 0, 0, .3); }
 .device-node--physical { border-color: #5d7188; background: linear-gradient(145deg, #162532, #0d171e); }
 .device-node--physical .device-node__kind { color: #9ebbd4; }
@@ -962,3 +962,21 @@ a { color: inherit; }
 .automatic-location-picker .object-location-picker-tree__choice { padding: 5px 7px; }
 .automatic-location-picker .object-location-picker-tree__choice[aria-selected="true"] { border-color: #77d6bd; color: #b9f0dc; background: #1a4238; }
 .automatic-location-picker .object-location-path { display: block; margin: 7px 0 0; overflow-wrap: anywhere; font-size: 10px; }
+
+/* PORT-UX-01: fixed flow-space markers; zoom never writes object geometry. */
+.blueprint-map-node:hover:not(:has(.blueprint-map-node__port:hover)) { outline: 1px solid #78aaa5; outline-offset: 3px; }
+.blueprint-map-node--selected:hover { outline: 2px solid #54e3b4; }
+.blueprint-map-node__panel { border: 0; box-shadow: inset 0 0 0 1px #78aaa5; }
+.blueprint-map-node__port { width: var(--port-size); height: var(--port-size); border-width: var(--port-stroke); cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cpath d='M4 9V4h5v5H4zm5-2h4v7h4' fill='%2318383a' stroke='%23e6fffb'/%3E%3C/svg%3E") 6 6, crosshair; }
+.blueprint-map-node__port--network_port { border-radius: 0; }
+.blueprint-map-node__port::before { content: ''; position: absolute; inset: -1.5px; }
+.blueprint-map-node__port:hover, .blueprint-map-node__port:focus-visible { outline: 1px solid #fff; outline-offset: 1px; z-index: 10; }
+.blueprint-map-node__port-label { display: none; position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); padding: 3px 6px; border: 1px solid #78aaa5; background: #10292a; color: #fff; font: 12px ui-monospace, monospace; white-space: nowrap; pointer-events: none; }
+.blueprint-map-node__port:hover .blueprint-map-node__port-label, .blueprint-map-node__port:focus-visible .blueprint-map-node__port-label { display: block; }
+.blueprint-map-node__port--wiring-eligible, .blueprint-map-node__port--wiring-eligible:hover { box-shadow: 0 0 0 1px #147d94; }
+.blueprint-map-node__port--wiring-source { box-shadow: 0 0 0 1px #d65cff; }
+.blueprint-map-node__port--wiring-destination { box-shadow: 0 0 0 1px #54e3b4; }
+.blueprint-map-node__port--trace-highlighted { box-shadow: 0 0 0 1px #f0bd66; }
+.blueprint-map-node__port--wiring-continuation { box-shadow: 0 0 0 1px #8d7aff; }
+.cable-route-port-marker--blueprint { filter: none; }
+.blueprint-map-node__port--wiring-unavailable { cursor: not-allowed; }

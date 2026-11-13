@@ -227,3 +227,17 @@ it('resolves current archived types for base and module glyphs while preserving 
   expect(await screen.findByTitle('Front 01 · Renamed')).toHaveStyle({ backgroundColor: '#ABCDEF' });
   fetchMock.mockRestore();
 });
+
+it('keeps port hover and focus passive while preserving mouse, keyboard and context actions', () => {
+  const click = vi.fn(), context = vi.fn(), resize = vi.fn();
+  render(<DeviceNode {...({ data: { projection, onPhysicalPortClick: click, onPhysicalPortContextMenu: context, onBlueprintDisplayResize: resize }, selected: false, width: 1 } as any)} />);
+  const port = screen.getByRole('button', { name: /Front 01$/ });
+  const card = screen.getByTestId('blueprint-map-node');
+  const style = card.getAttribute('style');
+  fireEvent.mouseEnter(port); fireEvent.focus(port); fireEvent.mouseLeave(port);
+  expect(card.getAttribute('style')).toBe(style);
+  expect(click).not.toHaveBeenCalled(); expect(context).not.toHaveBeenCalled(); expect(resize).not.toHaveBeenCalled();
+  expect(port.querySelector('.blueprint-map-node__port-label')).toHaveTextContent('Front 01');
+  fireEvent.click(port); fireEvent.keyDown(port, { key: ' ' }); fireEvent.contextMenu(port);
+  expect(click).toHaveBeenCalledTimes(2); expect(context).toHaveBeenCalledTimes(1);
+});

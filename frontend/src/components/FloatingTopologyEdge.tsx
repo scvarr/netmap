@@ -20,7 +20,7 @@ import {
 } from '../topology/layout';
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
-import { blueprintMapNameplateHeight, blueprintNodeDisplayDimensions } from '../topology/blueprintDisplaySize';
+import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, blueprintMapNameplateHeight, blueprintNodeDisplayDimensions } from '../topology/blueprintDisplaySize';
 import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } from '../topology/geometryAssist';
 import { assistBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
 import { findForeignRouteSnap, FOREIGN_BOUNDARY_HALF_SIDE_FLOW, FOREIGN_BOUNDARY_STROKE_FLOW, FOREIGN_WAYPOINT_RADIUS_FLOW, FOREIGN_WAYPOINT_STROKE_FLOW, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
@@ -108,7 +108,7 @@ export const getConnectionPointEndpoint = (
     const side = slot.external_attachment.side;
     const composition = blueprintNodeDisplayDimensions(presentation, box.width);
     return {
-      x: box.x + box.width * slot.external_attachment.x,
+      x: box.x + composition.width * slot.external_attachment.x,
       y: box.y + blueprintMapNameplateHeight(presentation, box.width) + composition.height * slot.external_attachment.y,
       side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
     };
@@ -129,7 +129,7 @@ export const getRenderedConnectionPoint = (
   const composition = blueprintNodeDisplayDimensions(presentation, box.width);
   const side = slot.external_attachment.side;
   return {
-    x: box.x + box.width * slot.rendered_position.x,
+    x: box.x + composition.width * slot.rendered_position.x,
     y: box.y + blueprintMapNameplateHeight(presentation, box.width) + composition.height * slot.rendered_position.y,
     side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
   };
@@ -370,10 +370,13 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers
       const endpoint = getRenderedConnectionPoint(projection, rectangle(node), port.id);
       const fill = portTypes?.find((type) => type.id === port.portTypeId)?.color ?? '#18383a';
       const state = physicalPortStates?.[port.id];
-      const className = `cable-route-port-marker${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
+      const traced = (projection.attributes.internal_l1_links ?? []).some(link => node.data.traceHighlightedConnectionMemberIds?.has(link.connection_member_id) && [link.from_connection_point_id, link.to_connection_point_id].includes(port.id));
+      const stroke = state === 'source' || state === 'destination' ? '#fff' : state === 'eligible' ? '#7be6ff' : traced ? '#fff2bc' : '#e6fffb';
+      const radius = blueprint ? (BLUEPRINT_PORT_SIZE - BLUEPRINT_PORT_STROKE) / 2 : 3.5;
+      const className = `cable-route-port-marker${blueprint ? ' cable-route-port-marker--blueprint' : ''}${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
       return endpoint && <g key={port.id}>{port.network
-        ? <rect className={className} style={{ fill }} data-connection-point-id={port.id} x={endpoint.x - 3.5} y={endpoint.y - 3.5} width={7} height={7} rx={1} pointerEvents="none" />
-        : <circle className={className} style={{ fill }} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={3.5} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
+        ? <rect className={className} style={{ fill, stroke: blueprint ? stroke : undefined, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined }} data-connection-point-id={port.id} x={endpoint.x - radius} y={endpoint.y - radius} width={radius * 2} height={radius * 2} rx={0} pointerEvents="none" />
+        : <circle className={className} style={{ fill, stroke: blueprint ? stroke : undefined, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined }} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={radius} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
     })}
   </g>;
 }

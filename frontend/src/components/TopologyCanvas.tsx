@@ -253,7 +253,7 @@ export function TopologyCanvas({
         if (!current) return;
         setLayoutError(
           reason instanceof Error
-            ? reason.message
+            ? reason.message === 'map.portGeometryUnsupported' || reason.message === 'map.portGeometryCoincident' ? t(reason.message) : reason.message
             : t("canvas.layoutFailed"),
         );
       },

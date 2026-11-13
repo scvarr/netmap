@@ -6,6 +6,8 @@ export const localeStorageKey = 'netmap.locale';
 
 const messages = {
   ru: {
+    'map.portGeometryUnsupported': 'Геометрия портов требует ширины больше 960. Исправьте геометрию шаблона.',
+    'map.portGeometryCoincident': 'Центры портов совпадают. Раздельное отображение невозможно: исправьте шаблон.',
     'autoLocation.enabled': 'Автоматическая компоновка',
     'autoLocation.hideEmpty': 'Скрыть пустые местоположения',
     'autoLocation.container': 'Контейнер',
@@ -226,6 +228,8 @@ const messages = {
     'map.objectMissing': 'Объект не найден на этой схеме.', 'map.tracePhysical': 'Трассировка L1 показана на физической карте.', 'location.pickerCollapse': 'Свернуть {name}', 'location.pickerExpand': 'Развернуть {name}', 'location.pickerCreateChild': 'Создать дочернее местоположение: {name}', 'location.pickerAdd': '+ Дочернее местоположение', 'location.pickerNoResults': 'Нет совпадающих местоположений.',
   },
   en: {
+    'map.portGeometryUnsupported': 'Port geometry requires more than the supported width of 960. Correct the template geometry.',
+    'map.portGeometryCoincident': 'Port centres coincide. Separate rendering is impossible: correct the template geometry.',
     'autoLocation.enabled': 'Automatic layout',
     'autoLocation.hideEmpty': 'Hide empty locations',
     'autoLocation.container': 'Container',

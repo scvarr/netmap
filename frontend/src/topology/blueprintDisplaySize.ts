@@ -6,8 +6,10 @@ export const DEFAULT_BLUEPRINT_DISPLAY_WIDTH = 240;
 export const MAX_BLUEPRINT_DISPLAY_WIDTH = 960;
 export const MIN_BLUEPRINT_USABLE_PANEL_HEIGHT = 12;
 export const MIN_BLUEPRINT_DISPLAY_WIDTH = 32;
-export const MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH = 240;
-export const MIN_BLUEPRINT_PORT_CENTER_SEPARATION = 14;
+export const BLUEPRINT_PORT_SIZE = 6;
+export const BLUEPRINT_PORT_STROKE = 0.5;
+export const BLUEPRINT_PORT_HIT_SIZE = 8;
+export const MIN_BLUEPRINT_PORT_CENTER_SEPARATION = BLUEPRINT_PORT_HIT_SIZE + 2;
 export const MIN_BLUEPRINT_LABEL_FONT_SIZE = 8;
 export const MAX_BLUEPRINT_LABEL_FONT_SIZE = 32;
 export const BLUEPRINT_MAP_NAMEPLATE_HEIGHT_RATIO = 0.12;
@@ -32,7 +34,9 @@ export const blueprintNodeDisplayDimensions = (
   displayWidth: number | undefined,
 ) => {
   const bounds = panelCompositionBounds(presentation.panels);
-  const width = displayWidth ?? DEFAULT_BLUEPRINT_DISPLAY_WIDTH;
+  const minimum = minimumBlueprintDisplayWidth(presentation);
+  if (minimum > MAX_BLUEPRINT_DISPLAY_WIDTH) throw new Error('map.portGeometryUnsupported');
+  const width = Math.max(displayWidth ?? DEFAULT_BLUEPRINT_DISPLAY_WIDTH, minimum);
   return {
     width,
     height: width * bounds.height / bounds.width,
@@ -46,33 +50,37 @@ export const blueprintMapNameplateHeight = (
   displayWidth: number | undefined,
 ) => Math.max(
   MIN_BLUEPRINT_MAP_NAMEPLATE_HEIGHT,
-  (displayWidth ?? DEFAULT_BLUEPRINT_DISPLAY_WIDTH) * Math.min(...presentation.panels.map((panel) => panel.height)) / panelCompositionBounds(presentation.panels).width * BLUEPRINT_MAP_NAMEPLATE_HEIGHT_RATIO,
+  blueprintNodeDisplayDimensions(presentation, displayWidth).width * Math.min(...presentation.panels.map((panel) => panel.height)) / panelCompositionBounds(presentation.panels).width * BLUEPRINT_MAP_NAMEPLATE_HEIGHT_RATIO,
 );
 
 export const minimumBlueprintDisplayWidth = (presentation: BlueprintPresentation) => {
   const bounds = panelCompositionBounds(presentation.panels);
-  const aspectRatio = bounds.width / bounds.height;
-  const portSeparationWidth = presentation.slots.flatMap((port, index) => presentation.slots.slice(index + 1).map((other) => {
-      const x = port.rendered_position.x - other.rendered_position.x;
-      const y = (port.rendered_position.y - other.rendered_position.y) / aspectRatio;
-      const normalizedDistance = Math.hypot(x, y);
-      return normalizedDistance === 0
-        ? MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH
-        : MIN_BLUEPRINT_PORT_CENTER_SEPARATION / normalizedDistance;
-    }));
-  return Math.min(
-    MAX_MINIMUM_BLUEPRINT_DISPLAY_WIDTH,
-    Math.max(MIN_BLUEPRINT_DISPLAY_WIDTH, MIN_BLUEPRINT_USABLE_PANEL_HEIGHT * aspectRatio, ...portSeparationWidth),
-  );
+  // Use the pinned panel-local centres, including panel offsets and gaps.
+  const centres = presentation.slots.map(port => {
+    const panel = presentation.panels.find(panel => panel.panel_key === port.panel_key)!;
+    return { x: panel.x + panel.width * port.panel_local_position.x,
+      y: panel.y + panel.height * port.panel_local_position.y };
+  });
+  let minimum = Math.max(MIN_BLUEPRINT_DISPLAY_WIDTH,
+    ...presentation.panels.map(panel => MIN_BLUEPRINT_USABLE_PANEL_HEIGHT * bounds.width / panel.height));
+  centres.forEach((port, index) => centres.slice(index + 1).forEach(other => {
+    // Axis-aligned hit squares must have a gap, even for diagonal neighbours.
+    const distance = Math.max(Math.abs(port.x - other.x), Math.abs(port.y - other.y));
+    if (distance === 0) throw new Error('map.portGeometryCoincident');
+    minimum = Math.max(minimum, MIN_BLUEPRINT_PORT_CENTER_SEPARATION * bounds.width / distance);
+  }));
+  // No upper clamp: an unrepresentable template must not silently overlap.
+  return minimum;
 };
 
 export const clampBlueprintDisplayWidth = (
   width: number,
   presentation?: BlueprintPresentation,
-) => Math.min(
-  MAX_BLUEPRINT_DISPLAY_WIDTH,
-  Math.max(presentation ? minimumBlueprintDisplayWidth(presentation) : MIN_BLUEPRINT_DISPLAY_WIDTH, width),
-);
+) => {
+  const minimum = presentation ? minimumBlueprintDisplayWidth(presentation) : MIN_BLUEPRINT_DISPLAY_WIDTH;
+  if (minimum > MAX_BLUEPRINT_DISPLAY_WIDTH) throw new Error('map.portGeometryUnsupported');
+  return Math.min(MAX_BLUEPRINT_DISPLAY_WIDTH, Math.max(minimum, width));
+};
 
 export const blueprintObjectLabelFontSize = (
   body: BlueprintPresentation['body'],
