@@ -12,8 +12,10 @@ export const BLUEPRINT_PORT_HIT_SIZE = 8;
 export const MIN_BLUEPRINT_PORT_CENTER_SEPARATION = BLUEPRINT_PORT_HIT_SIZE + 2;
 export const MIN_BLUEPRINT_LABEL_FONT_SIZE = 8;
 export const MAX_BLUEPRINT_LABEL_FONT_SIZE = 32;
-export const BLUEPRINT_MAP_NAMEPLATE_HEIGHT_RATIO = 0.12;
-export const MIN_BLUEPRINT_MAP_NAMEPLATE_HEIGHT = 14;
+export const OBJECT_NAME_ZONE_WIDTH = 72;
+export const OBJECT_CABLE_ZONE_WIDTH = 20;
+export const OBJECT_SIDE_ZONES_WIDTH = OBJECT_NAME_ZONE_WIDTH + OBJECT_CABLE_ZONE_WIDTH;
+export const compositionWidthFromFootprint = (width: number) => width - OBJECT_SIDE_ZONES_WIDTH;
 
 export const panelCompositionBounds = (panels: BlueprintPresentation['panels']) => {
   const x = Math.min(...panels.map((panel) => panel.x));
@@ -42,16 +44,6 @@ export const blueprintNodeDisplayDimensions = (
     height: width * bounds.height / bounds.width,
   };
 };
-
-// This is a card chrome dimension, deliberately derived from the composition
-// so the React Flow card preserves the Blueprint body's resize aspect ratio.
-export const blueprintMapNameplateHeight = (
-  presentation: BlueprintPresentation,
-  displayWidth: number | undefined,
-) => Math.max(
-  MIN_BLUEPRINT_MAP_NAMEPLATE_HEIGHT,
-  blueprintNodeDisplayDimensions(presentation, displayWidth).width * Math.min(...presentation.panels.map((panel) => panel.height)) / panelCompositionBounds(presentation.panels).width * BLUEPRINT_MAP_NAMEPLATE_HEIGHT_RATIO,
-);
 
 export const minimumBlueprintDisplayWidth = (presentation: BlueprintPresentation) => {
   const bounds = panelCompositionBounds(presentation.panels);
@@ -93,8 +85,8 @@ export const blueprintObjectLabelFontSize = (
   );
 };
 
-/** Complete rendered card: pinned panel composition plus object nameplate. */
+/** Complete three-zone footprint; displayWidth always describes the composition. */
 export const blueprintRenderedNodeDimensions = (presentation: BlueprintPresentation, displayWidth: number | undefined) => {
   const body = blueprintNodeDisplayDimensions(presentation, displayWidth);
-  return { width: body.width, height: body.height + blueprintMapNameplateHeight(presentation, displayWidth) };
+  return { width: body.width + OBJECT_SIDE_ZONES_WIDTH, height: body.height };
 };

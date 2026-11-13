@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import select
 from app.database import SessionLocal
 from app.models import Cable, Connection, ConnectionPoint
@@ -22,8 +23,8 @@ def test_pp24_move_response_content_bounds_manual_floor_variants_and_rollback():
     doc, frames = state(map_id)
     variant = doc["active_variant_ref"]["entity_id"]
     identity = {s["location_ref"]["entity_id"]: s["boundary_point_id"] for s in doc["location_states"]}
-    assert frames[leaf]["width"] == 280
-    assert frames[leaf]["height"] == 96  # 22 body + 14 nameplate + 40 header + 20 border.
+    assert frames[leaf]["width"] == pytest.approx(382)
+    assert frames[leaf]["height"] == pytest.approx(250 * 44 / 480 + 60)  # Density floor, composition, Location header/padding.
     copy = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": "Copy", "source_variant_id": variant}).json()["variant_ref"]["entity_id"]
     copied = detail(map_id, copy)
     other, other_point = create_object_with_point(client, "Other")
@@ -48,8 +49,8 @@ def test_pp24_move_response_content_bounds_manual_floor_variants_and_rollback():
         assert points[1-moving_index] == old_points[1-moving_index]
         assert position(current, obj)["x"] == target["x"]
         assert position(current, obj)["y"] == target["y"]
-        assert contains(current_frames[leaf], dict(target, width=240, height=36))
-        assert current_frames[leaf]["width"] == 280 and current_frames[leaf]["height"] == 96
+        assert contains(current_frames[leaf], dict(target, width=342, height=250 * 44 / 480))
+        assert current_frames[leaf]["width"] == pytest.approx(382) and current_frames[leaf]["height"] == pytest.approx(250 * 44 / 480 + 60)
         assert current_frames[leaf]["x"] == target["x"] - 20
         for parent, child in zip(chain, chain[1:]):
             assert contains(current_frames[parent], current_frames[child])
@@ -60,7 +61,7 @@ def test_pp24_move_response_content_bounds_manual_floor_variants_and_rollback():
     response = client.put(url, json={"x": pos["x"], "y": pos["y"], "display_width": 480})
     assert response.status_code == 200
     _, resized = state(map_id)
-    assert resized[leaf]["width"] == 520 and resized[leaf]["height"] == 118
+    assert resized[leaf]["width"] == 612 and resized[leaf]["height"] == 104
     manual = dict(resized[leaf], width=800, height=400)
     assert move(map_id, variant, leaf, manual).status_code == 200
     before = detail(map_id)

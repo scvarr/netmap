@@ -13,7 +13,7 @@ from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.device_catalog import DeviceCatalog
 from app.location_frame_geometry import layout_location_frames, contains, overlaps, expand_location_frames
 from app.location_boundary_anchors import normalize_boundary_route
-from app.models import ObjectConfiguration, PresentationPanel, Cable, Connection, ConnectionPoint, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import BuiltInEndpointDefinition, BuiltInEndpointMapping, ObjectConfiguration, PresentationPanel, Cable, Connection, ConnectionPoint, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
@@ -248,10 +248,21 @@ class SavedMapCatalog:
             width, height = 212, 144
             if object_id in panels:
                 bounds = panels[object_id]
-                width = position.display_width or 240
-                composition_width = max(p.x + p.width for p in bounds) - min(p.x for p in bounds)
-                height = width * (max(p.y + p.height for p in bounds) - min(p.y for p in bounds)) / composition_width
-                height += max(14, width * min(p.height for p in bounds) / composition_width * .12)
+                from app.hardware_catalog import HardwareCatalog
+                from app.object_frame_geometry import object_frame_dimensions
+                slots = self.session.scalars(select(BuiltInEndpointDefinition)
+                    .join(BuiltInEndpointMapping, BuiltInEndpointMapping.definition_id == BuiltInEndpointDefinition.id)
+                    .join(ObjectConfiguration, ObjectConfiguration.id == BuiltInEndpointMapping.configuration_id)
+                    .where(ObjectConfiguration.physical_object_id == object_id)).all()
+                by_key = {panel.panel_key: panel for panel in bounds}
+                centres = [(by_key[slot.panel_key].x + by_key[slot.panel_key].width * slot.position_x,
+                            by_key[slot.panel_key].y + by_key[slot.panel_key].height * slot.position_y) for slot in slots]
+                for bay in HardwareCatalog(self.session).configuration_document(object_id)["bays"]:
+                    if bay["installation"]:
+                        panel = by_key[bay["panel_key"]]
+                        centres.extend((panel.x + panel.width * endpoint["x"], panel.y + panel.height * endpoint["y"])
+                                       for endpoint in bay["installation"]["endpoints"])
+                width, height = object_frame_dimensions(bounds, centres, position.display_width)
             footprints[object_id] = {"physical_object_id": object_id, "x": position.x, "y": position.y, "width": width, "height": height}
         return records, footprints
 

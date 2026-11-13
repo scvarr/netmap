@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('@xyflow/react', () => ({
   Handle: () => null,
-  NodeResizer: ({ onResizeEnd, lineClassName, handleClassName, isVisible, minWidth, maxWidth, keepAspectRatio }: { onResizeEnd: (event: unknown, dimensions: { width: number }) => void; lineClassName?: string; handleClassName?: string; isVisible?: boolean; minWidth?: number; maxWidth?: number; keepAspectRatio?: boolean }) => <button type="button" aria-label="resize" data-line-class={lineClassName} data-handle-class={handleClassName} data-visible={String(isVisible)} data-min-width={minWidth} data-max-width={maxWidth} data-aspect-ratio={String(keepAspectRatio)} onClick={() => onResizeEnd({}, { width: 360 })} />,
+  NodeResizeControl: ({ onResizeEnd, className, style, resizeDirection, minWidth, maxWidth, keepAspectRatio }: { onResizeEnd: (event: unknown, dimensions: { width: number }) => void; className?: string; style?: React.CSSProperties; resizeDirection?: string; minWidth?: number; maxWidth?: number; keepAspectRatio?: boolean }) => <button type="button" aria-label="resize" data-direction={resizeDirection} data-handle-class={className} data-visible={String(style?.display !== "none")} data-min-width={minWidth} data-max-width={maxWidth} data-aspect-ratio={String(keepAspectRatio)} onClick={() => onResizeEnd({}, { width: 360 })} />,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
 }));
 
@@ -34,12 +34,12 @@ describe('DeviceNode internal L1 overlay', () => {
       ...blueprint, body: { ...blueprint.body, width: 480, height: 44 },
       panels: [{ ...blueprint.panels[0], width: 480, height: 44 }], slots: [],
     } } };
-    render(<DeviceNode {...({ data: { projection: pp24 }, selected: false, width } as any)} />);
+    render(<DeviceNode {...({ data: { projection: pp24 }, selected: false, width: width + 92 } as any)} />);
     const card = screen.getByTestId('blueprint-map-node');
-    const footprint = nodeFootprint({ id: 'pp24', position: { x: 0, y: 0 }, width, data: { projection: pp24 } } as any);
+    const footprint = nodeFootprint({ id: 'pp24', position: { x: 0, y: 0 }, width: width + 92, data: { projection: pp24 } } as any);
     expect(card).toHaveStyle({ width: `${footprint.width}px`, height: `${footprint.height}px` });
-    expect(footprint.height).toBe(width * 44 / 480 + 14);
-    expect(card.querySelector('.blueprint-map-node__nameplate')).toHaveStyle({ height: '14px' });
+    expect(footprint.height).toBe(width * 44 / 480);
+
   });
   it('uses local module names in spatial markers even when detached point names are contextual', () => {
     const slots = [1, 2].flatMap(installation => [1, 2].map(port => ({
@@ -53,17 +53,17 @@ describe('DeviceNode internal L1 overlay', () => {
       blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots },
       connection_points: slots.map(s => ({ connection_point_id: s.connection_point_id, display_name: `Back / PCIe${s.connection_point_id.split('-')[1]} / ${s.display_name}`, cardinality: 1, external_connection_count: 0 })),
     } };
-    render(<DeviceNode {...({ data: { projection: moduleProjection }, selected: false, width: 300 } as any)} />);
+    render(<DeviceNode {...({ data: { projection: moduleProjection }, selected: false, width: 392 } as any)} />);
     expect(screen.getAllByTitle('feth1 · CONNECTION_POINT')).toHaveLength(2);
     expect(screen.getAllByTitle('feth2 · CONNECTION_POINT')).toHaveLength(2);
     expect(document.querySelectorAll('[data-connection-point-id]')).toHaveLength(4);
     expect(screen.queryByText('Back / PCIe1 / feth1')).not.toBeInTheDocument();
   });
   it('puts the Location path inside the existing Blueprint nameplate without changing its height or footprint', () => {
-    const props = { data: { projection, locationPresentationPath: 'U01 / SLOT-A' }, selected: false, width: 160 } as any;
+    const props = { data: { projection, locationPresentationPath: 'U01 / SLOT-A' }, selected: false, width: 252 } as any;
     const view = render(<DeviceNode {...props} />);
     const body = screen.getByTestId('blueprint-map-node');
-    const nameplate = body.querySelector('.blueprint-map-node__nameplate')!;
+    const nameplate = body.querySelector('.blueprint-map-node__identity')!;
     expect(nameplate).toHaveTextContent('PP1');
     expect(nameplate).toHaveTextContent('U01 / SLOT-A');
     expect(nameplate.querySelector('.blueprint-map-node__location')).toBeInTheDocument();
@@ -71,16 +71,16 @@ describe('DeviceNode internal L1 overlay', () => {
     const nameplateHeight = (nameplate as HTMLElement).style.height;
     view.rerender(<DeviceNode {...({ ...props, data: { projection } } as any)} />);
     expect(body.style.height).toBe(height);
-    expect((body.querySelector('.blueprint-map-node__nameplate') as HTMLElement).style.height).toBe(nameplateHeight);
+    expect((body.querySelector('.blueprint-map-node__identity') as HTMLElement).style.height).toBe(nameplateHeight);
     expect(body.querySelector('.blueprint-map-node__location')).toBeNull();
-    const base = { id: 'panel', type: 'device', position: { x: 0, y: 0 }, width: 160, data: { projection } } as any;
+    const base = { id: 'panel', type: 'device', position: { x: 0, y: 0 }, width: 252, data: { projection } } as any;
     expect(nodeFootprint({ ...base, data: props.data })).toEqual(nodeFootprint(base));
   });
 
   it('shows the Location path beside a generic physical name and omits it in logical context', () => {
     const generic = { ...projection, attributes: { class: 'switch' } };
     const view = render(<DeviceNode {...({ data: { projection: generic, locationPresentationPath: 'U03' }, selected: false } as any)} />);
-    const header = document.querySelector('.device-node__nameplate')!;
+    const header = document.querySelector('.device-node__identity')!;
     expect(header).toHaveTextContent('PP1');
     expect(header).toHaveTextContent('U03');
     expect(header.querySelector('.device-node__location')).toBeInTheDocument();
@@ -89,32 +89,33 @@ describe('DeviceNode internal L1 overlay', () => {
   });
   it('keeps a short name like PC1 readable on a small Blueprint', () => {
     const small = { ...projection, label: 'PC1' };
-    render(<DeviceNode {...({ data: { projection: small }, selected: false, width: 64 } as any)} />);
+    render(<DeviceNode {...({ data: { projection: small }, selected: false, width: 156 } as any)} />);
     const nameplate = screen.getByTitle('PC1');
     expect(nameplate).toHaveTextContent('PC1');
-    expect(nameplate).toHaveClass('blueprint-map-node__nameplate');
-    expect(nameplate).toHaveStyle({ height: '14px' });
+    expect(nameplate).toHaveClass('blueprint-map-node__identity');
+
   });
 
   it('keeps the full long name in title while the small nameplate ellipsizes via CSS', () => {
     const longName = 'Patch panel with a very long descriptive name';
     const small = { ...projection, label: longName };
-    render(<DeviceNode {...({ data: { projection: small }, selected: false, width: 64 } as any)} />);
+    render(<DeviceNode {...({ data: { projection: small }, selected: false, width: 156 } as any)} />);
     const nameplate = screen.getByTitle(longName);
     expect(nameplate).toHaveTextContent(longName);
-    expect(nameplate).toHaveClass('blueprint-map-node__nameplate');
+    expect(nameplate).toHaveClass('blueprint-map-node__identity');
   });
 
   it('keeps one shared nameplate typography across Blueprint display widths', () => {
-    const { rerender } = render(<DeviceNode {...({ data: { projection }, selected: false, width: 160 } as any)} />);
-    const nameplate = () => screen.getByTitle('PP1');
-    expect(nameplate()).toHaveStyle({ height: '14px' });
-    rerender(<DeviceNode {...({ data: { projection }, selected: false, width: 320 } as any)} />);
-    expect(nameplate()).toHaveStyle({ height: '19.2px' });
+    const { rerender } = render(<DeviceNode {...({ data: { projection }, selected: false, width: 252 } as any)} />);
+    const identity = screen.getByTitle('PP1');
+    expect(identity.style.height).toBe('');
+    rerender(<DeviceNode {...({ data: { projection }, selected: false, width: 412 } as any)} />);
+    expect(identity.style.height).toBe('');
+    expect(screen.getByTestId('blueprint-map-node').style.gridTemplateColumns).toBe('72px 320px 20px');
   });
 
   it('renders both panels simultaneously and keeps slots on their own surfaces', () => {
-    render(<DeviceNode {...({ data: { projection, traceHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 320 } as any)} />);
+    render(<DeviceNode {...({ data: { projection, traceHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 412 } as any)} />);
     const front = screen.getByTestId('blueprint-panel-front');
     const rear = screen.getByTestId('blueprint-panel-rear');
     const body = screen.getByTestId('blueprint-map-node');
@@ -122,8 +123,8 @@ describe('DeviceNode internal L1 overlay', () => {
     expect(screen.queryByRole('button', { name: 'Задняя' })).not.toBeInTheDocument();
     expect(screen.queryByText('Передняя')).not.toBeInTheDocument();
     expect(screen.queryByText('Задняя')).not.toBeInTheDocument();
-    expect(body).toHaveStyle({ height: '339.2px', gridTemplateRows: '19.2px 320px' });
-    expect(within(body).getByTitle('PP1')).toHaveClass('blueprint-map-node__nameplate');
+    expect(body).toHaveStyle({ height: '320px', gridTemplateColumns: '72px 320px 20px' });
+    expect(within(body).getByTitle('PP1')).toHaveClass('blueprint-map-node__identity');
     expect(front.nextElementSibling).toBe(rear);
     expect(front.parentElement?.parentElement).toHaveClass('blueprint-map-node__body');
     expect(front.parentElement?.parentElement).toHaveStyle({ height: '320px' });
@@ -150,8 +151,8 @@ describe('DeviceNode internal L1 overlay', () => {
     expect(screen.getByTestId('blueprint-panel-front')).toBeInTheDocument();
     expect(screen.getByTestId('blueprint-panel-rear')).toBeInTheDocument();
     const body = screen.getByTestId('blueprint-map-node');
-    expect(body).toHaveStyle({ height: '254.4px' });
-    expect(body.style.gridTemplateRows).toContain('240px');
+    expect(body).toHaveStyle({ height: '240px' });
+    expect(body.style.gridTemplateColumns).toContain('240px');
     const rearOnly = { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots: [projection.attributes.blueprint_presentation.slots[1]] } } };
     rerender(<DeviceNode {...({ data: { projection: rearOnly }, selected: false } as any)} />);
     expect(screen.getByTestId('blueprint-panel-front')).toBeInTheDocument();
@@ -160,30 +161,30 @@ describe('DeviceNode internal L1 overlay', () => {
 
   it('persists one resized display width for both panels', () => {
     const onBlueprintDisplayResize = vi.fn();
-    render(<DeviceNode {...({ data: { projection, blueprintResizeEnabled: true, onBlueprintDisplayResize }, selected: true, width: 320 } as any)} />);
+    render(<DeviceNode {...({ data: { projection, blueprintResizeEnabled: true, onBlueprintDisplayResize }, selected: true, width: 412 } as any)} />);
     screen.getByRole('button', { name: 'resize' }).click();
-    expect(onBlueprintDisplayResize).toHaveBeenCalledWith('object-1', 360);
+    expect(onBlueprintDisplayResize).toHaveBeenCalledWith('object-1', 268);
   });
 
   it('uses compact styled resize handles while retaining Blueprint width and aspect constraints', () => {
-    render(<DeviceNode {...({ data: { projection, blueprintResizeEnabled: true }, selected: true, width: 320 } as any)} />);
+    render(<DeviceNode {...({ data: { projection, blueprintResizeEnabled: true }, selected: true, width: 412 } as any)} />);
     const resize = screen.getByRole('button', { name: 'resize' });
     expect(resize).toHaveAttribute('data-visible', 'true');
-    expect(resize).toHaveAttribute('data-line-class', 'blueprint-map-node__resizer-line');
+    expect(resize).toHaveAttribute('data-direction', 'horizontal');
     expect(resize).toHaveAttribute('data-handle-class', 'blueprint-map-node__resizer-handle');
-    expect(resize).toHaveAttribute('data-min-width', '32');
-    expect(resize).toHaveAttribute('data-max-width', '960');
-    expect(resize).toHaveAttribute('data-aspect-ratio', 'true');
+    expect(resize).toHaveAttribute('data-min-width', '124');
+    expect(resize).toHaveAttribute('data-max-width', '1052');
+    expect(resize).toHaveAttribute('data-aspect-ratio', 'undefined');
   });
 
   it('keeps the nameplate in the object card hit area and lets port wiring stop selection', () => {
     const onObjectClick = vi.fn();
     const onPhysicalPortClick = vi.fn();
-    render(<div onClick={onObjectClick}><DeviceNode {...({ data: { projection, physicalPortStates: { 'front-01': 'eligible' }, onPhysicalPortClick }, selected: true, width: 320 } as any)} /></div>);
+    render(<div onClick={onObjectClick}><DeviceNode {...({ data: { projection, physicalPortStates: { 'front-01': 'eligible' }, onPhysicalPortClick }, selected: true, width: 412 } as any)} /></div>);
     const body = screen.getByTestId('blueprint-map-node');
     const nameplate = within(body).getByTitle('PP1');
     expect(body).toHaveClass('blueprint-map-node--selected');
-    expect(nameplate).toHaveClass('blueprint-map-node__nameplate');
+    expect(nameplate).toHaveClass('blueprint-map-node__identity');
     fireEvent.click(nameplate);
     fireEvent.click(body);
     expect(onObjectClick).toHaveBeenCalledTimes(2);
@@ -194,7 +195,7 @@ describe('DeviceNode internal L1 overlay', () => {
   });
 
   it('keeps a wiring-highlighted cross-face line in the object layer while ports remain above it', () => {
-    render(<DeviceNode {...({ data: { projection, wiringHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 160 } as any)} />);
+    render(<DeviceNode {...({ data: { projection, wiringHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 252 } as any)} />);
     const line = screen.getByTestId('internal-l1-line-member-1');
     expect(line).toHaveAttribute('y1', '20');
     expect(line).toHaveAttribute('y2', '140');
@@ -209,7 +210,7 @@ it('resolves current archived types for base and module glyphs while preserving 
   const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => [{ id: 'type', name: 'Archived copper', color: '#123456', is_active: false }] } as Response);
   const click = vi.fn();
   const slots = projection.attributes.blueprint_presentation.slots.map((slot, index) => ({ ...slot, port_type_id: 'type', slot_key: index ? 'installation:port' : slot.slot_key, kind: index ? 'NETWORK_PORT' : 'CONNECTION_POINT' }));
-  const props = { data: { projection: { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots } } }, physicalPortStates: { 'front-01': 'source', 'rear-01': 'unavailable' }, onPhysicalPortClick: click }, selected: true, width: 300 } as any;
+  const props = { data: { projection: { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots } } }, physicalPortStates: { 'front-01': 'source', 'rear-01': 'unavailable' }, onPhysicalPortClick: click }, selected: true, width: 392 } as any;
   const view = render(<RuntimePortTypes><DeviceNode {...props} /></RuntimePortTypes>);
   const circle = await screen.findByTitle('Front 01 · Archived copper');
   const square = screen.getByTitle('Rear 01 · Archived copper');

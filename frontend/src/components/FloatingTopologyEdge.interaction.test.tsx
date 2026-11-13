@@ -311,16 +311,16 @@ describe('direct cable route edge interaction', () => {
       const { container } = render(<ForegroundCableRoutes edges={[edge] as any} physicalPortStates={{ 'source-port': 'source', 'target-port': 'destination' }} />);
       const markers = container.querySelectorAll('.cable-route-port-marker');
       expect(markers).toHaveLength(2);
-      expect(markers[0]).toHaveAttribute('x', '22.25');
+      expect(markers[0]).toHaveAttribute('x', '77.25');
       expect(markers[0].tagName).toBe('rect');
       expect(markers[0]).toHaveClass('cable-route-port-marker--network', 'cable-route-port-marker--wiring-source');
       expect(markers[0]).toHaveAttribute('pointer-events', 'none');
-      expect(markers[1]).toHaveAttribute('cx', '375');
+      expect(markers[1]).toHaveAttribute('cx', '396');
       expect(markers[1].tagName).toBe('circle');
       expect(markers[1]).toHaveClass('cable-route-port-marker--wiring-destination');
       expect(container.querySelector('.cable-route-port-marker[cx="100"]')).toBeNull();
       expect(container.querySelector('.cable-route-port-marker[cx="300"]')).toBeNull();
-      expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 25 64 L 375 64');
+      expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 80 16 L 396 16');
       expect(container.querySelectorAll('.cable-route-segment-hit')).toHaveLength(1);
       expect(container.querySelectorAll('.cable-route-waypoint')).toHaveLength(0);
     });
@@ -331,7 +331,7 @@ describe('direct cable route edge interaction', () => {
     const blueprintTarget = blueprintNode('target', 300, 'target-object', { connectionPointId: 'target-port', kind: 'CONNECTION_POINT', renderedX: .75, attachmentX: 0, side: 'LEFT' });
     withNodes({ source: blueprintSource, target: blueprintTarget }, () => {
       const { container } = render(<svg><WiringRoute source={{ physicalObjectId: 'source-object', connectionPointId: 'source-port' }} target={{ physicalObjectId: 'target-object', connectionPointId: 'target-port' }} waypoints={[]} selectedWaypointIndex={null} onWaypointSelect={vi.fn()} onWaypointMove={vi.fn()} /></svg>);
-      expect(container.querySelector('.wiring-route-preview')).toHaveAttribute('d', 'M 25 64 L 375 64');
+      expect(container.querySelector('.wiring-route-preview')).toHaveAttribute('d', 'M 80 16 L 396 16');
       expect(container.querySelectorAll('.cable-route-waypoint')).toHaveLength(0);
     });
   });
@@ -343,7 +343,7 @@ describe('direct cable route edge interaction', () => {
       const draft = editor([{ x: 200, y: 100 }]);
       const edge = { id: 'blueprint-cable', source: 'source', target: 'target', data: { projection: { id: 'edge', from_node_id: 'source', to_node_id: 'target', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableNode: { id: 'cable-node' }, endpointPair: { from_connection_point_id: 'source-port', to_connection_point_id: 'target-port' }, cableRouteDraft: draft } };
       const { container } = render(<ForegroundCableRoutes edges={[edge] as any} />);
-      expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 25 64 L 200 100 L 375 64');
+      expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 80 16 L 200 100 L 396 16');
       expect(container.querySelectorAll('.cable-route-segment-hit')).toHaveLength(2);
       expect(container.querySelectorAll('.cable-route-waypoint')).toHaveLength(1);
     });
