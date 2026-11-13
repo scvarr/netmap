@@ -203,14 +203,14 @@ describe('authoring workspace contextual region', () => {
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     fireEvent.pointerDown(nodes[0]); fireEvent.pointerUp(document.querySelector('svg')!);
     expect(document.querySelector('.blueprint-composer__contextual')).toBe(contextual);
-    expect(contextual).toContainElement(screen.getByRole('group', { name: 'Положение выделения' }));
+    expect(screen.getByRole('group', { name: 'Масштаб редактора' })).toContainElement(screen.getByRole('group', { name: 'Положение выделения' }));
     expect(contextual).toContainElement(screen.getByRole('group', { name: 'Копировать выделение' }));
     expect(contextual).toContainElement(document.querySelector('.blueprint-composer__selected'));
     expect(within(contextual as HTMLElement).getByLabelText('Название')).toHaveValue('1-1');
     fireEvent.pointerDown(nodes[1], { ctrlKey: true }); fireEvent.pointerUp(document.querySelector('svg')!);
-    expect(contextual).toHaveTextContent('Выбрано: 2');
+    expect(screen.getByRole('group', { name: 'Масштаб редактора' })).toHaveTextContent('Выбрано: 2');
     expect(document.querySelector('.blueprint-composer__selected')).toBeNull();
-    expect(contextual).toContainElement(screen.getByRole('group', { name: 'Положение выделения' }));
+    expect(screen.getByRole('group', { name: 'Масштаб редактора' })).toContainElement(screen.getByRole('group', { name: 'Положение выделения' }));
     expect(contextual).toContainElement(screen.getByRole('group', { name: 'Копировать выделение' }));
     expect(document.querySelector('.blueprint-composer__properties')).toContainElement(screen.getByRole('button', { name: 'Порты и внутренние связи · 0' }));
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -889,7 +889,7 @@ it('BASE-UX-01 keeps zoom out of saved model and draft notifications', () => {
 });
 
 
-it.each([1,4,8])('corrective keeps X/Y and port properties before the viewport after drag at %sx', async zoom => {
+it.each([1,4,8])('compact toolbar keeps X/Y above and properties below the viewport after drag at %sx', async zoom => {
   const initial = newBlueprintEditorState(); initial.name = 'Controls';
   const state = addEndpoints(initial, 'NETWORK_PORT', 1, initial.activePanelKey, 'test-type');
   state.slots[0].rendered_position = { x: .5, y: .5 };
@@ -899,12 +899,13 @@ it.each([1,4,8])('corrective keeps X/Y and port properties before the viewport a
   Object.defineProperty(svg, 'getBoundingClientRect', { value: () => ({ left: -200, top: -100, width: 1000 * zoom, height: 375 * zoom }) });
   const tools = document.querySelector('.blueprint-composer__contextual')!;
   const viewport = document.querySelector('.blueprint-composer__viewport')!;
-  expect(tools.compareDocumentPosition(viewport) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(viewport.compareDocumentPosition(tools) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.pointerDown(document.querySelector('[data-slot-key]')!, { button: 0, clientX: -200 + 500 * zoom, clientY: -100 + 187.5 * zoom });
   fireEvent.pointerMove(svg, { clientX: -200 + 600 * zoom, clientY: -100 + 187.5 * zoom });
   fireEvent.pointerUp(svg);
-  const x = within(tools as HTMLElement).getByLabelText('X');
-  expect(x).toHaveValue(.6); expect(within(tools as HTMLElement).getByLabelText('Y')).toHaveValue(.5);
+  const toolbar = screen.getByRole('group', { name: 'Масштаб редактора' });
+  const x = within(toolbar).getByLabelText('X');
+  expect(x).toHaveValue(.6); expect(within(toolbar).getByLabelText('Y')).toHaveValue(.5);
   fireEvent.change(x, { target: { value: '.7' } }); fireEvent.blur(x);
   expect(x).toHaveValue(.7);
   expect(within(tools as HTMLElement).getByLabelText('Название')).toHaveValue('1-1');
@@ -914,4 +915,29 @@ it.each([1,4,8])('corrective keeps X/Y and port properties before the viewport a
   expect(document.querySelector('.blueprint-composer__contextual')).toBe(tools);
   expect(document.querySelector('.blueprint-composition-canvas')).toBe(svg);
   expect(x).toHaveValue(.7);
+});
+
+
+it('compact toolbar edits exactly three selected ports and leaves no inactive properties', () => {
+  const initial = newBlueprintEditorState();
+  const state = addEndpoints(initial, 'NETWORK_PORT', 48, initial.activePanelKey, 'test-type');
+  const save = vi.fn().mockResolvedValue(undefined);
+  render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Compact" description="" saveLabel="Save" initialState={{ ...state, name: 'Compact' }} onSave={save} /></MemoryRouter></I18nProvider>);
+  const toolbar = screen.getByRole('group', { name: 'Масштаб редактора' });
+  const properties = document.querySelector('.blueprint-composer__contextual')!;
+  expect(properties).toBeEmptyDOMElement();
+  const svg = document.querySelector('svg')!;
+  state.slots.slice(0,3).forEach((slot,i) => {
+    fireEvent.pointerDown(document.querySelector(`[data-slot-key="${slot.key}"]`)!, { button: 0, ctrlKey: i > 0 }); fireEvent.pointerUp(svg);
+  });
+  expect(toolbar).toHaveTextContent('Выбрано: 3');
+  const x = within(toolbar).getByLabelText('X');
+  fireEvent.change(x, { target: { value: '.5' } }); fireEvent.blur(x);
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  const saved = save.mock.calls[0][0];
+  expect(saved.slots.slice(3)).toEqual(state.slots.slice(3));
+  saved.slots.slice(0,3).forEach((slot: typeof state.slots[number],i: number) => expect(slot.rendered_position.x - state.slots[i].rendered_position.x).toBeCloseTo(.425));
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(properties).toBeEmptyDOMElement();
+  expect(within(toolbar).queryByLabelText('X')).toBeNull();
 });

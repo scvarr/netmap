@@ -238,9 +238,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
           {catalog.types && editor.slots.some(slot => !activeTypeIds.has(slot.port_type_id)) && <p role="alert">{t('templateCopy.archived')}</p>}
           <PortTypeNotice {...catalog} />
-          {selected.size > 1 && <PortTypeSelect bulk types={catalog.types} value="" onChange={id =>
-            setEditor(old => ({ ...old, slots: old.slots.map(slot => selected.has(slot.key) ? { ...slot, port_type_id: id } : slot) }))
-          } />}
           <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} />
           <button type="button" className="secondary-action" disabled={!activeTypeIds.has(portTypeId)} onClick={() => { const next = addEndpoints(editor, kind, count, panelKey, portTypeId); if (next === editor) return; setEditor(next); setSelectedBayKey(undefined); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
         </div>
@@ -256,37 +253,16 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <button type="button" className="secondary-action" onClick={addBay}>{t('hardware.addBay')}</button>
           <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey) || editor.bays?.some(bay => bay.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
         </div>
-        <div className="blueprint-composer__panel-actions" role="group" aria-label={t('blueprint.zoom.title')}>
+        <div className="blueprint-composer__panel-actions blueprint-composer__view-tools" role="group" aria-label={t('blueprint.zoom.title')}>
           <button type="button" className="secondary-action" disabled={zoom <= 1} aria-label={t('blueprint.zoom.out')} onClick={() => setZoom(value => Math.max(1, value / 2))}>−</button><span>{zoom}×</span>
           <button type="button" className="secondary-action" disabled={zoom >= 8} aria-label={t('blueprint.zoom.in')} onClick={() => setZoom(value => Math.min(8, value * 2))}>+</button>
           <button type="button" className="secondary-action" onClick={() => { setZoom(1); const viewport = canvasWrap.current?.querySelector('.blueprint-composer__viewport'); if (viewport) { viewport.scrollLeft = 0; viewport.scrollTop = 0; } }}>{t('blueprint.zoom.fit')}</button>
-        </div>
-        {trimRejected && <p role="status" className="blueprint-editor__error">{t('blueprint.panel.trimRejected')}</p>}
-        <div className="blueprint-composer__contextual">
-          {selectedBay && <ModuleBaysEditor key={selectedBay.bay_key} bay={selectedBay} panels={editor.panels} onDuplicate={duplicateBay} onChange={patch => {
-            changeBay(selectedBay.bay_key, patch);
-            if (patch.panel_key) { activatePanel(patch.panel_key); setSelectedBayKey(selectedBay.bay_key); }
-          }} onRemove={() => { setEditor(old => ({ ...old, bays: old.bays?.filter(bay => bay.bay_key !== selectedBay.bay_key) })); setSelectedBayKey(undefined); }} />}
         {selected.size > 1 && <span className="blueprint-composer__selection-count">{t('blueprint.layout.selected', { count: selected.size })}</span>}
-        {selectedPosition && <section className="blueprint-composer__position" role="group" aria-label={t('blueprint.position.title')}>
-          <strong>{t('blueprint.position.title')}</strong>
+        {selectedPosition && <section className="blueprint-composer__coordinates" role="group" aria-label={t('blueprint.position.title')}>
           {(['x', 'y'] as const).map((axis) => <label key={axis}>{axis.toUpperCase()}<input type="number" min="0" max="1" step="0.001" value={positionDraft?.axis === axis ? positionDraft.value : shownPosition(selectedPosition[axis])} onFocus={() => setPositionDraft({ axis, value: shownPosition(selectedPosition[axis]) })} onChange={(event) => setPositionDraft({ axis, value: event.target.value })} onBlur={(event) => applyPosition(axis, event.currentTarget.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} /></label>)}
         </section>}
-        {selected.size >= 1 && editor.panels.length > 1 && <section className="blueprint-composer__copy" role="group" aria-label={t('blueprint.copy.title')}>
-          <strong>{t('blueprint.copy.title')}</strong>
-          <label>{t('blueprint.copy.destination')}<select value={destinationKey} onChange={(event) => setCopyDestination(event.target.value)}>{destinationPanels.map((panel) => <option key={panel.panel_key} value={panel.panel_key}>{panel.panel_number} · {panel.display_name}</option>)}</select></label>
-          <label className="blueprint-composer__copy-continuity"><input type="checkbox" checked={createContinuity} onChange={(event) => setCreateContinuity(event.target.checked)} />{t('blueprint.copy.continuity')}</label>
-          <button type="button" className="secondary-action" disabled={Boolean(copyError) || !catalog.types || copyHasArchivedType} onClick={copySelected}>{t('blueprint.copy.action')}</button>
-          {copyHasArchivedType && <p role="status" className="blueprint-editor__error">{t('portTypes.copyArchived')}</p>}
-          {copyError === 'capacity'  && <p role="status" className="blueprint-editor__error">{t('blueprint.copy.capacity')}</p>}
-        </section>}
-        {selectedSlot && <aside className="blueprint-composer__selected">
-          <label>{t('blueprint.endpoint.name')}<input value={selectedSlot.display_name} onChange={(e) => updateSlot(selectedSlot.key, { display_name: e.target.value })} /></label>
-          <PortTypeSelect types={catalog.types} value={selectedSlot.port_type_id} onChange={id => updateSlot(selectedSlot.key, { port_type_id: id })} />
-          <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
-          <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>
-        </aside>}
         </div>
+        {trimRejected && <p role="status" className="blueprint-editor__error">{t('blueprint.panel.trimRejected')}</p>}
         <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
           <div className="blueprint-composer__viewport" onScroll={() => setMenu(undefined)}><div className="blueprint-composer__stage" style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%`, padding: 24 * zoom }}><BlueprintCompositionCanvas zoom={zoom} portTypes={catalog.types} bays={editor.bays} selectedBayKey={selectedBayKey} onSelectBay={selectBay} onBayGeometry={changeBay} key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelectedBayKey(undefined); setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle, mode, portPadding) => setEditor((old) => { const next = setPanelRectangle(old, key, rectangle, mode, portPadding); setTrimRejected(next === old); return next; })} onContextMenu={(key, clientX, clientY) => {
             if (key && !selected.has(key)) setSelected(new Set([key]));
@@ -307,6 +283,29 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
               </div>}
             </div>)}
           </div>}
+        </div>
+        <div className="blueprint-composer__contextual">
+          {selected.size > 1 && <section className="blueprint-composer__bulk-types"><PortTypeSelect bulk types={catalog.types} value="" onChange={id =>
+            setEditor(old => ({ ...old, slots: old.slots.map(slot => selected.has(slot.key) ? { ...slot, port_type_id: id } : slot) }))
+          } /></section>}
+          {selectedBay && <ModuleBaysEditor key={selectedBay.bay_key} bay={selectedBay} panels={editor.panels} onDuplicate={duplicateBay} onChange={patch => {
+            changeBay(selectedBay.bay_key, patch);
+            if (patch.panel_key) { activatePanel(patch.panel_key); setSelectedBayKey(selectedBay.bay_key); }
+          }} onRemove={() => { setEditor(old => ({ ...old, bays: old.bays?.filter(bay => bay.bay_key !== selectedBay.bay_key) })); setSelectedBayKey(undefined); }} />}
+        {selected.size >= 1 && editor.panels.length > 1 && <section className="blueprint-composer__copy" role="group" aria-label={t('blueprint.copy.title')}>
+          <strong>{t('blueprint.copy.title')}</strong>
+          <label>{t('blueprint.copy.destination')}<select value={destinationKey} onChange={(event) => setCopyDestination(event.target.value)}>{destinationPanels.map((panel) => <option key={panel.panel_key} value={panel.panel_key}>{panel.panel_number} · {panel.display_name}</option>)}</select></label>
+          <label className="blueprint-composer__copy-continuity"><input type="checkbox" checked={createContinuity} onChange={(event) => setCreateContinuity(event.target.checked)} />{t('blueprint.copy.continuity')}</label>
+          <button type="button" className="secondary-action" disabled={Boolean(copyError) || !catalog.types || copyHasArchivedType} onClick={copySelected}>{t('blueprint.copy.action')}</button>
+          {copyHasArchivedType && <p role="status" className="blueprint-editor__error">{t('portTypes.copyArchived')}</p>}
+          {copyError === 'capacity'  && <p role="status" className="blueprint-editor__error">{t('blueprint.copy.capacity')}</p>}
+        </section>}
+        {selectedSlot && <aside className="blueprint-composer__selected">
+          <label>{t('blueprint.endpoint.name')}<input value={selectedSlot.display_name} onChange={(e) => updateSlot(selectedSlot.key, { display_name: e.target.value })} /></label>
+          <PortTypeSelect types={catalog.types} value={selectedSlot.port_type_id} onChange={id => updateSlot(selectedSlot.key, { port_type_id: id })} />
+          <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
+          <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>
+        </aside>}
         </div>
 
       </section>
