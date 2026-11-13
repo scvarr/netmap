@@ -98,7 +98,7 @@ canonical endpoints, подключения и зависимости исход
 | C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
 | C-UX-14 | Проверить понятность Change Inspector и точность больших сводок impact | RECHECK PENDING | Реализован; HV-01 не заменяет UX recheck |
 | C-UX-15 | Natural ordering trace port selector: реальные panel/port labels и модульный контекст при совпадении; «Любой порт» первым, 1,2,…10; дубликаты отдельны | VERIFIED | Техническая реализация прошла external review (c4c04ed); пользователь 10.11.2026 подтвердил успешную ручную проверку |
-| C-UX-16 | Undo/Redo draft waypoint operations и delete в панели | PRODUCT DECISION PENDING | История отсутствует; delete через инспектор есть; final toolbar/hotkeys открыты |
+| C-UX-16 | Undo/Redo draft waypoint operations | OPEN | История отсутствует; независимая панель, delete и Enter/Esc реализованы в ROUTE-UX-01 |
 | C-COR-02 | Полный manual recheck distribute у границ панели, невозможная операция и reload | VERIFIED | Пользователь 10.11.2026 подтвердил границы панели, атомарное отклонение невозможной операции, сохранение и повторное открытие |
 | C-VIS-01 | Совпадающий общий подсвеченный участок допустим; canonical trace evidence отдельных Cables не смешивается | OPEN | Геометрическое пересечение не доказывает connectivity; реализация не объявляется завершённой |
 | C-VIS-02 | Отдельное исправление отложено; повторная проверка после изменения маркеров в P-UX-21 | OPEN | Не закрывается автоматически |

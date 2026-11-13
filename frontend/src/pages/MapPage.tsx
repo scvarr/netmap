@@ -390,15 +390,17 @@ function MapPageContent({
   const drawableSelectedCable = Boolean(
     selectedCableId && document && viewMode === "physical" && presentationSceneDocument(document).edges.some((edge) => edge.kind === 'cable' && edge.cableNode && cableIdForNode(edge.cableNode) === selectedCableId),
   );
+  const editingCable = catalogInventory?.cables.find((item) => item.cable_ref.entity_id === cableRouteEdit?.cableId);
+  const editingCableNode = document?.nodes.find((node) => cableIdForNode(node) === cableRouteEdit?.cableId);
   const selectedCableRoute = selectedCableId
     ? (activeMap?.cable_routes ?? []).find((route) => route.cable_ref.entity_id === selectedCableId)
     : undefined;
 
   useEffect(() => {
     if (!cableRouteEdit) return;
-    if (viewMode !== "physical" || mapId !== cableRouteEdit.mapId)
+    if (viewMode !== "physical" || mapId !== cableRouteEdit.mapId || (variantId !== null && variantId !== cableRouteEdit.variantId) || (activeMap && activeMap.active_variant_ref.entity_id !== cableRouteEdit.variantId))
       setCableRouteEdit(null);
-  }, [cableRouteEdit, mapId, viewMode]);
+  }, [cableRouteEdit, mapId, viewMode, variantId, activeMap]);
 
   useEffect(() => {
     textAnnotationOperationSequence.current += 1;
@@ -1404,25 +1406,25 @@ function MapPageContent({
   };
 
   const beginCableRouteEdit = (requestedCableId = selectedCableId) => {
-    if (!activeMap || !requestedCableId || viewMode !== "physical") return;
+    if (!activeMap || !requestedCableId || viewMode !== "physical" || cableRouteEdit) return;
     const existing = (activeMap.cable_routes ?? []).find((route) => route.cable_ref.entity_id === requestedCableId);
     const copied = existing?.waypoints.map((point) => ({ ...point })) ?? [];
     const normalized = routeNormalizerRef.current?.(requestedCableId, copied) ?? copied;
     setCableRouteEdit({ mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id, cableId: requestedCableId, originalRoutePresent: Boolean(existing), originalWaypoints: copied, draftWaypoints: normalized, selectedWaypointIndex: null, status: "editing", error: null });
   };
   const saveCableRoute = async () => {
-    if (!savedMapDataSource || !cableRouteEdit || cableRouteEdit.status === "saving") return;
+    if (!savedMapDataSource || !cableRouteEdit || cableRouteEdit.status !== "editing") return;
     const operation = cableRouteEdit;
     setCableRouteEdit({ ...operation, status: "saving", error: null });
     try { await savedMapDataSource.setCableRoute(operation.mapId, operation.cableId, routeNormalizerRef.current?.(operation.cableId, operation.draftWaypoints) ?? operation.draftWaypoints, operation.variantId); }
     catch {
-      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cableId === operation.cableId ? { ...current, status: "editing", error: t("map.routeEditorFailed") } : current);
+      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cableId === operation.cableId && current.variantId === operation.variantId ? { ...current, status: "editing", error: t("map.routeEditorFailed") } : current);
       return;
     }
     try {
-      if (await reloadMap(operation.mapId) && selectedMapId.current === operation.mapId) setCableRouteEdit(null);
+      if (await reloadMap(operation.mapId) && selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cableId === operation.cableId && current.variantId === operation.variantId ? null : current);
     } catch {
-      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cableId === operation.cableId ? { ...current, status: "refresh-failed", error: t("map.routeSavedRefreshFailed") } : current);
+      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cableId === operation.cableId && current.variantId === operation.variantId ? { ...current, status: "refresh-failed", error: t("map.routeSavedRefreshFailed") } : current);
     }
   };
   const retryCableRouteRefresh = async () => {
@@ -1430,9 +1432,9 @@ function MapPageContent({
     const operation = cableRouteEdit;
     setCableRouteEdit({ ...operation, status: "saving", error: null });
     try {
-      if (await reloadMap(operation.mapId) && selectedMapId.current === operation.mapId) setCableRouteEdit(null);
+      if (await reloadMap(operation.mapId) && selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cableId === operation.cableId && current.variantId === operation.variantId ? null : current);
     } catch {
-      if (selectedMapId.current === operation.mapId) setCableRouteEdit({ ...operation, status: "refresh-failed", error: t("map.routeSavedRefreshFailed") });
+      if (selectedMapId.current === operation.mapId) setCableRouteEdit((current) => current?.mapId === operation.mapId && current.cableId === operation.cableId && current.variantId === operation.variantId ? { ...current, status: "refresh-failed", error: t("map.routeSavedRefreshFailed") } : current);
     }
   };
   useEffect(() => {
@@ -2096,9 +2098,16 @@ function MapPageContent({
       )}
       {cableRouteEdit && viewMode === "physical" && (
         <section className="map-route-edit-affordance" aria-label="Редактирование трассы">
-          <strong>Редактирование трассы</strong>
-          <button type="button" className="primary-action" disabled={cableRouteEdit.status === "saving"} onClick={() => void saveCableRoute()}>Сохранить</button>
-          <button type="button" className="secondary-action" disabled={cableRouteEdit.status === "saving"} onClick={() => setCableRouteEdit(null)}>Отменить</button>
+          <strong>{editingCable?.label ?? editingCableNode?.label ?? cableRouteEdit.cableId}</strong>
+          {editingCable && <span>{editingCable.endpoint_a.remote_physical_object_label} / {editingCable.endpoint_a.remote_connection_point_label} ↔ {editingCable.endpoint_b.remote_physical_object_label} / {editingCable.endpoint_b.remote_connection_point_label}</span>}
+          <span>{t("inspector.routePoints", { count: cableRouteEdit.draftWaypoints.length })}</span>
+          <button type="button" className="secondary-action" disabled={cableRouteEdit.status !== "editing" || cableRouteEdit.selectedWaypointIndex === null} onClick={() => setCableRouteEdit((current) => current?.status === "editing" && current.selectedWaypointIndex !== null ? { ...current, draftWaypoints: current.draftWaypoints.filter((_, index) => index !== current.selectedWaypointIndex), selectedWaypointIndex: null } : current)}>{t("inspector.deleteSelectedPoint")}</button>
+          {cableRouteEdit.status === "refresh-failed"
+            ? <button type="button" className="primary-action" onClick={() => void retryCableRouteRefresh()}>{t("map.retryRefresh")}</button>
+            : <button type="button" className="primary-action" disabled={cableRouteEdit.status !== "editing"} onClick={() => void saveCableRoute()}>{t("inspector.saveRoute")}</button>}
+          <button type="button" className="secondary-action" disabled={cableRouteEdit.status === "saving"} onClick={() => setCableRouteEdit(null)}>{t("action.cancel")}</button>
+          {cableRouteEdit.status === "saving" && <span role="status">{t("map.savingRoute")}</span>}
+          {cableRouteEdit.error && <p role="alert">{cableRouteEdit.error}</p>}
           <small>Enter · Esc</small>
         </section>
       )}
@@ -2107,12 +2116,7 @@ function MapPageContent({
         selection={physicalAnnotationMode ? null : selection}
         onSelectNode={(node) => setSelection({ type: "node", item: node })}
         onClose={() => setSelection(null)}
-        cableRoutePresentation={(!legacy && viewMode === "physical" && selectedCableId && drawableSelectedCable) ? { present: Boolean(selectedCableRoute), waypointCount: selectedCableRoute?.waypoints.length ?? 0, editing: Boolean(cableRouteEdit), selectedWaypointIndex: cableRouteEdit?.selectedWaypointIndex ?? null, savePending: cableRouteEdit?.status === "saving", refreshFailed: cableRouteEdit?.status === "refresh-failed", error: cableRouteEdit?.error ?? null, resetPending: cableRouteReset?.status === "pending", resetRefreshFailed: cableRouteReset?.status === "refresh-failed" } : undefined}
-        onEditCableRoute={beginCableRouteEdit}
-        onCancelCableRouteEdit={() => setCableRouteEdit(null)}
-        onDeleteCableRouteWaypoint={() => setCableRouteEdit((current) => current && current.selectedWaypointIndex !== null ? { ...current, draftWaypoints: current.draftWaypoints.filter((_, index) => index !== current.selectedWaypointIndex), selectedWaypointIndex: null } : current)}
-        onSaveCableRoute={() => void saveCableRoute()}
-        onRetryCableRouteRefresh={() => void retryCableRouteRefresh()}
+        cableRoutePresentation={(!legacy && viewMode === "physical" && selectedCableId && drawableSelectedCable) ? { present: Boolean(selectedCableRoute), waypointCount: selectedCableRoute?.waypoints.length ?? 0 } : undefined}
         onResetCableRoute={() => void resetCableRoute()}
         onRetryCableRouteReset={() => void retryCableRouteResetRefresh()}
         onAddContinuationToMap={
