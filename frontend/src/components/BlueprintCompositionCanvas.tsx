@@ -126,7 +126,7 @@ export function BlueprintCompositionCanvas({ zoom = 1, portTypes, body, panels, 
     gesture.current = { kind: 'bay', handle, bay, start: { x: event.clientX - rect.left, y: event.clientY - rect.top }, pixels: { x: activeRect.width * scale, y: activeRect.height * scale } };
     setFrozenView({ minX, minY, unit, height });
   };
-  return <svg ref={svg} className="blueprint-composition-canvas" style={zoom === 1 ? undefined : { width: `${zoom * 100}%`, maxWidth: 'none', height: `calc(clamp(280px, 45vh, 440px) * ${zoom})` }} viewBox={`0 0 1000 ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.editor.preview')} onPointerMove={(event) => {
+  return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 1000 ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.editor.preview')} onPointerMove={(event) => {
     const current = gesture.current;
     if (!current) return;
     if (current.kind === 'bay') {

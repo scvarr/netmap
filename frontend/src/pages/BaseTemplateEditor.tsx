@@ -262,27 +262,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <button type="button" className="secondary-action" onClick={() => { setZoom(1); const viewport = canvasWrap.current?.querySelector('.blueprint-composer__viewport'); if (viewport) { viewport.scrollLeft = 0; viewport.scrollTop = 0; } }}>{t('blueprint.zoom.fit')}</button>
         </div>
         {trimRejected && <p role="status" className="blueprint-editor__error">{t('blueprint.panel.trimRejected')}</p>}
-        <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
-          <div className="blueprint-composer__viewport" onScroll={() => setMenu(undefined)}><BlueprintCompositionCanvas zoom={zoom} portTypes={catalog.types} bays={editor.bays} selectedBayKey={selectedBayKey} onSelectBay={selectBay} onBayGeometry={changeBay} key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelectedBayKey(undefined); setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle, mode, portPadding) => setEditor((old) => { const next = setPanelRectangle(old, key, rectangle, mode, portPadding); setTrimRejected(next === old); return next; })} onContextMenu={(key, clientX, clientY) => {
-            if (key && !selected.has(key)) setSelected(new Set([key]));
-            if (!key && selected.size === 0) { setMenu(undefined); return; }
-            const rect = canvasWrap.current!.getBoundingClientRect();
-            setDistributionAxis(undefined);
-            setMenu({ x: Math.max(0, Math.min(clientX - rect.left, rect.width - 320)), y: Math.max(0, Math.min(clientY - rect.top, rect.height - 280)) });
-          }} /></div>
-          {menu && <div className="blueprint-composer__context-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
-            <button type="button" role="menuitem" disabled={!selected.size} onClick={() => { setWorkspaceSelection([...selected]); setLinksOpen(true); setMenu(undefined); }}>{t('blueprint.naming.open')}</button>
-            {menuSections.map((section) => <div key={section.label} className={`blueprint-composer__context-section blueprint-composer__context-section--${section.label}`}>
-              <strong>{t(`blueprint.layout.section.${section.label}`)}</strong>
-              {section.actions.map((action) => <button key={action} type="button" role="menuitem" disabled={selected.size < (action === 'distributeX' || action === 'distributeY' || action === 'twoRows' ? 3 : action === 'horizontalLine' || action === 'verticalLine' || action === 'oneRow' ? 2 : 1)} onClick={() => runMenuAction(action)}>{t(`blueprint.layout.${action}`)}</button>)}
-              {section.label === 'distribute' && distributionAxis && <div className="blueprint-composer__distribution-settings" role="group" aria-label={t('blueprint.layout.distributionSettings')}>
-                <label>{t(distributionAxis === 'x' ? 'blueprint.layout.rangeWidth' : 'blueprint.layout.rangeHeight')}<input type="number" min="1" max="100" step="1" value={distributionPercent} disabled={distributionFull} onChange={(event) => setDistributionPercent(event.target.value)} /></label>
-                <label className="blueprint-composer__distribution-full"><input type="checkbox" checked={distributionFull} onChange={(event) => setDistributionFull(event.target.checked)} />{t(distributionAxis === 'x' ? 'blueprint.layout.fullWidth' : 'blueprint.layout.fullHeight')}</label>
-                <button type="button" className="blueprint-composer__distribution-apply" disabled={!distributionFull && (!Number.isFinite(Number(distributionPercent)) || Number(distributionPercent) < 1 || Number(distributionPercent) > 100)} onClick={applyDistribution}>{t('blueprint.layout.applyDistribution')}</button>
-              </div>}
-            </div>)}
-          </div>}
-        </div>
         <div className="blueprint-composer__contextual">
           {selectedBay && <ModuleBaysEditor key={selectedBay.bay_key} bay={selectedBay} panels={editor.panels} onDuplicate={duplicateBay} onChange={patch => {
             changeBay(selectedBay.bay_key, patch);
@@ -308,6 +287,28 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>
         </aside>}
         </div>
+        <div ref={canvasWrap} className="blueprint-composer__canvas-wrap">
+          <div className="blueprint-composer__viewport" onScroll={() => setMenu(undefined)}><div className="blueprint-composer__stage" style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%`, padding: 24 * zoom }}><BlueprintCompositionCanvas zoom={zoom} portTypes={catalog.types} bays={editor.bays} selectedBayKey={selectedBayKey} onSelectBay={selectBay} onBayGeometry={changeBay} key={panelKey} body={{ width: bounds.width, height: bounds.height, fillColor: editor.fillColor }} panels={editor.panels} activePanelKey={panelKey} slots={editor.slots} links={editor.individualLinks} selectedKeys={selected} onActivatePanel={activatePanel} onSelect={selectSlot} onMarquee={(keys) => { setSelectedBayKey(undefined); setSelected(new Set(keys)); setPositionDraft(undefined); }} onTranslate={(keys, dx, dy) => setEditor((old) => translateSelection(old, keys, dx, dy))} onPanelGeometry={(key, rectangle, mode, portPadding) => setEditor((old) => { const next = setPanelRectangle(old, key, rectangle, mode, portPadding); setTrimRejected(next === old); return next; })} onContextMenu={(key, clientX, clientY) => {
+            if (key && !selected.has(key)) setSelected(new Set([key]));
+            if (!key && selected.size === 0) { setMenu(undefined); return; }
+            const rect = canvasWrap.current!.getBoundingClientRect();
+            setDistributionAxis(undefined);
+            setMenu({ x: Math.max(0, Math.min(clientX - rect.left, rect.width - 320)), y: Math.max(0, Math.min(clientY - rect.top, rect.height - 280)) });
+          }} /></div></div>
+          {menu && <div className="blueprint-composer__context-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
+            <button type="button" role="menuitem" disabled={!selected.size} onClick={() => { setWorkspaceSelection([...selected]); setLinksOpen(true); setMenu(undefined); }}>{t('blueprint.naming.open')}</button>
+            {menuSections.map((section) => <div key={section.label} className={`blueprint-composer__context-section blueprint-composer__context-section--${section.label}`}>
+              <strong>{t(`blueprint.layout.section.${section.label}`)}</strong>
+              {section.actions.map((action) => <button key={action} type="button" role="menuitem" disabled={selected.size < (action === 'distributeX' || action === 'distributeY' || action === 'twoRows' ? 3 : action === 'horizontalLine' || action === 'verticalLine' || action === 'oneRow' ? 2 : 1)} onClick={() => runMenuAction(action)}>{t(`blueprint.layout.${action}`)}</button>)}
+              {section.label === 'distribute' && distributionAxis && <div className="blueprint-composer__distribution-settings" role="group" aria-label={t('blueprint.layout.distributionSettings')}>
+                <label>{t(distributionAxis === 'x' ? 'blueprint.layout.rangeWidth' : 'blueprint.layout.rangeHeight')}<input type="number" min="1" max="100" step="1" value={distributionPercent} disabled={distributionFull} onChange={(event) => setDistributionPercent(event.target.value)} /></label>
+                <label className="blueprint-composer__distribution-full"><input type="checkbox" checked={distributionFull} onChange={(event) => setDistributionFull(event.target.checked)} />{t(distributionAxis === 'x' ? 'blueprint.layout.fullWidth' : 'blueprint.layout.fullHeight')}</label>
+                <button type="button" className="blueprint-composer__distribution-apply" disabled={!distributionFull && (!Number.isFinite(Number(distributionPercent)) || Number(distributionPercent) < 1 || Number(distributionPercent) > 100)} onClick={applyDistribution}>{t('blueprint.layout.applyDistribution')}</button>
+              </div>}
+            </div>)}
+          </div>}
+        </div>
+
       </section>
     </div></div>
     {linksOpen && <EndpointLinkWorkspace initialSelectedKeys={workspaceSelection} state={editor} onChange={setEditor} onClose={closeLinks} />}

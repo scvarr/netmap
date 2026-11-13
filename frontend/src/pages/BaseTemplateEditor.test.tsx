@@ -887,3 +887,31 @@ it('BASE-UX-01 keeps zoom out of saved model and draft notifications', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Вписать в область' }));
   expect(screen.getByText('1×')).toBeInTheDocument();
 });
+
+
+it.each([1,4,8])('corrective keeps X/Y and port properties before the viewport after drag at %sx', async zoom => {
+  const initial = newBlueprintEditorState(); initial.name = 'Controls';
+  const state = addEndpoints(initial, 'NETWORK_PORT', 1, initial.activePanelKey, 'test-type');
+  state.slots[0].rendered_position = { x: .5, y: .5 };
+  render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Controls" description="" saveLabel="Save" initialState={state} onSave={vi.fn().mockResolvedValue(undefined)} /></MemoryRouter></I18nProvider>);
+  for (let n = 1; n < zoom; n *= 2) fireEvent.click(screen.getByRole('button', { name: 'Увеличить' }));
+  const svg = document.querySelector('.blueprint-composition-canvas')!;
+  Object.defineProperty(svg, 'getBoundingClientRect', { value: () => ({ left: -200, top: -100, width: 1000 * zoom, height: 375 * zoom }) });
+  const tools = document.querySelector('.blueprint-composer__contextual')!;
+  const viewport = document.querySelector('.blueprint-composer__viewport')!;
+  expect(tools.compareDocumentPosition(viewport) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.pointerDown(document.querySelector('[data-slot-key]')!, { button: 0, clientX: -200 + 500 * zoom, clientY: -100 + 187.5 * zoom });
+  fireEvent.pointerMove(svg, { clientX: -200 + 600 * zoom, clientY: -100 + 187.5 * zoom });
+  fireEvent.pointerUp(svg);
+  const x = within(tools as HTMLElement).getByLabelText('X');
+  expect(x).toHaveValue(.6); expect(within(tools as HTMLElement).getByLabelText('Y')).toHaveValue(.5);
+  fireEvent.change(x, { target: { value: '.7' } }); fireEvent.blur(x);
+  expect(x).toHaveValue(.7);
+  expect(within(tools as HTMLElement).getByLabelText('Название')).toHaveValue('1-1');
+  expect(await within(tools as HTMLElement).findByRole('combobox', { name: 'Тип порта' })).toBeEnabled();
+  expect(within(tools as HTMLElement).getByRole('button', { name: 'Удалить' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Вписать в область' }));
+  expect(document.querySelector('.blueprint-composer__contextual')).toBe(tools);
+  expect(document.querySelector('.blueprint-composition-canvas')).toBe(svg);
+  expect(x).toHaveValue(.7);
+});
