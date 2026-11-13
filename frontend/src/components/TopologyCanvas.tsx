@@ -234,7 +234,7 @@ export function TopologyCanvas({
             const blueprint = node.data.projection.attributes.blueprint_presentation;
             const displayWidth = displayWidthOverrides?.[node.id];
             return blueprint && displayWidth !== undefined
-              ? { ...node, ...blueprintRenderedNodeDimensions(blueprint, displayWidth) }
+              ? { ...node, ...blueprintRenderedNodeDimensions(blueprint, displayWidth), data: { ...node.data, compositionDisplayWidth: displayWidth } }
               : node;
           }),
         };
@@ -271,7 +271,7 @@ export function TopologyCanvas({
         const blueprint = node.data.projection.attributes.blueprint_presentation;
         const displayWidth = displayWidthOverrides[node.id];
         return blueprint && displayWidth !== undefined
-          ? { ...node, ...blueprintRenderedNodeDimensions(blueprint, displayWidth) }
+          ? { ...node, ...blueprintRenderedNodeDimensions(blueprint, displayWidth), data: { ...node.data, compositionDisplayWidth: displayWidth } }
           : node;
       }),
     } : current);
@@ -376,7 +376,7 @@ export function TopologyCanvas({
       const physicalObjectId = physicalObjectIdForNode(node.data.projection);
       if (!physicalObjectId) return [];
       const rectangle = nodeFootprint(node);
-      return [{ physicalObjectId, rectangle }];
+      return [{ physicalObjectId, rectangle, flexibleCableZone: Boolean(node.data.projection.attributes.blueprint_presentation) }];
     }) : [];
   const locationPresentation = showLocationPresentation && locationFrameInput
     ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationFrameInput.states ?? [], locationFrameInput.automatic)
@@ -403,6 +403,7 @@ export function TopologyCanvas({
   }));
   const nodes: DeviceFlowNode[] = projection.nodes.filter((node) => !hiddenNodeProxies.has(node.id)).map((node) => ({
     ...node,
+    ...(locationPresentation.automaticPositions?.get(physicalObjectIdForNode(node.data.projection) ?? "") ?? {}),
     position: locationPresentation.automaticPositions?.get(physicalObjectIdForNode(node.data.projection) ?? '') ?? node.position,
     draggable: automatic ? false : draggableNodeIds ? draggableNodeIds.has(node.id) && !lockedNodeIds?.has(node.id) : lockedNodeIds?.has(node.id) ? false : undefined,
     data: {
@@ -491,7 +492,7 @@ export function TopologyCanvas({
     if (delta) node.position = { x: node.position.x + delta.x, y: node.position.y + delta.y };
   }
   const renderedNodeById = new Map(nodes.map((node) => [node.id, node]));
-  const nodeBox = (node: DeviceFlowNode) => ({ x: node.position.x, y: node.position.y, width: node.measured?.width ?? node.width ?? 212, height: node.measured?.height ?? node.height ?? 144 });
+  const nodeBox = (node: DeviceFlowNode) => ({ compositionDisplayWidth: node.data.compositionDisplayWidth, x: node.position.x, y: node.position.y, width: node.measured?.width ?? node.width ?? 212, height: node.measured?.height ?? node.height ?? 144 });
   const routeEndpoints = (sourceNode: DeviceFlowNode, targetNode: DeviceFlowNode, sourcePointId?: string, targetPointId?: string) => {
     const sourceBox = nodeBox(sourceNode), targetBox = nodeBox(targetNode);
     const floating = getFloatingEndpoints(sourceBox, targetBox);

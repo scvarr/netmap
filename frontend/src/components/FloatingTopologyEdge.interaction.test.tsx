@@ -30,7 +30,7 @@ const renderEdge = (draft = editor([])) => render(<svg><FloatingTopologyEdge {..
 const blueprintNode = (id: string, x: number, physicalObjectId: string, slot: { connectionPointId: string; kind: 'CONNECTION_POINT' | 'NETWORK_PORT'; renderedX: number; attachmentX: number; side: 'LEFT' | 'RIGHT' }) => ({
   internals: { positionAbsolute: { x, y: 0 } },
   measured: { width: 100, height: 100 },
-  data: { projection: {
+  data: { compositionDisplayWidth: 32, projection: {
     id,
     kind: 'PHYSICAL_OBJECT',
     label: id,

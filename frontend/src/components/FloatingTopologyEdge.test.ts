@@ -36,8 +36,8 @@ describe('floating topology edge geometry', () => {
     const projection: TopologyProjectionNode = { id: 'blueprint', kind: 'PHYSICAL_OBJECT', label: 'Patch panel', source_refs: [], attributes: {
       blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, panels: [{ panel_key: 'one', panel_number: 1, display_name: 'Panel 1', x: 0, y: 0, width: 200, height: 100 }], slots: [{ slot_key: 'rear01', display_name: 'rear01', kind: 'CONNECTION_POINT', connection_point_id: 'rear-01', panel_key: 'one', panel_local_position: { x: .25, y: .5 }, rendered_position: { x: .25, y: .5 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }] },
     } };
-    const endpoint = getConnectionPointEndpoint(projection, { ...node(10, 20), width: 292 }, 'rear-01');
-    const renderedPort = getRenderedConnectionPoint(projection, { ...node(10, 20), width: 292 }, 'rear-01');
+    const endpoint = getConnectionPointEndpoint(projection, { ...node(10, 20), compositionDisplayWidth: 200, width: 292 }, 'rear-01');
+    const renderedPort = getRenderedConnectionPoint(projection, { ...node(10, 20), compositionDisplayWidth: 200, width: 292 }, 'rear-01');
     expect(endpoint).toMatchObject({ x: 132, y: 20, side: Position.Top });
     expect(renderedPort).toMatchObject({ x: 132, y: 70, side: Position.Top });
     expect(routedCablePath(endpoint!, { x: 300, y: 200, side: Position.Left }, [{ x: 80, y: 30 }]))
@@ -50,8 +50,8 @@ describe('floating topology edge geometry', () => {
     const projection: TopologyProjectionNode = { id: 'blueprint', kind: 'PHYSICAL_OBJECT', label: 'Patch panel', source_refs: [], attributes: {
       blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, panels: [{ panel_key: 'a', panel_number: 1, display_name: 'A', x: 0, y: 0, width: 200, height: 100 }, { panel_key: 'b', panel_number: 2, display_name: 'B', x: 0, y: 100, width: 200, height: 100 }], slots: [{ slot_key: 'front', display_name: 'front', kind: 'CONNECTION_POINT', connection_point_id: 'front', panel_key: 'a', panel_local_position: { x: .25, y: .5 }, rendered_position: { x: .25, y: .25 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }, { slot_key: 'rear', display_name: 'rear', kind: 'CONNECTION_POINT', connection_point_id: 'rear', panel_key: 'b', panel_local_position: { x: .25, y: .5 }, rendered_position: { x: .25, y: .75 }, external_attachment: { x: .25, y: 1, side: 'BOTTOM' } }] },
     } };
-    expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, width: 292, height: 200 }, 'front')).toMatchObject({ x: 132, y: 20, side: Position.Top });
-    expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, width: 292, height: 200 }, 'rear')).toMatchObject({ x: 132, y: 220, side: Position.Bottom });
+    expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, compositionDisplayWidth: 200, width: 292, height: 200 }, 'front')).toMatchObject({ x: 132, y: 20, side: Position.Top });
+    expect(getConnectionPointEndpoint(projection, { x: 10, y: 20, compositionDisplayWidth: 200, width: 292, height: 200 }, 'rear')).toMatchObject({ x: 132, y: 220, side: Position.Bottom });
   });
 
   it('uses nearest horizontal sides even when raw source is geometrically right of target', () => {
@@ -98,11 +98,25 @@ describe('OBJECT-UX-01 dense three-zone endpoint geometry', () => {
     const before = JSON.stringify(projection);
     for (const width of [columns * 10, 480, 960]) {
       for (const slot of slots) {
-        const point = getRenderedConnectionPoint(projection, { x: 100, y: 50, width: width + 92, height: width * 44 / 480 }, slot.connection_point_id)!;
+        const point = getRenderedConnectionPoint(projection, { x: 100, y: 50, compositionDisplayWidth: width, width: width + 92, height: width * 44 / 480 }, slot.connection_point_id)!;
         expect(point.x).toBeCloseTo(100 + 72 + width * slot.panel_local_position.x);
         expect(point.y).toBeCloseTo(50 + width * 44 / 480 * slot.panel_local_position.y);
       }
     }
     expect(JSON.stringify(projection)).toBe(before);
   });
+});
+
+
+it('holds rendered ports and cable endpoints fixed while only the cable reserve expands', () => {
+  const presentation = { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'b' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v' }, body: { kind: 'RECTANGLE', width: 480, height: 44 }, panels: [{ panel_key: 'one', panel_number: 1, display_name: 'Panel', x: 0, y: 0, width: 480, height: 44 }], slots: [{ slot_key: 'p', display_name: 'p', kind: 'NETWORK_PORT', connection_point_id: 'p', panel_key: 'one', panel_local_position: { x: .5, y: .5 }, rendered_position: { x: .5, y: .5 }, external_attachment: { x: .5, y: 0, side: 'TOP' } }] };
+  const projection = { id: 'p', kind: 'PHYSICAL_OBJECT', label: 'PP1', source_refs: [], attributes: { blueprint_presentation: presentation } } as TopologyProjectionNode;
+  const box = { x: 10, y: 20, width: 332, height: 22, compositionDisplayWidth: 240 };
+  const expanded = { ...box, width: 572 };
+  expect(getRenderedConnectionPoint(projection, expanded, 'p')).toEqual(getRenderedConnectionPoint(projection, box, 'p'));
+  expect(getConnectionPointEndpoint(projection, expanded, 'p')).toEqual(getConnectionPointEndpoint(projection, box, 'p'));
+  const waypoints = [{ x: 500, y: 200 }];
+  const before = JSON.stringify(waypoints);
+  routedCablePath(getRenderedConnectionPoint(projection, expanded, 'p')!, { x: 900, y: 200, side: Position.Left }, waypoints);
+  expect(JSON.stringify(waypoints)).toBe(before);
 });

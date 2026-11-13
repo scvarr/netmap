@@ -15,7 +15,7 @@ export const MAX_BLUEPRINT_LABEL_FONT_SIZE = 32;
 export const OBJECT_NAME_ZONE_WIDTH = 72;
 export const OBJECT_CABLE_ZONE_WIDTH = 20;
 export const OBJECT_SIDE_ZONES_WIDTH = OBJECT_NAME_ZONE_WIDTH + OBJECT_CABLE_ZONE_WIDTH;
-export const compositionWidthFromFootprint = (width: number) => width - OBJECT_SIDE_ZONES_WIDTH;
+
 
 export const panelCompositionBounds = (panels: BlueprintPresentation['panels']) => {
   const x = Math.min(...panels.map((panel) => panel.x));
@@ -86,7 +86,7 @@ export const blueprintObjectLabelFontSize = (
 };
 
 /** Complete three-zone footprint; displayWidth always describes the composition. */
-export const blueprintRenderedNodeDimensions = (presentation: BlueprintPresentation, displayWidth: number | undefined) => {
+export const blueprintRenderedNodeDimensions = (presentation: BlueprintPresentation, displayWidth: number | undefined, frameWidth?: number) => {
   const body = blueprintNodeDisplayDimensions(presentation, displayWidth);
-  return { width: body.width + OBJECT_SIDE_ZONES_WIDTH, height: body.height };
+  return { width: Math.max(frameWidth ?? 0, body.width + OBJECT_SIDE_ZONES_WIDTH), height: body.height };
 };

@@ -9,6 +9,7 @@ import type { FlowRectangle } from './nodeFootprint';
 export const LOCATION_FRAME_PADDING = 20;
 
 export interface DisplayedPhysicalObject {
+  flexibleCableZone?: boolean;
   physicalObjectId: string;
   rectangle: FlowRectangle;
 }

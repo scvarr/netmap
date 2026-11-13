@@ -1,7 +1,7 @@
 import type { XYPosition } from '@xyflow/react';
 import { LAYOUT_NODE_HEIGHT, LAYOUT_NODE_WIDTH, type DeviceFlowNode } from './layout';
 import type { TopologyProjectionNode } from './types';
-import { compositionWidthFromFootprint, blueprintRenderedNodeDimensions } from './blueprintDisplaySize';
+import { blueprintRenderedNodeDimensions } from './blueprintDisplaySize';
 
 export interface FlowRectangle extends XYPosition {
   width: number;
@@ -53,7 +53,7 @@ export const nodeFootprint = (
   const blueprint = node.data.projection.attributes.blueprint_presentation;
   if (blueprint) {
     const width = node.measured?.width ?? node.width ?? dimensions.width;
-    return { ...position, ...blueprintRenderedNodeDimensions(blueprint, compositionWidthFromFootprint(width)) };
+    return { ...position, ...blueprintRenderedNodeDimensions(blueprint, node.data.compositionDisplayWidth, width) };
   }
   return {
     ...position,

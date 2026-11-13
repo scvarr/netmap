@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useRuntimePortTypes } from './RuntimePortTypes';
 import { Handle, NodeResizeControl, Position, type NodeProps } from '@xyflow/react';
 import type { Node } from '@xyflow/react';
@@ -6,11 +7,12 @@ import { displayNodeLabel, physicalClassPresentation } from '../topology/present
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import { internalL1Segments } from '../topology/internalL1Presentation';
 import { InternalL1Continuity } from './InternalL1Continuity';
-import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, OBJECT_CABLE_ZONE_WIDTH, OBJECT_SIDE_ZONES_WIDTH, compositionWidthFromFootprint, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
+import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, OBJECT_SIDE_ZONES_WIDTH, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
 export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>) {
+  const resizeStart = useRef<{ frameWidth: number; displayWidth: number } | null>(null);
   const portTypes = useRuntimePortTypes();
   const { projection } = data;
   const physical = projection.kind === 'PHYSICAL_OBJECT';
@@ -22,15 +24,17 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
     return { role: 'button' as const, tabIndex: state === 'unavailable' ? -1 : 0, 'aria-label': `Порт ${label}`, 'aria-disabled': state === 'unavailable' || undefined, onClick: (event: React.MouseEvent) => { event.stopPropagation(); if (state !== 'unavailable' && objectId) data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); }, onContextMenu: (event: React.MouseEvent) => { event.preventDefault(); event.stopPropagation(); if (objectId) data.onPhysicalPortContextMenu?.({ physicalObjectId: objectId, connectionPointId, label }, { x: event.clientX, y: event.clientY }); }, onKeyDown: (event: React.KeyboardEvent) => { if ((event.key === 'Enter' || event.key === ' ') && state !== 'unavailable' && objectId) { event.preventDefault(); data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); } } };
   };
   if (physical && blueprint) {
-    const displayWidth = blueprintNodeDisplayDimensions(blueprint, width === undefined ? undefined : compositionWidthFromFootprint(width)).width;
+    const displayWidth = blueprintNodeDisplayDimensions(blueprint, data.compositionDisplayWidth).width;
     const displayHeight = blueprintNodeDisplayDimensions(blueprint, displayWidth).height;
+    const frameWidth = Math.max(width ?? 0, displayWidth + OBJECT_SIDE_ZONES_WIDTH);
+    const cableWidth = frameWidth - OBJECT_NAME_ZONE_WIDTH - displayWidth;
     const bounds = panelCompositionBounds(blueprint.panels);
     const traceHighlightedConnectionPointIds = new Set(
       (projection.attributes.internal_l1_links ?? [])
         .filter((link) => data.traceHighlightedConnectionMemberIds?.has(link.connection_member_id))
         .flatMap((link) => [link.from_connection_point_id, link.to_connection_point_id]),
     );
-    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: displayWidth + OBJECT_SIDE_ZONES_WIDTH, height: displayHeight, gridTemplateColumns: `${OBJECT_NAME_ZONE_WIDTH}px ${displayWidth}px ${OBJECT_CABLE_ZONE_WIDTH}px` }}>
+    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: frameWidth, height: displayHeight, gridTemplateColumns: `${OBJECT_NAME_ZONE_WIDTH}px ${displayWidth}px ${cableWidth}px` }}>
     <NodeResizeControl
       position="right"
       resizeDirection="horizontal"
@@ -41,7 +45,12 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       maxHeight={blueprintNodeDisplayDimensions(blueprint, 960).height}
 
       className="blueprint-map-node__resizer-handle"
-      onResizeEnd={(_, dimensions) => { if (objectId) data.onBlueprintDisplayResize?.(objectId, compositionWidthFromFootprint(dimensions.width)); }}
+      onResizeStart={() => { resizeStart.current = { frameWidth, displayWidth }; }}
+      onResizeEnd={(_, dimensions) => {
+        const start = resizeStart.current ?? { frameWidth, displayWidth };
+        resizeStart.current = null;
+        if (objectId) data.onBlueprintDisplayResize?.(objectId, start.displayWidth + dimensions.width - start.frameWidth);
+      }}
     />
     <Handle type="target" position={Position.Top} className="device-node__handle" />
     <strong className="blueprint-map-node__identity" title={data.locationPresentationPath ? `${displayNodeLabel(projection)} — ${data.locationPresentationPath}` : displayNodeLabel(projection)}>

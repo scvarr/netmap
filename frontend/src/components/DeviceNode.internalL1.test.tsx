@@ -34,9 +34,9 @@ describe('DeviceNode internal L1 overlay', () => {
       ...blueprint, body: { ...blueprint.body, width: 480, height: 44 },
       panels: [{ ...blueprint.panels[0], width: 480, height: 44 }], slots: [],
     } } };
-    render(<DeviceNode {...({ data: { projection: pp24 }, selected: false, width: width + 92 } as any)} />);
+    render(<DeviceNode {...({ data: { projection: pp24, compositionDisplayWidth: width }, selected: false, width: width + 92 } as any)} />);
     const card = screen.getByTestId('blueprint-map-node');
-    const footprint = nodeFootprint({ id: 'pp24', position: { x: 0, y: 0 }, width: width + 92, data: { projection: pp24 } } as any);
+    const footprint = nodeFootprint({ id: 'pp24', position: { x: 0, y: 0 }, width: width + 92, data: { projection: pp24, compositionDisplayWidth: width } } as any);
     expect(card).toHaveStyle({ width: `${footprint.width}px`, height: `${footprint.height}px` });
     expect(footprint.height).toBe(width * 44 / 480);
 
@@ -53,14 +53,14 @@ describe('DeviceNode internal L1 overlay', () => {
       blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots },
       connection_points: slots.map(s => ({ connection_point_id: s.connection_point_id, display_name: `Back / PCIe${s.connection_point_id.split('-')[1]} / ${s.display_name}`, cardinality: 1, external_connection_count: 0 })),
     } };
-    render(<DeviceNode {...({ data: { projection: moduleProjection }, selected: false, width: 392 } as any)} />);
+    render(<DeviceNode {...({ data: { compositionDisplayWidth: 300, projection: moduleProjection }, selected: false, width: 392 } as any)} />);
     expect(screen.getAllByTitle('feth1 · CONNECTION_POINT')).toHaveLength(2);
     expect(screen.getAllByTitle('feth2 · CONNECTION_POINT')).toHaveLength(2);
     expect(document.querySelectorAll('[data-connection-point-id]')).toHaveLength(4);
     expect(screen.queryByText('Back / PCIe1 / feth1')).not.toBeInTheDocument();
   });
   it('puts the Location path inside the existing Blueprint nameplate without changing its height or footprint', () => {
-    const props = { data: { projection, locationPresentationPath: 'U01 / SLOT-A' }, selected: false, width: 252 } as any;
+    const props = { data: { compositionDisplayWidth: 160, projection, locationPresentationPath: 'U01 / SLOT-A' }, selected: false, width: 252 } as any;
     const view = render(<DeviceNode {...props} />);
     const body = screen.getByTestId('blueprint-map-node');
     const nameplate = body.querySelector('.blueprint-map-node__identity')!;
@@ -69,11 +69,11 @@ describe('DeviceNode internal L1 overlay', () => {
     expect(nameplate.querySelector('.blueprint-map-node__location')).toBeInTheDocument();
     const height = body.style.height;
     const nameplateHeight = (nameplate as HTMLElement).style.height;
-    view.rerender(<DeviceNode {...({ ...props, data: { projection } } as any)} />);
+    view.rerender(<DeviceNode {...({ ...props, data: { projection, compositionDisplayWidth: 160 } } as any)} />);
     expect(body.style.height).toBe(height);
     expect((body.querySelector('.blueprint-map-node__identity') as HTMLElement).style.height).toBe(nameplateHeight);
     expect(body.querySelector('.blueprint-map-node__location')).toBeNull();
-    const base = { id: 'panel', type: 'device', position: { x: 0, y: 0 }, width: 252, data: { projection } } as any;
+    const base = { id: 'panel', type: 'device', position: { x: 0, y: 0 }, width: 252, data: { projection, compositionDisplayWidth: 160 } } as any;
     expect(nodeFootprint({ ...base, data: props.data })).toEqual(nodeFootprint(base));
   });
 
@@ -89,7 +89,7 @@ describe('DeviceNode internal L1 overlay', () => {
   });
   it('keeps a short name like PC1 readable on a small Blueprint', () => {
     const small = { ...projection, label: 'PC1' };
-    render(<DeviceNode {...({ data: { projection: small }, selected: false, width: 156 } as any)} />);
+    render(<DeviceNode {...({ data: { compositionDisplayWidth: 64, projection: small }, selected: false, width: 156 } as any)} />);
     const nameplate = screen.getByTitle('PC1');
     expect(nameplate).toHaveTextContent('PC1');
     expect(nameplate).toHaveClass('blueprint-map-node__identity');
@@ -99,23 +99,23 @@ describe('DeviceNode internal L1 overlay', () => {
   it('keeps the full long name in title while the small nameplate ellipsizes via CSS', () => {
     const longName = 'Patch panel with a very long descriptive name';
     const small = { ...projection, label: longName };
-    render(<DeviceNode {...({ data: { projection: small }, selected: false, width: 156 } as any)} />);
+    render(<DeviceNode {...({ data: { compositionDisplayWidth: 64, projection: small }, selected: false, width: 156 } as any)} />);
     const nameplate = screen.getByTitle(longName);
     expect(nameplate).toHaveTextContent(longName);
     expect(nameplate).toHaveClass('blueprint-map-node__identity');
   });
 
   it('keeps one shared nameplate typography across Blueprint display widths', () => {
-    const { rerender } = render(<DeviceNode {...({ data: { projection }, selected: false, width: 252 } as any)} />);
+    const { rerender } = render(<DeviceNode {...({ data: { compositionDisplayWidth: 160, projection }, selected: false, width: 252 } as any)} />);
     const identity = screen.getByTitle('PP1');
     expect(identity.style.height).toBe('');
-    rerender(<DeviceNode {...({ data: { projection }, selected: false, width: 412 } as any)} />);
+    rerender(<DeviceNode {...({ data: { compositionDisplayWidth: 320, projection }, selected: false, width: 412 } as any)} />);
     expect(identity.style.height).toBe('');
     expect(screen.getByTestId('blueprint-map-node').style.gridTemplateColumns).toBe('72px 320px 20px');
   });
 
   it('renders both panels simultaneously and keeps slots on their own surfaces', () => {
-    render(<DeviceNode {...({ data: { projection, traceHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 412 } as any)} />);
+    render(<DeviceNode {...({ data: { compositionDisplayWidth: 320, projection, traceHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 412 } as any)} />);
     const front = screen.getByTestId('blueprint-panel-front');
     const rear = screen.getByTestId('blueprint-panel-rear');
     const body = screen.getByTestId('blueprint-map-node');
@@ -161,13 +161,13 @@ describe('DeviceNode internal L1 overlay', () => {
 
   it('persists one resized display width for both panels', () => {
     const onBlueprintDisplayResize = vi.fn();
-    render(<DeviceNode {...({ data: { projection, blueprintResizeEnabled: true, onBlueprintDisplayResize }, selected: true, width: 412 } as any)} />);
+    render(<DeviceNode {...({ data: { compositionDisplayWidth: 320, projection, blueprintResizeEnabled: true, onBlueprintDisplayResize }, selected: true, width: 412 } as any)} />);
     screen.getByRole('button', { name: 'resize' }).click();
     expect(onBlueprintDisplayResize).toHaveBeenCalledWith('object-1', 268);
   });
 
   it('uses compact styled resize handles while retaining Blueprint width and aspect constraints', () => {
-    render(<DeviceNode {...({ data: { projection, blueprintResizeEnabled: true }, selected: true, width: 412 } as any)} />);
+    render(<DeviceNode {...({ data: { compositionDisplayWidth: 320, projection, blueprintResizeEnabled: true }, selected: true, width: 412 } as any)} />);
     const resize = screen.getByRole('button', { name: 'resize' });
     expect(resize).toHaveAttribute('data-visible', 'true');
     expect(resize).toHaveAttribute('data-direction', 'horizontal');
@@ -180,7 +180,7 @@ describe('DeviceNode internal L1 overlay', () => {
   it('keeps the nameplate in the object card hit area and lets port wiring stop selection', () => {
     const onObjectClick = vi.fn();
     const onPhysicalPortClick = vi.fn();
-    render(<div onClick={onObjectClick}><DeviceNode {...({ data: { projection, physicalPortStates: { 'front-01': 'eligible' }, onPhysicalPortClick }, selected: true, width: 412 } as any)} /></div>);
+    render(<div onClick={onObjectClick}><DeviceNode {...({ data: { compositionDisplayWidth: 320, projection, physicalPortStates: { 'front-01': 'eligible' }, onPhysicalPortClick }, selected: true, width: 412 } as any)} /></div>);
     const body = screen.getByTestId('blueprint-map-node');
     const nameplate = within(body).getByTitle('PP1');
     expect(body).toHaveClass('blueprint-map-node--selected');
@@ -195,7 +195,7 @@ describe('DeviceNode internal L1 overlay', () => {
   });
 
   it('keeps a wiring-highlighted cross-face line in the object layer while ports remain above it', () => {
-    render(<DeviceNode {...({ data: { projection, wiringHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 252 } as any)} />);
+    render(<DeviceNode {...({ data: { compositionDisplayWidth: 160, projection, wiringHighlightedConnectionMemberIds: new Set(['member-1']) }, selected: false, width: 252 } as any)} />);
     const line = screen.getByTestId('internal-l1-line-member-1');
     expect(line).toHaveAttribute('y1', '20');
     expect(line).toHaveAttribute('y2', '140');
@@ -231,7 +231,7 @@ it('resolves current archived types for base and module glyphs while preserving 
 
 it('keeps port hover and focus passive while preserving mouse, keyboard and context actions', () => {
   const click = vi.fn(), context = vi.fn(), resize = vi.fn();
-  render(<DeviceNode {...({ data: { projection, onPhysicalPortClick: click, onPhysicalPortContextMenu: context, onBlueprintDisplayResize: resize }, selected: false, width: 1 } as any)} />);
+  render(<DeviceNode {...({ data: { compositionDisplayWidth: -91, projection, onPhysicalPortClick: click, onPhysicalPortContextMenu: context, onBlueprintDisplayResize: resize }, selected: false, width: 1 } as any)} />);
   const port = screen.getByRole('button', { name: /Front 01$/ });
   const card = screen.getByTestId('blueprint-map-node');
   const style = card.getAttribute('style');
@@ -241,4 +241,17 @@ it('keeps port hover and focus passive while preserving mouse, keyboard and cont
   expect(port.querySelector('.blueprint-map-node__port-label')).toHaveTextContent('Front 01');
   fireEvent.click(port); fireEvent.keyDown(port, { key: ' ' }); fireEvent.contextMenu(port);
   expect(click).toHaveBeenCalledTimes(2); expect(context).toHaveBeenCalledTimes(1);
+});
+
+
+it('expands only the cable column without moving the composition or L1 segments', () => {
+  const { rerender } = render(<DeviceNode {...({ data: { projection, compositionDisplayWidth: 240 }, width: 332 } as any)} />);
+  const card = screen.getByTestId('blueprint-map-node');
+  const line = screen.getByTestId('internal-l1-line-member-1');
+  const endpoints = ['x1', 'y1', 'x2', 'y2'].map(name => line.getAttribute(name));
+  expect(card.style.gridTemplateColumns).toBe('72px 240px 20px');
+  rerender(<DeviceNode {...({ data: { projection, compositionDisplayWidth: 240 }, width: 572 } as any)} />);
+  expect(card.style.gridTemplateColumns).toBe('72px 240px 260px');
+  expect(['x1', 'y1', 'x2', 'y2'].map(name => line.getAttribute(name))).toEqual(endpoints);
+  expect(card.style.height).toBe('240px');
 });

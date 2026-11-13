@@ -1023,3 +1023,8 @@ a { color: inherit; }
 .blueprint-composer__contextual .blueprint-composer__selected label { min-width: 0; width: 160px; max-width: 100%; }
 
 .blueprint-map-node__cable-zone { min-width: 0; border-left: 1px solid #42756c; pointer-events: none; }
+
+/* The frame is painted over all three surfaces without shifting panel coordinates. */
+.blueprint-map-node::after { content: ''; position: absolute; inset: 0; z-index: 6; border: 1px solid #a2c9c4; pointer-events: none; }
+.blueprint-map-node__identity { padding: 1px 5px; font-size: 9px; }
+.blueprint-map-node__cable-zone { box-sizing: border-box; border-left: 1px solid #a2c9c4; }

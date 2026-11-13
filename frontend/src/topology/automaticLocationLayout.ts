@@ -27,6 +27,8 @@ export function automaticLocationLayout(locations: readonly LocationDocument[], 
     counts.set(id, result); return result;
   };
   count('root');
+  const includedByLocation = new Map<string, Array<[string, FlowRectangle]>>();
+  const flexible = new Set(objects.filter(o => o.flexibleCableZone).map(o => o.physicalObjectId));
   const frames = new Map<string, FlowRectangle>();
   const positions = new Map<string, FlowRectangle>();
   const hidden = new Set<string>();
@@ -60,6 +62,7 @@ export function automaticLocationLayout(locations: readonly LocationDocument[], 
       cursor += (horizontal ? box.width : box.height) + (horizontal ? HORIZONTAL_GAP : CLEARANCE);
       cross = Math.max(cross, horizontal ? box.height : box.width);
     }
+    includedByLocation.set(id, included);
     // Only direct visible frames share a cross-axis size. Descendants retain
     // their own independently measured groups; equipment is never stretched.
     for (const [key, placed] of included) if (key.startsWith('Location:')) {
@@ -78,6 +81,12 @@ export function automaticLocationLayout(locations: readonly LocationDocument[], 
   const place = (id: string, x: number, y: number) => {
     const box = frames.get(id)!;
     box.x += x; box.y += y;
+    const included = includedByLocation.get(id) ?? [];
+    if (id !== 'root' && included.length === 1 && included[0][0].startsWith('PhysicalObject:')) {
+      const objectId = included[0][0].slice(15);
+      const object = positions.get(objectId);
+      if (object && flexible.has(objectId)) object.width = Math.max(object.width, box.width - 2 * CLEARANCE);
+    }
     for (const key of members.get(id) ?? []) {
       const child = key.slice(key.indexOf(':') + 1);
       if (key.startsWith('Location:') && frames.has(child)) place(child, box.x, box.y);

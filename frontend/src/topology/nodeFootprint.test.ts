@@ -44,6 +44,7 @@ describe('node footprint presentation geometry', () => {
 
   it('includes the complete three-zone frame in Blueprint collision geometry', () => {
     const blueprint = node('blueprint', { x: 0, y: 0 }, { blueprint_presentation: { body: { width: 2, height: 1 }, panels: [{ x: 0, y: 0, width: 2, height: 1 }], slots: [] } });
+    blueprint.data.compositionDisplayWidth = 320;
     blueprint.measured = { width: 412, height: 160 };
     expect(nodeFootprint(blueprint)).toMatchObject({ width: 412, height: 160 });
   });

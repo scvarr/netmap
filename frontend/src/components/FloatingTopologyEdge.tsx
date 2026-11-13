@@ -20,7 +20,7 @@ import {
 } from '../topology/layout';
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
-import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, compositionWidthFromFootprint, blueprintNodeDisplayDimensions } from '../topology/blueprintDisplaySize';
+import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, blueprintNodeDisplayDimensions } from '../topology/blueprintDisplaySize';
 import { assistSegment, segmentAngle, segmentLength, type SegmentAssistResult } from '../topology/geometryAssist';
 import { assistBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
 import { findForeignRouteSnap, FOREIGN_BOUNDARY_HALF_SIDE_FLOW, FOREIGN_BOUNDARY_STROKE_FLOW, FOREIGN_WAYPOINT_RADIUS_FLOW, FOREIGN_WAYPOINT_STROKE_FLOW, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
@@ -42,6 +42,7 @@ const rayIntersection = (left: MapCableRouteWaypoint, leftAngle: number, right: 
 };
 
 export interface NodeRectangle {
+  compositionDisplayWidth?: number;
   x: number;
   y: number;
   width: number;
@@ -90,6 +91,7 @@ export const getFloatingEndpoints = (
 };
 
 const rectangle = (node: InternalNode<DeviceFlowNode>): NodeRectangle => ({
+  compositionDisplayWidth: node.data.compositionDisplayWidth,
   x: node.internals.positionAbsolute.x,
   y: node.internals.positionAbsolute.y,
   width: node.measured.width ?? node.width ?? LAYOUT_NODE_WIDTH,
@@ -106,7 +108,7 @@ export const getConnectionPointEndpoint = (
   const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId);
   if (slot && presentation) {
     const side = slot.external_attachment.side;
-    const composition = blueprintNodeDisplayDimensions(presentation, compositionWidthFromFootprint(box.width));
+    const composition = blueprintNodeDisplayDimensions(presentation, box.compositionDisplayWidth);
     return {
       x: box.x + OBJECT_NAME_ZONE_WIDTH + composition.width * slot.external_attachment.x,
       y: box.y + composition.height * slot.external_attachment.y,
@@ -126,7 +128,7 @@ export const getRenderedConnectionPoint = (
   const presentation = projection.attributes.blueprint_presentation;
   const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId);
   if (!slot || !presentation) return getConnectionPointEndpoint(projection, box, connectionPointId);
-  const composition = blueprintNodeDisplayDimensions(presentation, compositionWidthFromFootprint(box.width));
+  const composition = blueprintNodeDisplayDimensions(presentation, box.compositionDisplayWidth);
   const side = slot.external_attachment.side;
   return {
     x: box.x + OBJECT_NAME_ZONE_WIDTH + composition.width * slot.rendered_position.x,
@@ -438,6 +440,7 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, bulkPortNumbe
     const sourceNode = nodeById.get(edge.source), targetNode = nodeById.get(edge.target);
     if (!sourceNode || !targetNode) return [];
     const box = (node: DeviceFlowNode): NodeRectangle => ({
+      compositionDisplayWidth: node.data.compositionDisplayWidth,
       x: node.position.x, y: node.position.y,
       width: node.measured?.width ?? node.width ?? LAYOUT_NODE_WIDTH,
       height: node.measured?.height ?? node.height ?? LAYOUT_NODE_HEIGHT,
@@ -481,7 +484,7 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, bulkPortNumbe
         const source = nodes.find((node) => node.data.projection && physicalObjectIdForNode(node.data.projection) === pair.source.physicalObjectId);
         const target = nodes.find((node) => node.data.projection && physicalObjectIdForNode(node.data.projection) === pair.target.physicalObjectId);
         if (!source || !target) return null;
-        const rect = (node: DeviceFlowNode): NodeRectangle => ({ x: node.position.x, y: node.position.y, width: node.measured?.width ?? node.width ?? LAYOUT_NODE_WIDTH, height: node.measured?.height ?? node.height ?? LAYOUT_NODE_HEIGHT });
+        const rect = (node: DeviceFlowNode): NodeRectangle => ({ compositionDisplayWidth: node.data.compositionDisplayWidth, x: node.position.x, y: node.position.y, width: node.measured?.width ?? node.width ?? LAYOUT_NODE_WIDTH, height: node.measured?.height ?? node.height ?? LAYOUT_NODE_HEIGHT });
         const a = getRenderedConnectionPoint(source.data.projection, rect(source), pair.source.connectionPointId);
         const b = getRenderedConnectionPoint(target.data.projection, rect(target), pair.target.connectionPointId);
         return a && b ? <line key={index} data-testid="bulk-pair-preview" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ffca66" strokeWidth={2} strokeDasharray="7 5" opacity={0.9} pointerEvents="none" /> : null;

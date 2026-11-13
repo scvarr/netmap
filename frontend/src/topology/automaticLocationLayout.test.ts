@@ -127,3 +127,26 @@ it.each([1, 3])('keeps border headings and full equipment footprints separate at
     } else expect(sibling.x - rack.x - rack.width).toBe(20);
   }
 });
+
+
+describe('flexible cable reserve', () => {
+  const ls = [loc('rack'), loc('U42', 'rack'), loc('U40', 'rack')];
+  const ps = [placement('PP1', 'U42'), placement('SW1', 'U40')];
+  const os = [{ physicalObjectId: 'PP1', flexibleCableZone: true, rectangle: { x: 0, y: 0, width: 332, height: 24 } }, { physicalObjectId: 'SW1', flexibleCableZone: true, rectangle: { x: 0, y: 0, width: 572, height: 44 } }];
+  it('fills equal-width stacked Locations using only derived frame widths', () => {
+    const before = JSON.stringify({ ls, ps, os, settings });
+    const result = automaticLocationLayout(ls, ps, os, [], settings);
+    const a = result.positions.get('PP1')!, b = result.positions.get('SW1')!;
+    expect(a.width).toBe(572);
+    expect(a.x + a.width).toBe(b.x + b.width);
+    expect(a.height).toBe(24);
+    expect(a.x + a.width).toBe(result.frames.get('U42')!.x + result.frames.get('U42')!.width - 12);
+    expect(JSON.stringify({ ls, ps, os, settings })).toBe(before);
+  });
+  it('never stretches multiple objects across a horizontal container', () => {
+    const result = automaticLocationLayout([loc('rack')], [placement('PP1', 'rack'), placement('SW1', 'rack')], os, [], { ...settings, containers: { rack: { direction: 'HORIZONTAL', order: [] } } });
+    const a = result.positions.get('PP1')!, b = result.positions.get('SW1')!;
+    expect(a.width).toBe(332); expect(b.width).toBe(572);
+    expect(a.x + a.width).toBeLessThan(b.x);
+  });
+});

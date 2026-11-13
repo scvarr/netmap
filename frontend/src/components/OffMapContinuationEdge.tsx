@@ -13,6 +13,7 @@ import {
 import { getConnectionPointEndpoint, type NodeRectangle } from './FloatingTopologyEdge';
 
 const rectangle = (node: InternalNode<DeviceFlowNode>): NodeRectangle => ({
+  compositionDisplayWidth: node.data.compositionDisplayWidth,
   x: node.internals.positionAbsolute.x,
   y: node.internals.positionAbsolute.y,
   width: node.measured.width ?? node.width ?? LAYOUT_NODE_WIDTH,
