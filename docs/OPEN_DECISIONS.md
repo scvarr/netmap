@@ -491,5 +491,5 @@ ARCHITECTURE). For this core, populated cells share both maxima table-wide;
 empty cells are excluded from those maxima. This bounded rule does not select
 a persistent format or an insertion algorithm. DOC-LOC-03 remains OPEN;
 SLOC-02 resolves DTO/API and runtime integration for uniform tables. Interactive
-editing SLOC-03 is implemented on the milestone branch (outer-quarter targets, frozen gesture hit regions, no empty-track normalization; see ARCHITECTURE). Grid-specific partial-collapse selection UX and user acceptance
+editing SLOC-03 is implemented on the milestone branch (outer-quarter targets, frozen gesture hit regions, normalization limited to newly emptied source tracks; see ARCHITECTURE). Grid-specific partial-collapse selection UX and user acceptance
 remain OPEN. Existing visible_direct_elements semantics are retained.

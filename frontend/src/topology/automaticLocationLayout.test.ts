@@ -205,4 +205,16 @@ it('SLOC-03 preview and persisted reload share final nested geometry without mut
  const before=automaticLocationLayout(locs,ps,objects,[],original);
  const relative=(layout:typeof before) => {const b=layout.frames.get('B')!, child=layout.frames.get('child')!, object=layout.positions.get('b')!; return [child.x-b.x,child.y-b.y,object.x-b.x,object.y-b.y,object.width,object.height];};
  expect(relative(preview)).toEqual(relative(before));
+ expect(next.tables.root).toEqual([['A','B'],['C',null]]);
+ let current = next;
+ for (let i=0;i<10;i++) {
+   current = {...current,tables:{...current.tables,root:insertLocation(current.tables.root,'B','A','BELOW')}};
+   expect(current.tables.root).toEqual(original.tables.root);
+   const restored = automaticLocationLayout(locs,ps,objects,[],current);
+   expect(restored.frames.get('root')).toEqual(before.frames.get('root'));
+   expect(relative(restored)).toEqual(relative(before));
+   current = {...current,tables:{...current.tables,root:insertLocation(current.tables.root,'B','A','RIGHT')}};
+   expect(automaticLocationLayout(locs,ps,objects,[],current).frames.get('root')).toEqual(preview.frames.get('root'));
+ }
+
 });

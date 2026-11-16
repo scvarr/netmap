@@ -563,8 +563,12 @@ oscillation. Flow conversion accounts for pan/zoom. Buttons and boundary points
 retain their independent interactions.
 
 The pure `insertLocation` clears the source first, uses an immediately adjacent
-free cell if available, otherwise inserts a whole row or column. It preserves
-all empty tracks, including the vacated track: no sparse-history normalization.
+free cell if available, otherwise inserts a whole row or column. Before insertion
+it removes the source row and/or column only when clearing the source made that
+track entirely empty, then locates the anchor again. Pre-existing
+empty tracks and source tracks containing other Locations remain intact.
+Preview and save share this normalized table; repeated moves do not accumulate
+space from vacated tracks.
 Only the parent table changes; nested tables, hidden cells and hide_empty remain.
 Preview feeds the existing runtime adapter and SLOC-01, with a pointer-transparent
 ghost sized from the rebuilt frame. No preview fitView or network writes occur.

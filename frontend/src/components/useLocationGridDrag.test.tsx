@@ -29,8 +29,10 @@ it('saves once on drop, preserves nested table/hide_empty, locks until response'
  const save=vi.fn((_settings: UniformLocationGrid) => new Promise<void>(r => {resolve=r;})); const h=setup(save);
  fireEvent.pointerMove(window,{clientX:100,clientY:2});
  expect(save).not.toHaveBeenCalled();
+ const preview = h.result.current.preview;
  fireEvent.pointerUp(window,{clientX:100,clientY:2});
- expect(save).toHaveBeenCalledTimes(1); expect(save.mock.calls[0][0]).toMatchObject({hide_empty:true,tables:{A:[['child']],root:[['C'],['A'],['B'],[null]]}});
+ expect(save).toHaveBeenCalledWith(preview);
+ expect(save).toHaveBeenCalledTimes(1); expect(save.mock.calls[0][0]).toMatchObject({hide_empty:true,tables:{A:[['child']],root:[['C'],['A'],['B']]}});
  expect(h.result.current.busy).toBe(true);
  await act(async()=>resolve()); expect(h.result.current.preview).toBeNull(); h.unmount();
 });
