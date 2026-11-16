@@ -1,3 +1,4 @@
+import { useLocationGridArrangement } from './useLocationGridArrangement';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi } from 'vitest';
@@ -77,4 +78,20 @@ it('explicitly enables grid with canonical ID order without converting the legac
   expect(settings.mode).toBe('uniform_grid');
   expect(settings.tables.a).toEqual([['b'], ['same1']]);
   expect(initial).toHaveProperty('containers.a.order', ['Location:same1', 'Location:b']);
+});
+
+it('hosts one shared arrangement transaction only for grid, with pending lock and cancellation', async()=>{
+ const save=vi.fn().mockResolvedValue(undefined);
+ const grid:AutomaticLocationLayout={mode:'uniform_grid',version:1,hide_empty:false,tables:{root:[['a'],['other']]}};
+ function Harness({settings}:{settings:AutomaticLocationLayout}) {
+   const map=saved(settings);
+   const arrangement=useLocationGridArrangement({automatic:settings,variantId:'variant',locations,onAutomaticLayout:save},'map');
+   return <AutomaticLocationControls map={map} locations={locations} onSave={save} arrangement={arrangement}/>;
+ }
+ const view=render(<Harness settings={initial}/>);expect(screen.queryByLabelText('Расстановка')).toBeNull();
+ view.rerender(<Harness settings={grid}/>);fireEvent.click(screen.getByLabelText('Расстановка'));
+ expect(screen.getByRole('button',{name:'Готово'})).toBeInTheDocument();expect(save).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('button',{name:'Отмена'}));expect(screen.getByLabelText('Расстановка')).not.toBeChecked();expect(save).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByLabelText('Расстановка'));fireEvent.click(screen.getByRole('button',{name:'Готово'}));
+ await waitFor(()=>expect(save).toHaveBeenCalledOnce());await waitFor(()=>expect(screen.getByLabelText('Расстановка')).not.toBeChecked());
 });

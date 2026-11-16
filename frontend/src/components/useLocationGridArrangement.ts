@@ -39,3 +39,5 @@ export function useLocationGridArrangement(input: Input | undefined, scene?: str
   };
   return {preview, selected: preview ? selected : null, select, busy, error, enter, cancel, move, finish, canMove:(direction: GridDirection) => Boolean(operation(direction))};
 }
+
+export type LocationGridArrangement = ReturnType<typeof useLocationGridArrangement>;

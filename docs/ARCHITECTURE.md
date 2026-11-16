@@ -556,9 +556,14 @@ before writes. SLOC-03 interactive insertion is described below.
 ### SLOC-03 — uniform-grid arrangement mode
 
 **IMPLEMENTED (branch; external inspection and user interaction acceptance required).**
-L1 uniform grid has an explicit «Расстановка» / Arrange mode, off by default.
+L1 uniform grid has an explicit «Расстановка» / Arrange mode in the existing
+«Компоновка» panel, off by default; Done and Cancel sit beside it. MapPage owns
+one arrangement draft shared by that panel and TopologyCanvas.
 Select a Location heading (including a collapsed label) to show four compact
-arrows for that Location only. Collapse/configure and boundary editing remain
+arrows for that Location only. The toolbar measures the rendered heading and
+actions, sits on the selected frame top edge to their right, and uses a compact
+outside-corner placement when space is insufficient. It follows geometry and
+zoom in the foreground layer, with rectangular styling. Collapse/configure and boundary editing remain
 separate. Manual and legacy sequence behavior is unchanged. Structural pointer
 drag, ghost and coordinate hit testing have been removed.
 

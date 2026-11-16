@@ -1,6 +1,6 @@
 import { locationAtPoint } from '../topology/locationSelection';
-import { useLocationGridArrangement } from './useLocationGridArrangement';
-import { LocationArrangementArrows } from './LocationArrangementArrows';
+import type { LocationGridArrangement } from './useLocationGridArrangement';
+import { LocationArrangementToolbar } from './LocationArrangementToolbar';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   applyNodeChanges,
@@ -62,6 +62,7 @@ import { LocationProxyNode } from "./LocationProxyNode";
 import { normalizeLocationBoundaryAnchors, projectBoundaryWaypoint, resolveBoundaryWaypoint } from "../topology/locationBoundaryAnchors";
 
 interface TopologyCanvasProps {
+  arrangement?: LocationGridArrangement;
   document: TopologyProjectionDocument;
   selection: TopologySelection;
   onSelectionChange: (selection: TopologySelection) => void;
@@ -79,7 +80,7 @@ interface TopologyCanvasProps {
   /** New authoritative SavedMap placement snapshot, including variant switches and refreshes. */
   positionSnapshot?: readonly MapPlacement[];
   displayWidthOverrides?: Record<string, number>;
-  locationFrameInput?: { onAutomaticLayout?: (settings: import('../topology/savedMapTypes').UniformLocationGrid) => Promise<void>; automatic?: import('../topology/savedMapTypes').AutomaticLocationLayout | null; locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onBoundaryPlacement?: (id: string, placement: Pick<import('../topology/savedMapTypes').MapLocationGeometry, 'edge' | 'offset'>) => Promise<void>; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; };
+  locationFrameInput?: { automatic?: import('../topology/savedMapTypes').AutomaticLocationLayout | null; locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onBoundaryPlacement?: (id: string, placement: Pick<import('../topology/savedMapTypes').MapLocationGeometry, 'edge' | 'offset'>) => Promise<void>; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; };
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
   authoritativePositionRevision?: number;
@@ -126,7 +127,7 @@ const hasRenderableBounds = (bounds: FlowRectangle) =>
   Number.isFinite(bounds.width) && Number.isFinite(bounds.height) &&
   bounds.width > 0 && bounds.height > 0;
 
-export function TopologyCanvas({
+export function TopologyCanvas({ arrangement: sharedArrangement,
   document,
   selection,
   onSelectionChange,
@@ -186,7 +187,7 @@ export function TopologyCanvas({
   const [frameUiZoom, setFrameUiZoom] = useState(1);
   const [frameEditPreview, setFrameEditPreview] = useState<{ scene: string; id: string; geometry: import('../topology/savedMapTypes').MapLocationGeometry } | null>(null);
   const { fitBounds, fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
-  const arrangement = useLocationGridArrangement(locationFrameInput, sceneKey ?? topologyLayoutViewKey(document));
+  const arrangement = sharedArrangement ?? {preview:null,selected:null,busy:false,select:()=>{},canMove:()=>false,move:()=>{}};
   useEffect(() => { setFrameEditPreview(null); }, [locationFrameInput?.automatic, locationFrameInput?.variantId]);
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
@@ -689,14 +690,6 @@ export function TopologyCanvas({
         proOptions={{ hideAttribution: true }}
       >
         <Panel position="top-left">
-          {showLocationPresentation && automatic && automatic.mode === 'uniform_grid' && locationFrameInput?.onAutomaticLayout && <div className="map-utility-panel__actions">
-            <label><input type="checkbox" checked={Boolean(arrangement.preview)} disabled={arrangement.busy} onChange={e => e.target.checked ? arrangement.enter() : arrangement.cancel()} />{t('autoLocation.arrange')}</label>
-            {arrangement.preview && <>
-              <button type="button" className="topology-auto-layout" disabled={arrangement.busy} onClick={() => void arrangement.finish()}>{t('autoLocation.done')}</button>
-              <button type="button" className="topology-auto-layout" disabled={arrangement.busy} onClick={arrangement.cancel}>{t('autoLocation.cancel')}</button>
-            </>}
-            {arrangement.error && <span role="alert">{t('autoLocation.error')}</span>}
-          </div>}
           {!disableAutoLayout && (
             <button
               type="button"
@@ -737,7 +730,7 @@ export function TopologyCanvas({
         {arrangement.preview && <ViewportPortal><div className="location-arrangement-layer">
             {arrangement.selected && (() => {
               const frame = [...renderableFrames, ...locationPresentation.proxies.filter(p => !p.partial)].find(f => f.locationId === arrangement.selected);
-              return frame ? <div className="location-arrangement-arrows nodrag nopan" style={{ left: frame.bounds.x + frame.bounds.width - 110, top: frame.bounds.y - 46, transform: `scale(${Math.min(1, 1 / frameUiZoom)})` }}><LocationArrangementArrows canMove={arrangement.canMove} onMove={arrangement.move} /></div> : null;
+              return frame ? <LocationArrangementToolbar canvasRef={canvasRef} frame={frame} uiScale={Math.min(1, 1 / frameUiZoom)} canMove={arrangement.canMove} onMove={arrangement.move} /> : null;
             })()}
         </div></ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (
