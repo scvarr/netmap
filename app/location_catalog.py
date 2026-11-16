@@ -153,6 +153,7 @@ class LocationCatalog:
         return location
 
     def delete(self, location_id: uuid.UUID) -> None:
+        self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
         location = self._require_location(location_id, lock=True)
         child_id = self.session.scalar(
             select(Location.id)
@@ -186,6 +187,8 @@ class LocationCatalog:
             )
         self.session.delete(location)
         self.session.flush()
+        from app.saved_map_catalog import SavedMapCatalog
+        SavedMapCatalog(self.session).synchronize_uniform_grids()
 
     def get_physical_object_location(self, physical_object_id: uuid.UUID) -> PhysicalObject:
         return self._require_physical_object(physical_object_id)

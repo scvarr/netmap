@@ -534,7 +534,12 @@ without interpreting legacy direction/order. No migration is required.
 Runtime reconciliation retains surviving direct-child addresses, clears stale
 references, then inserts new direct children in immutable-ID order into the first
 free cell or appends a row. Reconciliation never mutates stored settings; the next
-settings save materializes the reconciled structure. New equipment uses an
+settings save materializes the reconciled structure. Canonical create/series,
+reparent and empty-Location delete also reconcile every stored grid variant in
+the canonical transaction, under hierarchy then UUID-ordered variant locks.
+Surviving cells retain addresses; stale cells become null, deleted-parent tables
+are removed, and missing children fill the first free cell or append a row.
+Manual and legacy settings are untouched; user saves remain strictly validated. New equipment uses an
 ID-sorted vertical sequence within its canonical Location. Complete rendered
 footprints feed SLOC-01; panels and objects retain dimensions. Populated siblings
 share both maxima; nested tables measure independently.

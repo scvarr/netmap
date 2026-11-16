@@ -66,7 +66,8 @@ class SavedMapCatalog:
 
     def create_variant(self, map_id: uuid.UUID, name: str, source_variant_id: uuid.UUID) -> MapPresentationVariant:
         self._require_map(map_id)
-        source = self._require_variant(map_id, source_variant_id)
+        # Serialize copying with canonical mutations before reading source JSON.
+        _, source = self._lock_physical_layout(map_id, source_variant_id)
         variant = MapPresentationVariant(map_id=map_id, name=name, automatic_layout=deepcopy(source.automatic_layout))
         self.session.add(variant)
         self._flush()
@@ -372,9 +373,27 @@ class SavedMapCatalog:
             self._store_frames(target_variant, states, frames, manual)
             self._flush()
 
+    def synchronize_uniform_grids(self):
+        """Caller holds the canonical hierarchy lock; variants lock in UUID order."""
+        from app.uniform_location_grid import reconcile_grid
+        locations = self.session.scalars(select(Location).order_by(Location.id)).all()
+        parents = {str(loc.id): str(loc.parent_location_id) if loc.parent_location_id else "root" for loc in locations}
+        # Lock before reading JSON, including variants without geometry/state rows.
+        variants = self.session.scalars(select(MapPresentationVariant)
+            .order_by(MapPresentationVariant.id).with_for_update()
+            .execution_options(populate_existing=True)).all()
+        for variant in variants:
+            settings = variant.automatic_layout
+            if settings is not None and settings.get("mode") == "uniform_grid":
+                reconciled = reconcile_grid(settings, parents)
+                if reconciled != settings:
+                    variant.automatic_layout = reconciled
+        self._flush()
+
     def synchronize_location_structure(self):
         """Canonical tree edits initialize presentation space, moving saved contents together."""
         locations = self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
+        self.synchronize_uniform_grids()
         parents = {location.id: location.parent_location_id for location in locations}
         variants = self.session.scalars(select(MapPresentationVariant).join(MapLocationState)
             .where(MapLocationState.geometry.is_not(None)).distinct().order_by(MapPresentationVariant.id)).all()
