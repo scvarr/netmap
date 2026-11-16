@@ -184,10 +184,10 @@ describe('MapPage SavedMap scope', () => {
     const locationDataSource: any = { loadLocations: vi.fn().mockResolvedValue([{ location_ref: roomRef, name: 'Room', type: null, parent_location_ref: null }]) };
     renderMapPage({ dataSource: { loadProjection: vi.fn(scopedProjection) }, savedMapDataSource: maps, locationDataSource }, `/map?map=${A}&view=physical`);
     fireEvent.click(await screen.findByRole('button', { name: 'configure room' }));
-    let dialog = screen.getByRole('dialog', { name: 'Настроить сворачивание' });
+    let dialog = screen.getByRole('dialog', { name: 'Настройки: Room' });
     expect(dialog).toHaveClass('map-dialog');
     expect(dialog.querySelector('.map-dialog__surface.map-location-dialog')).toBeInTheDocument();
-    expect(within(dialog).getByRole('heading')).toHaveTextContent('Настройка сворачивания: Room');
+    expect(within(dialog).getByRole('heading')).toHaveTextContent('Настройки: Room');
     const choices = dialog.querySelector('.map-location-dialog__choices')!;
     expect(choices.closest('.map-dialog__surface')).toBeInTheDocument();
     await within(dialog).findByLabelText('PP1');
@@ -195,7 +195,7 @@ describe('MapPage SavedMap scope', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Отмена' }));
     expect(setLocationState).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'configure room' }));
-    dialog = screen.getByRole('dialog', { name: 'Настроить сворачивание' });
+    dialog = screen.getByRole('dialog', { name: 'Настройки: Room' });
     await within(dialog).findByLabelText('PP1');
     fireEvent.click(within(dialog).getByText('PP1'));
     fireEvent.click(within(dialog).getByText('Child'));

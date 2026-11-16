@@ -1,3 +1,4 @@
+import { LocationSettingsDialog } from '../components/LocationSettingsDialog';
 import { LocationGridSorting } from '../components/LocationGridSorting';
 import { gridTables } from '../topology/uniformGridPresentation';
 import { useLocationGridArrangement } from '../components/useLocationGridArrangement';
@@ -2142,10 +2143,7 @@ function MapPageContent({
         mapOperation={mapOperation?.mapId === mapId ? mapOperation : null}
         onRetryMapRefresh={retryMapRefresh}
       />
-      {locationConfigId && viewMode === 'physical' && <div className="map-dialog" role="dialog" aria-modal="true" aria-label="Настроить сворачивание"><section className="map-dialog__surface map-location-dialog">
-        <h2>Настройка сворачивания: {locations?.find((location) => location.location_ref.entity_id === locationConfigId)?.name ?? locationConfigId}</h2>
-        {activeVariant?.automatic_layout?.mode === 'uniform_grid' && <LocationGridSorting key={locationConfigId} parent={locationConfigId} table={gridTables(locations ?? [], (locationArrangement.preview ?? activeVariant.automatic_layout).tables)[locationConfigId] ?? []} locations={locations ?? []} arrangement={locationArrangement} />}
-        <h3>{t('gridSort.collapse')}</h3>
+      {locationConfigId && viewMode === 'physical' && <LocationSettingsDialog key={locationConfigId} name={locations?.find(location => location.location_ref.entity_id === locationConfigId)?.name ?? locationConfigId} onClose={() => setLocationConfigId(null)} layout={activeVariant?.automatic_layout?.mode === 'uniform_grid' ? <LocationGridSorting parent={locationConfigId} table={gridTables(locations ?? [], (locationArrangement.preview ?? activeVariant.automatic_layout).tables)[locationConfigId] ?? []} locations={locations ?? []} arrangement={locationArrangement} /> : undefined}>
         <p>Оставить видимыми при сворачивании:</p>
         <div className="map-location-dialog__choices">
           {directLocationChoices === null ? <p>Загрузка…</p> : directLocationChoices.map(({ ref, label }) => {
@@ -2154,7 +2152,7 @@ function MapPageContent({
           })}
         </div>
         <div className="map-dialog__actions"><button type="button" disabled={locationStateBusy} onClick={() => setLocationConfigId(null)}>Отмена</button><button type="button" disabled={locationStateBusy || directLocationChoices === null} onClick={() => void writeLocationState(locationConfigId, locationStateFor(locationConfigId)?.collapsed ?? false, locationConfigVisible)}>Сохранить</button></div>
-      </section></div>}
+      </LocationSettingsDialog>}
     </main>
   );
 }

@@ -613,3 +613,13 @@ Validation: targeted computational, hook, controls and canvas tests plus Chromiu
 smoke on the real tiled canvas fixture. The fixture uses in-memory persistence;
 server round-trip/reload for SLOC-04 is not verified by that smoke. DOC-LOC-03
 remains OPEN; external acceptance is still required.
+
+SLOC-04 corrective UI: Location settings use separate Collapse/Layout tabs under
+“Settings: <Location name>”. Switching tabs retains mounted controls and the shared
+draft. Compact sort actions stay above a bounded table viewport with independent
+vertical/horizontal scrolling and sticky R/C headers. The dialog is constrained to
+the viewport. Layout explains that closing only reveals the preview; map-panel
+Done/Cancel remains the sole sorting persistence boundary. Collapse save retains
+its existing direct-reference behavior. Chromium checks cover 42 direct children,
+single/multiple columns at 1024×768 and 1600×900, including measured scroll offsets,
+visible actions, tab switching, close/preview, Cancel without writes and Done once.
