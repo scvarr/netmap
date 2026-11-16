@@ -468,7 +468,8 @@ Location допускают строки, столбцы и комбиниров
 стоек и несколькими рядами. Location остаётся универсальным: фиксированной
 taxonomy «стойка», «этаж», «кабинет», «U» не вводится.
 
-Пользователь перетаскивает Location сверху/снизу/слева/справа от другого элемента.
+Пользователь включает режим «Расстановка», выбирает Location и перемещает его
+стрелками вверх/вниз/влево/вправо по адресам соседних ячеек таблицы.
 Соседство локально соответствующей строке или столбцу: размещение справа от
 элемента не растягивает его на высоту всей группы. Ручной ввод абсолютных X/Y
 и обязательный выбор HORIZONTAL/VERTICAL технического root не требуются.
@@ -552,30 +553,34 @@ cable routes or free waypoints. Variant copies deep-copy JSON. Server save and
 workspace validation reject duplicate/foreign children, invalid cells and cycles
 before writes. SLOC-03 interactive insertion is described below.
 
-### SLOC-03 — interactive uniform-grid Location insertion
+### SLOC-03 — uniform-grid arrangement mode
 
 **IMPLEMENTED (branch; external inspection and user interaction acceptance required).**
-L1 uniform-grid headings (including collapsed labels) initiate pointer insertion
-among canonical direct siblings only. Outer quarter bands select ABOVE/BELOW/LEFT/RIGHT;
-the central half and areas outside sibling bounds reject drops. Corner ties prefer
-vertical. Hit regions are frozen at gesture start to avoid layout-driven target
-oscillation. Flow conversion accounts for pan/zoom. Buttons and boundary points
-retain their independent interactions.
+L1 uniform grid has an explicit «Расстановка» / Arrange mode, off by default.
+Select a Location heading (including a collapsed label) to show four compact
+arrows for that Location only. Collapse/configure and boundary editing remain
+separate. Manual and legacy sequence behavior is unchanged. Structural pointer
+drag, ghost and coordinate hit testing have been removed.
 
-The pure `insertLocation` clears the source first, uses an immediately adjacent
-free cell if available, otherwise inserts a whole row or column. Before insertion
-it removes the source row and/or column only when clearing the source made that
-track entirely empty, then locates the anchor again. Pre-existing
-empty tracks and source tracks containing other Locations remain intact.
-Preview and save share this normalized table; repeated moves do not accumulate
-space from vacated tracks.
-Only the parent table changes; nested tables, hidden cells and hide_empty remain.
-Preview feeds the existing runtime adapter and SLOC-01, with a pointer-transparent
-ghost sized from the rebuilt frame. No preview fitView or network writes occur.
-Drop writes the captured active variant through automatic-layout API once;
-repeat drags are blocked until response, then authoritative settings render.
-Escape, pointercancel, blur, invalid release, variant/settings or scene changes
-cancel the gesture. Failure restores persisted layout and displays an error.
-Mode changes remount frame editors and clear manual geometry preview; boundary
-edge/offset editing remains explicit and separate from structural saving.
-DOC-LOC-03 remains OPEN for user acceptance and other target capabilities.
+`moveGridLocation` uses the canonical parent's table address, never screen
+proximity. An arrow swaps with an occupied neighbor or moves into a free cell.
+At an outer edge it adds a row/column only if the normalized result differs;
+otherwise that arrow is disabled. Selection survives successive operations.
+`normalizeLocationTable` removes all wholly empty rows and columns, retaining
+nonempty track order and interior holes. This includes older empty tracks.
+Entering arrangement reconciles and normalizes a client working copy of the
+variant's tables; ordinary reads and variant switches do not normalize storage.
+Hidden/collapsed Location identities and cells survive, hide_empty is unchanged.
+Nested tables and equipment retain contents and independent layout sizing.
+
+Every arrow updates only the working copy, rendered via uniformGridPresentation
+and SLOC-01, with no separate geometry, fitView or per-arrow API writes.
+«Готово» / Done saves the complete working settings through the existing active
+variant automatic-layout API once, blocks repeat requests until confirmation,
+and exits. Even entry-only cleanup is persisted only by Done. Cancel discards
+all changes. Variant, layout/settings or scene changes discard the draft without
+saving; drafts cannot cross variants. API failure restores authoritative settings
+and displays an error. Server confirmation supplies the authoritative display.
+Boundary identity/edge/offset, canonical hierarchy/assignments, Cable and routes
+are untouched. DOC-LOC-03 remains OPEN for user acceptance; natural sorting,
+PhysicalObject movement, routing and cable combing remain separate capabilities.

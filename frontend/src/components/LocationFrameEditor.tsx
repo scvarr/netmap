@@ -6,8 +6,8 @@ import { FRAME_HEADER, FRAME_PADDING } from '../topology/locationFrameGeometry';
 import type { FlowRectangle } from '../topology/nodeFootprint';
 import { useI18n } from '../i18n';
 
-export function LocationFrameEditor({ automatic, onStructuralStart, frame, state, screenToFlowPosition, onSave, onSaveBoundary, actions, parentBounds, childBounds = [], onDraft, disabled, uiScale = 1 }: {
-  onStructuralStart?: (event: PointerEvent<HTMLElement>) => void;
+export function LocationFrameEditor({ automatic, onSelectLocation, frame, state, screenToFlowPosition, onSave, onSaveBoundary, actions, parentBounds, childBounds = [], onDraft, disabled, uiScale = 1 }: {
+  onSelectLocation?: () => void;
   automatic?: boolean; uiScale?: number;
   parentBounds?: FlowRectangle; childBounds?: readonly FlowRectangle[]; onDraft?: (geometry: MapLocationGeometry | null) => void; disabled?: boolean;
   frame: LocationFrame; state?: MapLocationState;
@@ -57,7 +57,7 @@ export function LocationFrameEditor({ automatic, onStructuralStart, frame, state
   };
   const handlers = { onPointerMove: move, onPointerUp: () => setDrag(null), onPointerCancel: () => { setDrag(null); setDraft(null); onDraft?.(null); } };
   return <div inert={disabled} className={'location-frame' + (selected ? ' location-frame--selected' : '')} data-location-id={frame.locationId} style={{ left: geometry.x, top: geometry.y, width: geometry.width, height: geometry.height }}>
-    <span style={{ transform: "translateY(-50%) scale(" + uiScale + ")", touchAction: 'none', transformOrigin: "left center" }} title={frame.canonicalPath ?? frame.label} className="location-frame__heading nodrag nopan" onPointerDown={e => onStructuralStart ? onStructuralStart(e) : start(e, 'move')} {...handlers}>
+    <span style={{ transform: "translateY(-50%) scale(" + uiScale + ")", cursor: automatic ? onSelectLocation ? 'pointer' : 'default' : undefined, touchAction: 'none', transformOrigin: "left center" }} title={frame.canonicalPath ?? frame.label} className="location-frame__heading nodrag nopan" onPointerDown={e => { if (onSelectLocation) { e.stopPropagation(); onSelectLocation(); } else start(e, 'move'); }} {...handlers}>
       <span className="location-frame__label">{frame.label}</span>
       <span onPointerDown={e => e.stopPropagation()}>{actions}</span>
     </span>

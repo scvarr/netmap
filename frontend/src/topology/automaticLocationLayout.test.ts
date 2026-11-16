@@ -1,4 +1,4 @@
-import { insertLocation } from './locationGridInsertion';
+import { moveGridLocation } from './locationGridArrangement';
 import { gridTables } from './uniformGridPresentation';
 import { describe, expect, it } from 'vitest';
 import { automaticLocationLayout } from './automaticLocationLayout';
@@ -197,7 +197,7 @@ it('SLOC-03 preview and persisted reload share final nested geometry without mut
  const ps=[placement('a','A'),placement('b','child')];
  const original = { mode:'uniform_grid' as const, version:1 as const, hide_empty:false, tables:{root:[['A'],['B'],['C']],B:[['child']]} };
  const snapshot=JSON.stringify(original);
- const next={...original,tables:{...original.tables,root:insertLocation(original.tables.root,'B','A','RIGHT')}};
+ const next={...original,tables:{...original.tables,root:moveGridLocation(original.tables.root,'B','RIGHT')!}};
  const preview=automaticLocationLayout(locs,ps,objects,[],next);
  const reload=automaticLocationLayout(locs,ps,objects,[],JSON.parse(JSON.stringify(next)));
  expect([...preview.frames]).toEqual([...reload.frames]); expect([...preview.positions]).toEqual([...reload.positions]);
@@ -205,15 +205,15 @@ it('SLOC-03 preview and persisted reload share final nested geometry without mut
  const before=automaticLocationLayout(locs,ps,objects,[],original);
  const relative=(layout:typeof before) => {const b=layout.frames.get('B')!, child=layout.frames.get('child')!, object=layout.positions.get('b')!; return [child.x-b.x,child.y-b.y,object.x-b.x,object.y-b.y,object.width,object.height];};
  expect(relative(preview)).toEqual(relative(before));
- expect(next.tables.root).toEqual([['A','B'],['C',null]]);
+ expect(next.tables.root).toEqual([['A',null],[null,'B'],['C',null]]);
  let current = next;
  for (let i=0;i<10;i++) {
-   current = {...current,tables:{...current.tables,root:insertLocation(current.tables.root,'B','A','BELOW')}};
+   current = {...current,tables:{...current.tables,root:moveGridLocation(current.tables.root,'B','LEFT')!}};
    expect(current.tables.root).toEqual(original.tables.root);
    const restored = automaticLocationLayout(locs,ps,objects,[],current);
    expect(restored.frames.get('root')).toEqual(before.frames.get('root'));
    expect(relative(restored)).toEqual(relative(before));
-   current = {...current,tables:{...current.tables,root:insertLocation(current.tables.root,'B','A','RIGHT')}};
+   current = {...current,tables:{...current.tables,root:moveGridLocation(current.tables.root,'B','RIGHT')!}};
    expect(automaticLocationLayout(locs,ps,objects,[],current).frames.get('root')).toEqual(preview.frames.get('root'));
  }
 

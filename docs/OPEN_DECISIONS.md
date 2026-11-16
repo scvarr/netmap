@@ -479,10 +479,10 @@ BaseTemplate не масштабируется, правая зона OBJECT-UX-
 C-UX-10 (Channel и составные маршруты) остаётся OPEN отдельной capability.
 
 **OPEN implementation decisions:** SLOC-02 defines versioned uniform-grid JSON in
-existing automatic_layout and connects it to L1 runtime; алгоритм локального вставления, нормализации групп,
-измерения и разрешения нехватки места требует bounded implementation contract.
-Открыты UX drop targets/preview, неоднозначного соседства и изменения ориентации
-последовательности объектов; точный алгоритм расчёски и геометрии подводов.
+existing automatic_layout and connects it to L1 runtime; SLOC-03 defines explicit arrangement mode with address-based arrow swaps/moves
+and full empty-track normalization of the working copy (see ARCHITECTURE).
+Открыты изменение ориентации последовательности объектов, точный алгоритм
+расчёски и геометрии подводов.
 Эти вопросы не отменяют продуктовый TARGET и не утверждают конкретное дерево,
 JSON schema, новую canonical entity или способ реализации. Phase A–I неизменны.
 
@@ -491,5 +491,5 @@ ARCHITECTURE). For this core, populated cells share both maxima table-wide;
 empty cells are excluded from those maxima. This bounded rule does not select
 a persistent format or an insertion algorithm. DOC-LOC-03 remains OPEN;
 SLOC-02 resolves DTO/API and runtime integration for uniform tables. Interactive
-editing SLOC-03 is implemented on the milestone branch (outer-quarter targets, frozen gesture hit regions, normalization limited to newly emptied source tracks; see ARCHITECTURE). Grid-specific partial-collapse selection UX and user acceptance
+editing SLOC-03 is implemented on the milestone branch (Arrange/Done/Cancel, selected-Location arrows, local working copy; see ARCHITECTURE). Grid-specific partial-collapse selection UX and user acceptance
 remain OPEN. Existing visible_direct_elements semantics are retained.

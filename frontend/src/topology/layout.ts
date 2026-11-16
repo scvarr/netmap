@@ -28,7 +28,7 @@ export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
   /** Composition width, independent of any derived cable-zone expansion. */
   compositionDisplayWidth?: number;
-  locationProxy?: { onStructuralStart?: (event: import('react').PointerEvent<HTMLElement>) => void; locationId: string; label: string; hiddenObjectCount: number; partial?: boolean; boundaryPointId?: string; boundaryEdge?: 'top' | 'right' | 'bottom' | 'left'; boundaryOffset?: number; traced?: boolean; expandLabel?: string; configureLabel?: string; onExpand?: () => void; onConfigure?: () => void };
+  locationProxy?: { onSelectLocation?: () => void; locationId: string; label: string; hiddenObjectCount: number; partial?: boolean; boundaryPointId?: string; boundaryEdge?: 'top' | 'right' | 'bottom' | 'left'; boundaryOffset?: number; traced?: boolean; expandLabel?: string; configureLabel?: string; onExpand?: () => void; onConfigure?: () => void };
   /** Physical SavedMap decoration derived from canonical Location context. */
   locationPresentationPath?: string;
   /** Temporary MapPage authoring state; deliberately separate from topology selection. */

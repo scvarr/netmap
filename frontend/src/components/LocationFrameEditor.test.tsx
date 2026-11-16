@@ -92,7 +92,7 @@ it('edits automatic boundary only, cancels, rolls back errors and saves edge/off
   vi.unstubAllGlobals();
 });
 
-it('clears manual edits across modes and keeps structural headings separate from boundary editing', () => {
+it('clears manual edits across modes and keeps arrangement selection separate from boundary editing', () => {
  vi.stubGlobal('PointerEvent', MouseEvent); HTMLElement.prototype.setPointerCapture = vi.fn();
  const start = vi.fn();
  const props = { frame: {locationId:'A',parentLocationId:null,pathLocationIds:['A'],label:'A',depth:0,bounds:{x:0,y:0,width:100,height:80}}, screenToFlowPosition:(p:{x:number;y:number})=>p, actions:<button>configure</button> };
@@ -100,7 +100,7 @@ it('clears manual edits across modes and keeps structural headings separate from
  const heading=h.container.querySelector('.location-frame__heading')!;
  fireEvent.pointerDown(heading,{clientX:0,clientY:0}); fireEvent.pointerMove(heading,{clientX:20,clientY:20});
  expect(screen.getByText('map.saveLocation')).toBeInTheDocument();
- h.rerender(<LocationFrameEditor {...props} automatic onStructuralStart={start}/>);
+ h.rerender(<LocationFrameEditor {...props} automatic onSelectLocation={start}/>);
  expect(screen.queryByText('map.saveLocation')).toBeNull();
  fireEvent.pointerDown(heading); expect(start).toHaveBeenCalledTimes(1);
  fireEvent.pointerDown(screen.getByText('configure')); expect(start).toHaveBeenCalledTimes(1);

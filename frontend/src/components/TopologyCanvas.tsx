@@ -1,4 +1,5 @@
-import { useLocationGridDrag } from './useLocationGridDrag';
+import { useLocationGridArrangement } from './useLocationGridArrangement';
+import { LocationArrangementArrows } from './LocationArrangementArrows';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import {
   applyNodeChanges,
@@ -184,7 +185,7 @@ export function TopologyCanvas({
   const [frameUiZoom, setFrameUiZoom] = useState(1);
   const [frameEditPreview, setFrameEditPreview] = useState<{ scene: string; id: string; geometry: import('../topology/savedMapTypes').MapLocationGeometry } | null>(null);
   const { fitBounds, fitView, getZoom, screenToFlowPosition, flowToScreenPosition } = useReactFlow();
-  const gridDrag = useLocationGridDrag(locationFrameInput, screenToFlowPosition, sceneKey);
+  const arrangement = useLocationGridArrangement(locationFrameInput, sceneKey ?? topologyLayoutViewKey(document));
   useEffect(() => { setFrameEditPreview(null); }, [locationFrameInput?.automatic, locationFrameInput?.variantId]);
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
@@ -382,9 +383,8 @@ export function TopologyCanvas({
       return [{ physicalObjectId, rectangle, flexibleCableZone: Boolean(node.data.projection.attributes.blueprint_presentation) }];
     }) : [];
   const locationPresentation = showLocationPresentation && locationFrameInput
-    ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationFrameInput.states ?? [], gridDrag.preview ?? locationFrameInput.automatic)
+    ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationFrameInput.states ?? [], arrangement.preview ?? locationFrameInput.automatic)
     : { frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map<string, string>() };
-  gridDrag.frames.current = [...locationPresentation.frames, ...locationPresentation.proxies.filter(p => !p.partial).map(p => ({ ...p, depth: 0, parentLocationId: locationFrameInput?.locations.find(l => l.location_ref.entity_id === p.locationId)?.parent_location_ref?.entity_id ?? null }))];
   const automatic = showLocationPresentation && locationFrameInput?.automatic;
   const baseFrameGeometries = automatic ? new Map([...locationPresentation.frames, ...locationPresentation.proxies.filter(p => !p.partial)].map(f => [f.locationId, { ...f.bounds, edge: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.edge ?? 'right' as const, offset: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.offset ?? .5 }])) : layoutLocationFrames(locationFrameInput?.locations ?? [], new Map(locationFrameInput?.states?.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : []) ?? []));
   const activeFrameEdit = frameEditPreview?.scene === presentationSceneKey && baseFrameGeometries.has(frameEditPreview.id) ? frameEditPreview : null;
@@ -426,10 +426,10 @@ export function TopologyCanvas({
     selected: selection?.type === "node" && selection.item.id === node.id,
   }));
   for (const proxy of locationPresentation.proxies) nodes.push({
-    id: proxyNodeId(proxy.locationId), type: 'locationProxy', style: { opacity: gridDrag.preview && gridDrag.moving === proxy.locationId ? 0 : undefined },
+    id: proxyNodeId(proxy.locationId), type: 'locationProxy',
     position: { x: proxy.bounds.x, y: proxy.bounds.y }, width: proxy.bounds.width, height: proxy.bounds.height,
     draggable: false, selectable: false,
-    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { onStructuralStart: automatic && automatic.mode === 'uniform_grid' && !proxy.partial ? e => gridDrag.start(e, proxy.locationId) : undefined, partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
+    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { onSelectLocation: arrangement.preview && !proxy.partial ? () => arrangement.select(proxy.locationId) : undefined, partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
   });
   const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const savedRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
@@ -680,10 +680,18 @@ export function TopologyCanvas({
         )}
         nodesConnectable={false}
         elementsSelectable={!annotationMode}
-        panOnDrag={!gridDrag.moving && !gridDrag.busy}
+        panOnDrag
         proOptions={{ hideAttribution: true }}
       >
         <Panel position="top-left">
+          {showLocationPresentation && automatic && automatic.mode === 'uniform_grid' && locationFrameInput?.onAutomaticLayout && <div className="map-utility-panel__actions">
+            <label><input type="checkbox" checked={Boolean(arrangement.preview)} disabled={arrangement.busy} onChange={e => e.target.checked ? arrangement.enter() : arrangement.cancel()} />{t('autoLocation.arrange')}</label>
+            {arrangement.preview && <>
+              <button type="button" className="topology-auto-layout" disabled={arrangement.busy} onClick={() => void arrangement.finish()}>{t('autoLocation.done')}</button>
+              <button type="button" className="topology-auto-layout" disabled={arrangement.busy} onClick={arrangement.cancel}>{t('autoLocation.cancel')}</button>
+            </>}
+            {arrangement.error && <span role="alert">{t('autoLocation.error')}</span>}
+          </div>}
           {!disableAutoLayout && (
             <button
               type="button"
@@ -702,18 +710,20 @@ export function TopologyCanvas({
         />
         {(renderableFrames.length > 0 || locationPresentation.proxies.length > 0) && <ViewportPortal>
           <div className="location-frame-layer" aria-hidden={!locationFrameInput?.onCollapse && !locationFrameInput?.onConfigure ? true : undefined}>
-            {gridDrag.error && <div role="alert">{t('autoLocation.error')}</div>}
-            {gridDrag.preview && gridDrag.moving && (() => { const box = gridDrag.frames.current.find(f => f.locationId === gridDrag.moving)?.bounds; return box ? <div className="location-frame" style={{ left: box.x, top: box.y, width: box.width, height: box.height, opacity: .4, borderStyle: 'dashed', pointerEvents: 'none' }} /> : null; })()}
+            {arrangement.selected && (() => {
+              const frame = [...renderableFrames, ...locationPresentation.proxies.filter(p => !p.partial)].find(f => f.locationId === arrangement.selected);
+              return frame ? <div className="location-arrangement-arrows nodrag nopan" style={{ left: frame.bounds.x + frame.bounds.width - 110, top: frame.bounds.y - 46, transform: `scale(${Math.min(1, 1 / frameUiZoom)})` }}><LocationArrangementArrows canMove={arrangement.canMove} onMove={arrangement.move} /></div> : null;
+            })()}
             {renderableFrames.map((frame) => {
               const collapsed = locationFrameInput?.states?.some((state) => state.location_ref.entity_id === frame.locationId && state.collapsed) ?? false;
               const toggleLabel = t(collapsed ? 'map.locationExpand' : 'map.locationCollapse', { name: frame.label });
               const configureLabel = t('map.locationConfigureCollapse', { name: frame.label });
-              return <div key={frame.locationId} style={{ opacity: gridDrag.preview && gridDrag.moving === frame.locationId ? 0 : undefined }}><LocationFrameEditor automatic={Boolean(automatic)} key={(locationFrameInput?.variantId ?? '') + (automatic ? automatic.mode ?? 'legacy' : 'manual') + frame.locationId} frame={frame} onStructuralStart={automatic && automatic.mode === 'uniform_grid' ? e => gridDrag.start(e, frame.locationId) : undefined}
+              return <div key={frame.locationId}><LocationFrameEditor automatic={Boolean(automatic)} key={(locationFrameInput?.variantId ?? '') + (automatic ? automatic.mode ?? 'legacy' : 'manual') + frame.locationId} frame={frame} onSelectLocation={arrangement.preview ? () => arrangement.select(frame.locationId) : undefined}
                 state={(() => { const state = locationFrameInput?.states?.find(state => state.location_ref.entity_id === frame.locationId); return state ? { ...state, geometry: editedFrameGeometries.get(frame.locationId)! } : undefined; })()}
                 uiScale={Math.min(1, 1 / frameUiZoom)}
                 parentBounds={frame.parentLocationId ? editedFrameGeometries.get(frame.parentLocationId) : undefined}
                 childBounds={(locationFrameInput?.locations ?? []).filter(l => l.parent_location_ref?.entity_id === frame.locationId).map<FlowRectangle>(l => editedFrameGeometries.get(l.location_ref.entity_id)!).concat(displayedPhysicalObjects.filter(object => locationFrameInput?.placements.some(p => p.physical_object_ref.entity_id === object.physicalObjectId && p.location_ref?.entity_id === frame.locationId)).map(object => object.rectangle))}
-                disabled={gridDrag.busy || Boolean(activeFrameEdit && activeFrameEdit.id !== frame.locationId)}
+                disabled={arrangement.busy || Boolean(activeFrameEdit && activeFrameEdit.id !== frame.locationId)}
                 onDraft={automatic ? undefined : geometry => setFrameEditPreview(geometry ? { scene: presentationSceneKey, id: frame.locationId, geometry } : null)}
                 screenToFlowPosition={screenToFlowPosition} onSave={locationFrameInput?.onGeometry} onSaveBoundary={locationFrameInput?.onBoundaryPlacement}
                 actions={<span className="location-frame__actions">
