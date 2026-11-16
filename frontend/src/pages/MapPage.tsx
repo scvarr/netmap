@@ -1,3 +1,5 @@
+import { LocationGridSorting } from '../components/LocationGridSorting';
+import { gridTables } from '../topology/uniformGridPresentation';
 import { useLocationGridArrangement } from '../components/useLocationGridArrangement';
 import { AutomaticLocationControls } from '../components/AutomaticLocationControls';
 import { RuntimePortTypes } from '../components/RuntimePortTypes';
@@ -2142,6 +2144,8 @@ function MapPageContent({
       />
       {locationConfigId && viewMode === 'physical' && <div className="map-dialog" role="dialog" aria-modal="true" aria-label="Настроить сворачивание"><section className="map-dialog__surface map-location-dialog">
         <h2>Настройка сворачивания: {locations?.find((location) => location.location_ref.entity_id === locationConfigId)?.name ?? locationConfigId}</h2>
+        {activeVariant?.automatic_layout?.mode === 'uniform_grid' && <LocationGridSorting key={locationConfigId} parent={locationConfigId} table={gridTables(locations ?? [], (locationArrangement.preview ?? activeVariant.automatic_layout).tables)[locationConfigId] ?? []} locations={locations ?? []} arrangement={locationArrangement} />}
+        <h3>{t('gridSort.collapse')}</h3>
         <p>Оставить видимыми при сворачивании:</p>
         <div className="map-location-dialog__choices">
           {directLocationChoices === null ? <p>Загрузка…</p> : directLocationChoices.map(({ ref, label }) => {

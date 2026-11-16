@@ -23,3 +23,22 @@ export function moveGridLocation(table: LocationTable, id: string, direction: Gr
   const next = normalizeLocationTable(rows);
   return JSON.stringify(next) === JSON.stringify(source) ? null : next;
 }
+
+export type GridSortScope = { kind: 'row' | 'column'; index: number } | { kind: 'all'; traversal: 'rows' | 'columns' };
+/** Pure address permutation: whole-table sorts retain the exact empty-cell mask. */
+export function sortLocationTable(table: LocationTable, names: ReadonlyMap<string, string>, scope: GridSortScope, descending = false): (string | null)[][] {
+  const next = table.map(row => [...row]);
+  const addresses: [number, number][] = [];
+  if (scope.kind === 'column' || (scope.kind === 'all' && scope.traversal === 'columns')) {
+    for (let c = 0; c < Math.max(0, ...table.map(row => row.length)); c++)
+      for (let r = 0; r < table.length; r++) if (c < table[r].length && (scope.kind === 'all' || c === scope.index)) addresses.push([r,c]);
+  } else {
+    table.forEach((row,r) => row.forEach((_,c) => { if (scope.kind === 'all' || r === scope.index) addresses.push([r,c]); }));
+  }
+  const collator = new Intl.Collator('ru', {numeric:true});
+  const ids = addresses.map(([r,c]) => table[r][c]).filter((id): id is string => id !== null);
+  ids.sort((a,b) => (descending ? -1 : 1) * (collator.compare(names.get(a) ?? '', names.get(b) ?? '') || (a < b ? -1 : a > b ? 1 : 0)));
+  const targets = scope.kind === 'all' ? addresses.filter(([r,c]) => table[r][c] !== null) : addresses;
+  targets.forEach(([r,c], i) => { next[r][c] = ids[i] ?? null; });
+  return next;
+}

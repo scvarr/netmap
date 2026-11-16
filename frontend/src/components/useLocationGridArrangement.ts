@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { LocationDocument } from '../topology/locationTypes';
 import type { AutomaticLocationLayout, UniformLocationGrid } from '../topology/savedMapTypes';
 import { gridTables } from '../topology/uniformGridPresentation';
-import { moveGridLocation, normalizeLocationTable, type GridDirection } from '../topology/locationGridArrangement';
+import { moveGridLocation, normalizeLocationTable, sortLocationTable, type GridSortScope, type GridDirection } from '../topology/locationGridArrangement';
 interface Input { automatic?: AutomaticLocationLayout | null; variantId?: string; locations: readonly LocationDocument[]; onAutomaticLayout?: (settings: UniformLocationGrid) => Promise<void> }
 export function useLocationGridArrangement(input: Input | undefined, scene?: string) {
   const key = JSON.stringify([scene, input?.variantId, input?.automatic]);
@@ -30,6 +30,16 @@ export function useLocationGridArrangement(input: Input | undefined, scene?: str
     return table ? {...preview, tables: {...preview.tables, [parent]:table}} : null;
   };
   const move = (direction: GridDirection) => { const settings = operation(direction); if (settings) setDraft({key, settings}); };
+  const sort = (parent: string, scope: GridSortScope, descending: boolean) => {
+    if (pending.current || input?.automatic?.mode !== 'uniform_grid' || !input.onAutomaticLayout) return;
+    const automatic = input.automatic;
+    setDraft(current => {
+      const base = current?.key === key ? current.settings : {...automatic, tables: gridTables(input.locations, automatic.tables)};
+      const names = new Map(input.locations.map(l => [l.location_ref.entity_id, l.name]));
+      return {key, settings: {...base, tables: {...base.tables, [parent]: sortLocationTable(base.tables[parent] ?? [], names, scope, descending)}}};
+    });
+    setError(false);
+  };
   const finish = async () => {
     if (pending.current || !preview || !input?.onAutomaticLayout) return;
     pending.current = true; setBusy(true); setError(false);
@@ -37,7 +47,7 @@ export function useLocationGridArrangement(input: Input | undefined, scene?: str
     catch { if (currentKey.current === key) { setDraft(null); select(null); setError(true); } }
     finally { pending.current = false; setBusy(false); }
   };
-  return {preview, selected: preview ? selected : null, select, busy, error, enter, cancel, move, finish, canMove:(direction: GridDirection) => Boolean(operation(direction))};
+  return {preview, selected: preview ? selected : null, select, busy, error, enter, cancel, move, sort, finish, canMove:(direction: GridDirection) => Boolean(operation(direction))};
 }
 
 export type LocationGridArrangement = ReturnType<typeof useLocationGridArrangement>;

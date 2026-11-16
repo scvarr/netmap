@@ -587,5 +587,29 @@ all changes. Variant, layout/settings or scene changes discard the draft without
 saving; drafts cannot cross variants. API failure restores authoritative settings
 and displays an error. Server confirmation supplies the authoritative display.
 Boundary identity/edge/offset, canonical hierarchy/assignments, Cable and routes
-are untouched. DOC-LOC-03 remains OPEN for user acceptance; natural sorting,
+are untouched. DOC-LOC-03 remains OPEN for user acceptance;
 PhysicalObject movement, routing and cable combing remain separate capabilities.
+
+### SLOC-04 — child Location sorting
+
+**IMPLEMENTED (branch; external inspection required).** Uniform-grid Location
+settings expose a Layout section alongside the unchanged collapse controls.
+The Layout panel exposes the technical root table. R1/C1 headers select indexed
+rows/columns; Entire table selects row-major or column-major traversal.
+Empty cells are explicit. Natural numeric name comparison uses the fixed Russian
+collation locale and immutable UUID ties; both ascending and descending are supported.
+Names remain arbitrary strings. No row/cell identities or taxonomy are introduced.
+
+A row/column sort changes only its region and sends nulls to its end. Whole-table
+sorting permutes occupied addresses only, retaining shape and the empty mask.
+All canonical children participate, including hidden/collapsed children; nested
+tables, assignments and geometry contracts remain unchanged. Sorting never runs
+on rename. The first sort atomically creates and updates the shared MapPage draft
+without entry normalization; subsequent sorts include arrow edits. Settings-dialog
+closure leaves this draft open. Only common Done writes once; Cancel and save
+failure restore authoritative settings. No backend/API/schema changes.
+
+Validation: targeted computational, hook, controls and canvas tests plus Chromium
+smoke on the real tiled canvas fixture. The fixture uses in-memory persistence;
+server round-trip/reload for SLOC-04 is not verified by that smoke. DOC-LOC-03
+remains OPEN; external acceptance is still required.

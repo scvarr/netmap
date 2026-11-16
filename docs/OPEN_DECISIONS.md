@@ -493,3 +493,9 @@ a persistent format or an insertion algorithm. DOC-LOC-03 remains OPEN;
 SLOC-02 resolves DTO/API and runtime integration for uniform tables. Interactive
 editing SLOC-03 is implemented on the milestone branch (Arrange/Done/Cancel, selected-Location arrows, local working copy; see ARCHITECTURE). Grid-specific partial-collapse selection UX and user acceptance
 remain OPEN. Existing visible_direct_elements semantics are retained.
+
+SLOC-04 implements explicit natural-name child Location sorting in uniform_grid:
+indexed row/column scopes and both whole-table traversals, common SLOC-03 draft,
+Done/Cancel and rollback. Whole-table empty masks are retained; first-sort entry
+therefore skips SLOC-03 empty-track normalization. No autosort on rename, canonical
+changes or new storage contracts. DOC-LOC-03 and external acceptance remain OPEN.

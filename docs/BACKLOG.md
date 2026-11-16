@@ -270,5 +270,13 @@ SLOC-02: **IMPLEMENTED (branch; external inspection required)** — versioned
 uniform-grid automatic_layout, server/workspace validation, L1 runtime adapter,
 explicit mode switch, live canonical reconciliation, variant copy/reload and
 targeted tests. Manual and legacy sequence contracts retained.
-SLOC-03: **IMPLEMENTED (branch; external inspection and user interaction acceptance required)** — explicit arrangement mode replacing structural drag/drop: selected-Location arrows, address-based swaps/moves, full empty-track cleanup in a local working copy, shared geometry, variant-only Done save, Cancel/error rollback. DOC-LOC-03 remains OPEN for user acceptance; natural sorting U01–U42 and other separate capabilities remain OPEN.
+SLOC-03: **IMPLEMENTED (branch; external inspection and user interaction acceptance required)** — explicit arrangement mode replacing structural drag/drop: selected-Location arrows, address-based swaps/moves, full empty-track cleanup in a local working copy, shared geometry, variant-only Done save, Cancel/error rollback. DOC-LOC-03 remains OPEN for user acceptance; other separate capabilities remain OPEN.
 Grid-specific partial-collapse selection UX remains OPEN; current semantics retained.
+
+SLOC-04: **IMPLEMENTED (branch; external inspection required)** — natural numeric
+name sorting of immediate child Location rows, columns and entire tables (both
+traversals/directions); explicit holes, indexed scope UI in Location settings and
+technical-root Layout panel; atomic automatic draft entry, combined arrow/sort
+preview, common Done/Cancel/error rollback. No backend changes. Targeted tests
+and Chromium fixture smoke cover the implementation; server reload validation is
+not covered by the in-memory smoke. DOC-LOC-03 remains OPEN.

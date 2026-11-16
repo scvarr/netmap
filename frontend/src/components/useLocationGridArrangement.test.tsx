@@ -43,3 +43,17 @@ it('discards on variant/layout changes without writes; manual and legacy cannot 
  }
  expect(h.save).not.toHaveBeenCalled();
 });
+
+it('atomically starts sorting with the full shape, combines moves, cancels or saves once',async()=>{
+ const h=setup();
+ act(()=>h.result.current.sort('root',{kind:'all',traversal:'rows'},true));
+ expect(h.result.current.preview?.tables.root).toEqual([[null],['C'],['B'],['A']]);
+ expect(h.result.current.preview?.tables.B).toEqual([['child']]);
+ act(()=>h.result.current.select('B')); act(()=>h.result.current.move('RIGHT'));
+ const moved=h.result.current.preview!;
+ act(()=>h.result.current.sort('root',{kind:'row',index:1},false));
+ expect(h.result.current.preview?.tables.B).toEqual(moved.tables.B);
+ act(()=>h.result.current.cancel()); expect(h.save).not.toHaveBeenCalled();
+ act(()=>h.result.current.sort('root',{kind:'all',traversal:'columns'},true));
+ await act(async()=>h.result.current.finish()); expect(h.save).toHaveBeenCalledTimes(1);
+});
