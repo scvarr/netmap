@@ -457,3 +457,31 @@ MPO→LC breakout, PON splitter, SAS shelves и duplex fiber/interface realizati
 AUTO-LOC-01 adds opt-in automatic composition of these frames per variant.
 Technical root, direction, mixed order and hide-empty settings are presentation
 only; they neither introduce Channel nor change the C-UX-10 channel target.
+
+
+## DOC-LOC-03 — Structural Location Composition
+
+**DECIDED TARGET / implementation OPEN.** Продуктовый контракт принят в
+[ARCHITECTURE](ARCHITECTURE.md#doc-loc-03--target-структурной-компоновки-location):
+локальное соседство сверху/снизу/слева/справа, смешанные строки/столбцы Location
+в одном родителе, простая упорядоченная последовательность непосредственных
+PhysicalObject, автоматические размеры и локальное выравнивание. Технический
+root не требует выбора направления. Визуальные группы и структура размещения
+принадлежат variant, не canonical hierarchy; assignment меняется явно.
+Скрытие и collapse не уничтожают структуру. CURRENT AUTO-LOC-01/02 не заменяется
+этим документационным решением и не объявляется реализацией TARGET.
+
+Отдельно согласована объектная кабельная геометрия: выход справа, расчёска
+над/под корпусом, визуальный жгут, object-relative подводы с выходом в свободное
+пространство Location без дополнительных полос внутри корпуса. Панель
+BaseTemplate не масштабируется, правая зона OBJECT-UX-01 может принимать
+дополнительную ширину. Cable независимы; расчёска не реализована.
+C-UX-10 (Channel и составные маршруты) остаётся OPEN отдельной capability.
+
+**OPEN implementation decisions:** формат хранения структуры и её представление
+в DTO/API не выбраны; алгоритм локального вставления, нормализации групп,
+измерения и разрешения нехватки места требует bounded implementation contract.
+Открыты UX drop targets/preview, неоднозначного соседства и изменения ориентации
+последовательности объектов; точный алгоритм расчёски и геометрии подводов.
+Эти вопросы не отменяют продуктовый TARGET и не утверждают конкретное дерево,
+JSON schema, новую canonical entity или способ реализации. Phase A–I неизменны.

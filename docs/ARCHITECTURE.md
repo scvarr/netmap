@@ -402,6 +402,8 @@ MapPresentationVariant остаётся компоновкой одной сет
 
 ### AUTO-LOC-01 — automatic Location composition
 
+**CURRENT.** Следующий DOC-LOC-03 описывает отдельный будущий TARGET.
+
 L1 Physical variants explicitly opt into `automatic_layout` (nullable JSONB on
 MapPresentationVariant). Null retains the existing manual contract and data.
 Settings contain `hide_empty` and per-container direction plus an ordered mixed
@@ -421,6 +423,8 @@ are disabled in automatic mode; server rejects explicit geometry/position writes
 Canonical assignment and connectivity remain independent of presentation.
 
 ### AUTO-LOC-02 — compact automatic geometry
+
+**CURRENT.**
 
 Automatic composition measures visible direct children bottom-up. VERTICAL
 aligns Location widths to the group's maximum required width; HORIZONTAL aligns
@@ -451,3 +455,51 @@ manual_bounds, equipment positions and cable routes are never written.
 Automatic frames remain derived; the geometry endpoint still rejects automatic
 frame edits. Point preview has Save/Cancel and error rollback. Boundary identity
 and independent cable route anchors are preserved. Manual editing is unchanged.
+
+
+## DOC-LOC-03 — TARGET структурной компоновки Location
+
+**DECIDED TARGET / implementation OPEN, не IMPLEMENTED.** Текущие
+AUTO-LOC-01/02 direction/order остаются CURRENT; они не реализуют описанную
+здесь структуру размещения. [Решения и открытые детали](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
+
+Location допускают строки, столбцы и комбинированную плиточную структуру внутри
+одного родителя: здание с этажами, этаж с кабинетами плиткой, серверная с группами
+стоек и несколькими рядами. Location остаётся универсальным: фиксированной
+taxonomy «стойка», «этаж», «кабинет», «U» не вводится.
+
+Пользователь перетаскивает Location сверху/снизу/слева/справа от другого элемента.
+Соседство локально соответствующей строке или столбцу: размещение справа от
+элемента не растягивает его на высоту всей группы. Ручной ввод абсолютных X/Y
+и обязательный выбор HORIZONTAL/VERTICAL технического root не требуются.
+Root допустим как presentation-контейнер, но не canonical Location.
+
+Непосредственные PhysicalObject одного Location образуют простую горизонтальную
+либо вертикальную последовательность с изменяемым порядком; смешанное двумерное
+дерево для них не требуется. Например, стойка содержит вертикальную
+последовательность Location U, а один U — три устройства горизонтально.
+
+Размеры прямоугольников определяет дочернее содержимое: строка согласует высоту,
+столбец — ширину; более крупный элемент расширяет соответствующую группу.
+Выравнивание локально группе, не глобально карте. Дополнительное пространство
+не масштабирует физическую панель BaseTemplate; в трёхзонном PhysicalObject
+ширина может отдаваться правой кабельной зоне согласно [OBJECT-UX-01](OBJECT-UX-01.md).
+
+Структура размещения и визуальные группы принадлежат MapPresentationVariant.
+Группы стоек/кабинетов не создают автоматически canonical Location. Canonical
+hierarchy, PhysicalObject assignment и connectivity не выводятся из геометрии.
+Перемещение внутри одного Location меняет только presentation; перенос
+PhysicalObject в другой canonical Location — отдельная явная операция.
+Скрытие пустых Location и collapse/expand сохраняют существующую смысловую
+разницу; перекомпоновка видимых элементов не уничтожает сохранённую структуру.
+
+### TARGET кабельной геометрии
+
+Отдельный согласованный TARGET, не реализация: объектная точка выхода на правой
+границе, автоматическая расчёска над/под корпусом, общий визуальный жгут и
+относительная к объекту геометрия подводов. Дополнительных верхних/нижних полос
+внутри PhysicalObject нет; подводы могут выходить за корпус в свободное
+пространство Location. Физические Cable остаются независимыми, общий жгут
+не объединяет identity или trace evidence. Это presentation, не новые endpoints.
+[Channel и составная маршрутизация C-UX-10](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
+остаются отдельной OPEN capability; расчёска также не IMPLEMENTED.

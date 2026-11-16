@@ -245,3 +245,17 @@ CAT-D: CableType как пользовательский справочник п
 и реализация остаются OPEN, остальные классификации этим решением не утверждены.
 
 AUTO-LOC-01 — **IMPLEMENTED (branch; external inspection required)**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative boundary anchors; independent copy/reopen; manual variants preserved. Channels and comb remain OPEN.
+
+
+## DOC-LOC-03 — реализация структурной компоновки
+
+**OPEN.** Один ограниченный implementation milestone для
+[согласованного TARGET](ARCHITECTURE.md#doc-loc-03--target-структурной-компоновки-location):
+структура размещения Location в variant, локальное соседство, строки/столбцы и
+плитка, простая последовательность непосредственных PhysicalObject,
+content-driven размеры без масштабирования панели, сохранение структуры при
+hide/collapse и независимость canonical assignment. До реализации согласовать
+[открытые детали хранения, алгоритма и UX](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
+CURRENT AUTO-LOC-01/02 не закрывают эту запись. Объектная расчёска не реализована;
+Channel и составная маршрутизация остаются в отдельном **C-UX-10 OPEN**.
+Новых этапов Phase A–I и расширения scope эта запись не вводит.
