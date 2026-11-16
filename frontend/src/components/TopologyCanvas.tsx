@@ -1,3 +1,4 @@
+import { locationAtPoint } from '../topology/locationSelection';
 import { useLocationGridArrangement } from './useLocationGridArrangement';
 import { LocationArrangementArrows } from './LocationArrangementArrows';
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
@@ -429,7 +430,7 @@ export function TopologyCanvas({
     id: proxyNodeId(proxy.locationId), type: 'locationProxy',
     position: { x: proxy.bounds.x, y: proxy.bounds.y }, width: proxy.bounds.width, height: proxy.bounds.height,
     draggable: false, selectable: false,
-    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { onSelectLocation: arrangement.preview && !proxy.partial ? () => arrangement.select(proxy.locationId) : undefined, partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
+    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { arrangementSelected: arrangement.selected === proxy.locationId, onSelectLocation: arrangement.preview && !proxy.partial ? () => arrangement.select(proxy.locationId) : undefined, partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
   });
   const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const savedRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
@@ -654,6 +655,10 @@ export function TopologyCanvas({
             return;
           }
           const anchor = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          if (arrangement.preview && !arrangement.busy) {
+            const id = locationAtPoint(locationFrameInput?.locations ?? [], [...renderableFrames, ...locationPresentation.proxies.filter(p => !p.partial)], anchor);
+            if (id) { arrangement.select(id); return; }
+          }
           onSelectionChange(null);
           onPaneClick?.(anchor);
         }}
@@ -709,16 +714,12 @@ export function TopologyCanvas({
           color="#25383c"
         />
         {(renderableFrames.length > 0 || locationPresentation.proxies.length > 0) && <ViewportPortal>
-          <div className="location-frame-layer" aria-hidden={!locationFrameInput?.onCollapse && !locationFrameInput?.onConfigure ? true : undefined}>
-            {arrangement.selected && (() => {
-              const frame = [...renderableFrames, ...locationPresentation.proxies.filter(p => !p.partial)].find(f => f.locationId === arrangement.selected);
-              return frame ? <div className="location-arrangement-arrows nodrag nopan" style={{ left: frame.bounds.x + frame.bounds.width - 110, top: frame.bounds.y - 46, transform: `scale(${Math.min(1, 1 / frameUiZoom)})` }}><LocationArrangementArrows canMove={arrangement.canMove} onMove={arrangement.move} /></div> : null;
-            })()}
+          <div className={"location-frame-layer" + (arrangement.preview ? " location-frame-layer--arranging" : "")} aria-hidden={!locationFrameInput?.onCollapse && !locationFrameInput?.onConfigure ? true : undefined}>
             {renderableFrames.map((frame) => {
               const collapsed = locationFrameInput?.states?.some((state) => state.location_ref.entity_id === frame.locationId && state.collapsed) ?? false;
               const toggleLabel = t(collapsed ? 'map.locationExpand' : 'map.locationCollapse', { name: frame.label });
               const configureLabel = t('map.locationConfigureCollapse', { name: frame.label });
-              return <div key={frame.locationId}><LocationFrameEditor automatic={Boolean(automatic)} key={(locationFrameInput?.variantId ?? '') + (automatic ? automatic.mode ?? 'legacy' : 'manual') + frame.locationId} frame={frame} onSelectLocation={arrangement.preview ? () => arrangement.select(frame.locationId) : undefined}
+              return <div key={frame.locationId}><LocationFrameEditor automatic={Boolean(automatic)} key={(locationFrameInput?.variantId ?? '') + (automatic ? automatic.mode ?? 'legacy' : 'manual') + frame.locationId} frame={frame} arrangementSelected={arrangement.selected === frame.locationId} onSelectLocation={arrangement.preview ? () => arrangement.select(frame.locationId) : undefined}
                 state={(() => { const state = locationFrameInput?.states?.find(state => state.location_ref.entity_id === frame.locationId); return state ? { ...state, geometry: editedFrameGeometries.get(frame.locationId)! } : undefined; })()}
                 uiScale={Math.min(1, 1 / frameUiZoom)}
                 parentBounds={frame.parentLocationId ? editedFrameGeometries.get(frame.parentLocationId) : undefined}
@@ -733,6 +734,12 @@ export function TopologyCanvas({
             })}
           </div>
         </ViewportPortal>}
+        {arrangement.preview && <ViewportPortal><div className="location-arrangement-layer">
+            {arrangement.selected && (() => {
+              const frame = [...renderableFrames, ...locationPresentation.proxies.filter(p => !p.partial)].find(f => f.locationId === arrangement.selected);
+              return frame ? <div className="location-arrangement-arrows nodrag nopan" style={{ left: frame.bounds.x + frame.bounds.width - 110, top: frame.bounds.y - 46, transform: `scale(${Math.min(1, 1 / frameUiZoom)})` }}><LocationArrangementArrows canMove={arrangement.canMove} onMove={arrangement.move} /></div> : null;
+            })()}
+        </div></ViewportPortal>}
         {document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT" && (textAnnotations.length > 0 || annotationMode) && (
           <ViewportPortal>
             <MapTextAnnotationLayer annotations={textAnnotations} previewAnnotation={annotationMode?.previewAnnotation} selectedAnnotationId={annotationMode?.selectedAnnotationId} interactiveAnnotationId={annotationMode?.editableAnnotationId} onAnnotationPointerDown={onAnnotationPointerDown} onAnnotationClick={(annotationId) => annotationMode?.onAnnotationSelect?.(annotationId)} />
