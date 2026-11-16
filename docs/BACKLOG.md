@@ -249,13 +249,16 @@ AUTO-LOC-01 — **IMPLEMENTED (branch; external inspection required)**. Explicit
 
 ## DOC-LOC-03 — реализация структурной компоновки
 
-**OPEN.** Один ограниченный implementation milestone для
+**OPEN.** Общая capability для реализации
 [согласованного TARGET](ARCHITECTURE.md#doc-loc-03--target-структурной-компоновки-location):
 структура размещения Location в variant, локальное соседство, строки/столбцы и
 плитка, простая последовательность непосредственных PhysicalObject,
 content-driven размеры без масштабирования панели, сохранение структуры при
 hide/collapse и независимость canonical assignment. До реализации согласовать
 [открытые детали хранения, алгоритма и UX](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
+После согласования открытых деталей реализация требует последующей декомпозиции
+на ограниченные последовательные milestones; их количество и техническое
+содержание этой записью не предрешаются.
 CURRENT AUTO-LOC-01/02 не закрывают эту запись. Объектная расчёска не реализована;
 Channel и составная маршрутизация остаются в отдельном **C-UX-10 OPEN**.
 Новых этапов Phase A–I и расширения scope эта запись не вводит.
