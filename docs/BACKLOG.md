@@ -262,3 +262,9 @@ hide/collapse и независимость canonical assignment. До реал�
 CURRENT AUTO-LOC-01/02 не закрывают эту запись. Объектная расчёска не реализована;
 Channel и составная маршрутизация остаются в отдельном **C-UX-10 OPEN**.
 Новых этапов Phase A–I и расширения scope эта запись не вводит.
+
+SLOC-01: isolated typed uniform-table computational core implemented, with
+recursive measurements, canonical-subtree population, compact empties and
+non-destructive hide/collapse. No runtime connection or persistence contract.
+DOC-LOC-03 remains OPEN; subsequent bounded work must define integration,
+persistence and user structural editing separately.

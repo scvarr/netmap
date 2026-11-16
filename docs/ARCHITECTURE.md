@@ -503,3 +503,21 @@ PhysicalObject в другой canonical Location — отдельная явн�
 не объединяет identity или trace evidence. Это presentation, не новые endpoints.
 [Channel и составная маршрутизация C-UX-10](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
 остаются отдельной OPEN capability; расчёска также не IMPLEMENTED.
+
+### SLOC-01 — isolated uniform Location table core
+
+`frontend/src/topology/locationGridLayout.ts` implements a pure, typed measurement
+core for later use by automaticLocationLayout; it is not connected to runtime.
+Its ephemeral input supplies canonical direct children as a sparse row/column
+table, canonical direct object footprints, minimum frame sizes and collapse.
+This is not a persistent schema. All populated visible cells share the maximum
+required width AND height across their entire table. Population includes objects
+in any canonical descendant, even collapsed ones; empty descendants alone do not
+count. Empty frames do not contribute to uniform maxima. Track extents include
+compact empty frames to prevent overlaps. Wholly invisible tracks are omitted;
+holes in active tracks retain their slot. Collapse uses minimum measured size
+before parent-table equalization. Nested tables retain independent inner sizes.
+Equipment footprints are retained without scaling; only Location frames expand.
+Coordinates are parent-local flow units, with no zoom or prior positions.
+AUTO-LOC-01/02 remain unchanged. DOC-LOC-03 remains OPEN: persistence, adapters,
+UI editing, partial-collapse selection and runtime integration are not implemented.

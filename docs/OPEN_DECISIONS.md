@@ -485,3 +485,9 @@ C-UX-10 (Channel и составные маршруты) остаётся OPEN �
 последовательности объектов; точный алгоритм расчёски и геометрии подводов.
 Эти вопросы не отменяют продуктовый TARGET и не утверждают конкретное дерево,
 JSON schema, новую canonical entity или способ реализации. Phase A–I неизменны.
+
+SLOC-01 implements only an isolated uniform-table measurement core (see
+ARCHITECTURE). For this core, populated cells share both maxima table-wide;
+empty cells are excluded from those maxima. This bounded rule does not select
+a persistent format or an insertion algorithm. DOC-LOC-03 remains OPEN;
+DTO/API, UI, partial-collapse selection and runtime integration remain unresolved.
