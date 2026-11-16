@@ -507,7 +507,7 @@ PhysicalObject в другой canonical Location — отдельная явн�
 ### SLOC-01 — isolated uniform Location table core
 
 `frontend/src/topology/locationGridLayout.ts` implements a pure, typed measurement
-core for later use by automaticLocationLayout; it is not connected to runtime.
+core used by the SLOC-02 runtime adapter.
 Its ephemeral input supplies canonical direct children as a sparse row/column
 table, canonical direct object footprints, minimum frame sizes and collapse.
 This is not a persistent schema. All populated visible cells share the maximum
@@ -519,5 +519,30 @@ holes in active tracks retain their slot. Collapse uses minimum measured size
 before parent-table equalization. Nested tables retain independent inner sizes.
 Equipment footprints are retained without scaling; only Location frames expand.
 Coordinates are parent-local flow units, with no zoom or prior positions.
-AUTO-LOC-01/02 remain unchanged. DOC-LOC-03 remains OPEN: persistence, adapters,
-UI editing, partial-collapse selection and runtime integration are not implemented.
+AUTO-LOC-01/02 remain unchanged. DOC-LOC-03 remains OPEN until interactive editing and external acceptance.
+
+### SLOC-02 — uniform grid runtime integration
+
+**IMPLEMENTED (branch; external inspection required).** L1 variants explicitly
+select manual, legacy sequence or uniform grid in the existing controls.
+The JSONB contract is `{mode: "uniform_grid", version: 1, hide_empty, tables}`;
+`tables` maps canonical parent UUIDs (or technical `root`) to arrays of rows of
+Location UUID/null cells. Legacy direction/order JSON and null manual settings
+retain their contract. Switching to grid initializes an ID-sorted single column,
+without interpreting legacy direction/order. No migration is required.
+
+Runtime reconciliation retains surviving direct-child addresses, clears stale
+references, then inserts new direct children in immutable-ID order into the first
+free cell or appends a row. Reconciliation never mutates stored settings; the next
+settings save materializes the reconciled structure. New equipment uses an
+ID-sorted vertical sequence within its canonical Location. Complete rendered
+footprints feed SLOC-01; panels and objects retain dimensions. Populated siblings
+share both maxima; nested tables measure independently.
+
+Hide-empty/full collapse preserve stored cells. Partial collapse filters existing
+visible_direct_elements without changing legacy semantics; a grid-specific
+selection editor remains OPEN. Boundary anchors reuse existing frame-relative
+edge/offset resolution. Grid changes never write placements, boundary identity,
+cable routes or free waypoints. Variant copies deep-copy JSON. Server save and
+workspace validation reject duplicate/foreign children, invalid cells and cycles
+before writes. Interactive cell editing, drag/drop and SLOC-03 remain outside scope.

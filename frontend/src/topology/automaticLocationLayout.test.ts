@@ -1,3 +1,4 @@
+import { gridTables } from './uniformGridPresentation';
 import { describe, expect, it } from 'vitest';
 import { automaticLocationLayout } from './automaticLocationLayout';
 import { resolveBoundaryWaypoint } from './locationBoundaryAnchors';
@@ -149,4 +150,43 @@ describe('flexible cable reserve', () => {
     expect(a.width).toBe(332); expect(b.width).toBe(572);
     expect(a.x + a.width).toBeLessThan(b.x);
   });
+});
+
+
+describe('uniform grid runtime integration', () => {
+  const grid = { mode: 'uniform_grid' as const, version: 1 as const, hide_empty: false, tables: { root: [['building', null, 'empty']] } };
+  it('uses real footprints through Location presentation and preserves settings across live additions', () => {
+    const frozen = JSON.stringify(grid);
+    const first = deriveLocationPresentation(locations, placements, objects, [], grid);
+    const room = first.frames.find(f => f.locationId === 'room')!.bounds;
+    expect(room.width).toBe(324);
+    expect(first.automaticPositions!.get('b')!.width).toBe(300);
+    const added = [...locations, loc('new')];
+    const next = automaticLocationLayout(added, [...placements, placement('large', 'empty')], [...objects, { physicalObjectId: 'large', rectangle: { x: 0, y: 0, width: 800, height: 400 } }], [], grid);
+    expect(next.frames.get('building')!.width).toBe(next.frames.get('empty')!.width);
+    expect(next.frames.has('new')).toBe(true);
+    expect(next.positions.get('large')!.width).toBe(800);
+    expect(JSON.stringify(grid)).toBe(frozen);
+    expect(deriveLocationPresentation(locations, placements, objects, [], JSON.parse(frozen))).toEqual(first);
+  });
+  it('preserves sparse addresses and collapse visibility without rewriting routes or structure', () => {
+    const state: MapLocationState = { location_ref: loc('room').location_ref, collapsed: true, visible_direct_elements: [{ entity_type: 'PhysicalObject', entity_id: 'b' }] };
+    const before = JSON.stringify(grid);
+    const layout = automaticLocationLayout(locations, placements, objects, [state], grid);
+    expect(layout.positions.has('a')).toBe(false);
+    expect(layout.positions.has('b')).toBe(true);
+    const hidden = automaticLocationLayout(locations, placements, objects, [], { ...grid, hide_empty: true });
+    expect(hidden.hidden.has('empty')).toBe(true);
+    expect(JSON.stringify(grid)).toBe(before);
+  });
+});
+
+
+it('reconciles new children into holes without moving surviving cells or mutating variants', () => {
+  const tables = { root: [[null, 'building'], ['empty']] };
+  const before = JSON.stringify(tables);
+  const next = gridTables([...locations, loc('added')], tables);
+  expect(next.root).toEqual([['added', 'building'], ['empty']]);
+  next.root[0][0] = null;
+  expect(JSON.stringify(tables)).toBe(before);
 });

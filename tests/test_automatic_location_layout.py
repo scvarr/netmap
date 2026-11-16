@@ -26,7 +26,8 @@ def test_variant_automatic_settings_copy_isolation_and_manual_roundtrip():
     assert next(v for v in variants if v['name'] == 'Основной').get('automatic_layout') is None
 
 
-def test_automatic_opt_in_preserves_canonical_data_boundary_and_manual_state():
+@pytest.mark.parametrize("grid", [False, True])
+def test_automatic_opt_in_preserves_canonical_data_boundary_and_manual_state(grid):
     from tests.test_map_location_states_e2e import location, assign, detail
     from tests.l1_builders import create_map, create_object_with_point, create_endpoint_cable
     from app.database import SessionLocal
@@ -44,6 +45,8 @@ def test_automatic_opt_in_preserves_canonical_data_boundary_and_manual_state():
     variant = before['active_variant_ref']['entity_id']
     endpoint = f'/v1/maps/{map_id}/presentation-variants/{variant}'
     settings = {"hide_empty": True, "containers": {parent: {"direction": "HORIZONTAL", "order": [f"Location:{child}"]}, child: {"direction": "VERTICAL", "order": [f"PhysicalObject:{obj}"]}}}
+    if grid:
+        settings = {"mode": "uniform_grid", "version": 1, "hide_empty": True, "tables": {parent: [[child]]}}
     with SessionLocal() as session:
         identities = (list(session.scalars(select(Cable.id))), list(session.scalars(select(Connection.id))))
     assert client.put(endpoint + '/automatic-layout', json=settings).status_code == 200
@@ -127,3 +130,41 @@ def test_boundary_placement_is_narrow_persistent_and_variant_owned():
     assert client.put(base + f'/locations/{uuid.uuid4()}/boundary-placement', json={"edge": "top", "offset": 0}).status_code == 422
     other = client.post('/v1/maps', json={"name": "Other boundary map"}).json()['map_ref']['entity_id']
     assert client.put(url.replace(map_id, other), json={"edge": "top", "offset": 1}).status_code == 422
+
+
+def test_uniform_grid_persistence_validation_copy_and_portability():
+    from tests.test_map_location_states_e2e import location
+    from app.database import SessionLocal
+    from app.workspace_portability import export_package, validate_package, import_package, reset_dataset, PackageError
+    from copy import deepcopy
+    parent = location("Grid building")
+    child = location("Grid room", parent)
+    created = client.post('/v1/maps', json={"name": "Grid"}).json()
+    map_id = created['map_ref']['entity_id']
+    variant = created['active_variant_ref']['entity_id']
+    endpoint = f'/v1/maps/{map_id}/presentation-variants/{variant}/automatic-layout'
+    settings = {"mode": "uniform_grid", "version": 1, "hide_empty": False, "tables": {"root": [[parent]], parent: [[None, child], [None]]}}
+    response = client.put(endpoint, json=settings)
+    assert response.status_code == 200, response.text
+    before = response.json()
+    for tables in [{parent: [[child, child]]}, {"root": [[child]]}, {parent: [[123]]}, {parent: ["bad"]}]:
+        assert client.put(endpoint, json={**settings, "tables": tables}).status_code == 422
+        after = client.get(f'/v1/maps/{map_id}').json()
+        for key in ('variants', 'placements', 'cable_routes'):
+            assert after[key] == before[key]
+    copied = client.post(f'/v1/maps/{map_id}/presentation-variants', json={"name": "Grid copy", "source_variant_id": variant}).json()
+    assert copied['automatic_layout'] == settings
+    assert client.put(endpoint, json={**settings, "hide_empty": True}).status_code == 200
+    variants = client.get(f'/v1/maps/{map_id}').json()['variants']
+    assert next(v for v in variants if v['name'] == 'Grid copy')['automatic_layout'] == settings
+    with SessionLocal() as session:
+        package = export_package(session)
+    validate_package(package)
+    broken = deepcopy(package)
+    next(v for v in broken['presentation']['MapPresentationVariant'] if v['id'] == variant)['automatic_layout']['tables'] = {"root": [[child]]}
+    with pytest.raises(PackageError):
+        validate_package(broken)
+    with SessionLocal.begin() as session:
+        reset_dataset(session)
+        import_package(session, package)
+    assert client.get(f'/v1/maps/{map_id}').json()['variants'] == variants

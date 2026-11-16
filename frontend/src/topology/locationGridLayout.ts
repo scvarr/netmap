@@ -13,6 +13,8 @@ export interface LocationGridNode {
   readonly directObjects: readonly GridSize[];
   readonly children: readonly (readonly (LocationGridNode | null)[])[];
   readonly collapsed?: boolean;
+  readonly visibleChildren?: readonly string[];
+  readonly visibleObjects?: readonly number[];
 }
 
 export interface LocationGridResult {
@@ -27,7 +29,7 @@ export interface LocationGridResult {
 
 const SIDE = 12, TOP = 24, COLUMN_GAP = 20, ROW_GAP = 12;
 
-/** Bottom-up measurement and table-wide equalization. No runtime integration.
+/** Bottom-up measurement and table-wide equalization. Runtime inputs are supplied by uniformGridPresentation.
  * Hide-empty removes wholly invisible tracks, retaining holes in active tracks.
  * Collapse measures the minimum frame before its parent's uniform sizing.
  */
@@ -44,7 +46,7 @@ export function layoutLocationGrid(root: LocationGridNode, hideEmpty = false): L
     const cells = node.children.flatMap((row, r) => row.flatMap((child, c) =>
       child ? [{ r, c, result: measure(child) }] : []));
     const populated = node.directObjects.length > 0 || cells.some(cell => cell.result.populated);
-    const shown = node.collapsed ? [] : cells.filter(cell => !hideEmpty || cell.result.populated);
+    const shown = node.collapsed ? [] : cells.filter(cell => (!hideEmpty || cell.result.populated) && (!node.visibleChildren || node.visibleChildren.includes(cell.result.id)));
     const filled = shown.filter(cell => cell.result.populated);
     const width = Math.max(0, ...filled.map(cell => cell.result.bounds.width));
     const height = Math.max(0, ...filled.map(cell => cell.result.bounds.height));
@@ -76,7 +78,7 @@ export function layoutLocationGrid(root: LocationGridNode, hideEmpty = false): L
     };
     const columns = offsets(columnWidths, COLUMN_GAP), rows = offsets(rowHeights, ROW_GAP);
     let bottom = SIDE;
-    const objects = node.collapsed ? [] : node.directObjects.map(size => {
+    const objects = node.collapsed ? [] : node.directObjects.filter((_, i) => !node.visibleObjects || node.visibleObjects.includes(i)).map(size => {
       const box = { x: SIDE, y: bottom, width: size.width, height: size.height };
       bottom += size.height + ROW_GAP;
       return box;

@@ -25,6 +25,14 @@ const automaticLayout = (value: unknown): import('./savedMapTypes').AutomaticLoc
   if (value === null || value === undefined) return value;
   const item = object(value, 'automatic_layout');
   if (typeof item.hide_empty !== 'boolean') malformed('automatic_layout.hide_empty must be boolean');
+  if (item.mode === 'uniform_grid') {
+    if (item.version !== 1) malformed('Unsupported grid version');
+    const tables = object(item.tables, 'grid tables');
+    for (const rows of Object.values(tables)) {
+      if (!Array.isArray(rows) || !rows.every(row => Array.isArray(row) && row.every(id => id === null || typeof id === 'string'))) malformed('Invalid grid cells');
+    }
+    return item as unknown as import('./savedMapTypes').UniformLocationGrid;
+  }
   const containers = object(item.containers, 'automatic_layout.containers');
   for (const entry of Object.values(containers)) {
     const config = object(entry, 'layout container');

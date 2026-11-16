@@ -266,5 +266,9 @@ Channel и составная маршрутизация остаются в о�
 SLOC-01: isolated typed uniform-table computational core implemented, with
 recursive measurements, canonical-subtree population, compact empties and
 non-destructive hide/collapse. No runtime connection or persistence contract.
-DOC-LOC-03 remains OPEN; subsequent bounded work must define integration,
-persistence and user structural editing separately.
+SLOC-02: **IMPLEMENTED (branch; external inspection required)** — versioned
+uniform-grid automatic_layout, server/workspace validation, L1 runtime adapter,
+explicit mode switch, live canonical reconciliation, variant copy/reload and
+targeted tests. Manual and legacy sequence contracts retained.
+DOC-LOC-03 remains OPEN for SLOC-03 interactive structural editing and acceptance.
+Grid-specific partial-collapse selection UX remains OPEN; current semantics retained.

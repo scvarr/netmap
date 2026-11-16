@@ -259,10 +259,21 @@ class AutomaticLocationLayoutEntry(BaseModel):
     order: list[str] = Field(default_factory=list)
 
 
-class AutomaticLocationLayout(BaseModel):
+class LegacyAutomaticLocationLayout(BaseModel):
     model_config = ConfigDict(extra="forbid")
     hide_empty: bool = False
     containers: dict[str, AutomaticLocationLayoutEntry] = Field(default_factory=dict)
+
+
+class UniformLocationGrid(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["uniform_grid"]
+    version: Literal[1]
+    hide_empty: bool = False
+    tables: dict[str, list[list[uuid.UUID | None]]] = Field(default_factory=dict)
+
+
+AutomaticLocationLayout = LegacyAutomaticLocationLayout | UniformLocationGrid
 
 
 class MapPresentationVariantDocument(BaseModel):

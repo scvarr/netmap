@@ -7,7 +7,7 @@ import type { LocationDocument } from '../topology/locationTypes';
 const location = (id: string, name: string, parent?: string): LocationDocument => ({ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: id }, name, type: null, parent_location_ref: parent ? { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: parent } : null });
 const locations = [location('a','8'),location('b','808','a'),location('c','823','b'),location('d','U42','c'),location('u10','U10','d'),location('u2','U2','d'),location('other','Other'),location('same1','Same','a'),location('same2','Same','other')];
 const initial: AutomaticLocationLayout = { hide_empty: false, containers: { a: { direction: 'HORIZONTAL', order: ['Location:same1','Location:b'] }, other: { direction: 'VERTICAL', order: ['Location:same2'] } } };
-const saved = (settings = initial): SavedMap => ({ map_ref: { entity_type: 'SavedMap', entity_id: 'map' }, active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: 'variant' }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant', entity_id: 'variant' }, name: 'Test', automatic_layout: settings }], placements: [], cable_routes: [], text_annotations: [], name: 'Test', created_at: '', updated_at: '' });
+const saved = (settings: AutomaticLocationLayout = initial): SavedMap => ({ map_ref: { entity_type: 'SavedMap', entity_id: 'map' }, active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: 'variant' }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant', entity_id: 'variant' }, name: 'Test', automatic_layout: settings }], placements: [], cable_routes: [], text_annotations: [], name: 'Test', created_at: '', updated_at: '' });
 const node = (path: string) => screen.getByRole('treeitem', { name: 'Корень карты' + path });
 const expand = (name: string) => fireEvent.click(screen.getByRole('button', { name: `Развернуть ${name}` }));
 describe('automatic layout container picker', () => {
@@ -64,4 +64,17 @@ describe('automatic layout container picker', () => {
     expect(reloaded[0].parentElement?.parentElement).toHaveTextContent('Same');
     expect(reloaded[1].parentElement?.parentElement).toHaveTextContent('808');
   });
+});
+
+
+it('explicitly enables grid with canonical ID order without converting the legacy sequence', async () => {
+  const onSave = vi.fn().mockResolvedValue(undefined);
+  render(<AutomaticLocationControls map={saved()} locations={locations} onSave={onSave} />);
+  expect(onSave).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Режим компоновки' }), { target: { value: 'uniform_grid' } });
+  await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+  const settings = onSave.mock.calls[0][0];
+  expect(settings.mode).toBe('uniform_grid');
+  expect(settings.tables.a).toEqual([['b'], ['same1']]);
+  expect(initial).toHaveProperty('containers.a.order', ['Location:same1', 'Location:b']);
 });

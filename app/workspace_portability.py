@@ -10,6 +10,8 @@ import uuid
 from datetime import datetime
 from enum import Enum
 
+from pydantic import TypeAdapter
+
 from sqlalchemy import delete, insert, select, text
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.sqltypes import JSON
@@ -209,7 +211,7 @@ def validate_package(package: object) -> dict:
             row = {field: _decode(record[field], columns[field], f"{name}.{field}") for field in fields}
             if model is models.MapPresentationVariant and row["automatic_layout"] is not None:
                 try:
-                    row["automatic_layout"] = AutomaticLocationLayout.model_validate(row["automatic_layout"]).model_dump()
+                    row["automatic_layout"] = TypeAdapter(AutomaticLocationLayout).validate_python(row["automatic_layout"]).model_dump(mode="json")
                 except ValidationError as error:
                     raise PackageError("Invalid MapPresentationVariant.automatic_layout settings") from error
             if model is models.PortType:
@@ -247,6 +249,14 @@ def validate_package(package: object) -> dict:
     if any((row["base_revision_id"], row["panel_key"]) not in panel_memberships for row in result["built_in_endpoint_definitions"]):
         raise PackageError("BuiltInEndpointDefinition.panel_key refers to a panel in another version")
     locations = {row["id"]: row["parent_location_id"] for row in result["locations"]}
+    from app.uniform_location_grid import validate_grid
+    for variant in result["map_presentation_variants"]:
+        settings = variant.get("automatic_layout")
+        if settings and settings.get("mode") == "uniform_grid":
+            try:
+                validate_grid(settings, {str(k): str(v) if v else "root" for k, v in locations.items()})
+            except ValueError as error:
+                raise PackageError(str(error)) from error
     for location_id in locations:
         seen = set()
         current = location_id

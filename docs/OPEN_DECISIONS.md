@@ -478,8 +478,8 @@ BaseTemplate не масштабируется, правая зона OBJECT-UX-
 дополнительную ширину. Cable независимы; расчёска не реализована.
 C-UX-10 (Channel и составные маршруты) остаётся OPEN отдельной capability.
 
-**OPEN implementation decisions:** формат хранения структуры и её представление
-в DTO/API не выбраны; алгоритм локального вставления, нормализации групп,
+**OPEN implementation decisions:** SLOC-02 defines versioned uniform-grid JSON in
+existing automatic_layout and connects it to L1 runtime; алгоритм локального вставления, нормализации групп,
 измерения и разрешения нехватки места требует bounded implementation contract.
 Открыты UX drop targets/preview, неоднозначного соседства и изменения ориентации
 последовательности объектов; точный алгоритм расчёски и геометрии подводов.
@@ -490,4 +490,6 @@ SLOC-01 implements only an isolated uniform-table measurement core (see
 ARCHITECTURE). For this core, populated cells share both maxima table-wide;
 empty cells are excluded from those maxima. This bounded rule does not select
 a persistent format or an insertion algorithm. DOC-LOC-03 remains OPEN;
-DTO/API, UI, partial-collapse selection and runtime integration remain unresolved.
+SLOC-02 resolves DTO/API and runtime integration for uniform tables. Interactive
+editing (SLOC-03), grid-specific partial-collapse selection UX and acceptance
+remain OPEN. Existing visible_direct_elements semantics are retained.

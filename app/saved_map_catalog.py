@@ -98,7 +98,13 @@ class SavedMapCatalog:
             parents = {str(location.id): str(location.parent_location_id) if location.parent_location_id else "root" for location in locations}
             assignments = {str(key): str(parent) if parent else "root" for key, parent in self.session.execute(
                 select(PhysicalObject.id, PhysicalObject.location_id).join(MapPlacement, MapPlacement.physical_object_id == PhysicalObject.id).where(MapPlacement.map_id == map_id))}
-            for container, entry in settings["containers"].items():
+            if settings.get("mode") == "uniform_grid":
+                from app.uniform_location_grid import validate_grid
+                try:
+                    validate_grid(settings, parents)
+                except ValueError as error:
+                    raise ValidationError(str(error)) from error
+            for container, entry in settings.get("containers", {}).items():
                 if container != "root" and container not in parents:
                     raise ValidationError("Unknown layout container")
                 order = entry["order"]

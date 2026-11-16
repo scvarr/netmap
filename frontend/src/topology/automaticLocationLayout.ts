@@ -1,3 +1,4 @@
+import { uniformGridPresentation } from './uniformGridPresentation';
 import type { LocationDocument } from './locationTypes';
 import type { AutomaticLocationLayout, MapLocationState, MapPlacement } from './savedMapTypes';
 import type { DisplayedPhysicalObject } from './locationFrames';
@@ -13,6 +14,7 @@ const MIN_HEIGHT = 32;
 
 /** Technical root is presentation only. Identity and canonical parents are inputs. */
 export function automaticLocationLayout(locations: readonly LocationDocument[], placements: readonly MapPlacement[], objects: readonly DisplayedPhysicalObject[], states: readonly MapLocationState[], settings: AutomaticLocationLayout) {
+  if (settings.mode === 'uniform_grid') return uniformGridPresentation(locations, placements, objects, states, settings);
   const byId = new Map(locations.map(l => [l.location_ref.entity_id, l]));
   const stateById = new Map(states.map(s => [s.location_ref.entity_id, s]));
   const members = new Map<string, string[]>();

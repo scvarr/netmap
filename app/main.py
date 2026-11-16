@@ -529,7 +529,7 @@ def get_map_location_direct_elements(map_id: uuid.UUID, variant_id: uuid.UUID, l
 def set_automatic_location_layout(map_id: uuid.UUID, variant_id: uuid.UUID, query: AutomaticLocationLayout | None = Body(default=None), session: Session = Depends(get_session)):
     with session.begin():
         catalog = SavedMapCatalog(session)
-        catalog.set_automatic_layout(map_id, variant_id, query.model_dump() if query else None)
+        catalog.set_automatic_layout(map_id, variant_id, query.model_dump(mode="json") if query else None)
         return _saved_map_document(catalog.detail(map_id, variant_id))
 
 
