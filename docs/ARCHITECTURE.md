@@ -550,4 +550,28 @@ selection editor remains OPEN. Boundary anchors reuse existing frame-relative
 edge/offset resolution. Grid changes never write placements, boundary identity,
 cable routes or free waypoints. Variant copies deep-copy JSON. Server save and
 workspace validation reject duplicate/foreign children, invalid cells and cycles
-before writes. Interactive cell editing, drag/drop and SLOC-03 remain outside scope.
+before writes. SLOC-03 interactive insertion is described below.
+
+### SLOC-03 — interactive uniform-grid Location insertion
+
+**IMPLEMENTED (branch; external inspection and user interaction acceptance required).**
+L1 uniform-grid headings (including collapsed labels) initiate pointer insertion
+among canonical direct siblings only. Outer quarter bands select ABOVE/BELOW/LEFT/RIGHT;
+the central half and areas outside sibling bounds reject drops. Corner ties prefer
+vertical. Hit regions are frozen at gesture start to avoid layout-driven target
+oscillation. Flow conversion accounts for pan/zoom. Buttons and boundary points
+retain their independent interactions.
+
+The pure `insertLocation` clears the source first, uses an immediately adjacent
+free cell if available, otherwise inserts a whole row or column. It preserves
+all empty tracks, including the vacated track: no sparse-history normalization.
+Only the parent table changes; nested tables, hidden cells and hide_empty remain.
+Preview feeds the existing runtime adapter and SLOC-01, with a pointer-transparent
+ghost sized from the rebuilt frame. No preview fitView or network writes occur.
+Drop writes the captured active variant through automatic-layout API once;
+repeat drags are blocked until response, then authoritative settings render.
+Escape, pointercancel, blur, invalid release, variant/settings or scene changes
+cancel the gesture. Failure restores persisted layout and displays an error.
+Mode changes remount frame editors and clear manual geometry preview; boundary
+edge/offset editing remains explicit and separate from structural saving.
+DOC-LOC-03 remains OPEN for user acceptance and other target capabilities.

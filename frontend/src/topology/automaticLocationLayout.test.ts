@@ -1,3 +1,4 @@
+import { insertLocation } from './locationGridInsertion';
 import { gridTables } from './uniformGridPresentation';
 import { describe, expect, it } from 'vitest';
 import { automaticLocationLayout } from './automaticLocationLayout';
@@ -189,4 +190,19 @@ it('reconciles new children into holes without moving surviving cells or mutatin
   expect(next.root).toEqual([['added', 'building'], ['empty']]);
   next.root[0][0] = null;
   expect(JSON.stringify(tables)).toBe(before);
+});
+
+it('SLOC-03 preview and persisted reload share final nested geometry without mutating settings', () => {
+ const locs=[loc('A'),loc('B'),loc('C'),loc('child','B')];
+ const ps=[placement('a','A'),placement('b','child')];
+ const original = { mode:'uniform_grid' as const, version:1 as const, hide_empty:false, tables:{root:[['A'],['B'],['C']],B:[['child']]} };
+ const snapshot=JSON.stringify(original);
+ const next={...original,tables:{...original.tables,root:insertLocation(original.tables.root,'B','A','RIGHT')}};
+ const preview=automaticLocationLayout(locs,ps,objects,[],next);
+ const reload=automaticLocationLayout(locs,ps,objects,[],JSON.parse(JSON.stringify(next)));
+ expect([...preview.frames]).toEqual([...reload.frames]); expect([...preview.positions]).toEqual([...reload.positions]);
+ expect(JSON.stringify(original)).toBe(snapshot); expect(next.tables.B).toBe(original.tables.B);
+ const before=automaticLocationLayout(locs,ps,objects,[],original);
+ const relative=(layout:typeof before) => {const b=layout.frames.get('B')!, child=layout.frames.get('child')!, object=layout.positions.get('b')!; return [child.x-b.x,child.y-b.y,object.x-b.x,object.y-b.y,object.width,object.height];};
+ expect(relative(preview)).toEqual(relative(before));
 });

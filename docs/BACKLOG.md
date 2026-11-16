@@ -270,5 +270,5 @@ SLOC-02: **IMPLEMENTED (branch; external inspection required)** — versioned
 uniform-grid automatic_layout, server/workspace validation, L1 runtime adapter,
 explicit mode switch, live canonical reconciliation, variant copy/reload and
 targeted tests. Manual and legacy sequence contracts retained.
-DOC-LOC-03 remains OPEN for SLOC-03 interactive structural editing and acceptance.
+SLOC-03: **IMPLEMENTED (branch; external inspection and user interaction acceptance required)** — sibling heading drag/drop, structural insertion, shared live geometry/ghost, variant-only save, cancel/error rollback and mode editor reset. DOC-LOC-03 remains OPEN for user acceptance; natural sorting U01–U42 and other separate capabilities remain OPEN.
 Grid-specific partial-collapse selection UX remains OPEN; current semantics retained.
