@@ -193,9 +193,3 @@ Unsupported capabilities не создают fake topology. Критерий б�
 инициализации, conflict policy и loader требуют implementation contract.
 Отдельный bounded milestone map isolation обязателен до включения demo initialization.
 Loader и map isolation здесь не реализуются; Phase A–I не переставляются.
-
-DOC-RECON-03: актуальная сверка статусов, направлений, зависимостей и OPEN —
-[BACKLOG: направления и зависимости](BACKLOG.md#направления-и-зависимости).
-AUTO-LOC-01/02 и SLOC-01–04 IMPLEMENTED / MERGED; DOC-LOC-03 PARTIAL,
-не полная приёмка всех возможностей. C-CAP-01-01 IMPLEMENTED / MERGED;
-02/03/04 OPEN. BT-DRAFT-01 и BT-COPY-01 находятся в main.

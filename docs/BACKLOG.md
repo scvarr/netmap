@@ -93,7 +93,7 @@ canonical endpoints, подключения и зависимости исход
 | C-UX-05 | Runtime map guides нужны; ориентиры — уже размещённые объекты | OPEN | Точный bounded UX-контракт открыт; presentation-only, отдельно от auto-layout |
 | C-UX-06 | Независимые Width/Height пока не реализовывать | OPEN | Повторно оценить необходимость после P-UX-21; не VERIFIED |
 | C-UX-09 | Раскрываемый графический preview BaseTemplate непосредственно при выборе шаблона | OPEN | Ориентир — существующий preview библиотеки; реализация открыта |
-| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [DECIDED TARGET](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels), C-UX-10-01 foundation объединён в main: иерархически вложенные variant frames всех Locations, единый атомарный перенос контейнера с оборудованием/routes, рост предков, согласование назначений/placements и одна обязательная map-scoped точка; authoritative move response, content bounds с ручным resize floor, полный compact collapse включая пустые subtree; не реализовано: уникальный Channel пары, preview/подтверждение, переиспользование, lifecycle и channel-aware collapse; channel schema/DTO/API, атомарность и конфликты OPEN. Boundary anchors/snapping не заменяют Channels; exact trace не меняется |
+| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [DECIDED TARGET](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels), C-UX-10-01 foundation объединён в main: иерархически вложенные variant frames всех Locations, единый атомарный перенос контейнера с оборудованием/routes, рост предков, согласование назначений/placements и одна обязательная map-scoped точка; authoritative move response, content bounds с ручным resize floor, полный compact collapse включая пустые subtree; не реализовано: иерархическая трасса и общие участки, preview/подтверждение, переиспользование, lifecycle и channel-aware collapse; channel schema/DTO/API, атомарность и конфликты OPEN. Boundary anchors/snapping не заменяют Channels; exact trace не меняется |
 | C-UX-12 | Проверить массовое именование, spatial order, обнаруживаемость и сохранение | RECHECK PENDING | Исправление реализовано |
 | C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
 | C-UX-14 | Проверить понятность Change Inspector и точность больших сводок impact | RECHECK PENDING | Реализован; HV-01 не заменяет UX recheck |
@@ -254,7 +254,7 @@ AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical
 структура размещения Location в variant, локальное соседство, строки/столбцы и
 плитка, простая последовательность непосредственных PhysicalObject,
 content-driven размеры без масштабирования панели, сохранение структуры при
-hide/collapse и независимость canonical assignment. До реализации согласовать
+hide/collapse и независимость canonical assignment. Для оставшихся возможностей согласовать
 [открытые детали хранения, алгоритма и UX](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
 После согласования открытых деталей реализация требует последующей декомпозиции
 на ограниченные последовательные milestones; их количество и техническое
@@ -270,7 +270,7 @@ SLOC-02: **IMPLEMENTED / MERGED** — versioned
 uniform-grid automatic_layout, server/workspace validation, L1 runtime adapter,
 explicit mode switch, live canonical reconciliation, variant copy/reload and
 targeted tests. Manual and legacy sequence contracts retained.
-SLOC-03: **IMPLEMENTED / MERGED; manual acceptance отдельно** — explicit arrangement mode replacing structural drag/drop: selected-Location arrows, address-based swaps/moves, full empty-track cleanup in a local working copy, shared geometry, variant-only Done save, Cancel/error rollback. DOC-LOC-03 remains OPEN for user acceptance; other separate capabilities remain OPEN.
+SLOC-03: **IMPLEMENTED / MERGED; manual acceptance отдельно** — explicit arrangement mode replacing structural drag/drop: selected-Location arrows, address-based swaps/moves, full empty-track cleanup in a local working copy, shared geometry, variant-only Done save, Cancel/error rollback. Manual acceptance remains OPEN; other separate capabilities remain OPEN.
 Grid-specific partial-collapse selection UX remains OPEN; current semantics retained.
 
 SLOC-04: **IMPLEMENTED / MERGED** — natural numeric
@@ -279,18 +279,18 @@ traversals/directions); explicit holes, indexed scope UI in Location settings an
 technical-root Layout panel; atomic automatic draft entry, combined arrow/sort
 preview, common Done/Cancel/error rollback. No backend changes. Targeted tests
 and Chromium fixture smoke cover the implementation; server reload validation is
-not covered by the in-memory smoke. DOC-LOC-03 remains OPEN.
+not covered by the in-memory smoke. DOC-LOC-03 remains PARTIAL.
 
 ## Направления и зависимости
 
 Единственный roadmap — существующие Phase A–I выше; их gates и критерии
-L1 PRODUCT COMPLETE сохраняются. Направления ниже не вводят второй roadmap.
+L1 PRODUCT COMPLETE сохраняются. Phase C и D остаются открытыми.
 
-- **A — обязательные L1 gates:** C-CAP-01 (01 IMPLEMENTED / MERGED,
+- **Обязательные L1 gates:** C-CAP-01 (01 IMPLEMENTED / MERGED,
   02/03/04 OPEN), representative acceptance, необходимые классификации с
   согласованием минимального состава, Phase E–I. Implementation, external review
   и manual acceptance — разные статусы; merge не доказывает ручную приёмку.
-- **B — пространственная карта:** AUTO-LOC-01/02 и SLOC-01/02/03/04 реализованы
+- **Развитие пространственной карты:** AUTO-LOC-01/02 и SLOC-01/02/03/04 реализованы
   и merged. После C-CAP-01-01 фактический переход был к компоновке карты.
   Дальнейшая согласованная последовательность: компоновка Location → объектная
   кабельная расчёска → автоматическая трасса через Location hierarchy → общая
@@ -298,7 +298,7 @@ L1 PRODUCT COMPLETE сохраняются. Направления ниже не
   навигация. DOC-LOC-03 частично реализован; grid-specific partial-collapse UX,
   оставшиеся возможности и ручная приёмка OPEN. Количество будущих implementation
   milestones не назначено. Эти возможности не становятся все blockers C/D.
-- **C — справочники:** PortType реализован. PhysicalObject class — строковая
+- **Справочники:** PortType реализован. PhysicalObject class — строковая
   metadata, включая default BaseTemplate; Location.type — optional пользовательская
   строка. Пользовательские справочники типов PhysicalObject и Location —
   согласованное направление без закрытой taxonomy. CableType — DECIDED TARGET,
@@ -307,7 +307,7 @@ L1 PRODUCT COMPLETE сохраняются. Направления ниже не
   PhysicalObject не задаёт connectivity, endpoints или mappings. Тип не identity.
   Hardcoded presentation presets workstation/switch/cable/outlet/patch_panel
   в форме PhysicalObject — не полноценный справочник.
-- **D — независимые карты:** L1-REFERENCE-01 TARGET. CURRENT SavedMap —
+- **Независимые карты и переносимость:** L1-REFERENCE-01 TARGET. CURRENT SavedMap —
   presentation общей topology; TARGET — независимая canonical сеть каждой карты.
   Общие библиотеки не означают общую topology; MapPresentationVariant остаётся
   компоновкой, NetworkWorkspace — application boundary. Map isolation необходим

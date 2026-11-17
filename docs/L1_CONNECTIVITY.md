@@ -75,12 +75,12 @@ invalid cardinality, cycles), [object trace](../tests/test_physical_object_l1_tr
 | Механизм / статус | Физическая семантика и пример | Canonical выразимость | UI/API и authoring/materialization | Lifecycle/reconcile | Trace/evidence и пробел |
 |---|---|---|---|---|---|
 | Обычное 1:1 — IMPLEMENTED | Patch cord между двумя портами | Два points, один mapping, optional Cable | Обычный create, bulk, disconnect | Атомарный внешний lifecycle | Exact member=1; не доказывает сигнал |
-| N:N — CORE ONLY | Независимые волокна MPO trunk | Один Connection с N уникальными mappings | Обычный write и template materialization только 1 | Multichannel editing/reconcile OPEN | Каждый member отдельно; нет пользовательского полного цикла |
-| Перестановка — CORE ONLY | Полярность оптического trunk, 1→3, 2→1, 3→2 | Явные пары, не порядок endpoints | Нет общего mapping editor | Сохранение identity при изменении mapping OPEN | Следовать записанной паре, не номеру/геометрии |
-| Частичное соответствие — CORE ONLY | Из 12 волокон подключены 4 | Connection cardinality=4, subset point members | Нет multichannel authoring | Отключение одного канала и capacity edits OPEN | Неподключённые members не получают путь |
-| N независимых каналов → N points — CORE ONLY | Задний MPO-24 → 24 лицевых гнезда | N Connections от разных rear members к front member=1 | BaseTemplate не материализует rear cardinality=N | Reconcile таких связей OPEN | Exact rear i → front i, без смешения; C-CAP-01 |
-| Internal passive — PARTIAL | Проходной адаптер | Same-object Connections без Cable | BaseTemplate 1:1 есть; ModuleTemplate internal materialization не доказана | Добавление 1:1; удаления не выводятся из provenance | Passive chain подтверждена; общий template contract OPEN |
-| Патч-панели и кроссы — PARTIAL | Задняя/передняя коммутация | Композиция internal/external continuity | 1:1 путь есть, multichannel core only | Сохранение существующих связей; общая смена распайки OPEN | Все canonical hops; тип «панель» не создаёт связь |
+| N:N — PARTIAL | Независимые волокна MPO trunk | Один Connection с N уникальными mappings | BaseTemplate API/materialization поддерживают internal N:N; внешний write только cardinality=1 | Допустимый reconcile сохраняет конструкцию; внешний member occupancy/edit/disconnect OPEN | Каждый member отдельно; нет пользовательского полного цикла |
+| Перестановка — PARTIAL | Полярность оптического trunk, 1→3, 2→1, 3→2 | Явные пары, не порядок endpoints | BaseTemplate API материализует internal permutation; общий mapping editor OPEN | Сохранение identity при изменении mapping OPEN | Следовать записанной паре, не номеру/геометрии |
+| Частичное соответствие — PARTIAL | Из 12 волокон подключены 4 | Connection cardinality=4, subset point members | BaseTemplate API материализует internal subset; внешний multichannel authoring OPEN | Отключение одного канала и capacity edits OPEN | Неподключённые members не получают путь |
+| N независимых каналов → N points — PARTIAL | Задний MPO-24 → 24 лицевых гнезда | N Connections от разных rear members к front member=1 | BaseTemplate материализует rear cardinality=N и N внутренних связей | Допустимый reconcile сохраняет конструкцию; смена распайки OPEN | Exact rear i → front i, без смешения; C-CAP-01 |
+| Internal passive — PARTIAL | Проходной адаптер | Same-object Connections без Cable | BaseTemplate материализует exact internal mappings; ModuleTemplate internal materialization отсутствует | Допустимый reconcile сохраняет multichannel конструкцию; ограничения обычных добавлений 1:1 сохраняются | Passive chain подтверждена; общий template contract OPEN |
+| Патч-панели и кроссы — PARTIAL | Задняя/передняя коммутация | Композиция internal/external continuity | Ordinary external 1:1 и BaseTemplate internal multichannel реализованы; внешний multichannel Cable OPEN | Сохранение существующих связей; общая смена распайки OPEN | Все canonical hops; тип «панель» не создаёт связь |
 | Муфты, сварки, переходники — PARTIAL | Сварка двух волокон внутри муфты | Парная continuity выражается | Пассивные points/links; специализированный splice workflow не доказан | Отдельный lifecycle сварки не доказан | Путь есть при explicit links; степень требуемой provenance OPEN |
 | Реальный splitter — OPEN | Оптический PLC 1:8 | Несколько Connections с общим member технически образуют граф | Полноценный splitter authoring не доказан | Правила общей занятости/изменений OPEN | Reachability не доказывает деление сигнала, потери, направленность |
 | Несколько окончаний — OPEN | Один breakout cable с общей оболочкой и тремя концами | Граф пар возможен, один Cable не охватывает несколько Connections | Пользовательский aggregate lifecycle отсутствует в проверенном пути | Текущий Cable identity двухточечный | Нельзя доказать принадлежность всех ветвей одному Cable |
@@ -158,7 +158,7 @@ C-CAP-01 остаётся OPEN Phase D; L1 PRODUCT COMPLETE обязателен
 |---|---|---|
 | Patch cord | Да, обычный UI/API | member 1→1, Connection/Member refs, после удаления UNKNOWN |
 | Многоканальный кабель с перестановкой | Core да; пользовательский цикл нет | Для каждой пары только заданный target, чужие members не соединены, reload |
-| Один rear-24 → 24 front | Core композиция да; template materialization нет | rear i→front i/1, остальные front недостижимы; один внешний trunk Cable |
+| Один rear-24 → 24 front | BaseTemplate definitions/materialization реализованы; внешний trunk write и полный пользовательский цикл OPEN | rear i→front i/1, остальные front недостижимы; один внешний trunk Cable |
 | Неполное подключение | Core subset да; UI нет | Подключённые пары REACHABLE; пропуски UNKNOWN, не автодополнение |
 | Несколько пассивных объектов | Парная цепь да, отдельный passive hop подтверждён тестом | Все hops и refs, точная member identity через каждый объект, разрыв цепи |
 | Один сигнал → несколько выходов | Граф выразим, физическая семантика OPEN | До решения нельзя принимать graph REACHABLE за signal split; проверить output→output смысл |
@@ -226,9 +226,3 @@ C-CAP-01-01 corrective: `draft/check` сравнивает physical structure с
 отсутствующих полях cardinality/mappings старого 1:1 формата. Links не удаляются,
 continuity не синтезируется, автоматической коррекции и splitter support нет.
 Корректные исторические 1:1 definitions остаются поддержаны. C-CAP-01 — OPEN Phase D.
-
-DOC-RECON-03: актуальная сверка статусов, направлений, зависимостей и OPEN —
-[BACKLOG: направления и зависимости](BACKLOG.md#направления-и-зависимости).
-AUTO-LOC-01/02 и SLOC-01–04 IMPLEMENTED / MERGED; DOC-LOC-03 PARTIAL,
-не полная приёмка всех возможностей. C-CAP-01-01 IMPLEMENTED / MERGED;
-02/03/04 OPEN. BT-DRAFT-01 и BT-COPY-01 находятся в main.

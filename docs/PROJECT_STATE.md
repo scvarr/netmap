@@ -44,6 +44,15 @@
   Полный collapse оставляет один компактный Location (также для пустого subtree),
   expand восстанавливает expanded geometry; partial collapse сохраняет выбор видимых
   непосредственных элементов, group move с collision rejection и route transform.
+- AUTO-LOC-01/02 и SLOC-01–04 — IMPLEMENTED / MERGED. AUTO-LOC даёт
+  opt-in компоновку variant с техническим корнем, порядком и ориентацией
+  дочерних элементов, компактной геометрией, hide/collapse и boundary anchors.
+  SLOC добавляет uniform-grid с сохранением в variant, размещение стрелками
+  и сортировку дочерних Location по строке, столбцу или всей таблице.
+  DOC-LOC-03 — PARTIAL. Остаются OPEN порядок и ориентация непосредственных
+  PhysicalObject и grid-specific partial-collapse UX. Ручная приёмка учитывается
+  отдельно. In-memory smoke SLOC-04 проверял работу с fixture; реальный серверный
+  save/reload сортировки этим smoke не проверен.
 - Редактор кабельного маршрута: transient draft, Save/Cancel, добавление,
   перемещение и удаление waypoints через инспектор, snapping к чужой геометрии,
   angle/length assistance, числовое изменение длины сегмента, boundary anchors.
@@ -148,17 +157,3 @@ workspace/auth/access/sharing/activity и обязательные PERF-002/003/
 Необязательные улучшения с «до L2: НЕТ» и будущие product decisions не становятся
 blockers автоматически. Нового roadmap эта сверка не вводит.
 FE-002 уточнён как OPEN: guard создания variant не защищает создание карты.
-
-- AUTO-LOC-01: IMPLEMENTED in milestone branch, external diff inspection required.
-  Explicit per-variant automatic Location composition: technical root, mixed child
-  order, horizontal/vertical direction, hide empty subtrees, existing full/partial
-  collapse, full equipment footprints and current-frame route anchors. Manual
-  variants retain their data and behavior. Settings survive variant copies and
-  workspace export/import. Targeted Docker validation: 138 frontend tests,
-  52 backend tests, TypeScript/Vite. No Channels or comb implementation.
-
-DOC-RECON-03: актуальная сверка статусов, направлений, зависимостей и OPEN —
-[BACKLOG: направления и зависимости](BACKLOG.md#направления-и-зависимости).
-AUTO-LOC-01/02 и SLOC-01–04 IMPLEMENTED / MERGED; DOC-LOC-03 PARTIAL,
-не полная приёмка всех возможностей. C-CAP-01-01 IMPLEMENTED / MERGED;
-02/03/04 OPEN. BT-DRAFT-01 и BT-COPY-01 находятся в main.

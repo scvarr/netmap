@@ -94,6 +94,19 @@ CONNECTION_POINT круглый; manual untyped points нейтральны.
 не взаимозаменяемы. Технические поля, immutable-field locking и остальные
 справочники не считаются реализованными; решения перечислены отдельно.
 
+CURRENT. PortType — реализованный справочник. PhysicalObject class хранится
+строкой, BaseTemplate может задавать default class. Location.type — optional
+пользовательская строка. CableType — DECIDED TARGET / OPEN. Формы оборудования
+предлагают hardcoded presets и произвольное значение. От строковых классов
+зависят подписи, акценты и фильтры списка оборудования. Presets обслуживают
+эти сценарии интерфейса и не образуют самостоятельный справочник.
+
+TARGET. Пользовательские типы PhysicalObject и Location без закрытой taxonomy.
+Типы отделены от canonical identity. Тип Location не ограничивает parent/children.
+Тип оборудования не задаёт connectivity, endpoints или member mappings.
+
+[Открытые решения по типам](OPEN_DECISIONS.md#справочники-и-техническая-совместимость).
+
 ## SavedMap, варианты и spatial isolation
 
 SavedMap — presentation scope в implicit workspace. Placement задаёт membership
@@ -195,9 +208,9 @@ Positions и затронутые routes сохраняются атомарно
 Channel schema/DTO/API остаются OPEN.
 
 Cable сохраняет реальные окончания и canonical identity. Его путь динамически
-составляется из индивидуальных подводов и общей геометрии Channel без копирования.
+составляется из индивидуальных подводов и общих участков иерархического пути без копирования.
 Preview и подтверждение предшествуют persistent изменениям; ошибки не оставляют
-частичных изменений. Используемый Channel нельзя удалить; пустой сохраняется
+частичных изменений. Используемый общий участок защищён от удаления, неиспользуемый сохраняется
 до ручного удаления. Перемещение оборудования сохраняет окончания и пересчитывает
 маршрут для новых непосредственных Location. Collapse скрывает структурные
 участки; проекция внешних каналов на общего родителя не создаёт persisted Channels.
@@ -460,9 +473,10 @@ and independent cable route anchors are preserved. Manual editing is unchanged.
 
 ## DOC-LOC-03 — TARGET структурной компоновки Location
 
-**DECIDED TARGET / implementation OPEN, не IMPLEMENTED.** Текущие
-AUTO-LOC-01/02 direction/order остаются CURRENT; SLOC-01–04 уже реализуют часть описанной
-здесь структуру размещения. [Решения и открытые детали](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
+**PARTIAL.** AUTO-LOC-01/02 и SLOC-01–04 в main: uniform-grid, стрелочная
+расстановка и сортировка дочерних Location. Порядок и ориентация непосредственных
+PhysicalObject и grid-specific partial-collapse UX остаются OPEN.
+[Открытые вопросы](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
 
 Location допускают строки, столбцы и комбинированную плиточную структуру внутри
 одного родителя: здание с этажами, этаж с кабинетами плиткой, серверная с группами
@@ -588,7 +602,7 @@ all changes. Variant, layout/settings or scene changes discard the draft without
 saving; drafts cannot cross variants. API failure restores authoritative settings
 and displays an error. Server confirmation supplies the authoritative display.
 Boundary identity/edge/offset, canonical hierarchy/assignments, Cable and routes
-are untouched. DOC-LOC-03 remains OPEN for user acceptance;
+are untouched. Manual acceptance remains OPEN;
 PhysicalObject movement, routing and cable combing remain separate capabilities.
 
 ### SLOC-04 — child Location sorting
@@ -612,8 +626,7 @@ failure restore authoritative settings. No backend/API/schema changes.
 
 Validation: targeted computational, hook, controls and canvas tests plus Chromium
 smoke on the real tiled canvas fixture. The fixture uses in-memory persistence;
-server round-trip/reload for SLOC-04 is not verified by that smoke. DOC-LOC-03
-remains OPEN; external acceptance is still required.
+server round-trip/reload for SLOC-04 is not verified by that smoke. Manual acceptance remains OPEN.
 
 SLOC-04 corrective UI: Location settings use separate Collapse/Layout tabs under
 “Settings: <Location name>”. Switching tabs retains mounted controls and the shared
@@ -624,9 +637,3 @@ Done/Cancel remains the sole sorting persistence boundary. Collapse save retains
 its existing direct-reference behavior. Chromium checks cover 42 direct children,
 single/multiple columns at 1024×768 and 1600×900, including measured scroll offsets,
 visible actions, tab switching, close/preview, Cancel without writes and Done once.
-
-DOC-RECON-03: актуальная сверка статусов, направлений, зависимостей и OPEN —
-[BACKLOG: направления и зависимости](BACKLOG.md#направления-и-зависимости).
-AUTO-LOC-01/02 и SLOC-01–04 IMPLEMENTED / MERGED; DOC-LOC-03 PARTIAL,
-не полная приёмка всех возможностей. C-CAP-01-01 IMPLEMENTED / MERGED;
-02/03/04 OPEN. BT-DRAFT-01 и BT-COPY-01 находятся в main.

@@ -197,52 +197,40 @@ Location без иерархического маршрута не являет�
 Connection, пересечение и общий участок не доказывают связность.
 Preview предшествует подтверждению; отмена/ошибка не оставляет частичных записей.
 
-OPEN implementation questions: определение и уникальность переиспользуемого
-участка иерархического пути, прохождение общего предка и его точки, обработка
-смены parent/Location, отсутствие assignment, конфликты и collapse-проекция.
-Persistence schema, DTO/API и подробный алгоритм сейчас не выбираются.
-
 ### Составное отображение Cable
 
 Физический Cable остаётся одной canonical сущностью с реальными окончаниями.
-Отображаемый путь: индивидуальный подвод от начального порта к точке его Location,
-динамическая общая часть по Channel, индивидуальный подвод от точки второго
-Location к конечному порту. Общая геометрия не копируется в маршруты Cables.
+Отображаемый путь состоит из индивидуальных подводов и последовательности
+участков через обязательные точки Location hierarchy. Для объектов одного
+непосредственного Location достаточно индивидуальной трассы. Общая presentation
+geometry переиспользуется без копирования в маршруты Cables.
 
-Клик по индивидуальному подводу выбирает Cable; клик по общей части — Channel.
-Редактирование Cable меняет только его индивидуальные подводы в концевых
-Location. Редактирование Channel меняет общую геометрию для всех использующих
-его Cables. Выделение Cable подсвечивает только его путь, не пути остальных
-кабелей; общий участок не смешивает их trace evidence. Выделение Channel может
-показывать список и количество использующих его Cables.
+Клик по подводу выбирает Cable, клик по общему участку выбирает общую геометрию.
+Правка общего участка отображается у всех использующих его Cables. Можно
+подсветить отдельный Cable по всему пути и показать список Cables на общем
+участке. Exact L1 evidence каждого Cable сохраняется независимо.
 
 ### Lifecycle и перемещение оборудования
 
-Используемый Channel удалять нельзя. После удаления последнего Cable пустой
-Channel сохраняется, визуально отличается от используемого и может быть вручную
-удалён пользователем. Изменение геометрии Channel не меняет canonical
-Cable/Connection/ConnectionMember.
+Используемые общие участки защищены от удаления. Неиспользуемые участки
+сохраняются, визуально отличаются и доступны для ручного удаления. Правки
+геометрии не меняют Cable/Connection/ConnectionMember.
 
-При перемещении оборудования в другой Location физические окончания Cable
-сохраняются. Индивидуальный подвод перепривязывается к обязательной точке нового
-Location; общая часть вычисляется для новой пары Location, отсутствующий Channel
-предлагается автоматически. Если оба конца теперь в одном Location, применяется
-индивидуальная трасса без Channel. Прежний Channel остаётся и может стать пустым.
-Ошибка не оставляет частично изменённую инфраструктуру или потерянный маршрут.
+При перемещении оборудования сохраняются физическая Cable identity и реальные
+окончания. Пересчитываются подводы, иерархический путь и используемые общие
+участки. Прежние участки могут стать пустыми. Preview и подтверждение предшествуют
+сохранению операции целиком. Отмена и ошибка исключают частичные изменения,
+а смена Location не удаляет физического подключения.
 
 ### Collapse / expand
 
-Сворачивание скрывает внутренние участки по структурной принадлежности, а не
-по координатам: waypoint внутреннего участка скрывается даже за рамкой Location.
-Внешние части отображаются до граничной точки свёрнутого Location. Необходимая
-boundary при пересечении subtree не скрывается unary simplification; маршрут между разными непосредственными Location следует последовательным уровням hierarchy.
-
-Nested collapse соблюдает иерархию: внешний явно свёрнутый контейнер приоритетен,
-внутренние Channels скрываются. Внешние Channels потомков при collapse общего
-родителя получают производное отображение до границы родителя без раскрытия
-детей. Эта проекция не создаёт новых persisted Channels и не меняет исходную пару
-Location. Expand полностью восстанавливает исходную геометрию рекурсивно,
-без перезаписи Cable или Channel.
+Collapse скрывает внутренние участки по принадлежности к subtree, включая
+waypoints за рамкой. Внешние участки видны до обязательной точки свёрнутого
+Location. Unary simplification сохраняет эту точку при пересечении границы.
+При nested collapse приоритет у внешнего явно свёрнутого контейнера. Проекция
+внешних участков потомков до его границы вычисляется для отображения. Expand
+рекурсивно восстанавливает геометрию без записи новых общих участков и без
+перезаписи Cable или исходной геометрии.
 
 ### Пустые Location
 
@@ -254,26 +242,32 @@ presentation state, не canonical физические размеры поме�
 
 ### OPEN implementation decisions
 
-Открыты точная persistence schema, DTO/API, детали атомарности согласованных
-операций, конфликтов и конкурентного создания уникальной пары; UX подтверждения
-и восстановления после ошибок, включая перемещение оборудования. Также OPEN:
-отсутствующий непосредственный Location, удаление/изменение иерархии Location,
-копирование вариантов и начальное размещение точек, алгоритм индивидуальных
-подводов/comb и производной collapse-проекции. Эти детали не отменяют принятые
-инварианты lifecycle, уникальности, identity и отсутствия частичных изменений.
-Waypoint snapping не реализует Channel; исправления renderer, косметика и общий
-CSS refactor не входят в documentation-only milestone.
+OPEN: структура Channel, ключ уникальности и гранулярность переиспользования,
+выбор пути и обработка точки общего предка, persistence schema, DTO/API.
+Также открыты конкурентные конфликты, механизм атомарного сохранения, UX preview
+и восстановления после ошибки, отсутствие непосредственного Location, удаление
+или reparent Location, копирование variants, начальное размещение точек,
+подводы/comb и вычисление collapse-проекции.
 
 ## Справочники и техническая совместимость
 
-PT-01/02/03 завершены. Согласовано: reusable user-defined values, выбор из
-«Справочников», current name/color независимо от immutable template revision.
-Открыты дополнительные типы оборудования/кабелей, классификации, технические
-характеристики PortType (technology/speed/connector), compatibility catalog,
-создание типов прямо из форм, immutable fields и правила блокировки изменений
-используемых типов, безопасное deletion/archive/update. Не подменять cardinality
-или member mapping классификацией; не вводить закрытую hardware taxonomy.
-Phase D определяет минимальные L1 classifications, E — UX, F — workspace/access.
+CURRENT. PortType — реализованный справочник. PhysicalObject class хранится
+строкой, BaseTemplate может задавать default class. Location.type — optional
+пользовательская строка. CableType — DECIDED TARGET / OPEN. Формы оборудования
+предлагают hardcoded presets и произвольное значение. От строковых классов
+зависят подписи, акценты и фильтры списка оборудования. Presets обслуживают
+эти сценарии интерфейса и не образуют самостоятельный справочник.
+
+TARGET. Пользовательские типы PhysicalObject и Location без закрытой taxonomy.
+Типы отделены от canonical identity. Тип Location не ограничивает parent/children.
+Тип оборудования не задаёт connectivity, endpoints или member mappings.
+
+OPEN: ID/reference model, перенос существующих строк и сохранение зависящего
+от них UI, выбор/создание типов, update/archive/delete, правила изменения
+используемых определений, типовые свойства, зависимости от шаблонов и порядок
+реализации. Характеристики PortType, compatibility и immutable-field locking
+требуют отдельных решений. Phase D определяет минимальные L1 classifications,
+E охватывает UX, F — workspace/access.
 
 ## Endpoint-relative route sections
 
@@ -451,7 +445,7 @@ only; they neither introduce Channel nor change the C-UX-10 channel target.
 
 ## DOC-LOC-03 — Structural Location Composition
 
-**DECIDED TARGET / implementation OPEN.** Продуктовый контракт принят в
+**PARTIAL.** Продуктовый контракт принят в
 [ARCHITECTURE](ARCHITECTURE.md#doc-loc-03--target-структурной-компоновки-location):
 локальное соседство сверху/снизу/слева/справа, смешанные строки/столбцы Location
 в одном родителе, простая упорядоченная последовательность непосредственных
@@ -468,30 +462,13 @@ BaseTemplate не масштабируется, правая зона OBJECT-UX-
 дополнительную ширину. Cable независимы; расчёска не реализована.
 C-UX-10 (Channel и составные маршруты) остаётся OPEN отдельной capability.
 
-**OPEN implementation decisions:** SLOC-02 defines versioned uniform-grid JSON in
-existing automatic_layout and connects it to L1 runtime; SLOC-03 defines explicit arrangement mode with address-based arrow swaps/moves
-and full empty-track normalization of the working copy (see ARCHITECTURE).
-Открыты изменение ориентации последовательности объектов, точный алгоритм
-расчёски и геометрии подводов.
-Эти вопросы не отменяют продуктовый TARGET и не утверждают конкретное дерево,
-JSON schema, новую canonical entity или способ реализации. Phase A–I неизменны.
+CURRENT. SLOC-01–04 находятся в main: uniform-grid хранится в variant
+automatic_layout, Arrange/Done/Cancel поддерживает стрелочные перемещения
+и swaps, сортировка дочерних Location использует тот же черновик. Сортировка
+всей таблицы сохраняет маску пустых ячеек, переименование не запускает сортировку.
+Действующий формат и взаимодействие описаны в ARCHITECTURE.
 
-SLOC-01 implements only an isolated uniform-table measurement core (see
-ARCHITECTURE). For this core, populated cells share both maxima table-wide;
-empty cells are excluded from those maxima. This bounded rule does not select
-a persistent format or an insertion algorithm. DOC-LOC-03 remains OPEN;
-SLOC-02 resolves DTO/API and runtime integration for uniform tables. Interactive
-editing SLOC-03 is implemented on the milestone branch (Arrange/Done/Cancel, selected-Location arrows, local working copy; see ARCHITECTURE). Grid-specific partial-collapse selection UX and user acceptance
-remain OPEN. Existing visible_direct_elements semantics are retained.
-
-SLOC-04 implements explicit natural-name child Location sorting in uniform_grid:
-indexed row/column scopes and both whole-table traversals, common SLOC-03 draft,
-Done/Cancel and rollback. Whole-table empty masks are retained; first-sort entry
-therefore skips SLOC-03 empty-track normalization. No autosort on rename, canonical
-changes or new storage contracts. DOC-LOC-03 and external acceptance remain OPEN.
-
-DOC-RECON-03: актуальная сверка статусов, направлений, зависимостей и OPEN —
-[BACKLOG: направления и зависимости](BACKLOG.md#направления-и-зависимости).
-AUTO-LOC-01/02 и SLOC-01–04 IMPLEMENTED / MERGED; DOC-LOC-03 PARTIAL,
-не полная приёмка всех возможностей. C-CAP-01-01 IMPLEMENTED / MERGED;
-02/03/04 OPEN. BT-DRAFT-01 и BT-COPY-01 находятся в main.
+OPEN: порядок и ориентация непосредственных PhysicalObject, grid-specific
+partial-collapse selection UX, расчёска и её интеграция с маршрутом.
+Ручная приёмка стрелочной расстановки и сортировки остаётся отдельной проверкой.
+In-memory smoke сортировки не проверял сохранение и reload через реальный backend.
