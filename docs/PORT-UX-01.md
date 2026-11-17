@@ -1,6 +1,6 @@
 # PORT-UX-01 — Compact ports
 
-Implementation on the milestone branch; external inspection and visual acceptance remain required.
+Implementation is in main. Visual acceptance remains a separate check; merge alone does not establish it.
 
 - Runtime Blueprint markers: 6 flow units including a 0.5-unit border; square NETWORK_PORT and circular CONNECTION_POINT. Foreground SVG uses a 5.5-unit path plus a centred 0.5-unit stroke, matching the HTML border box. Runtime PortType supplies the fill in both layers.
 - Hit squares are 8 units. Minimum centre separation is 10 units on at least one axis, leaving a 2-unit gap between adjacent hit squares. Highlight rings extend at most 1 unit from the marker. No editor controls are copied.

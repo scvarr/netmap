@@ -50,7 +50,7 @@ blocker не установлен. Для P-UX-22, C-UX-16, дополнител
 
 ## Ближайшая очередь реализации — решение 11.11.2026
 
-BT-DRAFT-01 → BT-COPY-01 → C-CAP-01 → продолжение representative L1 acceptance.
+Историческая очередь BT-DRAFT-01 → BT-COPY-01 → C-CAP-01-01 выполнена в main. Текущая последовательность направлений — в [BACKLOG](BACKLOG.md#направления-и-зависимости); representative acceptance остаётся OPEN.
 Это очередь реализации, не изменение последовательности gates Phase A–I.
 L1 PRODUCT COMPLETE остаётся обязательным до продуктового L2/L3.
 
@@ -70,7 +70,7 @@ L1 PRODUCT COMPLETE остаётся обязательным до продук�
 
 ### BT-COPY-01 — копирование BaseTemplate
 
-**IMPLEMENTED / external inspection pending.** «Создать копию» в библиотеке из опубликованной ревизии создаёт новый
+**IMPLEMENTED / MERGED; manual acceptance pending.** «Создать копию» в библиотеке из опубликованной ревизии создаёт новый
 независимый BaseTemplate. Копируются определения, панели, порты, PortType refs,
 геометрия, внутренние связи и модульные места. Не копируются PhysicalObject,
 canonical endpoints, подключения и зависимости исходных экземпляров.
@@ -142,7 +142,7 @@ members/evidence -> export/reset/import/reload. Synthetic stand не утвер�
 
 C-CAP-01 (единый пункт, ссылка из Phase C) — OPEN, обязательный semantic gap Phase D.
 Canonical ConnectionPoint/Connection/ConnectionMember foundation существует, но
-BaseTemplate authoring, materialization и обычный Cable UI ограничены cardinality=1.
+C-CAP-01-01 реализует BaseTemplate multichannel definitions/materialization; внешний multichannel Cable write и полный UI остаются OPEN (02/03/04).
 Обязательный сценарий стенда: один задний многоканальный вход патч-панели,
 24 независимо адресуемых канала, 24 отдельных передних порта, exact internal
 member mapping 1..24, один физический многоканальный Cable и точный L1 trace
@@ -244,12 +244,12 @@ C-CAP-01 остаётся OPEN Phase D; C-CAP-01-02/03/04 не закрыты; P
 CAT-D: CableType как пользовательский справочник принят; состав технических полей
 и реализация остаются OPEN, остальные классификации этим решением не утверждены.
 
-AUTO-LOC-01 — **IMPLEMENTED (branch; external inspection required)**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative boundary anchors; independent copy/reopen; manual variants preserved. Channels and comb remain OPEN.
+AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative boundary anchors; independent copy/reopen; manual variants preserved. Channels and comb remain OPEN.
 
 
 ## DOC-LOC-03 — реализация структурной компоновки
 
-**OPEN.** Общая capability для реализации
+**PARTIAL / IMPLEMENTED IN MAIN: SLOC-01–04.** Общая capability для реализации
 [согласованного TARGET](ARCHITECTURE.md#doc-loc-03--target-структурной-компоновки-location):
 структура размещения Location в variant, локальное соседство, строки/столбцы и
 плитка, простая последовательность непосредственных PhysicalObject,
@@ -266,17 +266,69 @@ Channel и составная маршрутизация остаются в о�
 SLOC-01: isolated typed uniform-table computational core implemented, with
 recursive measurements, canonical-subtree population, compact empties and
 non-destructive hide/collapse. No runtime connection or persistence contract.
-SLOC-02: **IMPLEMENTED (branch; external inspection required)** — versioned
+SLOC-02: **IMPLEMENTED / MERGED** — versioned
 uniform-grid automatic_layout, server/workspace validation, L1 runtime adapter,
 explicit mode switch, live canonical reconciliation, variant copy/reload and
 targeted tests. Manual and legacy sequence contracts retained.
-SLOC-03: **IMPLEMENTED (branch; external inspection and user interaction acceptance required)** — explicit arrangement mode replacing structural drag/drop: selected-Location arrows, address-based swaps/moves, full empty-track cleanup in a local working copy, shared geometry, variant-only Done save, Cancel/error rollback. DOC-LOC-03 remains OPEN for user acceptance; other separate capabilities remain OPEN.
+SLOC-03: **IMPLEMENTED / MERGED; manual acceptance отдельно** — explicit arrangement mode replacing structural drag/drop: selected-Location arrows, address-based swaps/moves, full empty-track cleanup in a local working copy, shared geometry, variant-only Done save, Cancel/error rollback. DOC-LOC-03 remains OPEN for user acceptance; other separate capabilities remain OPEN.
 Grid-specific partial-collapse selection UX remains OPEN; current semantics retained.
 
-SLOC-04: **IMPLEMENTED (branch; external inspection required)** — natural numeric
+SLOC-04: **IMPLEMENTED / MERGED** — natural numeric
 name sorting of immediate child Location rows, columns and entire tables (both
 traversals/directions); explicit holes, indexed scope UI in Location settings and
 technical-root Layout panel; atomic automatic draft entry, combined arrow/sort
 preview, common Done/Cancel/error rollback. No backend changes. Targeted tests
 and Chromium fixture smoke cover the implementation; server reload validation is
 not covered by the in-memory smoke. DOC-LOC-03 remains OPEN.
+
+## Направления и зависимости
+
+Единственный roadmap — существующие Phase A–I выше; их gates и критерии
+L1 PRODUCT COMPLETE сохраняются. Направления ниже не вводят второй roadmap.
+
+- **A — обязательные L1 gates:** C-CAP-01 (01 IMPLEMENTED / MERGED,
+  02/03/04 OPEN), representative acceptance, необходимые классификации с
+  согласованием минимального состава, Phase E–I. Implementation, external review
+  и manual acceptance — разные статусы; merge не доказывает ручную приёмку.
+- **B — пространственная карта:** AUTO-LOC-01/02 и SLOC-01/02/03/04 реализованы
+  и merged. После C-CAP-01-01 фактический переход был к компоновке карты.
+  Дальнейшая согласованная последовательность: компоновка Location → объектная
+  кабельная расчёска → автоматическая трасса через Location hierarchy → общая
+  геометрия, виртуальные каналы и визуальные жгуты → общий обзор и пошаговая L1
+  навигация. DOC-LOC-03 частично реализован; grid-specific partial-collapse UX,
+  оставшиеся возможности и ручная приёмка OPEN. Количество будущих implementation
+  milestones не назначено. Эти возможности не становятся все blockers C/D.
+- **C — справочники:** PortType реализован. PhysicalObject class — строковая
+  metadata, включая default BaseTemplate; Location.type — optional пользовательская
+  строка. Пользовательские справочники типов PhysicalObject и Location —
+  согласованное направление без закрытой taxonomy. CableType — DECIDED TARGET,
+  реализация OPEN. Дополнительные технические характеристики и compatibility —
+  отдельные решения. Тип Location не задаёт допустимых родителей/детей; тип
+  PhysicalObject не задаёт connectivity, endpoints или mappings. Тип не identity.
+  Hardcoded presentation presets workstation/switch/cable/outlet/patch_panel
+  в форме PhysicalObject — не полноценный справочник.
+- **D — независимые карты:** L1-REFERENCE-01 TARGET. CURRENT SavedMap —
+  presentation общей topology; TARGET — независимая canonical сеть каждой карты.
+  Общие библиотеки не означают общую topology; MapPresentationVariant остаётся
+  компоновкой, NetworkWorkspace — application boundary. Map isolation необходим
+  до demo loader; reference acceptance зависит от CableType, C-CAP-01 и нужных
+  пользовательских workflows. Portability определений требует отдельного
+  контракта и не равна workspace v7. Эти возможности не реализованы; стратегия
+  миграции не выбрана.
+
+OPEN для справочников: ID/reference model, перенос строк, UX выбора/создания,
+update/archive/delete, изменение используемых определений, свойства типов,
+зависимости от шаблонов и точная последовательность. Schema/API требуют отдельного
+implementation contract.
+
+Согласованный UX TARGET обзора/trace: можно отдалиться до всей инфраструктуры
+и полной трассы; подсветка различима при сильном zoom-out. Вся рассчитанная трасса
+постоянно подсвечена, текущий шаг ярче, камера фокусируется на текущем участке.
+Ручная навигация не сбрасывает trace. Камера и шаг — transient view state,
+не canonical topology. Численный minZoom не принят; LOD/virtualization требуют
+измерений, не являются заранее обязательной технологией.
+
+In-memory smoke подтверждает только проверенный fixture path; он не доказывает
+сохранение через реальный backend и reload. Новая ручная приёмка DOC-RECON-03
+не выполнялась. Geometry сохраняет отдельную Cable identity и независимые
+Connection/ConnectionMember evidence; общая линия не создаёт физической связности.

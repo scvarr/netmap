@@ -56,3 +56,7 @@ git diff --check
 
 `docs/chatgpt.md` — отдельный внутренний контракт координатора, не инструкция
 coding agent и не часть продуктового комплекта.
+
+C-CAP-01-01 multichannel materialization и AUTO-LOC/SLOC-01–04 находятся в main;
+внешний multichannel Cable write и полный UI OPEN. Очередность и зависимости:
+[BACKLOG](docs/BACKLOG.md#направления-и-зависимости).

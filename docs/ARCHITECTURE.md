@@ -188,8 +188,9 @@ Positions и затронутые routes сохраняются атомарно
 [Основной контракт](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
 остаётся OPEN, не IMPLEMENTED. Каждый Location, включая пустой, получает ровно
 одну обязательную виртуальную точку со стабильной identity; это не ConnectionPoint.
-В пределах независимой карты одна неупорядоченная пара Location имеет не более
-одного прямого Channel. Инфраструктура не разделяется между картами; геометрия
+Маршрут следует граничным точкам последовательных уровней Location hierarchy.
+В одном непосредственном Location переход через другие Location не требуется.
+Прямой Channel произвольной пары без иерархического пути не принят. Инфраструктура не разделяется между картами; геометрия
 принадлежит presentation variant. Foundation frames/points реализован в C-UX-10-01;
 Channel schema/DTO/API остаются OPEN.
 
@@ -402,7 +403,7 @@ MapPresentationVariant остаётся компоновкой одной сет
 
 ### AUTO-LOC-01 — automatic Location composition
 
-**CURRENT.** Следующий DOC-LOC-03 описывает отдельный будущий TARGET.
+**CURRENT.** Следующий DOC-LOC-03 описывает частично реализованный TARGET.
 
 L1 Physical variants explicitly opt into `automatic_layout` (nullable JSONB on
 MapPresentationVariant). Null retains the existing manual contract and data.
@@ -460,7 +461,7 @@ and independent cable route anchors are preserved. Manual editing is unchanged.
 ## DOC-LOC-03 — TARGET структурной компоновки Location
 
 **DECIDED TARGET / implementation OPEN, не IMPLEMENTED.** Текущие
-AUTO-LOC-01/02 direction/order остаются CURRENT; они не реализуют описанную
+AUTO-LOC-01/02 direction/order остаются CURRENT; SLOC-01–04 уже реализуют часть описанной
 здесь структуру размещения. [Решения и открытые детали](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
 
 Location допускают строки, столбцы и комбинированную плиточную структуру внутри
@@ -520,11 +521,11 @@ holes in active tracks retain their slot. Collapse uses minimum measured size
 before parent-table equalization. Nested tables retain independent inner sizes.
 Equipment footprints are retained without scaling; only Location frames expand.
 Coordinates are parent-local flow units, with no zoom or prior positions.
-AUTO-LOC-01/02 remain unchanged. DOC-LOC-03 remains OPEN until interactive editing and external acceptance.
+AUTO-LOC-01/02 remain unchanged. DOC-LOC-03 partially implemented by SLOC-01–04; remaining capabilities and manual acceptance stay OPEN.
 
 ### SLOC-02 — uniform grid runtime integration
 
-**IMPLEMENTED (branch; external inspection required).** L1 variants explicitly
+**IMPLEMENTED / MERGED.** L1 variants explicitly
 select manual, legacy sequence or uniform grid in the existing controls.
 The JSONB contract is `{mode: "uniform_grid", version: 1, hide_empty, tables}`;
 `tables` maps canonical parent UUIDs (or technical `root`) to arrays of rows of
@@ -555,7 +556,7 @@ before writes. SLOC-03 interactive insertion is described below.
 
 ### SLOC-03 — uniform-grid arrangement mode
 
-**IMPLEMENTED (branch; external inspection and user interaction acceptance required).**
+**IMPLEMENTED / MERGED; manual acceptance отдельно.**
 L1 uniform grid has an explicit «Расстановка» / Arrange mode in the existing
 «Компоновка» panel, off by default; Done and Cancel sit beside it. MapPage owns
 one arrangement draft shared by that panel and TopologyCanvas.
@@ -592,7 +593,7 @@ PhysicalObject movement, routing and cable combing remain separate capabilities.
 
 ### SLOC-04 — child Location sorting
 
-**IMPLEMENTED (branch; external inspection required).** Uniform-grid Location
+**IMPLEMENTED / MERGED.** Uniform-grid Location
 settings expose a Layout section alongside the unchanged collapse controls.
 The Layout panel exposes the technical root table. R1/C1 headers select indexed
 rows/columns; Entire table selects row-major or column-major traversal.
@@ -623,3 +624,9 @@ Done/Cancel remains the sole sorting persistence boundary. Collapse save retains
 its existing direct-reference behavior. Chromium checks cover 42 direct children,
 single/multiple columns at 1024×768 and 1600×900, including measured scroll offsets,
 visible actions, tab switching, close/preview, Cancel without writes and Done once.
+
+DOC-RECON-03: актуальная сверка статусов, направлений, зависимостей и OPEN —
+[BACKLOG: направления и зависимости](BACKLOG.md#направления-и-зависимости).
+AUTO-LOC-01/02 и SLOC-01–04 IMPLEMENTED / MERGED; DOC-LOC-03 PARTIAL,
+не полная приёмка всех возможностей. C-CAP-01-01 IMPLEMENTED / MERGED;
+02/03/04 OPEN. BT-DRAFT-01 и BT-COPY-01 находятся в main.

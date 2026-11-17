@@ -23,7 +23,7 @@ C-VIS-02 — OPEN: отдельное исправление отложено д
 
 ## Ближайшая очередь реализации — решение 11.11.2026
 
-BT-DRAFT-01 → BT-COPY-01 → C-CAP-01 → продолжение representative L1 acceptance.
+Историческая очередь BT-DRAFT-01 → BT-COPY-01 → C-CAP-01-01 выполнена в main. Текущая последовательность направлений — в [BACKLOG](BACKLOG.md#направления-и-зависимости); representative acceptance остаётся OPEN.
 Это очередь реализации, не изменение последовательности gates Phase A–I.
 L1 PRODUCT COMPLETE остаётся обязательным до продуктового L2/L3.
 
@@ -43,7 +43,7 @@ L1 PRODUCT COMPLETE остаётся обязательным до продук�
 
 ### BT-COPY-01 — копирование BaseTemplate
 
-**IMPLEMENTED / external inspection pending.** «Создать копию» в библиотеке из опубликованной ревизии создаёт новый
+**IMPLEMENTED / MERGED; manual acceptance pending.** «Создать копию» в библиотеке из опубликованной ревизии создаёт новый
 независимый BaseTemplate. Копируются определения, панели, порты, PortType refs,
 геометрия, внутренние связи и модульные места. Не копируются PhysicalObject,
 canonical endpoints, подключения и зависимости исходных экземпляров.
@@ -59,7 +59,7 @@ canonical endpoints, подключения и зависимости исход
 
 C-CAP-01 (единый пункт, ссылка из Phase C) — OPEN, обязательный semantic gap Phase D.
 Canonical ConnectionPoint/Connection/ConnectionMember foundation существует, но
-BaseTemplate authoring, materialization и обычный Cable UI ограничены cardinality=1.
+C-CAP-01-01 реализует BaseTemplate multichannel definitions/materialization; внешний multichannel Cable write и полный UI остаются OPEN (02/03/04).
 Обязательный сценарий стенда: один задний многоканальный вход патч-панели,
 24 независимо адресуемых канала, 24 отдельных передних порта, exact internal
 member mapping 1..24, один физический многоканальный Cable и точный L1 trace
@@ -189,27 +189,18 @@ ConnectionPoint и не создаёт физических endpoints.
 
 ### Общий виртуальный Channel
 
-Channel соединяет обязательные точки двух разных Location. Для одной
-неупорядоченной пары Location в карте допустим не более чем один прямой Channel.
-Он имеет общую редактируемую геометрию и используется любым количеством Cables.
-Поиск обходного пути через третьи Location не требуется. Геометрические изгибы
-не создают промежуточных Location connections. Channel не является Cable,
-Connection или CableBundle; его наличие не доказывает физическую связность
-и не влияет на exact L1 trace.
+СОГЛАСОВАНО: маршрут проходит через обязательные граничные точки последовательных
+уровней Location hierarchy. Для объектов одного непосредственного Location
+переход через другие Location не требуется. Прямой Channel произвольной пары
+Location без иерархического маршрута не является принятым алгоритмом.
+Общие участки переиспользуют presentation geometry; Channel не Cable и не
+Connection, пересечение и общий участок не доказывают связность.
+Preview предшествует подтверждению; отмена/ошибка не оставляет частичных записей.
 
-### Соединение портов и preview
-
-При соединении портов определяются непосредственные Location их объектов.
-При одинаковом Location используется прямая индивидуальная трасса без Channel.
-При разных Location используется существующий Channel этой пары; если его нет,
-предлагается автоматическое создание с обязательными точками обоих Location.
-Полный маршрут показывается до подтверждения. Persistent изменения создаются
-только после подтверждения согласованной операции; отмена или ошибка не оставляет
-частично созданной инфраструктуры. Повторное подключение переиспользует Channel
-без дубликатов.
-
-Пример: первый Cable U19 → U24 создаёт Channel U19–U24; следующий использует
-его. Cable U18 → U24 создаёт Channel U18–U24, используя существующую точку U24.
+OPEN implementation questions: определение и уникальность переиспользуемого
+участка иерархического пути, прохождение общего предка и его точки, обработка
+смены parent/Location, отсутствие assignment, конфликты и collapse-проекция.
+Persistence schema, DTO/API и подробный алгоритм сейчас не выбираются.
 
 ### Составное отображение Cable
 
@@ -244,8 +235,7 @@ Location; общая часть вычисляется для новой пар�
 Сворачивание скрывает внутренние участки по структурной принадлежности, а не
 по координатам: waypoint внутреннего участка скрывается даже за рамкой Location.
 Внешние части отображаются до граничной точки свёрнутого Location. Необходимая
-boundary при пересечении subtree не скрывается unary simplification; между двумя
-детьми обязательного перехода через точку родителя нет.
+boundary при пересечении subtree не скрывается unary simplification; маршрут между разными непосредственными Location следует последовательным уровням hierarchy.
 
 Nested collapse соблюдает иерархию: внешний явно свёрнутый контейнер приоритетен,
 внутренние Channels скрываются. Внешние Channels потомков при collapse общего
@@ -499,3 +489,9 @@ indexed row/column scopes and both whole-table traversals, common SLOC-03 draft,
 Done/Cancel and rollback. Whole-table empty masks are retained; first-sort entry
 therefore skips SLOC-03 empty-track normalization. No autosort on rename, canonical
 changes or new storage contracts. DOC-LOC-03 and external acceptance remain OPEN.
+
+DOC-RECON-03: актуальная сверка статусов, направлений, зависимостей и OPEN —
+[BACKLOG: направления и зависимости](BACKLOG.md#направления-и-зависимости).
+AUTO-LOC-01/02 и SLOC-01–04 IMPLEMENTED / MERGED; DOC-LOC-03 PARTIAL,
+не полная приёмка всех возможностей. C-CAP-01-01 IMPLEMENTED / MERGED;
+02/03/04 OPEN. BT-DRAFT-01 и BT-COPY-01 находятся в main.

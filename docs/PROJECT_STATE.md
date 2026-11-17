@@ -122,15 +122,15 @@ C-VIS-02 — OPEN: отдельное исправление отложено д
 изменения маркеров P-UX-21; автоматически не закрывается.
 
 BT-DRAFT-01 — IMPLEMENTED / ACCEPTED / MERGED: локальное автосохранение BaseTemplate.
-BT-COPY-01 — IMPLEMENTED / external inspection pending: независимая копия выбранной
+BT-COPY-01 — IMPLEMENTED / MERGED; manual acceptance pending: независимая копия выбранной
 опубликованной ревизии, восстановление через BT-DRAFT-01, подтверждённая локальная
 отмена создания/копии/редактирования. Ручная проверка pending.
-Ближайшая очередь: C-CAP-01 (OPEN), продолжение representative L1 acceptance. Согласованные
+После C-CAP-01-01 фактическая работа перешла к компоновке карты (AUTO-LOC, SLOC); обязательные C-CAP-01-02/03/04 и representative acceptance остаются OPEN. Согласованные
 границы BaseTemplate работ — в [BACKLOG](BACKLOG.md); это не смена gates A–I.
 C-CAP-01 — обязательный semantic gap Phase D: один задний вход с 24 адресуемыми
 каналами, 24 передних порта, exact internal mapping 1..24, один физический
 multichannel Cable и точный trace канала после reload. Foundation существует,
-но BaseTemplate authoring/materialization и обычный Cable UI ограничены cardinality=1.
+C-CAP-01-01 реализован; внешний multichannel Cable write и полный UI остаются OPEN.
 DTO/API, member mapping editing, lifecycle/reconcile и UX открыты; не IMPLEMENTED.
 Fanout entity, фиктивные порты и 24 искусственных Cable не подменяют этот сценарий.
 
@@ -156,3 +156,9 @@ FE-002 уточнён как OPEN: guard создания variant не защи�
   variants retain their data and behavior. Settings survive variant copies and
   workspace export/import. Targeted Docker validation: 138 frontend tests,
   52 backend tests, TypeScript/Vite. No Channels or comb implementation.
+
+DOC-RECON-03: актуальная сверка статусов, направлений, зависимостей и OPEN —
+[BACKLOG: направления и зависимости](BACKLOG.md#направления-и-зависимости).
+AUTO-LOC-01/02 и SLOC-01–04 IMPLEMENTED / MERGED; DOC-LOC-03 PARTIAL,
+не полная приёмка всех возможностей. C-CAP-01-01 IMPLEMENTED / MERGED;
+02/03/04 OPEN. BT-DRAFT-01 и BT-COPY-01 находятся в main.

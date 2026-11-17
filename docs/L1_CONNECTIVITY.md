@@ -34,7 +34,7 @@ PARTIAL — реализована часть категории; OPEN — се�
   `delete_external_connection` удаляют внешнюю связь атомарно с label lifecycle;
   internal connection этим внешним disconnect не удаляется. Label не identity.
 - [hardware_catalog.py](../app/hardware_catalog.py) `create_object` создаёт
-  points cardinality=1 и BaseTemplate internal links 1:1 без Cable.
+  points с cardinality из BaseTemplate и exact internal member mappings без Cable (C-CAP-01-01).
   `install_module` создаёт points/bindings cardinality=1; аналогичная
   materialization внутренних связей ModuleTemplate здесь не реализована.
   Нельзя переносить возможности BaseTemplate на ModuleTemplate по аналогии.
@@ -226,3 +226,9 @@ C-CAP-01-01 corrective: `draft/check` сравнивает physical structure с
 отсутствующих полях cardinality/mappings старого 1:1 формата. Links не удаляются,
 continuity не синтезируется, автоматической коррекции и splitter support нет.
 Корректные исторические 1:1 definitions остаются поддержаны. C-CAP-01 — OPEN Phase D.
+
+DOC-RECON-03: актуальная сверка статусов, направлений, зависимостей и OPEN —
+[BACKLOG: направления и зависимости](BACKLOG.md#направления-и-зависимости).
+AUTO-LOC-01/02 и SLOC-01–04 IMPLEMENTED / MERGED; DOC-LOC-03 PARTIAL,
+не полная приёмка всех возможностей. C-CAP-01-01 IMPLEMENTED / MERGED;
+02/03/04 OPEN. BT-DRAFT-01 и BT-COPY-01 находятся в main.
