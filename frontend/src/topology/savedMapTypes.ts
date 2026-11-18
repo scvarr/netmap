@@ -4,7 +4,8 @@ import type { LocationRef } from './locationTypes';
 export interface SavedMapRef { entity_type: 'SavedMap'; entity_id: string }
 export interface MapPresentationVariantRef { entity_type: 'MapPresentationVariant'; entity_id: string }
 export interface LegacyAutomaticLocationLayout { mode?: undefined; hide_empty: boolean; containers: Record<string, { direction: 'HORIZONTAL' | 'VERTICAL'; order: string[] }> }
-export interface UniformLocationGrid { mode: 'uniform_grid'; version: 1; hide_empty: boolean; tables: Record<string, (string | null)[][]> }
+export interface GridObjectSequence { direction: 'HORIZONTAL' | 'VERTICAL'; order: string[] }
+export interface UniformLocationGrid { mode: 'uniform_grid'; version: 1; hide_empty: boolean; tables: Record<string, (string | null)[][]>; object_sequences?: Record<string, GridObjectSequence> }
 export type AutomaticLocationLayout = LegacyAutomaticLocationLayout | UniformLocationGrid;
 export interface MapPresentationVariant { automatic_layout?: AutomaticLocationLayout | null; variant_ref: MapPresentationVariantRef; name: string }
 export type SavedMapView = 'physical' | 'logical';

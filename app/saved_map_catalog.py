@@ -67,7 +67,9 @@ class SavedMapCatalog:
     def create_variant(self, map_id: uuid.UUID, name: str, source_variant_id: uuid.UUID) -> MapPresentationVariant:
         self._require_map(map_id)
         # Serialize copying with canonical mutations before reading source JSON.
-        _, source = self._lock_physical_layout(map_id, source_variant_id)
+        self._lock_location_hierarchy()
+        self._lock_object_layout_maps([map_id])
+        source = self._require_variant(map_id, source_variant_id, lock=True)
         variant = MapPresentationVariant(map_id=map_id, name=name, automatic_layout=deepcopy(source.automatic_layout))
         self.session.add(variant)
         self._flush()
@@ -100,9 +102,10 @@ class SavedMapCatalog:
             assignments = {str(key): str(parent) if parent else "root" for key, parent in self.session.execute(
                 select(PhysicalObject.id, PhysicalObject.location_id).join(MapPlacement, MapPlacement.physical_object_id == PhysicalObject.id).where(MapPlacement.map_id == map_id))}
             if settings.get("mode") == "uniform_grid":
-                from app.uniform_location_grid import validate_grid
+                from app.uniform_location_grid import validate_grid, validate_object_sequences
                 try:
                     validate_grid(settings, parents)
+                    validate_object_sequences(settings, parents, assignments)
                 except ValueError as error:
                     raise ValidationError(str(error)) from error
             for container, entry in settings.get("containers", {}).items():
@@ -390,6 +393,41 @@ class SavedMapCatalog:
                     variant.automatic_layout = reconciled
         self._flush()
 
+    def _lock_object_layout_maps(self, map_ids):
+        # Serialize placement membership with variant copies, even if Location is empty.
+        self.session.scalars(select(SavedMap.id).where(SavedMap.id.in_(map_ids))
+            .order_by(SavedMap.id).with_for_update(key_share=True)).all()
+
+    def lock_object_layout_variants(self, map_ids):
+        self._lock_object_layout_maps(map_ids)
+        return self.session.scalars(select(MapPresentationVariant)
+            .where(MapPresentationVariant.map_id.in_(map_ids))
+            .order_by(MapPresentationVariant.id).with_for_update()
+            .execution_options(populate_existing=True)).all()
+
+    def lock_placed_object_layouts(self, object_id):
+        map_ids = list(self.session.scalars(select(MapPlacement.map_id)
+            .where(MapPlacement.physical_object_id == object_id)))
+        return self.lock_object_layout_variants(map_ids) if map_ids else []
+
+    def synchronize_object_layouts(self, variants):
+        from app.uniform_location_grid import reconcile_object_sequences
+        grids = [variant for variant in variants if (variant.automatic_layout or {}).get("mode") == "uniform_grid"]
+        if not grids:
+            return
+        assignments = {variant.map_id: {} for variant in grids}
+        records = self.session.execute(select(MapPlacement.map_id, PhysicalObject.id, PhysicalObject.location_id)
+            .join(PhysicalObject, PhysicalObject.id == MapPlacement.physical_object_id)
+            .where(MapPlacement.map_id.in_(assignments)))
+        for map_id, key, parent in records:
+            assignments[map_id][str(key)] = str(parent) if parent else "root"
+        for variant in grids:
+            settings = variant.automatic_layout
+            reconciled = reconcile_object_sequences(settings, assignments[variant.map_id])
+            if reconciled != settings:
+                variant.automatic_layout = reconciled
+        self._flush()
+
     def synchronize_location_structure(self):
         """Canonical tree edits initialize presentation space, moving saved contents together."""
         locations = self.session.scalars(select(Location).order_by(Location.id).with_for_update()).all()
@@ -483,9 +521,12 @@ class SavedMapCatalog:
         display_width: float | None = None, variant_id: uuid.UUID | None = None,
     ) -> MapPlacement:
         self._require_map(map_id)
-        _, variant = self._lock_physical_layout(map_id, variant_id)
-        if self.session.get(PhysicalObject, physical_object_id) is None:
+        self._lock_location_hierarchy()
+        if self.session.scalar(select(PhysicalObject.id).where(PhysicalObject.id == physical_object_id)
+                .with_for_update(read=True, key_share=True)) is None:
             raise ValidationError("PhysicalObject does not exist", {"physical_object_id": str(physical_object_id)})
+        variants = self.lock_object_layout_variants([map_id])
+        variant = self._require_variant(map_id, variant_id)
         if self.session.scalar(select(MapPlacement.id).where(
             MapPlacement.map_id == map_id, MapPlacement.physical_object_id == physical_object_id
         )) is not None:
@@ -499,6 +540,7 @@ class SavedMapCatalog:
         self.session.add(placement)
         self._flush()
         self.place_assigned_object(physical_object_id, map_id=map_id, variant_id=placement.view_positions[0].variant_id)
+        self.synchronize_object_layouts(variants)
         return placement
 
     def move_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, x: float, y: float, display_width: float | None = None) -> MapPlacement:
@@ -559,6 +601,8 @@ class SavedMapCatalog:
 
     def remove_placement(self, map_id: uuid.UUID, physical_object_id: uuid.UUID) -> None:
         self._require_map(map_id)
+        self._lock_location_hierarchy()
+        variants = self.lock_object_layout_variants([map_id])
         placement = self.session.scalar(select(MapPlacement).where(
             MapPlacement.map_id == map_id, MapPlacement.physical_object_id == physical_object_id
         ).with_for_update())
@@ -568,6 +612,7 @@ class SavedMapCatalog:
             })
         self.session.delete(placement)
         self._flush()
+        self.synchronize_object_layouts(variants)
 
     def set_cable_route(
         self,

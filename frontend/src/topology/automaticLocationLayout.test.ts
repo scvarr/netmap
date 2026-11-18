@@ -180,6 +180,34 @@ describe('uniform grid runtime integration', () => {
     expect(hidden.hidden.has('empty')).toBe(true);
     expect(JSON.stringify(grid)).toBe(before);
   });
+
+  it('lays out ordered full footprints along each container’s own axis', () => {
+    const tree = [loc('room'), loc('nested', 'room'), loc('sibling')];
+    const rootMember = (id: string) => ({ ...placement(id, 'room'), location_ref: null });
+    const members = [...placements, rootMember('rootA'), rootMember('rootB'), placement('c', 'nested')];
+    const footprints = [...objects, ...['rootA', 'rootB', 'c'].map(physicalObjectId => ({
+      physicalObjectId, rectangle: { x: 100, y: -100, width: 80, height: 40 },
+    }))];
+    const baseline = automaticLocationLayout(tree, members, footprints, [], grid);
+    const edited = automaticLocationLayout(tree, members, footprints, [], {
+      ...grid, object_sequences: {
+        room: { direction: 'HORIZONTAL' as const, order: ['b', 'rootA', 'b'] },
+        root: { direction: 'VERTICAL' as const, order: ['rootB', 'rootA'] },
+      },
+    });
+    const a = edited.positions.get('a')!, b = edited.positions.get('b')!;
+    expect([b.width, b.height, a.width, a.height]).toEqual([300, 130, 240, 84]);
+    expect(a.x).toBeGreaterThan(b.x + b.width);
+    expect(a.y).toBe(b.y);
+    expect(edited.frames.get('room')!.width).toBeGreaterThan(baseline.frames.get('room')!.width);
+    expect(edited.frames.get('nested')!.y).toBeGreaterThan(b.y + b.height);
+    expect(edited.frames.get('nested')!.width).toBe(baseline.frames.get('nested')!.width);
+    const first = edited.positions.get('rootB')!, second = edited.positions.get('rootA')!;
+    expect(first.x).toBe(second.x);
+    expect(second.y).toBeGreaterThan(first.y + first.height);
+    expect(baseline.positions.get('rootA')!.y).toBeLessThan(baseline.positions.get('rootB')!.y);
+    expect(edited.positions.size).toBe(members.length);
+  });
 });
 
 

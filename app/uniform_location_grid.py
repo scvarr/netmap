@@ -51,4 +51,38 @@ def reconcile_grid(settings, parents):
                 rows.append([child])
         tables[parent] = rows
     result["tables"] = tables
+    if "object_sequences" in result:
+        result["object_sequences"] = {
+            parent: entry for parent, entry in result["object_sequences"].items()
+            if parent == "root" or parent in parents
+        }
+        if not result["object_sequences"]:
+            del result["object_sequences"]
     return result
+
+
+def validate_object_sequences(settings, parents, assignments):
+    for parent, entry in settings.get("object_sequences", {}).items():
+        if parent != "root" and parent not in parents:
+            raise ValueError("Unknown grid object container")
+        order = entry["order"]
+        if len(order) != len(set(order)) or any(assignments.get(key) != parent for key in order):
+            raise ValueError("Duplicate or foreign grid PhysicalObject")
+
+
+def reconcile_object_sequences(settings, assignments):
+    direct = {}
+    for key, parent in sorted(assignments.items()):
+        direct.setdefault(parent, []).append(key)
+    saved = settings.get("object_sequences", {})
+    sequences = {}
+    for parent in sorted(saved.keys() | direct.keys()):
+        entry = saved.get(parent, {"direction": "VERTICAL", "order": []})
+        remaining = dict.fromkeys(direct.get(parent, []))
+        order = []
+        for key in entry["order"]:
+            if key in remaining:
+                order.append(key)
+                del remaining[key]
+        sequences[parent] = {"direction": entry["direction"], "order": order + list(remaining)}
+    return {**settings, "object_sequences": sequences} if sequences else settings

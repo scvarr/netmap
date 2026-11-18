@@ -1,4 +1,5 @@
 import { LocationGridSorting } from './LocationGridSorting';
+import { GridObjectSequenceControls } from './GridObjectSequenceControls';
 import type { LocationGridArrangement } from './useLocationGridArrangement';
 import { gridTables } from '../topology/uniformGridPresentation';
 import { AutomaticLocationPicker } from './AutomaticLocationPicker';
@@ -39,7 +40,10 @@ export function AutomaticLocationControls({ map, locations, objectLabels, onSave
       </>}
       {arrangement.error && <span role="alert">{t('autoLocation.error')}</span>}
     </div>}
-    {settings?.mode === 'uniform_grid' && arrangement && <LocationGridSorting parent="root" table={gridTables(locations, (arrangement.preview ?? settings).tables).root ?? []} locations={locations} arrangement={arrangement} />}
+    {settings?.mode === 'uniform_grid' && arrangement && <>
+      <LocationGridSorting parent="root" table={gridTables(locations, (arrangement.preview ?? settings).tables).root ?? []} locations={locations} arrangement={arrangement} />
+      <GridObjectSequenceControls parent="root" labels={objectLabels} arrangement={arrangement} />
+    </>}
     {settings && settings.mode !== 'uniform_grid' && <>
       <AutomaticLocationPicker locations={locations} selected={validContainer} onSelect={setContainer} />
       <select aria-label={t('autoLocation.direction')} value={entry.direction} onChange={e => update({ direction: e.target.value as typeof entry.direction })}><option value="VERTICAL">{t('autoLocation.vertical')}</option><option value="HORIZONTAL">{t('autoLocation.horizontal')}</option></select>

@@ -1,4 +1,5 @@
 import type { FlowRectangle } from './nodeFootprint';
+import type { GridObjectSequence } from './savedMapTypes';
 
 export interface GridSize { readonly width: number; readonly height: number }
 
@@ -11,6 +12,7 @@ export interface LocationGridNode {
   readonly id: string;
   readonly minimum: GridSize;
   readonly directObjects: readonly GridSize[];
+  readonly objectDirection?: GridObjectSequence['direction'];
   readonly children: readonly (readonly (LocationGridNode | null)[])[];
   readonly collapsed?: boolean;
   readonly visibleChildren?: readonly string[];
@@ -78,9 +80,12 @@ export function layoutLocationGrid(root: LocationGridNode, hideEmpty = false): L
     };
     const columns = offsets(columnWidths, COLUMN_GAP), rows = offsets(rowHeights, ROW_GAP);
     let bottom = SIDE;
+    let right = SIDE;
+    const horizontal = node.objectDirection === 'HORIZONTAL';
     const objects = node.collapsed ? [] : node.directObjects.filter((_, i) => !node.visibleObjects || node.visibleObjects.includes(i)).map(size => {
-      const box = { x: SIDE, y: bottom, width: size.width, height: size.height };
-      bottom += size.height + ROW_GAP;
+      const box = { x: horizontal ? right : SIDE, y: horizontal ? SIDE : bottom, width: size.width, height: size.height };
+      right = Math.max(right, box.x + box.width + (horizontal ? COLUMN_GAP : SIDE));
+      bottom = Math.max(bottom, box.y + box.height + ROW_GAP);
       return box;
     });
     const hasTable = rowHeights.size > 0;
@@ -92,7 +97,8 @@ export function layoutLocationGrid(root: LocationGridNode, hideEmpty = false): L
     return {
       id: node.id, populated,
       bounds: { x: 0, y: 0,
-        width: Math.max(node.minimum.width, columns.extent + (hasTable ? 2 * SIDE : 0), ...objects.map(o => o.width + 2 * SIDE)),
+        width: Math.max(node.minimum.width, columns.extent + (hasTable ? 2 * SIDE : 0),
+          objects.length ? right + (horizontal ? SIDE - COLUMN_GAP : 0) : 0),
         height: Math.max(node.minimum.height, objects.length ? bottom : 0, hasTable ? tableTop + rows.extent + SIDE : 0) },
       objects, children: shown.map(cell => cell.result),
     };

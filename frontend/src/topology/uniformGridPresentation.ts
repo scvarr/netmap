@@ -1,6 +1,6 @@
 import { layoutLocationGrid, type LocationGridNode, type LocationGridResult } from './locationGridLayout';
 import type { LocationDocument } from './locationTypes';
-import type { MapPlacement, MapLocationState, UniformLocationGrid } from './savedMapTypes';
+import type { GridObjectSequence, MapPlacement, MapLocationState, UniformLocationGrid } from './savedMapTypes';
 import type { DisplayedPhysicalObject } from './locationFrames';
 import type { FlowRectangle } from './nodeFootprint';
 
@@ -24,23 +24,38 @@ export function gridTables(locations: readonly LocationDocument[], saved: Unifor
   return tables;
 }
 
+export function directGridObjects(placements: readonly MapPlacement[]) {
+  const direct = new Map<string, Set<string>>();
+  for (const p of placements) {
+    const parent = p.location_ref?.entity_id ?? 'root';
+    const members = direct.get(parent) ?? new Set<string>();
+    members.add(p.physical_object_ref.entity_id);
+    direct.set(parent, members);
+  }
+  return direct;
+}
+
+export function gridObjectSequence(members: ReadonlySet<string> | undefined, saved?: GridObjectSequence): GridObjectSequence {
+  const remaining = new Set(members);
+  const order = (saved?.order ?? []).filter(id => remaining.delete(id));
+  return { direction: saved?.direction ?? 'VERTICAL', order: [...order, ...[...remaining].sort()] };
+}
+
 export function uniformGridPresentation(locations: readonly LocationDocument[], placements: readonly MapPlacement[], objects: readonly DisplayedPhysicalObject[], states: readonly MapLocationState[], settings: UniformLocationGrid) {
   const tables = gridTables(locations, settings.tables);
   const dimensions = new Map(objects.map(o => [o.physicalObjectId, o.rectangle]));
-  const direct = new Map<string, string[]>();
-  for (const p of placements) {
-    const parent = p.location_ref?.entity_id ?? 'root';
-    direct.set(parent, [...(direct.get(parent) ?? []), p.physical_object_ref.entity_id]);
-  }
+  const direct = directGridObjects(placements);
   const objectIds = new Map<string, string[]>();
   const build = (id: string): LocationGridNode => {
     const state = states.find(s => s.location_ref.entity_id === id);
     const visible = new Set(state?.visible_direct_elements.map(r => r.entity_type + ':' + r.entity_id));
-    const ids = (direct.get(id) ?? []).filter(key => dimensions.has(key)).sort();
+    const sequence = gridObjectSequence(direct.get(id), settings.object_sequences?.[id]);
+    const ids = sequence.order.filter(key => dimensions.has(key));
     objectIds.set(id, ids.filter(key => !state?.collapsed || visible.has('PhysicalObject:' + key)));
     const label = locations.find(l => l.location_ref.entity_id === id)?.name ?? '';
     return { id, minimum: { width: Math.max(100, Math.min(360, 74 + [...label].length * 7)), height: 32 },
       directObjects: ids.map(key => dimensions.get(key)!),
+      objectDirection: sequence.direction,
       children: (tables[id] ?? []).map(row => row.map(key => key ? build(key) : null)),
       collapsed: Boolean(state?.collapsed && !visible.size),
       visibleChildren: state?.collapsed && visible.size ? [...visible].filter(key => key.startsWith('Location:')).map(key => key.slice(9)) : undefined,

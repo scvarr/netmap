@@ -202,10 +202,13 @@ class LocationCatalog:
         if location_id is not None:
             self._require_location(location_id, lock=True)
         physical_object = self._require_physical_object(physical_object_id, lock=True)
+        from app.saved_map_catalog import SavedMapCatalog
+        maps = SavedMapCatalog(self.session)
+        variants = maps.lock_placed_object_layouts(physical_object_id)
         physical_object.location_id = location_id
         self.session.flush()
-        from app.saved_map_catalog import SavedMapCatalog
-        SavedMapCatalog(self.session).place_assigned_object(physical_object_id)
+        maps.place_assigned_object(physical_object_id)
+        maps.synchronize_object_layouts(variants)
         return physical_object
 
     def _require_location(self, location_id: uuid.UUID, *, lock: bool = False) -> Location:

@@ -22,6 +22,9 @@ class PhysicalObjectDeletionCatalog:
         self.session = session
 
     def delete(self, physical_object_id: uuid.UUID) -> None:
+        from app.saved_map_catalog import SavedMapCatalog
+        maps = SavedMapCatalog(self.session)
+        maps._lock_location_hierarchy()
         object_ = self.session.scalar(
             select(PhysicalObject).where(PhysicalObject.id == physical_object_id).with_for_update()
         )
@@ -39,9 +42,11 @@ class PhysicalObjectDeletionCatalog:
                 "PhysicalObject is in use",
                 {"reason": "PHYSICAL_OBJECT_IN_USE", "blockers": blockers},
             )
+        variants = maps.lock_placed_object_layouts(physical_object_id)
         self._delete_owned_l2_configuration(interface_ids)
         internal_connection_ids = self._connection_ids_between(point_ids, point_ids)
         self._delete_aggregate(object_, point_ids, interface_ids, internal_connection_ids)
+        maps.synchronize_object_layouts(variants)
 
     def _ordinary_blockers(self, point_ids: tuple[uuid.UUID, ...], interface_ids: tuple[uuid.UUID, ...]) -> dict[str, int]:
         blockers: Counter[str] = Counter()

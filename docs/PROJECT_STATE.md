@@ -49,11 +49,15 @@
   дочерних элементов, компактной геометрией, hide/collapse и boundary anchors.
   SLOC добавляет uniform-grid с сохранением в variant, размещение стрелками
   и сортировку дочерних Location по строке, столбцу или всей таблице.
-  DOC-LOC-03 — PARTIAL. Остаются OPEN порядок и ориентация непосредственных
-  PhysicalObject и grid-specific partial-collapse UX. Ручная приёмка учитывается
-  отдельно. SLOC-04-SAVE добавляет сохранение общего черновика активного variant
+  DOC-LOC-03 — PARTIAL. Остаются OPEN grid-specific partial-collapse UX и
+  объектная кабельная геометрия. Ручная приёмка учитывается отдельно.
+  SLOC-04-SAVE добавляет сохранение общего черновика активного variant
   из настроек Location. Chromium с реальным backend и PostgreSQL подтвердил
   сохранение порядка после перезагрузки и независимость второго варианта.
+- SLOC-05 — IMPLEMENTED на milestone-ветке. В uniform-grid порядок и ориентация
+  непосредственного оборудования каждого Location и root входят в общий черновик
+  варианта. Состав последовательности согласуется с canonical assignment и
+  размещением на карте. Ручная приёмка OPEN.
 - Редактор кабельного маршрута: transient draft, Save/Cancel, добавление,
   перемещение и удаление waypoints через инспектор, snapping к чужой геометрии,
   angle/length assistance, числовое изменение длины сегмента, boundary anchors.

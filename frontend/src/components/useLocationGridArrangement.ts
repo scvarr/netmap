@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { LocationDocument } from '../topology/locationTypes';
-import type { AutomaticLocationLayout, UniformLocationGrid } from '../topology/savedMapTypes';
-import { gridTables } from '../topology/uniformGridPresentation';
+import type { AutomaticLocationLayout, GridObjectSequence, MapPlacement, UniformLocationGrid } from '../topology/savedMapTypes';
+import { directGridObjects, gridObjectSequence, gridTables } from '../topology/uniformGridPresentation';
 import { moveGridLocation, normalizeLocationTable, sortLocationTable, type GridSortScope, type GridDirection } from '../topology/locationGridArrangement';
-interface Input { automatic?: AutomaticLocationLayout | null; variantId?: string; locations: readonly LocationDocument[]; onAutomaticLayout?: (settings: UniformLocationGrid) => Promise<void> }
+interface Input { automatic?: AutomaticLocationLayout | null; variantId?: string; locations: readonly LocationDocument[]; placements?: readonly MapPlacement[]; onAutomaticLayout?: (settings: UniformLocationGrid) => Promise<void> }
 export function useLocationGridArrangement(input: Input | undefined, scene?: string) {
   const key = JSON.stringify([scene, input?.variantId, input?.automatic]);
   const currentKey = useRef(key); currentKey.current = key;
@@ -13,8 +13,15 @@ export function useLocationGridArrangement(input: Input | undefined, scene?: str
   const pending = useRef(false);
   const [error, setError] = useState(false);
   const preview = draft?.key === key ? draft.settings : null;
-  const hasChanges = preview !== null && input?.automatic?.mode === 'uniform_grid' &&
-    JSON.stringify(preview.tables) !== JSON.stringify(gridTables(input.locations, input.automatic.tables));
+  const automatic = input?.automatic?.mode === 'uniform_grid' ? input.automatic : null;
+  const placements = input?.placements;
+  const direct = useMemo(() => directGridObjects(placements ?? []), [placements]);
+  const hasChanges = preview !== null && input !== undefined && automatic !== null &&
+    (JSON.stringify(preview.tables) !== JSON.stringify(gridTables(input.locations, automatic.tables)) ||
+      Object.entries(preview.object_sequences ?? {}).some(([parent, entry]) =>
+        JSON.stringify(gridObjectSequence(direct.get(parent), entry)) !==
+        JSON.stringify(gridObjectSequence(direct.get(parent), automatic.object_sequences?.[parent]))));
+  const objectSequence = (parent: string) => gridObjectSequence(direct.get(parent), (preview ?? automatic)?.object_sequences?.[parent]);
   const cancel = () => { setDraft(null); select(null); setError(false); };
   useEffect(() => { cancel(); }, [key]);
   const enter = () => {
@@ -42,6 +49,15 @@ export function useLocationGridArrangement(input: Input | undefined, scene?: str
     });
     setError(false);
   };
+  const editObjects = (parent: string, update: (sequence: GridObjectSequence) => GridObjectSequence) => {
+    if (pending.current || !automatic || !input?.onAutomaticLayout) return;
+    setDraft(current => {
+      const base = current?.key === key ? current.settings : {...automatic, tables: gridTables(input.locations, automatic.tables)};
+      const sequence = gridObjectSequence(direct.get(parent), base.object_sequences?.[parent]);
+      return { key, settings: {...base, object_sequences: {...base.object_sequences, [parent]: update(sequence)}} };
+    });
+    setError(false);
+  };
   const finish = async () => {
     if (pending.current || !preview || !input?.onAutomaticLayout) return false;
     pending.current = true; setBusy(true); setError(false);
@@ -55,7 +71,7 @@ export function useLocationGridArrangement(input: Input | undefined, scene?: str
     }
     finally { pending.current = false; setBusy(false); }
   };
-  return {preview, hasChanges, selected: preview ? selected : null, select, busy, error, enter, cancel, move, sort, finish, canMove:(direction: GridDirection) => Boolean(operation(direction))};
+  return {preview, hasChanges, selected: preview ? selected : null, select, busy, error, enter, cancel, move, sort, objectSequence, editObjects, finish, canMove:(direction: GridDirection) => Boolean(operation(direction))};
 }
 
 export type LocationGridArrangement = ReturnType<typeof useLocationGridArrangement>;

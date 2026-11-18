@@ -249,12 +249,20 @@ def validate_package(package: object) -> dict:
     if any((row["base_revision_id"], row["panel_key"]) not in panel_memberships for row in result["built_in_endpoint_definitions"]):
         raise PackageError("BuiltInEndpointDefinition.panel_key refers to a panel in another version")
     locations = {row["id"]: row["parent_location_id"] for row in result["locations"]}
-    from app.uniform_location_grid import validate_grid
+    from app.uniform_location_grid import validate_grid, validate_object_sequences
+    parents = {str(key): str(parent) if parent else "root" for key, parent in locations.items()}
+    object_parents = {row["id"]: str(row["location_id"]) if row["location_id"] else "root"
+                      for row in result["physical_objects"]}
+    assignments = {}
+    for placement in result["map_placements"]:
+        key = placement["physical_object_id"]
+        assignments.setdefault(placement["map_id"], {})[str(key)] = object_parents[key]
     for variant in result["map_presentation_variants"]:
         settings = variant.get("automatic_layout")
         if settings and settings.get("mode") == "uniform_grid":
             try:
-                validate_grid(settings, {str(k): str(v) if v else "root" for k, v in locations.items()})
+                validate_grid(settings, parents)
+                validate_object_sequences(settings, parents, assignments.get(variant["map_id"], {}))
             except ValueError as error:
                 raise PackageError(str(error)) from error
     for location_id in locations:

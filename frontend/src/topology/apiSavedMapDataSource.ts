@@ -31,6 +31,16 @@ const automaticLayout = (value: unknown): import('./savedMapTypes').AutomaticLoc
     for (const rows of Object.values(tables)) {
       if (!Array.isArray(rows) || !rows.every(row => Array.isArray(row) && row.every(id => id === null || typeof id === 'string'))) malformed('Invalid grid cells');
     }
+    if (item.object_sequences !== undefined) {
+      for (const [parent, entry] of Object.entries(object(item.object_sequences, 'grid object sequences'))) {
+        if (parent !== 'root') uuid(parent, 'grid object container');
+        const sequence = object(entry, 'grid object sequence');
+        if (sequence.direction !== 'VERTICAL' && sequence.direction !== 'HORIZONTAL') malformed('Invalid grid object direction');
+        if (!Array.isArray(sequence.order)) malformed('Invalid grid object order');
+        const ids = (sequence.order as unknown[]).map(id => uuid(id, 'grid object order'));
+        if (new Set(ids).size !== ids.length) malformed('Duplicate grid object');
+      }
+    }
     return item as unknown as import('./savedMapTypes').UniformLocationGrid;
   }
   const containers = object(item.containers, 'automatic_layout.containers');

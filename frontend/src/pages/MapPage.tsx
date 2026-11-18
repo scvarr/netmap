@@ -1,3 +1,4 @@
+import { GridObjectSequenceControls } from '../components/GridObjectSequenceControls';
 import { LocationSettingsDialog } from '../components/LocationSettingsDialog';
 import { LocationGridSorting } from '../components/LocationGridSorting';
 import { gridTables } from '../topology/uniformGridPresentation';
@@ -360,7 +361,7 @@ function MapPageContent({
   const activeMap = !legacy && map?.map_ref.entity_id === mapId ? map : null;
   const locationArrangement = useLocationGridArrangement(activeMap && locations && viewMode === 'physical' ? {
     automatic: activeMap.variants.find(v => v.variant_ref.entity_id === activeMap.active_variant_ref.entity_id)?.automatic_layout,
-    variantId: activeMap.active_variant_ref.entity_id, locations,
+    variantId: activeMap.active_variant_ref.entity_id, locations, placements: activeMap.placements,
     onAutomaticLayout: savedMapDataSource?.setAutomaticLayout ? async settings => {
       const updated = await savedMapDataSource.setAutomaticLayout!(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, settings);
       setMap(current => current?.map_ref.entity_id === updated.map_ref.entity_id && current.active_variant_ref.entity_id === updated.active_variant_ref.entity_id ? updated : current);
@@ -371,6 +372,10 @@ function MapPageContent({
     sceneDocument?.sceneKey === presentationSceneKey
       ? sceneDocument.document
       : null;
+  const layoutObjectLabels = useMemo(() => new Map((document?.nodes ?? []).flatMap(node => {
+    const id = physicalObjectIdForNode(node);
+    return id ? [[id, node.label] as const] : [];
+  })), [document]);
   latestActiveMap.current = activeMap;
   latestPhysicalDocument.current = viewMode === "physical" ? document : null;
   const ids =
@@ -1763,7 +1768,7 @@ function MapPageContent({
             </button>
             {utilitySection === "layout" && <div className="map-utility-panel__content">
               <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => { mapDetailRequest.current += 1; setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); next.delete("focus"); return next; }); }} />
-              {activeMap && locations && savedMapDataSource?.setAutomaticLayout && <AutomaticLocationControls arrangement={locationArrangement} key={activeMap.active_variant_ref.entity_id} map={activeMap} locations={locations} objectLabels={new Map((document?.nodes ?? []).flatMap(n => { const id = physicalObjectIdForNode(n); return id ? [[id, n.label] as const] : []; }))} onSave={async settings => { const updated = await savedMapDataSource.setAutomaticLayout!(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, settings); setMap(current => current?.map_ref.entity_id === updated.map_ref.entity_id && current.active_variant_ref.entity_id === updated.active_variant_ref.entity_id ? updated : current); }} />}
+              {activeMap && locations && savedMapDataSource?.setAutomaticLayout && <AutomaticLocationControls arrangement={locationArrangement} key={activeMap.active_variant_ref.entity_id} map={activeMap} locations={locations} objectLabels={layoutObjectLabels} onSave={async settings => { const updated = await savedMapDataSource.setAutomaticLayout!(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, settings); setMap(current => current?.map_ref.entity_id === updated.map_ref.entity_id && current.active_variant_ref.entity_id === updated.active_variant_ref.entity_id ? updated : current); }} />}
               <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
             </div>}
           </section>
@@ -2143,7 +2148,19 @@ function MapPageContent({
         mapOperation={mapOperation?.mapId === mapId ? mapOperation : null}
         onRetryMapRefresh={retryMapRefresh}
       />
-      {locationConfigId && viewMode === 'physical' && <LocationSettingsDialog arrangement={locationArrangement} collapseBusy={locationStateBusy} key={locationConfigId} name={locations?.find(location => location.location_ref.entity_id === locationConfigId)?.name ?? locationConfigId} onClose={() => setLocationConfigId(null)} layout={activeVariant?.automatic_layout?.mode === 'uniform_grid' ? <LocationGridSorting parent={locationConfigId} table={gridTables(locations ?? [], (locationArrangement.preview ?? activeVariant.automatic_layout).tables)[locationConfigId] ?? []} locations={locations ?? []} arrangement={locationArrangement} /> : undefined}>
+      {locationConfigId && viewMode === 'physical' && <LocationSettingsDialog
+        arrangement={locationArrangement}
+        collapseBusy={locationStateBusy}
+        key={locationConfigId}
+        name={locations?.find(location => location.location_ref.entity_id === locationConfigId)?.name ?? locationConfigId}
+        onClose={() => setLocationConfigId(null)}
+        layout={activeVariant?.automatic_layout?.mode === 'uniform_grid' ? <>
+          <LocationGridSorting parent={locationConfigId}
+            table={gridTables(locations ?? [], (locationArrangement.preview ?? activeVariant.automatic_layout).tables)[locationConfigId] ?? []}
+            locations={locations ?? []} arrangement={locationArrangement} />
+          <GridObjectSequenceControls parent={locationConfigId} labels={layoutObjectLabels} arrangement={locationArrangement} />
+        </> : undefined}
+      >
         <p>Оставить видимыми при сворачивании:</p>
         <div className="map-location-dialog__choices">
           {directLocationChoices === null ? <p>Загрузка…</p> : directLocationChoices.map(({ ref, label }) => {

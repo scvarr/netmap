@@ -33,6 +33,11 @@ export function LocationSettingsDialog({name, layout, arrangement, collapseBusy,
           {t(arrangement.busy ? 'gridSort.savingLayout' : 'gridSort.saveLayout')}
         </button>
       )}
+      {layout && tab === 'layout' && arrangement.preview && (
+        <button type="button" disabled={arrangement.busy || collapseBusy} onClick={arrangement.cancel}>
+          {t('autoLocation.cancel')}
+        </button>
+      )}
       <button type="button" disabled={arrangement.busy} onClick={onClose}>{t('gridSort.close')}</button>
     </div>
   </section></div>;

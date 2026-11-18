@@ -285,6 +285,11 @@ variant's shared draft through the same operation as Done. Chromium with the
 Docker backend and PostgreSQL verified save/reload of 42 children, preservation
 of empty cells and isolation of a second variant.
 
+SLOC-05: **IMPLEMENTED на milestone-ветке; ручная приёмка OPEN** — список и
+ориентация непосредственных PhysicalObject для каждого Location и root, общий
+черновик и сохранение в variant, согласование при изменении состава, размещение
+по полным размерам. DOC-LOC-03 остаётся PARTIAL.
+
 ## Направления и зависимости
 
 Единственный roadmap — существующие Phase A–I выше; их gates и критерии

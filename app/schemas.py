@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, IPvAnyAddress, model_validator
+from pydantic import BaseModel, ConfigDict, Field, FiniteFloat, IPvAnyAddress, model_serializer, model_validator
 from pydantic_core import PydanticCustomError
 
 
@@ -265,12 +265,26 @@ class LegacyAutomaticLocationLayout(BaseModel):
     containers: dict[str, AutomaticLocationLayoutEntry] = Field(default_factory=dict)
 
 
+class UniformGridObjectSequence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    direction: Literal["HORIZONTAL", "VERTICAL"]
+    order: list[uuid.UUID]
+
+
 class UniformLocationGrid(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mode: Literal["uniform_grid"]
     version: Literal[1]
     hide_empty: bool = False
     tables: dict[str, list[list[uuid.UUID | None]]] = Field(default_factory=dict)
+    object_sequences: dict[str, UniformGridObjectSequence] = Field(default_factory=dict)
+
+    @model_serializer(mode="wrap")
+    def serialize(self, handler):
+        result = handler(self)
+        if not self.object_sequences:
+            result.pop("object_sequences", None)
+        return result
 
 
 AutomaticLocationLayout = LegacyAutomaticLocationLayout | UniformLocationGrid

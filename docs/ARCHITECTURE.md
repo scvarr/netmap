@@ -474,8 +474,9 @@ and independent cable route anchors are preserved. Manual editing is unchanged.
 ## DOC-LOC-03 — TARGET структурной компоновки Location
 
 **PARTIAL.** AUTO-LOC-01/02 и SLOC-01–04 в main: uniform-grid, стрелочная
-расстановка и сортировка дочерних Location. Порядок и ориентация непосредственных
-PhysicalObject и grid-specific partial-collapse UX остаются OPEN.
+расстановка и сортировка дочерних Location. SLOC-05 добавляет на milestone-ветке
+порядок и ориентацию непосредственных PhysicalObject. Grid-specific partial-collapse
+UX и объектная кабельная геометрия остаются OPEN.
 [Открытые вопросы](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
 
 Location допускают строки, столбцы и комбинированную плиточную структуру внутри
@@ -535,13 +536,13 @@ holes in active tracks retain their slot. Collapse uses minimum measured size
 before parent-table equalization. Nested tables retain independent inner sizes.
 Equipment footprints are retained without scaling; only Location frames expand.
 Coordinates are parent-local flow units, with no zoom or prior positions.
-AUTO-LOC-01/02 remain unchanged. DOC-LOC-03 partially implemented by SLOC-01–04; remaining capabilities and manual acceptance stay OPEN.
+AUTO-LOC-01/02 remain unchanged. DOC-LOC-03 remains PARTIAL. Manual acceptance is OPEN.
 
 ### SLOC-02 — uniform grid runtime integration
 
 **IMPLEMENTED / MERGED.** L1 variants explicitly
 select manual, legacy sequence or uniform grid in the existing controls.
-The JSONB contract is `{mode: "uniform_grid", version: 1, hide_empty, tables}`;
+The base JSONB contract is `{mode: "uniform_grid", version: 1, hide_empty, tables}`.
 `tables` maps canonical parent UUIDs (or technical `root`) to arrays of rows of
 Location UUID/null cells. Legacy direction/order JSON and null manual settings
 retain their contract. Switching to grid initializes an ID-sorted single column,
@@ -555,7 +556,7 @@ reparent and empty-Location delete also reconcile every stored grid variant in
 the canonical transaction, under hierarchy then UUID-ordered variant locks.
 Surviving cells retain addresses; stale cells become null, deleted-parent tables
 are removed, and missing children fill the first free cell or append a row.
-Manual and legacy settings are untouched; user saves remain strictly validated. New equipment uses an
+Manual and legacy settings are untouched; user saves remain strictly validated. Equipment defaults to an
 ID-sorted vertical sequence within its canonical Location. Complete rendered
 footprints feed SLOC-01; panels and objects retain dimensions. Populated siblings
 share both maxima; nested tables measure independently.
@@ -648,3 +649,25 @@ settings save independently. No backend/API/schema changes.
 SLOC-04-SAVE was verified in Chromium against the Docker backend and PostgreSQL.
 One successful save retained sorted order and empty cells for 42 direct children
 after reload. A second variant retained its original order.
+
+### SLOC-05 — direct PhysicalObject sequences
+
+Version 1 accepts optional `object_sequences`, keyed by canonical Location UUID
+or technical `root`. Each value is `{direction, order}`: `HORIZONTAL` or
+`VERTICAL` and an ordered list of PhysicalObject UUIDs. Absent entries use
+vertical UUID order. Map placements determine eligibility, and each placed
+object's canonical Location assignment determines its container. Save and
+workspace import reject duplicates, unknown containers and foreign objects.
+Variant copy and workspace export/import carry the JSON settings.
+
+Placement creation/removal and canonical reassignment/deletion reconcile
+affected variants in the same transaction. Surviving objects keep their order,
+stale IDs are removed, and missing members are appended in UUID order.
+Empty containers retain configured direction until their Location is deleted.
+The direct-object sequence uses full rendered footprints on its own axis.
+The independently measured child Location table starts below the sequence.
+
+The Layout panel and the Location settings Layout tab show the direct equipment
+list, up/down actions and orientation. These controls share the draft with
+Location moves and sorts. Save layout and Done submit the draft once, Cancel
+and a failed save restore the authoritative settings. Manual acceptance is OPEN.
