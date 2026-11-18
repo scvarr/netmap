@@ -1024,17 +1024,15 @@ function MapPageContent({
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return false;
     setSceneDocument({ sceneKey: `${operation.mapId}/physical`, document: next }); return true;
   };
-  const refreshWiringAfterRouteWrite = async (operation: WiringOperation): Promise<boolean> => {
-    if (!await reloadMap(operation.mapId)) return false;
-    return refreshWiringProjection(operation);
+  const refreshCreatedWiring = async (operation: WiringOperation) => {
+    try {
+      if (await reloadMap(operation.mapId) && await refreshWiringProjection(operation)) setWiring({ status: "idle" });
+    } catch {
+      if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "refresh-failed", error: null });
+    }
   };
   const saveWiringRoute = async (operation: WiringOperation) => {
-    if (!operation.canonicalResult) return;
-    if (!savedMapDataSource || typeof savedMapDataSource.setCableRoute !== "function") {
-      try { if (await refreshWiringProjection(operation)) setWiring({ status: "idle" }); }
-      catch { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "refresh-failed", error: null }); }
-      return;
-    }
+    if (!operation.canonicalResult || typeof savedMapDataSource?.setCableRoute !== "function") return;
     setWiring({ ...operation, status: "route-saving", error: null });
     // Saved routes follow physical projection order (stable object UUIDs), not gesture order.
     const waypoints = operation.source.physicalObjectId > operation.target.physicalObjectId
@@ -1042,8 +1040,7 @@ function MapPageContent({
     try { await savedMapDataSource.setCableRoute(operation.mapId, operation.canonicalResult.cable_ref.entity_id, routeNormalizerRef.current?.(operation.canonicalResult.cable_ref.entity_id, waypoints) ?? waypoints, operation.variantId); }
     catch { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "route-failed", error: null }); return; }
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
-    try { if (await refreshWiringAfterRouteWrite(operation)) setWiring({ status: "idle" }); }
-    catch { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, status: "refresh-failed", error: null }); }
+    await refreshCreatedWiring(operation);
   };
   const createWiring = async (confirmedHistoricalLabel?: string) => {
     if (!physicalEndpointConnectionWriteDataSource || wiring.status !== "confirming" || (wiringHistoricalCandidate && !confirmedHistoricalLabel) || (wiring.naming.generate_cable_label && !wiring.naming.cable_label_template_id)) return;
@@ -1054,10 +1051,12 @@ function MapPageContent({
     try { canonicalResult = await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection({ source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: 1 }, target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: 1 }, cable_label: operation.naming.cable_label?.trim() || null, cable_label_template_id: operation.naming.cable_label_template_id ?? null, generate_cable_label: operation.naming.generate_cable_label === true, confirmed_historical_label: confirmedHistoricalLabel ?? null }); }
     catch (reason) { if (isHistoricalCableLabelReuseRequired(reason)) { setWiringHistoricalCandidate(reason.candidate); setWiring(operation); } else if (confirmedHistoricalLabel && isHistoricalCableLabelReuseConfirmationStale(reason)) { setWiringHistoricalCandidate(null); setWiring(operation); setTimeout(() => void createWiring(), 0); } else if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, error: errorMessage(reason, t("map.connectFailed")) }); return; }
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
-    await saveWiringRoute({ ...operation, canonicalResult });
+    const created = { ...operation, canonicalResult };
+    if (created.draftWaypoints.length && typeof savedMapDataSource?.setCableRoute === "function") await saveWiringRoute(created);
+    else await refreshCreatedWiring(created);
   };
   const retryWiringRoute = async () => { if (wiring.status !== "route-failed") return; await saveWiringRoute(wiring); };
-  const retryWiringRefresh = async () => { if (wiring.status !== "refresh-failed") return; const operation = wiring; try { if (await refreshWiringAfterRouteWrite(operation)) setWiring({ status: "idle" }); } catch { if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring(operation); } };
+  const retryWiringRefresh = async () => { if (wiring.status === "refresh-failed") await refreshCreatedWiring(wiring); };
 
   const resolveInsertionPosition = async (
     id: string,
@@ -1932,7 +1931,7 @@ function MapPageContent({
         {(wiring.status === "confirming" || wiring.status === "creating") && <><p>{t("map.wiring.endpointSummary", { sourceObject: wiring.source.objectLabel, sourcePort: wiring.source.portLabel, targetObject: wiring.target.objectLabel, targetPort: wiring.target.portLabel })}</p><p>{t("map.wiring.points", { count: wiring.draftWaypoints.length })}</p><CableNamingFields dataSource={cableLabelDataSource} disabled={wiring.status === "creating"} value={wiring.naming} onChange={(naming) => { setWiringHistoricalCandidate(null); setWiring((current) => current.status === "confirming" ? { ...current, naming } : current); }} />{wiringHistoricalCandidate && wiring.status === "confirming" && <div className="map-wiring-historical-warning" role="alert"><strong>{t("map.wiring.historicalReuse", { name: wiringHistoricalCandidate })}</strong><small>{t("map.wiring.historicalReuseHint")}</small><div><button type="button" onClick={() => setWiringHistoricalCandidate(null)}>{t("map.wiring.historicalReuseNo")}</button><button type="button" onClick={() => { const candidate = wiringHistoricalCandidate; setWiringHistoricalCandidate(null); void createWiring(candidate); }}>{t("map.wiring.historicalReuseYes")}</button></div></div>}{wiring.error && <p role="alert">{wiring.error}</p>}<div className="map-dialog__actions map-dialog__actions--wiring"><button type="button" disabled={wiring.status === "creating"} onClick={() => { setWiringHistoricalCandidate(null); setWiring({ status: "selecting-target", mapId: wiring.mapId, variantId: wiring.variantId, source: wiring.source, draftWaypoints: wiring.draftWaypoints, selectedWaypointIndex: wiring.selectedWaypointIndex }); }}>{t("map.back")}</button><button type="button" disabled={wiring.status === "creating"} onClick={() => { setWiringHistoricalCandidate(null); setWiring({ status: "idle" }); }}>{t("map.cancel")}</button><button type="button" disabled={wiring.status === "creating" || Boolean(wiringHistoricalCandidate) || (wiring.naming.generate_cable_label === true && !wiring.naming.cable_label_template_id)} onClick={() => void createWiring()}>{wiring.status === "creating" ? t("map.creating") : wiring.error ? t("action.retry") : t("map.createCable")}</button></div></>}
         {wiring.status === "route-saving" && <p role="status">{t("map.savingRoute")}</p>}
         {wiring.status === "route-failed" && <><p role="alert">{t("map.routeFailed")}</p><button type="button" onClick={() => void retryWiringRoute()}>{t("map.retrySaveRoute")}</button><button type="button" onClick={() => setWiring({ status: "idle" })}>{t("action.close")}</button></>}
-        {wiring.status === "refresh-failed" && <><p role="alert">{t("map.wiringRefreshFailed")}</p><button type="button" onClick={() => void retryWiringRefresh()}>{t("map.retryRefresh")}</button></>}
+        {wiring.status === "refresh-failed" && <><p role="alert">{t("map.cableCreatedRefreshFailed")}</p><button type="button" onClick={() => void retryWiringRefresh()}>{t("map.retryRefresh")}</button></>}
       </div></section>}
       {contextAnchor && viewMode === "physical" && !contextBusy && <MapContextMenu
         target={contextAnchor}

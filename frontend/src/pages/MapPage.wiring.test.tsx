@@ -27,7 +27,7 @@ describe('MapPage visual wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'pane 2' }));
     fireEvent.click(screen.getByRole('button', { name: reverse ? 'blueprint port' : 'generic port' }));
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
-    await waitFor(() => expect(setCableRoute).toHaveBeenCalledWith('map-1', 'cable-1', reverse ? [{ x: 30, y: 40 }, { x: 10, y: 20 }] : [{ x: 10, y: 20 }, { x: 30, y: 40 }], VARIANT));
+    await waitFor(() => expect(setCableRoute).toHaveBeenCalledExactlyOnceWith('map-1', 'cable-1', reverse ? [{ x: 30, y: 40 }, { x: 10, y: 20 }] : [{ x: 10, y: 20 }, { x: 30, y: 40 }], VARIANT));
     expect(write).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ source: expect.objectContaining({ connection_point_id: reverse ? 'b-cp' : 'a-cp' }), target: expect.objectContaining({ connection_point_id: reverse ? 'a-cp' : 'b-cp' }) }));
   });
   it('keeps primary map controls usable while the transient trace dock opens and closes without saved-map writes', async () => {
@@ -45,9 +45,11 @@ describe('MapPage visual wiring', () => {
     expect(maps.setCableRoute).not.toHaveBeenCalled();
   });
 
-  it('uses a non-modal selecting panel, keeps canvas clickable, then writes exact ports once', async () => {
-    const { write, loadProjection } = renderPage();
+  it('creates the exact cable once without a route and refreshes both map and projection', async () => {
+    const { write, loadProjection, maps, setCableRoute } = renderPage();
     await screen.findByTestId('canvas');
+    const mapReads = maps.loadMap.mock.calls.length;
+    const projectionReads = loadProjection.mock.calls.length;
     startWiring();
     expect(screen.getByLabelText('Соединить порты')).not.toHaveAttribute('aria-modal', 'true');
     expect(screen.getByTestId('canvas')).toBeInTheDocument();
@@ -62,13 +64,22 @@ describe('MapPage visual wiring', () => {
     expect(write).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     await waitFor(() => expect(write).toHaveBeenCalledWith({ source: { kind: 'CONNECTION_POINT', connection_point_id: 'a-cp', member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: 'b-cp', member_index: 1 }, cable_label: null, cable_label_template_id: null, generate_cable_label: false, confirmed_historical_label: null }));
-    expect(write).toHaveBeenCalledTimes(1); expect(loadProjection.mock.calls.length).toBeGreaterThan(1);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Соединить порты' })).not.toBeInTheDocument());
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(setCableRoute).not.toHaveBeenCalled();
+    expect(maps.loadMap).toHaveBeenCalledTimes(mapReads + 1);
+    expect(loadProjection.mock.calls.length).toBeGreaterThan(projectionReads);
   });
 
   it('retries only projection refresh after a successful write', async () => {
     const write = vi.fn().mockResolvedValue(creation); let physicalReads = 0; const loadProjection = vi.fn((request: any) => request.layer === 'L1' && ++physicalReads === 2 ? Promise.reject(new Error('refresh')) : Promise.resolve(doc));
-    renderPage(write, loadProjection); await screen.findByTestId('canvas'); startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
-    expect(await screen.findByText('Кабель и трасса сохранены, но карту не удалось обновить.')).toBeInTheDocument(); fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' })); await waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+    const { setCableRoute } = renderPage(write, loadProjection); await screen.findByTestId('canvas'); startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    expect(await screen.findByText('Кабель создан, но карту не удалось обновить.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Соединить порты' })).not.toBeInTheDocument());
+    expect(physicalReads).toBe(3);
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(setCableRoute).not.toHaveBeenCalled();
   });
 
   it('passes generated and manual Cable naming through the map create request and requires a template for generation', async () => {
@@ -83,7 +94,10 @@ describe('MapPage visual wiring', () => {
     const write = vi.fn().mockRejectedValueOnce(new HistoricalCableLabelReuseRequiredError('000001')).mockResolvedValue(creation); const { loadProjection, setCableRoute } = renderPage(write); await screen.findByTestId('canvas');
     startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await screen.findByRole('option', { name: 'FC' }); fireEvent.change(screen.getByLabelText('Шаблон'), { target: { value: 'template-1' } }); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
     expect(await screen.findByText('Имя 000001 использовалось ранее. Использовать повторно?')).toBeInTheDocument(); expect(screen.getAllByRole('dialog')).toHaveLength(1); expect(screen.queryByRole('heading', { name: 'Имя 000001 использовалось ранее' })).not.toBeInTheDocument(); expect(screen.getByRole('button', { name: 'Создать кабель' })).toBeDisabled(); expect(write).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: 'Да' })); await waitFor(() => expect(write).toHaveBeenLastCalledWith(expect.objectContaining({ confirmed_historical_label: '000001', cable_label_template_id: 'template-1', generate_cable_label: true }))); await waitFor(() => expect(setCableRoute).toHaveBeenCalledWith('map-1', 'cable-1', [], VARIANT)); expect(loadProjection.mock.calls.length).toBeGreaterThan(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Да' })); await waitFor(() => expect(write).toHaveBeenLastCalledWith(expect.objectContaining({ confirmed_historical_label: '000001', cable_label_template_id: 'template-1', generate_cable_label: true })));
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Соединить порты' })).not.toBeInTheDocument());
+    expect(setCableRoute).not.toHaveBeenCalled();
+    expect(loadProjection.mock.calls.length).toBeGreaterThan(1);
   });
 
   it('keeps the wiring form after declining historical label reuse without another write', async () => {
@@ -127,9 +141,10 @@ describe('MapPage visual wiring', () => {
     const mapId = '00000000-0000-4000-8000-000000000001';
     const cableId = '00000000-0000-4000-8000-000000000003';
     const variantId = '00000000-0000-4000-8000-000000000004';
-    const savedMap: any = { map_ref: { entity_type: 'SavedMap', entity_id: mapId }, active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, name: 'Основной' }], name: 'M1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: '00000000-0000-4000-8000-000000000011' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0, locked: false } } }], cable_routes: [], text_annotations: [] };
+    const savedMap = { map_ref: { entity_type: 'SavedMap', entity_id: mapId }, active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, name: 'Основной' }], name: 'M1', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: '00000000-0000-4000-8000-000000000011' }, positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0, locked: false } } }], cable_routes: [], text_annotations: [], location_states: [] };
     let acknowledged = false; let postWriteReads = 0;
-    const refreshedMap = { ...savedMap, cable_routes: [{ cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: cableId }, view: 'L1/PHYSICAL_OBJECT', waypoints: [] }] };
+    const waypoints = [{ x: 10, y: 20 }];
+    const refreshedMap = { ...savedMap, cable_routes: [{ cable_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: cableId }, view: 'L1/PHYSICAL_OBJECT', waypoints }] };
     const fetchMock = vi.fn((url: string, init?: RequestInit) => {
       if (url === '/api/v1/maps') return Promise.resolve(apiResponse({ maps: [savedMap] }));
       if ((init?.method ?? 'GET') === 'PUT') { acknowledged = true; return Promise.resolve(apiResponse({ acknowledged: true })); }
@@ -140,13 +155,17 @@ describe('MapPage visual wiring', () => {
     const write = vi.fn().mockResolvedValue({ ...creation, cable_ref: { ...creation.cable_ref, entity_id: cableId } });
     renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(doc) }, savedMapDataSource: new ApiSavedMapDataSource(), physicalEndpointConnectionWriteDataSource: { createPhysicalEndpointConnection: write } }, `/map?map=${mapId}&view=physical`);
     await screen.findByTestId('canvas');
-    startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
-    expect(await screen.findByText('Кабель и трасса сохранены, но карту не удалось обновить.')).toBeInTheDocument();
+    startWiring(); fireEvent.click(screen.getByRole('button', { name: 'blueprint port' })); fireEvent.click(screen.getByRole('button', { name: 'pane 1' })); fireEvent.click(screen.getByRole('button', { name: 'generic port' })); fireEvent.click(screen.getByRole('button', { name: 'Создать кабель' }));
+    expect(await screen.findByText('Кабель создан, но карту не удалось обновить.')).toBeInTheDocument();
     expect(screen.queryByText(/Malformed SavedMap response/)).not.toBeInTheDocument();
-    expect(fetchMock.mock.calls.filter(([url, init]) => String(url).includes('/cable-routes/') && (init as RequestInit).method === 'PUT')).toHaveLength(1);
+    const routeWrites = () => fetchMock.mock.calls.filter(([url, init]) => String(url).includes('/cable-routes/') && init?.method === 'PUT');
+    expect(routeWrites()).toHaveLength(1);
+    expect(routeWrites()[0][0]).toBe(`/api/v1/maps/${mapId}/cable-routes/${cableId}?variant_id=${variantId}`);
+    expect(JSON.parse(String(routeWrites()[0][1]?.body))).toEqual({ view: 'physical', waypoints });
     fireEvent.click(screen.getByRole('button', { name: 'Повторить обновление' }));
-    await waitFor(() => expect(postWriteReads).toBe(2));
-    expect(fetchMock.mock.calls.filter(([url, init]) => String(url).includes('/cable-routes/') && (init as RequestInit).method === 'PUT')).toHaveLength(1);
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Соединить порты' })).not.toBeInTheDocument());
+    expect(postWriteReads).toBe(2);
+    expect(routeWrites()).toHaveLength(1);
     expect(write).toHaveBeenCalledTimes(1);
   });
 });
