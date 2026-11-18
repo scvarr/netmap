@@ -130,9 +130,9 @@ variant geometry и одна обязательная map-scoped виртуал�
 автоматические bounds по полному rendered footprint с отдельным manual resize floor,
 полный collapse пустых/заполненных subtree в один компактный элемент с прежней точкой,
 expand без перезаписи expanded geometry и сохранение partial visible elements.
-C-UX-10 остаётся OPEN для межлокационных Channels, глобальной маршрутизации,
-общих межобъектных жгутов и channel-aware collapse. Объектный граф COMB-01
-реализован на milestone-ветке.
+C-UX-10 остаётся OPEN для автоматической маршрутизации Cable через Location
+hierarchy (LOC-ROUTE-01), общих межобъектных жгутов и channel-aware collapse.
+Объектный граф COMB-01 и взаимодействие CABLE-SELECT-01 объединены в main.
 
 
 **OPEN: DECIDED TARGET, не IMPLEMENTED.** C-UX-10-CONTRACT — только
@@ -143,7 +143,8 @@ C-UX-10 остаётся OPEN для межлокационных Channels, гл
 
 CURRENT: COMB-01 вычисляет объектные пути и preview. Индивидуальная
 геометрия Cable больше не хранится. Каждый Location, включая пустой, имеет
-рамку и одну обязательную виртуальную точку.
+рамку и одну обязательную виртуальную точку. LOC-CHAN-01 вычисляет из variant
+общий локальный граф для Location и технического корня независимо от Cable.
 
 TARGET согласован с [независимыми картами](L1_REFERENCE_NETWORK.md#независимые-карты):
 Location и виртуальная инфраструктура принадлежат одной карте и не разделяются
@@ -437,7 +438,7 @@ SLOC-04-SAVE добавляет «Сохранить компоновку» в �
 «Готово» сохраняют общий черновик активного variant. Настройки сворачивания
 сохраняются отдельно. Действующий формат и взаимодействие описаны в ARCHITECTURE.
 
-На milestone-ветке SLOC-05 добавляет порядок и ориентацию непосредственных
+SLOC-05 в main добавляет порядок и ориентацию непосредственных
 PhysicalObject для каждого Location и root. Эти правки входят в общий черновик.
 OPEN: grid-specific partial-collapse selection UX. COMB-01 резервирует
 место для верхней и нижней магистралей в uniform-grid.

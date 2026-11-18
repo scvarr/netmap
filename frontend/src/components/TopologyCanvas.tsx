@@ -49,8 +49,9 @@ import type { MapTextAnnotation } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
 import { blueprintRenderedNodeDimensions } from "../topology/blueprintDisplaySize";
 import { nodeFootprint, type FlowRectangle } from "../topology/nodeFootprint";
-import { layoutLocationFrames, editLocationFrames } from '../topology/locationFrameGeometry';
+import { layoutLocationFrames, editLocationFrames, locationBoundaryPoint } from '../topology/locationFrameGeometry';
 import { LocationFrameEditor } from "./LocationFrameEditor";
+import { LocationChannelLayer, type LocationChannelInput } from './LocationChannelLayer';
 import { deriveLocationPresentation, projectCollapsedEdges } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
 import type { MapLocationState, MapPlacement } from "../topology/savedMapTypes";
@@ -381,7 +382,13 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   const automatic = showLocationPresentation && locationFrameInput?.automatic;
   const baseFrameGeometries = automatic ? new Map([...locationPresentation.frames, ...locationPresentation.proxies.filter(p => !p.partial)].map(f => [f.locationId, { ...f.bounds, edge: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.edge ?? 'right' as const, offset: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.offset ?? .5 }])) : layoutLocationFrames(locationFrameInput?.locations ?? [], new Map(locationFrameInput?.states?.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : []) ?? []));
   const activeFrameEdit = frameEditPreview?.scene === presentationSceneKey && baseFrameGeometries.has(frameEditPreview.id) ? frameEditPreview : null;
-  const frameEdit = activeFrameEdit ? editLocationFrames(locationFrameInput?.locations ?? [], baseFrameGeometries, activeFrameEdit.id, activeFrameEdit.geometry) : { frames: baseFrameGeometries, translations: new Map<string, { x: number; y: number }>() };
+  const frameEdit = activeFrameEdit && !automatic
+    ? editLocationFrames(locationFrameInput?.locations ?? [], baseFrameGeometries, activeFrameEdit.id, activeFrameEdit.geometry)
+    : { frames: baseFrameGeometries, translations: new Map<string, XYPosition>() };
+  if (automatic && activeFrameEdit) {
+    const frame = baseFrameGeometries.get(activeFrameEdit.id)!;
+    frameEdit.frames.set(activeFrameEdit.id, { ...frame, edge: activeFrameEdit.geometry.edge, offset: activeFrameEdit.geometry.offset });
+  }
   const editedFrameGeometries = frameEdit.frames;
   locationPresentation.frames = locationPresentation.frames.map(frame => ({ ...frame, bounds: editedFrameGeometries.get(frame.locationId)! }));
   locationPresentation.proxies = locationPresentation.proxies.map(proxy => {
@@ -462,12 +469,46 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     };
   });
 
+  const assignments = new Map(locationFrameInput?.placements.map(p => [p.physical_object_ref.entity_id, p.location_ref?.entity_id ?? null]));
+  const locationChannels = new Map<string | null, LocationChannelInput>();
+  if (showLocationPresentation) {
+    locationChannels.set(null, { locationId: null, boundary: null, members: [] });
+    const pointIds = new Map(locationFrameInput?.states?.map(state => [state.location_ref.entity_id, state.boundary_point_id]));
+    const parents = new Map(locationFrameInput?.locations.map(location => [location.location_ref.entity_id, location.parent_location_ref?.entity_id ?? null]));
+    const boundaryId = (id: string) => 'Boundary:' + (pointIds.get(id) ?? id);
+    for (const frame of renderableFrames) {
+      locationChannels.set(frame.locationId, {
+        locationId: frame.locationId,
+        boundary: { id: boundaryId(frame.locationId), geometry: editedFrameGeometries.get(frame.locationId)! },
+        members: [],
+      });
+    }
+    const childFrames = [...renderableFrames, ...locationPresentation.proxies.filter(p => !p.partial && hasRenderableBounds(p.bounds))];
+    for (const frame of childFrames) {
+      const geometry = editedFrameGeometries.get(frame.locationId);
+      const parent = locationChannels.get(parents.get(frame.locationId) ?? null);
+      if (parent && geometry) parent.members.push({
+        id: boundaryId(frame.locationId), bounds: frame.bounds,
+        point: locationBoundaryPoint(frame.bounds, geometry), edge: geometry.edge,
+      });
+    }
+  }
   for (const node of nodes) {
     if (node.data.locationProxy) continue;
     const objectId = physicalObjectIdForNode(node.data.projection);
-    const assigned = locationFrameInput?.placements.find(p => p.physical_object_ref.entity_id === objectId)?.location_ref?.entity_id;
+    if (!objectId) continue;
+    const assigned = assignments.get(objectId) ?? null;
     const delta = assigned ? frameEdit.translations.get(assigned) : undefined;
     if (delta) node.position = { x: node.position.x + delta.x, y: node.position.y + delta.y };
+    const local = locationChannels.get(assigned);
+    if (local) {
+      const bounds = nodeFootprint(node);
+      if (hasRenderableBounds(bounds)) local.members.push({
+        id: 'PhysicalObject:' + objectId, bounds, edge: 'right',
+        // This is also the COMB-01 exit on a blueprint's complete footprint.
+        point: { x: bounds.x + bounds.width, y: bounds.y + bounds.height / 2 },
+      });
+    }
   }
   const onNodeClick: NodeMouseHandler<DeviceFlowNode> = (_, node) => {
     if (annotationMode) return;
@@ -665,7 +706,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
                 parentBounds={frame.parentLocationId ? editedFrameGeometries.get(frame.parentLocationId) : undefined}
                 childBounds={(locationFrameInput?.locations ?? []).filter(l => l.parent_location_ref?.entity_id === frame.locationId).map<FlowRectangle>(l => editedFrameGeometries.get(l.location_ref.entity_id)!).concat(displayedPhysicalObjects.filter(object => locationFrameInput?.placements.some(p => p.physical_object_ref.entity_id === object.physicalObjectId && p.location_ref?.entity_id === frame.locationId)).map(object => object.rectangle))}
                 disabled={arrangement.busy || Boolean(activeFrameEdit && activeFrameEdit.id !== frame.locationId)}
-                onDraft={automatic ? undefined : geometry => setFrameEditPreview(geometry ? { scene: presentationSceneKey, id: frame.locationId, geometry } : null)}
+                onDraft={geometry => setFrameEditPreview(geometry ? { scene: presentationSceneKey, id: frame.locationId, geometry } : null)}
                 screenToFlowPosition={screenToFlowPosition} onSave={locationFrameInput?.onGeometry} onSaveBoundary={locationFrameInput?.onBoundaryPlacement}
                 actions={<span className="location-frame__actions">
                   <button type="button" className="location-action" aria-label={toggleLabel} title={toggleLabel} onClick={() => locationFrameInput?.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button>
@@ -695,6 +736,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
+        {showLocationPresentation && <LocationChannelLayer inputs={[...locationChannels.values()]} visible={Boolean(showAllVirtualChannels && !annotationMode)} />}
         {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels} showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
       </ReactFlow>
     </div>

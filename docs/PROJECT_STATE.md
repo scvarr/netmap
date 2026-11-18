@@ -44,7 +44,7 @@
   Полный collapse оставляет один компактный Location (также для пустого subtree),
   expand восстанавливает expanded geometry; partial collapse сохраняет выбор видимых
   непосредственных элементов, group move с collision rejection.
-- AUTO-LOC-01/02 и SLOC-01–04 — IMPLEMENTED / MERGED. AUTO-LOC даёт
+- AUTO-LOC-01/02 и SLOC-01–05 — IMPLEMENTED / MERGED. AUTO-LOC даёт
   opt-in компоновку variant с техническим корнем, порядком и ориентацией
   дочерних элементов, компактной геометрией, hide/collapse и граничными точками.
   SLOC добавляет uniform-grid с сохранением в variant, размещение стрелками
@@ -53,12 +53,14 @@
   SLOC-04-SAVE добавляет сохранение общего черновика активного variant
   из настроек Location. Chromium с реальным backend и PostgreSQL подтвердил
   сохранение порядка после перезагрузки и независимость второго варианта.
-- SLOC-05 — IMPLEMENTED на milestone-ветке. В uniform-grid порядок и ориентация
+- SLOC-05 — IMPLEMENTED / MERGED. В uniform-grid порядок и ориентация
   непосредственного оборудования каждого Location и root входят в общий черновик
   варианта. Состав последовательности согласуется с canonical assignment и
   размещением на карте. Ручная приёмка OPEN.
-- ROUTE-UX-01 удалил ручные трассы. COMB-01 вычисляет объектные пути, preview
-  и геометрию Cable по текущей компоновке. LOC-CHAN-01 и LOC-ROUTE-01 остаются OPEN.
+- ROUTE-UX-01 удалил ручные трассы. COMB-01 и CABLE-SELECT-01 — IMPLEMENTED /
+  MERGED. Объектные пути, preview и геометрия Cable вычисляются по текущей
+  компоновке. LOC-CHAN-01 реализует локальные деревья виртуальных каналов
+  Location и технического корня на milestone-ветке. LOC-ROUTE-01 остаётся OPEN.
 - Массовые операции: ordered port pairing с обязательным preview и одной
   canonical transaction; шаблоны Cable labels; массовое именование и spatial
   order endpoints, выравнивание/распределение в редакторах.

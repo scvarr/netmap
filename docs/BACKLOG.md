@@ -93,7 +93,7 @@ canonical endpoints, подключения и зависимости исход
 | C-UX-05 | Runtime map guides нужны; ориентиры — уже размещённые объекты | OPEN | Точный bounded UX-контракт открыт; presentation-only, отдельно от auto-layout |
 | C-UX-06 | Независимые Width/Height пока не реализовывать | OPEN | Повторно оценить необходимость после P-UX-21; не VERIFIED |
 | C-UX-09 | Раскрываемый графический preview BaseTemplate непосредственно при выборе шаблона | OPEN | Ориентир — существующий preview библиотеки; реализация открыта |
-| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [DECIDED TARGET](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels), C-UX-10-01 foundation объединён в main: иерархически вложенные variant frames всех Locations, единый атомарный перенос контейнера с оборудованием, рост предков, согласование назначений/placements и одна обязательная map-scoped точка; authoritative move response, content bounds с ручным resize floor, полный compact collapse включая пустые subtree; не реализовано: иерархическая трасса и общие участки, preview/подтверждение, переиспользование, lifecycle и channel-aware collapse; channel schema/DTO/API, атомарность и конфликты OPEN. LOC-CHAN-01 и LOC-ROUTE-01 остаются OPEN |
+| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [DECIDED TARGET](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels). C-UX-10-01 foundation объединён в main. LOC-CHAN-01 реализует производный локальный граф Location и технического корня. LOC-ROUTE-01, preview составного пути, общие жгуты и channel-aware collapse остаются OPEN |
 | C-UX-12 | Проверить массовое именование, spatial order, обнаруживаемость и сохранение | RECHECK PENDING | Исправление реализовано |
 | C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
 | C-UX-14 | Проверить понятность Change Inspector и точность больших сводок impact | RECHECK PENDING | Реализован; HV-01 не заменяет UX recheck |
@@ -251,7 +251,7 @@ AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical
 
 ## DOC-LOC-03 — реализация структурной компоновки
 
-**PARTIAL / IMPLEMENTED IN MAIN: SLOC-01–04.** Общая capability для реализации
+**PARTIAL / IMPLEMENTED IN MAIN: SLOC-01–05.** Общая capability для реализации
 [согласованного TARGET](ARCHITECTURE.md#doc-loc-03--target-структурной-компоновки-location):
 структура размещения Location в variant, локальное соседство, строки/столбцы и
 плитка, простая последовательность непосредственных PhysicalObject,
@@ -261,12 +261,16 @@ hide/collapse и независимость canonical assignment. Для ост�
 После согласования открытых деталей реализация требует последующей декомпозиции
 на ограниченные последовательные milestones; их количество и техническое
 содержание этой записью не предрешаются.
-**COMB-01 / IMPLEMENTED на milestone-ветке.** Производный граф путей от
+**COMB-01 / IMPLEMENTED / MERGED.** Производный граф путей от
 портов Blueprint-backed оборудования до общего правого выхода используется
 реальными Cable. Переключатель карты отображает свободные сегменты. Uniform-grid
 учитывает вертикальные коридоры. DOC-LOC-03 остаётся PARTIAL.
-Межлокационные Channel, глобальная маршрутизация и общие межобъектные жгуты
-остаются в **C-UX-10 OPEN**.
+CABLE-SELECT-01 / IMPLEMENTED / MERGED — выбор и hover Cable на участках L1.
+
+**LOC-CHAN-01 / IMPLEMENTED на milestone-ветке.** L1 строит общий свободный
+граф для каждого Location и технического корня по текущей геометрии варианта.
+Деревья используют каноническое назначение и существующие граничные точки.
+Составная трасса физического Cable (LOC-ROUTE-01) и C-UX-10 остаются OPEN.
 Новых этапов Phase A–I и расширения scope эта запись не вводит.
 
 SLOC-01: isolated typed uniform-table computational core implemented, with
@@ -291,7 +295,7 @@ variant's shared draft through the same operation as Done. Chromium with the
 Docker backend and PostgreSQL verified save/reload of 42 children, preservation
 of empty cells and isolation of a second variant.
 
-SLOC-05: **IMPLEMENTED на milestone-ветке; ручная приёмка OPEN** — список и
+SLOC-05: **IMPLEMENTED / MERGED; ручная приёмка OPEN** — список и
 ориентация непосредственных PhysicalObject для каждого Location и root, общий
 черновик и сохранение в variant, согласование при изменении состава, размещение
 по полным размерам. DOC-LOC-03 остаётся PARTIAL.
