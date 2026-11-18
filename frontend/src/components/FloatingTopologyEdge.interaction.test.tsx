@@ -1,13 +1,15 @@
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ForegroundCableRoutes } from './FloatingTopologyEdge';
 
+const cableRef = (id: string) => ({ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: id });
 const markerPoints = ['eligible', 'source', 'destination', 'unavailable'].map((id) => ({ connection_point_id: id, display_name: id, cardinality: 1, external_connection_count: 0 }));
 const source = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'source', kind: 'PHYSICAL_OBJECT', label: 'source', source_refs: [], attributes: { connection_points: markerPoints } } } };
 const target = { internals: { positionAbsolute: { x: 300, y: 0 } }, measured: { width: 100, height: 100 }, data: { projection: { id: 'target', kind: 'PHYSICAL_OBJECT', label: 'target', source_refs: [], attributes: { connection_points: markerPoints } } } };
 let activeNodes: Record<string, any> = { source, target };
 
 vi.mock('@xyflow/react', () => ({
+  useViewport: () => ({ zoom: 1 }),
   BaseEdge: ({ interactionWidth, path, style }: any) => <path data-testid="base-edge" data-interaction-width={interactionWidth} d={path} style={style} />,
   Position: { Top: 'top', Right: 'right', Bottom: 'bottom', Left: 'left' },
   getStraightPath: () => ['straight'],
@@ -35,7 +37,7 @@ const withNodes = (nodes: Record<string, any>, run: () => void) => {
 };
 
 describe('direct cable route edge interaction', () => {
-  it('draws occupied channels once, traces a single cable and recomputes their geometry', () => {
+  it('uses shared geometry for hover, selection, trace, and cable choice', () => {
     const fixture = (id: string, x: number) => blueprintNode(id, x, id, {
       connectionPointId: id + '-a', kind: 'CONNECTION_POINT', renderedX: .1, attachmentX: 0, side: 'LEFT',
     });
@@ -43,18 +45,18 @@ describe('direct cable route edge interaction', () => {
     const right = fixture('right', 300);
     for (const node of [left, right]) {
       const slots = node.data.projection.attributes.blueprint_presentation.slots;
-      slots.push({ ...slots[0], connection_point_id: node.data.projection.id + '-b', rendered_position: { x: .8, y: .8 }, panel_local_position: { x: .8, y: .8 } });
+      slots.push({ ...slots[0], connection_point_id: node.data.projection.id + '-b', display_name: 'Port B', rendered_position: { x: .8, y: .8 }, panel_local_position: { x: .8, y: .8 } });
       slots.push({ ...slots[0], connection_point_id: node.data.projection.id + '-free', rendered_position: { x: .8, y: .15 }, panel_local_position: { x: .8, y: .15 } });
     }
     const cable = (id: string, emphasis: string) => ({
       id, source: 'left', target: 'right', data: {
-        cableNode: { id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: id }] },
+        cableNode: { id, label: 'Patch', attributes: {}, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: id }] },
         endpointPair: { from_connection_point_id: 'left-' + id, to_connection_point_id: 'right-' + id },
         cablePresentationEmphasis: emphasis,
       },
     });
-    const a = cable('a', 'traced'), b = cable('b', 'normal');
-    const onCableClick = vi.fn();
+    const a = cable('a', 'normal'), b = cable('b', 'normal');
+    const onCableSelect = vi.fn();
     withNodes({ left, right }, () => {
       const view = render(<ForegroundCableRoutes edges={[]} virtualChannels />);
       const channels = () => [...view.container.querySelectorAll('.object-virtual-channel')];
@@ -63,27 +65,60 @@ describe('direct cable route edge interaction', () => {
       const fullCount = channels().length;
       expect(fullCount).toBeGreaterThan(0);
       expect(channels().every(p => p.classList.contains('cable-route-foreground--free'))).toBe(true);
-      view.rerender(<ForegroundCableRoutes edges={[a] as any} virtualChannels onCableClick={onCableClick} />);
+      view.rerender(<ForegroundCableRoutes edges={[a] as any} virtualChannels onCableSelect={onCableSelect} />);
       const oneCableCount = channels().length;
       expect(oneCableCount).toBeGreaterThan(0);
-      view.rerender(<ForegroundCableRoutes edges={[a, b] as any} virtualChannels onCableClick={onCableClick} />);
+      view.rerender(<ForegroundCableRoutes edges={[a, b] as any} virtualChannels onCableSelect={onCableSelect} />);
       expect(channels().length).toBeGreaterThan(oneCableCount);
       expect(channels().length).toBeLessThan(fullCount);
-      expect(channels().filter(p => p.classList.contains('cable-route-foreground--traced'))).toHaveLength(oneCableCount);
-      expect(channels().filter(p => p.getAttribute('d') === 'M 116 16 L 124 16')).toHaveLength(2);
-      expect(view.container.querySelector('[data-testid="foreground-cable-a"] path')).toHaveAttribute('d', 'M 124 16 L 424 16');
-      expect(view.container.querySelector('[data-testid="foreground-cable-b"] path')).toHaveClass('cable-route-foreground--normal');
-      fireEvent.click(channels().find(p => p.classList.contains('cable-route-foreground--normal'))!);
-      expect(onCableClick).toHaveBeenCalledWith(expect.anything(), b);
+      expect(channels().filter(p => p.getAttribute('d') === 'M 116 16 L 124 16')).toHaveLength(1);
+      expect(view.container.querySelectorAll('.cable-route-foreground')).toHaveLength(1);
+      const single = view.container.querySelector('.cable-route-hit[data-cable-count="1"][aria-label*="Port B"]')!;
+      const shared = view.container.querySelector('.cable-route-hit[data-cable-count="2"]')!;
+      fireEvent.pointerEnter(single);
+      expect(view.getByRole('tooltip')).toHaveTextContent('Patch');
+      expect(view.getByRole('tooltip')).toHaveTextContent('left / Port B');
+      expect(view.container.querySelectorAll('.cable-route-foreground--hovered')).toHaveLength(9);
+      expect(onCableSelect).not.toHaveBeenCalled();
+      fireEvent.pointerLeave(single);
+      expect(view.queryByRole('tooltip')).toBeNull();
+      expect(view.container.querySelector('.cable-route-foreground--hovered')).toBeNull();
+      fireEvent.click(single);
+      expect(onCableSelect).toHaveBeenLastCalledWith(b);
+
+      fireEvent.pointerEnter(shared);
+      expect(view.getByRole('tooltip')).toHaveTextContent('Кабелей на участке: 2');
+      fireEvent.keyDown(shared, { key: 'Escape' });
+      expect(view.queryByRole('tooltip')).toBeNull();
+      fireEvent.keyDown(shared, { key: 'Enter' });
+      expect(view.getByRole('dialog')).toBeInTheDocument();
+      fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+      expect(view.queryByRole('dialog')).toBeNull();
+      fireEvent.click(shared);
+      fireEvent.pointerDown(document.body);
+      expect(view.queryByRole('dialog')).toBeNull();
+      fireEvent.click(shared);
+      fireEvent.click(within(view.getByRole('dialog')).getByRole('button', { name: /Patch.*Port B/ }));
+      expect(onCableSelect).toHaveBeenLastCalledWith(b);
+      expect(view.queryByRole('dialog')).toBeNull();
+
+      const traced = cable('a', 'traced');
+      const selected = cable('b', 'selected');
+      view.rerender(<ForegroundCableRoutes edges={[traced, selected] as any} virtualChannels traceActive onCableSelect={onCableSelect} />);
+      fireEvent.pointerEnter(single);
+      expect(view.container.querySelector('.cable-route-foreground--hovered')).toBeNull();
+      expect(view.container.querySelector('.cable-route-foreground--traced')).toBeInTheDocument();
+      expect(view.container.querySelectorAll('.cable-route-marker:not(.cable-route-marker--hovered)')).toHaveLength(1);
+      expect(onCableSelect).toHaveBeenCalledTimes(2);
       right.internals.positionAbsolute = { x: 450, y: 70 };
       right.data.compositionDisplayWidth = 48;
       view.rerender(<ForegroundCableRoutes edges={[a, b] as any} virtualChannels showAllVirtualChannels />);
-      expect(view.container.querySelector('[data-testid="foreground-cable-a"] path')).toHaveAttribute('d', 'M 124 16 L 590 94');
+      expect(view.container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 124 16 L 590 94');
     });
   });
   it('renders a cable to a Location proxy without treating the proxy as a port-bearing object', () => {
     const proxy = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 110, height: 30 }, data: { projection: null, locationProxy: { locationId: 'room', label: 'Room', hiddenObjectCount: 1 } } };
-    const cable = { id: "real-cable", source: "proxy", target: "target", data: { cableNode: { id: "canonical-cable" } } };
+    const cable = { id: "real-cable", source: "proxy", target: "target", data: { cableNode: { source_refs: [cableRef("canonical-cable")], id: "canonical-cable" } } };
     withNodes({ proxy, target }, () => {
       const { container } = render(<ForegroundCableRoutes edges={[cable] as any} />);
       expect(container.querySelector('[data-testid="foreground-cable-real-cable"]')).not.toBeNull();
@@ -97,14 +132,14 @@ describe('direct cable route edge interaction', () => {
   });
   it('anchors a real cable between two compact Location proxies', () => {
     const proxy = (id: string, x: number) => ({ internals: { positionAbsolute: { x, y: 0 } }, measured: { width: 110, height: 30 }, data: { projection: null, locationProxy: { locationId: id, label: id, hiddenObjectCount: 1 } } });
-    const cable = { id: 'between-proxies', source: 'left', target: 'right', data: { cableNode: { id: 'canonical-cable' } } };
+    const cable = { id: 'between-proxies', source: 'left', target: 'right', data: { cableNode: { source_refs: [cableRef('canonical-cable')], id: 'canonical-cable' } } };
     withNodes({ left: proxy('left', 0), right: proxy('right', 300) }, () => {
       const { container } = render(<ForegroundCableRoutes edges={[cable] as any} />);
       expect(container.querySelector('.cable-route-foreground')).toHaveAttribute('d', 'M 110 15 L 300 15');
     });
   });
   it('preserves every wiring port state in the foreground repaint', () => {
-    const edge = { id: 'cable', source: 'source', target: 'target', data: { cableNode: { id: 'cable-node' } } };
+    const edge = { id: 'cable', source: 'source', target: 'target', data: { cableNode: { source_refs: [cableRef('cable-node')], id: 'cable-node' } } };
     const { container } = render(<ForegroundCableRoutes edges={[edge] as any} physicalPortStates={{ eligible: 'eligible', source: 'source', destination: 'destination', unavailable: 'unavailable' }} />);
     for (const state of ['eligible', 'source', 'destination', 'unavailable']) {
       expect(container.querySelector(`.cable-route-port-marker--wiring-${state}`)).toBeInTheDocument();
@@ -137,7 +172,7 @@ describe('direct cable route edge interaction', () => {
     const blueprintSource = blueprintNode('source', 0, 'source-object', { connectionPointId: 'source-port', kind: 'NETWORK_PORT', renderedX: .25, attachmentX: 1, side: 'RIGHT' });
     const blueprintTarget = blueprintNode('target', 300, 'target-object', { connectionPointId: 'target-port', kind: 'CONNECTION_POINT', renderedX: .75, attachmentX: 0, side: 'LEFT' });
     withNodes({ source: blueprintSource, target: blueprintTarget }, () => {
-      const edge = { id: 'blueprint-cable', source: 'source', target: 'target', data: { projection: { id: 'edge', from_node_id: 'source', to_node_id: 'target', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableNode: { id: 'cable-node' }, endpointPair: { from_connection_point_id: 'source-port', to_connection_point_id: 'target-port' } } };
+      const edge = { id: 'blueprint-cable', source: 'source', target: 'target', data: { projection: { id: 'edge', from_node_id: 'source', to_node_id: 'target', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableNode: { source_refs: [cableRef('cable-node')], id: 'cable-node' }, endpointPair: { from_connection_point_id: 'source-port', to_connection_point_id: 'target-port' } } };
       const { container } = render(<ForegroundCableRoutes edges={[edge] as any} physicalPortStates={{ 'source-port': 'source', 'target-port': 'destination' }} />);
       const markers = container.querySelectorAll('.cable-route-port-marker');
       expect(markers).toHaveLength(2);
@@ -167,16 +202,16 @@ describe('direct cable route edge interaction', () => {
     };
     const cable = (id: string, suffix: string) => ({
       id, source: 'source', target: 'target', data: {
-        cableNode: { id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: id }] },
+        cableNode: { id, label: 'Patch', attributes: {}, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: id }] },
         endpointPair: { from_connection_point_id: `source-${suffix}`, to_connection_point_id: `target-${suffix}` },
         cablePresentationEmphasis: 'normal',
       },
     });
     const occupied = cable('occupied', 'occupied');
     const edges = [occupied] as any;
-    const onCableClick = vi.fn();
+    const onCableSelect = vi.fn();
     withNodes({ source: blueprintSource, target: blueprintTarget }, () => {
-      const view = render(<ForegroundCableRoutes edges={edges} virtualChannels onCableClick={onCableClick} />);
+      const view = render(<ForegroundCableRoutes edges={edges} virtualChannels onCableSelect={onCableSelect} />);
       const segments = () => [...view.container.querySelectorAll('.object-virtual-channel')]
         .map(p => `${p.parentElement?.getAttribute('transform')} ${p.getAttribute('d')}`).sort();
       const preview = () => view.container.querySelector('[data-testid="foreground-wiring-route"] path');
@@ -185,16 +220,15 @@ describe('direct cable route edge interaction', () => {
       view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels physicalPortStates={{'source-port': 'eligible'}} />);
       expect(segments()).toEqual(original);
       expect(occupiedPath()).toHaveAttribute('d', 'M 124 16 L 424 16');
-      view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels wiringRoute={{ ...wiring, target: undefined }} onCableClick={onCableClick} />);
+      view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels wiringRoute={{ ...wiring, target: undefined }} onCableSelect={onCableSelect} />);
       expect(view.container.querySelector('.object-virtual-channel.wiring-route-preview')).toBeInTheDocument();
       expect(preview()).toBeNull();
-      view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels wiringRoute={wiring} onCableClick={onCableClick} />);
+      view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels wiringRoute={wiring} onCableSelect={onCableSelect} />);
       const confirmed = segments();
       expect(confirmed).toHaveLength(new Set(confirmed).size);
       expect(confirmed).toEqual(expect.arrayContaining(original));
-      const shared = view.container.querySelector('.object-virtual-channel[d="M 116 16 L 124 16"]')!;
-      fireEvent.click(shared);
-      expect(onCableClick).toHaveBeenCalledWith(expect.anything(), occupied);
+      expect(view.container.querySelector('.cable-route-hit')).toBeNull();
+      expect(onCableSelect).not.toHaveBeenCalled();
       const connector = preview()!.getAttribute('d');
       expect(connector).toBe('M 124 16 L 424 16');
       view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels />);
@@ -202,7 +236,7 @@ describe('direct cable route edge interaction', () => {
       expect(preview()).toBeNull();
       view.rerender(<ForegroundCableRoutes edges={[occupied, cable('new', 'port')] as any} virtualChannels />);
       expect(segments()).toEqual(confirmed);
-      expect(view.container.querySelector('[data-testid="foreground-cable-new"] path')).toHaveAttribute('d', connector);
+      expect(view.container.querySelector('.cable-route-foreground')).toHaveAttribute('d', connector);
     });
   });
 
@@ -221,12 +255,11 @@ describe('direct cable route edge interaction', () => {
 
   it('forwards a right click on the foreground Cable to its context menu handler', () => {
     const bare = { id: "cable", source: "source", target: "target", data: {} };
-    const edge = { ...bare, data: { ...bare.data, cableNode: { id: 'cable' } }, style: { strokeWidth: 2 } };
+    const edge = { ...bare, data: { ...bare.data, cableNode: { source_refs: [cableRef('cable')], id: 'cable', label: 'Cable' } }, style: { strokeWidth: 2 } };
     const onCableContextMenu = vi.fn((event: React.MouseEvent<SVGElement>) => event.preventDefault());
     const onAncestorContextMenu = vi.fn();
     const { container } = render(<div onContextMenu={onAncestorContextMenu}><ForegroundCableRoutes edges={[edge] as any} onCableContextMenu={onCableContextMenu} /></div>);
-    const path = container.querySelector('.cable-route-foreground')!;
-    expect(path).toHaveStyle({ pointerEvents: 'stroke' });
+    const path = container.querySelector('.cable-route-hit')!;
     const event = new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 120, clientY: 50 });
     fireEvent(path, event);
     expect(onCableContextMenu).toHaveBeenCalledWith(expect.anything(), edge);
@@ -236,7 +269,7 @@ describe('direct cable route edge interaction', () => {
 
   it('orders visual Cable states independently of edges order and follows selection changes', () => {
     const bare = { id: "cable", source: "source", target: "target", data: {} };
-    const make = (id: string, emphasis: string, selected = false) => ({ ...bare, id, selected, data: { ...bare.data, cableNode: { id }, cablePresentationEmphasis: emphasis } });
+    const make = (id: string, emphasis: string, selected = false) => ({ ...bare, id, selected, data: { ...bare.data, cableNode: { source_refs: [cableRef(id)], id }, endpointPair: { from_connection_point_id: markerPoints[['normal', 'traced', 'attached', 'selected'].indexOf(id)].connection_point_id }, cablePresentationEmphasis: emphasis } });
     const normal = make('normal', 'normal');
     const selected = make('selected', 'selected', true);
     const attached = make('attached', 'attached');

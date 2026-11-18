@@ -365,6 +365,9 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
 
   const physicalObjectView = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT";
   const useVirtualChannels = physicalObjectView;
+  const cableTraceActive = Boolean(traceOverlay && (
+    traceOverlay.highlightedCableIds.size || traceOverlay.highlightedConnectionMemberIds.size || traceOverlay.highlightedEdgeIds.size
+  ));
   const showLocationPresentation = Boolean(locationFrameInput && physicalObjectView);
   const displayedPhysicalObjects = showLocationPresentation ? projection.nodes.flatMap((node) => {
       const physicalObjectId = physicalObjectIdForNode(node.data.projection);
@@ -419,7 +422,6 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     draggable: false, selectable: false,
     data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { arrangementSelected: arrangement.selected === proxy.locationId, onSelectLocation: arrangement.preview && !proxy.partial ? () => arrangement.select(proxy.locationId) : undefined, partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
   });
-  const blueprintNodeIds = new Set(nodes.filter(node => node.data.projection?.attributes.blueprint_presentation).map(node => node.id));
   const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const tracedCableId = edge.data?.cableNode
       ? cableIdForNode(edge.data.cableNode)
@@ -448,8 +450,9 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
         : isDirectlyAttached ? 'attached' : 'normal';
     return {
       ...edge,
-      data: edge.data ? { ...edge.data, cablePresentationEmphasis, renderCableInForegroundOnly: useVirtualChannels && Boolean(edge.data.cableNode) && (blueprintNodeIds.has(edge.source) || blueprintNodeIds.has(edge.target)) } : edge.data,
+      data: edge.data ? { ...edge.data, cablePresentationEmphasis, renderCableInForegroundOnly: Boolean(edge.data.cableNode) } : edge.data,
       selected: isSelected,
+      focusable: edge.data?.cableNode ? false : edge.focusable,
       animated: isSelected || isTraced || isDirectlyAttached,
       style: {
         stroke: isSelected ? "#54e3b4" : isTraced ? "#f0bd66" : isDirectlyAttached ? "#35c99c" : "#52676b",
@@ -472,6 +475,9 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     const physicalObjectId = physicalObjectIdForNode(node.data.projection);
     onSelectionChange({ type: "node", item: node.data.projection });
   };
+  const selectCable = (edge: LogicalFlowEdge) => {
+    if (edge.data?.cableNode) onSelectionChange({ type: "node", item: edge.data.cableNode });
+  };
   const onEdgeClick: EdgeMouseHandler<LogicalFlowEdge> = (event, edge) => {
     if (annotationMode) return;
     const item = edge.data?.projection;
@@ -482,7 +488,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
       );
       onSelectionChange({ type: "continuation", item: edge.data.continuation });
     } else if (edge.data?.cableNode)
-      onSelectionChange({ type: "node", item: edge.data.cableNode });
+      selectCable(edge);
     else if (item) onSelectionChange({ type: "edge", item });
   };
   const onNodeContextMenu: NodeMouseHandler<DeviceFlowNode> = (event, node) => {
@@ -689,7 +695,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels} showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} onCableClick={(event, edge) => onEdgeClick(event, edge)} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
+        {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels} showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
       </ReactFlow>
     </div>
   );
