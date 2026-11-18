@@ -277,9 +277,13 @@ SLOC-04: **IMPLEMENTED / MERGED** — natural numeric
 name sorting of immediate child Location rows, columns and entire tables (both
 traversals/directions); explicit holes, indexed scope UI in Location settings and
 technical-root Layout panel; atomic automatic draft entry, combined arrow/sort
-preview, common Done/Cancel/error rollback. No backend changes. Targeted tests
-and Chromium fixture smoke cover the implementation; server reload validation is
-not covered by the in-memory smoke. DOC-LOC-03 remains PARTIAL.
+preview, common Done/Cancel/error rollback. Targeted tests and Chromium fixture
+smoke cover the implementation. DOC-LOC-03 remains PARTIAL.
+
+SLOC-04-SAVE adds Save layout to Location settings. It writes the active
+variant's shared draft through the same operation as Done. Chromium with the
+Docker backend and PostgreSQL verified save/reload of 42 children, preservation
+of empty cells and isolation of a second variant.
 
 ## Направления и зависимости
 

@@ -2143,7 +2143,7 @@ function MapPageContent({
         mapOperation={mapOperation?.mapId === mapId ? mapOperation : null}
         onRetryMapRefresh={retryMapRefresh}
       />
-      {locationConfigId && viewMode === 'physical' && <LocationSettingsDialog key={locationConfigId} name={locations?.find(location => location.location_ref.entity_id === locationConfigId)?.name ?? locationConfigId} onClose={() => setLocationConfigId(null)} layout={activeVariant?.automatic_layout?.mode === 'uniform_grid' ? <LocationGridSorting parent={locationConfigId} table={gridTables(locations ?? [], (locationArrangement.preview ?? activeVariant.automatic_layout).tables)[locationConfigId] ?? []} locations={locations ?? []} arrangement={locationArrangement} /> : undefined}>
+      {locationConfigId && viewMode === 'physical' && <LocationSettingsDialog arrangement={locationArrangement} collapseBusy={locationStateBusy} key={locationConfigId} name={locations?.find(location => location.location_ref.entity_id === locationConfigId)?.name ?? locationConfigId} onClose={() => setLocationConfigId(null)} layout={activeVariant?.automatic_layout?.mode === 'uniform_grid' ? <LocationGridSorting parent={locationConfigId} table={gridTables(locations ?? [], (locationArrangement.preview ?? activeVariant.automatic_layout).tables)[locationConfigId] ?? []} locations={locations ?? []} arrangement={locationArrangement} /> : undefined}>
         <p>Оставить видимыми при сворачивании:</p>
         <div className="map-location-dialog__choices">
           {directLocationChoices === null ? <p>Загрузка…</p> : directLocationChoices.map(({ ref, label }) => {

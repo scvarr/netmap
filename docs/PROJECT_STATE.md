@@ -51,8 +51,9 @@
   и сортировку дочерних Location по строке, столбцу или всей таблице.
   DOC-LOC-03 — PARTIAL. Остаются OPEN порядок и ориентация непосредственных
   PhysicalObject и grid-specific partial-collapse UX. Ручная приёмка учитывается
-  отдельно. In-memory smoke SLOC-04 проверял работу с fixture; реальный серверный
-  save/reload сортировки этим smoke не проверен.
+  отдельно. SLOC-04-SAVE добавляет сохранение общего черновика активного variant
+  из настроек Location. Chromium с реальным backend и PostgreSQL подтвердил
+  сохранение порядка после перезагрузки и независимость второго варианта.
 - Редактор кабельного маршрута: transient draft, Save/Cancel, добавление,
   перемещение и удаление waypoints через инспектор, snapping к чужой геометрии,
   angle/length assistance, числовое изменение длины сегмента, boundary anchors.

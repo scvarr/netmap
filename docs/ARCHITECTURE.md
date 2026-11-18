@@ -620,20 +620,31 @@ sorting permutes occupied addresses only, retaining shape and the empty mask.
 All canonical children participate, including hidden/collapsed children; nested
 tables, assignments and geometry contracts remain unchanged. Sorting never runs
 on rename. The first sort atomically creates and updates the shared MapPage draft
-without entry normalization; subsequent sorts include arrow edits. Settings-dialog
-closure leaves this draft open. Only common Done writes once; Cancel and save
-failure restore authoritative settings. No backend/API/schema changes.
+without entry normalization; subsequent sorts include arrow edits. Closing
+Location settings leaves the shared preview active. Cancel and save failure
+restore authoritative settings.
 
 Validation: targeted computational, hook, controls and canvas tests plus Chromium
-smoke on the real tiled canvas fixture. The fixture uses in-memory persistence;
-server round-trip/reload for SLOC-04 is not verified by that smoke. Manual acceptance remains OPEN.
+smoke on the tiled canvas fixture with in-memory persistence.
+Manual acceptance remains OPEN.
 
 SLOC-04 corrective UI: Location settings use separate Collapse/Layout tabs under
 “Settings: <Location name>”. Switching tabs retains mounted controls and the shared
 draft. Compact sort actions stay above a bounded table viewport with independent
 vertical/horizontal scrolling and sticky R/C headers. The dialog is constrained to
-the viewport. Layout explains that closing only reveals the preview; map-panel
-Done/Cancel remains the sole sorting persistence boundary. Collapse save retains
-its existing direct-reference behavior. Chromium checks cover 42 direct children,
+the viewport. Collapse save handles direct visibility references independently.
+Chromium fixture checks cover 42 direct children,
 single/multiple columns at 1024×768 and 1600×900, including measured scroll offsets,
 visible actions, tab switching, close/preview, Cancel without writes and Done once.
+
+SLOC-04-SAVE adds Save layout to the Location settings Layout tab. It is enabled
+when the shared draft differs from the authoritative layout. Save layout and the
+map panel's Done use the same operation to write the active variant's entire draft,
+including sorts and arrow moves. While a save is pending, duplicate submissions
+are blocked. A successful response updates the map and closes the dialog. On
+failure the dialog stays open and reports the rollback. Layout and Collapse
+settings save independently. No backend/API/schema changes.
+
+SLOC-04-SAVE was verified in Chromium against the Docker backend and PostgreSQL.
+One successful save retained sorted order and empty cells for 42 direct children
+after reload. A second variant retained its original order.

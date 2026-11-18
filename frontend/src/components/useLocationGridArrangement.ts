@@ -13,6 +13,8 @@ export function useLocationGridArrangement(input: Input | undefined, scene?: str
   const pending = useRef(false);
   const [error, setError] = useState(false);
   const preview = draft?.key === key ? draft.settings : null;
+  const hasChanges = preview !== null && input?.automatic?.mode === 'uniform_grid' &&
+    JSON.stringify(preview.tables) !== JSON.stringify(gridTables(input.locations, input.automatic.tables));
   const cancel = () => { setDraft(null); select(null); setError(false); };
   useEffect(() => { cancel(); }, [key]);
   const enter = () => {
@@ -22,7 +24,7 @@ export function useLocationGridArrangement(input: Input | undefined, scene?: str
     select(null); setError(false);
   };
   const operation = (direction: GridDirection) => {
-    if (!preview || !selected || busy) return null;
+    if (!preview || !selected || pending.current) return null;
     const location = input?.locations.find(l => l.location_ref.entity_id === selected);
     if (!location) return null;
     const parent = location.parent_location_ref?.entity_id ?? 'root';
@@ -41,13 +43,19 @@ export function useLocationGridArrangement(input: Input | undefined, scene?: str
     setError(false);
   };
   const finish = async () => {
-    if (pending.current || !preview || !input?.onAutomaticLayout) return;
+    if (pending.current || !preview || !input?.onAutomaticLayout) return false;
     pending.current = true; setBusy(true); setError(false);
-    try { await input.onAutomaticLayout(preview); if (currentKey.current === key) cancel(); }
-    catch { if (currentKey.current === key) { setDraft(null); select(null); setError(true); } }
+    try {
+      await input.onAutomaticLayout(preview);
+      if (currentKey.current === key) cancel();
+      return true;
+    } catch {
+      if (currentKey.current === key) { setDraft(null); select(null); setError(true); }
+      return false;
+    }
     finally { pending.current = false; setBusy(false); }
   };
-  return {preview, selected: preview ? selected : null, select, busy, error, enter, cancel, move, sort, finish, canMove:(direction: GridDirection) => Boolean(operation(direction))};
+  return {preview, hasChanges, selected: preview ? selected : null, select, busy, error, enter, cancel, move, sort, finish, canMove:(direction: GridDirection) => Boolean(operation(direction))};
 }
 
 export type LocationGridArrangement = ReturnType<typeof useLocationGridArrangement>;
