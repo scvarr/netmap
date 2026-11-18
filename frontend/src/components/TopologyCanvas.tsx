@@ -1,7 +1,7 @@
 import { locationAtPoint } from '../topology/locationSelection';
 import type { LocationGridArrangement } from './useLocationGridArrangement';
 import { LocationArrangementToolbar } from './LocationArrangementToolbar';
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import {
   applyNodeChanges,
   Background,
@@ -488,7 +488,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
       const geometry = editedFrameGeometries.get(frame.locationId);
       const parent = locationChannels.get(parents.get(frame.locationId) ?? null);
       if (parent && geometry) parent.members.push({
-        id: boundaryId(frame.locationId), bounds: frame.bounds,
+        id: boundaryId(frame.locationId), kind: 'location', bounds: frame.bounds,
         point: locationBoundaryPoint(frame.bounds, geometry), edge: geometry.edge,
       });
     }
@@ -505,6 +505,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
       const bounds = nodeFootprint(node);
       if (hasRenderableBounds(bounds)) local.members.push({
         id: 'PhysicalObject:' + objectId, bounds, edge: 'right',
+        kind: node.data.projection.attributes.blueprint_presentation ? 'blueprint-object' : 'generic-object',
         // This is also the COMB-01 exit on a blueprint's complete footprint.
         point: { x: bounds.x + bounds.width, y: bounds.y + bounds.height / 2 },
       });
@@ -618,6 +619,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   return (
     <div
       className="topology-canvas"
+      style={{ '--location-terminal-scale': Math.min(1, 1 / frameUiZoom) } as CSSProperties}
       aria-label={
         document.layer === "L1"
           ? t("canvas.physical")
@@ -694,6 +696,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
           size={1.4}
           color="#25383c"
         />
+        {showLocationPresentation && <LocationChannelLayer inputs={[...locationChannels.values()]} visible={Boolean(showAllVirtualChannels && !annotationMode)} zoom={frameUiZoom} />}
         {(renderableFrames.length > 0 || locationPresentation.proxies.length > 0) && <ViewportPortal>
           <div className={"location-frame-layer" + (arrangement.preview ? " location-frame-layer--arranging" : "")} aria-hidden={!locationFrameInput?.onCollapse && !locationFrameInput?.onConfigure ? true : undefined}>
             {renderableFrames.map((frame) => {
@@ -736,7 +739,6 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        {showLocationPresentation && <LocationChannelLayer inputs={[...locationChannels.values()]} visible={Boolean(showAllVirtualChannels && !annotationMode)} />}
         {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels} showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
       </ReactFlow>
     </div>

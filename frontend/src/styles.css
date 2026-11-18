@@ -69,10 +69,10 @@ button { font: inherit; }
 .workspace__body { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; }
 .canvas-panel, .inspector { border: 1px solid #203135; border-radius: 14px; background: #0a1518; overflow: hidden; }
 .canvas-panel { position: relative; min-height: 420px; }
-.topology-canvas { width: 100%; height: 100%; }
+.topology-canvas { width: 100%; height: 100%; --location-terminal-fill: #197989; --location-terminal-stroke: #b0f0fb; }
 .topology-canvas .react-flow__nodes { position: relative; z-index: 1; }
 .location-frame-layer { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
-.location-frame { position: absolute; box-sizing: border-box; border: 1px solid rgb(91 188 168 / .55); border-radius: 0; background: rgb(39 110 101 / .075); pointer-events: none; }
+.location-frame { position: absolute; box-sizing: border-box; border: var(--location-border-width, 1px) solid rgb(91 188 168 / .55); border-radius: 0; background: rgb(39 110 101 / .075); pointer-events: none; }
 .location-frame__heading { position: absolute; top: 0; left: 10px; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 5px; box-sizing: border-box; max-width: calc(100% - 20px); padding: 0 4px; background: #0a1518; pointer-events: auto; cursor: move; touch-action: none; }
 .location-frame--drag-preview { border-style: dashed; border-color: #91e9cf; background: rgb(91 188 168 / .04); pointer-events: none; }
 .location-frame__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #a6e9d8; font: 600 11px/16px ui-monospace, monospace; }
@@ -80,7 +80,7 @@ button { font: inherit; }
 .location-action { display: inline-grid; place-items: center; box-sizing: border-box; width: 22px; height: 22px; padding: 0; border: 1px solid #3a7168; border-radius: 0; color: #b5e9d9; background: #102b29; cursor: pointer; font: 700 15px/1 ui-monospace, monospace; }
 .location-action:hover { border-color: #70cbb0; color: #e1fff2; background: #1a4139; }
 .location-action:focus-visible { outline: 2px solid #8de2c8; outline-offset: 2px; }
-.location-proxy { width: 100%; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 5px; min-width: 0; padding: 3px 4px 3px 8px; border: 1px solid #72cdb7; border-radius: 0; background: #163d38; color: #dcfff4; font: 600 11px/1 ui-monospace, monospace; }
+.location-proxy { width: 100%; height: 100%; box-sizing: border-box; display: flex; align-items: center; gap: 5px; min-width: 0; padding: 3px 4px 3px 8px; border: var(--location-border-width, 1px) solid #72cdb7; border-radius: 0; background: #163d38; color: #dcfff4; font: 600 11px/1 ui-monospace, monospace; }
 .location-proxy__label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .location-proxy__actions { display: inline-flex; flex: 0 0 auto; gap: 3px; }
 .location-proxy--traced { border-color: #f0bd66; box-shadow: 0 0 0 2px rgb(240 189 102 / .3); }
@@ -920,8 +920,10 @@ a { color: inherit; }
 }
 .runtime-port-type { display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; font-size: .85em; font-weight: normal; } .runtime-port-type > span { width: 8px; height: 8px; border: 1px solid #91a5a5; flex-shrink: 0; }
 
-.location-frame--selected { border-color: #a6e9d8; border-width: 2px; }
-.location-boundary-point { position: absolute; transform: translate(-50%, -50%); width: 14px; height: 14px; padding: 0; border: 2px solid #a6e9d8; border-radius: 0; background: #183e37; pointer-events: auto; touch-action: none; cursor: crosshair; }
+.location-frame--selected { border-color: #a6e9d8; --location-border-width: 2px; }
+/* Anchor to the outer frame bounds used by the routing geometry. */
+.location-boundary-anchor { position: absolute; inset: calc(-1 * var(--location-border-width, 1px)); pointer-events: none; }
+.location-boundary-point { position: absolute; transform: translate(-50%, -50%) scale(var(--location-terminal-scale, 1)); box-sizing: border-box; width: 14px; height: 14px; padding: 0; border: 1px solid var(--location-terminal-stroke); border-radius: 50%; background: var(--location-terminal-fill); pointer-events: auto; touch-action: none; cursor: crosshair; }
 .location-frame__resize { position: absolute; right: -8px; bottom: -8px; pointer-events: auto; touch-action: none; cursor: nwse-resize; }
 .location-frame__save { position: absolute; top: 100%; left: 0; display: flex; gap: 4px; pointer-events: auto; }
 
@@ -1042,10 +1044,10 @@ a { color: inherit; }
    to physical nodes/edges. Free-space selection is handled by React Flow. */
 .location-frame-layer--arranging { z-index: 2; }
 .location-arrangement-layer { position: absolute; inset: 0; z-index: 10000; pointer-events: none; }
-.location-frame--arrangement-selected { border: 2px solid #f0bd66; box-shadow: 0 0 0 2px rgb(240 189 102 / .4); }
+.location-frame--arrangement-selected { --location-border-width: 2px; border-color: #f0bd66; box-shadow: 0 0 0 2px rgb(240 189 102 / .4); }
 .location-frame--arrangement-selected .location-frame__heading { background: #594022; outline: 2px solid #f0bd66; }
 .location-frame--arrangement-selected .location-frame__label { color: #fff2ce; }
-.location-proxy--arrangement-selected { border: 2px solid #f0bd66; background: #594022; box-shadow: 0 0 0 2px rgb(240 189 102 / .4); }
+.location-proxy--arrangement-selected { --location-border-width: 2px; border-color: #f0bd66; background: #594022; box-shadow: 0 0 0 2px rgb(240 189 102 / .4); }
 
 .location-arrangement-arrows--compact > span { display: grid; grid-template-columns: repeat(2, 22px); }
 
@@ -1066,7 +1068,11 @@ a { color: inherit; }
 .location-grid-sorting button[aria-pressed="true"] { border-color: #55e5b5; background: #15372f; }
 
 .object-virtual-channel.cable-route-foreground--free { stroke: #809591; stroke-width: 1.25; stroke-dasharray: 3 3; }
-.location-channel-layer { position: absolute; width: 1px; height: 1px; overflow: visible; pointer-events: none; fill: none; stroke: #809591; stroke-width: 1.25; stroke-dasharray: 5 4; }
+.location-channel-layer { position: absolute; top: 0; left: 0; z-index: 0; width: 1px; height: 1px; overflow: visible; pointer-events: none; }
+.location-channel-layer path { fill: none; stroke: #69cadb; stroke-width: var(--location-channel-unit); stroke-dasharray: calc(4 * var(--location-channel-unit)) calc(3 * var(--location-channel-unit)); }
+.location-channel-outlet { r: calc(4.5 * var(--location-channel-unit)); fill: var(--location-terminal-fill); stroke: var(--location-terminal-stroke); stroke-width: var(--location-channel-unit); }
+/* The blueprint outlet sits on the cable-zone edge. Generic ports paint above their outlet. */
+.location-channel-layer--outlets { z-index: 2; }
 .cable-route-hit { fill: none; stroke: transparent; pointer-events: stroke; cursor: crosshair; }
 .cable-route-hit:focus { outline: none; }
 .cable-route-hit:focus-visible { stroke: rgb(141 226 200 / .55); }

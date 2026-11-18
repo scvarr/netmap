@@ -60,7 +60,9 @@ export function LocationFrameEditor({ automatic, arrangementSelected, onSelectLo
       <span className="location-frame__label">{frame.label}</span>
       <span onPointerDown={e => e.stopPropagation()}>{actions}</span>
     </span>
-    <button type="button" className="location-boundary-point nodrag nopan" aria-label={t('map.boundaryPoint')} data-boundary-point-id={state?.boundary_point_id} style={{ left: point.x - geometry.x, top: point.y - geometry.y, transform: 'translate(-50%, -50%) scale(' + uiScale + ')' }} onPointerDown={e => start(e, 'point')} {...handlers} />
+    <span className="location-boundary-anchor">
+      <button type="button" className="location-boundary-point nodrag nopan" aria-label={t('map.boundaryPoint')} data-boundary-point-id={state?.boundary_point_id} style={{ left: point.x - geometry.x, top: point.y - geometry.y }} onPointerDown={e => start(e, 'point')} {...handlers} />
+    </span>
     {selected && <>
       {!automatic && <button type="button" style={{ transform: "scale(" + uiScale + ")", transformOrigin: "center" }} className="location-action location-frame__resize nodrag nopan" aria-label={t('map.resizeLocation')} onPointerDown={e => start(e, 'resize')} {...handlers}>↘</button>}
       {(draft || error) && <span style={{ transform: "scale(" + uiScale + ")", transformOrigin: "left top" }} className="location-frame__save nodrag nopan">
