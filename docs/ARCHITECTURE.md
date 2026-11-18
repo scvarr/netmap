@@ -510,16 +510,29 @@ PhysicalObject в другой canonical Location — отдельная явн�
 Скрытие пустых Location и collapse/expand сохраняют существующую смысловую
 разницу; перекомпоновка видимых элементов не уничтожает сохранённую структуру.
 
-### TARGET кабельной геометрии
+### COMB-01 — объектные виртуальные кабельные каналы
 
-Отдельный согласованный TARGET, не реализация: объектная точка выхода на правой
-границе, автоматическая расчёска над/под корпусом, общий визуальный жгут и
-относительная к объекту геометрия подводов. Дополнительных верхних/нижних полос
-внутри PhysicalObject нет; подводы могут выходить за корпус в свободное
-пространство Location. Физические Cable остаются независимыми, общий жгут
-не объединяет identity или trace evidence. Это presentation, не новые endpoints.
-[Channel и составная маршрутизация C-UX-10](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
-остаются отдельной OPEN capability; расчёска также не IMPLEMENTED.
+**IMPLEMENTED на milestone-ветке.** В физическом виде L1 каждый видимый
+Blueprint-backed PhysicalObject получает производный локальный граф по
+отображаемым координатам портов и размерам рамки. Короткие вертикальные
+подводы ведут к ближайшей верхней или нижней магистрали. Магистрали сходятся
+в правой зоне рамки и заканчиваются на её правой границе. От каждого
+ConnectionPoint граф хранит ссылку на начало пути, а совпадающие участки
+представлены общими сегментами.
+
+При отображении Cable локальные пути дополняют межобъектную линию с
+существующими waypoints и разрешёнными boundary anchors. По умолчанию
+видны занятые сегменты. Переключатель карты добавляет свободные. Выделение
+и trace применяются по canonical Cable ID, включая его общие сегменты.
+Нажатие на сегмент с единственным Cable выбирает этот Cable.
+Во время редактирования трассы и прокладки схема показывает
+непосредственные линии к портам для согласованности с редактором и snapping.
+
+Геометрия вычисляется из активного представления. Uniform-grid резервирует
+вертикальный зазор при измерении ячеек без изменения размеров панелей.
+COMB-01 не добавляет записей или API. [C-UX-10](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
+остаётся OPEN для маршрутов через Location hierarchy, общих межобъектных
+жгутов и глобальной маршрутизации. DOC-LOC-03 остаётся PARTIAL.
 
 ### SLOC-01 — isolated uniform Location table core
 
@@ -604,7 +617,7 @@ saving; drafts cannot cross variants. API failure restores authoritative setting
 and displays an error. Server confirmation supplies the authoritative display.
 Boundary identity/edge/offset, canonical hierarchy/assignments, Cable and routes
 are untouched. Manual acceptance remains OPEN;
-PhysicalObject movement, routing and cable combing remain separate capabilities.
+Direct PhysicalObject arrangement is covered by SLOC-05. Object-local cable geometry is covered by COMB-01.
 
 ### SLOC-04 — child Location sorting
 

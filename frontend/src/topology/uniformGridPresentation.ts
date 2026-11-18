@@ -3,6 +3,7 @@ import type { LocationDocument } from './locationTypes';
 import type { GridObjectSequence, MapPlacement, MapLocationState, UniformLocationGrid } from './savedMapTypes';
 import type { DisplayedPhysicalObject } from './locationFrames';
 import type { FlowRectangle } from './nodeFootprint';
+import { OBJECT_CHANNEL_GRID_INSET } from './objectVirtualChannels';
 
 /** Reconcile live hierarchy without moving surviving saved cells or mutating settings. */
 export function gridTables(locations: readonly LocationDocument[], saved: UniformLocationGrid['tables'] = {}) {
@@ -43,7 +44,11 @@ export function gridObjectSequence(members: ReadonlySet<string> | undefined, sav
 
 export function uniformGridPresentation(locations: readonly LocationDocument[], placements: readonly MapPlacement[], objects: readonly DisplayedPhysicalObject[], states: readonly MapLocationState[], settings: UniformLocationGrid) {
   const tables = gridTables(locations, settings.tables);
-  const dimensions = new Map(objects.map(o => [o.physicalObjectId, o.rectangle]));
+  const insets = new Map(objects.filter(o => o.flexibleCableZone).map(o => [o.physicalObjectId, OBJECT_CHANNEL_GRID_INSET]));
+  const dimensions = new Map(objects.map(o => [o.physicalObjectId, {
+    ...o.rectangle,
+    height: o.rectangle.height + 2 * (insets.get(o.physicalObjectId) ?? 0),
+  }]));
   const direct = directGridObjects(placements);
   const objectIds = new Map<string, string[]>();
   const build = (id: string): LocationGridNode => {
@@ -67,7 +72,11 @@ export function uniformGridPresentation(locations: readonly LocationDocument[], 
   const visit = (node: LocationGridResult, x: number, y: number) => {
     const box = { ...node.bounds, x: x + node.bounds.x, y: y + node.bounds.y };
     frames.set(node.id, box);
-    node.objects.forEach((r, i) => positions.set(objectIds.get(node.id)![i], { ...r, x: box.x + r.x, y: box.y + r.y }));
+    node.objects.forEach((r, i) => {
+      const id = objectIds.get(node.id)![i];
+      const inset = insets.get(id) ?? 0;
+      positions.set(id, { ...r, x: box.x + r.x, y: box.y + r.y + inset, height: r.height - 2 * inset });
+    });
     node.children.forEach(child => visit(child, box.x, box.y));
   };
   visit(result, 0, 0);

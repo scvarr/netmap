@@ -1069,3 +1069,5 @@ a { color: inherit; }
 .location-grid-sorting tr > th:first-child { position: sticky; left: 0; background: #0b191b; }
 .location-grid-sorting button, .map-location-dialog .location-grid-sorting button, .location-grid-sorting select { padding: 4px 6px; font-size: 11px; line-height: 1.2; }
 .location-grid-sorting button[aria-pressed="true"] { border-color: #55e5b5; background: #15372f; }
+
+.object-virtual-channel.cable-route-foreground--free { stroke: #809591; stroke-width: 1.25; stroke-dasharray: 3 3; }

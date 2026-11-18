@@ -2,7 +2,7 @@
 
 PhysicalObject with a published BaseTemplate composition uses one square-corner horizontal frame:
 identity (72 flow px), composition, cable management reserve (minimum 20 flow px).
-The empty right zone is presentation only: no ports, links, or canonical entities are synthesized.
+The right zone is presentation geometry and hosts the shared exit of COMB-01.
 The identity is bounded and ellipsized, with a full hover title; Location is optional and no U or name-derived Location type is required.
 
 `display_width` continues to mean composition width. Minimum footprint adds 92 px; derived automatic frame allocation may extend the cable zone;
@@ -13,9 +13,10 @@ rendered ports, cable endpoints and foreground markers share the same left-zone 
 Client layout/collision and server SavedMap footprints include both side zones and the density minimum.
 Reading geometry does not write Cable waypoints or alter MapCableRoute.
 
-Object cable comb and common harness are agreed **OPEN** follow-up work, including object-relative
-waypoints and later Location boundary integration. This milestone creates only a reserved area.
-C-UX-10 is not declared implemented by this change. Canonical topology and Member mappings are unchanged.
+COMB-01 uses the right-hand reserve for the shared spine and exit. The upper
+and lower rails sit outside the frame. Local segments derive from the rendered
+ports and frame dimensions. Location hierarchy routing and inter-object
+harnesses remain OPEN under C-UX-10.
 
 Validation: targeted frontend geometry, interaction, L1, layout and runtime-color tests;
 server dense footprint, SavedMap, variants and Location geometry tests; Docker TypeScript/Vite build.

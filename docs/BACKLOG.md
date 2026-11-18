@@ -244,7 +244,7 @@ C-CAP-01 остаётся OPEN Phase D; C-CAP-01-02/03/04 не закрыты; P
 CAT-D: CableType как пользовательский справочник принят; состав технических полей
 и реализация остаются OPEN, остальные классификации этим решением не утверждены.
 
-AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative boundary anchors; independent copy/reopen; manual variants preserved. Channels and comb remain OPEN.
+AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative boundary anchors; independent copy/reopen; manual variants preserved. Location Channels remain OPEN.
 
 
 ## DOC-LOC-03 — реализация структурной компоновки
@@ -259,8 +259,12 @@ hide/collapse и независимость canonical assignment. Для ост�
 После согласования открытых деталей реализация требует последующей декомпозиции
 на ограниченные последовательные milestones; их количество и техническое
 содержание этой записью не предрешаются.
-CURRENT AUTO-LOC-01/02 не закрывают эту запись. Объектная расчёска не реализована;
-Channel и составная маршрутизация остаются в отдельном **C-UX-10 OPEN**.
+**COMB-01 / IMPLEMENTED на milestone-ветке.** Производный граф путей от
+портов Blueprint-backed оборудования до общего правого выхода используется
+реальными Cable. Переключатель карты отображает свободные сегменты. Uniform-grid
+учитывает вертикальные коридоры. DOC-LOC-03 остаётся PARTIAL.
+Межлокационные Channel, глобальная маршрутизация и общие межобъектные жгуты
+остаются в **C-UX-10 OPEN**.
 Новых этапов Phase A–I и расширения scope эта запись не вводит.
 
 SLOC-01: isolated typed uniform-table computational core implemented, with

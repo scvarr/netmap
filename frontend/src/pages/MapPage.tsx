@@ -308,6 +308,7 @@ function MapPageContent({
   const [cableRename, setCableRename] = useState<CableRenameState | null>(null);
   const [wiringHistoricalCandidate, setWiringHistoricalCandidate] = useState<string | null>(null);
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
+  const [showAllVirtualChannels, setShowAllVirtualChannels] = useState(false);
   const [bulkWiring, setBulkWiring] = useState<BulkWiringState | null>(null);
   const [bulkTemplates, setBulkTemplates] = useState<{ id: string; name: string }[]>([]);
   const [annotationMode, setAnnotationMode] = useState(false);
@@ -1779,6 +1780,9 @@ function MapPageContent({
             {utilitySection === "tools" && <div className="map-utility-panel__content">
               <button type="button" onClick={() => setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id, variantId: activeMap.active_variant_ref.entity_id })} disabled={!document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
               <button type="button" aria-pressed={physicalAnnotationMode} onClick={() => { setAnnotationMode((active) => !active); setUtilitySection(null); }}>{t("map.textAnnotation")}</button>
+              <button type="button" aria-pressed={showAllVirtualChannels}
+                disabled={!document || physicalAnnotationMode || wiring.status !== "idle" || Boolean(bulkWiring) || Boolean(cableRouteEdit)}
+                onClick={() => setShowAllVirtualChannels(value => !value)}>{t("map.virtualChannels")}</button>
             </div>}
           </section>
         </aside>
@@ -2032,6 +2036,7 @@ function MapPageContent({
                   }}
                   arrangement={locationArrangement}
                   sceneKey={presentationSceneKey}
+                  showAllVirtualChannels={showAllVirtualChannels}
                   positionOverrides={!legacy ? positions : undefined}
                   positionSnapshot={activeMap?.placements}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}

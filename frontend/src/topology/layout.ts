@@ -47,6 +47,7 @@ export interface DeviceNodeData extends Record<string, unknown> {
 export interface LogicalEdgeData extends Record<string, unknown> {
   projection?: TopologyProjectionEdge;
   endpointPair?: PhysicalEndpointPair;
+  renderCableInForegroundOnly?: boolean;
   cableNode?: TopologyProjectionNode;
   supportingEdgeIds?: string[];
   /** Authoritative SavedMap state, enriched after topology-derived layout. */

@@ -156,8 +156,9 @@ variant geometry и одна обязательная map-scoped виртуал�
 автоматические bounds по полному rendered footprint с отдельным manual resize floor,
 полный collapse пустых/заполненных subtree в один компактный элемент с прежней точкой,
 expand без перезаписи expanded geometry и сохранение partial visible elements.
-C-UX-10 остаётся OPEN: Channels, составные Cable routes, comb и новый collapse
-не реализованы.
+C-UX-10 остаётся OPEN для межлокационных Channels, глобальной маршрутизации,
+общих межобъектных жгутов и channel-aware collapse. Объектный граф COMB-01
+реализован на milestone-ветке.
 
 
 **OPEN: DECIDED TARGET, не IMPLEMENTED.** C-UX-10-CONTRACT — только
@@ -168,7 +169,7 @@ C-UX-10 остаётся OPEN: Channels, составные Cable routes, comb �
 
 CURRENT: MapCableRoute хранит индивидуальные waypoints; boundary anchors
 привязаны к самостоятельным Location frames (C-UX-10-01 foundation).
-Shared channels и автоматическое создание каналов отсутствуют. Пустые Location
+Persisted shared Channels остаются OPEN. Пустые Location
 имеют frame и одну обязательную виртуальную точку.
 
 TARGET согласован с [независимыми картами](L1_REFERENCE_NETWORK.md#независимые-карты):
@@ -459,7 +460,8 @@ root не требует выбора направления. Визуальны
 над/под корпусом, визуальный жгут, object-relative подводы с выходом в свободное
 пространство Location без дополнительных полос внутри корпуса. Панель
 BaseTemplate не масштабируется, правая зона OBJECT-UX-01 может принимать
-дополнительную ширину. Cable независимы; расчёска не реализована.
+дополнительную ширину. Локальный граф и его отображение реализованы в COMB-01.
+Общий межобъектный жгут остаётся OPEN.
 C-UX-10 (Channel и составные маршруты) остаётся OPEN отдельной capability.
 
 CURRENT. SLOC-01–04 находятся в main: uniform-grid хранится в variant
@@ -472,7 +474,8 @@ SLOC-04-SAVE добавляет «Сохранить компоновку» в �
 
 На milestone-ветке SLOC-05 добавляет порядок и ориентацию непосредственных
 PhysicalObject для каждого Location и root. Эти правки входят в общий черновик.
-OPEN: grid-specific partial-collapse selection UX, расчёска и её интеграция с маршрутом.
+OPEN: grid-specific partial-collapse selection UX. COMB-01 резервирует
+место для верхней и нижней магистралей в uniform-grid.
 Ручная приёмка SLOC-05 остаётся OPEN.
 Ручная приёмка стрелочной расстановки и сортировки остаётся отдельной проверкой.
 Для SLOC-04-SAVE сохранение и reload проверены в Chromium с реальным backend

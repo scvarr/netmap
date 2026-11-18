@@ -46,6 +46,54 @@ const withNodes = (nodes: Record<string, any>, run: () => void) => {
 };
 
 describe('direct cable route edge interaction', () => {
+  it('draws occupied channels once, traces a single cable and preserves saved route points', () => {
+    const fixture = (id: string, x: number) => blueprintNode(id, x, id, {
+      connectionPointId: id + '-a', kind: 'CONNECTION_POINT', renderedX: .1, attachmentX: 0, side: 'LEFT',
+    });
+    const left = fixture('left', 0);
+    const right = fixture('right', 300);
+    for (const node of [left, right]) {
+      const slots = node.data.projection.attributes.blueprint_presentation.slots;
+      slots.push({ ...slots[0], connection_point_id: node.data.projection.id + '-b', rendered_position: { x: .8, y: .8 }, panel_local_position: { x: .8, y: .8 } });
+      slots.push({ ...slots[0], connection_point_id: node.data.projection.id + '-free', rendered_position: { x: .8, y: .15 }, panel_local_position: { x: .8, y: .15 } });
+    }
+    const waypoints = [Object.freeze({ x: 180, y: 65, anchor: Object.freeze({ location_id: 'room', edge: 'right', offset: .5 }) })];
+    const cable = (id: string, emphasis: string) => ({
+      id, source: 'left', target: 'right', data: {
+        cableNode: { id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: id }] },
+        endpointPair: { from_connection_point_id: 'left-' + id, to_connection_point_id: 'right-' + id },
+        cablePresentationEmphasis: emphasis, cableRoute: { waypoints },
+      },
+    });
+    const a = cable('a', 'traced'), b = cable('b', 'normal');
+    const onCableClick = vi.fn();
+    withNodes({ left, right }, () => {
+      const view = render(<ForegroundCableRoutes edges={[]} virtualChannels />);
+      const channels = () => [...view.container.querySelectorAll('.object-virtual-channel')];
+      expect(channels()).toHaveLength(0);
+      view.rerender(<ForegroundCableRoutes edges={[]} virtualChannels showAllVirtualChannels />);
+      const fullCount = channels().length;
+      expect(fullCount).toBeGreaterThan(0);
+      expect(channels().every(p => p.classList.contains('cable-route-foreground--free'))).toBe(true);
+      view.rerender(<ForegroundCableRoutes edges={[a] as any} virtualChannels onCableClick={onCableClick} />);
+      const oneCableCount = channels().length;
+      expect(oneCableCount).toBeGreaterThan(0);
+      view.rerender(<ForegroundCableRoutes edges={[a, b] as any} virtualChannels onCableClick={onCableClick} />);
+      expect(channels().length).toBeGreaterThan(oneCableCount);
+      expect(channels().length).toBeLessThan(fullCount);
+      expect(channels().filter(p => p.classList.contains('cable-route-foreground--traced'))).toHaveLength(oneCableCount);
+      expect(channels().filter(p => p.getAttribute('d') === 'M 116 16 L 124 16')).toHaveLength(2);
+      expect(view.container.querySelector('[data-testid="foreground-cable-a"] path')).toHaveAttribute('d', 'M 124 16 L 180 65 L 424 16');
+      expect(view.container.querySelector('[data-testid="foreground-cable-b"] path')).toHaveClass('cable-route-foreground--normal');
+      fireEvent.click(channels().find(p => p.classList.contains('cable-route-foreground--normal'))!);
+      expect(onCableClick).toHaveBeenCalledWith(expect.anything(), b);
+      expect(waypoints[0].anchor).toEqual({ location_id: 'room', edge: 'right', offset: .5 });
+      right.internals.positionAbsolute = { x: 450, y: 70 };
+      right.data.compositionDisplayWidth = 48;
+      view.rerender(<ForegroundCableRoutes edges={[a, b] as any} virtualChannels showAllVirtualChannels />);
+      expect(view.container.querySelector('[data-testid="foreground-cable-a"] path')).toHaveAttribute('d', 'M 124 16 L 180 65 L 590 94');
+    });
+  });
   it('renders a cable to a Location proxy without treating the proxy as a port-bearing object', () => {
     const proxy = { internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 110, height: 30 }, data: { projection: null, locationProxy: { locationId: 'room', label: 'Room', hiddenObjectCount: 1 } } };
     const cable = { id: 'real-cable', source: 'proxy', target: 'target', data: { cableNode: { id: 'canonical-cable' }, cableRoute: { waypoints: [{ x: 180, y: 20 }] } } };

@@ -10,8 +10,9 @@ import {
   useViewport,
   type EdgeProps,
   type InternalNode,
+  type XYPosition,
 } from '@xyflow/react';
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
@@ -26,6 +27,8 @@ import { assistBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
 import { findForeignRouteSnap, FOREIGN_BOUNDARY_HALF_SIDE_FLOW, FOREIGN_BOUNDARY_STROKE_FLOW, FOREIGN_WAYPOINT_RADIUS_FLOW, FOREIGN_WAYPOINT_STROKE_FLOW, type ForeignRouteGeometry, type ForeignRouteSnap } from '../topology/foreignRouteSnap';
 import { cableIdForNode, physicalObjectIdForNode } from '../topology/projection';
 import { waypointAtSegmentLength } from '../topology/numericSegmentGeometry';
+import { objectVirtualChannels, type VirtualChannelSegment } from '../topology/objectVirtualChannels';
+import type { BlueprintPresentation } from '../topology/types';
 
 const CABLE_ANGLE_FAMILIES = [{ step: 45, capturePx: 12 }, { step: 15, capturePx: 5 }];
 const EDITING_CABLE_STROKE_FLOW = 5;
@@ -190,7 +193,7 @@ export function FloatingTopologyEdge({
   const { screenToFlowPosition } = useReactFlow();
   const sourceNode = useInternalNode<DeviceFlowNode>(source);
   const targetNode = useInternalNode<DeviceFlowNode>(target);
-  if (!sourceNode || !targetNode) return null;
+  if (!sourceNode || !targetNode || data?.renderCableInForegroundOnly) return null;
 
   const pair = data?.endpointPair;
   const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => node.data.locationProxy ? null : data?.cableNode
@@ -242,7 +245,7 @@ export function FloatingTopologyEdge({
 
 type GeometryFeedback = { start: MapCableRouteWaypoint; end: MapCableRouteWaypoint; assist: SegmentAssistResult };
 
-function ForegroundCableRoute({ edge, foreignGeometry, onCableClick, onCableContextMenu, onFeedbackChange, onSnapChange }: { edge: LogicalFlowEdge; foreignGeometry: readonly ForeignRouteGeometry[]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void; onFeedbackChange: (edgeId: string, feedback: readonly GeometryFeedback[]) => void; onSnapChange: (snap: ForeignRouteSnap | null) => void }) {
+function ForegroundCableRoute({ edge, channelExits, foreignGeometry, onCableClick, onCableContextMenu, onFeedbackChange, onSnapChange }: { edge: LogicalFlowEdge; channelExits?: { source?: FloatingEndpoint; target?: FloatingEndpoint }; foreignGeometry: readonly ForeignRouteGeometry[]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void; onFeedbackChange: (edgeId: string, feedback: readonly GeometryFeedback[]) => void; onSnapChange: (snap: ForeignRouteSnap | null) => void }) {
   const { screenToFlowPosition, flowToScreenPosition } = useReactFlow();
   const sourceNode = useInternalNode<DeviceFlowNode>(edge.source);
   const targetNode = useInternalNode<DeviceFlowNode>(edge.target);
@@ -252,8 +255,8 @@ function ForegroundCableRoute({ edge, foreignGeometry, onCableClick, onCableCont
   const pair = data.endpointPair;
   const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
   const endpoints = {
-    source: sourceNode.data.locationProxy ? floating.source : getRenderedConnectionPoint(sourceNode.data.projection, rectangle(sourceNode), pair?.from_connection_point_id) ?? floating.source,
-    target: targetNode.data.locationProxy ? floating.target : getRenderedConnectionPoint(targetNode.data.projection, rectangle(targetNode), pair?.to_connection_point_id) ?? floating.target,
+    source: channelExits?.source ?? (sourceNode.data.locationProxy ? floating.source : getRenderedConnectionPoint(sourceNode.data.projection, rectangle(sourceNode), pair?.from_connection_point_id) ?? floating.source),
+    target: channelExits?.target ?? (targetNode.data.locationProxy ? floating.target : getRenderedConnectionPoint(targetNode.data.projection, rectangle(targetNode), pair?.to_connection_point_id) ?? floating.target),
   };
   const draft = data.cableRouteDraft;
   const waypoints = draft?.waypoints ?? data.cableRoute?.waypoints;
@@ -387,6 +390,9 @@ const cablePriority = (edge: LogicalFlowEdge) => edge.data?.cableRouteDraft ? 3
   : edge.selected || edge.data?.cablePresentationEmphasis === 'selected' ? 2
     : edge.data?.cablePresentationEmphasis === 'attached' || edge.data?.cablePresentationEmphasis === 'traced' ? 1 : 0;
 
+const virtualCablePriority = (edge: LogicalFlowEdge) =>
+  2 * cablePriority(edge) + Number(edge.data?.cablePresentationEmphasis === 'traced');
+
 export function layoutGeometryFeedback(items: readonly GeometryFeedback[], zoom: number) {
   const candidates = items.map((item, index) => {
     const length = segmentLength(item.start, item.end);
@@ -421,9 +427,26 @@ export function layoutSelectedMeasurements(points: readonly MapCableRouteWaypoin
 }
 
 /** Foreground cable selection and route editing share the same visual stack. */
-export function ForegroundCableRoutes({ edges, physicalPortStates, bulkPortNumbers, bulkPairs, wiringRoute, onCableClick, onCableContextMenu }: { edges: readonly LogicalFlowEdge[]; physicalPortStates?: Record<string, ForegroundPortState>; bulkPortNumbers?: Record<string, number>; bulkPairs?: readonly { source: { physicalObjectId: string; connectionPointId: string }; target: { physicalObjectId: string; connectionPointId: string } }[]; wiringRoute?: Parameters<typeof WiringRoute>[0]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void }) {
+export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualChannels, physicalPortStates, bulkPortNumbers, bulkPairs, wiringRoute, onCableClick, onCableContextMenu }: { edges: readonly LogicalFlowEdge[]; virtualChannels?: boolean; showAllVirtualChannels?: boolean; physicalPortStates?: Record<string, ForegroundPortState>; bulkPortNumbers?: Record<string, number>; bulkPairs?: readonly { source: { physicalObjectId: string; connectionPointId: string }; target: { physicalObjectId: string; connectionPointId: string } }[]; wiringRoute?: Parameters<typeof WiringRoute>[0]; onCableClick?: (event: MouseEvent<SVGPathElement>, edge: LogicalFlowEdge) => void; onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void }) {
   const { zoom } = useViewport();
   const nodes = useNodes<DeviceFlowNode>();
+  const graphCache = useMemo(() => new WeakMap<BlueprintPresentation, {
+    width: number;
+    compositionWidth: number | undefined;
+    graph: ReturnType<typeof objectVirtualChannels>;
+  }>(), []);
+  const channelObjects = useMemo(() => new Map(virtualChannels ? nodes.flatMap(node => {
+    const presentation = node.data.projection?.attributes.blueprint_presentation;
+    if (!presentation) return [];
+    const width = node.width ?? node.measured?.width ?? 0;
+    const compositionWidth = node.data.compositionDisplayWidth;
+    let entry = graphCache.get(presentation);
+    if (!entry || entry.width !== width || entry.compositionWidth !== compositionWidth) {
+      entry = { width, compositionWidth, graph: objectVirtualChannels(presentation, compositionWidth, width) };
+      graphCache.set(presentation, entry);
+    }
+    return [[node.id, { position: node.position, graph: entry.graph }] as const];
+  }) : []), [nodes, virtualChannels, graphCache]);
   const [feedbackByCable, setFeedbackByCable] = useState<Record<string, readonly GeometryFeedback[]>>({});
   const [activeSnap, setActiveSnap] = useState<{ edgeId: string; snap: ForeignRouteSnap } | null>(null);
   const [numericEdit, setNumericEdit] = useState<{ edgeId: string; waypointIndex: number; segmentIndex: number; value: string; invalid: boolean } | null>(null);
@@ -434,9 +457,9 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, bulkPortNumbe
   useEffect(() => { setActiveSnap(null); setFeedbackByCable({}); }, [editingCableId]);
   useEffect(() => { setNumericEdit(null); }, [editingCableId, editingWaypointIndex]);
   useEffect(() => { numericInputRef.current?.focus(); numericInputRef.current?.select(); }, [numericEdit?.edgeId, numericEdit?.waypointIndex, numericEdit?.segmentIndex]);
-  if (!cables.length && !wiringRoute && !bulkPortNumbers && !bulkPairs) return null;
+  if (!cables.length && !wiringRoute && !bulkPortNumbers && !bulkPairs && !(showAllVirtualChannels && channelObjects.size)) return null;
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
-  const geometryByCable = new Map(cables.flatMap((edge) => {
+  const geometryByCable = new Map((editingCableId ? cables : []).flatMap((edge) => {
     const sourceNode = nodeById.get(edge.source), targetNode = nodeById.get(edge.target);
     if (!sourceNode || !targetNode) return [];
     const box = (node: DeviceFlowNode): NodeRectangle => ({
@@ -459,7 +482,31 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, bulkPortNumbe
     .flatMap((other) => { const geometry = geometryByCable.get(other.id); return geometry ? [geometry] : []; });
   const editingEdge = cables.find((edge) => edge.data?.cableRouteDraft);
   const foreignGeometry = editingEdge ? foreignGeometryFor(editingEdge) : [];
-  const ordered = cables.map((edge, index) => ({ edge, index })).sort((a, b) => cablePriority(a.edge) - cablePriority(b.edge) || a.index - b.index);
+  const priority = virtualChannels ? virtualCablePriority : cablePriority;
+  const ordered = cables.map((edge, index) => ({ edge, index })).sort((a, b) => priority(a.edge) - priority(b.edge) || a.index - b.index);
+  const channelUsers = new Map<string, Map<VirtualChannelSegment, Map<string, LogicalFlowEdge>>>();
+  const allocate = (nodeId: string, pointId: string, cableId: string, edge: LogicalFlowEdge): FloatingEndpoint | undefined => {
+    const object = channelObjects.get(nodeId);
+    const first = object?.graph.paths.get(pointId);
+    if (!object || !first) return undefined;
+    let usage = channelUsers.get(nodeId);
+    if (!usage) channelUsers.set(nodeId, usage = new Map());
+    for (let segment: VirtualChannelSegment | null = first; segment; segment = segment.next) {
+      let users = usage.get(segment);
+      if (!users) usage.set(segment, users = new Map());
+      users.set(cableId, edge);
+    }
+    return { x: object.position.x + object.graph.exit.x, y: object.position.y + object.graph.exit.y, side: Position.Right };
+  };
+  const channelExits = new Map(virtualChannels ? ordered.flatMap(({ edge }) => {
+    const pair = edge.data?.endpointPair;
+    const cableId = edge.data?.cableNode && cableIdForNode(edge.data.cableNode);
+    if (!pair || !cableId) return [];
+    return [[edge.id, {
+      source: allocate(edge.source, pair.from_connection_point_id, cableId, edge),
+      target: allocate(edge.target, pair.to_connection_point_id, cableId, edge),
+    }] as const];
+  }) : []);
   const feedback = layoutGeometryFeedback(ordered.flatMap(({ edge }) => edge.data?.cableRouteDraft ? feedbackByCable[edge.id] ?? [] : []), zoom);
   const selectedDraft = editingEdge?.data?.cableRouteDraft;
   const selectedIndex = selectedDraft?.selectedWaypointIndex;
@@ -478,7 +525,27 @@ export function ForegroundCableRoutes({ edges, physicalPortStates, bulkPortNumbe
   const snap = activeSnap && cables.some((edge) => edge.id === activeSnap.edgeId && edge.data?.cableRouteDraft) ? activeSnap.snap : null;
   return <ViewportPortal>
     <svg className="cable-routes-foreground" aria-hidden={activeNumericEdit ? undefined : true}>
-      {ordered.map(({ edge }) => <ForegroundCableRoute key={edge.id} edge={edge} foreignGeometry={edge.data?.cableRouteDraft ? foreignGeometry : []} onCableClick={onCableClick} onCableContextMenu={onCableContextMenu} onFeedbackChange={(edgeId, items) => setFeedbackByCable((current) => ({ ...current, [edgeId]: items }))} onSnapChange={(next) => setActiveSnap(next ? { edgeId: edge.id, snap: next } : null)} />)}
+      {ordered.map(({ edge }) => <ForegroundCableRoute key={edge.id} edge={edge} channelExits={channelExits.get(edge.id)} foreignGeometry={edge.data?.cableRouteDraft ? foreignGeometry : []} onCableClick={onCableClick} onCableContextMenu={onCableContextMenu} onFeedbackChange={(edgeId, items) => setFeedbackByCable((current) => ({ ...current, [edgeId]: items }))} onSnapChange={(next) => setActiveSnap(next ? { edgeId: edge.id, snap: next } : null)} />)}
+      {[...channelObjects].map(([nodeId, { graph, position }]) => {
+        const usage = channelUsers.get(nodeId);
+        if (!usage && !showAllVirtualChannels) return null;
+        return <g key={nodeId} transform={`translate(${position.x} ${position.y})`}>
+          {(showAllVirtualChannels ? graph.segments : [...usage!.keys()]).map(segment => {
+            const users = usage?.get(segment);
+            let emphasis: LogicalFlowEdge | undefined;
+            for (const user of users?.values() ?? []) {
+              if (!emphasis || priority(user) >= priority(emphasis)) emphasis = user;
+            }
+            const cable = users?.size === 1 ? emphasis : undefined;
+            return <path key={`${segment.from.x},${segment.from.y}`}
+              className={`object-virtual-channel cable-route-foreground--${emphasis?.data?.cablePresentationEmphasis ?? 'free'}`}
+              d={`M ${segment.from.x} ${segment.from.y} L ${segment.to.x} ${segment.to.y}`}
+              fill="none" style={emphasis?.style} pointerEvents={cable && (onCableClick || onCableContextMenu) ? 'stroke' : 'none'}
+              onClick={cable && onCableClick ? event => { event.stopPropagation(); onCableClick(event, cable); } : undefined}
+              onContextMenu={cable && onCableContextMenu ? event => { event.stopPropagation(); onCableContextMenu(event, cable); } : undefined} />;
+          })}
+        </g>;
+      })}
       <ForegroundPortMarkers physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} />
       {bulkPairs?.map((pair, index) => {
         const source = nodes.find((node) => node.data.projection && physicalObjectIdForNode(node.data.projection) === pair.source.physicalObjectId);

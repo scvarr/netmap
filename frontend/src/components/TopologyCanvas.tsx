@@ -72,6 +72,7 @@ interface TopologyCanvasProps {
   /** Exact Cable ids directly attached to the selected PhysicalObject. */
   directlyAttachedCableIds?: ReadonlySet<string>;
   sceneKey?: string;
+  showAllVirtualChannels?: boolean;
   /** Request one fit after a fresh layout has been applied. */
   viewportFitRevision?: number;
   /** A one-shot presentation request to reveal a physical object. */
@@ -136,6 +137,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   traceOverlay,
   directlyAttachedCableIds,
   sceneKey,
+  showAllVirtualChannels,
   viewportFitRevision = 0,
   focusPhysicalObjectId,
   positionOverrides,
@@ -319,7 +321,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     const locations = locationFrameInput && document.layer === 'L1' && document.detail_level === 'PHYSICAL_OBJECT'
       ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, projection.nodes.flatMap(node => {
           const id = physicalObjectIdForNode(node.data.projection);
-          return id ? [{ physicalObjectId: id, rectangle: nodeFootprint(node) }] : [];
+          return id ? [{ physicalObjectId: id, rectangle: nodeFootprint(node), flexibleCableZone: Boolean(node.data.projection.attributes.blueprint_presentation) }] : [];
         }), locationFrameInput.states ?? [], locationFrameInput.automatic) : null;
     const bounds = [...(locations?.frames ?? []).map(frame => frame.bounds), ...(locations?.proxies ?? []).filter(proxy => !proxy.partial).map(proxy => proxy.bounds),
       ...projection.nodes.map(node => ({ ...node, position: locations?.automaticPositions?.get(physicalObjectIdForNode(node.data.projection) ?? '') ?? node.position })).filter(node => !locations?.hiddenObjectProxy.has(physicalObjectIdForNode(node.data.projection) ?? '')).map(node => nodeFootprint(node))];
@@ -377,7 +379,9 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     );
   }
 
-  const showLocationPresentation = Boolean(locationFrameInput && document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT");
+  const physicalObjectView = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT";
+  const useVirtualChannels = physicalObjectView && !cableRouteDraft && !wiringRoute && !physicalPortStates && !bulkPairs;
+  const showLocationPresentation = Boolean(locationFrameInput && physicalObjectView);
   const displayedPhysicalObjects = showLocationPresentation ? projection.nodes.flatMap((node) => {
       const physicalObjectId = physicalObjectIdForNode(node.data.projection);
       if (!physicalObjectId) return [];
@@ -433,6 +437,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     draggable: false, selectable: false,
     data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { arrangementSelected: arrangement.selected === proxy.locationId, onSelectLocation: arrangement.preview && !proxy.partial ? () => arrangement.select(proxy.locationId) : undefined, partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
   });
+  const blueprintNodeIds = new Set(nodes.filter(node => node.data.projection?.attributes.blueprint_presentation).map(node => node.id));
   const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const savedRoute = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT"
       ? cableRouteForCollapsedCable(edge.data?.cableNode, cableRoutes)
@@ -479,7 +484,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
             : 'normal';
     return {
       ...edge,
-      data: edge.data ? { ...edge.data, cablePresentationEmphasis, ...(cableRoute ? { cableRoute } : {}), ...(matchingDraft ? { cableRouteDraft: matchingDraft, renderRouteEditorInForeground: true } : {}) } : edge.data,
+      data: edge.data ? { ...edge.data, cablePresentationEmphasis, renderCableInForegroundOnly: useVirtualChannels && Boolean(edge.data.cableNode) && (blueprintNodeIds.has(edge.source) || blueprintNodeIds.has(edge.target)), ...(cableRoute ? { cableRoute } : {}), ...(matchingDraft ? { cableRouteDraft: matchingDraft, renderRouteEditorInForeground: true } : {}) } : edge.data,
       selected: isSelected,
       animated: isSelected || isTraced || isDirectlyAttached,
       style: {
@@ -748,7 +753,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        {!annotationMode && <ForegroundCableRoutes edges={edges} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} onCableClick={(event, edge) => onEdgeClick(event, edge)} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
+        {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels} showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} onCableClick={(event, edge) => onEdgeClick(event, edge)} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
       </ReactFlow>
     </div>
   );
