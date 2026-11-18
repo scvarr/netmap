@@ -18,6 +18,10 @@ export interface ObjectVirtualChannels {
   readonly paths: ReadonlyMap<string, VirtualChannelSegment>;
 }
 
+export function objectVirtualChannelExit(body: { width: number; height: number }, frameWidth: number): XYPosition {
+  return { x: Math.max(frameWidth, body.width + OBJECT_SIDE_ZONES_WIDTH), y: body.height / 2 };
+}
+
 /** Object-local directed segments. A port points to its first segment and every
  * shared suffix is represented once. The keys are physical ConnectionPoint IDs. */
 export function objectVirtualChannels(
@@ -26,7 +30,7 @@ export function objectVirtualChannels(
   frameWidth: number,
 ): ObjectVirtualChannels {
   const body = blueprintNodeDisplayDimensions(presentation, compositionDisplayWidth);
-  const exit = { x: Math.max(frameWidth, body.width + OBJECT_SIDE_ZONES_WIDTH), y: body.height / 2 };
+  const exit = objectVirtualChannelExit(body, frameWidth);
   const junction = { x: exit.x - OBJECT_CHANNEL_RAIL_OFFSET, y: exit.y };
   const segments: VirtualChannelSegment[] = [];
   const paths = new Map<string, VirtualChannelSegment>();

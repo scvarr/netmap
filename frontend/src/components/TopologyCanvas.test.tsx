@@ -219,6 +219,16 @@ describe('TopologyCanvas async layout boundary', () => {
   it.each([false, true])('keeps two Location boundaries on their own endpoint sides through save and reload, reverse wiring: %s', async (reverse) => {
     const ref = <T extends string,>(type: T, id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type: type, entity_id: id });
     const objects: TopologyProjectionNode[] = ['a', 'a2', 'b', 'b2'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [ref('PhysicalObject', id)], attributes: {} }));
+    for (const node of [objects[0], objects[2]]) {
+      node.attributes.blueprint_presentation = {
+        blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' },
+        version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'rev' },
+        body: { kind: 'RECTANGLE', width: 200, height: 120 },
+        panels: [{ panel_key: 'panel', panel_number: 1, display_name: 'Panel', x: 0, y: 0, width: 200, height: 120 }],
+        slots: [{ slot_key: 'port', connection_point_id: node.id + '-port', display_name: 'Port', kind: 'CONNECTION_POINT',
+          panel_key: 'panel', panel_local_position: { x: .25, y: .25 }, rendered_position: { x: .25, y: .25 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }],
+      };
+    }
     const positions = [0, 300, 1000, 1300];
     const locations = ['A', 'B'].map((id) => ({ location_ref: ref('Location', id), name: id, type: null, parent_location_ref: null }));
     const placements = objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: locations[index < 2 ? 0 : 1].location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: positions[index], y: 0, locked: false } } }));
@@ -231,6 +241,7 @@ describe('TopologyCanvas async layout boundary', () => {
     await screen.findByRole('button', { name: 'a' });
     const saved = routeNormalizerRef.current!('cable', [{ x: 400, y: 72 }, { x: 700, y: 72 }]);
     expect(saved.map((point) => point.anchor?.location_id ?? null)).toEqual([null, 'A', null, 'B']);
+    expect(saved.map(point => point.y)).toEqual([72, 72, 72, 72]);
     // JSON round-trip models the persisted representation; the new edge follows projection order.
     const route = { cable_ref: ref('Cable', 'cable'), view: 'L1/PHYSICAL_OBJECT' as const, waypoints: JSON.parse(JSON.stringify(saved)) };
     const pair = { from_connection_point_id: 'a-port', from_member_index: 1, to_connection_point_id: 'b-port', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member', cable_ref: ref('Cable', 'cable') };

@@ -49,7 +49,8 @@ import { cableRouteForCollapsedCable } from "../topology/cableRoutePresentation"
 import { cableIdForNode } from "../topology/projection";
 import type { MapCableRouteWaypoint, MapTextAnnotation } from "../topology/savedMapTypes";
 import { useI18n } from "../i18n";
-import { blueprintRenderedNodeDimensions } from "../topology/blueprintDisplaySize";
+import { blueprintNodeDisplayDimensions, blueprintRenderedNodeDimensions } from "../topology/blueprintDisplaySize";
+import { objectVirtualChannelExit } from "../topology/objectVirtualChannels";
 import { nodeFootprint, type FlowRectangle } from "../topology/nodeFootprint";
 import { layoutLocationFrames, editLocationFrames } from '../topology/locationFrameGeometry';
 import { LocationFrameEditor } from "./LocationFrameEditor";
@@ -380,7 +381,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   }
 
   const physicalObjectView = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT";
-  const useVirtualChannels = physicalObjectView && !cableRouteDraft && !wiringRoute && !physicalPortStates && !bulkPairs;
+  const useVirtualChannels = physicalObjectView && !cableRouteDraft;
   const showLocationPresentation = Boolean(locationFrameInput && physicalObjectView);
   const displayedPhysicalObjects = showLocationPresentation ? projection.nodes.flatMap((node) => {
       const physicalObjectId = physicalObjectIdForNode(node.data.projection);
@@ -514,14 +515,23 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   };
   routeNormalizer.current = (cableId, waypoints) => {
     const edge = edges.find((item) => item.data?.cableNode && cableIdForNode(item.data.cableNode) === cableId);
-    let endpoints = edge && renderedNodeById.get(edge.source) && renderedNodeById.get(edge.target)
+    let endpoints: { source: XYPosition; target: XYPosition } | null = edge && renderedNodeById.get(edge.source) && renderedNodeById.get(edge.target)
       ? routeEndpoints(renderedNodeById.get(edge.source)!, renderedNodeById.get(edge.target)!, edge.data?.endpointPair?.from_connection_point_id, edge.data?.endpointPair?.to_connection_point_id)
       : null;
-    if (!endpoints && wiringRoute?.target) {
-      const sourceNode = nodes.find((node) => physicalObjectIdForNode(node.data.projection) === wiringRoute.source.physicalObjectId);
-      const targetNode = nodes.find((node) => physicalObjectIdForNode(node.data.projection) === wiringRoute.target?.physicalObjectId);
+    if (wiringRoute?.target) {
+      const sourceNode = nodes.find((node) => node.data.projection && physicalObjectIdForNode(node.data.projection) === wiringRoute.source.physicalObjectId);
+      const targetNode = nodes.find((node) => node.data.projection && physicalObjectIdForNode(node.data.projection) === wiringRoute.target?.physicalObjectId);
       if (sourceNode && targetNode) {
-        const gesture = routeEndpoints(sourceNode, targetNode, wiringRoute.source.connectionPointId, wiringRoute.target.connectionPointId);
+        const sourceId = wiringRoute.source.connectionPointId, targetId = wiringRoute.target.connectionPointId;
+        const fallback = routeEndpoints(sourceNode, targetNode, sourceId, targetId);
+        const channelExit = (node: DeviceFlowNode, pointId: string): XYPosition | undefined => {
+          const presentation = node.data.projection.attributes.blueprint_presentation;
+          if (!useVirtualChannels || !presentation?.slots.some(slot => slot.connection_point_id === pointId)) return undefined;
+          const body = blueprintNodeDisplayDimensions(presentation, node.data.compositionDisplayWidth);
+          const exit = objectVirtualChannelExit(body, node.width ?? node.measured?.width ?? 0);
+          return { x: node.position.x + exit.x, y: node.position.y + exit.y };
+        };
+        const gesture = { source: channelExit(sourceNode, sourceId) ?? fallback.source, target: channelExit(targetNode, targetId) ?? fallback.target };
         // The caller supplies persisted projection-order points even before the new Cable is projected.
         endpoints = wiringRoute.source.physicalObjectId > wiringRoute.target.physicalObjectId
           ? { source: gesture.target, target: gesture.source } : gesture;

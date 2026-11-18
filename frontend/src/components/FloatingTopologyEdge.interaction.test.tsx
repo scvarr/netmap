@@ -1,6 +1,6 @@
 import { fireEvent, render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { FloatingTopologyEdge, ForegroundCableRoutes, WiringRoute, layoutGeometryFeedback, layoutSelectedMeasurements } from './FloatingTopologyEdge';
+import { FloatingTopologyEdge, ForegroundCableRoutes, layoutGeometryFeedback, layoutSelectedMeasurements } from './FloatingTopologyEdge';
 import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 
 const markerPoints = ['eligible', 'source', 'destination', 'unavailable'].map((id) => ({ connection_point_id: id, display_name: id, cardinality: 1, external_connection_count: 0 }));
@@ -374,13 +374,71 @@ describe('direct cable route edge interaction', () => {
     });
   });
 
-  it('draws a new zero-waypoint Blueprint wiring draft directly port-to-port', () => {
+  it('shares occupied channels with the wiring draft through source, target, cancel and confirmation', () => {
     const blueprintSource = blueprintNode('source', 0, 'source-object', { connectionPointId: 'source-port', kind: 'NETWORK_PORT', renderedX: .25, attachmentX: 1, side: 'RIGHT' });
     const blueprintTarget = blueprintNode('target', 300, 'target-object', { connectionPointId: 'target-port', kind: 'CONNECTION_POINT', renderedX: .75, attachmentX: 0, side: 'LEFT' });
+    for (const [node, x] of [[blueprintSource, .75], [blueprintTarget, .25]] as const) {
+      const slots = node.data.projection.attributes.blueprint_presentation.slots;
+      slots.push({ ...slots[0], connection_point_id: node.data.projection.id + '-occupied', panel_local_position: {x, y: .5}, rendered_position: {x, y: .5} });
+    }
+    const wiring = {
+      source: { physicalObjectId: 'source-object', connectionPointId: 'source-port' },
+      target: { physicalObjectId: 'target-object', connectionPointId: 'target-port' },
+      waypoints: [], selectedWaypointIndex: null, onWaypointSelect: vi.fn(), onWaypointMove: vi.fn(),
+    };
+    const cable = (id: string, suffix: string) => ({
+      id, source: 'source', target: 'target', data: {
+        cableNode: { id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: id }] },
+        endpointPair: { from_connection_point_id: `source-${suffix}`, to_connection_point_id: `target-${suffix}` },
+        cablePresentationEmphasis: 'normal',
+      },
+    });
+    const occupied = cable('occupied', 'occupied');
+    const edges = [occupied] as any;
+    const onCableClick = vi.fn();
     withNodes({ source: blueprintSource, target: blueprintTarget }, () => {
-      const { container } = render(<svg><WiringRoute source={{ physicalObjectId: 'source-object', connectionPointId: 'source-port' }} target={{ physicalObjectId: 'target-object', connectionPointId: 'target-port' }} waypoints={[]} selectedWaypointIndex={null} onWaypointSelect={vi.fn()} onWaypointMove={vi.fn()} /></svg>);
-      expect(container.querySelector('.wiring-route-preview')).toHaveAttribute('d', 'M 80 16 L 396 16');
-      expect(container.querySelectorAll('.cable-route-waypoint')).toHaveLength(0);
+      const view = render(<ForegroundCableRoutes edges={edges} virtualChannels onCableClick={onCableClick} />);
+      const segments = () => [...view.container.querySelectorAll('.object-virtual-channel')]
+        .map(p => `${p.parentElement?.getAttribute('transform')} ${p.getAttribute('d')}`).sort();
+      const preview = () => view.container.querySelector('[data-testid="foreground-wiring-route"] path');
+      const occupiedPath = () => view.container.querySelector('[data-testid="foreground-cable-occupied"] path');
+      const original = segments();
+      view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels physicalPortStates={{'source-port': 'eligible'}} />);
+      expect(segments()).toEqual(original);
+      expect(occupiedPath()).toHaveAttribute('d', 'M 124 16 L 424 16');
+      view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels wiringRoute={{ ...wiring, target: undefined }} onCableClick={onCableClick} />);
+      expect(view.container.querySelector('.object-virtual-channel.wiring-route-preview')).toBeInTheDocument();
+      expect(preview()).toBeNull();
+      view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels wiringRoute={wiring} onCableClick={onCableClick} />);
+      const confirmed = segments();
+      expect(confirmed).toHaveLength(new Set(confirmed).size);
+      expect(confirmed).toEqual(expect.arrayContaining(original));
+      const shared = view.container.querySelector('.object-virtual-channel[d="M 116 16 L 124 16"]')!;
+      fireEvent.click(shared);
+      expect(onCableClick).toHaveBeenCalledWith(expect.anything(), occupied);
+      const connector = preview()!.getAttribute('d');
+      expect(connector).toBe('M 124 16 L 424 16');
+      view.rerender(<ForegroundCableRoutes edges={edges} virtualChannels />);
+      expect(segments()).toEqual(original);
+      expect(preview()).toBeNull();
+      view.rerender(<ForegroundCableRoutes edges={[occupied, cable('new', 'port')] as any} virtualChannels />);
+      expect(segments()).toEqual(confirmed);
+      expect(view.container.querySelector('[data-testid="foreground-cable-new"] path')).toHaveAttribute('d', connector);
+    });
+  });
+
+  it('uses the rendered Generic endpoint when wiring from a Blueprint beside a Location proxy', () => {
+    const blueprint = blueprintNode('source', 0, 'source-object', { connectionPointId: 'source-port', kind: 'NETWORK_PORT', renderedX: .25, attachmentX: 1, side: 'RIGHT' });
+    const generic = { ...target, data: { projection: { ...target.data.projection, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'generic' }] } } };
+    const proxy = { ...target, data: { projection: null, locationProxy: { locationId: 'room' } } };
+    withNodes({ proxy, source: blueprint, target: generic }, () => {
+      const { container } = render(<ForegroundCableRoutes edges={[]} virtualChannels wiringRoute={{
+        source: { physicalObjectId: 'source-object', connectionPointId: 'source-port' },
+        target: { physicalObjectId: 'generic', connectionPointId: 'source' },
+        waypoints: [{ x: 200, y: 100 }], selectedWaypointIndex: 0, onWaypointSelect: vi.fn(), onWaypointMove: vi.fn(),
+      }} />);
+      expect(container.querySelector('[data-testid="foreground-wiring-route"] path')).toHaveAttribute('d', 'M 124 16 L 200 100 L 400 60');
+      expect(container.querySelector('.wiring-route-waypoint')).toHaveAttribute('cx', '200');
     });
   });
 
