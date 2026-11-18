@@ -13,7 +13,7 @@ const renderMapPage = createMapPageHarness(MapPage);
 
 const mapId = 'map-a';
 const annotation = { annotation_ref: { entity_type: 'MapTextAnnotation' as const, entity_id: 'annotation-a' }, text: 'Existing\ntext', position: { x: 3, y: 4 }, text_color: '#123456', font_size: 16 };
-const map = { active_variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: 'variant-a' }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: 'variant-a' }, name: 'Основной' }], map_ref: { entity_type: 'SavedMap' as const, entity_id: mapId }, name: 'A', created_at: '', updated_at: '', placements: [], cable_routes: [], text_annotations: [annotation] };
+const map = { active_variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: 'variant-a' }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant' as const, entity_id: 'variant-a' }, name: 'Основной' }], map_ref: { entity_type: 'SavedMap' as const, entity_id: mapId }, name: 'A', created_at: '', updated_at: '', placements: [], text_annotations: [annotation] };
 const document: any = { schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', nodes: [], edges: [], gaps: [], warnings: [] };
 const renderPage = (maps: any) => renderMapPage({ dataSource: { loadProjection: vi.fn().mockResolvedValue(document) }, savedMapDataSource: maps }, `/map?map=${mapId}&view=physical`);
 

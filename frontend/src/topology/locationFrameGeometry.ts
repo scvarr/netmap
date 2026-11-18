@@ -1,4 +1,5 @@
-import type { MapLocationGeometry } from './savedMapTypes';
+import type { FlowRectangle } from './nodeFootprint';
+import type { MapLocationGeometry, MapPresentationPoint } from './savedMapTypes';
 import type { LocationDocument } from './locationTypes';
 
 export const FRAME_PADDING = 20;
@@ -95,3 +96,25 @@ export function editLocationFrames(locations: readonly LocationDocument[], origi
   }
   return { frames, translations };
 }
+
+type BoundaryPlacement = Pick<MapLocationGeometry, 'edge' | 'offset'>;
+
+export function locationBoundaryPoint(frame: FlowRectangle, { edge, offset }: BoundaryPlacement): MapPresentationPoint {
+  return {
+    x: edge === 'left' ? frame.x : edge === 'right' ? frame.x + frame.width : frame.x + frame.width * offset,
+    y: edge === 'top' ? frame.y : edge === 'bottom' ? frame.y + frame.height : frame.y + frame.height * offset,
+  };
+}
+
+const clamp = (value: number) => Math.max(0, Math.min(1, value));
+
+export const projectLocationBoundaryPoint = (frame: FlowRectangle, pointer: MapPresentationPoint): BoundaryPlacement => {
+  const candidates: { edge: BoundaryPlacement['edge']; point: MapPresentationPoint; offset: number }[] = [
+    { edge: 'top', point: { x: Math.max(frame.x, Math.min(frame.x + frame.width, pointer.x)), y: frame.y }, offset: clamp((pointer.x - frame.x) / frame.width) },
+    { edge: 'right', point: { x: frame.x + frame.width, y: Math.max(frame.y, Math.min(frame.y + frame.height, pointer.y)) }, offset: clamp((pointer.y - frame.y) / frame.height) },
+    { edge: 'bottom', point: { x: Math.max(frame.x, Math.min(frame.x + frame.width, pointer.x)), y: frame.y + frame.height }, offset: clamp((pointer.x - frame.x) / frame.width) },
+    { edge: 'left', point: { x: frame.x, y: Math.max(frame.y, Math.min(frame.y + frame.height, pointer.y)) }, offset: clamp((pointer.y - frame.y) / frame.height) },
+  ];
+  const chosen = candidates.reduce((best, candidate) => Math.hypot(candidate.point.x - pointer.x, candidate.point.y - pointer.y) < Math.hypot(best.point.x - pointer.x, best.point.y - pointer.y) ? candidate : best);
+  return { edge: chosen.edge, offset: chosen.offset };
+};

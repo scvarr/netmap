@@ -31,7 +31,6 @@ from app.models import (
     BaseTemplate,
     BaseTemplateRevision,
     PresentationPanel,
-    MapCableRoute,
     MapPlacement,
     MapViewPosition,
     Location,
@@ -92,7 +91,6 @@ def clean_database(request: pytest.FixtureRequest):
 
     require_confirmed_test_database()
     with SessionLocal.begin() as session:
-        session.execute(delete(MapCableRoute))
         session.execute(delete(MapViewPosition))
         session.execute(delete(MapPlacement))
         session.execute(delete(SavedMap))

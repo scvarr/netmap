@@ -40,7 +40,7 @@ function setup(persist = vi.fn<(settings: UniformLocationGrid) => Promise<void>>
       map_ref: { entity_type: 'SavedMap', entity_id: 'map' }, name: 'Test', created_at: '', updated_at: '',
       active_variant_ref: variant,
       variants: [{ variant_ref: variant, name: 'Test', automatic_layout: settings }],
-      placements, cable_routes: [], text_annotations: [],
+      placements, text_annotations: [],
     };
     const table = (arrangement.preview ?? settings).tables.rack;
     return <>

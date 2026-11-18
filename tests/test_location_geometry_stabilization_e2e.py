@@ -5,7 +5,7 @@ from app.models import Cable, Connection, ConnectionPoint
 from app.location_frame_geometry import contains
 from tests.test_base_templates_e2e import create_blueprint, instantiate, slot
 from tests.test_map_location_states_e2e import client, location, detail, assign, write
-from tests.l1_builders import create_map, create_object_with_point, create_endpoint_cable, put_cable_route
+from tests.l1_builders import create_map, create_object_with_point, create_endpoint_cable
 from tests.test_location_container_e2e import state, position, move
 
 
@@ -27,10 +27,8 @@ def test_pp24_move_response_content_bounds_manual_floor_variants_and_rollback():
     assert frames[leaf]["height"] == pytest.approx(250 * 44 / 480 + 60)  # Density floor, composition, Location header/padding.
     copy = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": "Copy", "source_variant_id": variant}).json()["variant_ref"]["entity_id"]
     copied = detail(map_id, copy)
-    other, other_point = create_object_with_point(client, "Other")
-    cable = create_endpoint_cable(client, created["slots"][0]["connection_point_ref"]["entity_id"], other_point)
-    cable_id = cable["cable_ref"]["entity_id"]
-    put_cable_route(client, map_id, cable_id, [{"x": 10, "y": 10}, {"x": 6000, "y": 6000}])
+    _, other_point = create_object_with_point(client, "Other")
+    create_endpoint_cable(client, created["slots"][0]["connection_point_ref"]["entity_id"], other_point)
     with SessionLocal() as session:
         canonical = (list(session.scalars(select(Cable.id))), list(session.scalars(select(Connection.id))), list(session.scalars(select(ConnectionPoint.id))))
     url = f"/v1/maps/{map_id}/placements/{obj}/positions/physical?variant_id={variant}"
@@ -42,11 +40,6 @@ def test_pp24_move_response_content_bounds_manual_floor_variants_and_rollback():
         assert response.status_code == 200, response.text
         assert response.json() == detail(map_id, variant)
         current, current_frames = state(map_id)
-        old_points = before['cable_routes'][0]['waypoints']
-        points = current['cable_routes'][0]['waypoints']
-        moving_index = 0 if obj < other else 1
-        assert points[moving_index] == {**old_points[moving_index], 'x': old_points[moving_index]['x'] + dx, 'y': old_points[moving_index]['y'] + dy}
-        assert points[1-moving_index] == old_points[1-moving_index]
         assert position(current, obj)["x"] == target["x"]
         assert position(current, obj)["y"] == target["y"]
         assert contains(current_frames[leaf], dict(target, width=342, height=250 * 44 / 480))

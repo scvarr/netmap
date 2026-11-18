@@ -2,7 +2,7 @@ import { moveGridLocation } from './locationGridArrangement';
 import { gridTables } from './uniformGridPresentation';
 import { describe, expect, it } from 'vitest';
 import { automaticLocationLayout } from './automaticLocationLayout';
-import { resolveBoundaryWaypoint } from './locationBoundaryAnchors';
+import { locationBoundaryPoint } from './locationFrameGeometry';
 import { deriveLocationPresentation } from './locationFrames';
 import type { LocationDocument } from './locationTypes';
 import type { MapPlacement, MapLocationState, AutomaticLocationLayout } from './savedMapTypes';
@@ -92,19 +92,17 @@ describe('compact cross-axis geometry', () => {
 });
 
 
-it('resolves route anchors against recomposed frames and preserves saved free geometry', () => {
+it('positions the Location boundary point on recomposed frames', () => {
   const tree = [loc('p'), loc('c','p')];
   const state: MapLocationState = { location_ref: loc('c').location_ref, boundary_point_id: 'stable-boundary', collapsed: false, visible_direct_elements: [], geometry: { x: 900, y: 800, width: 700, height: 600, edge: 'bottom', offset: .25 } };
-  const route = [{ x: 999, y: 888, anchor: { location_id: 'c', edge: 'bottom' as const, offset: .25 } }, { x: 321, y: 123 }];
-  const before = JSON.stringify({ state, route });
+  const before = JSON.stringify(state);
   for (const direction of ['VERTICAL', 'HORIZONTAL'] as const) {
     const presentation = deriveLocationPresentation(tree, [placement('a','p')], objects, [state], { ...settings, containers: { p: { direction, order: [] } } });
     const frame = presentation.frames.find(f => f.locationId === 'c')!;
-    const resolved = route.map(w => resolveBoundaryWaypoint(w, presentation.frames));
-    expect(resolved[0]).toEqual({ x: frame.bounds.x + frame.bounds.width * .25, y: frame.bounds.y + frame.bounds.height, anchor: route[0].anchor });
-    expect(resolved[1]).toEqual(route[1]);
+    const resolved = locationBoundaryPoint(frame.bounds, state.geometry!);
+    expect(resolved).toEqual({ x: frame.bounds.x + frame.bounds.width * .25, y: frame.bounds.y + frame.bounds.height });
   }
-  expect(JSON.stringify({ state, route })).toBe(before);
+  expect(JSON.stringify(state)).toBe(before);
 });
 
 

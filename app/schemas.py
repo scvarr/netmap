@@ -187,29 +187,6 @@ class MapPlacementDocument(BaseModel):
     positions: dict[Literal["L1/PHYSICAL_OBJECT", "L2/DEVICE"], MapViewPositionDocument]
 
 
-class MapLocationBoundaryAnchor(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    location_id: uuid.UUID
-    edge: Literal["top", "right", "bottom", "left"]
-    offset: FiniteFloat = Field(ge=0, le=1)
-
-
-class MapCableRouteWaypoint(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    x: FiniteFloat
-    y: FiniteFloat
-    anchor: MapLocationBoundaryAnchor | None = None
-
-
-class SetMapCableRouteRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    view: Literal["physical"]
-    waypoints: list[MapCableRouteWaypoint]
-
-
 class GroupMoveRectangle(BaseModel):
     model_config = ConfigDict(extra="forbid")
     x: FiniteFloat
@@ -222,35 +199,17 @@ class GroupMoveFootprint(GroupMoveRectangle):
     physical_object_id: uuid.UUID
 
 
-class GroupMoveBoundaryRoute(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    cable_id: uuid.UUID
-    moving_endpoint_is_source: bool
-    moving_endpoint: MapCableRouteWaypoint
-    external_endpoint: MapCableRouteWaypoint
-
-
 class GroupMoveLocationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     delta_x: FiniteFloat
     delta_y: FiniteFloat
-    frame: GroupMoveRectangle
     footprints: list[GroupMoveFootprint]
-    boundary_routes: list[GroupMoveBoundaryRoute]
 
 
 class CreateMapPresentationVariantRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     name: str = Field(min_length=1, max_length=255)
     source_variant_id: uuid.UUID
-
-
-class MapCableRouteDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    cable_ref: ProjectionSourceRef
-    view: Literal["L1/PHYSICAL_OBJECT"]
-    waypoints: list[MapCableRouteWaypoint]
 
 
 class AutomaticLocationLayoutEntry(BaseModel):
@@ -387,7 +346,6 @@ class SavedMapDocument(SavedMapSummary):
     variants: list[MapPresentationVariantDocument]
     location_states: list[MapLocationStateDocument]
     placements: list[MapPlacementDocument]
-    cable_routes: list[MapCableRouteDocument]
     text_annotations: list[MapTextAnnotationDocument]
 
 

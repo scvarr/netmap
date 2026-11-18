@@ -76,9 +76,6 @@ class SavedMap(Base):
     placements: Mapped[list["MapPlacement"]] = relationship(
         back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
     )
-    cable_routes: Mapped[list["MapCableRoute"]] = relationship(
-        back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
-    )
     presentation_variants: Mapped[list["MapPresentationVariant"]] = relationship(
         back_populates="saved_map", cascade="all, delete-orphan", passive_deletes=True
     )
@@ -120,7 +117,6 @@ class MapPresentationVariant(Base):
     automatic_layout: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     saved_map: Mapped[SavedMap] = relationship(back_populates="presentation_variants")
     positions: Mapped[list["MapViewPosition"]] = relationship(back_populates="variant", passive_deletes=True)
-    cable_routes: Mapped[list["MapCableRoute"]] = relationship(back_populates="variant", passive_deletes=True)
     location_states: Mapped[list["MapLocationState"]] = relationship(back_populates="variant", passive_deletes=True)
 
 
@@ -174,27 +170,6 @@ class MapViewPosition(Base):
     display_width: Mapped[float | None] = mapped_column(Float, nullable=True)
     placement: Mapped[MapPlacement] = relationship(back_populates="view_positions")
     variant: Mapped[MapPresentationVariant] = relationship(back_populates="positions")
-
-
-class MapCableRoute(Base):
-    """SavedMap-owned Physical/L1 cable route geometry, never canonical topology."""
-
-    __tablename__ = "map_cable_routes"
-    __table_args__ = (
-        UniqueConstraint("variant_id", "cable_id", "view_key", name="uq_map_cable_routes_variant_cable_view"),
-        CheckConstraint("view_key = 'L1/PHYSICAL_OBJECT'", name="map_cable_routes_view_key_physical_only"),
-        Index("ix_map_cable_routes_cable_id", "cable_id"),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
-    variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_presentation_variants.id", ondelete="CASCADE"), nullable=False)
-    cable_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cables.id", ondelete="CASCADE"), nullable=False)
-    view_key: Mapped[MapViewKey] = mapped_column(String(32), nullable=False)
-    waypoints: Mapped[list[dict[str, object]]] = mapped_column(JSONB, nullable=False, default=list)
-    saved_map: Mapped[SavedMap] = relationship(back_populates="cable_routes")
-    variant: Mapped[MapPresentationVariant] = relationship(back_populates="cable_routes")
-    cable: Mapped["Cable"] = relationship(back_populates="map_routes")
 
 
 class MapTextAnnotation(Base):
@@ -273,9 +248,6 @@ class Cable(Base):
     # Mutable user-facing metadata.  It is deliberately not identity or topology.
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     connection: Mapped[Connection] = relationship(back_populates="cable")
-    map_routes: Mapped[list[MapCableRoute]] = relationship(
-        back_populates="cable", cascade="all, delete-orphan", passive_deletes=True
-    )
 
 
 class CableLabelSettings(Base):

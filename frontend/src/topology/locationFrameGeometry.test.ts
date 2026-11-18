@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { layoutLocationFrames, translateFrameSubtree, editLocationFrames } from './locationFrameGeometry';
-import { resolveBoundaryWaypoint } from './locationBoundaryAnchors';
+import { locationBoundaryPoint } from './locationFrameGeometry';
 import type { LocationDocument } from './locationTypes';
 const location = (id: string, parent?: string): LocationDocument => ({ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: id }, name: id, type: null, parent_location_ref: parent ? { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: parent } : null });
 const locations = [location('808'), location('823', '808'), location('821', '808'), location('U19', '823'), location('U23', '823')];
@@ -27,7 +27,7 @@ it('translates descendants together and resolves each boundary on its own moved 
     expect(moved.get(id)!.x).toBe(frames.get(id)!.x + 50);
     expect(moved.get(id)!.y).toBe(frames.get(id)!.y + 70);
     const g = moved.get(id)!;
-    const point = resolveBoundaryWaypoint({ x: 0, y: 0, anchor: { location_id: id, edge: g.edge, offset: g.offset } }, [{ locationId: id, bounds: g }]);
+    const point = locationBoundaryPoint(g, g);
     expect(point.x).toBe(g.x + g.width);
     expect(point.y).toBe(g.y + g.height * .5);
   }

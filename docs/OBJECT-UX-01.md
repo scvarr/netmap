@@ -11,7 +11,7 @@ PORT-UX-01 density minima still apply. Resize converts the frame width back to c
 Panels, port shapes, colors and published revisions are unchanged. Internal L1 stays composition-local;
 rendered ports, cable endpoints and foreground markers share the same left-zone offset.
 Client layout/collision and server SavedMap footprints include both side zones and the density minimum.
-Reading geometry does not write Cable waypoints or alter MapCableRoute.
+Object geometry feeds the derived COMB-01 channels.
 
 COMB-01 uses the right-hand reserve for the shared spine and exit. The upper
 and lower rails sit outside the frame. Local segments derive from the rendered

@@ -1,8 +1,7 @@
 import { useEffect, useState, type PointerEvent, type ReactNode } from 'react';
 import type { LocationFrame } from '../topology/locationFrames';
 import type { MapLocationGeometry, MapLocationState } from '../topology/savedMapTypes';
-import { projectBoundaryWaypoint, resolveBoundaryWaypoint } from '../topology/locationBoundaryAnchors';
-import { FRAME_HEADER, FRAME_PADDING } from '../topology/locationFrameGeometry';
+import { FRAME_PADDING, locationBoundaryPoint, projectLocationBoundaryPoint } from '../topology/locationFrameGeometry';
 import type { FlowRectangle } from '../topology/nodeFootprint';
 import { useI18n } from '../i18n';
 
@@ -26,7 +25,7 @@ export function LocationFrameEditor({ automatic, arrangementSelected, onSelectLo
   useEffect(() => { setDraft(null); select(false); setDrag(null); setError(''); }, [automatic]);
   const geometry = automatic && draft ? { ...initial, edge: draft.edge, offset: draft.offset } : draft ?? initial;
   const save = automatic ? (onSaveBoundary ? () => onSaveBoundary(frame.locationId, { edge: geometry.edge, offset: geometry.offset }) : undefined) : (onSave ? () => onSave(frame.locationId, geometry) : undefined);
-  const point = resolveBoundaryWaypoint({ x: 0, y: 0, anchor: { location_id: frame.locationId, edge: geometry.edge, offset: geometry.offset } }, [{ locationId: frame.locationId, bounds: geometry }]);
+  const point = locationBoundaryPoint(geometry, geometry);
   const start = (event: PointerEvent<HTMLElement>, mode: 'move' | 'resize' | 'point') => {
     if (busy || (automatic && mode !== 'point')) return;
     event.stopPropagation(); event.preventDefault(); select(true);
@@ -39,8 +38,7 @@ export function LocationFrameEditor({ automatic, arrangementSelected, onSelectLo
     const dx = p.x - drag.x, dy = p.y - drag.y;
     const g = drag.geometry;
     if (drag.mode === 'point') {
-      const anchor = projectBoundaryWaypoint(frame.locationId, automatic ? frame.bounds : g, p).anchor!;
-      const next = { ...g, edge: anchor.edge, offset: anchor.offset };
+      const next = { ...g, ...projectLocationBoundaryPoint(automatic ? frame.bounds : g, p) };
       setDraft(next); onDraft?.(next);
     } else {
       let next = { ...g };

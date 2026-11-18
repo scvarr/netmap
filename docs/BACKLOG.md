@@ -44,7 +44,7 @@ C-UX-03 закрыт как NOT REQUIRED. Для C-UX-05/06/09/10, C-VIS-01/02 �
 Необязательные для текущего gate улучшения: performance/maintenance пункты
 с «до L2: НЕТ», archive measurement/compression; повышение их обязательности
 требует решения. P-UX-21 имеет согласованное направление, но статус обязательного
-blocker не установлен. Для P-UX-22, C-UX-16, дополнительных справочников и
+blocker не установлен. Для P-UX-22, дополнительных справочников и
 будущих slices контракт/обязательность уточняются отдельно. CAT-E остаётся
 работой Phase E, CAT-F зависит от Phase F; это не blockers начала Phase C.
 
@@ -93,12 +93,11 @@ canonical endpoints, подключения и зависимости исход
 | C-UX-05 | Runtime map guides нужны; ориентиры — уже размещённые объекты | OPEN | Точный bounded UX-контракт открыт; presentation-only, отдельно от auto-layout |
 | C-UX-06 | Независимые Width/Height пока не реализовывать | OPEN | Повторно оценить необходимость после P-UX-21; не VERIFIED |
 | C-UX-09 | Раскрываемый графический preview BaseTemplate непосредственно при выборе шаблона | OPEN | Ориентир — существующий preview библиотеки; реализация открыта |
-| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [DECIDED TARGET](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels), C-UX-10-01 foundation объединён в main: иерархически вложенные variant frames всех Locations, единый атомарный перенос контейнера с оборудованием/routes, рост предков, согласование назначений/placements и одна обязательная map-scoped точка; authoritative move response, content bounds с ручным resize floor, полный compact collapse включая пустые subtree; не реализовано: иерархическая трасса и общие участки, preview/подтверждение, переиспользование, lifecycle и channel-aware collapse; channel schema/DTO/API, атомарность и конфликты OPEN. Boundary anchors/snapping не заменяют Channels; exact trace не меняется |
+| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [DECIDED TARGET](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels), C-UX-10-01 foundation объединён в main: иерархически вложенные variant frames всех Locations, единый атомарный перенос контейнера с оборудованием, рост предков, согласование назначений/placements и одна обязательная map-scoped точка; authoritative move response, content bounds с ручным resize floor, полный compact collapse включая пустые subtree; не реализовано: иерархическая трасса и общие участки, preview/подтверждение, переиспользование, lifecycle и channel-aware collapse; channel schema/DTO/API, атомарность и конфликты OPEN. LOC-CHAN-01 и LOC-ROUTE-01 остаются OPEN |
 | C-UX-12 | Проверить массовое именование, spatial order, обнаруживаемость и сохранение | RECHECK PENDING | Исправление реализовано |
 | C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
 | C-UX-14 | Проверить понятность Change Inspector и точность больших сводок impact | RECHECK PENDING | Реализован; HV-01 не заменяет UX recheck |
 | C-UX-15 | Natural ordering trace port selector: реальные panel/port labels и модульный контекст при совпадении; «Любой порт» первым, 1,2,…10; дубликаты отдельны | VERIFIED | Техническая реализация прошла external review (c4c04ed); пользователь 10.11.2026 подтвердил успешную ручную проверку |
-| C-UX-16 | Undo/Redo draft waypoint operations | OPEN | История отсутствует; независимая панель, delete и Enter/Esc реализованы в ROUTE-UX-01 |
 | C-COR-02 | Полный manual recheck distribute у границ панели, невозможная операция и reload | VERIFIED | Пользователь 10.11.2026 подтвердил границы панели, атомарное отклонение невозможной операции, сохранение и повторное открытие |
 | C-VIS-01 | Совпадающий общий подсвеченный участок допустим; canonical trace evidence отдельных Cables не смешивается | OPEN | Геометрическое пересечение не доказывает connectivity; реализация не объявляется завершённой |
 | C-VIS-02 | Отдельное исправление отложено; повторная проверка после изменения маркеров в P-UX-21 | OPEN | Не закрывается автоматически |
@@ -130,7 +129,7 @@ HV-01 PASSED, PT-01/02/03 приняты, P-UX-03E принят и merged — н
 
 После обязательных fixes пройти с пустой тестовой БД rack-first/service-path
 synthetic stand: оборудование/модули -> Locations (rack/room/floor/site) ->
-Cables и passive continuity -> SavedMap/variants/collapse/routes -> trace exact
+Cables и passive continuity -> SavedMap/variants/collapse -> trace exact
 members/evidence -> export/reset/import/reload. Synthetic stand не утверждает
 неизвестные факты реальной сети. Двигаться малыми UI-шагами, остановиться на
 первом существенном finding, bounded fix/review/merge, повторить тот же шаг на
@@ -165,11 +164,11 @@ P-UX-21 — OPEN: реализовать согласованное распол
 P-UX-22 — PRODUCT DECISION PENDING: согласовать pan/drag modes/cursors/hotkeys,
 затем проверить понятность доступных действий. Оба вне P-UX-03E.
 
-Endpoint-relative route sections, ordered child layout/occupancy, reusable
+Ordered child layout/occupancy, reusable
 Location series, selector collapse, arbitrary grouping, MapReference,
 media/capability diagnostics, observations/Dynamic Maps — PRODUCT DECISION PENDING.
 Их наличие в обсуждениях не делает каждый пункт обязательным до L2.
-Workspace archive size/compression — OPEN: измерить текущий v7 по разделам и
+Workspace archive size/compression — OPEN: измерить текущий v8 по разделам и
 ZIP/GZIP; старый размер v5 не является current baseline.
 
 ## Stabilization и performance gate
@@ -239,13 +238,16 @@ C-CAP-01 остаётся **OPEN Phase D**; C-CAP-01-02/03/04 не реализ�
 [Контракт и синтетический стенд](L1_REFERENCE_NETWORK.md): независимые карты,
 CableType, переносимые файлы определений и demo initialization — DECIDED TARGET,
 не IMPLEMENTED. Map isolation требует отдельного bounded milestone до demo loader.
-Portability требует собственного implementation contract отдельно от workspace v7.
+Portability требует собственного implementation contract отдельно от workspace v8.
 C-CAP-01 остаётся OPEN Phase D; C-CAP-01-02/03/04 не закрыты; Phase A–I без изменений.
 CAT-D: CableType как пользовательский справочник принят; состав технических полей
 и реализация остаются OPEN, остальные классификации этим решением не утверждены.
 
-AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative boundary anchors; independent copy/reopen; manual variants preserved. Location Channels remain OPEN.
+AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative Location boundary points; independent copy/reopen; manual variants preserved. Location Channels remain OPEN.
 
+
+**ROUTE-UX-01 / IMPLEMENTED на milestone-ветке.** Удалены ручное редактирование
+и хранение индивидуальных трасс. Создание Cable использует preview COMB-01.
 
 ## DOC-LOC-03 — реализация структурной компоновки
 
@@ -326,7 +328,7 @@ L1 PRODUCT COMPLETE сохраняются. Phase C и D остаются отк
   компоновкой, NetworkWorkspace — application boundary. Map isolation необходим
   до demo loader; reference acceptance зависит от CableType, C-CAP-01 и нужных
   пользовательских workflows. Portability определений требует отдельного
-  контракта и не равна workspace v7. Эти возможности не реализованы; стратегия
+  контракта и не равна workspace v8. Эти возможности не реализованы; стратегия
   миграции не выбрана.
 
 OPEN для справочников: ID/reference model, перенос строк, UX выбора/создания,

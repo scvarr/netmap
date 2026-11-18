@@ -4,7 +4,7 @@ from app.database import SessionLocal
 from app.models import MapPlacement, MapViewPosition, Cable, Connection, ConnectionPoint
 from app.location_frame_geometry import contains, overlaps
 from tests.test_map_location_states_e2e import client, location, detail, assign
-from tests.l1_builders import create_map, create_object_with_point, create_endpoint_cable, put_cable_route
+from tests.l1_builders import create_map, create_object_with_point, create_endpoint_cable
 
 
 def state(map_id, variant=None):
@@ -27,7 +27,7 @@ def test_assignment_addition_all_existing_scopes_container_move_and_identity():
     maps = [create_map(client, name) for name in ("T1", "T2", "No placement")]
     obj, point = create_object_with_point(client, "PP1")
     other, other_point = create_object_with_point(client, "PP2")
-    cable = create_endpoint_cable(client, point, other_point)
+    create_endpoint_cable(client, point, other_point)
     with SessionLocal() as session:
         identities = (list(session.scalars(select(Cable.id))), list(session.scalars(select(Connection.id))), list(session.scalars(select(ConnectionPoint.id))))
     scopes = []
@@ -52,9 +52,6 @@ def test_assignment_addition_all_existing_scopes_container_move_and_identity():
     assert contains(frames[target], dict(position(before, other), width=212, height=144))
     assert frames[target]["height"] < 500
     assert not overlaps(dict(position(before, obj), width=212, height=144), dict(position(before, other), width=212, height=144))
-    # Internal saved route follows the same transaction as container and placements.
-    cable_id = cable["cable_ref"]["entity_id"]
-    put_cable_route(client, map_id, cable_id, [{"x": frames[target]["x"] + 60, "y": frames[target]["y"] + 70}])
     before, frames = state(map_id, variant)
     original_other_variant = detail(map_id, scopes[1][1])
     ids = {s["location_ref"]["entity_id"]: s["boundary_point_id"] for s in before["location_states"]}
@@ -66,10 +63,12 @@ def test_assignment_addition_all_existing_scopes_container_move_and_identity():
     for key in (obj, other):
         assert position(after, key)["x"] == position(before, key)["x"] + 500
         assert position(after, key)["y"] == position(before, key)["y"] + 100
-    assert after["cable_routes"][0]["waypoints"][0]["x"] == before["cable_routes"][0]["waypoints"][0]["x"] + 500
+    for location_id, geometry in frames.items():
+        assert moved[location_id]["edge"] == geometry["edge"]
+        assert moved[location_id]["offset"] == geometry["offset"]
     assert detail(map_id, scopes[1][1]) == original_other_variant
     assert {s["location_ref"]["entity_id"]: s["boundary_point_id"] for s in after["location_states"]} == ids
-    # Locked contents reject the whole move, preserving every frame/position/route.
+    # Locked contents reject the whole move, preserving every frame and position.
     with SessionLocal.begin() as session:
         pos = session.scalar(select(MapViewPosition).join(MapPlacement).where(MapPlacement.map_id == uuid.UUID(map_id), MapPlacement.physical_object_id == uuid.UUID(obj), MapViewPosition.variant_id == uuid.UUID(variant)))
         pos.locked = True
@@ -137,34 +136,6 @@ def test_locked_variant_assignment_and_sibling_push_roll_back_atomically():
     response = move(map_id, primary, target, dict(frames[target], y=frames[sibling]["y"], height=500))
     assert response.status_code == 422, response.text
     assert detail(map_id, primary) == before
-
-
-def test_container_external_route_keeps_suffix_and_exact_connectivity():
-    room = location("Room")
-    map_id = create_map(client, "Boundary")
-    inside, inside_point = create_object_with_point(client, "Inside")
-    outside, outside_point = create_object_with_point(client, "Outside")
-    assign(inside, room)
-    for key, x, y in ((inside, 0, 0), (outside, 2000, 2000)):
-        assert client.post(f"/v1/maps/{map_id}/placements", json={"physical_object_id": key, "x": x, "y": y}).status_code == 201
-    cable = create_endpoint_cable(client, inside_point, outside_point)
-    cable_id = cable["cable_ref"]["entity_id"]
-    before, frames = state(map_id)
-    variant = before["active_variant_ref"]["entity_id"]
-    g = frames[room]
-    lead = {"x": g["x"] + 60, "y": g["y"] + 70}
-    anchor = {"x": g["x"] + g["width"], "y": g["y"] + g["height"] * .5, "anchor": {"location_id": room, "edge": "right", "offset": .5}}
-    suffix = {"x": 1500, "y": 1600}
-    points = [lead, anchor, suffix] if inside < outside else [suffix, anchor, lead]
-    put_cable_route(client, map_id, cable_id, points)
-    response = move(map_id, variant, room, dict(g, x=g["x"] + 100, y=g["y"] + 50))
-    assert response.status_code == 200, response.text
-    restored = detail(map_id)["cable_routes"][0]["waypoints"]
-    oriented = restored if inside < outside else list(reversed(restored))
-    assert oriented[0] == {"x": lead["x"] + 100, "y": lead["y"] + 50}
-    assert oriented[-1] == suffix
-    assert oriented[1]["anchor"] == anchor["anchor"]
-    assert detail(map_id)["cable_routes"][0]["cable_ref"]["entity_id"] == cable_id
 
 
 def test_new_equipment_uses_compact_room_instead_of_skipping_siblings():

@@ -27,30 +27,29 @@
   назначение объекту, дерево с collapse/expand, массовое создание дочерней серии
   с preview и атомарным сохранением. Location.type — открытая optional строка.
 - SavedMap и именованные MapPresentationVariant: placements, отдельные позиции
-  физических/логических видов, presentation routes, text annotations.
+  физических/логических видов, text annotations.
   Spatial P-UX-03A–E реализован; **P-UX-03E ACCEPTED / MERGED / MANUAL RECHECK PASSED**.
   C-UX-10-01 foundation (MERGED): самостоятельные
   прямоугольные Location frames, включая пустые/unary, и одна обязательная
   виртуальная точка (map/Location UUIDv5); variant geometry с явным Save/Cancel,
   drag/resize, копированием и восстановлением. Corrective: иерархическое начальное
   размещение пустых рамок, вложение по canonical parent, атомарный перенос всей
-  ветви рамок с размещённым оборудованием/routes, рост предков и безопасное
+  ветви рамок с размещённым оборудованием, рост предков и безопасное
   выделение места соседям. Назначение Location и добавление объекта согласуют
   существующие placements во всех картах/variants; locks отклоняют всю операцию.
   Компактные пустые frames, единый drag и явный Save/Cancel, локальный radius=0 UI,
   непосредственные имена с canonical path в tooltip,
-  authoritative positions/frames/routes сразу после move; content-aware bounds
+  authoritative positions/frames сразу после move; content-aware bounds
   включают blueprint nameplate, ручной resize сохраняется отдельным floor.
   Полный collapse оставляет один компактный Location (также для пустого subtree),
   expand восстанавливает expanded geometry; partial collapse сохраняет выбор видимых
-  непосредственных элементов, group move с collision rejection и route transform.
+  непосредственных элементов, group move с collision rejection.
 - AUTO-LOC-01/02 и SLOC-01–04 — IMPLEMENTED / MERGED. AUTO-LOC даёт
   opt-in компоновку variant с техническим корнем, порядком и ориентацией
-  дочерних элементов, компактной геометрией, hide/collapse и boundary anchors.
+  дочерних элементов, компактной геометрией, hide/collapse и граничными точками.
   SLOC добавляет uniform-grid с сохранением в variant, размещение стрелками
   и сортировку дочерних Location по строке, столбцу или всей таблице.
-  DOC-LOC-03 — PARTIAL. Остаются OPEN grid-specific partial-collapse UX и
-  объектная кабельная геометрия. Ручная приёмка учитывается отдельно.
+  DOC-LOC-03 — PARTIAL. Остаются OPEN grid-specific partial-collapse UX и маршрутизация через Location. Ручная приёмка учитывается отдельно.
   SLOC-04-SAVE добавляет сохранение общего черновика активного variant
   из настроек Location. Chromium с реальным backend и PostgreSQL подтвердил
   сохранение порядка после перезагрузки и независимость второго варианта.
@@ -58,11 +57,8 @@
   непосредственного оборудования каждого Location и root входят в общий черновик
   варианта. Состав последовательности согласуется с canonical assignment и
   размещением на карте. Ручная приёмка OPEN.
-- Редактор кабельного маршрута: transient draft, Save/Cancel, добавление,
-  перемещение и удаление waypoints через инспектор, snapping к чужой геометрии,
-  angle/length assistance, числовое изменение длины сегмента, boundary anchors.
-  Выбор другого элемента не теряет draft; выход из карты отменяет несохранённое.
-  Полной Undo/Redo истории нет.
+- ROUTE-UX-01 удалил ручные трассы. COMB-01 вычисляет объектные пути, preview
+  и геометрию Cable по текущей компоновке. LOC-CHAN-01 и LOC-ROUTE-01 остаются OPEN.
 - Массовые операции: ordered port pairing с обязательным preview и одной
   canonical transaction; шаблоны Cable labels; массовое именование и spatial
   order endpoints, выравнивание/распределение в редакторах.
@@ -84,7 +80,7 @@
   10.11.2026: пользователь подтвердил сохранение цветов после операций
   с кабелями и в проверенных режимах карты.
 - Export/reset/import текущего implicit workspace через настройки данных.
-  Текущий Workspace JSON **v7** (`app/workspace_portability.py`), с geometry,
+  Текущий Workspace JSON **v8** (`app/workspace_portability.py`), с geometry,
   layout и logical module places version 1. Это не persisted multi-workspace UI.
 
 - **C-UX-02 VERIFIED**: штатное создание PhysicalObject из BaseTemplate с выбором
@@ -122,7 +118,7 @@ P-UX-13/14/15 сведены к C-UX-02/04/09 и проверке переход
 
 Phase C **OPEN**, Phase D не завершена, **L1 PRODUCT COMPLETE не достигнут**.
 Не реализованы truthful FANOUT-1x24 authoring и multichannel connect через UI
-(C-CAP-01), Location cable channels/comb (C-UX-10), route Undo/Redo (C-UX-16),
+(C-CAP-01), Location cable channels (C-UX-10),
 P-UX-21; контракт P-UX-22 ещё требует решения.
 C-UX-03 — NOT REQUIRED: произвольных названий панелей достаточно, отдельная
 FRONT/REAR-семантика не нужна; это не реализованная функция. C-UX-05 — OPEN:
@@ -148,8 +144,7 @@ C-CAP-01-01 реализован; внешний multichannel Cable write и п�
 DTO/API, member mapping editing, lifecycle/reconcile и UX открыты; не IMPLEMENTED.
 Fanout entity, фиктивные порты и 24 искусственных Cable не подменяют этот сценарий.
 
-Boundary route re-entry одного Location не поддерживается. Общие каналы,
-endpoint-relative route sections, MapReference, physical occupancy, дополнительные
+Общие каналы, MapReference, physical occupancy, дополнительные
 справочники и характеристики PortType — будущие возможности.
 MapComposite и MapRegion удалены, поддерживаемыми моделями не являются.
 

@@ -73,7 +73,7 @@ it.each([false, true])('keeps the visible top layer typed through cable lifecycl
   for (const state of ['eligible', 'source', 'destination', 'unavailable']) {
     nodes = [makeNode()]; // fresh projection, same canonical assignments
     nodes[0].data.traceHighlighted = true;
-    view.rerender(scene([{ ...cable, data: { ...cable.data, cablePresentationEmphasis: 'traced', cableRoute: { waypoints: [{ x: 250, y: 50 }] } } }], state));
+    view.rerender(scene([{ ...cable, data: { ...cable.data, cablePresentationEmphasis: 'traced' } }], state));
     check(true); check(false);
   }
   view.rerender(scene([])); check(false);

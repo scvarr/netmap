@@ -17,15 +17,14 @@ const renderPage = createMapPageHarness(MapPage);
 function setup(projection = vi.fn().mockResolvedValue(doc)) {
   const create = vi.fn().mockResolvedValue({ created: [{ cable_id: 'c1', connection_id: 'l1' }, { cable_id: 'c2', connection_id: 'l2' }] });
   const preview = vi.fn().mockResolvedValue({ labels: [{ label: 'B001', historical: false }, { label: 'B002', historical: true }] });
-  const setCableRoute = vi.fn();
-  renderPage({ dataSource: { loadProjection: projection }, savedMapDataSource: { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map), setCableRoute } as any, physicalEndpointConnectionWriteDataSource: { createPhysicalEndpointConnection: vi.fn(), createBulkPhysicalConnections: create, previewBulkCableLabels: preview }, cableLabelDataSource: { loadCableLabelTemplates: vi.fn().mockResolvedValue({ templates: [{ id: 'template', name: 'Bulk' }] }) } as any }, '/map?map=map&view=physical');
-  return { create, preview, projection, setCableRoute };
+  renderPage({ dataSource: { loadProjection: projection }, savedMapDataSource: { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map) } as any, physicalEndpointConnectionWriteDataSource: { createPhysicalEndpointConnection: vi.fn(), createBulkPhysicalConnections: create, previewBulkCableLabels: preview }, cableLabelDataSource: { loadCableLabelTemplates: vi.fn().mockResolvedValue({ templates: [{ id: 'template', name: 'Bulk' }] }) } as any }, '/map?map=map&view=physical');
+  return { create, preview, projection };
 }
 async function start() { await screen.findByTestId('bulk-canvas'); fireEvent.click(screen.getByText('source object menu')); fireEvent.click(screen.getByRole('menuitem', { name: 'Массовое соединение портов' })); }
 
 describe('MapPage bulk port pairing', () => {
   it('keeps ordered source selection, renumbers toggles, previews reverse pairing and writes once', async () => {
-    const { create, projection, setCableRoute } = setup(); await start();
+    const { create, projection } = setup(); await start();
     const readsBeforeCreate = projection.mock.calls.length;
     fireEvent.click(screen.getByRole('button', { name: 'a2' })); fireEvent.click(screen.getByRole('button', { name: 'a1' }));
     expect(screen.getByTestId('numbers')).toHaveTextContent('"a2":1');
@@ -43,7 +42,6 @@ describe('MapPage bulk port pairing', () => {
     fireEvent.keyDown(window, { key: 'Enter' });
     await waitFor(() => expect(create).toHaveBeenCalledTimes(1));
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ pairs: [expect.objectContaining({ source: expect.objectContaining({ connection_point_id: 'a1' }), target: expect.objectContaining({ connection_point_id: 'b2' }) }), expect.objectContaining({ source: expect.objectContaining({ connection_point_id: 'a2' }), target: expect.objectContaining({ connection_point_id: 'b1' }) })] }));
-    expect(setCableRoute).not.toHaveBeenCalled();
     await waitFor(() => expect(projection.mock.calls.length).toBe(readsBeforeCreate + 1));
   });
 

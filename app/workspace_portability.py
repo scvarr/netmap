@@ -1,4 +1,4 @@
-"""Version 6 exchange contract for the current implicit workspace dataset.
+"""Version 8 exchange contract for the current implicit workspace dataset.
 
 The public names and fields below are deliberately fixed independently of table
 names. A storage change must adapt this mapping or introduce a new format version.
@@ -24,7 +24,7 @@ from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 7
+FORMAT_VERSION = 8
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -89,7 +89,6 @@ ENTITIES = (
     ("presentation", "MapPlacement", "MapPlacement", "id map_id physical_object_id"),
     ("presentation", "MapViewPosition", "MapViewPosition", "id placement_id variant_id view_key x y locked display_width"),
     ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements geometry manual_bounds"),
-    ("presentation", "MapCableRoute", "MapCableRoute", "id map_id variant_id cable_id view_key waypoints"),
     ("presentation", "MapTextAnnotation", "MapTextAnnotation", "id map_id text position text_color font_size"),
     ("settings", "PortType", "PortType", "id name description color is_active"),
     ("settings", "CableLabelSettings", "CableLabelSettings", "id unique_labels"),

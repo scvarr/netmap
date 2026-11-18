@@ -6,7 +6,6 @@ import type { TopologyProjectionDocument, TopologyProjectionNode } from '../topo
 import type { PresentationSceneDocument } from '../topology/presentationScene';
 import type { TopologyLayoutStore } from '../topology/layoutStore';
 import { ApiSavedMapDataSource } from '../topology/apiSavedMapDataSource';
-import type { MapCableRouteWaypoint } from '../topology/savedMapTypes';
 
 const { fitViewMock, getZoomMock, screenTransform } = vi.hoisted(() => ({
   fitViewMock: vi.fn(),
@@ -52,8 +51,6 @@ vi.mock('@xyflow/react', () => ({
     <div data-testid="flow">
       <svg>{edges.map((edge) => <path key={edge.id} data-testid={`svg-path-${edge.id}`} d="M0,0L1,1" />)}</svg>
       {edges.map((edge) => <button key={`edge-${edge.id}`} onClick={() => onEdgeClick?.({}, edge)}>edge {edge.id}</button>)}
-      {edges.map((edge) => <output key={`route-${edge.id}`} data-testid={`route-${edge.id}`}>{edge.data?.cableRoute ? JSON.stringify(edge.data.cableRoute.waypoints) : 'no-route'}</output>)}
-      {edges.filter((edge) => edge.data?.cableRouteDraft).map((edge) => <button key={`move-route-${edge.id}`} onClick={() => edge.data!.cableRouteDraft!.onWaypointMove(0, { x: 450, y: 1000 })}>move route {edge.id}</button>)}
       {edges.map((edge) => <output key={`endpoints-${edge.id}`} data-testid={`endpoints-${edge.id}`}>{edge.source}:{edge.target}</output>)}
       {edges.map((edge) => <output key={`traced-${edge.id}`} data-testid={`traced-${edge.id}`}>{String(Boolean(edge.animated))}</output>)}
       {edges.map((edge) => <output key={`emphasis-${edge.id}`} data-testid={`emphasis-${edge.id}`}>{edge.data?.cablePresentationEmphasis ?? 'none'}</output>)}
@@ -216,63 +213,6 @@ describe('TopologyCanvas async layout boundary', () => {
 
 
 
-  it.each([false, true])('keeps two Location boundaries on their own endpoint sides through save and reload, reverse wiring: %s', async (reverse) => {
-    const ref = <T extends string,>(type: T, id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type: type, entity_id: id });
-    const objects: TopologyProjectionNode[] = ['a', 'a2', 'b', 'b2'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [ref('PhysicalObject', id)], attributes: {} }));
-    for (const node of [objects[0], objects[2]]) {
-      node.attributes.blueprint_presentation = {
-        blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' },
-        version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'rev' },
-        body: { kind: 'RECTANGLE', width: 200, height: 120 },
-        panels: [{ panel_key: 'panel', panel_number: 1, display_name: 'Panel', x: 0, y: 0, width: 200, height: 120 }],
-        slots: [{ slot_key: 'port', connection_point_id: node.id + '-port', display_name: 'Port', kind: 'CONNECTION_POINT',
-          panel_key: 'panel', panel_local_position: { x: .25, y: .25 }, rendered_position: { x: .25, y: .25 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }],
-      };
-    }
-    const positions = [0, 300, 1000, 1300];
-    const locations = ['A', 'B'].map((id) => ({ location_ref: ref('Location', id), name: id, type: null, parent_location_ref: null }));
-    const placements = objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: locations[index < 2 ? 0 : 1].location_ref, positions: { 'L1/PHYSICAL_OBJECT': { x: positions[index], y: 0, locked: false } } }));
-    const layoutEngine: TopologyLayoutEngine = async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: positions[index], y: 0 }, data: { projection } })), edges: scene.edges.map((edge) => ({ id: edge.id, source: edge.source, target: edge.target, data: { cableNode: edge.cableNode, endpointPair: edge.endpointPair, projection: edge.projectionEdge } })) });
-    const routeNormalizerRef: { current: ((id: string, points: readonly MapCableRouteWaypoint[]) => MapCableRouteWaypoint[]) | null } = { current: null };
-    const wiringRoute = { source: { physicalObjectId: reverse ? 'b' : 'a', connectionPointId: reverse ? 'b-port' : 'a-port' }, target: { physicalObjectId: reverse ? 'a' : 'b', connectionPointId: reverse ? 'a-port' : 'b-port' }, waypoints: [], selectedWaypointIndex: null, onWaypointSelect: vi.fn(), onWaypointMove: vi.fn() };
-    const props = { selection: null, onSelectionChange: vi.fn(), layoutEngine, routeNormalizerRef, locationFrameInput: { locations, placements, states: locations.map((location, index) => ({ location_ref: location.location_ref, collapsed: false, visible_direct_elements: [], geometry: { x: index * 1000 - 20, y: -20, width: 552, height: 184, edge: 'right' as const, offset: .5 } })) } };
-    const base = { ...documentFor('physical-two-locations'), nodes: objects, edges: [] };
-    const { rerender } = render(<TopologyCanvas {...props} document={base} wiringRoute={wiringRoute} />);
-    await screen.findByRole('button', { name: 'a' });
-    const saved = routeNormalizerRef.current!('cable', [{ x: 400, y: 72 }, { x: 700, y: 72 }]);
-    expect(saved.map((point) => point.anchor?.location_id ?? null)).toEqual([null, 'A', null, 'B']);
-    expect(saved.map(point => point.y)).toEqual([72, 72, 72, 72]);
-    // JSON round-trip models the persisted representation; the new edge follows projection order.
-    const route = { cable_ref: ref('Cable', 'cable'), view: 'L1/PHYSICAL_OBJECT' as const, waypoints: JSON.parse(JSON.stringify(saved)) };
-    const pair = { from_connection_point_id: 'a-port', from_member_index: 1, to_connection_point_id: 'b-port', to_member_index: 1, connection_id: 'connection', connection_member_id: 'member', cable_ref: ref('Cable', 'cable') };
-    const document = { ...base, edges: [{ id: 'ab', from_node_id: 'a', to_node_id: 'b', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: { endpoint_pairs: [pair] } }] };
-    rerender(<TopologyCanvas {...props} document={document} cableRoutes={[route]} />);
-    const restored = JSON.parse((await screen.findByTestId('route-collapsed-cable:cable')).textContent!);
-    expect(restored).toEqual(saved);
-    expect(screen.getByTestId('endpoints-collapsed-cable:cable')).toHaveTextContent('a:b');
-    expect(restored.map((point: MapCableRouteWaypoint) => point.x)).toEqual([...restored.map((point: MapCableRouteWaypoint) => point.x)].sort((a, b) => a - b));
-    expect(routeNormalizerRef.current!('cable', restored)).toEqual(saved);
-  });
-
-  it('normalizes a saved route using the rendered Location frame before its one route write', async () => {
-    const room = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
-    const objects: TopologyProjectionNode[] = ['inside', 'inside-2', 'outside'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
-    const cableNode: TopologyProjectionNode = { id: 'cable', kind: 'CABLE', label: 'Cable', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'cable' }], attributes: {} };
-    const onWaypointMove = vi.fn();
-    const routeNormalizerRef: { current: ((id: string, points: readonly { x: number; y: number }[]) => { x: number; y: number; anchor?: unknown }[]) | null } = { current: null };
-    const edge: any = { id: 'cable-edge', from_node_id: 'inside', to_node_id: 'outside', kind: 'L1_PHYSICAL_LINK', source_refs: [], attributes: {} };
-    render(<TopologyCanvas document={{ ...documentFor('physical-route-anchor'), nodes: objects, edges: [edge] }} selection={null} onSelectionChange={vi.fn()} layoutEngine={async (scene) => ({ nodes: scene.nodes.map((projection, index) => ({ id: projection.id, type: 'device', position: { x: [0, 300, 1000][index], y: 0 }, data: { projection } })), edges: [{ id: 'cable-edge', source: 'inside', target: 'outside', data: { cableNode, projection: edge } }] })} routeNormalizerRef={routeNormalizerRef as any} cableRouteDraft={{ cableId: 'cable', waypoints: [{ x: 532, y: 72, anchor: { location_id: 'room', edge: 'right', offset: .5 } }], selectedWaypointIndex: null, onWaypointSelect: vi.fn(), onWaypointMove, onWaypointInsert: vi.fn() }} locationFrameInput={{ states: [{ location_ref: room, collapsed: false, visible_direct_elements: [], geometry: { x: 0, y: 0, width: 300, height: 200, edge: 'right', offset: .5 } }], locations: [{ location_ref: room, name: 'Room', type: null, parent_location_ref: null }], placements: objects.map((object, index) => ({ physical_object_ref: object.source_refs[0], location_ref: index < 2 ? room : null, positions: { 'L1/PHYSICAL_OBJECT': { x: [0, 300, 1000][index], y: 0, locked: false } } })) }} />);
-    await screen.findByRole('button', { name: 'inside' });
-    await waitFor(() => expect(routeNormalizerRef.current).not.toBeNull());
-    const result = routeNormalizerRef.current!('cable', [{ x: 100, y: 72 }, { x: 700, y: 72 }]);
-    expect(result.filter((point) => point.anchor)).toEqual([expect.objectContaining({ anchor: expect.objectContaining({ location_id: 'room', edge: 'right' }) })]);
-    expect(routeNormalizerRef.current!('cable', result).filter((point) => point.anchor)).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button', { name: 'move route cable-edge' }));
-    expect(onWaypointMove).toHaveBeenCalledWith(0, expect.objectContaining({ y: expect.any(Number), anchor: expect.objectContaining({ location_id: 'room', edge: 'right' }) }));
-    expect(onWaypointMove.mock.calls[0][1].y).toBeLessThan(1000);
-  });
-
-
   it('keeps independent frames when equipment geometry is invalid', async () => {
     const objects: TopologyProjectionNode[] = ['a', 'b'].map((id) => ({ id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: id }], attributes: {} }));
     const location_ref = { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Location' as const, entity_id: 'room' };
@@ -283,7 +223,7 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(globalThis.document.querySelector('.location-frame--drag-preview')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Свернуть Room' })).toBeInTheDocument();
   });
-  it('replaces hidden nodes with one immovable Location proxy and preserves real cable route data', async () => {
+  it('replaces hidden nodes with one immovable Location proxy and preserves the real cable edge', async () => {
     const a: TopologyProjectionNode = { id: 'physical-a', kind: 'PHYSICAL_OBJECT', label: 'A', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'a' }], attributes: {} };
     const b: TopologyProjectionNode = { id: 'physical-b', kind: 'PHYSICAL_OBJECT', label: 'B', source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: 'b' }], attributes: {} };
     const document = { ...documentFor('physical-a'), nodes: [a, b] };
@@ -395,35 +335,6 @@ describe('TopologyCanvas async layout boundary', () => {
     expect(await screen.findByTestId('minimap')).toHaveAttribute('data-position', 'bottom-right');
     expect(screen.getByTestId('minimap')).toHaveAttribute('data-class', 'topology-canvas__minimap');
   });
-  it('enriches only a collapsed cable edge from current SavedMap routes without rerunning layout', async () => {
-    const document: TopologyProjectionDocument = {
-      ...documentFor('physical-route'),
-      nodes: [
-        { id: 'left', kind: 'PHYSICAL_OBJECT', label: 'left', source_refs: [], attributes: {} },
-        { id: 'right', kind: 'PHYSICAL_OBJECT', label: 'right', source_refs: [], attributes: {} },
-      ],
-    };
-    const cableNode = {
-      id: 'cable-node', kind: 'CABLE', label: 'not-an-identity',
-      source_refs: [{ ref_type: 'CANONICAL_FACT' as const, entity_type: 'Cable', entity_id: 'cable-id' }],
-      attributes: {},
-    };
-    const cableEdge = {
-      id: 'collapsed-cable:cable-node', source: 'left', target: 'right', type: 'floating' as const,
-      data: { projection: { id: 'presentation:cable-node', from_node_id: 'left', to_node_id: 'right', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableNode },
-    };
-    const layoutEngine: TopologyLayoutEngine = vi.fn(async () => ({
-      nodes: document.nodes.map((projection) => ({ id: projection.id, type: 'device' as const, position: { x: 0, y: 0 }, data: { projection } })),
-      edges: [cableEdge],
-    }));
-    const explicitStraightRoute = { cable_ref: { ref_type: 'CANONICAL_FACT' as const, entity_type: 'Cable', entity_id: 'cable-id' }, view: 'L1/PHYSICAL_OBJECT' as const, waypoints: [] };
-    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} cableRoutes={[explicitStraightRoute]} />);
-    expect(await screen.findByTestId('route-collapsed-cable:cable-node')).toHaveTextContent('[]');
-    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} cableRoutes={[]} />);
-    expect(screen.getByTestId('route-collapsed-cable:cable-node')).toHaveTextContent('no-route');
-    expect(layoutEngine).toHaveBeenCalledTimes(1);
-  });
-
   it.each([
     ['blueprint to blueprint', false, false],
     ['blueprint to generic', false, true],

@@ -36,9 +36,6 @@ interface QuickInspectorProps {
     message?: string;
   } | null;
   onRetryMapRefresh?: () => Promise<void>;
-  cableRoutePresentation?: { present: boolean; waypointCount: number };
-  onResetCableRoute?: () => void;
-  onRetryCableRouteReset?: () => void;
 }
 const natural = (a: string, b: string) =>
   a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
@@ -307,13 +304,6 @@ export function QuickInspector(props: QuickInspectorProps) {
             <p key={notice}>{notice}</p>
           ))}
         {inventory && !item && <p>{t("inspector.cableUnavailable")}</p>}
-        {props.cableRoutePresentation && (
-          <section className="quick-inspector__cable-route">
-            <h3>{t("inspector.route")}</h3>
-            {props.cableRoutePresentation.present ? <p>{t("inspector.routePoints", { count: props.cableRoutePresentation.waypointCount })}</p> : <p>{t("inspector.noRoute")}</p>}
-
-          </section>
-        )}
         {operationFor("delete", cableId)?.status === "refresh-failed" && (
           <>
             <p role="alert">{operationFor("delete", cableId)?.message}</p>

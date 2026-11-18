@@ -7,20 +7,18 @@ from math import isclose
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, aliased, selectinload
+from sqlalchemy.orm import Session, selectinload
 
 from app.errors import ModelError, ValidationError, classify_integrity_error
 from app.device_catalog import DeviceCatalog
 from app.location_frame_geometry import layout_location_frames, contains, overlaps, expand_location_frames
-from app.location_boundary_anchors import normalize_boundary_route
-from app.models import BuiltInEndpointDefinition, BuiltInEndpointMapping, ObjectConfiguration, PresentationPanel, Cable, Connection, ConnectionPoint, Location, MapCableRoute, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
+from app.models import BuiltInEndpointDefinition, BuiltInEndpointMapping, ObjectConfiguration, PresentationPanel, Location, MapLocationState, MapPlacement, MapPresentationVariant, MapTextAnnotation, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
 
 
 @dataclass(frozen=True)
 class SavedMapDetail:
     saved_map: SavedMap
     placements: tuple[MapPlacement, ...]
-    cable_routes: tuple[MapCableRoute, ...]
     text_annotations: tuple[MapTextAnnotation, ...]
     variant: MapPresentationVariant
     variants: tuple[MapPresentationVariant, ...]
@@ -62,7 +60,7 @@ class SavedMapCatalog:
         saved_map = self._require_map(map_id)
         variant = self._require_variant(map_id, variant_id)
         states = self._location_states(variant.id)
-        return SavedMapDetail(saved_map, self._placements(map_id, variant.id), self._cable_routes(map_id, variant.id), self._text_annotations(map_id), variant, self._variants(map_id), states, self._valid_location_refs(states))
+        return SavedMapDetail(saved_map, self._placements(map_id, variant.id), self._text_annotations(map_id), variant, self._variants(map_id), states, self._valid_location_refs(states))
 
     def create_variant(self, map_id: uuid.UUID, name: str, source_variant_id: uuid.UUID) -> MapPresentationVariant:
         self._require_map(map_id)
@@ -80,13 +78,6 @@ class SavedMapCatalog:
             placement_id=position.placement_id, variant_id=variant.id, view_key=position.view_key,
             x=position.x, y=position.y, locked=position.locked, display_width=position.display_width,
         ) for position in source_positions)
-        source_routes = self.session.scalars(select(MapCableRoute).where(
-            MapCableRoute.map_id == map_id, MapCableRoute.variant_id == source.id
-        ))
-        self.session.add_all(MapCableRoute(
-            map_id=route.map_id, variant_id=variant.id, cable_id=route.cable_id, view_key=route.view_key,
-            waypoints=[dict(point) for point in route.waypoints],
-        ) for route in source_routes)
         self.session.add_all(MapLocationState(
             variant_id=variant.id, location_id=state.location_id, collapsed=state.collapsed,
             geometry=dict(state.geometry), manual_bounds=dict(state.manual_bounds) if state.manual_bounds else None,
@@ -239,8 +230,7 @@ class SavedMapCatalog:
             moving = {object_id for _, object_id, assigned in records if assigned in subtree}
             if moving:
                 dx, dy = translations[key]
-                self.move_location_group(map_id, variant_id, key, dx, dy, original[key],
-                                         list(footprints.values()), self._boundary_evidence(map_id, variant_id, moving, footprints))
+                self.move_location_group(map_id, variant_id, key, dx, dy, list(footprints.values()))
 
     def _physical_geometry(self, map_id, variant_id):
         records = self.session.execute(select(MapViewPosition, MapPlacement.physical_object_id, PhysicalObject.location_id)
@@ -275,27 +265,6 @@ class SavedMapCatalog:
                 width, height = object_frame_dimensions(bounds, centres, position.display_width)
             footprints[object_id] = {"physical_object_id": object_id, "x": position.x, "y": position.y, "width": width, "height": height}
         return records, footprints
-
-    def _boundary_evidence(self, map_id, variant_id, moving, footprints):
-        first, second = aliased(ConnectionPoint), aliased(ConnectionPoint)
-        rows = self.session.execute(select(Cable.id, first.physical_object_id, second.physical_object_id)
-            .join(Connection, Connection.id == Cable.connection_id)
-            .join(first, first.id == Connection.point_a_id).join(second, second.id == Connection.point_b_id)
-            .join(MapCableRoute, MapCableRoute.cable_id == Cable.id)
-            .where(MapCableRoute.map_id == map_id, MapCableRoute.variant_id == variant_id)).all()
-        evidence = []
-        for cable_id, a, b in rows:
-            a, b = sorted((a, b), key=str)
-            if (a in moving) == (b in moving):
-                continue
-            if a not in footprints or b not in footprints:
-                raise ValidationError("Boundary Cable endpoint geometry is unavailable", {"cable_id": str(cable_id)})
-            def center(key):
-                g = footprints[key]
-                return {"x": g["x"] + g["width"] / 2, "y": g["y"] + g["height"] / 2}
-            evidence.append({"cable_id": cable_id, "moving_endpoint_is_source": a in moving,
-                             "moving_endpoint": center(a if a in moving else b), "external_endpoint": center(b if a in moving else a)})
-        return evidence
 
     def _store_frames(self, variant_id, states, frames, manual):
         stored = {state.location_id: state for state in self.session.scalars(
@@ -371,8 +340,6 @@ class SavedMapCatalog:
             if any(overlaps(candidate, other) for key, other in final_footprints.items() if key != object_id):
                 raise ValidationError("PhysicalObject placement overlaps another object", {})
             position.x, position.y = candidate["x"], candidate["y"]
-            if dx or dy:
-                self._translate_object_route_leads(target_map, target_variant, object_id, dx, dy)
             self._store_frames(target_variant, states, frames, manual)
             self._flush()
 
@@ -462,23 +429,6 @@ class SavedMapCatalog:
             self._store_frames(variant.id, states, frames, manual)
         self._flush()
 
-    def _translate_object_route_leads(self, map_id, variant_id, object_id, dx, dy):
-        first, second = aliased(ConnectionPoint), aliased(ConnectionPoint)
-        rows = self.session.execute(select(MapCableRoute, first.physical_object_id, second.physical_object_id)
-            .join(Cable, Cable.id == MapCableRoute.cable_id).join(Connection, Connection.id == Cable.connection_id)
-            .join(first, first.id == Connection.point_a_id).join(second, second.id == Connection.point_b_id)
-            .where(MapCableRoute.map_id == map_id, MapCableRoute.variant_id == variant_id).with_for_update()).all()
-        for route, a, b in rows:
-            a, b = sorted((a, b), key=str)
-            if object_id not in (a, b):
-                continue
-            points = [dict(p) for p in (route.waypoints if object_id == a else reversed(route.waypoints))]
-            stop = next((i for i, p in enumerate(points) if p.get("anchor")), min(1, len(points)))
-            for point in points[:stop]:
-                point["x"] += dx
-                point["y"] += dy
-            route.waypoints = points if object_id == a else list(reversed(points))
-
     def _location_states(self, variant_id: uuid.UUID) -> tuple[MapLocationState, ...]:
         stored = {state.location_id: state for state in self.session.scalars(
             select(MapLocationState).where(MapLocationState.variant_id == variant_id))}
@@ -564,7 +514,6 @@ class SavedMapCatalog:
                 "map_id": str(map_id), "physical_object_id": str(physical_object_id),
             })
         position = next((item for item in placement.view_positions if item.view_key == view_key and item.variant_id == variant.id), None)
-        previous = (position.x, position.y) if position is not None else None
         if position is None:
             placement.view_positions.append(MapViewPosition(variant_id=variant.id, view_key=view_key, x=x, y=y, display_width=display_width))
         else:
@@ -576,9 +525,6 @@ class SavedMapCatalog:
         self._flush()
         if view_key == MapViewKey.PHYSICAL:
             self.place_assigned_object(physical_object_id, map_id=map_id, variant_id=variant.id, relocate=False)
-            if previous is not None and previous != (x, y):
-                self._translate_object_route_leads(map_id, variant.id, physical_object_id, x-previous[0], y-previous[1])
-                self._flush()
         return placement
 
     def set_view_lock(self, map_id: uuid.UUID, physical_object_id: uuid.UUID, view_key: MapViewKey, locked: bool, variant_id: uuid.UUID | None = None) -> MapPlacement:
@@ -614,38 +560,10 @@ class SavedMapCatalog:
         self._flush()
         self.synchronize_object_layouts(variants)
 
-    def set_cable_route(
-        self,
-        map_id: uuid.UUID,
-        cable_id: uuid.UUID,
-        waypoints: list[dict[str, object]], variant_id: uuid.UUID | None = None,
-    ) -> MapCableRoute:
-        variant = self._require_variant(map_id, variant_id)
-        self._require_cable(cable_id)
-        route = self.session.scalar(
-            select(MapCableRoute)
-            .where(
-                MapCableRoute.map_id == map_id,
-                MapCableRoute.cable_id == cable_id,
-                MapCableRoute.view_key == MapViewKey.PHYSICAL, MapCableRoute.variant_id == variant.id,
-            )
-            .with_for_update()
-        )
-        if route is None:
-            route = MapCableRoute(
-                map_id=map_id, variant_id=variant.id,
-                cable_id=cable_id,
-                view_key=MapViewKey.PHYSICAL,
-            )
-            self.session.add(route)
-        route.waypoints = [dict(point) for point in waypoints]
-        self._flush()
-        return route
-
     def move_location_group(
         self, map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID,
-        delta_x: float, delta_y: float, frame: dict[str, float],
-        footprints: list[dict[str, object]], boundary_routes: list[dict[str, object]],
+        delta_x: float, delta_y: float,
+        footprints: list[dict[str, object]],
     ) -> None:
         """Move one canonical Location subtree within one physical presentation variant."""
         _, variant = self._lock_physical_layout(map_id, variant_id)
@@ -656,7 +574,6 @@ class SavedMapCatalog:
         subtree = select(Location.id).where(Location.id == location_id).cte("moving_locations", recursive=True)
         subtree = subtree.union_all(select(Location.id).join(subtree, Location.parent_location_id == subtree.c.id))
         location_ids = set(self.session.scalars(select(subtree.c.id)))
-        subtree_object_ids = set(self.session.scalars(select(PhysicalObject.id).where(PhysicalObject.location_id.in_(location_ids))))
         records = self.session.execute(select(MapViewPosition, MapPlacement.physical_object_id, PhysicalObject.location_id)
             .join(MapPlacement, MapPlacement.id == MapViewPosition.placement_id)
             .join(PhysicalObject, PhysicalObject.id == MapPlacement.physical_object_id)
@@ -682,64 +599,10 @@ class SavedMapCatalog:
                 other = geometry[external_id]
                 if x < other["x"] + other["width"] and x + source["width"] > other["x"] and y < other["y"] + other["height"] and y + source["height"] > other["y"]:
                     raise ValidationError("Location group collides with an external PhysicalObject", {"physical_object_id": str(external_id)})
-        routes = self.session.scalars(select(MapCableRoute).where(
-            MapCableRoute.map_id == map_id, MapCableRoute.variant_id == variant_id,
-            MapCableRoute.view_key == MapViewKey.PHYSICAL).with_for_update()).all()
-        first, second = aliased(ConnectionPoint), aliased(ConnectionPoint)
-        endpoint_rows = self.session.execute(select(Cable.id, first.physical_object_id, second.physical_object_id)
-            .join(Connection, Connection.id == Cable.connection_id)
-            .join(first, first.id == Connection.point_a_id)
-            .join(second, second.id == Connection.point_b_id)
-            .where(Cable.id.in_([route.cable_id for route in routes]))).all()
-        endpoints = {cable_id: (a, b) for cable_id, a, b in endpoint_rows}
-        boundary = {item["cable_id"]: item for item in boundary_routes}
-        if len(boundary) != len(boundary_routes):
-            raise ValidationError("Duplicate boundary Cable evidence", {})
-        expected_boundary = {route.cable_id for route in routes if route.cable_id in endpoints and sum(object_id in subtree_object_ids for object_id in endpoints[route.cable_id]) == 1}
-        if set(boundary) != expected_boundary:
-            raise ValidationError("Boundary Cable evidence is incomplete", {})
-        route_updates: list[tuple[MapCableRoute, list[dict[str, object]]]] = []
-        for route in routes:
-            pair = endpoints.get(route.cable_id)
-            if pair is None:
-                raise ValidationError("Saved Cable route has no canonical endpoints", {"cable_id": str(route.cable_id)})
-            inside_count = sum(object_id in subtree_object_ids for object_id in pair)
-            if inside_count == 0: continue
-            if inside_count == 2:
-                route_updates.append((route, [dict(point) if point.get("anchor") else {"x": point["x"] + delta_x, "y": point["y"] + delta_y} for point in route.waypoints]))
-                continue
-            evidence = boundary[route.cable_id]
-            oriented = route.waypoints if evidence["moving_endpoint_is_source"] else list(reversed(route.waypoints))
-            normalized, anchor_index = normalize_boundary_route(location_id, frame, evidence["moving_endpoint"], oriented, evidence["external_endpoint"])
-            transformed = [
-                {"x": point["x"] + delta_x, "y": point["y"] + delta_y} if index < anchor_index and not point.get("anchor") else dict(point)
-                for index, point in enumerate(normalized)
-            ]
-            route_updates.append((route, transformed if evidence["moving_endpoint_is_source"] else list(reversed(transformed))))
         for object_id in moving_ids:
             positions[object_id].x += delta_x
             positions[object_id].y += delta_y
-        for route, waypoints in route_updates:
-            route.waypoints = waypoints
         self._flush()
-
-    def delete_cable_route(self, map_id: uuid.UUID, cable_id: uuid.UUID, variant_id: uuid.UUID | None = None) -> None:
-        variant = self._require_variant(map_id, variant_id)
-        route = self.session.scalar(
-            select(MapCableRoute)
-            .where(
-                MapCableRoute.map_id == map_id,
-                MapCableRoute.cable_id == cable_id,
-                MapCableRoute.view_key == MapViewKey.PHYSICAL, MapCableRoute.variant_id == variant.id,
-            )
-            .with_for_update()
-        )
-        if route is None:
-            raise ValidationError("MapCableRoute does not exist", {
-                "map_id": str(map_id), "cable_id": str(cable_id),
-            })
-        self.session.delete(route)
-        self.session.flush()
 
     def create_text_annotation(self, map_id: uuid.UUID, text: str, position: dict[str, float], text_color: str, font_size: float) -> MapTextAnnotation:
         self._require_map(map_id)
@@ -783,13 +646,6 @@ class SavedMapCatalog:
             MapPlacement.map_id == map_id
         ).order_by(MapPlacement.physical_object_id)))
 
-    def _cable_routes(self, map_id: uuid.UUID, variant_id: uuid.UUID | None = None) -> tuple[MapCableRoute, ...]:
-        return tuple(self.session.scalars(
-            select(MapCableRoute)
-            .where(MapCableRoute.map_id == map_id, MapCableRoute.variant_id == self._require_variant(map_id, variant_id).id)
-            .order_by(MapCableRoute.cable_id, MapCableRoute.view_key)
-        ))
-
     def _text_annotations(self, map_id: uuid.UUID) -> tuple[MapTextAnnotation, ...]:
         return tuple(self.session.scalars(
             select(MapTextAnnotation).where(MapTextAnnotation.map_id == map_id).order_by(MapTextAnnotation.id)
@@ -806,10 +662,6 @@ class SavedMapCatalog:
         variant = self.session.scalar(query)
         if variant is None: raise ValidationError("MapPresentationVariant does not exist on SavedMap", {"map_id": str(map_id), "variant_id": str(variant_id) if variant_id else None})
         return variant
-
-    def _require_cable(self, cable_id: uuid.UUID) -> None:
-        if self.session.get(Cable, cable_id) is None:
-            raise ValidationError("Cable does not exist", {"cable_id": str(cable_id)})
 
     def _flush(self) -> None:
         try:

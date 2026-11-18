@@ -1,27 +1,11 @@
 import { Position } from '@xyflow/react';
 import { describe, expect, it } from 'vitest';
-import { getConnectionPointEndpoint, getFloatingEndpoints, getRenderedConnectionPoint, routedCablePath, type NodeRectangle } from './FloatingTopologyEdge';
+import { getConnectionPointEndpoint, getFloatingEndpoints, getRenderedConnectionPoint, type NodeRectangle } from './FloatingTopologyEdge';
 import type { TopologyProjectionNode } from '../topology/types';
 
 const node = (x: number, y: number): NodeRectangle => ({ x, y, width: 200, height: 100 });
 
 describe('floating topology edge geometry', () => {
-  it('uses persisted waypoints literally and in their stored order', () => {
-    expect(routedCablePath(
-      { x: 10, y: 20, side: Position.Right },
-      { x: 90, y: 80, side: Position.Left },
-      [{ x: 50, y: -1 }, { x: -4, y: 12 }, { x: 33.5, y: 7 }],
-    )).toBe('M 10 20 L 50 -1 L -4 12 L 33.5 7 L 90 80');
-  });
-
-  it('keeps an explicit zero-waypoint route as the exact endpoint-to-endpoint path', () => {
-    expect(routedCablePath(
-      { x: 10, y: 20, side: Position.Right },
-      { x: 90, y: 80, side: Position.Left },
-      [],
-    )).toBe('M 10 20 L 90 80');
-  });
-
   it('lands on the exact generic rail marker identified by canonical ConnectionPoint UUID', () => {
     const projection: TopologyProjectionNode = { id: 'manual', kind: 'PHYSICAL_OBJECT', label: 'Outlet', source_refs: [], attributes: { connection_points: [
       { connection_point_id: 'port-10', display_name: 'Port10', cardinality: 1, external_connection_count: 0 },
@@ -32,7 +16,7 @@ describe('floating topology edge geometry', () => {
     expect(getConnectionPointEndpoint(projection, node(10, 20), 'port-10')).toMatchObject({ x: 210, y: 95, side: Position.Right });
   });
 
-  it('keeps a Blueprint slot anchor exact when a cable path is routed', () => {
+  it('keeps a Blueprint slot anchor at the rendered port', () => {
     const projection: TopologyProjectionNode = { id: 'blueprint', kind: 'PHYSICAL_OBJECT', label: 'Patch panel', source_refs: [], attributes: {
       blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'bp' }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'v1' }, body: { kind: 'RECTANGLE', width: 200, height: 100 }, panels: [{ panel_key: 'one', panel_number: 1, display_name: 'Panel 1', x: 0, y: 0, width: 200, height: 100 }], slots: [{ slot_key: 'rear01', display_name: 'rear01', kind: 'CONNECTION_POINT', connection_point_id: 'rear-01', panel_key: 'one', panel_local_position: { x: .25, y: .5 }, rendered_position: { x: .25, y: .5 }, external_attachment: { x: .25, y: 0, side: 'TOP' } }] },
     } };
@@ -40,10 +24,6 @@ describe('floating topology edge geometry', () => {
     const renderedPort = getRenderedConnectionPoint(projection, { ...node(10, 20), compositionDisplayWidth: 200, width: 292 }, 'rear-01');
     expect(endpoint).toMatchObject({ x: 132, y: 20, side: Position.Top });
     expect(renderedPort).toMatchObject({ x: 132, y: 70, side: Position.Top });
-    expect(routedCablePath(endpoint!, { x: 300, y: 200, side: Position.Left }, [{ x: 80, y: 30 }]))
-      .toBe('M 132 20 L 80 30 L 300 200');
-    expect(routedCablePath(renderedPort!, { x: 320, y: 220, side: Position.Left }, [{ x: 80, y: 30 }]))
-      .toBe('M 132 70 L 80 30 L 320 220');
   });
 
   it('uses complete composition coordinates for slots on adjacent panels', () => {
@@ -115,8 +95,4 @@ it('holds rendered ports and cable endpoints fixed while only the cable reserve 
   const expanded = { ...box, width: 572 };
   expect(getRenderedConnectionPoint(projection, expanded, 'p')).toEqual(getRenderedConnectionPoint(projection, box, 'p'));
   expect(getConnectionPointEndpoint(projection, expanded, 'p')).toEqual(getConnectionPointEndpoint(projection, box, 'p'));
-  const waypoints = [{ x: 500, y: 200 }];
-  const before = JSON.stringify(waypoints);
-  routedCablePath(getRenderedConnectionPoint(projection, expanded, 'p')!, { x: 900, y: 200, side: Position.Left }, waypoints);
-  expect(JSON.stringify(waypoints)).toBe(before);
 });

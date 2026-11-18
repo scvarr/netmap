@@ -25,7 +25,7 @@ MapPresentationVariant — компоновка одной карты, не др
 Отдельные файлы: PortType catalog, будущий CableType catalog, BaseTemplate,
 ModuleTemplate. Это определения создаваемых сущностей с необходимыми
 зависимостями через локальные семантические ключи, не экспорт таблиц и не
-workspace snapshot/export-import v7. Исходные UUID не становятся identity новых записей.
+workspace snapshot/export-import v8. Исходные UUID не становятся identity новых записей.
 
 Импорт проверяет файл, версию, определения и зависимости; сопоставляет типы
 с текущими справочниками, предлагает создать отсутствующие, показывает preview

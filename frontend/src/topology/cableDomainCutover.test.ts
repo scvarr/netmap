@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { parsePhysicalObjectDetailsDocument } from './apiPhysicalObjectDetailsDataSource';
-import { cableRouteForCollapsedCable } from './cableRoutePresentation';
 import type { TopologyProjectionNode } from './types';
 
 const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
@@ -17,10 +16,4 @@ describe('Cable.1 canonical frontend contracts', () => {
     expect(() => parsePhysicalObjectDetailsDocument(document)).toThrow('must be a Cable ref');
   });
 
-  it('matches routes by canonical Cable identity, never a PhysicalObject identity', () => {
-    const cable: TopologyProjectionNode = { id: 'node', kind: 'PHYSICAL_OBJECT', label: 'Cable', source_refs: [ref('Cable', 'cable')], attributes: {} };
-    const route: any = { cable_ref: ref('Cable', 'cable'), view: 'L1/PHYSICAL_OBJECT', waypoints: [] };
-    expect(cableRouteForCollapsedCable(cable, [route])).toBe(route);
-    expect(cableRouteForCollapsedCable(cable, [{ ...route, cable_ref: ref('PhysicalObject', 'cable') }])).toBeUndefined();
-  });
 });

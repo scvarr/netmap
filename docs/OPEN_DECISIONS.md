@@ -117,42 +117,16 @@ foundation не означает IMPLEMENTED.
 P-UX-22 — отдельная будущая работа вне P-UX-03E.
 
 
-### C-UX-16 — История изменений и инструменты редактора трасс
-
-**OPEN / PRODUCT DIRECTION.** Undo/Redo не реализованы. ROUTE-UX-01 переносит
-удаление выбранного waypoint, Save/Cancel, ошибки и повторное чтение в независимую
-плавающую панель. Активный draft привязан к map/variant/Cable и сохраняется при
-смене selection; смена карты, компоновки или выход из Physical отменяет draft.
-
-**Целевое направление (реализация сейчас не выполняется).**
-
-1. Undo отменяет последнее изменение геометрии в текущей сессии редактирования;
-   Redo повторяет отменённое изменение.
-2. История охватывает добавление, перемещение, числовое редактирование и удаление
-   waypoints. Новое изменение после Undo сбрасывает доступную ветку Redo.
-3. Удаление выбранного обычного waypoint доступно непосредственно в панели
-   редактирования маршрута. Кнопки отражают доступность действия.
-4. История изменяет только transient draft. Save выполняет существующую persisted
-   запись; Cancel возвращает сохранённую геометрию.
-5. Существующие ограничения Location boundary anchors сохраняются.
-6. Canonical Cable, Connection, endpoints, trace evidence и SavedMap schema
-   не меняются.
-7. Undo/Redo и их горячие клавиши остаются OPEN. Enter/Esc для Save/Cancel
-   сохранены в ROUTE-UX-01.
-
-C-UX-16 не входит в C-UX-11 и не переоткрывает его. Завершённые milestones
-11-08 не реализуют эту историю.
-
 ## C-UX-10 — Automatic Location Cable Channels
 
 C-UX-10-01 foundation объединён в main:
 самостоятельные прямоугольные frames всех canonical Locations на каждой карте
 со spatial вложением по canonical parent, единым переносом контейнера с
-оборудованием/routes и ростом предков; назначение Location согласует существующие
+оборудованием и ростом предков; назначение Location согласует существующие
 placements всех карт/variants (corrective),
 variant geometry и одна обязательная map-scoped виртуальная точка, Save/Cancel,
 перемещение/resize и копирование variant. Геометрия не меняет topology/hierarchy.
-Стабилизация foundation: полный authoritative ответ move (positions/frames/routes),
+Стабилизация foundation: полный authoritative ответ move (positions/frames),
 автоматические bounds по полному rendered footprint с отдельным manual resize floor,
 полный collapse пустых/заполненных subtree в один компактный элемент с прежней точкой,
 expand без перезаписи expanded geometry и сохранение partial visible elements.
@@ -167,10 +141,9 @@ C-UX-10 остаётся OPEN для межлокационных Channels, гл
 
 ### CURRENT и владение
 
-CURRENT: MapCableRoute хранит индивидуальные waypoints; boundary anchors
-привязаны к самостоятельным Location frames (C-UX-10-01 foundation).
-Persisted shared Channels остаются OPEN. Пустые Location
-имеют frame и одну обязательную виртуальную точку.
+CURRENT: COMB-01 вычисляет объектные пути и preview. Индивидуальная
+геометрия Cable больше не хранится. Каждый Location, включая пустой, имеет
+рамку и одну обязательную виртуальную точку.
 
 TARGET согласован с [независимыми картами](L1_REFERENCE_NETWORK.md#независимые-карты):
 Location и виртуальная инфраструктура принадлежат одной карте и не разделяются
@@ -203,7 +176,7 @@ Preview предшествует подтверждению; отмена/оши
 Физический Cable остаётся одной canonical сущностью с реальными окончаниями.
 Отображаемый путь состоит из индивидуальных подводов и последовательности
 участков через обязательные точки Location hierarchy. Для объектов одного
-непосредственного Location достаточно индивидуальной трассы. Общая presentation
+непосредственного Location путь соединяет объектные подводы. Общая presentation
 geometry переиспользуется без копирования в маршруты Cables.
 
 Клик по подводу выбирает Cable, клик по общему участку выбирает общую геометрию.
@@ -225,8 +198,7 @@ geometry переиспользуется без копирования в ма�
 
 ### Collapse / expand
 
-Collapse скрывает внутренние участки по принадлежности к subtree, включая
-waypoints за рамкой. Внешние участки видны до обязательной точки свёрнутого
+Collapse скрывает внутренние участки по принадлежности к subtree, по иерархии. Внешние участки видны до обязательной точки свёрнутого
 Location. Unary simplification сохраняет эту точку при пересечении границы.
 При nested collapse приоритет у внешнего явно свёрнутого контейнера. Проекция
 внешних участков потомков до его границы вычисляется для отображения. Expand
@@ -270,13 +242,6 @@ OPEN: ID/reference model, перенос существующих строк и 
 требуют отдельных решений. Phase D определяет минимальные L1 classifications,
 E охватывает UX, F — workspace/access.
 
-## Endpoint-relative route sections
-
-Обсуждались waypoints относительно ConnectionPoint: непрерывный prefix/suffix
-одного endpoint, между системами координат elastic segment; допускается несколько
-relative points. Это presentation, не новая connectivity. Persistence/API/schema
-и UX открыты; не часть P-UX-03E и не принятый implementation milestone.
-
 ## Spatial и оборудование
 
 Ordered child layout (rack units/chassis/shelves), physical occupancy нескольких
@@ -300,7 +265,7 @@ SQLAlchemy scope и storage/schema strategy, provisioning/archive/soft-delete,
 sharing permissions/public links, query/UI и release gate не выбраны.
 Fork/merge/compare/rebase, copy-on-write, database-per-workspace, packages,
 comments/annotations, map cloning/templates и общая portability не становятся MUST
-автоматически. Текущий v7 export/reset/import не закрывает эту family.
+автоматически. Текущий v8 export/reset/import не закрывает эту family.
 
 Generic activity: append-only mutation journal, global feed и per-entity projection,
 не event sourcing и не source of truth topology. Actor/workspace attribution после
@@ -339,7 +304,7 @@ permissions источников не выбраны.
   C-CAP-01. Canonical foundation есть; exact template/API решение не выбрано.
 - Поиск всего оборудования и свободного порта для создания связи независимо от
   текущей карты — future product direction; map click остаётся быстрым способом.
-- Application compression: сначала размеры текущего v7 и ZIP/GZIP, затем решение
+- Application compression: сначала размеры текущего v8 и ZIP/GZIP, затем решение
   о собственном формате; старый v5 размер не основание архитектуры.
 - RoutingPolicy/PACKET_MARK storage/predicate domains, direct-next-hop PBR,
   redirect, VRF leaking и effective observations требуют отдельного product scope;

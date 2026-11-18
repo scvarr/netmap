@@ -44,7 +44,7 @@ def test_port_type_workspace_round_trip_and_invalid_import():
     archived = client.post(URL, json={"name": "Optical", "color": "#abcdef",
                                       "description": "SFP+", "is_active": False}).json()
     before = snapshot()
-    assert before["format_version"] == 7
+    assert before["format_version"] == 8
     assert {item["id"]: item for item in before["settings"]["PortType"]} == {
         active["id"]: active, archived["id"]: archived,
     }
@@ -144,7 +144,7 @@ def test_assignment_lifecycle_and_workspace_round_trip(template_kind, section):
     assert client.get(draft_url).json()["definition"] == definition
 
     before = snapshot()
-    assert before["format_version"] == 7
+    assert before["format_version"] == 8
     assert client.delete("/v1/workspace/dataset").status_code == 204
     malformed = copy.deepcopy(before)
     draft_record, = malformed["authoring"][f"{template_kind.capitalize()}TemplateDraft"]

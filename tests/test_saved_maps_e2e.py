@@ -58,7 +58,6 @@ def test_only_allowlisted_unique_constraints_are_classified():
     for constraint, reason in {
         "uq_saved_maps_name": "SAVED_MAP_NAME_CONFLICT",
         "uq_map_placements_map_object": "MAP_PLACEMENT_CONFLICT",
-        "uq_map_cable_routes_map_cable_view": "MAP_CABLE_ROUTE_CONFLICT",
     }.items():
         error = IntegrityError("statement", {}, SimpleNamespace(diag=SimpleNamespace(constraint_name=constraint)))
         conflict = classify_integrity_error(error)
@@ -116,7 +115,6 @@ def test_create_list_and_detail_saved_maps_are_empty_and_use_presentation_refs()
     assert created["name"] == "Серверная"
     assert created["map_ref"] == {"entity_type": "SavedMap", "entity_id": map_id(created)}
     assert created["placements"] == []
-    assert created["cable_routes"] == []
     assert "ref_type" not in created["map_ref"]
 
     listed = client.get("/v1/maps")

@@ -7,9 +7,6 @@ import type {
   TopologyProjectionNode,
 } from './types';
 import type { PresentationSceneDocument } from './presentationScene';
-import type { MapCableRoute } from './savedMapTypes';
-import type { MapCableRouteWaypoint } from './savedMapTypes';
-import type { BoundaryFrame } from './locationBoundaryAnchors';
 import { blueprintRenderedNodeDimensions } from './blueprintDisplaySize';
 
 export const LAYOUT_NODE_WIDTH = 212;
@@ -50,22 +47,9 @@ export interface LogicalEdgeData extends Record<string, unknown> {
   renderCableInForegroundOnly?: boolean;
   cableNode?: TopologyProjectionNode;
   supportingEdgeIds?: string[];
-  /** Authoritative SavedMap state, enriched after topology-derived layout. */
-  cableRoute?: MapCableRoute;
-  cableRouteDraft?: {
-    cableId: string;
-    waypoints: readonly MapCableRouteWaypoint[];
-    selectedWaypointIndex: number | null;
-    onWaypointSelect: (index: number) => void;
-    onWaypointMove: (index: number, waypoint: MapCableRouteWaypoint) => void;
-    onWaypointInsert: (index: number, waypoint: MapCableRouteWaypoint) => void;
-    boundaryFrames?: readonly BoundaryFrame[];
-  };
-  /** Route editing controls are rendered by the foreground cable overlay. */
-  renderRouteEditorInForeground?: boolean;
   continuation?: L1OffMapContinuation;
   /** Presentation priority for Cable rendering; it never changes topology evidence. */
-  cablePresentationEmphasis?: 'normal' | 'attached' | 'selected' | 'traced' | 'editing';
+  cablePresentationEmphasis?: 'normal' | 'attached' | 'selected' | 'traced';
 }
 
 export type DeviceFlowNode = Node<DeviceNodeData, 'device' | 'locationProxy'>;

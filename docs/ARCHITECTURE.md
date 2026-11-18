@@ -111,7 +111,7 @@ TARGET. Пользовательские типы PhysicalObject и Location б�
 
 SavedMap — presentation scope в implicit workspace. Placement задаёт membership
 PhysicalObject в карте. MapPresentationVariant принадлежит одной карте и хранит
-именованную компоновку: позиции по view, locks, cable routes, Location state.
+именованную компоновку: позиции по view, locks и Location state.
 Membership общий для вариантов; topology и canonical Location assignment не
 меняются переключением варианта. Physical и Logical scene coordinates независимы.
 MapTextAnnotation — отдельная presentation capability.
@@ -134,7 +134,7 @@ MapLocationState.geometry хранит x/y/width/height и edge/offset обяз�
 соседние ветви при необходимости получают место без пересечений. Это разрешённое
 начальное presentation размещение, а не canonical containment из координат.
 Create/series/reparent canonical Location согласуют уже сохранённые variant layouts:
-выделение места переносит затронутые соседние рамки вместе с оборудованием/routes
+выделение места переносит затронутые соседние рамки вместе с оборудованием
 в той же транзакции; locked конфликт не оставляет частичных canonical/presentation writes.
 Boundary identity — UUIDv5(namespace=SavedMap ID, name=Location ID), одна на пару
 map/Location, не зависит от variant/геометрии. Отдельного create/delete точки нет.
@@ -145,21 +145,17 @@ Geometry PUT блокирует canonical hierarchy и variant, переноси
 вместе со всеми существующими L1 placements её subtree (включая скрытые).
 Physical position/add, geometry и group move берут hierarchy `FOR SHARE`
 (Location ID order), затем свой variant `FOR UPDATE`, затем зависимые
-placements/positions, routes и frame state. Это не сериализует layout writes
+placements/positions и frame state. Это не сериализует layout writes
 разных variants на hierarchy. Canonical assignment сохраняет hierarchy
 `FOR UPDATE` → PhysicalObject → все затронутые variants в UUID order →
 presentation rows. Hierarchy/variant locks получаются до position DML/flush;
 поздний повторный lock не заменяет предварительную блокировку.
-Существующий group-move core сохраняет внутренние free waypoints и внутренний
-prefix boundary route; внешний suffix не переносится. Обязательная точка
-Location и route anchors — разные presentation bindings.
 Расширение дочерней рамки/содержимого увеличивает предков, в том числе влево/вверх,
 не сжимая вручную увеличенные границы. При пересечении соседний контейнер получает
 место ниже вместе с содержимым; неподвижные объекты сохраняют позиции, когда это
-возможно. Locked placements, object collisions и неоднозначная boundary evidence
-отклоняют всю транзакцию. Недопустимый parent shrink не обрезает содержимое:
+возможно. Locked placements и object collisions отклоняют всю транзакцию. Недопустимый parent shrink не обрезает содержимое:
 размер сохраняется достаточным для детей и оборудования.
-Сохранение фиксирует frames, positions и routes одной транзакцией и возвращает
+Сохранение фиксирует frames и positions одной транзакцией и возвращает
 SavedMapDocument. UI: единый drag заголовка создаёт preview рамок и оборудования,
 resize и drag точки также создают draft; Save явно сохраняет, Cancel отменяет.
 Отдельная кнопка group move убрана; core/API group move сохранён. Controls используют
@@ -173,12 +169,10 @@ Location. Размер объекта определяется pinned compositio
 frontend collision/layout и backend используют полный footprint
 (обычный объект 212x144); свободное место выбирается детерминированно с учётом
 объектов/дочерних рамок, предки расширяются согласованно. Missing placements/positions
-не создаются назначением. При переносе одного объекта следуют free lead waypoints
-до первого route anchor; без anchor следует первый waypoint со стороны объекта.
+не создаются назначением.
 Canonical assignment задаётся только явной операцией, никогда координатами.
 Cable/Connection/endpoints не пересоздаются и не переподключаются.
-Position PUT возвращает полный authoritative SavedMapDocument: positions, frames
-и routes. Клиент применяет его только к исходным map/variant; ошибка восстанавливает
+Position PUT возвращает полный authoritative SavedMapDocument с positions и frames. Клиент применяет его только к исходным map/variant; ошибка восстанавливает
 подтверждённые позиции, без повторного write. Выход объекта за прежние bounds
 согласует рамки и соседние ветви атомарно, не меняя canonical assignment.
 Полный collapse показывает один компактный proxy с той же boundary identity,
@@ -194,7 +188,7 @@ Group move переносит одинаковым delta все имеющиес
 subtree в активном variant, включая скрытые. Сервер заново разрешает subtree,
 сверяет geometry evidence, locks и collision со внешними placements. Locked
 member или collision отклоняет всё; отсутствующие позиции не создаются.
-Positions и затронутые routes сохраняются атомарно, без automatic re-layout.
+Positions сохраняются атомарно, без automatic re-layout.
 
 ## C-UX-10 — TARGET виртуальной инфраструктуры
 
@@ -217,32 +211,10 @@ Preview и подтверждение предшествуют persistent изм
 Expand восстанавливает геометрию без перезаписи. Пустой Location получает видимую
 presentation область. Ничто из этого не создаёт topology evidence или exact L1 path.
 
-## Routes и boundary anchors
-
-CURRENT: MapCableRoute — presentation конкретного Cable в карте/variant. Internal route
-(оба конца внутри subtree) переносит свободные waypoints; external не меняется;
-boundary route переносит внутренний prefix до выхода, сохраняя внешний suffix.
-Route anchor следует самостоятельному Location frame; это не обязательная точка Location. Без сохранённой route линия строится от endpoints.
-
-Waypoint — {x,y} либо {x,y,anchor:{location_id,edge,offset}}; edge top/right/bottom/left,
-offset 0..1. x/y у anchor — snapshot/fallback, renderable frame определяет binding.
-Frame bounds сохраняются в Location presentation state. Anchor drag ограничен периметром; явный anchor
-приоритетен перед повторным split того же Location, другие Locations независимы.
-Повторный выход/re-entry одного Location пока отклоняется. Сохранение нормализует
-пересечения без дублирования anchors. Чтение обычной route не мутирует storage;
-нормализация при открытии только в draft. Group move материализует нужный anchor
-в общей транзакции. Save пишет draft, Cancel возвращает persisted geometry.
-
-Обычный selection не отменяет draft; выход из map/view отменяет без записи.
-Enter/ Escape действуют вне editable/control/dialog contexts. Compact waypoint
-имеет независимый увеличенный pointer target. Numeric length finite >0 меняет
-выбранный ordinary waypoint вдоль направления от неподвижного соседнего конца;
-не создаёт persistent constraints. Boundary anchor measurements read-only.
-Snapping разных routes не создаёт общей persisted зависимости или CableBundle.
+## Массовые операции
 
 Bulk pairing требует ordered preview и atomic canonical batch validation,
-независимую от SavedMap. Создаёт отдельные Cables/Connections; автоматически
-маршруты не создаёт. Location series имеет один contiguous # pattern, range/step,
+независимую от SavedMap. Создаёт отдельные Cables/Connections, которые отображаются через COMB-01. Location series имеет один contiguous # pattern, range/step,
 preview и проверку conflicts до all-or-nothing write; создаёт только Locations.
 
 ## Resolver, evidence и L1/L2/L3 boundaries
@@ -282,7 +254,8 @@ Persisted NetworkWorkspace/auth/sharing ещё не реализованы.
 Применённые Alembic revisions immutable: исправления только forward migration.
 Сохраняются canonical user/network data, stable identity и retained immutable
 snapshots; development-stage authoring/runtime compatibility не является целью.
-Workspace export v7 не означает автоматическую поддержку любых старых пакетов;
+Workspace JSON v8 исключает индивидуальные трассы из presentation. Импорт
+принимает пакеты v8;
 исторические snapshots читаются только в пределах явно реализованного контракта.
 Не добавлять old/new fallback, shadow models или translation shims ради obsolete
 API. Reset данных — явная destructive операция, не побочный эффект чтения.
@@ -424,7 +397,7 @@ Settings contain `hide_empty` and per-container direction plus an ordered mixed
 sequence of `Location:<id>` / `PhysicalObject:<id>`. `root` is a technical
 presentation container, never a canonical Location. Missing entries default to
 VERTICAL; unspecified/new children follow immutable-ID order. Copying a variant
-copies settings, collapse and routes independently.
+copies settings and collapse state independently.
 
 The frontend measures full rendered equipment footprints including nameplates,
 then composes frames bottom-up and places contents top-down with header/padding.
@@ -432,7 +405,7 @@ Manual x/y/frame sizes are not automatic position inputs. Empty subtree detectio
 uses current SavedMap placements; hiding removes its entire space. Full collapse
 uses a compact rectangle; partial-collapse visibility semantics remain unchanged.
 Boundary identity stays map/Location UUIDv5; edge/offset anchors resolve against
-current displayed frames. Routes remain variant-owned. Drag/resize/free movement
+current displayed frames. Drag/resize/free movement
 are disabled in automatic mode; server rejects explicit geometry/position writes.
 Canonical assignment and connectivity remain independent of presentation.
 
@@ -454,10 +427,8 @@ sequence gaps, 24 only between nested border headings, and 20 between
 horizontal siblings, retaining the existing container interval. Equipment starts
 12 units below the border; no separate header row is reserved. The technical
 root has no heading. Geometry does not depend on viewport zoom. Frames alone
-stretch; contents are not scaled or distributed into spare space. Boundary
-identity, edge/offset and stored route/free waypoint data remain inputs;
-anchors resolve against the resulting frames. No settings, server contract,
-migrations or manual geometry change.
+stretch; contents are not scaled or distributed into spare space. Location boundary points retain their identity and resolve their saved edge/offset
+against the resulting frames.
 
 
 Automatic Location boundary editing uses the variant-owned MapLocationState:
@@ -465,10 +436,9 @@ Automatic Location boundary editing uses the variant-owned MapLocationState:
 validates finite offset in [0,1], and returns authoritative SavedMap state.
 It locks hierarchy, then variant, then state; only the boundary placement is
 updated. An absent geometry is materialized from its existing effective bounds;
-manual_bounds, equipment positions and cable routes are never written.
+Manual bounds and equipment positions are retained.
 Automatic frames remain derived; the geometry endpoint still rejects automatic
-frame edits. Point preview has Save/Cancel and error rollback. Boundary identity
-and independent cable route anchors are preserved. Manual editing is unchanged.
+frame edits. Point preview has Save/Cancel and error rollback. The point retains its map-scoped identity.
 
 
 ## DOC-LOC-03 — TARGET структурной компоновки Location
@@ -520,18 +490,16 @@ Blueprint-backed PhysicalObject получает производный лока
 ConnectionPoint граф хранит ссылку на начало пути, а совпадающие участки
 представлены общими сегментами.
 
-При отображении Cable локальные пути дополняют межобъектную линию с
-существующими waypoints и разрешёнными boundary anchors. По умолчанию
-видны занятые сегменты. Переключатель карты добавляет свободные. Выделение
-и trace применяются по canonical Cable ID, включая его общие сегменты.
-Нажатие на сегмент с единственным Cable выбирает этот Cable.
-При прокладке существующие Cable сохраняют свои подводы. Preview использует тот же
-локальный граф для выбранных портов и соединяет выходы через точки черновика.
-Общие локальные сегменты рисуются один раз. При редактировании сохранённой трассы
-схема показывает прямые подводы к портам для согласованности со snapping.
+При отображении Cable локальные пути дополняют межобъектную линию между
+выходами объектных графов. По умолчанию видны занятые сегменты. Переключатель
+карты добавляет свободные. Общий локальный сегмент рисуется один раз.
+Выделение и trace применяются по canonical Cable ID. Клик по сегменту с одним
+Cable выбирает этот Cable.
 
-Новый Cable без указанных пользователем точек сразу использует производную
-геометрию COMB-01. При таком создании MapCableRoute и boundary anchors не записываются.
+Создание Cable на карте включает выбор двух портов, preview по тому же графу
+и подтверждение canonical create. ROUTE-UX-01 удалил ручное редактирование и
+persistence индивидуальной геометрии. После создания клиент обновляет карту
+и физическую проекцию. Повтор refresh перечитывает состояние.
 
 Геометрия вычисляется из активного представления. Uniform-grid резервирует
 вертикальный зазор при измерении ячеек без изменения размеров панелей.
@@ -581,9 +549,8 @@ share both maxima; nested tables measure independently.
 
 Hide-empty/full collapse preserve stored cells. Partial collapse filters existing
 visible_direct_elements without changing legacy semantics; a grid-specific
-selection editor remains OPEN. Boundary anchors reuse existing frame-relative
-edge/offset resolution. Grid changes never write placements, boundary identity,
-cable routes or free waypoints. Variant copies deep-copy JSON. Server save and
+selection editor remains OPEN. The Location boundary point uses frame-relative edge/offset. Grid changes retain
+placements and boundary identity. Variant copies deep-copy JSON. Server save and
 workspace validation reject duplicate/foreign children, invalid cells and cycles
 before writes. SLOC-03 interactive insertion is described below.
 
@@ -620,7 +587,7 @@ and exits. Even entry-only cleanup is persisted only by Done. Cancel discards
 all changes. Variant, layout/settings or scene changes discard the draft without
 saving; drafts cannot cross variants. API failure restores authoritative settings
 and displays an error. Server confirmation supplies the authoritative display.
-Boundary identity/edge/offset, canonical hierarchy/assignments, Cable and routes
+Boundary identity/edge/offset, canonical hierarchy/assignments and Cable
 are untouched. Manual acceptance remains OPEN;
 Direct PhysicalObject arrangement is covered by SLOC-05. Object-local cable geometry is covered by COMB-01.
 

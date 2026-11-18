@@ -119,7 +119,6 @@ def test_boundary_placement_is_narrow_persistent_and_variant_owned():
     new = next(s for s in after['location_states'] if s['location_ref']['entity_id'] == loc)
     assert new == {**old, "geometry": {**old['geometry'], "edge": "bottom", "offset": .25}}
     assert after['placements'] == before['placements']
-    assert after['cable_routes'] == before['cable_routes']
     assert client.get(f'/v1/maps/{map_id}').json()['location_states'] == after['location_states']
     copy = client.post(f'/v1/maps/{map_id}/presentation-variants', json={"name": "Boundary copy", "source_variant_id": variant}).json()
     copy_id = copy['variant_ref']['entity_id']
@@ -150,7 +149,7 @@ def test_uniform_grid_persistence_validation_copy_and_portability():
     for tables in [{parent: [[child, child]]}, {"root": [[child]]}, {parent: [[123]]}, {parent: ["bad"]}]:
         assert client.put(endpoint, json={**settings, "tables": tables}).status_code == 422
         after = client.get(f'/v1/maps/{map_id}').json()
-        for key in ('variants', 'placements', 'cable_routes'):
+        for key in ('variants', 'placements'):
             assert after[key] == before[key]
     copied = client.post(f'/v1/maps/{map_id}/presentation-variants', json={"name": "Grid copy", "source_variant_id": variant}).json()
     assert copied['automatic_layout'] == settings

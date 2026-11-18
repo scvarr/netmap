@@ -133,6 +133,27 @@ def test_blueprint_patch_panel_internal_pair_allows_one_external_attachment_per_
 
 
 
+def test_cable_between_blueprint_ports_is_projected_from_canonical_endpoints():
+    template, version = create_blueprint([slot("Port")], name="Two Blueprint ports")
+    objects = [instantiate(template, version, name) for name in ("Source", "Target")]
+    points = [obj["slots"][0]["connection_point_ref"]["entity_id"] for obj in objects]
+    created = connect(point_endpoint(points[0]), point_endpoint(points[1]))
+    assert created.status_code == 201, created.text
+    cable_id = created.json()["cable_ref"]["entity_id"]
+
+    projection = physical_projection()
+    assert {node["label"] for node in projection["nodes"]} == {"Source", "Target"}
+    assert all(node["attributes"]["blueprint_presentation"]["slots"] for node in projection["nodes"])
+    assert any(ref["entity_type"] == "Cable" and ref["entity_id"] == cable_id
+               for edge in projection["edges"] for ref in edge["source_refs"])
+
+    trace = client.post("/v1/traces/l1", json={
+        "from": {"point_id": points[0], "member_index": 1},
+        "to": {"point_id": points[1], "member_index": 1},
+    })
+    assert trace.status_code == 200 and trace.json()["verdict"] == "REACHABLE"
+
+
 def test_existing_connection_point_member_cannot_be_connected_again():
     _, first_interface = create_device("PC1", "eth0")
     _, second_interface = create_device("SW1", "eth1")

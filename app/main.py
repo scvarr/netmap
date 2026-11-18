@@ -122,7 +122,6 @@ from app.schemas import (
     NATEvaluationArtifact,
     NATEvaluationQuery,
     MoveMapPlacementRequest,
-    SetMapCableRouteRequest,
     GroupMoveLocationRequest,
     ReplaceMapTextAnnotationRequest,
     SetMapViewLockRequest,
@@ -256,18 +255,6 @@ def _saved_map_document(detail) -> dict[str, object]:
                 },
             }
             for placement in detail.placements
-        ],
-        "cable_routes": [
-            {
-                "cable_ref": {
-                    "ref_type": "CANONICAL_FACT",
-                    "entity_type": "Cable",
-                    "entity_id": route.cable_id,
-                },
-                "view": str(route.view_key),
-                "waypoints": route.waypoints,
-            }
-            for route in detail.cable_routes
         ],
         "text_annotations": [
             {
@@ -620,36 +607,8 @@ def move_map_location_group(map_id: uuid.UUID, variant_id: uuid.UUID, location_i
     with session.begin():
         SavedMapCatalog(session).move_location_group(
             map_id, variant_id, location_id, query.delta_x, query.delta_y,
-            query.frame.model_dump(), [item.model_dump() for item in query.footprints],
-            [item.model_dump() for item in query.boundary_routes],
+            [item.model_dump() for item in query.footprints],
         )
-
-
-@app.put("/v1/maps/{map_id}/cable-routes/{cable_id}", response_model=SavedMapDocument, responses={422: {"model": ErrorResponse}})
-def set_map_cable_route(
-    map_id: uuid.UUID,
-    cable_id: uuid.UUID,
-    query: SetMapCableRouteRequest,
-    variant_id: uuid.UUID | None = None, session: Session = Depends(get_session),
-) -> SavedMapDocument:
-    with session.begin():
-        catalog = SavedMapCatalog(session)
-        catalog.set_cable_route(
-            map_id,
-            cable_id,
-            [waypoint.model_dump(exclude_none=True, mode="json") for waypoint in query.waypoints], variant_id,
-        )
-        return _saved_map_document(catalog.detail(map_id, variant_id))
-
-
-@app.delete("/v1/maps/{map_id}/cable-routes/{cable_id}", status_code=204, responses={422: {"model": ErrorResponse}})
-def delete_map_cable_route(
-    map_id: uuid.UUID,
-    cable_id: uuid.UUID,
-    variant_id: uuid.UUID | None = None, session: Session = Depends(get_session),
-) -> None:
-    with session.begin():
-        SavedMapCatalog(session).delete_cable_route(map_id, cable_id, variant_id)
 
 
 @app.post("/v1/maps/{map_id}/text-annotations", response_model=MapTextAnnotationDocument, status_code=201, responses={422: {"model": ErrorResponse}})

@@ -9,7 +9,7 @@ NetMap — модель физической сети с canonical topology, L1 
 оборудования и установленных модулей, PortType справочник, дерево Locations,
 SavedMap с вариантами компоновки, collapse/group move, кабельные маршруты,
 массовое соединение портов и L1 trace с exact evidence. Настройки данных дают
-export/reset/import текущего implicit workspace в Workspace JSON v7.
+export/reset/import текущего implicit workspace в Workspace JSON v8.
 
 ## Запуск
 

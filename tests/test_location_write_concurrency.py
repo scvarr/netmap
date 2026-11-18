@@ -13,7 +13,7 @@ from app.location_frame_geometry import contains
 from app.location_catalog import LocationCatalog
 from app.models import Cable, Connection, ConnectionPoint, MapViewKey, PhysicalObject
 from app.saved_map_catalog import SavedMapCatalog
-from tests.l1_builders import create_map, create_object_with_point, create_endpoint_cable, put_cable_route
+from tests.l1_builders import create_map, create_object_with_point, create_endpoint_cable
 from tests.test_location_container_e2e import position, state
 from tests.test_map_location_states_e2e import client, location, assign, detail
 
@@ -28,8 +28,7 @@ def setup_layout(locked=False):
         assert client.post(f'/v1/maps/{map_id}/placements', json={'physical_object_id': obj, 'x': 0, 'y': 0}).status_code == 201
     doc, frames = state(map_id)
     variant = doc['active_variant_ref']['entity_id']
-    cable = create_endpoint_cable(client, *points)['cable_ref']['entity_id']
-    put_cable_route(client, map_id, cable, [{'x': position(doc, obj)['x']+30, 'y': position(doc, obj)['y']+30} for obj in objects])
+    create_endpoint_cable(client, *points)
     if locked:
         assert client.put(f'/v1/maps/{map_id}/placements/{objects[0]}/locks/physical', json={'locked': True}).status_code == 200
     return map_id, variant, root, leaf, objects, frames
@@ -37,7 +36,7 @@ def setup_layout(locked=False):
 
 def snapshot(map_id, variant):
     doc = detail(map_id, variant)
-    return {key: doc[key] for key in ('placements', 'location_states', 'cable_routes')}
+    return {key: doc[key] for key in ('placements', 'location_states')}
 
 
 def wait_on_lock(waiter_pid, holder_pid, table):

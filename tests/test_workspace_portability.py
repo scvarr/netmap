@@ -12,7 +12,7 @@ from app.database import SessionLocal
 from app.main import app
 from app.workspace_portability import reset_dataset
 from tests.conftest import require_confirmed_test_database
-from tests.l1_builders import create_endpoint_cable, put_cable_route
+from tests.l1_builders import create_endpoint_cable
 
 
 client = TestClient(app, raise_server_exceptions=False)
@@ -46,7 +46,7 @@ def create_graph():
         objects.append(create_object_details(client, name))
     point_ids = [item['connection_points'][0]['connection_point_ref']['entity_id'] for item in objects]
     object_ids = [item['physical_object']['source_ref']['entity_id'] for item in objects]
-    cable = create_endpoint_cable(client, point_ids[0], point_ids[1])
+    create_endpoint_cable(client, point_ids[0], point_ids[1])
     blueprint = client.post('/v1/library/base-templates', json={
         'name': 'Test blueprint', 'body': {'kind': 'RECTANGLE', 'width': 100, 'height': 40},
         'panels': [{'panel_key': 'panel-1', 'panel_number': 1, 'display_name': 'Панель 1', 'x': 0, 'y': 0, 'width': 100, 'height': 40}],
@@ -70,7 +70,6 @@ def create_graph():
         })
         assert response.status_code == 201, response.text
     assert client.put(f'/v1/maps/{map_id}/placements/{object_ids[0]}/locks/physical', json={'locked': True}).status_code == 200
-    put_cable_route(client, map_id, cable['cable_ref']['entity_id'], [{'x': 120, 'y': 80}])
     annotation = client.post(f'/v1/maps/{map_id}/text-annotations', json={
         'text': 'Rack note', 'position': {'x': 15, 'y': 25}, 'text_color': '#123456', 'font_size': 18,
     })
@@ -85,7 +84,7 @@ def create_graph():
 def test_empty_export_and_roundtrip():
     empty = snapshot()
     assert empty['format'] == 'netmap-workspace'
-    assert empty['format_version'] == 7
+    assert empty['format_version'] == 8
     assert all(not rows for section in ('canonical', 'authoring', 'presentation') for rows in empty[section].values())
     assert empty['settings']['CableLabelSettings'] == [{'id': 1, 'unique_labels': False}]
     assert client.post('/v1/workspace/package', json=empty).status_code == 204
@@ -111,7 +110,8 @@ def test_graph_export_reset_import_restores_all_persisted_state():
     assert before['authoring']['PresentationPanel'][0]['panel_key'] == 'panel-1'
     assert 'PortBlockVersion' not in before['authoring']
     assert len(before['presentation']['MapPlacement']) == 2
-    assert before['presentation']['MapCableRoute'][0]['waypoints'] == [{'x': 120, 'y': 80}]
+    assert 'MapCableRoute' not in before['presentation']
+    assert len(before['canonical']['Cable']) == 1
     assert before['presentation']['MapTextAnnotation'][0]['text'] == 'Rack note'
     assert before['settings']['CableLabelTemplate'][0]['name'] == 'Cable IDs'
     assert any(position['locked'] is True for position in before['presentation']['MapViewPosition'])
@@ -135,8 +135,11 @@ def test_nonempty_import_and_bad_packages_do_not_mutate():
     assert client.post('/v1/workspace/package', json=unsupported).status_code == 422
     unsupported['format_version'] = 1
     assert client.post('/v1/workspace/package', json=unsupported).status_code == 422
-    unsupported['format_version'] = 2
+    unsupported['format_version'] = 7
     assert client.post('/v1/workspace/package', json=unsupported).status_code == 422
+    obsolete = copy.deepcopy(before)
+    obsolete['presentation']['MapCableRoute'] = []
+    assert client.post('/v1/workspace/package', json=obsolete).status_code == 422
     incomplete = copy.deepcopy(before)
     del incomplete['canonical']['Cable']
     assert client.post('/v1/workspace/package', json=incomplete).status_code == 422

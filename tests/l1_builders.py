@@ -53,15 +53,6 @@ def create_map(client: TestClient, name: str) -> str:
     return response.json()["map_ref"]["entity_id"]
 
 
-def put_cable_route(client: TestClient, map_id: str, cable_id: str, waypoints: list[dict]) -> dict:
-    response = client.put(
-        f"/v1/maps/{map_id}/cable-routes/{cable_id}",
-        json={"view": "physical", "waypoints": waypoints},
-    )
-    assert response.status_code == 200, response.text
-    return response.json()
-
-
 def create_object_details(client, name, point_name="p1", class_=None):
     # Low-level canonical fixtures remain allowed; product creation is tested separately.
     with SessionLocal.begin() as session:
