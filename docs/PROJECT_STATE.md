@@ -60,7 +60,9 @@
 - ROUTE-UX-01 удалил ручные трассы. COMB-01 и CABLE-SELECT-01 — IMPLEMENTED /
   MERGED. Объектные пути, preview и геометрия Cable вычисляются по текущей
   компоновке. LOC-CHAN-01 реализует локальные деревья виртуальных каналов
-  Location и технического корня на milestone-ветке. LOC-ROUTE-01 остаётся OPEN.
+  Location и технического корня. LOC-ROUTE-01 — IMPLEMENTED на milestone-ветке.
+  Preview и созданный Cable используют одни сегменты, а collapse ограничивает
+  путь видимой граничной точкой. C-UX-10 остаётся OPEN, DOC-LOC-03 — PARTIAL.
 - Массовые операции: ordered port pairing с обязательным preview и одной
   canonical transaction; шаблоны Cable labels; массовое именование и spatial
   order endpoints, выравнивание/распределение в редакторах.

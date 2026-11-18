@@ -51,7 +51,7 @@ import { blueprintRenderedNodeDimensions } from "../topology/blueprintDisplaySiz
 import { nodeFootprint, type FlowRectangle } from "../topology/nodeFootprint";
 import { layoutLocationFrames, editLocationFrames, locationBoundaryPoint } from '../topology/locationFrameGeometry';
 import { LocationFrameEditor } from "./LocationFrameEditor";
-import { LocationChannelLayer, type LocationChannelInput } from './LocationChannelLayer';
+import type { LocationChannelInput } from '../topology/hierarchicalCableRoutes';
 import { deriveLocationPresentation, projectCollapsedEdges } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
 import type { MapLocationState, MapPlacement } from "../topology/savedMapTypes";
@@ -71,6 +71,7 @@ interface TopologyCanvasProps {
   directlyAttachedCableIds?: ReadonlySet<string>;
   sceneKey?: string;
   showAllVirtualChannels?: boolean;
+  requireLocationChannels?: boolean;
   /** Request one fit after a fresh layout has been applied. */
   viewportFitRevision?: number;
   /** A one-shot presentation request to reveal a physical object. */
@@ -133,6 +134,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   directlyAttachedCableIds,
   sceneKey,
   showAllVirtualChannels,
+  requireLocationChannels,
   viewportFitRevision = 0,
   focusPhysicalObjectId,
   positionOverrides,
@@ -696,7 +698,6 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
           size={1.4}
           color="#25383c"
         />
-        {showLocationPresentation && <LocationChannelLayer inputs={[...locationChannels.values()]} visible={Boolean(showAllVirtualChannels && !annotationMode)} zoom={frameUiZoom} />}
         {(renderableFrames.length > 0 || locationPresentation.proxies.length > 0) && <ViewportPortal>
           <div className={"location-frame-layer" + (arrangement.preview ? " location-frame-layer--arranging" : "")} aria-hidden={!locationFrameInput?.onCollapse && !locationFrameInput?.onConfigure ? true : undefined}>
             {renderableFrames.map((frame) => {
@@ -739,7 +740,9 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
           ariaLabel={t("canvas.minimap")}
         />
         <Controls showInteractive={false} position="bottom-left" />
-        {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels} showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
+        {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels}
+          locationInputs={showLocationPresentation || (physicalObjectView && requireLocationChannels) ? [...locationChannels.values()] : undefined} zoom={frameUiZoom}
+          showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
       </ReactFlow>
     </div>
   );

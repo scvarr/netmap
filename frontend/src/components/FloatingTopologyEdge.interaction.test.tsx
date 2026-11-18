@@ -1,6 +1,8 @@
 import { fireEvent, render, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ForegroundCableRoutes } from './FloatingTopologyEdge';
+import { blueprintRenderedNodeDimensions } from '../topology/blueprintDisplaySize';
+import type { BlueprintPresentation } from '../topology/types';
 
 const cableRef = (id: string) => ({ ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: id });
 const markerPoints = ['eligible', 'source', 'destination', 'unavailable'].map((id) => ({ connection_point_id: id, display_name: id, cardinality: 1, external_connection_count: 0 }));
@@ -26,7 +28,7 @@ const blueprintNode = (id: string, x: number, physicalObjectId: string, slot: { 
     kind: 'PHYSICAL_OBJECT',
     label: id,
     source_refs: [{ ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: physicalObjectId }],
-    attributes: { blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: `${id}-bp` }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: `${id}-v` }, body: { kind: 'RECTANGLE', width: 100, height: 100 }, panels: [{ panel_key: 'panel', panel_number: 1, display_name: 'Panel', x: 0, y: 0, width: 100, height: 100 }], slots: [{ slot_key: slot.connectionPointId, display_name: slot.connectionPointId, kind: slot.kind, connection_point_id: slot.connectionPointId, panel_key: 'panel', panel_local_position: { x: slot.renderedX, y: .5 }, rendered_position: { x: slot.renderedX, y: .5 }, external_attachment: { x: slot.attachmentX, y: .5, side: slot.side } }] } },
+    attributes: { blueprint_presentation: { blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: `${id}-bp` }, version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: `${id}-v` }, body: { kind: 'RECTANGLE', width: 100, height: 100 }, panels: [{ panel_key: 'panel', panel_number: 1, display_name: 'Panel', x: 0, y: 0, width: 100, height: 100 }], slots: [{ slot_key: slot.connectionPointId, display_name: slot.connectionPointId, kind: slot.kind, connection_point_id: slot.connectionPointId, panel_key: 'panel', panel_local_position: { x: slot.renderedX, y: .5 }, rendered_position: { x: slot.renderedX, y: .5 }, external_attachment: { x: slot.attachmentX, y: .5, side: slot.side } }] } satisfies BlueprintPresentation },
   } },
 });
 
@@ -36,7 +38,53 @@ const withNodes = (nodes: Record<string, any>, run: () => void) => {
   try { run(); } finally { activeNodes = previous; }
 };
 
-describe('direct cable route edge interaction', () => {
+describe('cable route edge interaction', () => {
+  it('shares Location segments between preview and canonical Cables and suppresses a failed route in full', () => {
+    const entry = (id: string, x: number) => blueprintNode(id, x, id, {
+      connectionPointId: id + '-1', kind: 'CONNECTION_POINT', renderedX: .15, attachmentX: 0, side: 'LEFT',
+    });
+    const left = entry('left', 0), right = entry('right', 420);
+    for (const node of [left, right]) {
+      const slots = node.data.projection.attributes.blueprint_presentation.slots;
+      slots.push({ ...slots[0], connection_point_id: node.data.projection.id + '-2',
+        rendered_position: { x: .7, y: .75 }, panel_local_position: { x: .7, y: .75 } });
+    }
+    const edge = (id: string, port: number) => ({
+      id, source: 'left', target: 'right',
+      data: { cableNode: { id, label: id, source_refs: [cableRef(id)] },
+        endpointPair: { from_connection_point_id: 'left-' + port, to_connection_point_id: 'right-' + port } },
+    }) as any;
+    const dimensions = blueprintRenderedNodeDimensions(left.data.projection.attributes.blueprint_presentation, 32, 100);
+    const member = (id: string, x: number) => ({
+      id: 'PhysicalObject:' + id, kind: 'blueprint-object' as const, edge: 'right' as const,
+      bounds: { x, y: 0, ...dimensions }, point: { x: x + dimensions.width, y: dimensions.height / 2 },
+    });
+    const members = [member('left', 0), member('right', 420)];
+    const input = { locationId: null, boundary: null, members };
+    const wiring = { source: { physicalObjectId: 'left', connectionPointId: 'left-2' },
+      target: { physicalObjectId: 'right', connectionPointId: 'right-2' } };
+
+    withNodes({ left, right }, () => {
+      const a = edge('canonical-a', 1), b = edge('canonical-b', 2);
+      const view = render(<ForegroundCableRoutes edges={[a]} virtualChannels locationInputs={[input]} wiringRoute={wiring} />);
+      const keys = (selector: string) => [...view.container.querySelectorAll<SVGPathElement>(selector)]
+        .map(path => path.dataset.routeSegment).sort();
+      const preview = keys('path[data-preview]');
+      expect(preview.length).toBeGreaterThan(2);
+      view.rerender(<ForegroundCableRoutes edges={[a]} virtualChannels locationInputs={[input]} bulkPairs={[wiring]} />);
+      expect(keys('path[data-testid="bulk-pair-preview"]')).toEqual(preview);
+      view.rerender(<ForegroundCableRoutes edges={[a, b]} virtualChannels locationInputs={[input]} showAllVirtualChannels />);
+      expect(keys('path[data-cable-ids*="canonical-b"]')).toEqual(preview);
+      const shared = keys('path[data-cable-ids*="canonical-a"][data-cable-ids*="canonical-b"]');
+      expect(shared.some(key => key?.startsWith('["location",'))).toBe(true);
+      expect(new Set(shared).size).toBe(shared.length);
+      const blocked = { ...input, members: [...members, member('blocker', dimensions.width - 5)] };
+      view.rerender(<ForegroundCableRoutes edges={[a]} virtualChannels locationInputs={[blocked]} />);
+      expect(view.container.querySelector('path[data-cable-ids*="canonical-a"]')).toBeNull();
+      expect(view.container.querySelector('.map-cable-route-diagnostics')).toHaveTextContent('blocked-access');
+    });
+  });
+
   it('uses shared geometry for hover, selection, trace, and cable choice', () => {
     const fixture = (id: string, x: number) => blueprintNode(id, x, id, {
       connectionPointId: id + '-a', kind: 'CONNECTION_POINT', renderedX: .1, attachmentX: 0, side: 'LEFT',
@@ -277,7 +325,7 @@ describe('direct cable route edge interaction', () => {
     const wiring = { source: { physicalObjectId: 'source-object', connectionPointId: 'source-port' } };
     const order = (root: HTMLElement) => [...root.querySelectorAll('[data-testid^="foreground-cable-"]')].map((node) => node.getAttribute('data-testid'));
     const view = render(<ForegroundCableRoutes edges={[selected, traced, normal, attached] as any} wiringRoute={wiring} />);
-    expect(order(view.container)).toEqual(['foreground-cable-normal', 'foreground-cable-traced', 'foreground-cable-attached', 'foreground-cable-selected']);
+    expect(order(view.container)).toEqual(['foreground-cable-normal', 'foreground-cable-attached', 'foreground-cable-traced', 'foreground-cable-selected']);
     view.rerender(<ForegroundCableRoutes edges={[make('selected', 'normal'), traced, make('normal', 'selected', true), attached] as any} wiringRoute={wiring} />);
     expect(order(view.container).at(-1)).toBe('foreground-cable-normal');
   });

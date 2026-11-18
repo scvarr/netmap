@@ -10,7 +10,7 @@ import {
   type InternalNode,
   type XYPosition,
 } from '@xyflow/react';
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
 import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
@@ -20,7 +20,9 @@ import {
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import { BLUEPRINT_PORT_HIT_SIZE, BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, blueprintNodeDisplayDimensions } from '../topology/blueprintDisplaySize';
 import { cableIdForNode, physicalObjectIdForNode } from '../topology/projection';
-import { objectVirtualChannels, type VirtualChannelSegment } from '../topology/objectVirtualChannels';
+import { objectVirtualChannels, type ObjectVirtualChannels, type VirtualChannelSegment } from '../topology/objectVirtualChannels';
+import { buildHierarchicalCableChannels, hierarchicalLocationPath, type LocationChannelInput } from '../topology/hierarchicalCableRoutes';
+import { LocationChannelLayer, locationSegmentKey } from './LocationChannelLayer';
 import { useI18n } from '../i18n';
 import { displayNodeLabelForLocale } from '../topology/presentation';
 import { CableRouteInteraction, cableHitClip, type CablePortBounds, type CableTarget } from './CableRouteInteraction';
@@ -214,11 +216,38 @@ const cableEmphasis = (edge?: LogicalFlowEdge) => edge
 interface RouteSegment extends CableTarget {
   cables: Map<string, LogicalFlowEdge>;
   preview?: boolean;
+  bulk?: boolean;
 }
 
-export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualChannels, physicalPortStates, bulkPortNumbers, bulkPairs, wiringRoute, traceActive, onCableSelect, onCableContextMenu }: {
+// Generic ports already sit on the right edge. Share their on-edge leads to
+// the Location terminal without changing the displayed endpoint positions.
+function genericChannelPaths(node: DeviceFlowNode): ObjectVirtualChannels {
+  const box = flowRectangle(node);
+  const exit = { x: box.width, y: box.height / 2 };
+  const ports = genericConnectionPoints(node.data.projection);
+  const segments: VirtualChannelSegment[] = [];
+  const paths = new Map<string, VirtualChannelSegment>();
+  for (const upper of [true, false]) {
+    let to = exit;
+    let next: VirtualChannelSegment | null = null;
+    const indices = ports.map((_, index) => index).filter(index => (genericEndpointOffset(index, ports.length) < .5) === upper);
+    if (upper) indices.reverse();
+    for (const index of indices) {
+      const from = { x: exit.x, y: box.height * genericEndpointOffset(index, ports.length) };
+      next = { from, to, next };
+      segments.push(next);
+      paths.set(ports[index].connection_point_id, next);
+      to = from;
+    }
+  }
+  return { exit, paths, segments };
+}
+
+export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, zoom = 1, showAllVirtualChannels, physicalPortStates, bulkPortNumbers, bulkPairs, wiringRoute, traceActive, onCableSelect, onCableContextMenu }: {
   edges: readonly LogicalFlowEdge[];
   virtualChannels?: boolean;
+  locationInputs?: readonly LocationChannelInput[];
+  zoom?: number;
   showAllVirtualChannels?: boolean;
   physicalPortStates?: Record<string, ForegroundPortState>;
   bulkPortNumbers?: Record<string, number>;
@@ -229,10 +258,13 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
   onCableContextMenu?: (event: MouseEvent<SVGElement>, edge: LogicalFlowEdge) => void;
 }) {
   const nodes = useNodes<DeviceFlowNode>();
-  const { locale } = useI18n();
+  const { locale, t } = useI18n();
   const [hoveredCable, setHoveredCable] = useState<string | null>(null);
   const interactive = !physicalPortStates && !bulkPortNumbers && !bulkPairs && !wiringRoute && Boolean(onCableSelect || onCableContextMenu);
   const nodeById = useMemo(() => new Map(nodes.map(node => [node.id, node])), [nodes]);
+  const locationSnapshot = locationInputs && JSON.stringify(locationInputs);
+  const locationChannels = useMemo(() => locationSnapshot === undefined ? undefined
+    : buildHierarchicalCableChannels(JSON.parse(locationSnapshot) as LocationChannelInput[]), [locationSnapshot]);
   const ports = useMemo(() => interactive ? nodes.flatMap(node => {
     const projection = node.data.projection;
     if (!projection || projection.kind !== 'PHYSICAL_OBJECT') return [];
@@ -258,8 +290,9 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
   }>(), []);
   const channelObjects = useMemo(() => new Map(virtualChannels ? nodes.flatMap(node => {
     const presentation = node.data.projection?.attributes.blueprint_presentation;
-    if (!presentation) return [];
-    const width = node.width ?? node.measured?.width ?? 0;
+    if (!presentation) return locationChannels && node.data.projection?.kind === 'PHYSICAL_OBJECT'
+      ? [[node.id, { position: node.position, graph: genericChannelPaths(node) }] as const] : [];
+    const width = node.measured?.width ?? node.width ?? 0;
     const compositionWidth = node.data.compositionDisplayWidth;
     let entry = graphCache.get(presentation);
     if (!entry || entry.width !== width || entry.compositionWidth !== compositionWidth) {
@@ -267,30 +300,97 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
       graphCache.set(presentation, entry);
     }
     return [[node.id, { position: node.position, graph: entry.graph }] as const];
-  }) : []), [nodes, virtualChannels, graphCache]);
-  const { channels, connectors, bulkLines, wiringSource, wiringTarget } = useMemo(() => {
+  }) : []), [nodes, virtualChannels, graphCache, locationChannels]);
+  const { channels, connectors, locationSegments, occupiedOutlets, failures, bulkLines, wiringSource, wiringTarget } = useMemo(() => {
 
     const priority = virtualChannels ? virtualCablePriority : cablePriority;
     const ordered = edges.flatMap((edge) => {
       const cableId = edge.data?.cableNode && cableIdForNode(edge.data.cableNode);
       return cableId ? [{ edge, cableId }] : [];
     }).sort((a, b) => priority(a.edge) - priority(b.edge));
-    type ChannelUsage = { cables: Map<string, LogicalFlowEdge>; preview?: boolean };
+    type ChannelUsage = { cables: Map<string, LogicalFlowEdge>; preview?: boolean; bulk?: boolean };
     const channelUsers = new Map<string, Map<VirtualChannelSegment, ChannelUsage>>();
+    const registerObject = (nodeId: string, segment: VirtualChannelSegment, register: (usage: ChannelUsage) => void) => {
+      let usage = channelUsers.get(nodeId);
+      if (!usage) channelUsers.set(nodeId, usage = new Map());
+      let users = usage.get(segment);
+      if (!users) usage.set(segment, users = { cables: new Map() });
+      register(users);
+    };
     const allocate = (nodeId: string, pointId: string, register: (usage: ChannelUsage) => void): FloatingEndpoint | undefined => {
       const object = channelObjects.get(nodeId);
       const first = object?.graph.paths.get(pointId);
       if (!object || !first) return undefined;
-      let usage = channelUsers.get(nodeId);
-      if (!usage) channelUsers.set(nodeId, usage = new Map());
       for (let segment: VirtualChannelSegment | null = first; segment; segment = segment.next) {
-        let users = usage.get(segment);
-        if (!users) usage.set(segment, users = { cables: new Map() });
-        register(users);
+        registerObject(nodeId, segment, register);
       }
       return { x: object.position.x + object.graph.exit.x, y: object.position.y + object.graph.exit.y, side: Position.Right };
     };
-    const channelExits = new Map(virtualChannels ? ordered.flatMap(({ edge, cableId }) => {
+    const locationSegments = new Map<string, RouteSegment>();
+    const occupiedOutlets = new Map<string, XYPosition>();
+    const failures: { id: string; reason: string }[] = [];
+    const objectNodes = new Map(nodes.flatMap(node => {
+      const id = node.data.projection && physicalObjectIdForNode(node.data.projection);
+      return id ? [[id, node] as const] : [];
+    }));
+    const route = (source: DeviceFlowNode | undefined, a: string | undefined, target: DeviceFlowNode | undefined,
+      b: string | undefined, register: (usage: ChannelUsage) => void, id: string) => {
+      if (!locationChannels) return;
+      const anchor = (node: DeviceFlowNode) => {
+        const proxy = node.data.locationProxy;
+        if (proxy) {
+          const terminalId = 'Boundary:' + (proxy.boundaryPointId ?? proxy.locationId);
+          return proxy.partial ? { locationId: proxy.locationId, terminalId } : locationChannels.terminals.get(terminalId);
+        }
+        return locationChannels.terminals.get('PhysicalObject:' + physicalObjectIdForNode(node.data.projection));
+      };
+      const from = source && anchor(source), to = target && anchor(target);
+      const first = source && a ? channelObjects.get(source.id)?.graph.paths.get(a) : undefined;
+      const last = target && b ? channelObjects.get(target.id)?.graph.paths.get(b) : undefined;
+      if (!source || !target || (!first && !source.data.locationProxy) || (!last && !target.data.locationProxy) || !from || !to) {
+        failures.push({ id, reason: 'missing-terminal' });
+        return;
+      }
+      const path = hierarchicalLocationPath(locationChannels, from, to);
+      if (!path.segments) {
+        const leg = path.failure;
+        const diagnostics = locationChannels.locations.get(leg.locationId)?.graph.diagnostics ?? [];
+        failures.push({ id, reason: JSON.stringify({ ...leg, diagnostics }) });
+        return;
+      }
+      const localPath = (segment: VirtualChannelSegment | undefined) => {
+        const result: VirtualChannelSegment[] = [];
+        for (let current = segment ?? null; current; current = current.next) result.push(current);
+        return result;
+      };
+      const start = localPath(first), end = localPath(last);
+      if (source.id === target.id) {
+        while (start.length && end.length && start.at(-1) === end.at(-1)) {
+          start.pop();
+          end.pop();
+        }
+      }
+      for (const segment of start) registerObject(source.id, segment, register);
+      for (const ref of path.segments) {
+        const key = locationSegmentKey(ref.locationId, ref.segment);
+        let segment = locationSegments.get(key);
+        if (!segment) {
+          const graph = locationChannels.locations.get(ref.locationId)!.graph;
+          const { from, to } = graph.segments[ref.segment];
+          locationSegments.set(key, segment = { key, from: graph.nodes[from], to: graph.nodes[to], cables: new Map() });
+        }
+        register(segment);
+      }
+      for (const segment of end.reverse()) registerObject(target.id, segment, register);
+      if (source.id !== target.id) {
+        for (const [node, terminal] of [[source, from], [target, to]] as const) {
+          const graph = locationChannels.locations.get(terminal.locationId)!.graph;
+          if (node.data.locationProxy) continue;
+          occupiedOutlets.set(terminal.terminalId, graph.nodes[graph.terminals.get(terminal.terminalId)!]);
+        }
+      }
+    };
+    const channelExits = new Map(virtualChannels && !locationChannels ? ordered.flatMap(({ edge, cableId }) => {
       const pair = edge.data?.endpointPair;
       if (!pair) return [];
       const register = (usage: ChannelUsage) => usage.cables.set(cableId, edge);
@@ -300,7 +400,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
       }] as const];
     }) : []);
     const previewEndpoint = ({ physicalObjectId, connectionPointId }: WiringPort) => {
-      const node = nodes.find(node => node.data.projection && physicalObjectIdForNode(node.data.projection) === physicalObjectId);
+      const node = objectNodes.get(physicalObjectId);
       if (!node) return undefined;
       return allocate(node.id, connectionPointId, usage => { usage.preview = true; })
         ?? getRenderedConnectionPoint(node.data.projection, {
@@ -309,19 +409,34 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
           height: node.measured?.height ?? node.height ?? LAYOUT_NODE_HEIGHT,
         }, connectionPointId);
     };
-    const wiringSource = wiringRoute && previewEndpoint(wiringRoute.source);
+    const previewPair = (source: WiringPort, target: WiringPort, bulk: boolean) => route(
+      objectNodes.get(source.physicalObjectId), source.connectionPointId,
+      objectNodes.get(target.physicalObjectId), target.connectionPointId,
+      usage => { if (bulk) usage.bulk = true; else usage.preview = true; }, t('map.cableRoute.preview'),
+    );
+    if (locationChannels && wiringRoute?.target) previewPair(wiringRoute.source, wiringRoute.target, false);
+    const wiringSource = wiringRoute && (!locationChannels || !wiringRoute.target) && previewEndpoint(wiringRoute.source);
     const wiringTarget = wiringSource && wiringRoute?.target && previewEndpoint(wiringRoute.target);
     const bulkLines = bulkPairs?.flatMap((pair, index) => {
+      if (locationChannels) {
+        previewPair(pair.source, pair.target, true);
+        return [];
+      }
       const a = previewEndpoint(pair.source), b = previewEndpoint(pair.target);
       return a && b ? [<line key={index} data-testid="bulk-pair-preview" x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#ffca66" strokeWidth={2} strokeDasharray="7 5" opacity={0.9} pointerEvents="none" />] : [];
     });
     const connectors = new Map<string, RouteSegment>();
     for (const { edge, cableId } of ordered) {
       const source = nodeById.get(edge.source), target = nodeById.get(edge.target);
+      const pair = edge.data?.endpointPair;
+      if (locationChannels) {
+        route(source, pair?.from_connection_point_id, target, pair?.to_connection_point_id,
+          usage => usage.cables.set(cableId, edge), cableId);
+        continue;
+      }
       if (!source || !target) continue;
       const sourceBox = flowRectangle(source), targetBox = flowRectangle(target);
       const floating = getFloatingEndpoints(sourceBox, targetBox);
-      const pair = edge.data?.endpointPair;
       const exits = channelExits.get(edge.id);
       const exact = (node: DeviceFlowNode, box: NodeRectangle, pointId?: string) => node.data.locationProxy
         ? null : getRenderedConnectionPoint(node.data.projection, box, pointId);
@@ -346,16 +461,18 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
       const leadWidths = new Map(leadColumns.map((x, i) => [x, Math.min(
         x - (leadColumns[i - 1] ?? -Infinity), (leadColumns[i + 1] ?? Infinity) - x,
       )]));
+      const indices = new Map(graph.segments.map((segment, index) => [segment, index]));
       return segments.map(segment => ({
-        key: JSON.stringify([nodeId, segment.from.x, segment.from.y]),
+        key: JSON.stringify([nodeId, indices.get(segment)]),
         from: translate(segment.from), to: translate(segment.to),
         maxHitWidth: segment.from.x === segment.to.x ? leadWidths.get(segment.from.x) : undefined,
         cables: usage?.get(segment)?.cables ?? new Map<string, LogicalFlowEdge>(),
         preview: usage?.get(segment)?.preview,
+        bulk: usage?.get(segment)?.bulk,
       }));
     });
-    return { channels, connectors, bulkLines, wiringSource, wiringTarget };
-  }, [edges, virtualChannels, showAllVirtualChannels, channelObjects, wiringRoute, bulkPairs, nodes, nodeById]);
+    return { channels, connectors, locationSegments, occupiedOutlets, failures, bulkLines, wiringSource, wiringTarget };
+  }, [edges, virtualChannels, showAllVirtualChannels, channelObjects, wiringRoute, bulkPairs, nodes, nodeById, locationChannels, t]);
 
   const priority = virtualChannels ? virtualCablePriority : cablePriority;
   const emphasisFor = (segment: RouteSegment) => {
@@ -365,24 +482,41 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
     }
     return edge;
   };
-  const connectorSegments = [...connectors.values()].sort((a, b) => priority(emphasisFor(a)!) - priority(emphasisFor(b)!));
+  const connectorSegments = [...connectors.values()];
+  const hovered = (segment: RouteSegment) => interactive && !traceActive && hoveredCable !== null && segment.cables.has(hoveredCable);
   const visiblePath = (segment: RouteSegment, channel: boolean) => {
     const edge = emphasisFor(segment);
     const emphasis = cableEmphasis(edge);
     const preview = segment.preview && (!edge || priority(edge) === 0);
-    const hovered = interactive && !traceActive && hoveredCable !== null && segment.cables.has(hoveredCable)
-      && emphasis !== 'selected' && emphasis !== 'traced';
-    const style = preview ? { stroke: '#8d7aff', strokeWidth: 3 } : edge?.style;
+    const bulk = segment.bulk && !edge && !preview;
+    const hover = hovered(segment) && emphasis !== 'selected' && emphasis !== 'traced';
     return <path key={segment.key} d={`M ${segment.from.x} ${segment.from.y} L ${segment.to.x} ${segment.to.y}`} fill="none"
-      className={`${channel ? 'object-virtual-channel' : 'cable-route-foreground'} ${preview ? 'wiring-route-preview' : `cable-route-foreground--${emphasis}`}${hovered ? ' cable-route-foreground--hovered' : ''}`}
-      style={hovered ? undefined : style} pointerEvents="none" />;
+      className={`${channel ? 'object-virtual-channel' : 'cable-route-foreground'} ${preview ? 'wiring-route-preview' : bulk ? 'wiring-bulk-preview' : `cable-route-foreground--${emphasis}`}${hover ? ' cable-route-foreground--hovered' : ''}`}
+      data-route-segment={segment.key} data-cable-ids={JSON.stringify([...segment.cables.keys()].sort())}
+      data-preview={segment.preview || undefined} data-testid={segment.bulk ? 'bulk-pair-preview' : undefined}
+      pointerEvents="none" />;
   };
 
   // Local leads win hit testing where their endpoints meet the wider shared routes.
-  const targets = useMemo(() => interactive ? [...connectors.values(), ...channels].filter(segment =>
+  const targets = useMemo(() => interactive ? [...connectors.values(), ...locationSegments.values(), ...channels].filter(segment =>
     segment.cables.size && (segment.from.x !== segment.to.x || segment.from.y !== segment.to.y))
-    .sort((a, b) => b.cables.size - a.cables.size) : [], [interactive, connectors, channels]);
-  const clip = useMemo(() => targets.length ? cableHitClip(targets, ports) : '', [targets, ports]);
+    .sort((a, b) => b.cables.size - a.cables.size) : [], [interactive, connectors, locationSegments, channels]);
+  const boundaries = useMemo(() => {
+    const points = new Map<string, XYPosition>();
+    for (const { input, graph } of locationChannels?.locations.values() ?? []) {
+      const ids = input.members.filter(member => member.kind === 'location').map(member => member.id);
+      if (input.boundary) ids.push(input.boundary.id);
+      for (const id of ids) points.set(id, graph.nodes[graph.terminals.get(id)!]);
+    }
+    return [...points];
+  }, [locationChannels]);
+  const boundaryScale = Math.min(1, 1 / zoom);
+  const clip = useMemo(() => targets.length ? cableHitClip(targets, [
+    ...ports,
+    ...boundaries.map(([, point]) => ({ ...point, radius: 7 * boundaryScale })),
+  ]) : '', [targets, ports, boundaries, boundaryScale]);
+  const terminalPoints = useMemo(() => new Set([...locationSegments.values()].flatMap(({ from, to }) =>
+    [`${from.x},${from.y}`, `${to.x},${to.y}`])), [locationSegments]);
   const labelFor = useMemo(() => {
     const labels = new Map<LogicalFlowEdge, { name: string; endpoints: string }>();
     return (edge: LogicalFlowEdge) => {
@@ -404,10 +538,11 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
       return label;
     };
   }, [nodeById, locale, edges]);
-  if (!connectors.size && !channels.length && !wiringRoute && !physicalPortStates && !bulkPortNumbers && !bulkPairs) return null;
+  if (!locationChannels && !connectors.size && !channels.length && !wiringRoute && !physicalPortStates && !bulkPortNumbers && !bulkPairs) return null;
 
   const markers = new Map<string, RouteSegment>();
-  for (const segment of [...connectorSegments, ...channels]) {
+  const visibleSegments = [...connectorSegments, ...locationSegments.values(), ...channels];
+  for (const segment of visibleSegments) {
     for (const [id, edge] of segment.cables) {
       if (cableEmphasis(edge) !== 'selected') continue;
       const current = markers.get(id);
@@ -415,15 +550,28 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
     }
   }
 
-  return <ViewportPortal>
-    <svg className="cable-routes-foreground">
-      {connectorSegments.map(segment => {
+  const paintPriority = (segment: RouteSegment) => {
+    const edge = emphasisFor(segment);
+    const emphasis = cableEmphasis(edge);
+    return emphasis === 'selected' ? 4 : emphasis === 'traced' ? 3 : hovered(segment) ? 2 : edge || segment.preview || segment.bulk ? 1 : 0;
+  };
+  return <>
+    {locationChannels && showAllVirtualChannels && <LocationChannelLayer channels={locationChannels}
+      used={locationSegments} occupiedOutlets={occupiedOutlets} zoom={zoom} />}
+    {failures.length > 0 && <details className="map-cable-route-diagnostics">
+      <summary>{t('map.cableRoute.unavailable', { count: failures.length })}</summary>
+      <ul>{failures.map(({ id, reason }, index) => <li key={index}>{id} · {reason}</li>)}</ul>
+    </details>}
+    <ViewportPortal>
+    <svg className="cable-routes-foreground" style={{ '--location-channel-unit': `${1 / zoom}px` } as CSSProperties}>
+      {visibleSegments.sort((a, b) => paintPriority(a) - paintPriority(b)).map(segment => {
+        if (!segment.key.startsWith('connector:')) return visiblePath(segment, !locationSegments.has(segment.key));
         const edge = emphasisFor(segment)!;
-        return <g key={segment.key} data-testid={`foreground-cable-${edge.id}`} data-emphasis={cableEmphasis(edge)}>
-          {visiblePath(segment, false)}
-        </g>;
+        return <g key={segment.key} data-testid={`foreground-cable-${edge.id}`} data-emphasis={cableEmphasis(edge)}>{visiblePath(segment, false)}</g>;
       })}
-      {channels.map(segment => visiblePath(segment, true))}
+      {[...occupiedOutlets].map(([id, point]) => <circle key={id} className="location-channel-outlet" cx={point.x} cy={point.y} />)}
+      {boundaries.map(([id, { x, y }]) => terminalPoints.has(`${x},${y}`) &&
+        <circle key={id} cx={x} cy={y} r={6 * boundaryScale} fill="var(--location-terminal-fill)" aria-hidden="true" />)}
       {(interactive || markers.size > 0) && <CableRouteInteraction targets={targets}
         clip={clip}
         selectedMarkers={[...new Set(markers.values())]} labelFor={labelFor} onHover={setHoveredCable}
@@ -431,8 +579,9 @@ export function ForegroundCableRoutes({ edges, virtualChannels, showAllVirtualCh
       <ForegroundPortMarkers physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} />
       {bulkLines}
       {wiringRoute && <g data-testid="foreground-wiring-route">
-        {wiringSource && wiringTarget && <path className="wiring-route-preview" d={`M ${wiringSource.x} ${wiringSource.y} L ${wiringTarget.x} ${wiringTarget.y}`} fill="none" stroke="#8d7aff" strokeWidth={3} pointerEvents="none" />}
+        {wiringSource && wiringTarget && <path className="wiring-route-preview" d={`M ${wiringSource.x} ${wiringSource.y} L ${wiringTarget.x} ${wiringTarget.y}`} fill="none" pointerEvents="none" />}
       </g>}
     </svg>
-  </ViewportPortal>;
+    </ViewportPortal>
+  </>;
 }

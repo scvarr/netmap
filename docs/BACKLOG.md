@@ -93,7 +93,7 @@ canonical endpoints, подключения и зависимости исход
 | C-UX-05 | Runtime map guides нужны; ориентиры — уже размещённые объекты | OPEN | Точный bounded UX-контракт открыт; presentation-only, отдельно от auto-layout |
 | C-UX-06 | Независимые Width/Height пока не реализовывать | OPEN | Повторно оценить необходимость после P-UX-21; не VERIFIED |
 | C-UX-09 | Раскрываемый графический preview BaseTemplate непосредственно при выборе шаблона | OPEN | Ориентир — существующий preview библиотеки; реализация открыта |
-| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [DECIDED TARGET](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels). C-UX-10-01 foundation объединён в main. LOC-CHAN-01 реализует производный локальный граф Location и технического корня. LOC-ROUTE-01, preview составного пути, общие жгуты и channel-aware collapse остаются OPEN |
+| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [DECIDED TARGET](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels). C-UX-10-01 foundation объединён в main. LOC-CHAN-01 реализует производный локальный граф Location и технического корня. LOC-ROUTE-01 реализует составной путь, preview и видимость при collapse. Общие межобъектные жгуты остаются OPEN |
 | C-UX-12 | Проверить массовое именование, spatial order, обнаруживаемость и сохранение | RECHECK PENDING | Исправление реализовано |
 | C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
 | C-UX-14 | Проверить понятность Change Inspector и точность больших сводок impact | RECHECK PENDING | Реализован; HV-01 не заменяет UX recheck |
@@ -270,7 +270,7 @@ CABLE-SELECT-01 / IMPLEMENTED / MERGED — выбор и hover Cable на уча
 **LOC-CHAN-01 / IMPLEMENTED на milestone-ветке.** L1 строит общий свободный
 граф для каждого Location и технического корня по текущей геометрии варианта.
 Деревья используют каноническое назначение и существующие граничные точки.
-Составная трасса физического Cable (LOC-ROUTE-01) и C-UX-10 остаются OPEN.
+**LOC-ROUTE-01 / IMPLEMENTED на milestone-ветке.** Маршрут и preview в L1 используют общие сегменты COMB-01 и деревьев Location; занятые участки выбираются по canonical Cable ID. C-UX-10 остаётся OPEN.
 Новых этапов Phase A–I и расширения scope эта запись не вводит.
 
 SLOC-01: isolated typed uniform-table computational core implemented, with
