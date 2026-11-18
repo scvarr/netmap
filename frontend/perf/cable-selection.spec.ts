@@ -64,7 +64,11 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   await page.mouse.move(panned.x, panned.y - 20);
   await page.mouse.move(panned.x, panned.y);
   await expect(tooltip).toHaveText('Кабелей на участке: 4');
-  await page.mouse.click(panned.x, panned.y);
+  await page.mouse.down();
+  await expect(shared).toBeFocused();
+  await expect(shared).toHaveCSS('outline-style', 'none');
+  await expect(shared).toHaveCSS('stroke', 'rgba(0, 0, 0, 0)');
+  await page.mouse.up();
   await expect(chooser).toBeVisible();
   await expect(chooser.getByRole('button')).toHaveCount(4);
   await expect(chooser.getByRole('button').first()).toBeFocused();
@@ -93,4 +97,35 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   await expect(hits).toHaveCount(0);
   await page.locator('.blueprint-map-node__port[data-connection-point-id="PP1-p5"]').click();
   await expect(page.getByTestId('clicked-port')).toHaveText('PP1-p5');
+});
+
+test('shows keyboard focus on the Cable segment without an SVG bounding box outline', async ({ page }) => {
+  await page.goto('/perf/cable-selection.html');
+  await page.getByRole('button', { name: 'zoom 1', exact: true }).click();
+  await expect(page.locator('.cable-route-hit[tabindex="0"]').first()).toBeAttached();
+  const chooser = page.getByRole('dialog');
+  const focusedHit = page.locator('.cable-route-hit:focus-visible');
+  const tabTo = async (target: Locator) => {
+    for (let remaining = 40; remaining > 0 && await target.count() === 0; remaining--) {
+      await page.keyboard.press('Tab');
+    }
+    await expect(target).toBeFocused();
+  };
+  const shared = focusedHit.and(page.locator('[data-cable-count="4"]'));
+  await tabTo(shared);
+  await expect(shared).toHaveCSS('outline-style', 'none');
+  await expect(shared).toHaveCSS('stroke', 'rgba(141, 226, 200, 0.55)');
+  await page.keyboard.press('Enter');
+  await expect(chooser.getByRole('button').first()).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(chooser).toHaveCount(0);
+  await expect(shared).toBeFocused();
+  await expect(shared).toHaveCSS('stroke', 'rgba(141, 226, 200, 0.55)');
+
+  const single = focusedHit.and(page.locator('[data-cable-count="1"]'));
+  await tabTo(single);
+  await expect(single).toHaveCSS('outline-style', 'none');
+  await expect(single).toHaveCSS('stroke', 'rgba(141, 226, 200, 0.55)');
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('complementary').getByRole('heading', { name: 'Patch' })).toBeVisible();
 });
