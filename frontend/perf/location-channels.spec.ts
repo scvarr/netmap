@@ -15,6 +15,19 @@ async function expectScreenTerminal(path: Locator, marker: Locator, owner: Locat
   expect(starts.some(p => Math.hypot(p.x - point.x, p.y - point.y) < 0.1)).toBe(true);
 }
 
+async function verticalRuns(path: Locator) {
+  return path.evaluate((el: SVGPathElement) => {
+    const toScreen = el.getScreenCTM()!;
+    return [...el.getAttribute('d')!.matchAll(/M (\S+) (\S+) L (\S+) (\S+)/g)]
+      .filter(([, ax, , bx]) => ax === bx)
+      .map(([, ax, ay, bx, by]) => {
+        const a = new DOMPoint(Number(ax), Number(ay)).matrixTransform(toScreen);
+        const b = new DOMPoint(Number(bx), Number(by)).matrixTransform(toScreen);
+        return { x: a.x, length: Math.abs(b.y - a.y) };
+      });
+  });
+}
+
 async function expectTerminalPaint(page: Page, marker: Locator) {
   const point = center((await marker.boundingBox())!);
   // Sample the centre of the opaque fill where a channel would otherwise paint.
@@ -157,6 +170,24 @@ test('keeps generic and blueprint ports clickable with the free layer visible', 
   }
 });
 
+test('centers the parent trunk between adjacent uniform-grid tiles', async ({ page }) => {
+  await page.goto('/perf/location-channels.html?corridor');
+  const left = page.locator('.location-frame[data-location-id="rack"]');
+  const right = page.locator('.location-frame[data-location-id="empty"]');
+  await expect(left).toBeVisible();
+  await page.getByRole('button', { name: 'zoom 1', exact: true }).click();
+  await page.getByRole('button', { name: 'Показать все кабельные каналы' }).click();
+  const parent = page.locator('[data-channel-location="building"] path');
+  await expectScreenTerminal(parent, left.locator('.location-boundary-point'), left);
+  await expectScreenTerminal(parent, right.locator('.location-boundary-point'), right);
+  const a = (await left.boundingBox())!, b = (await right.boundingBox())!;
+  const mid = (a.x + a.width + b.x) / 2;
+  const inGap = (await verticalRuns(parent)).filter(run => run.x > a.x + a.width && run.x < b.x);
+  expect(inGap.reduce((sum, run) => sum + run.length, 0)).toBeGreaterThan(a.height / 2);
+  for (const run of inGap) expect(run.x).toBeCloseTo(mid, 1);
+  await page.screenshot({ path: test.info().outputPath('centered-tiles.png') });
+});
+
 test('renders one terminal per exit in a dense nested rack', async ({ page }) => {
   await page.goto('/perf/location-channels.html?dense');
   await expect(page.locator('.location-frame[data-location-id="rack"]')).toBeVisible();
@@ -168,7 +199,15 @@ test('renders one terminal per exit in a dense nested rack', async ({ page }) =>
   const frame = page.locator('.location-frame[data-location-id="rack"]');
   await expect(marker).toHaveCount(1);
   await expectScreenTerminal(page.locator('[data-channel-location="building"] path'), marker, frame);
-  await expectScreenTerminal(page.locator('[data-channel-location="rack"] path'), marker, frame);
+  const rack = page.locator('[data-channel-location="rack"] path');
+  await expectScreenTerminal(rack, marker, frame);
+  const device = (await page.locator('[data-id="unit-1"] .blueprint-map-node').boundingBox())!;
+  const bounds = (await frame.boundingBox())!;
+  const mid = (device.x + device.width + bounds.x + bounds.width) / 2;
+  const runs = await verticalRuns(rack);
+  expect(runs.reduce((sum, run) => sum + run.length, 0)).toBeGreaterThan(bounds.height * 0.9);
+  for (const run of runs) expect(run.x).toBeCloseTo(mid, 1);
+  await page.screenshot({ path: test.info().outputPath('centered-rack.png') });
 });
 
 test('rebuilds from manual object movement and Location resize drafts', async ({ page }) => {

@@ -5,6 +5,7 @@ const member = (id: string, x: number, y: number, width = 100, height = 20): Loc
   id, bounds: { x, y, width, height }, point: { x: x + width, y: y + height / 2 }, edge: 'right',
 });
 const boundary = { id: 'boundary:rack', geometry: { x: 0, y: 0, width: 180, height: 180, edge: 'right' as const, offset: 0.5 } };
+const segments = (graph: LocationChannelGraph) => graph.segments.map(({ from, to }) => [graph.nodes[from], graph.nodes[to]] as const);
 
 function expectTree(graph: LocationChannelGraph) {
   const seen = new Set(graph.root === null ? [] : [graph.root]);
@@ -40,6 +41,31 @@ function expectTree(graph: LocationChannelGraph) {
 }
 
 describe('Location virtual channels', () => {
+  it.each([false, true])('centers the crossing of a gap before and after resize (transposed: %s)', transpose => {
+    const frame = { ...boundary, geometry: { ...boundary.geometry, width: 220, height: 220, offset: 100 / 220 } };
+    const upper = { ...member('upper', 44, 0, 140, 80), point: { x: 44, y: 68 }, edge: 'left' as const };
+    const swap = ({ x, y }: { x: number; y: number }) => ({ x: y, y: x });
+    for (const [upperHeight, lowerStart] of [[80, 120], [90, 138]]) {
+      const lower = member('lower', 44, lowerStart, 140, 220 - lowerStart);
+      const tiles = [{ ...upper, bounds: { ...upper.bounds, height: upperHeight } }, lower];
+      const graph = transpose
+        ? buildLocationChannelGraph({ ...frame, geometry: { ...frame.geometry, edge: 'bottom' } }, tiles.map(tile => ({
+            ...tile,
+            bounds: { ...swap(tile.bounds), width: tile.bounds.height, height: tile.bounds.width },
+            point: swap(tile.point), edge: tile.edge === 'left' ? 'top' : 'bottom',
+          })))
+        : buildLocationChannelGraph(frame, tiles);
+      expectTree(graph);
+      const center = (upperHeight + lowerStart) / 2;
+      const crossingLength = segments(graph).reduce((total, pair) => {
+        const [a, b] = transpose ? pair.map(swap) : pair;
+        if (a.y !== center || b.y !== center) return total;
+        return total + Math.max(0, Math.min(184, Math.max(a.x, b.x)) - Math.max(44, Math.min(a.x, b.x)));
+      }, 0);
+      expect(crossingLength).toBe(140);
+    }
+  });
+
   it('connects 42 exits along shared branches with a bounded total length', () => {
     const objects = Array.from({ length: 42 }, (_, i) => member('object:' + i, 12, 24 + i * 32));
     const rack = { ...boundary, geometry: { ...boundary.geometry, height: 1380 } };
@@ -52,7 +78,9 @@ describe('Location virtual channels', () => {
       const a = graph.nodes[from], b = graph.nodes[to];
       return sum + Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
     }, 0);
-    expect(length).toBeLessThan(1600);
+    expect(length).toBeLessThan(2850);
+    const vertical = segments(graph).filter(([a, b]) => a.x === b.x);
+    expect([...new Set(vertical.map(([a]) => a.x))]).toEqual([146]);
     expect(buildLocationChannelGraph(rack, [...objects].reverse())).toEqual(graph);
   });
 

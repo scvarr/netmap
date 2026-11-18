@@ -16,11 +16,13 @@ const locations: LocationDocument[] = [
   { location_ref: location('rack'), name: 'Rack', type: null, parent_location_ref: location('building') },
   { location_ref: location('empty'), name: 'Empty', type: null, parent_location_ref: location('building') },
 ];
-const dense = new URLSearchParams(window.location.search).has('dense');
+const fixture = new URLSearchParams(window.location.search);
+const dense = fixture.has('dense');
+const facingTiles = fixture.has('corridor');
 const rackIds = dense ? Array.from({ length: 42 }, (_, i) => `unit-${i + 1}`) : ['switch', 'panel', 'server'];
 const ids = [...rackIds, 'root-object'];
 const placements: MapPlacement[] = ids.map(id => ({
-  physical_object_ref: object(id), location_ref: id === 'root-object' ? null : location('rack'), positions: {},
+  physical_object_ref: object(id), location_ref: id === 'root-object' ? (facingTiles ? location('empty') : null) : location('rack'), positions: {},
 }));
 const blueprint: BlueprintPresentation = {
   blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'server-template' },
@@ -56,7 +58,7 @@ const engine: TopologyLayoutEngine = async scene => ({
 const store = { load: () => ({}), save: () => {}, clear: () => {} };
 const settings = (alternate: boolean, reflow: boolean): UniformLocationGrid => ({
   mode: 'uniform_grid', version: 1, hide_empty: false,
-  tables: { root: [[null, 'building']], building: reflow ? [['empty', 'rack']] : [['rack'], ['empty']] },
+  tables: { root: [[null, 'building']], building: facingTiles ? [['rack', 'empty']] : reflow ? [['empty', 'rack']] : [['rack'], ['empty']] },
   object_sequences: { rack: { direction: alternate ? 'HORIZONTAL' : 'VERTICAL', order: rackIds } },
 });
 const manualBounds = [
@@ -92,6 +94,7 @@ function Fixture() {
     visible_direct_elements: location_ref.entity_id === 'rack' && partial
       ? [{ entity_type: 'PhysicalObject', entity_id: 'switch' }] : [],
     geometry: manual ? { ...manualBounds[i], edge: 'right', offset: 0.5 }
+      : facingTiles ? { ...manualBounds[i], edge: i === 0 ? 'top' : i === 1 ? 'right' : 'left', offset: [0.5, 0.3, 0.7][i] }
       : location_ref.entity_id === 'rack' && !alternate ? savedBoundary : undefined,
   }));
   return <>
