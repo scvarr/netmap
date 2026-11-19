@@ -58,7 +58,7 @@ import type { LocationDocument } from "../topology/locationTypes";
 import type { MapLocationState, MapPlacement } from "../topology/savedMapTypes";
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { MapTextAnnotationLayer } from "./MapTextAnnotationLayer";
-import { blueprintFace, type resolveFaces } from '../topology/physicalFaces';
+import { blueprintFace, selectedCableIdFor, temporaryFacesFor, type resolveFaces } from '../topology/physicalFaces';
 import type { FaceOverride, FaceTarget } from '../topology/savedMapTypes';
 import { PhysicalFaceIndicator } from './PhysicalFaceControls';
 import { LocationProxyNode } from "./LocationProxyNode";
@@ -71,6 +71,7 @@ interface TopologyCanvasProps {
   layoutEngine?: TopologyLayoutEngine;
   layoutStore?: TopologyLayoutStore;
   traceOverlay?: PhysicalTraceOverlay;
+  traceOwnsFaces?: boolean;
   /** Exact Cable ids directly attached to the selected PhysicalObject. */
   directlyAttachedCableIds?: ReadonlySet<string>;
   sceneKey?: string;
@@ -138,6 +139,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   layoutEngine = toFlowProjection,
   layoutStore,
   traceOverlay,
+  traceOwnsFaces,
   directlyAttachedCableIds,
   sceneKey,
   showAllVirtualChannels,
@@ -199,6 +201,11 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
 
   const physicalObjectView = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT";
   const objectFaces = physicalObjectView ? faceViews?.objectFaces : undefined;
+  const selectedCableId = selectedCableIdFor(selection);
+  const temporaryFaces = useMemo(() => objectFaces ? temporaryFacesFor(
+    document, objectFaces, selectedCableId,
+    traceOwnsFaces ? traceOverlay?.highlightedConnectionPointIds ?? new Set<string>() : undefined,
+  ) : undefined, [document, objectFaces, selectedCableId, traceOwnsFaces, traceOverlay]);
   const projection = useMemo(() => {
     if (!storedProjection || !objectFaces) return storedProjection;
     return { ...storedProjection, nodes: storedProjection.nodes.map(node => {
@@ -206,13 +213,15 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
       const resolvedFace = id ? objectFaces.get(id) : undefined;
       const blueprint = node.data.projection.attributes.blueprint_presentation;
       if (!resolvedFace || !blueprint) return node;
-      const facePresentation = blueprintFace(blueprint, resolvedFace.face);
+      const temporaryFace = id ? temporaryFaces?.get(id) : undefined;
+      const face = temporaryFace?.face ?? resolvedFace.face;
+      const facePresentation = face === 'BOTH' ? undefined : blueprintFace(blueprint, face);
       const dimensions = blueprintRenderedNodeDimensions(
         facePresentation?.visibleBlueprint ?? blueprint, node.data.compositionDisplayWidth,
       );
-      return { ...node, ...dimensions, data: { ...node.data, facePresentation } };
+      return { ...node, ...dimensions, data: { ...node.data, facePresentation, temporaryFace } };
     }) };
-  }, [storedProjection, objectFaces]);
+  }, [storedProjection, objectFaces, temporaryFaces]);
 
   const locationStates = useMemo(() => {
     const states = locationFrameInput?.states ?? [];
@@ -473,6 +482,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
       } : undefined,
       faceBusy,
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
+      traceHighlightedConnectionPointIds: traceOverlay?.highlightedConnectionPointIds,
       traceHighlightedConnectionMemberIds: traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
       cableOccupiedPortIds: occupiedPorts,
       wiringHighlightedConnectionMemberIds,
@@ -494,13 +504,13 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const tracedCableId = edge.data?.cableNode
       ? cableIdForNode(edge.data.cableNode)
-      : null;
+      : edge.data?.continuation?.cable_ref.entity_id ?? null;
     const isSelected = edge.data?.continuation
-      ? selection?.type === "continuation" &&
-        selection.item.id === edge.data.continuation.id
+      ? selection?.type === "continuation"
+        ? selection.item.id === edge.data.continuation.id
+        : selectedCableId !== null && selectedCableId === tracedCableId
       : edge.data?.cableNode
-        ? selection?.type === "node" &&
-          selection.item.id === edge.data.cableNode.id
+        ? selectedCableId !== null && selectedCableId === tracedCableId
         : selection?.type === "edge" &&
           selection.item.id === edge.data?.projection?.id;
     const isTraced = tracedCableId !== null

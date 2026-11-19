@@ -209,7 +209,7 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers
       const { endpoint } = port;
       const state = physicalPortStates?.[port.id];
       const { fill, outline } = physicalPortPaint(portTypes?.find(type => type.id === port.portTypeId)?.color,
-        node.data.cableOccupiedPortIds?.has(port.id) ?? false, tracedPorts.has(port.id), state);
+        node.data.cableOccupiedPortIds?.has(port.id) ?? false, tracedPorts.has(port.id) || Boolean(node.data.traceHighlightedConnectionPointIds?.has(port.id)), state);
       const className = `cable-route-port-marker${blueprint ? ' cable-route-port-marker--blueprint' : ''}${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
       const style = { fill, stroke: outline, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined };
       const emphasis = state === 'source' || state === 'destination' ? undefined : endpointEmphasis.get(port.id);

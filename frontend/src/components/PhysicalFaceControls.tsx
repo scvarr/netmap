@@ -1,5 +1,5 @@
 import { useI18n } from '../i18n';
-import type { ResolvedFace } from '../topology/physicalFaces';
+import type { ResolvedFace, TemporaryFace } from '../topology/physicalFaces';
 import type { FaceOverride, PhysicalFace } from '../topology/savedMapTypes';
 
 export function PhysicalFaceSelect({ value, allowInherit, unassigned, disabled, onChange }: {
@@ -19,23 +19,30 @@ export function PhysicalFaceSelect({ value, allowInherit, unassigned, disabled, 
   </label>;
 }
 
-export function PhysicalFaceIndicator({ resolved, panelFace, disabled, onChange }: {
+export function PhysicalFaceIndicator({ resolved, panelFace, temporary, disabled, onChange }: {
   resolved: ResolvedFace;
   panelFace?: PhysicalFace | null;
+  temporary?: TemporaryFace;
   disabled?: boolean;
   onChange?: (value: FaceOverride) => void;
 }) {
   const { t } = useI18n();
   const { face, source, explicit } = resolved;
   const side = (value: PhysicalFace) => t(value === 'FRONT' ? 'face.front' : 'face.rear');
-  const label = t('face.effective', {
+  const configuredLabel = t('face.effective', {
     face: side(face),
     source: source.kind === 'location' ? t('face.locationSource', { name: source.name })
       : t(source.kind === 'variant' ? 'face.variantSource' : 'face.objectSource'),
   }) + (panelFace ? ' / ' + t('face.singlePanel', { face: side(panelFace) }) : '');
-  return <span className={'physical-face' + (explicit ? ' physical-face--explicit' : '') + (onChange ? ' nodrag nopan' : '')}
+  const displayed = temporary?.face ?? panelFace ?? face;
+  const label = temporary ? t('face.temporary', {
+    face: displayed === 'BOTH' ? t('face.unassigned') : side(displayed),
+    reason: t(temporary.reason === 'trace' ? 'face.traceReason' : 'face.cableReason'),
+    configured: configuredLabel,
+  }) : configuredLabel;
+  return <span className={'physical-face' + (temporary ? ' physical-face--temporary' : explicit ? ' physical-face--explicit' : '') + (onChange ? ' nodrag nopan' : '')}
     title={label} aria-label={label}>
-    {(panelFace ?? face) === 'FRONT' ? 'F' : 'R'}
+    {displayed === 'BOTH' ? 'F+R' : displayed === 'FRONT' ? 'F' : 'R'}
     {onChange && <select aria-label={t('face.view') + ' / ' + label} title={label} value={explicit ? face : 'INHERIT'}
       disabled={disabled} onClick={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}
       onChange={event => onChange(event.target.value as FaceOverride)}>

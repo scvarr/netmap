@@ -30,6 +30,7 @@ export function OffMapContinuationEdge({ id, source, data, selected }: EdgeProps
     sourceNode.data.facePresentation?.visibleBlueprint,
   );
   if (!endpoint) return null;
+  const color = selected ? '#54e3b4' : data?.cablePresentationEmphasis === 'traced' ? '#f0bd66' : '#d7a960';
   const vector = vectorFor(endpoint.side);
   const markerX = endpoint.x + vector.x * 34;
   const markerY = endpoint.y + vector.y * 34;
@@ -37,9 +38,9 @@ export function OffMapContinuationEdge({ id, source, data, selected }: EdgeProps
   const labelY = markerY + (vector.y < 0 ? -7 : 13);
   return (
     <g className="off-map-continuation" aria-label={`Продолжение вне карты: ${continuation.remote_display_name}`}>
-      <BaseEdge id={id} path={`M ${endpoint.x},${endpoint.y} L ${markerX},${markerY}`} style={{ stroke: selected ? '#54e3b4' : '#d7a960', strokeWidth: selected ? 3 : 2, strokeDasharray: '5 3' }} interactionWidth={18} />
-      <circle cx={markerX} cy={markerY} r={7} fill="#0d1b1e" stroke={selected ? '#54e3b4' : '#d7a960'} strokeWidth={2} />
-      <path d={`M ${markerX - 2},${markerY} L ${markerX + 2},${markerY}`} stroke={selected ? '#54e3b4' : '#d7a960'} strokeWidth={2} />
+      <BaseEdge id={id} path={`M ${endpoint.x},${endpoint.y} L ${markerX},${markerY}`} style={{ stroke: color, strokeWidth: selected ? 3 : 2, strokeDasharray: '5 3' }} interactionWidth={18} />
+      <circle cx={markerX} cy={markerY} r={7} fill="#0d1b1e" stroke={color} strokeWidth={2} />
+      <path d={`M ${markerX - 2},${markerY} L ${markerX + 2},${markerY}`} stroke={color} strokeWidth={2} />
       <text x={labelX} y={labelY} fill={selected ? '#dff7ef' : '#d7a960'} fontSize="10" fontWeight="700" textAnchor={vector.x < 0 ? 'end' : 'start'}>вне карты</text>
     </g>
   );

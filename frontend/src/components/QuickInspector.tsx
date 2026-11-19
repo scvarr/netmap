@@ -4,6 +4,7 @@ import {
   displayNodeLabel,
   physicalClassPresentation,
 } from "../topology/presentation";
+import { presentationSceneDocument } from "../topology/presentationScene";
 import { cableIdForNode, physicalObjectIdForNode } from "../topology/projection";
 import { useI18n } from "../i18n";
 import type {
@@ -15,6 +16,7 @@ import type {
   PhysicalObjectDetailsDocument,
 } from "../topology/physicalObjectDetailsTypes";
 import type {
+  L1OffMapContinuation,
   TopologyProjectionDocument,
   TopologyProjectionNode,
   TopologyProjectionEdge,
@@ -25,6 +27,7 @@ interface QuickInspectorProps {
   document: TopologyProjectionDocument | null;
   selection: TopologySelection;
   onSelectNode: (node: TopologyProjectionNode) => void;
+  onSelectContinuation?: (continuation: L1OffMapContinuation) => void;
   onClose: () => void;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
@@ -318,6 +321,10 @@ export function QuickInspector(props: QuickInspectorProps) {
   }
   if (node && isL1 && id) {
     const attached = details ? connections(details) : [];
+    const cableEdges = document ? presentationSceneDocument(document).edges.filter(edge =>
+      (edge.source === node.id || edge.target === node.id) &&
+      (edge.cableNode || (edge.continuation && props.onSelectContinuation)),
+    ) : [];
     return shell(
       <>
         <span className="eyebrow">
@@ -347,6 +354,13 @@ export function QuickInspector(props: QuickInspectorProps) {
             {[...details.warnings, ...details.gaps].map((notice) => <p key={notice} role="alert">{notice}</p>)}
           </>
         )}
+        {cableEdges.length > 0 && <details className="quick-inspector__technical">
+          <summary>{t("inspector.cablesOnMap")}</summary>
+          <ul>{cableEdges.map(({ id: edgeId, cableNode, continuation }) => <li key={edgeId}>
+            {cableNode ? <button type="button" onClick={() => onSelectNode(cableNode)}>{displayNodeLabel(cableNode)}</button>
+              : continuation && <button type="button" onClick={() => props.onSelectContinuation?.(continuation)}>{continuation.cable_display_name}</button>}
+          </li>)}</ul>
+        </details>}
         <Link className="quick-inspector__primary" to={url(id)}>{t("inspector.open")}</Link>
         {operationFor("remove", id)?.status === "refresh-failed" && (
           <>

@@ -1,7 +1,68 @@
 import type { LocationDocument } from './locationTypes';
 import type { MapLocationState, MapPlacement, PhysicalFace } from './savedMapTypes';
 import { panelCompositionBounds } from './blueprintDisplaySize';
-import type { BlueprintPresentation } from './types';
+import { cableIdForNode, physicalObjectIdForNode } from './projection';
+import type { BlueprintPresentation, ProjectionSourceRef, TopologyProjectionDocument, TopologySelection } from './types';
+
+export interface TemporaryFace {
+  face: PhysicalFace | 'BOTH';
+  reason: 'cable' | 'trace';
+}
+
+const isCable = (ref: ProjectionSourceRef | undefined, id: string) =>
+  ref?.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'Cable' && ref.entity_id === id;
+
+export function selectedCableIdFor(selection: TopologySelection): string | null {
+  if (selection?.type === 'node') return cableIdForNode(selection.item);
+  if (selection?.type === 'continuation') {
+    const ref = selection.item.cable_ref;
+    return isCable(ref, ref.entity_id) ? ref.entity_id : null;
+  }
+  return null;
+}
+
+export function cableEndpointIds(document: TopologyProjectionDocument, cableId: string): Set<string> {
+  const result = new Set<string>();
+  for (const edge of document.edges) {
+    for (const pair of edge.attributes.endpoint_pairs ?? []) {
+      if (!isCable(pair.cable_ref, cableId)) continue;
+      result.add(pair.from_connection_point_id);
+      result.add(pair.to_connection_point_id);
+    }
+  }
+  for (const continuation of document.l1_off_map_continuations ?? []) {
+    if (isCable(continuation.cable_ref, cableId) &&
+        continuation.local_connection_point_ref.ref_type === 'CANONICAL_FACT' &&
+        continuation.local_connection_point_ref.entity_type === 'ConnectionPoint') {
+      result.add(continuation.local_connection_point_ref.entity_id);
+    }
+  }
+  return result;
+}
+
+export function temporaryFacesFor(
+  document: TopologyProjectionDocument,
+  configured: ReadonlyMap<string, ResolvedFace>,
+  selectedCableId: string | null,
+  tracePoints?: ReadonlySet<string>,
+): ReadonlyMap<string, TemporaryFace> {
+  const result = new Map<string, TemporaryFace>();
+  if (document.layer !== 'L1' || document.detail_level !== 'PHYSICAL_OBJECT') return result;
+  const points = tracePoints ?? (selectedCableId ? cableEndpointIds(document, selectedCableId) : undefined);
+  if (!points?.size) return result;
+  for (const node of document.nodes) {
+    const id = physicalObjectIdForNode(node);
+    const base = id ? configured.get(id) : undefined;
+    const blueprint = node.attributes.blueprint_presentation;
+    if (!id || !base || !blueprint || blueprint.panels.length <= 1) continue;
+    const panels = new Map(blueprint.panels.map(panel => [panel.panel_key, panel.face]));
+    const needed = new Set(blueprint.slots.filter(slot => points.has(slot.connection_point_id))
+      .map(slot => panels.get(slot.panel_key)).filter((face): face is PhysicalFace => Boolean(face)));
+    const face = needed.size === 2 ? 'BOTH' : needed.values().next().value;
+    if (face && face !== base.face) result.set(id, { face, reason: tracePoints ? 'trace' : 'cable' });
+  }
+  return result;
+}
 
 export interface ResolvedFace {
   face: PhysicalFace;

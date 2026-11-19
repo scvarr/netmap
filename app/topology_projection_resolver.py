@@ -211,6 +211,7 @@ class ConfiguredTopologyProjectionResolver:
         for member in connection_members:
             if (
                 member.object_a_id == member.object_b_id
+                and member.connection_id not in cables_by_connection
                 and member.object_a_id in selected_object_ids
             ):
                 internal_members_by_object.setdefault(member.object_a_id, []).append(member)
@@ -233,7 +234,7 @@ class ConfiguredTopologyProjectionResolver:
             tuple[uuid.UUID, uuid.UUID], list[PhysicalConnectionMemberRecord]
         ] = {}
         for member in connection_members:
-            if member.object_a_id == member.object_b_id:
+            if member.object_a_id == member.object_b_id and member.connection_id not in cables_by_connection:
                 continue
             if not {
                 member.object_a_id,

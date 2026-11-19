@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { blueprintRenderedNodeDimensions } from './blueprintDisplaySize';
 import { uniformGridPresentation } from './uniformGridPresentation';
-import { blueprintFace, resolveFaces } from './physicalFaces';
+import { blueprintFace, resolveFaces, selectedCableIdFor, temporaryFacesFor } from './physicalFaces';
 import type { LocationDocument, LocationRef } from './locationTypes';
 import type { MapLocationState, MapPlacement, PhysicalFace } from './savedMapTypes';
-import type { BlueprintPresentation } from './types';
+import { physicalTraceOverlayFor } from './interfacePhysicalTraceOverlay';
+import type { PhysicalObjectL1TraceArtifact } from './physicalObjectL1TraceTypes';
+import type { BlueprintPresentation, TopologyProjectionDocument } from './types';
 
 const ref = (id: string): LocationRef => ({ ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: id });
 const location = (id: string, parent?: string): LocationDocument => ({
@@ -86,5 +88,85 @@ describe('physical faces', () => {
     expect(empty.panels).toEqual([]);
     expect(empty.slots).toEqual([]);
     expect(blueprintRenderedNodeDimensions(empty, 200)).toEqual({ width: 124, height: 24 });
+  });
+});
+
+describe('temporary physical views', () => {
+  const canonical = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
+  const pair = (from: string, to: string, member: string, cable?: string) => ({
+    from_connection_point_id: from, from_member_index: 1, to_connection_point_id: to, to_member_index: 1,
+    connection_id: 'connection-' + member, connection_member_id: member,
+    cable_ref: cable ? canonical('Cable', cable) : undefined,
+  });
+  const object = (id: string) => {
+    const panels = ['FRONT', 'REAR', null].map((face, index) => ({
+      panel_key: String(index), panel_number: index + 1, display_name: String(index), x: 0, y: index * 20,
+      width: 100, height: 20, face: face as PhysicalFace | null,
+    }));
+    const point = { x: .5, y: .5 };
+    return {
+      id, kind: 'PHYSICAL_OBJECT', label: id, source_refs: [canonical('PhysicalObject', id)],
+      attributes: {
+        blueprint_presentation: {
+          blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'template' },
+          version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'revision' },
+          body: { kind: 'RECTANGLE', width: 100, height: 60 }, panels,
+          slots: ['front', 'rear', 'other'].map((suffix, i) => ({
+            slot_key: suffix, connection_point_id: id + '-' + suffix, display_name: suffix, panel_key: String(i),
+            kind: 'CONNECTION_POINT', panel_local_position: point,
+            rendered_position: { ...point, y: (i + .5) / 3 }, external_attachment: { ...point, side: 'RIGHT' },
+          })),
+        } satisfies BlueprintPresentation,
+        internal_l1_links: [{ ...pair(id + '-front', id + '-rear', 'inside-' + id), source_refs: [] }],
+      },
+    };
+  };
+  const edge = (from: string, to: string, endpoint: ReturnType<typeof pair>) => ({
+    id: endpoint.connection_id, from_node_id: from, to_node_id: to, kind: 'L1_PHYSICAL_LINK', aggregate: true,
+    source_refs: [canonical('ConnectionMember', endpoint.connection_member_id)], attributes: { endpoint_pairs: [endpoint] },
+  });
+  const document: TopologyProjectionDocument = {
+    schema_version: '1.0', layer: 'L1', detail_level: 'PHYSICAL_OBJECT', gaps: [], warnings: [],
+    nodes: ['a', 'b', 'c'].map(object),
+    edges: [
+      edge('a', 'b', pair('a-front', 'b-rear', 'external', 'first')),
+      edge('a', 'b', pair('a-front', 'b-other', 'unassigned', 'already-visible')),
+      edge('b', 'b', pair('b-front', 'b-rear', 'loop', 'same-object')),
+    ],
+  };
+  const configured = resolveFaces('FRONT', [], [], ['a', 'b', 'c'].map(id => placement(id))).objectFaces;
+  it('reveals only the selected Cable endpoint sides, including BOTH on one object', () => {
+    const selected = selectedCableIdFor({ type: 'node', item: {
+      id: 'inspector-item', kind: 'CABLE', label: 'Cable', source_refs: [canonical('Cable', 'first')], attributes: {},
+    } });
+    expect(temporaryFacesFor(document, configured, selected)).toEqual(new Map([['b', { face: 'REAR', reason: 'cable' }]]));
+    expect(temporaryFacesFor(document, configured, 'already-visible').size).toBe(0);
+    expect(temporaryFacesFor(document, configured, 'same-object')).toEqual(new Map([['b', { face: 'BOTH', reason: 'cable' }]]));
+    expect(temporaryFacesFor(document, configured, null).size).toBe(0);
+    expect(configured.get('b')?.face).toBe('FRONT');
+  });
+
+  it('uses only exact member evidence of the chosen trace branch and takes priority over Cable', () => {
+    const branch = (id: string, member: string, target: string) => ({
+      branch_id: id, source: { point_id: 'a-front', member_index: 1 }, target: { point_id: target, member_index: 1 },
+      edge_ids: [], evidence_refs: [canonical('ConnectionMember', member)],
+    });
+    const artifact: PhysicalObjectL1TraceArtifact = {
+      schema_version: 1, query: { from_physical_object_id: 'a', to_physical_object_id: 'b' },
+      verdict: 'REACHABLE', branches: [branch('internal', 'inside-b', 'b-front'), branch('alternate', 'external', 'b-rear')],
+      source_candidates: [], target_candidates: [], cycles: [], nodes: [], edges: [],
+      evidence_refs: [canonical('ConnectionMember', 'inside-c')], gaps: [], warnings: [],
+    };
+    for (const [id, face] of [['internal', 'BOTH'], ['alternate', 'REAR']] as const) {
+      const trace = physicalTraceOverlayFor(artifact, document, id);
+      expect(temporaryFacesFor(document, configured, 'same-object', trace.highlightedConnectionPointIds))
+        .toEqual(new Map([['b', { face, reason: 'trace' }]]));
+      expect(trace.highlightedConnectionPointIds.has('b-other')).toBe(false);
+      expect(trace.highlightedConnectionPointIds.has('c-rear')).toBe(false);
+    }
+    for (const [verdict, id] of [['UNKNOWN', 'internal'], ['REACHABLE', 'missing']] as const) {
+      const trace = physicalTraceOverlayFor({ ...artifact, verdict }, document, id);
+      expect(temporaryFacesFor(document, configured, 'same-object', trace.highlightedConnectionPointIds).size).toBe(0);
+    }
   });
 });

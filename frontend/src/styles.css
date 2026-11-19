@@ -1104,5 +1104,6 @@ a { color: inherit; }
 
 .physical-face { position: relative; display: inline-grid; place-items: center; align-self: start; width: 1.35em; flex: 0 0 auto; border: 1px dashed currentColor; border-radius: 3px; color: #a6bab8; font: 700 9px/1.15 ui-monospace, monospace; }
 .physical-face--explicit { border-style: solid; color: #dff7ef; background: #225d51; }
+.physical-face--temporary { width: auto; min-width: 1.35em; padding-inline: .35em; border-style: solid; color: #f0bd66; }
 .physical-face select { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }
 .physical-face:focus-within { outline: 2px solid #54e3b4; }

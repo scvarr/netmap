@@ -23,7 +23,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
   const blueprint = data.facePresentation?.visibleBlueprint ?? canonicalBlueprint;
   const singlePanelFace = canonicalBlueprint?.panels.length === 1 ? canonicalBlueprint.panels[0].face : undefined;
   const faceIndicator = data.resolvedFace && <PhysicalFaceIndicator resolved={data.resolvedFace}
-    panelFace={singlePanelFace} onChange={data.onFaceChange} disabled={data.faceBusy} />;
+    panelFace={singlePanelFace} temporary={data.temporaryFace} onChange={data.onFaceChange} disabled={data.faceBusy} />;
   const objectId = projection.source_refs.find((ref) => ref.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'PhysicalObject')?.entity_id;
   const tracedPorts = tracedPortIds(projection, data.traceHighlightedConnectionMemberIds);
   const portProps = (connectionPointId: string, label: string) => {
@@ -70,7 +70,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
               const portType = portTypes?.find(type => type.id === slot.port_type_id);
               const state = data.physicalPortStates?.[id];
               const occupied = data.cableOccupiedPortIds?.has(id) ?? false;
-              const traced = tracedPorts.has(id);
+              const traced = tracedPorts.has(id) || Boolean(data.traceHighlightedConnectionPointIds?.has(id));
               const { fill, outline } = physicalPortPaint(portType?.color, occupied, traced, state);
               const style = { '--port-size': `${BLUEPRINT_PORT_SIZE}px`, '--port-stroke': `${BLUEPRINT_PORT_STROKE}px`,
                 backgroundColor: fill, borderColor: outline, left: `${slot.panel_local_position.x * 100}%`, top: `${slot.panel_local_position.y * 100}%` };
@@ -112,7 +112,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
         const id = point.connection_point_id;
         const state = data.physicalPortStates?.[id];
         const occupied = data.cableOccupiedPortIds?.has(id) ?? false;
-        const traced = tracedPorts.has(id);
+        const traced = tracedPorts.has(id) || Boolean(data.traceHighlightedConnectionPointIds?.has(id));
         const { fill, outline } = physicalPortPaint(undefined, occupied, traced, state);
 
         return <span key={id} className={`generic-map-node__endpoint${traced ? ' generic-map-node__endpoint--trace-highlighted' : ''}${state ? ` generic-map-node__endpoint--wiring-${state}` : ''}`}

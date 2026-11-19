@@ -211,3 +211,26 @@ def test_cable_backed_direct_connection_projects_between_physical_objects():
     assert len(projected["nodes"]) == 2
     pair = projected["edges"][0]["attributes"]["endpoint_pairs"][0]
     assert pair["cable_ref"] == {"ref_type": "CANONICAL_FACT", "entity_type": "Cable", "entity_id": cable_id}
+
+
+def test_same_object_cable_has_one_selectable_projection_edge_with_exact_endpoints():
+    from app.models import Cable
+
+    with SessionLocal.begin() as session:
+        repository = CanonicalRepository(session)
+        panel = repository.add_physical_object()
+        front = repository.add_connection_point(panel.id, 1)
+        rear = repository.add_connection_point(panel.id, 1)
+        connection, _ = repository.add_connection(front.id, rear.id, 1, [ConnectionMemberInput(1, 1, 1)])
+        cable = Cable(connection_id=connection.id)
+        session.add(cable)
+        session.flush()
+        cable_id = str(cable.id)
+    projected = client.post("/v1/topology/projection", json=projection_query([str(panel.id)])).json()
+    node = node_by_object(projected, str(panel.id))
+    assert node["attributes"]["internal_l1_links"] == []
+    edge, = projected["edges"]
+    assert edge["from_node_id"] == edge["to_node_id"] == node["id"]
+    pair, = edge["attributes"]["endpoint_pairs"]
+    assert pair["cable_ref"] == {"ref_type": "CANONICAL_FACT", "entity_type": "Cable", "entity_id": cable_id}
+    assert {pair["from_connection_point_id"], pair["to_connection_point_id"]} == {str(front.id), str(rear.id)}

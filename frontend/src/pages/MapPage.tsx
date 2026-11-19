@@ -14,7 +14,7 @@ import {
   mapCandidateChoices,
 } from "../components/MapInsertionPicker";
 import { PhysicalFaceSelect } from '../components/PhysicalFaceControls';
-import { blueprintFace, resolveFaces } from '../topology/physicalFaces';
+import { blueprintFace, cableEndpointIds, resolveFaces, selectedCableIdFor } from '../topology/physicalFaces';
 import type { FaceOverride, FaceTarget } from '../topology/savedMapTypes';
 import { QuickInspector } from "../components/QuickInspector";
 import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
@@ -273,6 +273,19 @@ function MapPageContent({
   const [selectedTraceBranchId, setSelectedTraceBranchId] = useState<string | null>(null);
   const [traceViewNotice, setTraceViewNotice] = useState<string | null>(null);
   const [selection, setSelection] = useState<TopologySelection>(null);
+  const traceScope = useMemo(() => ({}), [mapId, variantId, viewMode]);
+  const currentTraceScope = useRef(traceScope);
+  currentTraceScope.current = traceScope;
+  const clearTrace = useCallback(() => {
+    setTraceArtifact(null);
+    setSelectedTraceBranchId(null);
+    setTraceViewNotice(null);
+  }, []);
+  useLayoutEffect(clearTrace, [mapId, variantId, clearTrace]);
+  useLayoutEffect(() => {
+    if (viewMode === 'logical') clearTrace();
+    setSelection(current => selectedCableIdFor(current) ? null : current);
+  }, [traceScope, viewMode, clearTrace]);
   const [utilitySection, setUtilitySection] = useState<"layout" | "tools" | null>(null);
   const [viewportFitRevision, setViewportFitRevision] = useState(0);
   const [objectSearch, setObjectSearch] = useState("");
@@ -675,6 +688,8 @@ function MapPageContent({
         )
           ? current
           : null;
+      const cableId = selectedCableIdFor(current);
+      if (cableId) return cableEndpointIds(document, cableId).size ? current : null;
       const id = physicalObjectIdForSelection(current);
       if (id && activeMap && locations && viewMode === "physical") {
         let element: MapLocationDirectElementRef = { entity_type: "PhysicalObject", entity_id: id };
@@ -1595,6 +1610,10 @@ function MapPageContent({
     setSceneDocument({ sceneKey: `${currentMap.map_ref.entity_id}/physical`, document: next });
   };
   const activeVariant = activeMap?.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
+  const traceOverlay = useMemo(
+    () => physicalTraceOverlayFor(traceArtifact, document, selectedTraceBranchId),
+    [traceArtifact, document, selectedTraceBranchId],
+  );
   const defaultFace = activeVariant?.default_face;
   const faceViews = useMemo(() => defaultFace && activeMap && locations
     ? resolveFaces(defaultFace, locations, activeMap.location_states ?? [], activeMap.placements)
@@ -1920,8 +1939,15 @@ function MapPageContent({
             traceDataSource={traceDataSource}
             traceArtifact={traceArtifact}
             selectedBranchId={selectedTraceBranchId}
-            onSelectedBranchId={setSelectedTraceBranchId}
+            onSelectedBranchId={(id) => {
+              if (currentTraceScope.current === traceScope) setSelectedTraceBranchId(id);
+            }}
             onTraceArtifact={(artifact) => {
+              if (currentTraceScope.current !== traceScope) return;
+              if (!artifact) {
+                clearTrace();
+                return;
+              }
               setTraceArtifact(artifact);
               setSelectedTraceBranchId(artifact?.verdict === "REACHABLE" ? artifact.branches[0]?.branch_id ?? null : null);
               if (artifact?.verdict === "REACHABLE" && viewMode === "logical") {
@@ -1983,11 +2009,8 @@ function MapPageContent({
                     setError(t("map.collision"))
                   }
                   disableAutoLayout={!legacy}
-                  traceOverlay={physicalTraceOverlayFor(
-                    traceArtifact,
-                    document,
-                    selectedTraceBranchId,
-                  )}
+                  traceOverlay={traceOverlay}
+                  traceOwnsFaces={Boolean(traceArtifact) && !physicalAnnotationMode}
                   viewportFitRevision={viewportFitRevision}
                   wiringRoute={!physicalAnnotationMode && (wiring.status === "selecting-target" || wiring.status === "confirming" || wiring.status === "creating") ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target } : undefined}
                   physicalPortStates={physicalAnnotationMode ? undefined : physicalPortStates}
@@ -2037,6 +2060,10 @@ function MapPageContent({
         document={document}
         selection={physicalAnnotationMode ? null : selection}
         onSelectNode={(node) => setSelection({ type: "node", item: node })}
+        onSelectContinuation={(item) => {
+          setContinuationAnchor(null);
+          setSelection({ type: "continuation", item });
+        }}
         onClose={() => setSelection(null)}
         onAddContinuationToMap={
           !legacy && viewMode === "physical"

@@ -50,6 +50,24 @@ describe('MapPage SavedMap scope', () => {
       else expect(screen.queryByTestId('inspector')).not.toBeInTheDocument();
     });
   });
+  it('clears a selected trace branch when changing variant or leaving physical view', async () => {
+    const primary = saved(A, [[PP, 10, 20]]);
+    const copy = { ...primary, active_variant_ref: { ...primary.active_variant_ref, entity_id: 'copy' } };
+    const loadMap = vi.fn((_: string, variant?: string) => Promise.resolve(variant === 'copy' ? copy : primary));
+    renderMapPage({ dataSource: { loadProjection: vi.fn(scopedProjection) },
+      savedMapDataSource: { listMaps: vi.fn().mockResolvedValue([primary]), loadMap } as unknown as SavedMapDataSource,
+    }, '/map?map=' + A + '&view=physical', <VariantNavigation />);
+    await screen.findByTestId('canvas');
+    const trace = screen.getByTestId('trace-logical');
+    fireEvent.click(screen.getByRole('button', { name: 'reachable' }));
+    expect(trace).toHaveAttribute('data-branch', 'branch-a');
+    fireEvent.click(screen.getByRole('button', { name: 'switch variant' }));
+    await waitFor(() => expect(loadMap).toHaveBeenLastCalledWith(A, 'copy'));
+    expect(trace).toHaveAttribute('data-artifact', '');
+    fireEvent.click(screen.getByRole('button', { name: 'reachable' }));
+    fireEvent.click(screen.getByRole('button', { name: '\u041b\u043e\u0433\u0438\u0447\u0435\u0441\u043a\u0430\u044f' }));
+    expect(trace).toHaveAttribute('data-branch', '');
+  });
   const deletionFixture = () => {
     const primary = saved(A, [[PP, 1, 2]]);
     const customId = 'custom';

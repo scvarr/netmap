@@ -500,7 +500,7 @@ describe('TopologyCanvas async layout boundary', () => {
     view.rerender(<TopologyCanvas document={document} selection={{ type: 'node', item: document.nodes[1] }} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
     expect(fitViewMock).toHaveBeenCalledTimes(1);
 
-    view.rerender(<TopologyCanvas document={document} selection={{ type: 'node', item: document.nodes[1] }} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(['physical-B']), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(), highlightedCableIds: new Set() }} />);
+    view.rerender(<TopologyCanvas document={document} selection={{ type: 'node', item: document.nodes[1] }} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(['physical-B']), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(), highlightedConnectionPointIds: new Set(), highlightedCableIds: new Set() }} />);
     expect(fitViewMock).toHaveBeenCalledTimes(1);
 
     view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
@@ -514,7 +514,7 @@ describe('TopologyCanvas async layout boundary', () => {
     const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} />);
     await screen.findByTestId('flow');
     await waitFor(() => expect(fitViewMock).toHaveBeenCalledTimes(1));
-    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(['physical-A']), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(['member-1']), highlightedCableIds: new Set() }} />);
+    view.rerender(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} sceneKey="map-a/physical" layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(['physical-A']), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(['member-1']), highlightedConnectionPointIds: new Set(), highlightedCableIds: new Set() }} />);
     expect(screen.getByTestId('highlighted-members-physical-A')).toHaveTextContent('member-1');
     expect(layoutEngine).toHaveBeenCalledTimes(1);
     expect(fitViewMock).toHaveBeenCalledTimes(1);
@@ -533,7 +533,7 @@ describe('TopologyCanvas async layout boundary', () => {
         data: { projection: { id: 'shared-edge', from_node_id: 'a', to_node_id: 'b', kind: 'L1_PHYSICAL_LINK', aggregate: true, source_refs: [], attributes: {} }, cableNode: cable(id), supportingEdgeIds: ['shared-edge'] },
       })),
     }));
-    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(['shared-edge']), highlightedConnectionMemberIds: new Set(), highlightedCableIds: new Set(['cable-one']) }} />);
+    render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} traceOverlay={{ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(['shared-edge']), highlightedConnectionMemberIds: new Set(), highlightedConnectionPointIds: new Set(), highlightedCableIds: new Set(['cable-one']) }} />);
 
     await screen.findByTestId('flow');
     expect(screen.getByTestId('traced-collapsed-cable:cable:cable-one')).toHaveTextContent('true');
@@ -550,7 +550,7 @@ describe('TopologyCanvas async layout boundary', () => {
       nodes: flowFor((await import('../topology/presentationScene')).presentationSceneDocument(document)).nodes,
       edges: ['attached', 'unrelated', 'traced'].map((id) => ({ id, source: 'a', target: 'b', type: 'floating' as const, data: { cableNode: cable(id) } })),
     }));
-    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} directlyAttachedCableIds={new Set(['attached', 'traced'])} traceOverlay={{ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(), highlightedCableIds: new Set(['traced']) }} />);
+    const view = render(<TopologyCanvas document={document} selection={null} onSelectionChange={vi.fn()} layoutEngine={layoutEngine} directlyAttachedCableIds={new Set(['attached', 'traced'])} traceOverlay={{ highlightedNodeIds: new Set(), highlightedEdgeIds: new Set(), highlightedConnectionMemberIds: new Set(), highlightedConnectionPointIds: new Set(), highlightedCableIds: new Set(['traced']) }} />);
     await screen.findByTestId('flow');
     expect(screen.getByTestId('emphasis-attached')).toHaveTextContent('attached');
     expect(screen.getByTestId('emphasis-unrelated')).toHaveTextContent('normal');
