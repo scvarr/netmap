@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
 import { CableReconnectError } from '../topology/apiCableReconnectDataSource';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
@@ -28,16 +28,17 @@ const docs = {
 const select = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name), { target: { value } });
 const click = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 
-async function open() {
+async function open(documents = docs) {
   const preview = vi.fn().mockResolvedValue({ expected, object_a_id: 'A', object_b_id: 'B', display_label: 'Cable 12' });
   const reconnect = vi.fn().mockResolvedValue(undefined);
   const refresh = vi.fn().mockResolvedValue(undefined);
   const close = vi.fn();
-  render(<CableReconnectDialog cableId="cable" objects={Object.keys(docs).map(id => ({ id, label: id }))}
-    details={{ loadPhysicalObjectDetails: async id => docs[id as keyof typeof docs] }}
+  const loadDetails = vi.fn(async (id: string) => documents[id as keyof typeof docs]);
+  render(<CableReconnectDialog cableId="cable" objects={Object.keys(documents).map(id => ({ id, label: id }))}
+    details={{ loadPhysicalObjectDetails: loadDetails }}
     writer={{ preview, reconnect }} refresh={refresh} close={close} />);
   await screen.findByText('B / Без панели / b1');
-  return { reconnect, refresh, close };
+  return { preview, loadDetails, reconnect, refresh, close };
 }
 
 it('chooses the endpoint, object, panel key and free point and reviews both connections', async () => {
@@ -63,21 +64,76 @@ it('chooses the endpoint, object, panel key and free point and reviews both conn
   expect(reconnect).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1');
 });
 
-it.each([false, true])('only retries the read after confirmation (conflict=%s)', async conflict => {
-  const { reconnect, refresh, close } = await open();
-  if (conflict) reconnect.mockRejectedValueOnce(new CableReconnectError(409));
-  else refresh.mockRejectedValueOnce(new Error('projection unavailable'));
+it('sorts shuffled ports by visible name within each physical panel and keeps busy options', async () => {
+  const numbers = Array.from({ length: 48 }, (_, index) => String(index + 1));
+  const shuffled = numbers.map((_, index) => numbers[(index * 17 + 12) % numbers.length]);
+  const numbered = shuffled.map((name, index) => ({
+    ...point(name, 'front', name === '13' ? 1 : 0),
+    connection_point_ref: ref('ConnectionPoint', `id-${index}`),
+    ordering_key: `slot-${index}`,
+  }));
+  const mixed = ['mgmt', 'xe10', 'console', 'xe2', 'xe1', 'Port 2', 'Port 02'].map(label => point(label, 'rear'));
+  await open({ ...docs, C: object('C', [...numbered, ...mixed], docs.C.panels) });
+  select('Целевой физический объект', 'C');
+  await screen.findByRole('option', { name: '13 · Подключён' });
+  const options = () => within(screen.getByLabelText('Порт')).getAllByRole('option').slice(1);
+  expect(options().map(item => item.textContent)).toEqual(numbers.map(name => name === '13' ? '13 · Подключён' : name));
+  expect(screen.getByRole('option', { name: '13 · Подключён' })).toBeDisabled();
+  select('Панель', 'rear');
+  expect(options().map(item => item.textContent)).toEqual(['console', 'mgmt', 'Port 02', 'Port 2', 'xe1', 'xe2', 'xe10']);
+  select('Панель', 'front');
+  expect(options()).toHaveLength(48);
+});
+
+async function reviewUnassignedPoint() {
   select('Целевой физический объект', 'C');
   await screen.findByRole('option', { name: 'Без панели' });
   select('Панель', '');
   select('Порт', 'c2');
   click('Предпросмотр');
+}
+
+it('rereads canonical endpoints after 409 and requires a new choice and preview', async () => {
+  const { preview, loadDetails, reconnect, refresh, close } = await open();
+  reconnect.mockRejectedValueOnce(new CableReconnectError(409));
+  await reviewUnassignedPoint();
+  click('Подтвердить переподключение');
+  expect(await screen.findByRole('alert')).toHaveTextContent('доступность порта изменились');
+  const next = { ...expected, point_b_id: 'b2' };
+  preview.mockResolvedValueOnce({ expected: next, object_a_id: 'A', object_b_id: 'B', display_label: 'Cable 12' });
+  loadDetails.mockImplementation(async id => id === 'B' ? object('B', [point('b2')]) : docs[id as keyof typeof docs]);
+  click('Обновить подключение');
+  expect(await screen.findByText('B / Без панели / b2')).toBeVisible();
+  expect(screen.queryByText('B / Без панели / b1')).not.toBeInTheDocument();
+  expect(preview.mock.calls).toEqual([['cable'], ['cable']]);
+  expect(loadDetails.mock.calls).toEqual([['A'], ['B'], ['C'], ['A'], ['B']]);
+  expect(screen.getByLabelText('Целевой физический объект')).toHaveValue('');
+  expect(screen.getByRole('button', { name: 'Предпросмотр' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Подтвердить переподключение' })).not.toBeInTheDocument();
+  expect(reconnect).toHaveBeenCalledOnce();
+  expect(refresh).not.toHaveBeenCalled();
+  expect(close).not.toHaveBeenCalled();
+
+  await reviewUnassignedPoint();
+  expect(loadDetails).toHaveBeenLastCalledWith('C');
+  expect(screen.getAllByText('B / Без панели / b2')).toHaveLength(2);
+  click('Подтвердить переподключение');
+  await waitFor(() => expect(close).toHaveBeenCalledOnce());
+  expect(reconnect).toHaveBeenNthCalledWith(2, 'cable', next, 'A', 'c2');
+});
+
+it('only retries L1 projection after a successful write', async () => {
+  const { preview, loadDetails, reconnect, refresh, close } = await open();
+  refresh.mockRejectedValueOnce(new Error('projection unavailable'));
+  await reviewUnassignedPoint();
   expect(screen.getByText('C / Без панели / c2')).toBeVisible();
   click('Подтвердить переподключение');
-  expect(await screen.findByRole('alert')).toHaveTextContent(conflict ? 'доступность порта изменились' : 'Кабель переподключён');
-  expect(refresh).toHaveBeenCalledTimes(conflict ? 0 : 1);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Кабель переподключён');
+  expect(refresh).toHaveBeenCalledOnce();
   click('Повторить обновление');
   await waitFor(() => expect(close).toHaveBeenCalledOnce());
   expect(reconnect).toHaveBeenCalledOnce();
-  expect(refresh).toHaveBeenCalledTimes(conflict ? 1 : 2);
+  expect(refresh).toHaveBeenCalledTimes(2);
+  expect(preview).toHaveBeenCalledOnce();
+  expect(loadDetails.mock.calls).toEqual([['A'], ['B'], ['C']]);
 });

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useI18n } from '../i18n';
 import { CableReconnectError, type CableEnd, type CableReconnectDataSource, type CableReconnectSnapshot } from '../topology/apiCableReconnectDataSource';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDataSource, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
-import { displayPointLabel } from './PhysicalObjectDetailsSection';
+import { displayPointLabel, sortedConnectionPoints } from './PhysicalObjectDetailsSection';
 
 interface Props {
   cableId: string;
@@ -25,7 +25,6 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
   const [panel, setPanel] = useState<string>();
   const [port, setPort] = useState('');
   const [step, setStep] = useState<'edit' | 'review' | 'writing' | 'refreshing' | 'refresh-failed' | 'conflict'>('edit');
-  const [written, setWritten] = useState(false);
   const [error, setError] = useState<'load' | 'target' | 'write' | 'unsupported'>();
   const [retry, setRetry] = useState(0);
 
@@ -98,9 +97,21 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
     }
   };
 
+  const reloadConnection = () => {
+    setCurrent(undefined);
+    setSide('A');
+    setObjectId('');
+    setTarget(undefined);
+    setPanel(undefined);
+    setPort('');
+    setError(undefined);
+    setStep('edit');
+    setRetry(value => value + 1);
+  };
+
   const options = target ? panels(target) : [];
   const selectedPanel = panel ?? options[0]?.key;
-  const points = target?.connection_points.filter(point => panelKey(point) === selectedPanel) ?? [];
+  const points = sortedConnectionPoints(target?.connection_points.filter(point => panelKey(point) === selectedPanel) ?? []);
   const opposite = side === 'A' ? current?.snapshot.object_b_id : current?.snapshot.object_a_id;
   const available = (point: ConnectionPointDetails) =>
     point.cardinality === 1 && point.external_connection_count === 0 && objectId !== opposite;
@@ -120,7 +131,6 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
       }
       return;
     }
-    setWritten(true);
     await refreshMap();
   };
 
@@ -131,7 +141,7 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
     <div className="map-dialog__surface">
       <h2>{t('map.reconnect.action')}</h2>
       {step === 'conflict' && <p role="alert">{t(error === 'write' ? 'map.reconnect.write' : 'map.reconnect.conflict')}</p>}
-      {step === 'refresh-failed' && <p role="alert">{t(written ? 'map.reconnect.savedRefreshFailed' : 'map.reconnect.refreshFailed')}</p>}
+      {step === 'refresh-failed' && <p role="alert">{t('map.reconnect.savedRefreshFailed')}</p>}
       {step === 'refreshing' && <p role="status">{t('map.refreshing')}</p>}
       {(step === 'edit' || step === 'review' || step === 'writing') && <>
         {error && <p role="alert">{t(error === 'unsupported' ? 'map.reconnect.unsupported' : 'map.reconnect.load')}</p>}
@@ -188,7 +198,9 @@ export function CableReconnectDialog({ cableId, objects, details, writer, refres
           <button type="button" onClick={() => setStep('edit')}>{t('map.back')}</button>
           <button type="button" onClick={() => void confirm()}>{t('map.reconnect.confirm')}</button>
         </>}
-        {(step === 'conflict' || step === 'refresh-failed') &&
+        {step === 'conflict' &&
+          <button type="button" onClick={reloadConnection}>{t('map.reconnect.reload')}</button>}
+        {step === 'refresh-failed' &&
           <button type="button" onClick={() => void refreshMap()}>{t('map.retryRefresh')}</button>}
       </div>
     </div>

@@ -10,12 +10,15 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
     return response.json();
   };
   const portType = await api('/port-types', { name, color: '#336699' });
+  const numbers = Array.from({ length: 48 }, (_, index) => index + 1);
+  const shuffled = numbers.map((_, index) => numbers[(index * 17 + 12) % numbers.length]);
+  const slotKey = (index: number) => `slot-${String(index + 1).padStart(2, '0')}`;
   const template = await api('/library/base-templates', {
-    name, body: { kind: 'RECTANGLE', width: 180, height: 80 },
-    panels: [{ panel_key: 'ports', panel_number: 1, display_name: 'Patch', x: 0, y: 0, width: 180, height: 80 }],
-    slots: [1, 2].map(number => ({
-      key: `p${number}`, display_name: `P${number}`, port_type_id: portType.id, kind: 'CONNECTION_POINT',
-      panel_key: 'ports', rendered_position: { x: number / 3, y: 0.5 },
+    name, body: { kind: 'RECTANGLE', width: 460, height: 80 },
+    panels: [{ panel_key: 'ports', panel_number: 1, display_name: 'Patch', x: 0, y: 0, width: 460, height: 80 }],
+    slots: shuffled.map((number, index) => ({
+      key: slotKey(index), display_name: `P${number}`, port_type_id: portType.id, kind: 'CONNECTION_POINT',
+      panel_key: 'ports', rendered_position: { x: ((number - 1) % 24 + 1) / 25, y: number <= 24 ? 0.3 : 0.7 },
     })),
     internal_links: [],
   });
@@ -23,7 +26,8 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
     const result = await api('/topology/physical-objects', { display_name: label, base_template_id: template.blueprint_ref.entity_id });
     return {
       id: result.physical_object_ref.entity_id,
-      ports: result.slots.map((slot: { connection_point_ref: { entity_id: string } }) => slot.connection_point_ref.entity_id) as string[],
+      ports: [1, 2].map(number => result.slots.find((slot: { slot_key: string }) =>
+        slot.slot_key === slotKey(shuffled.indexOf(number))).connection_point_ref.entity_id as string),
     };
   }));
   const endpoint = (connection_point_id: string) => ({ kind: 'CONNECTION_POINT', connection_point_id, member_index: 1 });
@@ -67,6 +71,9 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
   await dialog.getByLabel('Переносимое окончание').selectOption('B');
   await dialog.getByLabel('Целевой физический объект').selectOption(b.id);
   await expect(dialog.getByRole('option', { name: 'P1 · Подключён' })).toHaveJSProperty('disabled', true);
+  await expect(dialog.getByLabel('Порт').getByRole('option')).toHaveText([
+    'Выберите порт', 'P1 · Подключён', ...numbers.slice(1).map(number => `P${number}`),
+  ]);
   await dialog.getByLabel('Порт').selectOption(b.ports[1]);
   await dialog.getByRole('button', { name: 'Предпросмотр' }).click();
   await expect(dialog.getByRole('heading', { name })).toBeVisible();
@@ -96,6 +103,8 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
   expect(await api(reconnectUrl)).toEqual({ ...before, expected: { ...before.expected, point_b_id: b.ports[1] } });
 
   const details = await api(`/topology/physical-objects/${b.id}`);
+  expect(details.connection_points.map((point: { panel_context: { port_name: string } }) => point.panel_context.port_name))
+    .toEqual(shuffled.map(number => `P${number}`));
   const [oldPoint, newPoint] = b.ports.map(id => details.connection_points.find(
     (point: { connection_point_ref: { entity_id: string } }) => point.connection_point_ref.entity_id === id,
   ));

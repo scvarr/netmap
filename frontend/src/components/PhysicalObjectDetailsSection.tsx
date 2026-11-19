@@ -66,19 +66,18 @@ const pointLabelCollator = new Intl.Collator(undefined, {
   sensitivity: 'base',
 });
 
-const isTechnicalPointLabel = (point: ConnectionPointDetails): boolean => (
-  point.label_source === 'TECHNICAL_FALLBACK'
-  || /^ConnectionPoint\s+/i.test(point.label)
-  || /^Точка\s+/i.test(point.label)
-);
-
-const sortedConnectionPoints = (points: ConnectionPointDetails[], fallback: string): ConnectionPointDetails[] => (
+export const sortedConnectionPoints = (points: ConnectionPointDetails[]): ConnectionPointDetails[] => (
   points
-    .map((point, index) => ({ point, index }))
+    .map(point => {
+      const technical = !point.panel_context && point.label_source === 'TECHNICAL_FALLBACK';
+      const label = point.panel_context ? displayPointLabel(point, '') : point.label;
+      // The display fallback contains a shortened ID, which is not a port name.
+      return { point, technical, label: technical ? '' : label };
+    })
     .sort((left, right) => (
-      Number(isTechnicalPointLabel(left.point)) - Number(isTechnicalPointLabel(right.point))
-      || pointLabelCollator.compare(displayPointLabel(left.point, fallback), displayPointLabel(right.point, fallback))
-      || left.index - right.index
+      Number(left.technical) - Number(right.technical)
+      || pointLabelCollator.compare(left.label, right.label)
+      || (left.label < right.label ? -1 : Number(left.label > right.label))
     ))
     .map(({ point }) => point)
 );
@@ -330,7 +329,7 @@ function PhysicalObjectDetailsContent({
   const visiblePoints = selectedPanel
     ? activeDocument?.connection_points.filter((point) => point.panel_context?.panel_key === selectedPanel) ?? []
     : unassigned;
-  const sortedPoints = sortedConnectionPoints(visiblePoints, t('physical.point', { id: '' }).trim());
+  const sortedPoints = sortedConnectionPoints(visiblePoints);
 
   const onDocumentChangeRef = useRef(onDocumentChange);
   onDocumentChangeRef.current = onDocumentChange;
