@@ -18,6 +18,8 @@ import { blueprintFace, cableEndpointIds, resolveFaces, selectedCableIdFor } fro
 import type { FaceOverride, FaceTarget } from '../topology/savedMapTypes';
 import { QuickInspector } from "../components/QuickInspector";
 import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
+import type { CableReconnectDataSource } from "../topology/apiCableReconnectDataSource";
+import { CableReconnectDialog } from "../components/CableReconnectDialog";
 import { CableRenameDialog } from "../components/CableRenameDialog";
 import { BulkCableCreateDialog } from "../components/BulkCableCreateDialog";
 import { BulkCableDeleteDialog } from "../components/BulkCableDeleteDialog";
@@ -98,6 +100,7 @@ interface MapPageProps {
   locationDataSource?: LocationDataSource;
   catalogInventoryDataSource?: CatalogInventoryDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
+  cableReconnectDataSource?: CableReconnectDataSource;
   cableDeleteDataSource?: CableDeleteDataSource;
   physicalObjectDetailsDataSource?: PhysicalObjectDetailsDataSource;
   physicalEndpointConnectionWriteDataSource?: PhysicalEndpointConnectionWriteDataSource;
@@ -234,6 +237,7 @@ function MapPageContent({
   locationDataSource,
   catalogInventoryDataSource,
   physicalObjectDeleteDataSource,
+  cableReconnectDataSource,
   cableDeleteDataSource,
   physicalObjectDetailsDataSource,
   physicalEndpointConnectionWriteDataSource,
@@ -302,6 +306,8 @@ function MapPageContent({
   const [wiringHistoricalCandidate, setWiringHistoricalCandidate] = useState<string | null>(null);
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
   const [showAllVirtualChannels, setShowAllVirtualChannels] = useState(false);
+  const [reconnectCableId, setReconnectCableId] = useState<string | null>(null);
+  useLayoutEffect(() => setReconnectCableId(null), [traceScope]);
   const [bulkSourceId, setBulkSourceId] = useState<string | null>(null);
   useLayoutEffect(() => setBulkSourceId(null), [traceScope]);
   const [bulkDeleteSourceId, setBulkDeleteSourceId] = useState<string | null>(null);
@@ -1463,7 +1469,7 @@ function MapPageContent({
     },
     [],
   );
-  const contextBusy = wiring.status !== "idle" || Boolean(bulkSourceId) || Boolean(bulkDeleteSourceId) || Boolean(insertion) || Boolean(mapDeletion) || Boolean(mapOperation);
+  const contextBusy = wiring.status !== "idle" || Boolean(reconnectCableId) || Boolean(bulkSourceId) || Boolean(bulkDeleteSourceId) || Boolean(insertion) || Boolean(mapDeletion) || Boolean(mapOperation);
   const refreshBulkCableDelete = async () => {
     if (!activeMap || !savedMapDataSource || !mapId || currentTraceScope.current !== traceScope) return;
     const request = ++mapDetailRequest.current;
@@ -1794,6 +1800,24 @@ function MapPageContent({
           requestedObjectId={insertion.requestedObjectId}
         />
       )}
+      {reconnectCableId && activeMap && document && physicalObjectDetailsDataSource && cableReconnectDataSource &&
+        <CableReconnectDialog cableId={reconnectCableId} details={physicalObjectDetailsDataSource} writer={cableReconnectDataSource}
+          objects={document.nodes.flatMap(node => {
+            const id = physicalObjectIdForNode(node);
+            return id ? [{ id, label: displayNodeLabel(node) }] : [];
+          })}
+          refresh={async () => {
+            const currentMap = latestActiveMap.current;
+            if (!currentMap || currentTraceScope.current !== traceScope) throw new Error('Map changed');
+            const next = await dataSource.loadProjection(projectionRequestFor(
+              'physical', currentMap.placements.map(item => item.physical_object_ref.entity_id), true,
+            ));
+            if (currentTraceScope.current !== traceScope) throw new Error('Map changed');
+            setSceneDocument({ sceneKey: presentationSceneKey, document: next });
+            setSelection(null);
+            clearTrace();
+          }}
+          close={() => { if (currentTraceScope.current === traceScope) setReconnectCableId(null); }} />}
       {bulkSourceId && activeMap && document && physicalObjectDetailsDataSource &&
         physicalEndpointConnectionWriteDataSource?.createBulkPhysicalConnections &&
         <BulkCableCreateDialog sourceId={bulkSourceId} nodes={document.nodes}
@@ -1840,6 +1864,7 @@ function MapPageContent({
         onCopyBlueprintSize={(width) => setCopiedBlueprintDisplayWidth(width)}
         onApplyCopiedBlueprintSize={(id, width) => void resizeBlueprint(id, width).catch((reason) => setError(errorMessage(reason, t("map.sizeFailed"))))}
         onApplyBlueprintSizeToSameBlueprint={(id) => void applySizeToSameBlueprint(id).catch((reason) => setError(errorMessage(reason, t("map.sizeFailed"))))}
+        onReconnectCable={activeMap && physicalObjectDetailsDataSource && cableReconnectDataSource ? setReconnectCableId : undefined}
         onRenameCable={catalogInventoryDataSource && cableLabelDataSource ? (id, label) => void beginCableRename(id, label) : undefined}
         onConnectFromPort={connectFromPort}
         onBulkConnect={activeMap && physicalObjectDetailsDataSource && physicalEndpointConnectionWriteDataSource?.createBulkPhysicalConnections ? setBulkSourceId : undefined}

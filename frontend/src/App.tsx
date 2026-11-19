@@ -26,6 +26,7 @@ import type { PhysicalObjectDeleteDataSource } from './topology/physicalObjectDe
 import type { SavedMapDataSource } from './topology/savedMapTypes';
 import type { CatalogInventoryDataSource } from './topology/catalogInventoryTypes';
 import type { PhysicalObjectDisplayNameWriteDataSource } from './topology/physicalObjectDisplayNameWriteTypes';
+import type { CableReconnectDataSource } from './topology/apiCableReconnectDataSource';
 import type { CableDeleteDataSource } from './topology/cableDeleteTypes';
 import { LocationsPage } from './pages/LocationsPage';
 import { CableLabelTemplatesPage } from './pages/CableLabelTemplatesPage';
@@ -47,6 +48,7 @@ export interface AppProps {
   l2ForwardingContextWriteDataSource?: L2ForwardingContextWriteDataSource;
   baseTemplateDataSource?: BaseTemplateDataSource;
   physicalObjectDeleteDataSource?: PhysicalObjectDeleteDataSource;
+  cableReconnectDataSource?: CableReconnectDataSource;
   cableDeleteDataSource?: CableDeleteDataSource;
   savedMapDataSource?: SavedMapDataSource;
   catalogInventoryDataSource: CatalogInventoryDataSource;
@@ -67,6 +69,7 @@ export function App(props: AppProps) {
             traceDataSource={props.traceDataSource}
             topologyLayoutStore={props.topologyLayoutStore}
             physicalObjectDeleteDataSource={props.physicalObjectDeleteDataSource}
+            cableReconnectDataSource={props.cableReconnectDataSource}
             cableDeleteDataSource={props.cableDeleteDataSource}
             physicalObjectDetailsDataSource={props.physicalObjectDetailsDataSource}
             physicalEndpointConnectionWriteDataSource={props.physicalEndpointConnectionWriteDataSource}

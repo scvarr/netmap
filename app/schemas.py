@@ -1183,6 +1183,29 @@ class BulkCableDeleteRequest(BaseModel):
     cables: list[BulkCableDeleteExpectation] = Field(min_length=1, max_length=256)
 
 
+class CableReconnectExpectation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    connection_id: uuid.UUID
+    connection_member_id: uuid.UUID
+    point_a_id: uuid.UUID
+    point_b_id: uuid.UUID
+    label: str | None = Field(max_length=255)
+
+
+class CableReconnectSnapshot(BaseModel):
+    expected: CableReconnectExpectation
+    object_a_id: uuid.UUID
+    object_b_id: uuid.UUID
+    display_label: str
+
+
+class CableReconnectRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected: CableReconnectExpectation
+    side: Literal["A", "B"]
+    new_point_id: uuid.UUID
+
+
 class BulkCableLabelPreviewItem(BaseModel):
     label: str
     historical: bool

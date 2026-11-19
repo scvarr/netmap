@@ -64,6 +64,15 @@ PhysicalObjects; internal continuity не требует Cable. Create/delete в
 меняет identity, endpoints, route или evidence. Cable-specific label/history
 не является generic application activity journal.
 
+Переподключение обычного Cable на сохранённой L1-карте обновляет одну ссылку
+на ConnectionPoint. `GET /v1/cables/{cable_id}/reconnect` возвращает ожидаемое
+состояние Cable и его Connection. `POST` на тот же адрес сверяет это состояние
+под блокировками, проверяет свободный внешний member=1 нового порта и сохраняет
+ID Cable, Connection, ConnectionMember, label, историю маркировки и второе
+окончание. Создание и переподключение сериализуются через блокировки
+ConnectionPoint. После записи редактор перечитывает L1-проекцию текущего
+варианта карты. Повтор обновления выполняет только чтение.
+
 Ordinary UI write поддерживает cardinality=1/member=1; общий member-aware core
 не выдаётся за multichannel authoring. C-CAP-01 не закрывается 24 фиктивными
 кабелями/входами или линиями без member identity. Технологии/connector/speed

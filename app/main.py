@@ -65,6 +65,8 @@ from app.schemas import (
     CreateBulkPhysicalConnectionsRequest,
     BulkCableDeletePreview,
     BulkCableDeleteRequest,
+    CableReconnectRequest,
+    CableReconnectSnapshot,
     BulkCableLabelPreviewDocument,
     BulkCableLabelPreviewItem,
     BulkPhysicalConnectionCreationDocument,
@@ -1211,6 +1213,21 @@ def bulk_delete_cables(
         PhysicalConnectionCatalog(session).bulk_delete_cables(
             request.source_object_id, request.target_object_id, request.cables,
         )
+
+
+@app.get("/v1/cables/{cable_id}/reconnect", response_model=CableReconnectSnapshot)
+def preview_cable_reconnect(
+    cable_id: uuid.UUID, session: Session = Depends(get_session),
+) -> CableReconnectSnapshot:
+    return PhysicalConnectionCatalog(session).preview_cable_reconnect(cable_id)
+
+
+@app.post("/v1/cables/{cable_id}/reconnect", status_code=204, responses={409: {"model": ErrorResponse}})
+def reconnect_cable(
+    cable_id: uuid.UUID, request: CableReconnectRequest, session: Session = Depends(get_session),
+) -> None:
+    with session.begin():
+        PhysicalConnectionCatalog(session).reconnect_cable(cable_id, request)
 
 
 @app.delete(

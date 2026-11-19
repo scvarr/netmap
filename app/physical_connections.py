@@ -10,7 +10,10 @@ from app.cable_labels import CableLabelCatalog, resolved_cable_label
 from app.module_endpoint_names import EndpointNames
 from app.models import Cable, Connection, ConnectionMember, ConnectionPoint, NetworkInterface
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from app.schemas import BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember
+from app.schemas import (
+    BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember,
+    CableReconnectExpectation, CableReconnectRequest, CableReconnectSnapshot,
+)
 
 
 @dataclass(frozen=True)
@@ -331,6 +334,79 @@ class PhysicalConnectionCatalog:
                 cable_id=cable.id, connection_id=connection.id,
             ))
         return created
+
+    def _reconnect_snapshot(
+        self, cable_id: uuid.UUID, new_point_id: uuid.UUID | None = None,
+    ) -> tuple[CableReconnectSnapshot, Connection, dict[uuid.UUID, ConnectionPoint]]:
+        def read(statement):
+            # NOWAIT also covers disconnect, which starts by locking Connection.
+            return statement.with_for_update(nowait=True) if new_point_id is not None else statement
+
+        cable = self.session.scalar(read(select(Cable).where(Cable.id == cable_id)))
+        if cable is None:
+            raise NetMapError("CABLE_RECONNECT_STALE", "Cable no longer exists")
+        connection = self.session.scalar(read(select(Connection).where(Connection.id == cable.connection_id)))
+        if connection is None:
+            raise NetMapError("CABLE_RECONNECT_STALE", "Connection no longer exists")
+        if connection.cardinality != 1:
+            raise ValidationError("Reconnect requires a cardinality=1 Connection")
+        ids = {connection.point_a_id, connection.point_b_id}
+        if new_point_id is not None:
+            ids.add(new_point_id)
+        points = {point.id: point for point in self.session.scalars(read(
+            select(ConnectionPoint).where(ConnectionPoint.id.in_(ids)).order_by(ConnectionPoint.id)
+        ))}
+        members = list(self.session.scalars(read(
+            select(ConnectionMember).where(ConnectionMember.connection_id == connection.id)
+            .order_by(ConnectionMember.id).limit(2)
+        )))
+        a = points.get(connection.point_a_id)
+        b = points.get(connection.point_b_id)
+        if a is None or b is None:
+            raise NetMapError("CABLE_RECONNECT_STALE", "Cable endpoints no longer exist")
+        if (
+            a.physical_object_id == b.physical_object_id
+            or a.cardinality != 1 or b.cardinality != 1
+            or len(members) != 1
+            or (members[0].index, members[0].point_a_member, members[0].point_b_member) != (1, 1, 1)
+        ):
+            raise ValidationError("Reconnect requires an external cardinality=1 Cable with mapping 1 to 1")
+        snapshot = CableReconnectSnapshot(
+            expected=CableReconnectExpectation(
+                connection_id=connection.id, connection_member_id=members[0].id,
+                point_a_id=a.id, point_b_id=b.id, label=cable.label,
+            ),
+            object_a_id=a.physical_object_id, object_b_id=b.physical_object_id,
+            display_label=resolved_cable_label(cable)[0],
+        )
+        return snapshot, connection, points
+
+    def preview_cable_reconnect(self, cable_id: uuid.UUID) -> CableReconnectSnapshot:
+        snapshot, _, _ = self._reconnect_snapshot(cable_id)
+        return snapshot
+
+    def reconnect_cable(self, cable_id: uuid.UUID, request: CableReconnectRequest) -> None:
+        try:
+            snapshot, connection, points = self._reconnect_snapshot(cable_id, request.new_point_id)
+            if snapshot.expected != request.expected:
+                raise NetMapError("CABLE_RECONNECT_STALE", "Cable or its Connection changed after preview")
+            new_point = points.get(request.new_point_id)
+            other_owner = snapshot.object_b_id if request.side == "A" else snapshot.object_a_id
+            if new_point is None or new_point.cardinality != 1:
+                raise ValidationError("The new ConnectionPoint must exist and have cardinality=1")
+            if new_point.physical_object_id == other_owner:
+                raise ValidationError("A cable requires endpoints on two different PhysicalObjects")
+            if self._has_external_member_connection(new_point, 1):
+                raise NetMapError("CABLE_RECONNECT_OCCUPIED", "ConnectionPoint member is already occupied")
+            if request.side == "A":
+                connection.point_a_id = new_point.id
+            else:
+                connection.point_b_id = new_point.id
+            self.session.flush()
+        except OperationalError as error:
+            if getattr(error.orig, "sqlstate", None) in ("55P03", "40P01", "40001"):
+                raise NetMapError("CABLE_RECONNECT_CONFLICT", "Concurrent topology or label update") from error
+            raise
 
     def delete_external_connection(self, connection_id: uuid.UUID) -> None:
         """Atomically delete a direct Connection or its attached Cable."""
