@@ -137,7 +137,35 @@ members/evidence -> export/reset/import/reload. Synthetic stand не утвер�
 Закрытие: применимые C-* проверены, обязательные blockers устранены или явно
 перенесены по согласованному roadmap, все representative workflows завершены.
 
+## Открытые дефекты карты и следующий этап
+
+- **OPEN** — перегруженные контекстные меню физической карты. [GitHub Issue #1](https://github.com/scvarr/netmap/issues/1)
+- **OPEN** — при сворачивании родительского Location с пустым набором
+  видимых дочерних элементов часть содержимого остаётся видимой.
+  [GitHub Issue #2](https://github.com/scvarr/netmap/issues/2)
+
+Оба дефекта остаются открытыми после
+[кабельных milestones](PROJECT_STATE.md#кабельные-milestones).
+
+Следующий этап после DOC-CABLE-RECON-01 — отдельный независимый аудит
+готовности NetMap L1 по исходному коду, актуальной документации и реальному
+браузерному интерфейсу. Проверить целостность пользовательских сценариев,
+согласованность UX/UI, инженерную практичность, фактические OPEN
+capabilities, достоверность canonical L1, недостатки интерфейса, навигации
+и справочников и работы до L1 PRODUCT COMPLETE. Результат — отдельный
+документ со свидетельствами, severity, предложениями и порядком исправлений.
+
 ## Remaining Phase D и справочники
+
+**FUTURE — структура справочников.** Перенести «Шаблоны имён кабелей» из
+«Инфраструктуры» в «Справочники». Добавить справочники производителей и
+моделей оборудования с выбором модели из списка вместо повторного ввода
+полного названия. Существующий каталог PortType сохраняется. Структура
+данных производителей здесь не определяется.
+
+Согласованные направления и открытые детали описаны в разделах
+[PortType и физическая совместимость](OPEN_DECISIONS.md#porttype-и-физическая-совместимость)
+и [CableType и member-aware модель](OPEN_DECISIONS.md#cabletype-и-member-aware-модель).
 
 C-CAP-01 (единый пункт, ссылка из Phase C) — OPEN, обязательный semantic gap Phase D.
 Canonical ConnectionPoint/Connection/ConnectionMember foundation существует, но
@@ -152,8 +180,8 @@ foundation не означает IMPLEMENTED.
 
 CAT-D — PRODUCT DECISION PENDING: определить bounded состав необходимых
 классификаций портов/кабелей; реализовать и проверить reusable user-defined
-значения. PT-01/02/03 не переоткрываются. Технические характеристики PortType,
-compatibility catalog и immutable-field locking требуют отдельного решения.
+значения. PT-01/02/03 не переоткрываются. Открыты точные структурные поля
+PortType и CableType, правила совместимости и реализация блокировки полей.
 CAT-E — OPEN: создание типов непосредственно из форм и единый reusable UX;
 зависит от Phase E. CAT-F — BLOCKED: workspace/access scope зависит от Phase F.
 
@@ -208,6 +236,10 @@ C-CAP-01 остаётся OPEN Phase D, L1 PRODUCT COMPLETE обязателен
 Решения не объявляют текущий core полным multichannel продуктом.
 
 ## Последовательность C-CAP-01 — OPEN implementation milestones
+
+C-CAP-01-01 — IMPLEMENTED / MERGED. Строки 02/03/04 сохраняют действующие
+обязательные критерии. Их пересмотр для member-aware модели и связи с L1-O5
+остаётся [OPEN](OPEN_DECISIONS.md#cabletype-и-member-aware-модель).
 
 Каждый этап требует отдельного implementation contract до выбора DTO, таблиц и
 миграций. Порядок 01 → 02 → 03 → 04 сохраняет небольшой scope каждого этапа.

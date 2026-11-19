@@ -1,8 +1,26 @@
 # Текущее состояние NetMap
 
-Срез состояния продукта с решениями и ручной проверкой от 11.11.2026. Это состояние продукта, не журнал разработки.
+Срез состояния продукта с учётом сверки кабельных сценариев от 19.11.2026.
 Контракты: [ARCHITECTURE](ARCHITECTURE.md); оставшаяся работа: [BACKLOG](BACKLOG.md);
 обсуждения: [OPEN_DECISIONS](OPEN_DECISIONS.md).
+
+## Кабельные milestones
+
+Сверка по `main` на `72b69316af8e16b32150250d7798864dae076863`.
+IMPLEMENTED подтверждён исходным кодом, MERGED — наличием коммитов в
+истории `main`. Успешная ручная приёмка этих сценариев в доступных
+источниках отдельно не подтверждена.
+
+| Milestone | Реализация | Включение в main | Ручная приёмка |
+|---|---|---|---|
+| CABLE-BULK-DELETE-01 | IMPLEMENTED — атомарное удаление выбранных Cable между двумя объектами с проверкой актуальности preview | MERGED · `ca03a92` | Успешное завершение не подтверждено |
+| PORT-CHANNEL-UX-01 | IMPLEMENTED — просмотр физических подключений по `panel_key` | MERGED · `b89fa6e` | Проверка упоминается в [issue #2](https://github.com/scvarr/netmap/issues/2), итог приёмки не подтверждён |
+| CABLE-BULK-UX-01 | IMPLEMENTED — табличное сопоставление свободных окончаний и атомарное создание отдельных Cable | MERGED · `3c608b5` | Успешное завершение не подтверждено |
+| CABLE-RECONNECT-01 | IMPLEMENTED — переподключение одного окончания с сохранением идентичности, сортировка портов и перечитывание после конфликта | MERGED · `a5162a5`, `72b6931` | Успешное завершение не подтверждено |
+
+Контракт операций описан в [ARCHITECTURE](ARCHITECTURE.md#кабельные-операции-и-панели-current).
+Внешняя многоканальная коммутация остаётся OPEN. Дефекты карты и следующий
+этап перечислены в [BACKLOG](BACKLOG.md#открытые-дефекты-карты-и-следующий-этап).
 
 ## Реализовано и доступно пользователю
 
@@ -148,7 +166,9 @@ BT-COPY-01 — IMPLEMENTED / MERGED; manual acceptance pending: независи
 C-CAP-01 — обязательный semantic gap Phase D: один задний вход с 24 адресуемыми
 каналами, 24 передних порта, exact internal mapping 1..24, один физический
 multichannel Cable и точный trace канала после reload. Foundation существует,
-C-CAP-01-01 реализован; внешний multichannel Cable write и полный UI остаются OPEN.
+C-CAP-01-01 — IMPLEMENTED / MERGED. Внешний multichannel Cable write и полный UI остаются OPEN.
+Пересмотр критериев 02/03/04 и L1-O5 остаётся
+[OPEN](OPEN_DECISIONS.md#cabletype-и-member-aware-модель).
 DTO/API, member mapping editing, lifecycle/reconcile и UX открыты; не IMPLEMENTED.
 Fanout entity, фиктивные порты и 24 искусственных Cable не подменяют этот сценарий.
 

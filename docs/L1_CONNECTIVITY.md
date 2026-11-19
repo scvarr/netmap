@@ -66,6 +66,15 @@ invalid cardinality, cycles), [object trace](../tests/test_physical_object_l1_tr
 [reconcile](../tests/test_object_reconciliation.py),
 [UI wiring](../frontend/src/pages/MapPage.wiring.test.tsx).
 
+В main также реализованы bulk delete и переподключение одного окончания.
+Reconnect сохраняет Cable, Connection и ConnectionMember ID, меняя один
+ConnectionPoint ID в рамках атомарной операции с проверкой занятости.
+Табличный bulk create создаёт отдельные Cable, а выбор панели по `panel_key`
+и производные маршруты SavedMap относятся к представлению. Подробности в
+[ARCHITECTURE](ARCHITECTURE.md#кабельные-операции-и-панели-current).
+Member-aware развитие PortType и физической совместимости описано в
+[OPEN_DECISIONS](OPEN_DECISIONS.md#porttype-и-физическая-совместимость).
+
 ## Матрица механизмов
 
 В таблице «trace» означает exact point/member continuity с evidence, а не
@@ -127,7 +136,8 @@ Cables или геометрическими линиями.
   Обычные ConnectionMember не имитируют деление. Оптический бюджет вне C-CAP-01.
 - **L1-O5:** физический кабель имеет одну Cable identity, включая несколько окончаний
   с разным числом каналов. Многоконцевые сборки требуют расширения текущей
-  двухточечной модели; фиктивные Cable недопустимы.
+  двухточечной модели; фиктивные Cable недопустимы. Пересмотр этого принятого
+  критерия остаётся [OPEN](OPEN_DECISIONS.md#cabletype-и-member-aware-модель).
 - **L1-O6:** BaseTemplate определяет физическую конструкцию и внутреннюю разводку.
   Физическая переделка требует нового BaseTemplate и нового PhysicalObject;
   индивидуальная переделка внутренней конструкции экземпляра не поддерживается.
@@ -165,6 +175,10 @@ C-CAP-01 остаётся OPEN Phase D; L1 PRODUCT COMPLETE обязателен
 | Кабель с несколькими окончаниями | Как один Cable корректно не выражен | После решения проверять общую cable identity и ветви; сейчас pair paths этого не доказывают |
 
 ## Последовательность C-CAP-01 — OPEN implementation milestones
+
+C-CAP-01-01 — IMPLEMENTED / MERGED. Строки 02/03/04 сохраняют действующие
+обязательные критерии. Их пересмотр для member-aware модели и связи с L1-O5
+остаётся [OPEN](OPEN_DECISIONS.md#cabletype-и-member-aware-модель).
 
 Каждый этап требует отдельного implementation contract до выбора DTO, таблиц и
 миграций. Порядок 01 → 02 → 03 → 04 сохраняет небольшой scope каждого этапа.
