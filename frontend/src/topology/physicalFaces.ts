@@ -1,5 +1,6 @@
 import type { LocationDocument } from './locationTypes';
 import type { MapLocationState, MapPlacement, PhysicalFace } from './savedMapTypes';
+import { panelCompositionBounds } from './blueprintDisplaySize';
 import type { BlueprintPresentation } from './types';
 
 export interface ResolvedFace {
@@ -44,17 +45,27 @@ export function resolveFaces(
 }
 
 export function blueprintFace(blueprint: BlueprintPresentation, face: PhysicalFace) {
-  const hiddenPanels = new Set(blueprint.panels.filter(panel =>
-    blueprint.panels.length > 1 && panel.face && panel.face !== face,
-  ).map(panel => panel.panel_key));
-  if (!hiddenPanels.size) return undefined;
+  if (blueprint.panels.length <= 1) return undefined;
+  const panels = blueprint.panels.filter(panel => !panel.face || panel.face === face);
+  if (panels.length === blueprint.panels.length) return undefined;
 
+  const bounds = panelCompositionBounds(panels);
+  const byKey = new Map(panels.map(panel => [panel.panel_key, panel]));
   const hiddenPorts = new Set<string>();
-  const slots = blueprint.slots.filter(slot => {
-    if (!hiddenPanels.has(slot.panel_key)) return true;
-    hiddenPorts.add(slot.connection_point_id);
-    return false;
+  const slots = blueprint.slots.flatMap(slot => {
+    const panel = byKey.get(slot.panel_key);
+    if (!panel) {
+      hiddenPorts.add(slot.connection_point_id);
+      return [];
+    }
+    const x = (panel.x - bounds.x + panel.width * slot.panel_local_position.x) / bounds.width;
+    const y = (panel.y - bounds.y + panel.height * slot.panel_local_position.y) / bounds.height;
+    const side = slot.external_attachment.side;
+    return [{ ...slot, rendered_position: { x, y }, external_attachment: {
+      x: side === 'LEFT' ? 0 : side === 'RIGHT' ? 1 : x,
+      y: side === 'TOP' ? 0 : side === 'BOTTOM' ? 1 : y,
+      side,
+    } }];
   });
-  // Keep the complete composition bounds and canonical slot positions.
-  return { hiddenPanels, hiddenPorts, visibleBlueprint: { ...blueprint, slots } };
+  return { hiddenPorts, visibleBlueprint: { ...blueprint, panels, slots } };
 }

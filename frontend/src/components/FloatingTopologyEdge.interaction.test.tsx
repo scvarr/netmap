@@ -93,14 +93,17 @@ describe('cable route edge interaction', () => {
     const left = entry('left', 0), right = entry('right', 420);
     const blueprint = left.data.projection.attributes.blueprint_presentation as BlueprintPresentation;
     blueprint.panels[0].face = 'REAR';
-    blueprint.panels.push({ ...blueprint.panels[0], panel_key: 'front', panel_number: 2, face: 'FRONT' });
-    const dimensions = blueprintRenderedNodeDimensions(blueprint, 32, 100);
-    left.measured = right.measured = dimensions;
-    const member = (id: string, x: number) => ({
+    blueprint.panels.push({ ...blueprint.panels[0], panel_key: 'front', panel_number: 2, y: 100, height: 50, face: 'FRONT' });
+    const rearFace = blueprintFace(blueprint, 'REAR')!;
+    const frontFace = blueprintFace(blueprint, 'FRONT')!;
+    left.measured = blueprintRenderedNodeDimensions(rearFace.visibleBlueprint, 32);
+    right.measured = blueprintRenderedNodeDimensions(right.data.projection.attributes.blueprint_presentation, 32);
+    const hiddenDimensions = blueprintRenderedNodeDimensions(frontFace.visibleBlueprint, 32);
+    const member = (id: string, x: number, dimensions: typeof left.measured) => ({
       id: 'PhysicalObject:' + id, kind: 'blueprint-object' as const, edge: 'right' as const,
       bounds: { x, y: 0, ...dimensions }, point: { x: x + dimensions.width, y: dimensions.height / 2 },
     });
-    const inputs = [{ locationId: null, boundary: null, members: [member('left', 0), member('right', 420)] }];
+    const inputs = (dimensions = left.measured) => [{ locationId: null, boundary: null, members: [member('left', 0, dimensions), member('right', 420, right.measured)] }];
     const edge = {
       id: 'edge', source: 'left', target: 'right',
       data: { cableNode: { id: 'cable-node', label: 'Cable', source_refs: [cableRef('canonical')] },
@@ -108,24 +111,24 @@ describe('cable route edge interaction', () => {
     } as any;
     const wiring = { source: { physicalObjectId: 'left', connectionPointId: 'left-port' },
       target: { physicalObjectId: 'right', connectionPointId: 'right-port' } };
-    const hidden = { ...left, data: { ...left.data, facePresentation: blueprintFace(blueprint, 'FRONT') } };
+    const hidden = { ...left, measured: hiddenDimensions, data: { ...left.data, facePresentation: frontFace } };
     const onSelect = vi.fn();
 
-    withNodes({ left, right }, () => {
-      const view = render(<ForegroundCableRoutes edges={[]} virtualChannels locationInputs={inputs} wiringRoute={wiring} />);
+    withNodes({ left: { ...left, data: { ...left.data, facePresentation: rearFace } }, right }, () => {
+      const view = render(<ForegroundCableRoutes edges={[]} virtualChannels locationInputs={inputs()} wiringRoute={wiring} />);
       const paths = (selector: string) => [...view.container.querySelectorAll(selector)].map(path => path.getAttribute('d')).sort();
       const preview = paths('path[data-preview]');
       expect(preview.length).toBeGreaterThan(2);
-      view.rerender(<ForegroundCableRoutes edges={[edge]} virtualChannels locationInputs={inputs} onCableSelect={onSelect} />);
+      view.rerender(<ForegroundCableRoutes edges={[edge]} virtualChannels locationInputs={inputs()} onCableSelect={onSelect} />);
       expect(paths('path[data-cable-ids*="canonical"]')).toEqual(preview);
 
       activeNodes = { left: hidden, right };
       const traced = { ...edge, data: { ...edge.data, cablePresentationEmphasis: 'traced' } };
-      view.rerender(<ForegroundCableRoutes edges={[traced]} virtualChannels locationInputs={inputs} onCableSelect={onSelect} traceActive />);
+      view.rerender(<ForegroundCableRoutes edges={[traced]} virtualChannels locationInputs={inputs(hiddenDimensions)} onCableSelect={onSelect} traceActive />);
       expect(view.container.querySelector('.map-cable-route-diagnostics')).toBeNull();
       expect(view.container.querySelector('[data-connection-point-id="left-port"]')).toBeNull();
       const visible = paths('path[data-cable-ids*="canonical"].cable-route-foreground--traced');
-      const terminal = dimensions.width + ' ' + dimensions.height / 2;
+      const terminal = hiddenDimensions.width + ' ' + hiddenDimensions.height / 2;
       expect(visible.some(path => path?.startsWith('M ' + terminal + ' L ') || path?.endsWith(' L ' + terminal))).toBe(true);
       expect(visible.length).toBeLessThan(preview.length);
       fireEvent.click(view.container.querySelector('path.cable-route-hit')!);

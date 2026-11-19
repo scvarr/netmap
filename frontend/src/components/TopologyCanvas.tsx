@@ -174,7 +174,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   annotationMode,
 }: TopologyCanvasProps) {
   const { t } = useI18n();
-  const [projection, setProjection] = useState<FlowProjection | null>(null);
+  const [storedProjection, setProjection] = useState<FlowProjection | null>(null);
   const [layoutError, setLayoutError] = useState<string | null>(null);
   const [layoutRevision, setLayoutRevision] = useState(0);
   const fitAfterLayout = useRef(false);
@@ -196,6 +196,50 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   const presentationSceneKey = sceneKey ?? viewKey;
   const presentationScene = useMemo(() => presentationSceneDocument(document), [document]);
   const occupiedPorts = useMemo(() => cableOccupiedPortIds(document), [document]);
+
+  const physicalObjectView = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT";
+  const objectFaces = physicalObjectView ? faceViews?.objectFaces : undefined;
+  const projection = useMemo(() => {
+    if (!storedProjection || !objectFaces) return storedProjection;
+    return { ...storedProjection, nodes: storedProjection.nodes.map(node => {
+      const id = physicalObjectIdForNode(node.data.projection);
+      const resolvedFace = id ? objectFaces.get(id) : undefined;
+      const blueprint = node.data.projection.attributes.blueprint_presentation;
+      if (!resolvedFace || !blueprint) return node;
+      const facePresentation = blueprintFace(blueprint, resolvedFace.face);
+      const dimensions = blueprintRenderedNodeDimensions(
+        facePresentation?.visibleBlueprint ?? blueprint, node.data.compositionDisplayWidth,
+      );
+      return { ...node, ...dimensions, data: { ...node.data, facePresentation } };
+    }) };
+  }, [storedProjection, objectFaces]);
+
+  const locationStates = useMemo(() => {
+    const states = locationFrameInput?.states ?? [];
+    if (!physicalObjectView || !locationFrameInput || locationFrameInput.automatic || !projection) return states;
+    const assignments = new Map(locationFrameInput.placements.map(p => [p.physical_object_ref.entity_id, p.location_ref?.entity_id]));
+    const contents = new Map<string, { right: number; bottom: number }>();
+    for (const node of projection.nodes) {
+      if (!node.data.projection.attributes.blueprint_presentation?.panels.some(panel => panel.face)) continue;
+      const object = physicalObjectIdForNode(node.data.projection);
+      const location = object ? assignments.get(object) : undefined;
+      if (!location) continue;
+      const bounds = nodeFootprint(node);
+      const previous = contents.get(location);
+      contents.set(location, {
+        right: Math.max(bounds.x + bounds.width, previous?.right ?? -Infinity),
+        bottom: Math.max(bounds.y + bounds.height, previous?.bottom ?? -Infinity),
+      });
+    }
+    if (!contents.size) return states;
+    // Grow the derived frames in place so a larger side can reach its terminal
+    // in a manual layout. Saved frames and object positions keep their origins.
+    const frames = layoutLocationFrames(locationFrameInput.locations,
+      new Map(states.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : [])),
+      contents,
+    );
+    return states.map(state => ({ ...state, geometry: frames.get(state.location_ref.entity_id) ?? state.geometry }));
+  }, [physicalObjectView, locationFrameInput, projection]);
 
   currentDocument.current = document;
 
@@ -319,7 +363,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
       ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, projection.nodes.flatMap(node => {
           const id = physicalObjectIdForNode(node.data.projection);
           return id ? [{ physicalObjectId: id, rectangle: nodeFootprint(node), flexibleCableZone: Boolean(node.data.projection.attributes.blueprint_presentation) }] : [];
-        }), locationFrameInput.states ?? [], locationFrameInput.automatic) : null;
+        }), locationStates, locationFrameInput.automatic) : null;
     const bounds = [...(locations?.frames ?? []).map(frame => frame.bounds), ...(locations?.proxies ?? []).filter(proxy => !proxy.partial).map(proxy => proxy.bounds),
       ...projection.nodes.map(node => ({ ...node, position: locations?.automaticPositions?.get(physicalObjectIdForNode(node.data.projection) ?? '') ?? node.position })).filter(node => !locations?.hiddenObjectProxy.has(physicalObjectIdForNode(node.data.projection) ?? '')).map(node => nodeFootprint(node))];
     if (bounds.length && locations) {
@@ -360,15 +404,6 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     return () => onViewportCenterReady(null);
   }, [onViewportCenterReady, screenToFlowPosition]);
 
-  const physicalObjectView = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT";
-  const objectFaces = physicalObjectView ? faceViews?.objectFaces : undefined;
-  const facePresentations = useMemo(() => new Map(projection?.nodes.map(node => {
-    const id = physicalObjectIdForNode(node.data.projection);
-    const face = id ? objectFaces?.get(id)?.face : undefined;
-    const blueprint = node.data.projection.attributes.blueprint_presentation;
-    return [node.id, face && blueprint ? blueprintFace(blueprint, face) : undefined] as const;
-  })), [projection?.nodes, objectFaces]);
-
   if (layoutError) {
     return (
       <div className="topology-layout-state" role="alert">
@@ -397,10 +432,10 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
       return [{ physicalObjectId, rectangle, flexibleCableZone: Boolean(node.data.projection.attributes.blueprint_presentation) }];
     }) : [];
   const locationPresentation = showLocationPresentation && locationFrameInput
-    ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationFrameInput.states ?? [], arrangement.preview ?? locationFrameInput.automatic)
+    ? deriveLocationPresentation(locationFrameInput.locations, locationFrameInput.placements, displayedPhysicalObjects, locationStates, arrangement.preview ?? locationFrameInput.automatic)
     : { frames: [], objectPaths: [], proxies: [], hiddenObjectProxy: new Map<string, string>() };
   const automatic = showLocationPresentation && locationFrameInput?.automatic;
-  const baseFrameGeometries = automatic ? new Map([...locationPresentation.frames, ...locationPresentation.proxies.filter(p => !p.partial)].map(f => [f.locationId, { ...f.bounds, edge: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.edge ?? 'right' as const, offset: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.offset ?? .5 }])) : layoutLocationFrames(locationFrameInput?.locations ?? [], new Map(locationFrameInput?.states?.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : []) ?? []));
+  const baseFrameGeometries = automatic ? new Map([...locationPresentation.frames, ...locationPresentation.proxies.filter(p => !p.partial)].map(f => [f.locationId, { ...f.bounds, edge: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.edge ?? 'right' as const, offset: locationFrameInput?.states?.find(s => s.location_ref.entity_id === f.locationId)?.geometry?.offset ?? .5 }])) : layoutLocationFrames(locationFrameInput?.locations ?? [], new Map(locationStates.flatMap(state => state.geometry ? [[state.location_ref.entity_id, state.geometry] as const] : [])));
   const activeFrameEdit = frameEditPreview?.scene === presentationSceneKey && baseFrameGeometries.has(frameEditPreview.id) ? frameEditPreview : null;
   const frameEdit = activeFrameEdit && !automatic
     ? editLocationFrames(locationFrameInput?.locations ?? [], baseFrameGeometries, activeFrameEdit.id, activeFrameEdit.geometry)
@@ -432,7 +467,6 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
       ...node.data,
       locationPresentationPath: locationPathsByObjectId.get(physicalObjectIdForNode(node.data.projection) ?? ""),
       resolvedFace: objectFaces?.get(physicalObjectIdForNode(node.data.projection) ?? ''),
-      facePresentation: facePresentations.get(node.id),
       onFaceChange: onFaceChange ? value => {
         const id = physicalObjectIdForNode(node.data.projection);
         if (id) onFaceChange(value, { kind: 'objects', id });

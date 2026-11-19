@@ -24,7 +24,7 @@ def test_pp24_move_response_content_bounds_manual_floor_variants_and_rollback():
     variant = doc["active_variant_ref"]["entity_id"]
     identity = {s["location_ref"]["entity_id"]: s["boundary_point_id"] for s in doc["location_states"]}
     assert frames[leaf]["width"] == pytest.approx(382)
-    assert frames[leaf]["height"] == pytest.approx(250 * 44 / 480 + 60)  # Density floor, composition, Location header/padding.
+    assert frames[leaf]["height"] == pytest.approx(24 + 60)  # Name and face indicator floor, Location header/padding.
     copy = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": "Copy", "source_variant_id": variant}).json()["variant_ref"]["entity_id"]
     copied = detail(map_id, copy)
     _, other_point = create_object_with_point(client, "Other")
@@ -42,8 +42,8 @@ def test_pp24_move_response_content_bounds_manual_floor_variants_and_rollback():
         current, current_frames = state(map_id)
         assert position(current, obj)["x"] == target["x"]
         assert position(current, obj)["y"] == target["y"]
-        assert contains(current_frames[leaf], dict(target, width=342, height=250 * 44 / 480))
-        assert current_frames[leaf]["width"] == pytest.approx(382) and current_frames[leaf]["height"] == pytest.approx(250 * 44 / 480 + 60)
+        assert contains(current_frames[leaf], dict(target, width=342, height=24))
+        assert current_frames[leaf]["width"] == pytest.approx(382) and current_frames[leaf]["height"] == pytest.approx(24 + 60)
         assert current_frames[leaf]["x"] == target["x"] - 20
         for parent, child in zip(chain, chain[1:]):
             assert contains(current_frames[parent], current_frames[child])

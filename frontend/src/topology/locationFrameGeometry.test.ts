@@ -5,6 +5,20 @@ import type { LocationDocument } from './locationTypes';
 const location = (id: string, parent?: string): LocationDocument => ({ location_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: id }, name: id, type: null, parent_location_ref: parent ? { ref_type: 'CANONICAL_FACT', entity_type: 'Location', entity_id: parent } : null });
 const locations = [location('808'), location('823', '808'), location('821', '808'), location('U19', '823'), location('U23', '823')];
 const inside = (p: { x: number; y: number; width: number; height: number }, c: typeof p) => c.x >= p.x + 20 && c.y >= p.y + 40 && c.x + c.width <= p.x + p.width - 20 && c.y + c.height <= p.y + p.height - 20;
+it('contains a larger active face without moving saved frames or changing their bounds', () => {
+  const saved = layoutLocationFrames(locations, new Map());
+  const snapshot = structuredClone(saved);
+  const rack = saved.get('U19')!;
+  const bottom = rack.y + rack.height + 120;
+  const rendered = layoutLocationFrames(locations, saved, new Map([
+    ['U19', { right: rack.x + rack.width, bottom }],
+  ]));
+  expect(rendered.get('U19')).toMatchObject({ x: rack.x, y: rack.y, height: bottom + 20 - rack.y });
+  expect(inside(rendered.get('823')!, rendered.get('U19')!)).toBe(true);
+  expect(rendered.get('U23')).toEqual(saved.get('U23'));
+  expect(saved).toEqual(snapshot);
+});
+
 it('lays out empty nested branches deterministically, independently of input order', () => {
   const frames = layoutLocationFrames(locations, new Map());
   expect(layoutLocationFrames([...locations].reverse(), new Map())).toEqual(frames);

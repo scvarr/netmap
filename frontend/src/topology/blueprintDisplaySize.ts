@@ -13,11 +13,13 @@ export const MIN_BLUEPRINT_PORT_CENTER_SEPARATION = BLUEPRINT_PORT_HIT_SIZE + 2;
 export const MIN_BLUEPRINT_LABEL_FONT_SIZE = 8;
 export const MAX_BLUEPRINT_LABEL_FONT_SIZE = 32;
 export const OBJECT_NAME_ZONE_WIDTH = 72;
+export const MIN_BLUEPRINT_FRAME_HEIGHT = 24;
 export const OBJECT_CABLE_ZONE_WIDTH = 20;
 export const OBJECT_SIDE_ZONES_WIDTH = OBJECT_NAME_ZONE_WIDTH + OBJECT_CABLE_ZONE_WIDTH;
 
 
 export const panelCompositionBounds = (panels: BlueprintPresentation['panels']) => {
+  if (!panels.length) return { x: 0, y: 0, width: 0, height: 0 };
   const x = Math.min(...panels.map((panel) => panel.x));
   const y = Math.min(...panels.map((panel) => panel.y));
   return { x, y, width: Math.max(...panels.map((panel) => panel.x + panel.width)) - x, height: Math.max(...panels.map((panel) => panel.y + panel.height)) - y };
@@ -35,6 +37,7 @@ export const blueprintNodeDisplayDimensions = (
   presentation: BlueprintPresentation,
   displayWidth: number | undefined,
 ) => {
+  if (!presentation.panels.length) return { width: MIN_BLUEPRINT_DISPLAY_WIDTH, height: MIN_BLUEPRINT_FRAME_HEIGHT };
   const bounds = panelCompositionBounds(presentation.panels);
   const minimum = minimumBlueprintDisplayWidth(presentation);
   if (minimum > MAX_BLUEPRINT_DISPLAY_WIDTH) throw new Error('map.portGeometryUnsupported');
@@ -88,5 +91,5 @@ export const blueprintObjectLabelFontSize = (
 /** Complete three-zone footprint; displayWidth always describes the composition. */
 export const blueprintRenderedNodeDimensions = (presentation: BlueprintPresentation, displayWidth: number | undefined, frameWidth?: number) => {
   const body = blueprintNodeDisplayDimensions(presentation, displayWidth);
-  return { width: Math.max(frameWidth ?? 0, body.width + OBJECT_SIDE_ZONES_WIDTH), height: body.height };
+  return { width: Math.max(frameWidth ?? 0, body.width + OBJECT_SIDE_ZONES_WIDTH), height: Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, body.height) };
 };

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { blueprintRenderedNodeDimensions } from './blueprintDisplaySize';
+import { uniformGridPresentation } from './uniformGridPresentation';
 import { blueprintFace, resolveFaces } from './physicalFaces';
 import type { LocationDocument, LocationRef } from './locationTypes';
 import type { MapLocationState, MapPlacement, PhysicalFace } from './savedMapTypes';
@@ -35,15 +37,15 @@ describe('physical faces', () => {
     expect(changed.objectFaces.get('explicit')).toEqual({ face: 'FRONT', source: { kind: 'variant' }, explicit: false });
   });
 
-  it('uses explicit panel faces while preserving geometry and canonical port IDs', () => {
-    const panel = (key: string, x: number, face?: PhysicalFace) => ({
-      panel_key: key, panel_number: x + 1, display_name: 'Arbitrary ' + key, x, y: 0, width: 1, height: 1, face,
+  it('crops vertical panel layouts, preserves port identity and remeasures uniform-grid cells', () => {
+    const panel = (key: string, y: number, face?: PhysicalFace, height = 1) => ({
+      panel_key: key, panel_number: y + 1, display_name: 'Arbitrary ' + key, x: 0, y, width: 4, height, face,
     });
     const blueprint = {
       blueprint_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplate', entity_id: 'template' },
       version_ref: { ref_type: 'LIBRARY_RECORD', entity_type: 'BaseTemplateRevision', entity_id: 'revision' },
-      body: { kind: 'RECTANGLE', width: 3, height: 1 },
-      panels: [panel('A', 0, 'FRONT'), panel('B', 1, 'REAR'), panel('C', 2)],
+      body: { kind: 'RECTANGLE', width: 4, height: 5 },
+      panels: [panel('A', 0, 'FRONT'), panel('B', 3, 'REAR', 2), panel('C', 5)],
       slots: ['A', 'B', 'C'].map(key => ({
         panel_key: key, slot_key: key, connection_point_id: 'canonical-' + key, display_name: key,
         kind: 'CONNECTION_POINT' as const, port_type_id: 'colored',
@@ -51,12 +53,38 @@ describe('physical faces', () => {
         external_attachment: { x: 1, y: .5, side: 'RIGHT' as const },
       })),
     } satisfies BlueprintPresentation;
+    const original = structuredClone(blueprint);
+    const front = blueprintFace(blueprint, 'FRONT')!.visibleBlueprint;
     const rear = blueprintFace(blueprint, 'REAR')!;
     expect(rear.hiddenPorts).toEqual(new Set(['canonical-A']));
-    expect(rear.visibleBlueprint.panels).toBe(blueprint.panels);
-    expect(rear.visibleBlueprint.slots).toEqual(blueprint.slots.slice(1));
+    expect(rear.visibleBlueprint.panels.map(item => item.panel_key)).toEqual(['B', 'C']);
+    expect(rear.visibleBlueprint.slots[0]).toMatchObject({
+      connection_point_id: 'canonical-B', port_type_id: 'colored',
+      rendered_position: { x: .5, y: 1 / 3 },
+      external_attachment: { x: 1, y: 1 / 3 },
+    });
+    expect(blueprint).toEqual(original);
+    expect(blueprintRenderedNodeDimensions(blueprint, 200)).toEqual({ width: 292, height: 300 });
+    const rearDimensions = blueprintRenderedNodeDimensions(rear.visibleBlueprint, 200);
+    expect(rearDimensions).toEqual({ width: 292, height: 150 });
+
+    const grid = (dimensions: typeof rearDimensions) => uniformGridPresentation(
+      [location('rack')], [placement('unit', 'rack'), placement('tail', 'rack')],
+      [{ physicalObjectId: 'unit', rectangle: { x: 0, y: 0, ...dimensions }, flexibleCableZone: true },
+        { physicalObjectId: 'tail', rectangle: { x: 0, y: 0, width: 212, height: 144 } }],
+      [], { mode: 'uniform_grid', version: 1, hide_empty: false, tables: { root: [['rack']] },
+        object_sequences: { rack: { direction: 'VERTICAL', order: ['unit', 'tail'] } } },
+    );
+    const frontGrid = grid(blueprintRenderedNodeDimensions(front, 200));
+    const rearGrid = grid(rearDimensions);
+    expect(rearGrid.positions.get('unit')?.height).toBe(150);
+    expect(frontGrid.positions.get('tail')!.y - rearGrid.positions.get('tail')!.y).toBe(150);
+
     expect(blueprintFace({ ...blueprint, panels: [panel('A', 0, 'REAR')] }, 'FRONT')).toBeUndefined();
     expect(blueprintFace({ ...blueprint, panels: [panel('A', 0), panel('B', 1)] }, 'REAR')).toBeUndefined();
-    expect(blueprintFace({ ...blueprint, panels: [panel('A', 0, 'FRONT'), panel('B', 1, 'FRONT'), panel('C', 2, 'FRONT')] }, 'REAR')?.visibleBlueprint.slots).toEqual([]);
+    const empty = blueprintFace({ ...blueprint, panels: blueprint.panels.map(item => ({ ...item, face: 'FRONT' })) }, 'REAR')!.visibleBlueprint;
+    expect(empty.panels).toEqual([]);
+    expect(empty.slots).toEqual([]);
+    expect(blueprintRenderedNodeDimensions(empty, 200)).toEqual({ width: 124, height: 24 });
   });
 });

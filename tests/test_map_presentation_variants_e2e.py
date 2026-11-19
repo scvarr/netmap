@@ -158,3 +158,38 @@ def test_face_settings_copy_and_reload_without_materializing_inheritance():
     assert settings(copied) == ("FRONT", {room: None, rack: None, other: None}, None)
     assert settings(source) == expected
     assert detail(map_id, copied)["placements"][0]["location_ref"]["entity_id"] == room
+
+
+def test_manual_variant_footprint_uses_active_face_without_moving_the_object():
+    from uuid import UUID, uuid4
+
+    from app.saved_map_catalog import SavedMapCatalog
+    from tests.test_hardware_configuration import base_payload, create_base, create_object
+    from tests.test_map_location_states_e2e import assign, detail, location
+
+    payload = base_payload()
+    panel = payload["panels"][0]
+    panel["face"] = "FRONT"
+    payload["panels"].append({**panel, "panel_key": str(uuid4()), "panel_number": 2,
+                              "y": 60, "height": 30, "face": "REAR"})
+    template_id, _ = create_base(payload)
+    object_id = create_object(template_id)["physical_object_ref"]["entity_id"]
+    room = location("Face geometry")
+    assign(object_id, room)
+    map_id = create_map(client, "Face geometry")
+    variant = detail(map_id)["active_variant_ref"]["entity_id"]
+    assert client.post(f"/v1/maps/{map_id}/placements", json={
+        "physical_object_id": object_id, "x": 100, "y": 100, "display_width": 240,
+    }).status_code == 201
+
+    def footprint():
+        with SessionLocal.begin() as session:
+            _, footprints = SavedMapCatalog(session)._physical_geometry(UUID(map_id), UUID(variant))
+            return footprints[UUID(object_id)]
+
+    before = footprint()
+    assert (before["width"], before["height"]) == (332, 90)
+    assert client.put(f"/v1/maps/{map_id}/presentation-variants/{variant}/face/locations/{room}",
+                      json={"face": "REAR"}).status_code == 200
+    assert footprint() == {**before, "height": 45}
+    assert detail(map_id)["placements"][0]["positions"]["L1/PHYSICAL_OBJECT"]["display_width"] == 240

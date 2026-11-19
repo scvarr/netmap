@@ -3,9 +3,12 @@ from app.errors import ValidationError
 
 NAME_ZONE_WIDTH = 72
 CABLE_ZONE_WIDTH = 20
+MIN_FRAME_HEIGHT = 24
 
 
 def object_frame_dimensions(panels, centres, display_width=None):
+    if not panels:
+        return 32 + NAME_ZONE_WIDTH + CABLE_ZONE_WIDTH, MIN_FRAME_HEIGHT
     composition_width = max(p.x + p.width for p in panels) - min(p.x for p in panels)
     composition_height = max(p.y + p.height for p in panels) - min(p.y for p in panels)
     minimum = max(32, *(12 * composition_width / p.height for p in panels))
@@ -18,4 +21,4 @@ def object_frame_dimensions(panels, centres, display_width=None):
     if minimum > 960:
         raise ValidationError("Unsupported map port geometry", {})
     width = max(display_width if display_width is not None else 240, minimum)
-    return width + NAME_ZONE_WIDTH + CABLE_ZONE_WIDTH, width * composition_height / composition_width
+    return width + NAME_ZONE_WIDTH + CABLE_ZONE_WIDTH, max(MIN_FRAME_HEIGHT, width * composition_height / composition_width)

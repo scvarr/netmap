@@ -9,7 +9,7 @@ import { internalL1Segments } from '../topology/internalL1Presentation';
 import { physicalPortPaint, tracedPortIds } from '../topology/physicalPortPresentation';
 import { PhysicalFaceIndicator } from './PhysicalFaceControls';
 import { InternalL1Continuity } from './InternalL1Continuity';
-import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, OBJECT_SIDE_ZONES_WIDTH, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
+import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, OBJECT_SIDE_ZONES_WIDTH, MIN_BLUEPRINT_FRAME_HEIGHT, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
@@ -19,8 +19,9 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
   const { projection } = data;
   const physical = projection.kind === 'PHYSICAL_OBJECT';
   const classPresentation = physicalClassPresentation(projection.attributes.class);
-  const blueprint = projection.attributes.blueprint_presentation;
-  const singlePanelFace = blueprint?.panels.length === 1 ? blueprint.panels[0].face : undefined;
+  const canonicalBlueprint = projection.attributes.blueprint_presentation;
+  const blueprint = data.facePresentation?.visibleBlueprint ?? canonicalBlueprint;
+  const singlePanelFace = canonicalBlueprint?.panels.length === 1 ? canonicalBlueprint.panels[0].face : undefined;
   const faceIndicator = data.resolvedFace && <PhysicalFaceIndicator resolved={data.resolvedFace}
     panelFace={singlePanelFace} onChange={data.onFaceChange} disabled={data.faceBusy} />;
   const objectId = projection.source_refs.find((ref) => ref.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'PhysicalObject')?.entity_id;
@@ -30,20 +31,20 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
     return { role: 'button' as const, tabIndex: state === 'unavailable' ? -1 : 0, 'aria-label': `Порт ${label}`, 'aria-disabled': state === 'unavailable' || undefined, onClick: (event: React.MouseEvent) => { event.stopPropagation(); if (state !== 'unavailable' && objectId) data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); }, onContextMenu: (event: React.MouseEvent) => { event.preventDefault(); event.stopPropagation(); if (objectId) data.onPhysicalPortContextMenu?.({ physicalObjectId: objectId, connectionPointId, label }, { x: event.clientX, y: event.clientY }); }, onKeyDown: (event: React.KeyboardEvent) => { if ((event.key === 'Enter' || event.key === ' ') && state !== 'unavailable' && objectId) { event.preventDefault(); data.onPhysicalPortClick?.({ physicalObjectId: objectId, connectionPointId, label }); } } };
   };
   if (physical && blueprint) {
-    const displayWidth = blueprintNodeDisplayDimensions(blueprint, data.compositionDisplayWidth).width;
-    const displayHeight = blueprintNodeDisplayDimensions(blueprint, displayWidth).height;
+    const { width: displayWidth, height: displayHeight } = blueprintNodeDisplayDimensions(blueprint, data.compositionDisplayWidth);
+    const frameHeight = Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, displayHeight);
     const frameWidth = Math.max(width ?? 0, displayWidth + OBJECT_SIDE_ZONES_WIDTH);
     const cableWidth = frameWidth - OBJECT_NAME_ZONE_WIDTH - displayWidth;
     const bounds = panelCompositionBounds(blueprint.panels);
-    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: frameWidth, height: displayHeight, gridTemplateColumns: `${OBJECT_NAME_ZONE_WIDTH}px ${displayWidth}px ${cableWidth}px` }}>
+    return <div data-testid="blueprint-map-node" className={`blueprint-map-node${selected ? ' blueprint-map-node--selected' : ''}${data.traceHighlighted ? ' blueprint-map-node--trace-highlighted' : ''}`} style={{ width: frameWidth, height: frameHeight, gridTemplateColumns: `${OBJECT_NAME_ZONE_WIDTH}px ${displayWidth}px ${cableWidth}px` }}>
     <NodeResizeControl
       position="right"
       resizeDirection="horizontal"
-      style={{ display: selected && data.blueprintResizeEnabled ? undefined : "none" }}
+      style={{ display: selected && data.blueprintResizeEnabled && blueprint.panels.length > 0 ? undefined : "none" }}
       minWidth={minimumBlueprintDisplayWidth(blueprint) + OBJECT_SIDE_ZONES_WIDTH}
       maxWidth={960 + OBJECT_SIDE_ZONES_WIDTH}
-      minHeight={blueprintNodeDisplayDimensions(blueprint, minimumBlueprintDisplayWidth(blueprint)).height}
-      maxHeight={blueprintNodeDisplayDimensions(blueprint, 960).height}
+      minHeight={Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, blueprintNodeDisplayDimensions(blueprint, minimumBlueprintDisplayWidth(blueprint)).height)}
+      maxHeight={Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, blueprintNodeDisplayDimensions(blueprint, 960).height)}
 
       className="blueprint-map-node__resizer-handle"
       onResizeStart={() => { resizeStart.current = { frameWidth, displayWidth }; }}
@@ -61,7 +62,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
     </strong>
     <div className="blueprint-map-node__body" style={{ height: displayHeight }}>
     <div className="blueprint-map-node__panels">
-      {blueprint.panels.filter(panel => !data.facePresentation?.hiddenPanels.has(panel.panel_key)).map((panel) => {
+      {blueprint.panels.map((panel) => {
         return <section key={panel.panel_key} className="blueprint-map-node__panel" data-testid={`blueprint-panel-${panel.panel_key}`} style={{ left: `${(panel.x - bounds.x) / bounds.width * 100}%`, top: `${(panel.y - bounds.y) / bounds.height * 100}%`, width: `${panel.width / bounds.width * 100}%`, height: `${panel.height / bounds.height * 100}%`, background: blueprint.body.fill_color ?? '#18383a' }}>
           <div className="blueprint-map-node__panel-surface" title={panel.display_name}>
             {blueprint.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => {
@@ -82,7 +83,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
         </section>;
       })}
     </div>
-    <InternalL1Continuity width={displayWidth} height={displayHeight} segments={internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, displayWidth, data.facePresentation?.hiddenPorts)} />
+    <InternalL1Continuity width={displayWidth} height={displayHeight} segments={internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, displayWidth, blueprint)} />
     </div>
     <div className="blueprint-map-node__cable-zone" aria-hidden="true" />
     <Handle type="source" position={Position.Top} className="device-node__handle" />

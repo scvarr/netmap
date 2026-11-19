@@ -12,9 +12,13 @@ def test_three_zone_density_and_saved_width(count, saved_width):
     width, height = object_frame_dimensions(panels, centres, saved_width)
     composition = max(saved_width, columns * 10)
     assert width == pytest.approx(composition + 92)
-    assert height == pytest.approx(composition * 44 / 480)
+    assert height == pytest.approx(max(24, composition * 44 / 480))
 
 
 def test_offset_panels_and_default_width():
     panels = [SimpleNamespace(x=-10, y=7, width=480, height=44), SimpleNamespace(x=-10, y=51, width=480, height=44)]
     assert object_frame_dimensions(panels, [], None) == (332, 44)
+
+
+def test_empty_face_uses_compact_frame_without_ports():
+    assert object_frame_dimensions([], [], 960) == (124, 24)

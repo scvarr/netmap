@@ -1,6 +1,8 @@
 import type { XYPosition } from '@xyflow/react';
 import { LAYOUT_NODE_HEIGHT, LAYOUT_NODE_WIDTH, type DeviceFlowNode } from './layout';
+import type { PhysicalFace } from './savedMapTypes';
 import type { TopologyProjectionNode } from './types';
+import { blueprintFace } from './physicalFaces';
 import { blueprintRenderedNodeDimensions } from './blueprintDisplaySize';
 
 export interface FlowRectangle extends XYPosition {
@@ -30,9 +32,13 @@ export const MAX_PLACEMENT_SEARCH_RING = 32;
 export const footprintDimensionsForProjectionNode = (
   node: TopologyProjectionNode,
   displayWidth?: number,
+  face?: PhysicalFace,
 ): NodeFootprintDimensions => {
   const blueprint = node.attributes.blueprint_presentation;
-  if (blueprint) return blueprintRenderedNodeDimensions(blueprint, displayWidth);
+  if (blueprint) {
+    const active = face ? blueprintFace(blueprint, face)?.visibleBlueprint : undefined;
+    return blueprintRenderedNodeDimensions(active ?? blueprint, displayWidth);
+  }
   return {
     width: LAYOUT_NODE_WIDTH,
     height: LAYOUT_NODE_HEIGHT,
@@ -43,22 +49,21 @@ export const projectionNodeFootprint = (
   node: TopologyProjectionNode,
   position: XYPosition,
   displayWidth?: number,
-): FlowRectangle => ({ ...position, ...footprintDimensionsForProjectionNode(node, displayWidth) });
+  face?: PhysicalFace,
+): FlowRectangle => ({ ...position, ...footprintDimensionsForProjectionNode(node, displayWidth, face) });
 
 export const nodeFootprint = (
   node: DeviceFlowNode,
   position: XYPosition = node.position,
 ): FlowRectangle => {
-  const dimensions = footprintDimensionsForProjectionNode(node.data.projection);
-  const blueprint = node.data.projection.attributes.blueprint_presentation;
+  const blueprint = node.data.facePresentation?.visibleBlueprint ?? node.data.projection?.attributes.blueprint_presentation;
   if (blueprint) {
-    const width = node.measured?.width ?? node.width ?? dimensions.width;
-    return { ...position, ...blueprintRenderedNodeDimensions(blueprint, node.data.compositionDisplayWidth, width) };
+    return { ...position, ...blueprintRenderedNodeDimensions(blueprint, node.data.compositionDisplayWidth, node.width ?? node.measured?.width) };
   }
   return {
     ...position,
-    width: node.measured?.width ?? node.width ?? dimensions.width,
-    height: node.measured?.height ?? node.height ?? dimensions.height,
+    width: node.measured?.width ?? node.width ?? LAYOUT_NODE_WIDTH,
+    height: node.measured?.height ?? node.height ?? LAYOUT_NODE_HEIGHT,
   };
 };
 

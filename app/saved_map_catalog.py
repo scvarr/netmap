@@ -275,11 +275,28 @@ class SavedMapCatalog:
                 .join(PresentationPanel, PresentationPanel.base_revision_id == ObjectConfiguration.base_revision_id)
                 .where(ObjectConfiguration.physical_object_id.in_([r[1] for r in records]))):
             panels.setdefault(object_id, []).append(panel)
+        variant = self._require_variant(map_id, variant_id)
+        parents = dict(self.session.execute(select(Location.id, Location.parent_location_id)).all())
+        overrides = dict(self.session.execute(select(MapLocationState.location_id, MapLocationState.face_override)
+            .where(MapLocationState.variant_id == variant_id, MapLocationState.face_override.is_not(None))).all())
+
+        def effective_face(position, assigned):
+            if position.face_override is not None:
+                return position.face_override
+            while assigned is not None:
+                if assigned in overrides:
+                    return overrides[assigned]
+                assigned = parents.get(assigned)
+            return variant.default_face
+
         footprints = {}
-        for position, object_id, _ in records:
+        for position, object_id, assigned in records:
             width, height = 212, 144
             if object_id in panels:
                 bounds = panels[object_id]
+                if len(bounds) > 1:
+                    face = effective_face(position, assigned)
+                    bounds = [panel for panel in bounds if panel.face is None or panel.face == face]
                 from app.hardware_catalog import HardwareCatalog
                 from app.object_frame_geometry import object_frame_dimensions
                 slots = self.session.scalars(select(BuiltInEndpointDefinition)
@@ -288,9 +305,9 @@ class SavedMapCatalog:
                     .where(ObjectConfiguration.physical_object_id == object_id)).all()
                 by_key = {panel.panel_key: panel for panel in bounds}
                 centres = [(by_key[slot.panel_key].x + by_key[slot.panel_key].width * slot.position_x,
-                            by_key[slot.panel_key].y + by_key[slot.panel_key].height * slot.position_y) for slot in slots]
+                            by_key[slot.panel_key].y + by_key[slot.panel_key].height * slot.position_y) for slot in slots if slot.panel_key in by_key]
                 for bay in HardwareCatalog(self.session).configuration_document(object_id)["bays"]:
-                    if bay["installation"]:
+                    if bay["installation"] and bay["panel_key"] in by_key:
                         panel = by_key[bay["panel_key"]]
                         centres.extend((panel.x + panel.width * endpoint["x"], panel.y + panel.height * endpoint["y"])
                                        for endpoint in bay["installation"]["endpoints"])

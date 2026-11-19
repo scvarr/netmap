@@ -14,7 +14,7 @@ import {
   mapCandidateChoices,
 } from "../components/MapInsertionPicker";
 import { PhysicalFaceSelect } from '../components/PhysicalFaceControls';
-import { resolveFaces } from '../topology/physicalFaces';
+import { blueprintFace, resolveFaces } from '../topology/physicalFaces';
 import type { FaceOverride, FaceTarget } from '../topology/savedMapTypes';
 import { QuickInspector } from "../components/QuickInspector";
 import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
@@ -70,7 +70,6 @@ import type {
   MapLocationDirectElementChoice,
 } from "../topology/savedMapTypes";
 import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth } from "../topology/blueprintDisplaySize";
-import { blueprintNodeDisplayDimensions } from "../topology/blueprintDisplaySize";
 import { directlyAttachedCableIds } from "../topology/presentationScene";
 import type {
   TopologyDataSource,
@@ -1036,7 +1035,7 @@ function MapPageContent({
         );
         const position = placement.positions["L1/PHYSICAL_OBJECT"];
         return node && position && node.kind === "PHYSICAL_OBJECT" && node.attributes.class !== "cable"
-          ? [projectionNodeFootprint(node, position, position.display_width)]
+          ? [projectionNodeFootprint(node, position, position.display_width, faceViews?.objectFaces.get(placement.physical_object_ref.entity_id)?.face)]
           : [];
       },
     );
@@ -1228,7 +1227,9 @@ function MapPageContent({
     const writes = requests.flatMap(({ id, displayWidth }) => {
       const current = activeMap?.placements.find((placement) => placement.physical_object_ref.entity_id === id)?.positions[positionKey];
       const blueprint = (latestPhysicalDocument.current?.nodes ?? []).find((node) => physicalObjectIdForNode(node) === id)?.attributes.blueprint_presentation;
-      return current && blueprint ? [{ id, current, width: clampBlueprintDisplayWidth(displayWidth, blueprint) }] : [];
+      const face = faceViews?.objectFaces.get(id)?.face;
+      const visible = blueprint && face ? blueprintFace(blueprint, face)?.visibleBlueprint ?? blueprint : blueprint;
+      return current && visible ? [{ id, current, width: clampBlueprintDisplayWidth(displayWidth, visible) }] : [];
     });
     if (!writes.length) return;
     const requestedVariant = selectedVariantId.current;

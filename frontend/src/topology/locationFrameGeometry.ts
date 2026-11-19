@@ -5,7 +5,11 @@ import type { LocationDocument } from './locationTypes';
 export const FRAME_PADDING = 20;
 export const FRAME_HEADER = 40;
 
-export function layoutLocationFrames(locations: readonly LocationDocument[], saved: ReadonlyMap<string, MapLocationGeometry>) {
+export function layoutLocationFrames(
+  locations: readonly LocationDocument[],
+  saved: ReadonlyMap<string, MapLocationGeometry>,
+  contents?: ReadonlyMap<string, { right: number; bottom: number }>,
+) {
   const parents = new Map(locations.map(l => [l.location_ref.entity_id, l.parent_location_ref?.entity_id]));
   const children = new Map([...parents.keys()].map(id => [id, [] as string[]]));
   const roots: string[] = [];
@@ -16,6 +20,11 @@ export function layoutLocationFrames(locations: readonly LocationDocument[], sav
   const newSubtree = (id: string): boolean => !saved.has(id) || children.get(id)!.some(newSubtree);
   const place = (id: string, x: number, y: number) => {
     const g = { ...(saved.get(id) ?? { x, y, width: Math.max(140, Math.min(360, 80 + [...(locations.find(l => l.location_ref.entity_id === id)?.name ?? '')].length * 7)), height: 64, edge: 'right' as const, offset: .5 }) };
+    const extent = contents?.get(id);
+    if (extent) {
+      g.width = Math.max(g.width, extent.right + FRAME_PADDING - g.x);
+      g.height = Math.max(g.height, extent.bottom + FRAME_PADDING - g.y);
+    }
     result.set(id, g);
     let cursor = Math.max(g.y + FRAME_HEADER, ...children.get(id)!.flatMap(child => saved.has(child) ? [saved.get(child)!.y + saved.get(child)!.height + FRAME_PADDING] : []));
     const placed: string[] = [];

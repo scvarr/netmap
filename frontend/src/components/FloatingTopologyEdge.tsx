@@ -12,8 +12,6 @@ import {
 } from '@xyflow/react';
 import { useEffect, useId, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
 import {
-  LAYOUT_NODE_HEIGHT,
-  LAYOUT_NODE_WIDTH,
   type DeviceFlowNode,
   type LogicalFlowEdge,
 } from '../topology/layout';
@@ -27,6 +25,7 @@ import { physicalPortPaint, tracedPortIds } from '../topology/physicalPortPresen
 import { useI18n } from '../i18n';
 import { displayNodeLabelForLocale } from '../topology/presentation';
 import { CableRouteInteraction, cableHitClip, type CablePortBounds, type CableTarget } from './CableRouteInteraction';
+import { nodeFootprint } from '../topology/nodeFootprint';
 import type { BlueprintPresentation } from '../topology/types';
 
 export interface NodeRectangle {
@@ -78,21 +77,18 @@ export const getFloatingEndpoints = (
   };
 };
 
-const rectangle = (node: InternalNode<DeviceFlowNode>): NodeRectangle => ({
+export const absoluteNodeRectangle = (node: InternalNode<DeviceFlowNode>): NodeRectangle => ({
+  ...nodeFootprint(node, node.internals.positionAbsolute),
   compositionDisplayWidth: node.data.compositionDisplayWidth,
-  x: node.internals.positionAbsolute.x,
-  y: node.internals.positionAbsolute.y,
-  width: node.measured.width ?? node.width ?? LAYOUT_NODE_WIDTH,
-  height: node.measured.height ?? node.height ?? LAYOUT_NODE_HEIGHT,
 });
 
 export const getConnectionPointEndpoint = (
   projection: DeviceFlowNode['data']['projection'],
   box: NodeRectangle,
   connectionPointId: string | undefined,
+  presentation = projection.attributes.blueprint_presentation,
 ): FloatingEndpoint | null => {
   if (!connectionPointId) return null;
-  const presentation = projection.attributes.blueprint_presentation;
   const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId);
   if (slot && presentation) {
     const side = slot.external_attachment.side;
@@ -111,11 +107,11 @@ export const getRenderedConnectionPoint = (
   projection: DeviceFlowNode['data']['projection'],
   box: NodeRectangle,
   connectionPointId: string | undefined,
+  presentation = projection.attributes.blueprint_presentation,
 ): FloatingEndpoint | null => {
   if (!connectionPointId) return null;
-  const presentation = projection.attributes.blueprint_presentation;
   const slot = presentation?.slots.find((item) => item.connection_point_id === connectionPointId);
-  if (!slot || !presentation) return getConnectionPointEndpoint(projection, box, connectionPointId);
+  if (!slot || !presentation) return getConnectionPointEndpoint(projection, box, connectionPointId, presentation);
   const composition = blueprintNodeDisplayDimensions(presentation, box.compositionDisplayWidth);
   const side = slot.external_attachment.side;
   return {
@@ -155,10 +151,10 @@ export function FloatingTopologyEdge({
   if (!sourceNode || !targetNode || data?.renderCableInForegroundOnly) return null;
 
   const pair = data?.endpointPair;
-  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => node.data.locationProxy ? null : hiddenFaceEndpoint(node, rectangle(node), connectionPointId) ?? (data?.cableNode
-    ? getRenderedConnectionPoint(node.data.projection, rectangle(node), connectionPointId)
-    : getConnectionPointEndpoint(node.data.projection, rectangle(node), connectionPointId));
-  const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
+  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => node.data.locationProxy ? null : hiddenFaceEndpoint(node, absoluteNodeRectangle(node), connectionPointId) ?? (data?.cableNode
+    ? getRenderedConnectionPoint(node.data.projection, absoluteNodeRectangle(node), connectionPointId, node.data.facePresentation?.visibleBlueprint)
+    : getConnectionPointEndpoint(node.data.projection, absoluteNodeRectangle(node), connectionPointId, node.data.facePresentation?.visibleBlueprint));
+  const floating = getFloatingEndpoints(absoluteNodeRectangle(sourceNode), absoluteNodeRectangle(targetNode));
   const endpoints = { source: exact(sourceNode, pair?.from_connection_point_id) ?? floating.source, target: exact(targetNode, pair?.to_connection_point_id) ?? floating.target };
   const [straightPath] = getStraightPath({
     sourceX: endpoints.source.x,
@@ -196,11 +192,11 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers
   const ports = blueprint
     ? (node.data.facePresentation?.visibleBlueprint ?? blueprint).slots.map((slot) => ({ id: slot.connection_point_id, network: slot.kind === 'NETWORK_PORT', portTypeId: slot.port_type_id }))
     : genericConnectionPoints(projection).map((point) => ({ id: point.connection_point_id, network: false, portTypeId: undefined }));
-  const box = rectangle(node);
+  const box = absoluteNodeRectangle(node);
   const portStroke = blueprint ? BLUEPRINT_PORT_STROKE : 1.25;
   const radius = blueprint ? (BLUEPRINT_PORT_SIZE - portStroke) / 2 : 3.5;
   const visiblePorts = ports.flatMap(port => {
-    const endpoint = getRenderedConnectionPoint(projection, box, port.id);
+    const endpoint = getRenderedConnectionPoint(projection, box, port.id, node.data.facePresentation?.visibleBlueprint);
     return endpoint ? [{ ...port, endpoint }] : [];
   });
   // React Flow scales the viewport via CSS. Convert screen pixels before painting.
@@ -253,9 +249,7 @@ const virtualCablePriority = (edge: LogicalFlowEdge) =>
   2 * cablePriority(edge) + Number(edge.data?.cablePresentationEmphasis === 'traced');
 
 const flowRectangle = (node: DeviceFlowNode): NodeRectangle => ({
-  ...node.position,
-  width: node.measured?.width ?? node.width ?? LAYOUT_NODE_WIDTH,
-  height: node.measured?.height ?? node.height ?? LAYOUT_NODE_HEIGHT,
+  ...nodeFootprint(node),
   compositionDisplayWidth: node.data.compositionDisplayWidth,
 });
 
@@ -362,7 +356,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
     const presentation = node.data.facePresentation?.visibleBlueprint ?? node.data.projection?.attributes.blueprint_presentation;
     if (!presentation) return locationChannels && node.data.projection?.kind === 'PHYSICAL_OBJECT'
       ? [[node.id, { position: node.position, graph: genericChannelPaths(node) }] as const] : [];
-    const width = node.measured?.width ?? node.width ?? 0;
+    const width = nodeFootprint(node).width;
     const compositionWidth = node.data.compositionDisplayWidth;
     let entry = graphCache.get(presentation);
     if (!entry || entry.width !== width || entry.compositionWidth !== compositionWidth) {
@@ -491,11 +485,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
       const node = objectNodes.get(physicalObjectId);
       if (!node) return undefined;
       return allocate(node.id, connectionPointId, usage => { usage.preview = true; })
-        ?? getRenderedConnectionPoint(node.data.projection, {
-          ...node.position, compositionDisplayWidth: node.data.compositionDisplayWidth,
-          width: node.measured?.width ?? node.width ?? LAYOUT_NODE_WIDTH,
-          height: node.measured?.height ?? node.height ?? LAYOUT_NODE_HEIGHT,
-        }, connectionPointId);
+        ?? getRenderedConnectionPoint(node.data.projection, flowRectangle(node), connectionPointId, node.data.facePresentation?.visibleBlueprint);
     };
     const previewPair = (source: WiringPort, target: WiringPort, bulk: boolean) => route(
       objectNodes.get(source.physicalObjectId), source.connectionPointId,
@@ -527,7 +517,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
       const floating = getFloatingEndpoints(sourceBox, targetBox);
       const exits = channelExits.get(edge.id);
       const exact = (node: DeviceFlowNode, box: NodeRectangle, pointId?: string) => node.data.locationProxy
-        ? null : hiddenFaceEndpoint(node, box, pointId) ?? getRenderedConnectionPoint(node.data.projection, box, pointId);
+        ? null : hiddenFaceEndpoint(node, box, pointId) ?? getRenderedConnectionPoint(node.data.projection, box, pointId, node.data.facePresentation?.visibleBlueprint);
       const from = exits?.source ?? exact(source, sourceBox, pair?.from_connection_point_id) ?? floating.source;
       const to = exits?.target ?? exact(target, targetBox, pair?.to_connection_point_id) ?? floating.target;
       const key = [`${from.x},${from.y}`, `${to.x},${to.y}`].sort().join('/');
