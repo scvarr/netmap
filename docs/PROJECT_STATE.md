@@ -49,7 +49,7 @@
   дочерних элементов, компактной геометрией, hide/collapse и граничными точками.
   SLOC добавляет uniform-grid с сохранением в variant, размещение стрелками
   и сортировку дочерних Location по строке, столбцу или всей таблице.
-  DOC-LOC-03 — PARTIAL. Остаются OPEN grid-specific partial-collapse UX и маршрутизация через Location. Ручная приёмка учитывается отдельно.
+  DOC-LOC-03 — PARTIAL. Остаются OPEN grid-specific partial-collapse UX. Ручная приёмка учитывается отдельно.
   SLOC-04-SAVE добавляет сохранение общего черновика активного variant
   из настроек Location. Chromium с реальным backend и PostgreSQL подтвердил
   сохранение порядка после перезагрузки и независимость второго варианта.
@@ -57,12 +57,16 @@
   непосредственного оборудования каждого Location и root входят в общий черновик
   варианта. Состав последовательности согласуется с canonical assignment и
   размещением на карте. Ручная приёмка OPEN.
-- ROUTE-UX-01 удалил ручные трассы. COMB-01 и CABLE-SELECT-01 — IMPLEMENTED /
-  MERGED. Объектные пути, preview и геометрия Cable вычисляются по текущей
-  компоновке. LOC-CHAN-01 реализует локальные деревья виртуальных каналов
-  Location и технического корня. LOC-ROUTE-01 — IMPLEMENTED на milestone-ветке.
-  Preview и созданный Cable используют одни сегменты, а collapse ограничивает
-  путь видимой граничной точкой. C-UX-10 остаётся OPEN, DOC-LOC-03 — PARTIAL.
+- COMB-01, ROUTE-UX-01, CABLE-SELECT-01, LOC-CHAN-01 и LOC-ROUTE-01 —
+  IMPLEMENTED / MERGED / MANUALLY ACCEPTED. Карта L1 вычисляет объектные графы
+  и локальные деревья раскрытых Locations и технического корня по активному
+  MapPresentationVariant. Автоматический путь Cable соединяет объектные подводы
+  через Location hierarchy. Preview использует те же сегменты, что и созданный
+  Cable. Collapse ограничивает видимый путь обязательной граничной точкой,
+  expand восстанавливает путь по текущей компоновке. Выбор и hover работают
+  по canonical Cable ID, включая выбор из списка на общем сегменте и подсветку
+  видимых физических окончаний. Exact L1 evidence берётся из canonical topology.
+  Ручные индивидуальные трассы и их хранение удалены.
 - Массовые операции: ordered port pairing с обязательным preview и одной
   canonical transaction; шаблоны Cable labels; массовое именование и spatial
   order endpoints, выравнивание/распределение в редакторах.
@@ -122,7 +126,7 @@ P-UX-13/14/15 сведены к C-UX-02/04/09 и проверке переход
 
 Phase C **OPEN**, Phase D не завершена, **L1 PRODUCT COMPLETE не достигнут**.
 Не реализованы truthful FANOUT-1x24 authoring и multichannel connect через UI
-(C-CAP-01), Location cable channels (C-UX-10),
+(C-CAP-01), общие межобъектные жгуты и остальные открытые возможности C-UX-10,
 P-UX-21; контракт P-UX-22 ещё требует решения.
 C-UX-03 — NOT REQUIRED: произвольных названий панелей достаточно, отдельная
 FRONT/REAR-семантика не нужна; это не реализованная функция. C-UX-05 — OPEN:

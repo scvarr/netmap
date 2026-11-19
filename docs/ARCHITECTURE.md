@@ -181,7 +181,7 @@ Position PUT возвращает полный authoritative SavedMapDocument с
 производны и не записываются. При partial collapse выбранные direct elements
 остаются видимыми внутри frame; скрытые endpoints используют невидимый route target
 без второго подписанного proxy. Direct children доступны и без оборудования.
-Внешний полный collapse приоритетен; channel-aware collapse не реализован.
+Внешний полный collapse приоритетен. Внешний путь Cable заканчивается на видимой обязательной точке свёрнутого Location.
 MapComposite/MapRegion не поддерживаются.
 
 Group move переносит одинаковым delta все имеющиеся L1 позиции canonical
@@ -190,27 +190,29 @@ subtree в активном variant, включая скрытые. Сервер
 member или collision отклоняет всё; отсутствующие позиции не создаются.
 Positions сохраняются атомарно, без automatic re-layout.
 
-## C-UX-10 — TARGET виртуальной инфраструктуры
+## C-UX-10 — виртуальная инфраструктура
 
-[Основной контракт](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
-остаётся OPEN, не IMPLEMENTED. Каждый Location, включая пустой, получает ровно
+**CURRENT.** [Основной контракт](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
+остаётся OPEN для общих межобъектных жгутов и других незавершённых возможностей. Каждый Location, включая пустой, получает ровно
 одну обязательную виртуальную точку со стабильной identity; это не ConnectionPoint.
 Маршрут следует граничным точкам последовательных уровней Location hierarchy.
 В одном непосредственном Location переход через другие Location не требуется.
 Прямой Channel произвольной пары без иерархического пути не принят. Инфраструктура не разделяется между картами; геометрия
 принадлежит presentation variant. Foundation frames/points реализован в C-UX-10-01.
 LOC-CHAN-01 реализует производный локальный граф. LOC-ROUTE-01
-составляет путь Cable из участков графов Location и COMB-01.
+составляет путь Cable из участков графов Location и COMB-01. SavedMap и
+MapPresentationVariant хранят presentation state. Графы вычисляются по текущей
+компоновке, persisted Channel отсутствует.
 
 Cable сохраняет реальные окончания и canonical identity. Его путь динамически
 составляется из индивидуальных подводов и общих участков иерархического пути без копирования.
-Preview и подтверждение предшествуют persistent изменениям; ошибки не оставляют
-частичных изменений. При создании и удалении Cable меняется занятость
+Preview предшествует подтверждению canonical create. При создании и удалении Cable меняется занятость
 участков графа. Перемещение оборудования сохраняет окончания и пересчитывает
 маршрут для новых непосредственных Location. Collapse скрывает структурные
 участки; проекция внешних каналов на общего родителя не создаёт persisted Channels.
 Expand восстанавливает геометрию без перезаписи. Пустой Location получает видимую
-presentation область. Ничто из этого не создаёт topology evidence или exact L1 path.
+presentation область. Exact L1 evidence определяется canonical topology. Общая геометрия сегмента
+и пересечение линий не создают физической связности между Cable.
 
 ## Массовые операции
 
@@ -447,7 +449,7 @@ frame edits. Point preview has Save/Cancel and error rollback. The point retains
 **PARTIAL.** AUTO-LOC-01/02 и SLOC-01–04 в main: uniform-grid, стрелочная
 расстановка и сортировка дочерних Location. SLOC-05 в main добавляет
 порядок и ориентацию непосредственных PhysicalObject. Grid-specific partial-collapse
-UX и объектная кабельная геометрия остаются OPEN.
+UX остаётся OPEN. Объектная кабельная геометрия реализована в COMB-01.
 [Открытые вопросы](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
 
 Location допускают строки, столбцы и комбинированную плиточную структуру внутри
@@ -513,7 +515,7 @@ DOC-LOC-03 остаётся PARTIAL.
 
 #### CABLE-SELECT-01 — взаимодействие на карте L1
 
-**IMPLEMENTED / MERGED.**
+**IMPLEMENTED / MERGED / MANUALLY ACCEPTED.**
 
 Подсказка индивидуального подвода показывает название и доступные окончания
 Cable. Общий участок показывает число Cable и открывает список, отсортированный
@@ -553,7 +555,7 @@ L1 вычисляет дерево отдельно для каждого ото
 
 ### LOC-ROUTE-01 — иерархический путь Cable
 
-**IMPLEMENTED на milestone-ветке.** Отображение SavedMap L1 берёт окончания
+**IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** Отображение SavedMap L1 берёт окончания
 из canonical Cable evidence. Между объектными подводами маршрут поднимается
 от терминала PhysicalObject через обязательные точки Location до ближайшего
 общего предка и спускается к другому объекту. Для одного непосредственного

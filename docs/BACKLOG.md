@@ -93,7 +93,7 @@ canonical endpoints, подключения и зависимости исход
 | C-UX-05 | Runtime map guides нужны; ориентиры — уже размещённые объекты | OPEN | Точный bounded UX-контракт открыт; presentation-only, отдельно от auto-layout |
 | C-UX-06 | Независимые Width/Height пока не реализовывать | OPEN | Повторно оценить необходимость после P-UX-21; не VERIFIED |
 | C-UX-09 | Раскрываемый графический preview BaseTemplate непосредственно при выборе шаблона | OPEN | Ориентир — существующий preview библиотеки; реализация открыта |
-| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [DECIDED TARGET](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels). C-UX-10-01 foundation объединён в main. LOC-CHAN-01 реализует производный локальный граф Location и технического корня. LOC-ROUTE-01 реализует составной путь, preview и видимость при collapse. Общие межобъектные жгуты остаются OPEN |
+| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [CURRENT и оставшийся scope](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels). C-UX-10-01 foundation объединён в main. LOC-CHAN-01 реализует производный локальный граф Location и технического корня. LOC-ROUTE-01 реализует составной путь, preview и видимость при collapse. Общие межобъектные жгуты остаются OPEN |
 | C-UX-12 | Проверить массовое именование, spatial order, обнаруживаемость и сохранение | RECHECK PENDING | Исправление реализовано |
 | C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
 | C-UX-14 | Проверить понятность Change Inspector и точность больших сводок impact | RECHECK PENDING | Реализован; HV-01 не заменяет UX recheck |
@@ -243,11 +243,11 @@ C-CAP-01 остаётся OPEN Phase D; C-CAP-01-02/03/04 не закрыты; P
 CAT-D: CableType как пользовательский справочник принят; состав технических полей
 и реализация остаются OPEN, остальные классификации этим решением не утверждены.
 
-AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative Location boundary points; independent copy/reopen; manual variants preserved. Location Channels remain OPEN.
+AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative Location boundary points; independent copy/reopen; manual variants preserved.
 
 
-**ROUTE-UX-01 / IMPLEMENTED на milestone-ветке.** Удалены ручное редактирование
-и хранение индивидуальных трасс. Создание Cable использует preview COMB-01.
+**ROUTE-UX-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** Удалены ручное редактирование
+и хранение индивидуальных трасс. Создание Cable использует автоматический preview по графам COMB-01 и LOC-CHAN-01.
 
 ## DOC-LOC-03 — реализация структурной компоновки
 
@@ -261,16 +261,15 @@ hide/collapse и независимость canonical assignment. Для ост�
 После согласования открытых деталей реализация требует последующей декомпозиции
 на ограниченные последовательные milestones; их количество и техническое
 содержание этой записью не предрешаются.
-**COMB-01 / IMPLEMENTED / MERGED.** Производный граф путей от
+**COMB-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** Производный граф путей от
 портов Blueprint-backed оборудования до общего правого выхода используется
 реальными Cable. Переключатель карты отображает свободные сегменты. Uniform-grid
 учитывает вертикальные коридоры. DOC-LOC-03 остаётся PARTIAL.
-CABLE-SELECT-01 / IMPLEMENTED / MERGED — выбор и hover Cable на участках L1.
+CABLE-SELECT-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED — выбор и hover Cable на участках L1.
 
-**LOC-CHAN-01 / IMPLEMENTED на milestone-ветке.** L1 строит общий свободный
-граф для каждого Location и технического корня по текущей геометрии варианта.
+**LOC-CHAN-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** L1 строит локальное дерево виртуальных каналов для каждого отображаемого раскрытого Location и технического корня по текущей геометрии варианта.
 Деревья используют каноническое назначение и существующие граничные точки.
-**LOC-ROUTE-01 / IMPLEMENTED на milestone-ветке.** Маршрут и preview в L1 используют общие сегменты COMB-01 и деревьев Location; занятые участки выбираются по canonical Cable ID. C-UX-10 остаётся OPEN.
+**LOC-ROUTE-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** Маршрут через Location hierarchy и preview используют одни сегменты. Collapse сохраняет внешний путь до видимой граничной точки. Выбор и hover используют canonical Cable ID, exact L1 evidence — canonical topology. C-UX-10 остаётся OPEN.
 Новых этапов Phase A–I и расширения scope эта запись не вводит.
 
 SLOC-01: isolated typed uniform-table computational core implemented, with
@@ -309,14 +308,14 @@ L1 PRODUCT COMPLETE сохраняются. Phase C и D остаются отк
   02/03/04 OPEN), representative acceptance, необходимые классификации с
   согласованием минимального состава, Phase E–I. Implementation, external review
   и manual acceptance — разные статусы; merge не доказывает ручную приёмку.
-- **Развитие пространственной карты:** AUTO-LOC-01/02 и SLOC-01/02/03/04 реализованы
-  и merged. После C-CAP-01-01 фактический переход был к компоновке карты.
-  Дальнейшая согласованная последовательность: компоновка Location → объектная
-  кабельная расчёска → автоматическая трасса через Location hierarchy → общая
-  геометрия, виртуальные каналы и визуальные жгуты → общий обзор и пошаговая L1
-  навигация. DOC-LOC-03 частично реализован; grid-specific partial-collapse UX,
-  оставшиеся возможности и ручная приёмка OPEN. Количество будущих implementation
-  milestones не назначено. Эти возможности не становятся все blockers C/D.
+- **Развитие пространственной карты:** AUTO-LOC-01/02 и SLOC-01–05 реализованы
+  и merged. После C-CAP-01-01 работа перешла к компоновке Location, объектной
+  кабельной расчёске и автоматической трассе через Location hierarchy.
+  DOC-LOC-03 остаётся PARTIAL, grid-specific partial-collapse UX и отдельные
+  ручные проверки компоновки открыты. Общие межобъектные жгуты, остальные
+  возможности C-UX-10, общий обзор и пошаговая L1 навигация остаются в существующей
+  очереди. Количество будущих milestones не назначено. Эти возможности не
+  становятся все blockers C/D.
 - **Справочники:** PortType реализован. PhysicalObject class — строковая
   metadata, включая default BaseTemplate; Location.type — optional пользовательская
   строка. Пользовательские справочники типов PhysicalObject и Location —

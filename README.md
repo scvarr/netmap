@@ -7,8 +7,12 @@ NetMap — модель физической сети с canonical topology, L1 
 
 Доступны библиотеки BaseTemplate/ModuleTemplate, ревизии и безопасное обновление
 оборудования и установленных модулей, PortType справочник, дерево Locations,
-SavedMap с вариантами компоновки, collapse/group move, кабельные маршруты,
-массовое соединение портов и L1 trace с exact evidence. Настройки данных дают
+SavedMap с вариантами компоновки, collapse/group move,
+массовое соединение портов и L1 trace с exact evidence. Карта L1 автоматически
+строит маршруты Cable по производным графам объектов и Location hierarchy.
+Создание Cable использует preview на тех же сегментах. При сворачивании внешний
+путь виден до граничной точки Location. Hover и выбор подсвечивают путь и
+видимые физические окончания. Общий сегмент открывает список Cable. Настройки данных дают
 export/reset/import текущего implicit workspace в Workspace JSON v8.
 
 ## Запуск
@@ -57,6 +61,6 @@ git diff --check
 `docs/chatgpt.md` — отдельный внутренний контракт координатора, не инструкция
 coding agent и не часть продуктового комплекта.
 
-C-CAP-01-01 multichannel materialization и AUTO-LOC/SLOC-01–04 находятся в main;
+C-CAP-01-01 multichannel materialization и AUTO-LOC-01/02 и SLOC-01–05 находятся в main;
 внешний multichannel Cable write и полный UI OPEN. Очередность и зависимости:
 [BACKLOG](docs/BACKLOG.md#направления-и-зависимости).
