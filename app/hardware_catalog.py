@@ -120,6 +120,7 @@ class HardwareCatalog:
             self.session.add(PresentationPanel(
                 base_revision_id=version.id, panel_key=panel.panel_key,
                 panel_number=panel.panel_number, display_name=panel.display_name,
+                face=panel.face,
                 x=panel.x, y=panel.y, width=panel.width, height=panel.height,
             ))
         self.session.flush()

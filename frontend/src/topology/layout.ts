@@ -25,8 +25,12 @@ export interface DeviceNodeData extends Record<string, unknown> {
   projection: TopologyProjectionNode;
   /** Composition width, independent of any derived cable-zone expansion. */
   compositionDisplayWidth?: number;
-  locationProxy?: { arrangementSelected?: boolean; onSelectLocation?: () => void; locationId: string; label: string; hiddenObjectCount: number; partial?: boolean; boundaryPointId?: string; boundaryEdge?: 'top' | 'right' | 'bottom' | 'left'; boundaryOffset?: number; traced?: boolean; expandLabel?: string; configureLabel?: string; onExpand?: () => void; onConfigure?: () => void };
+  locationProxy?: { resolvedFace?: import("./physicalFaces").ResolvedFace; arrangementSelected?: boolean; onSelectLocation?: () => void; locationId: string; label: string; hiddenObjectCount: number; partial?: boolean; boundaryPointId?: string; boundaryEdge?: 'top' | 'right' | 'bottom' | 'left'; boundaryOffset?: number; traced?: boolean; expandLabel?: string; configureLabel?: string; onExpand?: () => void; onConfigure?: () => void };
   /** Physical SavedMap decoration derived from canonical Location context. */
+  resolvedFace?: import('./physicalFaces').ResolvedFace;
+  facePresentation?: ReturnType<typeof import('./physicalFaces').blueprintFace>;
+  onFaceChange?: (value: import('./savedMapTypes').FaceOverride) => void;
+  faceBusy?: boolean;
   locationPresentationPath?: string;
   /** Temporary MapPage authoring state; deliberately separate from topology selection. */
   traceHighlighted?: boolean;

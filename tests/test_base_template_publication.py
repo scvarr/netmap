@@ -243,3 +243,27 @@ def test_published_workspace_v6_roundtrip_preserves_receipt_and_rebased_draft():
     invalid = copy.deepcopy(package)
     invalid['authoring']['BaseTemplateCandidate'][0]['definition']['panels'] = []
     assert client.post('/v1/workspace/package', json=invalid).status_code == 422
+
+
+def test_panel_face_is_published_as_revision_metadata_and_exported():
+    template_id, _ = create_base()
+    draft = open_draft(template_id)
+    original_id = draft["source_revision_id"]
+    definition = copy.deepcopy(draft["definition"])
+    original_panel = definition["panels"][0]
+    original_panel.update(face="REAR", display_name="Arbitrary label")
+    checked = check(template_id, save(template_id, draft, definition))
+    response = publish(template_id, checked["review"]["candidate_id"])
+    assert response.status_code == 200, response.text
+    new_id = response.json()["revision_id"]
+
+    def panel(revision_id):
+        return client.get(f"/v1/library/base-templates/{template_id}/versions/{revision_id}").json()["panels"][0]
+
+    assert panel(original_id).get("face") is None
+    assert panel(new_id)["face"] == "REAR"
+    assert panel(new_id)["display_name"] == "Arbitrary label"
+    assert panel(new_id)["panel_key"] == panel(original_id)["panel_key"]
+    package = client.get("/v1/workspace/package").json()
+    assert any(p["base_revision_id"] == new_id and p["face"] == "REAR"
+               for p in package["authoring"]["PresentationPanel"])

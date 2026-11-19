@@ -10,7 +10,7 @@ import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
 } from '../topology/layout';
-import { getConnectionPointEndpoint, type NodeRectangle } from './FloatingTopologyEdge';
+import { getConnectionPointEndpoint, hiddenFaceEndpoint, type NodeRectangle } from './FloatingTopologyEdge';
 
 const rectangle = (node: InternalNode<DeviceFlowNode>): NodeRectangle => ({
   compositionDisplayWidth: node.data.compositionDisplayWidth,
@@ -35,7 +35,7 @@ export function OffMapContinuationEdge({ id, source, data, selected }: EdgeProps
     x: rectangle(sourceNode).x + rectangle(sourceNode).width,
     y: rectangle(sourceNode).y + rectangle(sourceNode).height / 2,
     side: Position.Right,
-  } : getConnectionPointEndpoint(
+  } : hiddenFaceEndpoint(sourceNode, rectangle(sourceNode), continuation.local_connection_point_ref.entity_id) ?? getConnectionPointEndpoint(
     sourceNode.data.projection,
     rectangle(sourceNode),
     continuation.local_connection_point_ref.entity_id,

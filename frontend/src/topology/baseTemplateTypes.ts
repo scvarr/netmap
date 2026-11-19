@@ -1,6 +1,7 @@
 export type BlueprintSlotKind = 'CONNECTION_POINT' | 'NETWORK_PORT';
 
 export interface PresentationPanel {
+  face?: import('./savedMapTypes').PhysicalFace | null;
   panel_key: string;
   panel_number: number;
   display_name: string;

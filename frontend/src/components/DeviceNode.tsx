@@ -7,6 +7,7 @@ import { displayNodeLabel, physicalClassPresentation } from '../topology/present
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
 import { internalL1Segments } from '../topology/internalL1Presentation';
 import { physicalPortPaint, tracedPortIds } from '../topology/physicalPortPresentation';
+import { PhysicalFaceIndicator } from './PhysicalFaceControls';
 import { InternalL1Continuity } from './InternalL1Continuity';
 import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, OBJECT_SIDE_ZONES_WIDTH, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
 
@@ -19,6 +20,9 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
   const physical = projection.kind === 'PHYSICAL_OBJECT';
   const classPresentation = physicalClassPresentation(projection.attributes.class);
   const blueprint = projection.attributes.blueprint_presentation;
+  const singlePanelFace = blueprint?.panels.length === 1 ? blueprint.panels[0].face : undefined;
+  const faceIndicator = data.resolvedFace && <PhysicalFaceIndicator resolved={data.resolvedFace}
+    panelFace={singlePanelFace} onChange={data.onFaceChange} disabled={data.faceBusy} />;
   const objectId = projection.source_refs.find((ref) => ref.ref_type === 'CANONICAL_FACT' && ref.entity_type === 'PhysicalObject')?.entity_id;
   const tracedPorts = tracedPortIds(projection, data.traceHighlightedConnectionMemberIds);
   const portProps = (connectionPointId: string, label: string) => {
@@ -52,11 +56,12 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
     <Handle type="target" position={Position.Top} className="device-node__handle" />
     <strong className="blueprint-map-node__identity" title={data.locationPresentationPath ? `${displayNodeLabel(projection)} — ${data.locationPresentationPath}` : displayNodeLabel(projection)}>
       <span className="blueprint-map-node__title">{displayNodeLabel(projection)}</span>
+      {faceIndicator}
       {data.locationPresentationPath && <span className="blueprint-map-node__location">{data.locationPresentationPath}</span>}
     </strong>
     <div className="blueprint-map-node__body" style={{ height: displayHeight }}>
     <div className="blueprint-map-node__panels">
-      {blueprint.panels.map((panel) => {
+      {blueprint.panels.filter(panel => !data.facePresentation?.hiddenPanels.has(panel.panel_key)).map((panel) => {
         return <section key={panel.panel_key} className="blueprint-map-node__panel" data-testid={`blueprint-panel-${panel.panel_key}`} style={{ left: `${(panel.x - bounds.x) / bounds.width * 100}%`, top: `${(panel.y - bounds.y) / bounds.height * 100}%`, width: `${panel.width / bounds.width * 100}%`, height: `${panel.height / bounds.height * 100}%`, background: blueprint.body.fill_color ?? '#18383a' }}>
           <div className="blueprint-map-node__panel-surface" title={panel.display_name}>
             {blueprint.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => {
@@ -77,7 +82,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
         </section>;
       })}
     </div>
-    <InternalL1Continuity width={displayWidth} height={displayHeight} segments={internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, displayWidth)} />
+    <InternalL1Continuity width={displayWidth} height={displayHeight} segments={internalL1Segments(projection, selected, data.traceHighlightedConnectionMemberIds, data.wiringHighlightedConnectionMemberIds, displayWidth, data.facePresentation?.hiddenPorts)} />
     </div>
     <div className="blueprint-map-node__cable-zone" aria-hidden="true" />
     <Handle type="source" position={Position.Top} className="device-node__handle" />
@@ -92,6 +97,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       </span>
       <div className="device-node__identity">
         <strong title={displayNodeLabel(projection)}>{displayNodeLabel(projection)}</strong>
+        {faceIndicator}
         {physical && data.locationPresentationPath && <span className="device-node__location" title={data.locationPresentationPath}>{data.locationPresentationPath}</span>}
       </div>
       <span className="device-node__role">

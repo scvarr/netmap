@@ -110,11 +110,12 @@ class MapPlacement(Base):
 class MapPresentationVariant(Base):
     """A named, SavedMap-owned presentation only; never topology or membership."""
     __tablename__ = "map_presentation_variants"
-    __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"), UniqueConstraint("map_id", "name", name="uq_map_presentation_variants_map_name"))
+    __table_args__ = (CheckConstraint("char_length(btrim(name)) > 0", name="name_not_blank"), UniqueConstraint("map_id", "name", name="uq_map_presentation_variants_map_name"), CheckConstraint("default_face IN ('FRONT', 'REAR')", name="default_face_valid"))
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     map_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("saved_maps.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     automatic_layout: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    default_face: Mapped[str] = mapped_column(String(5), nullable=False, server_default="FRONT")
     saved_map: Mapped[SavedMap] = relationship(back_populates="presentation_variants")
     positions: Mapped[list["MapViewPosition"]] = relationship(back_populates="variant", passive_deletes=True)
     location_states: Mapped[list["MapLocationState"]] = relationship(back_populates="variant", passive_deletes=True)
@@ -124,12 +125,13 @@ class MapLocationState(Base):
     """Variant-specific Location presentation; refs are validated against live canonical facts."""
 
     __tablename__ = "map_location_states"
-    __table_args__ = (UniqueConstraint("variant_id", "location_id", name="uq_map_location_states_variant_location"),)
+    __table_args__ = (UniqueConstraint("variant_id", "location_id", name="uq_map_location_states_variant_location"), CheckConstraint("face_override IN ('FRONT', 'REAR')", name="face_override_valid"))
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     variant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("map_presentation_variants.id", ondelete="CASCADE"), nullable=False)
     location_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("locations.id", ondelete="CASCADE"), nullable=False)
     geometry: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     manual_bounds: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    face_override: Mapped[str | None] = mapped_column(String(5), nullable=True)
     collapsed: Mapped[bool] = mapped_column(nullable=False, server_default="false")
     visible_direct_elements: Mapped[list[dict[str, str]]] = mapped_column(JSONB, nullable=False, default=list)
     variant: Mapped[MapPresentationVariant] = relationship(back_populates="location_states")
@@ -145,6 +147,7 @@ class MapViewPosition(Base):
 
     __tablename__ = "map_view_positions"
     __table_args__ = (
+        CheckConstraint("face_override IS NULL OR (view_key = 'L1/PHYSICAL_OBJECT' AND face_override IN ('FRONT', 'REAR'))", name="face_override_valid"),
         UniqueConstraint("placement_id", "variant_id", "view_key", name="uq_map_view_positions_placement_variant_view"),
         CheckConstraint(
             "view_key IN ('L1/PHYSICAL_OBJECT', 'L2/DEVICE')",
@@ -168,6 +171,7 @@ class MapViewPosition(Base):
     # Per-map/view presentation size. NULL deliberately preserves historical
     # positions; readers apply the deterministic L1 display default.
     display_width: Mapped[float | None] = mapped_column(Float, nullable=True)
+    face_override: Mapped[str | None] = mapped_column(String(5), nullable=True)
     placement: Mapped[MapPlacement] = relationship(back_populates="view_positions")
     variant: Mapped[MapPresentationVariant] = relationship(back_populates="positions")
 
@@ -471,6 +475,7 @@ class BaseTemplatePublication(Base):
 class PresentationPanel(Base):
     __tablename__ = "presentation_panels"
     __table_args__ = (
+        CheckConstraint("face IN ('FRONT', 'REAR')", name="face_valid"),
         CheckConstraint("char_length(btrim(panel_key)) > 0", name="panel_key_not_blank"),
         CheckConstraint("panel_number > 0", name="panel_number_positive"),
         CheckConstraint("width > 0 AND height > 0", name="size_positive"),
@@ -481,6 +486,7 @@ class PresentationPanel(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     base_revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("base_template_revisions.id", ondelete="RESTRICT"), nullable=False)
     panel_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    face: Mapped[str | None] = mapped_column(String(5), nullable=True)
     panel_number: Mapped[int] = mapped_column(Integer, nullable=False)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     x: Mapped[float] = mapped_column(Float, nullable=False)

@@ -13,6 +13,9 @@ import {
   MapInsertionPicker,
   mapCandidateChoices,
 } from "../components/MapInsertionPicker";
+import { PhysicalFaceSelect } from '../components/PhysicalFaceControls';
+import { resolveFaces } from '../topology/physicalFaces';
+import type { FaceOverride, FaceTarget } from '../topology/savedMapTypes';
 import { QuickInspector } from "../components/QuickInspector";
 import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
 import { CableRenameDialog } from "../components/CableRenameDialog";
@@ -255,6 +258,7 @@ function MapPageContent({
   const [catalogInventory, setCatalogInventory] =
     useState<CatalogInventoryDocument | null>(null);
   const [map, setMap] = useState<SavedMap | null>(null);
+  const [faceBusy, setFaceBusy] = useState(false);
   const [locations, setLocations] = useState<LocationDocument[] | null>(null);
   const [locationConfigId, setLocationConfigId] = useState<string | null>(null);
   const [locationConfigVisible, setLocationConfigVisible] = useState<MapLocationDirectElementRef[]>([]);
@@ -1590,6 +1594,38 @@ function MapPageContent({
     setSceneDocument({ sceneKey: `${currentMap.map_ref.entity_id}/physical`, document: next });
   };
   const activeVariant = activeMap?.variants.find((item) => item.variant_ref.entity_id === activeMap.active_variant_ref.entity_id);
+  const defaultFace = activeVariant?.default_face;
+  const faceViews = useMemo(() => defaultFace && activeMap && locations
+    ? resolveFaces(defaultFace, locations, activeMap.location_states ?? [], activeMap.placements)
+    : undefined, [defaultFace, locations, activeMap?.location_states, activeMap?.placements]);
+  const writeFace = savedMapDataSource?.setFace ? async (face: FaceOverride, target?: FaceTarget) => {
+    if (!activeMap || faceBusy) return;
+    const id = activeMap.map_ref.entity_id, variant = activeMap.active_variant_ref.entity_id;
+    setFaceBusy(true);
+    try {
+      const updated = await savedMapDataSource.setFace!(id, variant, face, target);
+      setMap(current => {
+        if (current?.map_ref.entity_id !== id || current.active_variant_ref.entity_id !== variant) return current;
+        if (!target) return { ...current, variants: current.variants.map(item => item.variant_ref.entity_id === variant
+          ? { ...item, default_face: updated.variants.find(value => value.variant_ref.entity_id === variant)?.default_face }
+          : item) };
+        const override = face === 'INHERIT' ? null : face;
+        if (target.kind === 'locations') return { ...current, location_states: current.location_states?.map(state =>
+          state.location_ref.entity_id === target.id ? { ...state, face_override: override } : state) };
+        const key = 'L1/PHYSICAL_OBJECT';
+        return { ...current, placements: current.placements.map(placement => {
+          const position = placement.positions[key];
+          return position && placement.physical_object_ref.entity_id === target.id
+            ? { ...placement, positions: { ...placement.positions, [key]: { ...position, face_override: override } } }
+            : placement;
+        }) };
+      });
+    } catch (reason) {
+      if (selectedMapId.current === id) setError(errorMessage(reason, t('face.saveFailed')));
+    } finally {
+      setFaceBusy(false);
+    }
+  } : undefined;
   const openPresentationVariantCreate = () => {
     if (!activeMap) return;
     setPresentationVariantCreate({ mapId: activeMap.map_ref.entity_id, sourceVariantId: activeMap.active_variant_ref.entity_id, sourceVariantName: activeVariant?.name ?? "", name: "", status: "editing", error: null });
@@ -1650,6 +1686,8 @@ function MapPageContent({
             </button>
             {utilitySection === "layout" && <div className="map-utility-panel__content">
               <MapToolbarDropdown label="Текущая компоновка" value={activeMap.active_variant_ref.entity_id} options={activeMap.variants.map((item) => ({ value: item.variant_ref.entity_id, label: item.name }))} onChange={(nextVariantId) => { mapDetailRequest.current += 1; setParams((current) => { const next = new URLSearchParams(current); next.set("variant", nextVariantId); next.delete("focus"); return next; }); }} />
+              {defaultFace && writeFace && <PhysicalFaceSelect value={defaultFace} disabled={faceBusy}
+                onChange={face => void writeFace(face)} />}
               {activeMap && locations && savedMapDataSource?.setAutomaticLayout && <AutomaticLocationControls arrangement={locationArrangement} key={activeMap.active_variant_ref.entity_id} map={activeMap} locations={locations} objectLabels={layoutObjectLabels} onSave={async settings => { const updated = await savedMapDataSource.setAutomaticLayout!(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, settings); setMap(current => current?.map_ref.entity_id === updated.map_ref.entity_id && current.active_variant_ref.entity_id === updated.active_variant_ref.entity_id ? updated : current); }} />}
               <div className="map-utility-panel__actions"><button type="button" title="Создать независимую копию текущего расположения, размеров и трасс" disabled={!savedMapDataSource?.createPresentationVariant} onClick={openPresentationVariantCreate}>Создать копию</button><button type="button" disabled={activeVariant?.name === "Основной" || !savedMapDataSource?.deletePresentationVariant} onClick={beginPresentationVariantDeletion}>Удалить</button></div>
             </div>}
@@ -1917,6 +1955,9 @@ function MapPageContent({
                   positionSnapshot={activeMap?.placements}
                   displayWidthOverrides={!legacy && viewMode === "physical" ? displayWidthOverrides : undefined}
                   requireLocationChannels={Boolean(activeMap && locationDataSource)}
+                  faceViews={faceViews}
+                  onFaceChange={writeFace}
+                  faceBusy={faceBusy}
                   locationFrameInput={!legacy && viewMode === "physical" && activeMap && locations
                     ? { automatic: activeVariant?.automatic_layout, variantId: activeMap.active_variant_ref.entity_id, onBoundaryPlacement: async (locationId, placement) => { const updated = await savedMapDataSource!.setLocationBoundaryPlacement!(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, locationId, placement); setMap(current => current?.map_ref.entity_id === updated.map_ref.entity_id && current.active_variant_ref.entity_id === updated.active_variant_ref.entity_id ? updated : current); }, onGeometry: async (locationId, geometry) => { const updated = await savedMapDataSource!.setLocationGeometry!(activeMap.map_ref.entity_id, activeMap.active_variant_ref.entity_id, locationId, geometry); setMap(current => current?.map_ref.entity_id === updated.map_ref.entity_id && current.active_variant_ref.entity_id === updated.active_variant_ref.entity_id ? updated : current); }, locations, placements: activeMap.placements, states: activeMap.location_states ?? [], onCollapse: (locationId, collapsed) => { const state = locationStateFor(locationId); void writeLocationState(locationId, collapsed, state?.visible_direct_elements ?? []); }, onConfigure: openLocationConfig }
                     : undefined}
@@ -2019,6 +2060,9 @@ function MapPageContent({
           <GridObjectSequenceControls parent={locationConfigId} labels={layoutObjectLabels} arrangement={locationArrangement} />
         </> : undefined}
       >
+        {faceViews && writeFace && <PhysicalFaceSelect allowInherit disabled={faceBusy}
+          value={locationStateFor(locationConfigId)?.face_override ?? 'INHERIT'}
+          onChange={face => void writeFace(face, { kind: 'locations', id: locationConfigId })} />}
         <p>Оставить видимыми при сворачивании:</p>
         <div className="map-location-dialog__choices">
           {directLocationChoices === null ? <p>Загрузка…</p> : directLocationChoices.map(({ ref, label }) => {

@@ -1,5 +1,6 @@
 import { fireEvent, render, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
+import { blueprintFace } from '../topology/physicalFaces';
 import { ForegroundCableRoutes } from './FloatingTopologyEdge';
 import { blueprintRenderedNodeDimensions } from '../topology/blueprintDisplaySize';
 import type { BlueprintPresentation } from '../topology/types';
@@ -82,6 +83,53 @@ describe('cable route edge interaction', () => {
       view.rerender(<ForegroundCableRoutes edges={[a]} virtualChannels locationInputs={[blocked]} />);
       expect(view.container.querySelector('path[data-cable-ids*="canonical-a"]')).toBeNull();
       expect(view.container.querySelector('.map-cable-route-diagnostics')).toHaveTextContent('blocked-access');
+    });
+  });
+
+  it('ends at a hidden port object boundary and keeps canonical Cable selection and trace', () => {
+    const entry = (id: string, x: number) => blueprintNode(id, x, id, {
+      connectionPointId: id + '-port', kind: 'CONNECTION_POINT', renderedX: .15, attachmentX: 0, side: 'LEFT',
+    });
+    const left = entry('left', 0), right = entry('right', 420);
+    const blueprint = left.data.projection.attributes.blueprint_presentation as BlueprintPresentation;
+    blueprint.panels[0].face = 'REAR';
+    blueprint.panels.push({ ...blueprint.panels[0], panel_key: 'front', panel_number: 2, face: 'FRONT' });
+    const dimensions = blueprintRenderedNodeDimensions(blueprint, 32, 100);
+    left.measured = right.measured = dimensions;
+    const member = (id: string, x: number) => ({
+      id: 'PhysicalObject:' + id, kind: 'blueprint-object' as const, edge: 'right' as const,
+      bounds: { x, y: 0, ...dimensions }, point: { x: x + dimensions.width, y: dimensions.height / 2 },
+    });
+    const inputs = [{ locationId: null, boundary: null, members: [member('left', 0), member('right', 420)] }];
+    const edge = {
+      id: 'edge', source: 'left', target: 'right',
+      data: { cableNode: { id: 'cable-node', label: 'Cable', source_refs: [cableRef('canonical')] },
+        endpointPair: { from_connection_point_id: 'left-port', to_connection_point_id: 'right-port' } },
+    } as any;
+    const wiring = { source: { physicalObjectId: 'left', connectionPointId: 'left-port' },
+      target: { physicalObjectId: 'right', connectionPointId: 'right-port' } };
+    const hidden = { ...left, data: { ...left.data, facePresentation: blueprintFace(blueprint, 'FRONT') } };
+    const onSelect = vi.fn();
+
+    withNodes({ left, right }, () => {
+      const view = render(<ForegroundCableRoutes edges={[]} virtualChannels locationInputs={inputs} wiringRoute={wiring} />);
+      const paths = (selector: string) => [...view.container.querySelectorAll(selector)].map(path => path.getAttribute('d')).sort();
+      const preview = paths('path[data-preview]');
+      expect(preview.length).toBeGreaterThan(2);
+      view.rerender(<ForegroundCableRoutes edges={[edge]} virtualChannels locationInputs={inputs} onCableSelect={onSelect} />);
+      expect(paths('path[data-cable-ids*="canonical"]')).toEqual(preview);
+
+      activeNodes = { left: hidden, right };
+      const traced = { ...edge, data: { ...edge.data, cablePresentationEmphasis: 'traced' } };
+      view.rerender(<ForegroundCableRoutes edges={[traced]} virtualChannels locationInputs={inputs} onCableSelect={onSelect} traceActive />);
+      expect(view.container.querySelector('.map-cable-route-diagnostics')).toBeNull();
+      expect(view.container.querySelector('[data-connection-point-id="left-port"]')).toBeNull();
+      const visible = paths('path[data-cable-ids*="canonical"].cable-route-foreground--traced');
+      const terminal = dimensions.width + ' ' + dimensions.height / 2;
+      expect(visible.some(path => path?.startsWith('M ' + terminal + ' L ') || path?.endsWith(' L ' + terminal))).toBe(true);
+      expect(visible.length).toBeLessThan(preview.length);
+      fireEvent.click(view.container.querySelector('path.cable-route-hit')!);
+      expect(onSelect).toHaveBeenCalledWith(traced);
     });
   });
 

@@ -43,6 +43,7 @@ const validateBlueprintPresentation = (value: unknown, path: string): void => {
     requireString(panel.panel_key, `${path}.panels[${index}].panel_key`);
     requireString(panel.display_name, `${path}.panels[${index}].display_name`);
     if (!Number.isInteger(panel.panel_number) || (panel.panel_number as number) < 1 || keys.has(panel.panel_key as string) || numbers.has(panel.panel_number as number)) malformed(`${path}.panels[${index}] identity is invalid.`);
+    if (panel.face != null && panel.face !== 'FRONT' && panel.face !== 'REAR') malformed(path + '.panel face is invalid.');
     keys.add(panel.panel_key as string); numbers.add(panel.panel_number as number);
     for (const field of ['x', 'y', 'width', 'height'] as const) if (typeof panel[field] !== 'number' || !Number.isFinite(panel[field])) malformed(`${path}.panels[${index}].${field} is invalid.`);
     if ((panel.width as number) <= 0 || (panel.height as number) <= 0) malformed(`${path}.panels[${index}] dimensions are invalid.`);

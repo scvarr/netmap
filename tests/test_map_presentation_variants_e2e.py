@@ -110,3 +110,51 @@ def test_deleting_primary_or_foreign_layout_is_rejected():
     foreign_id = client.get(f"/v1/maps/{second}").json()["active_variant_ref"]["entity_id"]
     assert client.delete(f"/v1/maps/{first}/presentation-variants/{primary_id}").status_code == 422
     assert client.delete(f"/v1/maps/{first}/presentation-variants/{foreign_id}").status_code == 422
+
+
+def test_face_settings_copy_and_reload_without_materializing_inheritance():
+    from tests.test_map_location_states_e2e import assign, detail, location, write
+
+    map_id = create_map(client, "Faces")
+    source = detail(map_id)["active_variant_ref"]["entity_id"]
+    room = location("Room")
+    rack = location("Rack", room)
+    other = location("Other")
+    object_id, _ = create_object_with_point(client, "Equipment")
+    assign(object_id, rack)
+    assert client.post(f"/v1/maps/{map_id}/placements", json={
+        "physical_object_id": object_id, "x": 10, "y": 20,
+    }).status_code == 201
+
+    def face(variant, value, target=""):
+        return client.put(f"/v1/maps/{map_id}/presentation-variants/{variant}/face{target}", json={"face": value})
+
+    def settings(variant):
+        data = detail(map_id, variant)
+        selected = next(item for item in data["variants"] if item["variant_ref"]["entity_id"] == variant)
+        positions = data["placements"][0]["positions"]
+        return (selected["default_face"],
+                {state["location_ref"]["entity_id"]: state.get("face_override") for state in data["location_states"]},
+                positions["L1/PHYSICAL_OBJECT"].get("face_override"))
+
+    assert face(source, "INHERIT").status_code == 422
+    assert face(source, "REAR").status_code == 200
+    assert face(source, "FRONT", f"/locations/{room}").status_code == 200
+    assert face(source, "REAR", f"/objects/{object_id}").status_code == 200
+    assert write(map_id, source, rack, collapsed=True).status_code == 200
+    assert write(map_id, source, rack, collapsed=False).status_code == 200
+
+    response = client.post(f"/v1/maps/{map_id}/presentation-variants", json={"name": "Copy", "source_variant_id": source})
+    assert response.status_code == 201, response.text
+    copied = response.json()["variant_ref"]["entity_id"]
+    expected = ("REAR", {room: "FRONT", rack: None, other: None}, "REAR")
+    assert settings(copied) == settings(source) == expected
+
+    assert face(copied, "FRONT").status_code == 200
+    assert face(copied, "INHERIT", f"/locations/{room}").status_code == 200
+    assert face(copied, "INHERIT", f"/objects/{object_id}").status_code == 200
+    assert client.put(f"/v1/locations/{rack}/parent", json={"parent_location_id": other}).status_code == 200
+    assign(object_id, room)
+    assert settings(copied) == ("FRONT", {room: None, rack: None, other: None}, None)
+    assert settings(source) == expected
+    assert detail(map_id, copied)["placements"][0]["location_ref"]["entity_id"] == room

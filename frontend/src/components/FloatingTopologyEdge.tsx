@@ -135,6 +135,11 @@ interface WiringRouteDraft {
   target?: WiringPort;
 }
 
+export function hiddenFaceEndpoint(node: DeviceFlowNode, box: NodeRectangle, pointId?: string): FloatingEndpoint | null {
+  if (!pointId || !node.data.facePresentation?.hiddenPorts.has(pointId)) return null;
+  return { x: box.x + box.width, y: box.y + box.height / 2, side: Position.Right };
+}
+
 export function FloatingTopologyEdge({
   id,
   source,
@@ -150,9 +155,9 @@ export function FloatingTopologyEdge({
   if (!sourceNode || !targetNode || data?.renderCableInForegroundOnly) return null;
 
   const pair = data?.endpointPair;
-  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => node.data.locationProxy ? null : data?.cableNode
+  const exact = (node: InternalNode<DeviceFlowNode>, connectionPointId: string | undefined): FloatingEndpoint | null => node.data.locationProxy ? null : hiddenFaceEndpoint(node, rectangle(node), connectionPointId) ?? (data?.cableNode
     ? getRenderedConnectionPoint(node.data.projection, rectangle(node), connectionPointId)
-    : getConnectionPointEndpoint(node.data.projection, rectangle(node), connectionPointId);
+    : getConnectionPointEndpoint(node.data.projection, rectangle(node), connectionPointId));
   const floating = getFloatingEndpoints(rectangle(sourceNode), rectangle(targetNode));
   const endpoints = { source: exact(sourceNode, pair?.from_connection_point_id) ?? floating.source, target: exact(targetNode, pair?.to_connection_point_id) ?? floating.target };
   const [straightPath] = getStraightPath({
@@ -189,7 +194,7 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers
   const blueprint = projection.attributes.blueprint_presentation;
   const tracedPorts = tracedPortIds(projection, node.data.traceHighlightedConnectionMemberIds);
   const ports = blueprint
-    ? blueprint.slots.map((slot) => ({ id: slot.connection_point_id, network: slot.kind === 'NETWORK_PORT', portTypeId: slot.port_type_id }))
+    ? (node.data.facePresentation?.visibleBlueprint ?? blueprint).slots.map((slot) => ({ id: slot.connection_point_id, network: slot.kind === 'NETWORK_PORT', portTypeId: slot.port_type_id }))
     : genericConnectionPoints(projection).map((point) => ({ id: point.connection_point_id, network: false, portTypeId: undefined }));
   const box = rectangle(node);
   const portStroke = blueprint ? BLUEPRINT_PORT_STROKE : 1.25;
@@ -334,7 +339,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
     const projection = node.data.projection;
     if (!projection || projection.kind !== 'PHYSICAL_OBJECT') return [];
     const box = flowRectangle(node);
-    const blueprint = projection.attributes.blueprint_presentation;
+    const blueprint = node.data.facePresentation?.visibleBlueprint ?? projection.attributes.blueprint_presentation;
     if (blueprint) {
       const body = blueprintNodeDisplayDimensions(blueprint, box.compositionDisplayWidth);
       return blueprint.slots.map(slot => ({
@@ -354,7 +359,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
     graph: ReturnType<typeof objectVirtualChannels>;
   }>(), []);
   const channelObjects = useMemo(() => new Map(virtualChannels ? nodes.flatMap(node => {
-    const presentation = node.data.projection?.attributes.blueprint_presentation;
+    const presentation = node.data.facePresentation?.visibleBlueprint ?? node.data.projection?.attributes.blueprint_presentation;
     if (!presentation) return locationChannels && node.data.projection?.kind === 'PHYSICAL_OBJECT'
       ? [[node.id, { position: node.position, graph: genericChannelPaths(node) }] as const] : [];
     const width = node.measured?.width ?? node.width ?? 0;
@@ -385,7 +390,11 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
     const allocate = (nodeId: string, pointId: string, register: (usage: ChannelUsage) => void): FloatingEndpoint | undefined => {
       const object = channelObjects.get(nodeId);
       const first = object?.graph.paths.get(pointId);
-      if (!object || !first) return undefined;
+      if (!object) return undefined;
+      if (!first) {
+        const node = nodeById.get(nodeId);
+        return node ? hiddenFaceEndpoint(node, flowRectangle(node), pointId) ?? undefined : undefined;
+      }
       for (let segment: VirtualChannelSegment | null = first; segment; segment = segment.next) {
         registerObject(nodeId, segment, register);
       }
@@ -412,7 +421,10 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
       const from = source && anchor(source), to = target && anchor(target);
       const first = source && a ? channelObjects.get(source.id)?.graph.paths.get(a) : undefined;
       const last = target && b ? channelObjects.get(target.id)?.graph.paths.get(b) : undefined;
-      if (!source || !target || (!first && !source.data.locationProxy) || (!last && !target.data.locationProxy) || !from || !to) {
+      const sourceHidden = Boolean(a && source?.data.facePresentation?.hiddenPorts.has(a));
+      const targetHidden = Boolean(b && target?.data.facePresentation?.hiddenPorts.has(b));
+      if (!source || !target || (!first && !sourceHidden && !source.data.locationProxy)
+        || (!last && !targetHidden && !target.data.locationProxy) || !from || !to) {
         failures.push({ id, reason: 'missing-terminal' });
         return;
       }
@@ -434,6 +446,17 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
           start.pop();
           end.pop();
         }
+      }
+      // Both hidden ends on one object share its boundary. Give the cable
+      // a selectable mark along the edge even when the path has zero length.
+      if (source.id === target.id && sourceHidden && targetHidden) {
+        const point = hiddenFaceEndpoint(source, flowRectangle(source), a)!;
+        const key = 'face-boundary:' + source.id;
+        let segment = locationSegments.get(key);
+        if (!segment) locationSegments.set(key, segment = {
+          key, from: point, to: { x: point.x, y: point.y - 6 }, cables: new Map(),
+        });
+        register(segment);
       }
       for (const segment of start) registerObject(source.id, segment, register);
       for (const ref of path.segments) {
@@ -504,7 +527,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
       const floating = getFloatingEndpoints(sourceBox, targetBox);
       const exits = channelExits.get(edge.id);
       const exact = (node: DeviceFlowNode, box: NodeRectangle, pointId?: string) => node.data.locationProxy
-        ? null : getRenderedConnectionPoint(node.data.projection, box, pointId);
+        ? null : hiddenFaceEndpoint(node, box, pointId) ?? getRenderedConnectionPoint(node.data.projection, box, pointId);
       const from = exits?.source ?? exact(source, sourceBox, pair?.from_connection_point_id) ?? floating.source;
       const to = exits?.target ?? exact(target, targetBox, pair?.to_connection_point_id) ?? floating.target;
       const key = [`${from.x},${from.y}`, `${to.x},${to.y}`].sort().join('/');

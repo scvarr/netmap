@@ -68,7 +68,7 @@ class SavedMapCatalog:
         self._lock_location_hierarchy()
         self._lock_object_layout_maps([map_id])
         source = self._require_variant(map_id, source_variant_id, lock=True)
-        variant = MapPresentationVariant(map_id=map_id, name=name, automatic_layout=deepcopy(source.automatic_layout))
+        variant = MapPresentationVariant(map_id=map_id, name=name, automatic_layout=deepcopy(source.automatic_layout), default_face=source.default_face)
         self.session.add(variant)
         self._flush()
         source_positions = self.session.scalars(select(MapViewPosition).join(MapPlacement).where(
@@ -77,14 +77,46 @@ class SavedMapCatalog:
         self.session.add_all(MapViewPosition(
             placement_id=position.placement_id, variant_id=variant.id, view_key=position.view_key,
             x=position.x, y=position.y, locked=position.locked, display_width=position.display_width,
+            face_override=position.face_override,
         ) for position in source_positions)
         self.session.add_all(MapLocationState(
             variant_id=variant.id, location_id=state.location_id, collapsed=state.collapsed,
+            face_override=state.face_override,
             geometry=dict(state.geometry), manual_bounds=dict(state.manual_bounds) if state.manual_bounds else None,
             visible_direct_elements=[dict(ref) for ref in state.visible_direct_elements],
         ) for state in self._location_states(source.id))
         self._flush()
         return variant
+
+    def set_face(self, map_id, variant_id, face, kind=None, entity_id=None):
+        self._require_map(map_id)
+        locations, variant = self._lock_physical_layout(map_id, variant_id)
+        override = None if face == "INHERIT" else face
+        if kind is None:
+            if override is None:
+                raise ValidationError("A presentation variant requires FRONT or REAR")
+            variant.default_face = override
+        elif kind == "locations":
+            if not any(location.id == entity_id for location in locations):
+                raise ValidationError("Location does not exist")
+            state = self.session.scalar(select(MapLocationState).where(
+                MapLocationState.variant_id == variant.id, MapLocationState.location_id == entity_id,
+            ).with_for_update())
+            if state is None:
+                if override is None:
+                    return
+                state = MapLocationState(variant_id=variant.id, location_id=entity_id)
+                self.session.add(state)
+            state.face_override = override
+        else:
+            position = self.session.scalar(select(MapViewPosition).join(MapPlacement).where(
+                MapPlacement.map_id == map_id, MapPlacement.physical_object_id == entity_id,
+                MapViewPosition.variant_id == variant.id, MapViewPosition.view_key == MapViewKey.PHYSICAL,
+            ).with_for_update(of=MapViewPosition))
+            if position is None:
+                raise ValidationError("PhysicalObject has no position in this map variant")
+            position.face_override = override
+        self._flush()
 
     def set_automatic_layout(self, map_id, variant_id, settings):
         locations, variant = self._lock_physical_layout(map_id, variant_id)
@@ -114,7 +146,7 @@ class SavedMapCatalog:
 
     def set_location_state(self, map_id: uuid.UUID, variant_id: uuid.UUID, location_id: uuid.UUID, collapsed: bool, refs: list[dict[str, str]]) -> MapLocationState:
         self._require_map(map_id)
-        self._require_variant(map_id, variant_id)
+        self._lock_physical_layout(map_id, variant_id)
         if self.session.get(Location, location_id) is None:
             raise ValidationError("Location does not exist", {"location_id": str(location_id)})
         keys = [(ref["entity_type"], ref["entity_id"]) for ref in refs]
@@ -440,6 +472,7 @@ class SavedMapCatalog:
             collapsed=stored[key].collapsed if key in stored else False,
             visible_direct_elements=stored[key].visible_direct_elements if key in stored else [],
             geometry=frames[key], manual_bounds=stored[key].manual_bounds if key in stored else None,
+            face_override=stored[key].face_override if key in stored else None,
         ) for key in parents)
 
     def _valid_location_refs(self, states: tuple[MapLocationState, ...]) -> dict[uuid.UUID, list[dict[str, str]]]:

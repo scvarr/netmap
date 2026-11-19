@@ -37,7 +37,7 @@ def published_definition(session, template_id, revision_id):
     return validate_definition({
         "name": detail.name, "default_physical_object_class": detail.default_physical_object_class,
         "body": {"kind": detail.body_kind, "width": detail.width, "height": detail.height, "fill_color": detail.fill_color},
-        "panels": [{k: getattr(p, k) for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height")} for p in detail.panels],
+        "panels": [{k: getattr(p, k) for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height", "face")} for p in detail.panels],
         "slots": [{"key": s.slot_key, "display_name": s.display_name, "kind": s.kind, "cardinality": s.cardinality, "port_type_id": s.port_type_id, "panel_key": s.panel_key,
                    "rendered_position": {"x": s.position_x, "y": s.position_y}} for s in detail.slots],
         "bays": [{k: getattr(b, k) for k in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for b in detail.bays],
@@ -59,11 +59,13 @@ def physical_structure(definition):
 def structural_changes(before, after):
     changes = []
     for section, key in (("panels", "panel_key"), ("slots", "key"), ("bays", "bay_key")):
-        # Compare semantic bay representations without rewriting frozen JSON.
-        records = ([ModuleBayRequest.model_validate(item).model_dump(mode="json")
-                    for item in d[section]] if section == "bays" else d[section]
-                   for d in (before, after))
-        old, new = ({item[key]: item for item in items} for items in records)
+        # Compare semantic panel and bay representations without rewriting frozen JSON.
+        old, new = ({item[key]: item for item in d[section]} for d in (before, after))
+        if section == "panels":
+            old, new = ({k: {"face": None, **item} for k, item in records.items()} for records in (old, new))
+        elif section == "bays":
+            old, new = ({k: ModuleBayRequest.model_validate(item).model_dump(mode="json")
+                         for k, item in records.items()} for records in (old, new))
         for identity in sorted(old.keys() | new.keys()):
             if old.get(identity) != new.get(identity):
                 changes.append({"section": section, "key": identity,

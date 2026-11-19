@@ -95,7 +95,7 @@ from app.schemas import (
     LocationSeriesPreviewDocument,
     LocationSeriesCreatedDocument,
     MapPlacementsDocument,
-    MapLocationBoundaryPlacement, MapLocationGeometry, MapTextAnnotationDocument, MapPresentationVariantDocument, MapLocationStateDocument, MapLocationDirectElementChoice, SetMapLocationStateRequest,
+    SetMapFaceRequest, MapLocationBoundaryPlacement, MapLocationGeometry, MapTextAnnotationDocument, MapPresentationVariantDocument, MapLocationStateDocument, MapLocationDirectElementChoice, SetMapLocationStateRequest,
     L3ReachabilityArtifact,
     L3ReachabilityQuery,
     NextHopResolutionArtifact,
@@ -217,11 +217,12 @@ def _saved_map_document(detail) -> dict[str, object]:
         "created_at": saved_map.created_at,
         "updated_at": saved_map.updated_at,
         "active_variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": detail.variant.id},
-        "variants": [{"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id}, "name": variant.name, "automatic_layout": variant.automatic_layout} for variant in detail.variants],
+        "variants": [{"variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id}, "name": variant.name, "automatic_layout": variant.automatic_layout, "default_face": variant.default_face} for variant in detail.variants],
         "location_states": [{
             "location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id},
             "geometry": state.geometry,
             "manual_bounds": state.manual_bounds,
+            "face_override": state.face_override,
             "boundary_point_id": uuid.uuid5(saved_map.id, str(state.location_id)),
             "collapsed": state.collapsed,
             "visible_direct_elements": detail.valid_location_refs[state.location_id],
@@ -249,6 +250,7 @@ def _saved_map_document(detail) -> dict[str, object]:
                         "x": position.x,
                         "y": position.y,
                         "locked": position.locked,
+                        **({"face_override": position.face_override} if position.face_override is not None else {}),
                         **({"display_width": position.display_width} if position.display_width is not None else {}),
                     }
                     for position in placement.view_positions if position.variant_id == detail.variant.id
@@ -488,7 +490,7 @@ def set_map_location_state(map_id: uuid.UUID, variant_id: uuid.UUID, location_id
         state = SavedMapCatalog(session).set_location_state(map_id, variant_id, location_id, query.collapsed, [
             {"entity_type": ref.entity_type, "entity_id": str(ref.entity_id)} for ref in query.visible_direct_elements
         ])
-        return {"location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id}, "geometry": next(item.geometry for item in SavedMapCatalog(session)._location_states(variant_id) if item.location_id == location_id), "boundary_point_id": uuid.uuid5(map_id, str(location_id)), "collapsed": state.collapsed, "visible_direct_elements": state.visible_direct_elements}
+        return {"location_ref": {"ref_type": "CANONICAL_FACT", "entity_type": "Location", "entity_id": state.location_id}, "geometry": next(item.geometry for item in SavedMapCatalog(session)._location_states(variant_id) if item.location_id == location_id), "boundary_point_id": uuid.uuid5(map_id, str(location_id)), "collapsed": state.collapsed, "visible_direct_elements": state.visible_direct_elements, "face_override": state.face_override}
 
 
 @app.put("/v1/maps/{map_id}/presentation-variants/{variant_id}/locations/{location_id}/boundary-placement", response_model=SavedMapDocument, response_model_exclude_none=True)
@@ -520,6 +522,25 @@ def set_automatic_location_layout(map_id: uuid.UUID, variant_id: uuid.UUID, quer
         return _saved_map_document(catalog.detail(map_id, variant_id))
 
 
+@app.put("/v1/maps/{map_id}/presentation-variants/{variant_id}/face", response_model=SavedMapDocument, response_model_exclude_none=True)
+def set_map_default_face(map_id: uuid.UUID, variant_id: uuid.UUID, query: SetMapFaceRequest,
+                         session: Session = Depends(get_session)):
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog.set_face(map_id, variant_id, query.face)
+        return _saved_map_document(catalog.detail(map_id, variant_id))
+
+
+@app.put("/v1/maps/{map_id}/presentation-variants/{variant_id}/face/{kind}/{entity_id}", response_model=SavedMapDocument, response_model_exclude_none=True)
+def set_map_face_override(map_id: uuid.UUID, variant_id: uuid.UUID,
+                          kind: Literal["locations", "objects"], entity_id: uuid.UUID,
+                          query: SetMapFaceRequest, session: Session = Depends(get_session)):
+    with session.begin():
+        catalog = SavedMapCatalog(session)
+        catalog.set_face(map_id, variant_id, query.face, kind, entity_id)
+        return _saved_map_document(catalog.detail(map_id, variant_id))
+
+
 @app.post("/v1/maps/{map_id}/presentation-variants", response_model=MapPresentationVariantDocument, status_code=201, responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}})
 def create_map_presentation_variant(map_id: uuid.UUID, query: CreateMapPresentationVariantRequest, session: Session = Depends(get_session)) -> MapPresentationVariantDocument:
     with session.begin():
@@ -528,6 +549,7 @@ def create_map_presentation_variant(map_id: uuid.UUID, query: CreateMapPresentat
             "variant_ref": {"entity_type": "MapPresentationVariant", "entity_id": variant.id},
             "name": variant.name,
             "automatic_layout": variant.automatic_layout,
+            "default_face": variant.default_face,
         }
 
 
@@ -805,7 +827,7 @@ def get_object_blueprint_version(
             "height": version.height, "fill_color": version.fill_color,
         },
         "panels": [
-            {"panel_key": panel.panel_key, "panel_number": panel.panel_number,
+            {"panel_key": panel.panel_key, "panel_number": panel.panel_number, "face": panel.face,
              "display_name": panel.display_name, "x": panel.x, "y": panel.y,
              "width": panel.width, "height": panel.height}
             for panel in version.panels

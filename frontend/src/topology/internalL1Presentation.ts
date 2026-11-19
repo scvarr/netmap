@@ -42,6 +42,7 @@ export const internalL1Segments = (
   highlightedConnectionMemberIds: ReadonlySet<string> = new Set(),
   wiringHighlightedConnectionMemberIds: ReadonlySet<string> = new Set(),
   displayWidth?: number,
+  hiddenPorts?: ReadonlySet<string>,
 ): InternalL1Segment[] => {
   const blueprint = node.attributes.blueprint_presentation;
   if (node.kind !== 'PHYSICAL_OBJECT' || !blueprint) return [];
@@ -54,7 +55,7 @@ export const internalL1Segments = (
     .flatMap((link) => {
       const fromSlot = slotsByConnectionPoint.get(link.from_connection_point_id);
       const toSlot = slotsByConnectionPoint.get(link.to_connection_point_id);
-      if (!fromSlot || !toSlot) return [];
+      if (!fromSlot || !toSlot || hiddenPorts?.has(link.from_connection_point_id) || hiddenPorts?.has(link.to_connection_point_id)) return [];
       return [{
         connectionMemberId: link.connection_member_id,
         fromConnectionPointId: link.from_connection_point_id,

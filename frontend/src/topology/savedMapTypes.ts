@@ -7,10 +7,13 @@ export interface LegacyAutomaticLocationLayout { mode?: undefined; hide_empty: b
 export interface GridObjectSequence { direction: 'HORIZONTAL' | 'VERTICAL'; order: string[] }
 export interface UniformLocationGrid { mode: 'uniform_grid'; version: 1; hide_empty: boolean; tables: Record<string, (string | null)[][]>; object_sequences?: Record<string, GridObjectSequence> }
 export type AutomaticLocationLayout = LegacyAutomaticLocationLayout | UniformLocationGrid;
-export interface MapPresentationVariant { automatic_layout?: AutomaticLocationLayout | null; variant_ref: MapPresentationVariantRef; name: string }
+export type PhysicalFace = 'FRONT' | 'REAR';
+export type FaceOverride = PhysicalFace | 'INHERIT';
+export type FaceTarget = { kind: 'locations' | 'objects'; id: string };
+export interface MapPresentationVariant { default_face?: PhysicalFace; automatic_layout?: AutomaticLocationLayout | null; variant_ref: MapPresentationVariantRef; name: string }
 export type SavedMapView = 'physical' | 'logical';
 export type SavedMapViewKey = 'L1/PHYSICAL_OBJECT' | 'L2/DEVICE';
-export interface MapViewPosition { x: number; y: number; locked: boolean; display_width?: number }
+export interface MapViewPosition { face_override?: PhysicalFace | null; x: number; y: number; locked: boolean; display_width?: number }
 /** `location_ref` is derived/live canonical context for this scene, not MapPlacement state. */
 export interface MapPlacement { physical_object_ref: ProjectionSourceRef; location_ref?: LocationRef | null; positions: Partial<Record<SavedMapViewKey, MapViewPosition>> }
 export interface LocationGroupMove {
@@ -23,11 +26,12 @@ export interface MapTextAnnotation { annotation_ref: MapTextAnnotationRef; text:
 export interface MapTextAnnotationWrite { text: string; position: MapPresentationPoint; text_color: string; font_size: number }
 export interface MapLocationDirectElementRef { entity_type: 'PhysicalObject' | 'Location'; entity_id: string }
 export interface MapLocationGeometry { x: number; y: number; width: number; height: number; edge: 'top' | 'right' | 'bottom' | 'left'; offset: number }
-export interface MapLocationState { manual_bounds?: { x: number; y: number; width: number; height: number }; geometry?: MapLocationGeometry; boundary_point_id?: string; location_ref: LocationRef; collapsed: boolean; visible_direct_elements: MapLocationDirectElementRef[] }
+export interface MapLocationState { face_override?: PhysicalFace | null; manual_bounds?: { x: number; y: number; width: number; height: number }; geometry?: MapLocationGeometry; boundary_point_id?: string; location_ref: LocationRef; collapsed: boolean; visible_direct_elements: MapLocationDirectElementRef[] }
 export interface MapLocationDirectElementChoice { ref: MapLocationDirectElementRef; label: string }
 export interface SavedMap { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string; active_variant_ref: MapPresentationVariantRef; variants: MapPresentationVariant[]; location_states?: MapLocationState[]; placements: MapPlacement[]; text_annotations: MapTextAnnotation[] }
 export interface SavedMapSummary { map_ref: SavedMapRef; name: string; created_at: string; updated_at: string }
 export interface SavedMapDataSource {
+  setFace?(mapId: string, variantId: string, face: FaceOverride, target?: FaceTarget): Promise<SavedMap>;
   setAutomaticLayout?(mapId: string, variantId: string, settings: AutomaticLocationLayout | null): Promise<SavedMap>;
   listMaps(): Promise<SavedMapSummary[]>;
   createMap(name: string): Promise<SavedMap>;

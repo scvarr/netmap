@@ -58,6 +58,9 @@ import type { LocationDocument } from "../topology/locationTypes";
 import type { MapLocationState, MapPlacement } from "../topology/savedMapTypes";
 import { presentationSceneDocument } from "../topology/presentationScene";
 import { MapTextAnnotationLayer } from "./MapTextAnnotationLayer";
+import { blueprintFace, type resolveFaces } from '../topology/physicalFaces';
+import type { FaceOverride, FaceTarget } from '../topology/savedMapTypes';
+import { PhysicalFaceIndicator } from './PhysicalFaceControls';
 import { LocationProxyNode } from "./LocationProxyNode";
 
 interface TopologyCanvasProps {
@@ -81,6 +84,9 @@ interface TopologyCanvasProps {
   /** New authoritative SavedMap placement snapshot, including variant switches and refreshes. */
   positionSnapshot?: readonly MapPlacement[];
   displayWidthOverrides?: Record<string, number>;
+  faceViews?: ReturnType<typeof resolveFaces>;
+  onFaceChange?: (value: FaceOverride, target: FaceTarget) => void;
+  faceBusy?: boolean;
   locationFrameInput?: { automatic?: import('../topology/savedMapTypes').AutomaticLocationLayout | null; locations: readonly LocationDocument[]; placements: readonly MapPlacement[]; variantId?: string; states?: readonly MapLocationState[]; onBoundaryPlacement?: (id: string, placement: Pick<import('../topology/savedMapTypes').MapLocationGeometry, 'edge' | 'offset'>) => Promise<void>; onGeometry?: (id: string, geometry: import('../topology/savedMapTypes').MapLocationGeometry) => Promise<void>; onCollapse?: (locationId: string, collapsed: boolean) => void; onConfigure?: (locationId: string) => void; };
   draggableNodeIds?: ReadonlySet<string>;
   lockedNodeIds?: ReadonlySet<string>;
@@ -135,6 +141,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   directlyAttachedCableIds,
   sceneKey,
   showAllVirtualChannels,
+  faceViews, onFaceChange, faceBusy,
   requireLocationChannels,
   viewportFitRevision = 0,
   focusPhysicalObjectId,
@@ -353,6 +360,15 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     return () => onViewportCenterReady(null);
   }, [onViewportCenterReady, screenToFlowPosition]);
 
+  const physicalObjectView = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT";
+  const objectFaces = physicalObjectView ? faceViews?.objectFaces : undefined;
+  const facePresentations = useMemo(() => new Map(projection?.nodes.map(node => {
+    const id = physicalObjectIdForNode(node.data.projection);
+    const face = id ? objectFaces?.get(id)?.face : undefined;
+    const blueprint = node.data.projection.attributes.blueprint_presentation;
+    return [node.id, face && blueprint ? blueprintFace(blueprint, face) : undefined] as const;
+  })), [projection?.nodes, objectFaces]);
+
   if (layoutError) {
     return (
       <div className="topology-layout-state" role="alert">
@@ -368,7 +384,6 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     );
   }
 
-  const physicalObjectView = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT";
   const useVirtualChannels = physicalObjectView;
   const showChannelTerminals = frameUiZoom >= 0.6;
   const cableTraceActive = Boolean(traceOverlay && (
@@ -416,6 +431,13 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     data: {
       ...node.data,
       locationPresentationPath: locationPathsByObjectId.get(physicalObjectIdForNode(node.data.projection) ?? ""),
+      resolvedFace: objectFaces?.get(physicalObjectIdForNode(node.data.projection) ?? ''),
+      facePresentation: facePresentations.get(node.id),
+      onFaceChange: onFaceChange ? value => {
+        const id = physicalObjectIdForNode(node.data.projection);
+        if (id) onFaceChange(value, { kind: 'objects', id });
+      } : undefined,
+      faceBusy,
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
       traceHighlightedConnectionMemberIds: traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
       cableOccupiedPortIds: occupiedPorts,
@@ -433,7 +455,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
     id: proxyNodeId(proxy.locationId), type: 'locationProxy',
     position: { x: proxy.bounds.x, y: proxy.bounds.y }, width: proxy.bounds.width, height: proxy.bounds.height,
     draggable: false, selectable: false,
-    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { arrangementSelected: arrangement.selected === proxy.locationId, onSelectLocation: arrangement.preview && !proxy.partial ? () => arrangement.select(proxy.locationId) : undefined, partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
+    data: { projection: null as unknown as TopologyProjectionNode, locationProxy: { resolvedFace: faceViews?.locationFaces.get(proxy.locationId), arrangementSelected: arrangement.selected === proxy.locationId, onSelectLocation: arrangement.preview && !proxy.partial ? () => arrangement.select(proxy.locationId) : undefined, partial: proxy.partial, boundaryPointId: locationFrameInput?.states?.find(s => s.location_ref.entity_id === proxy.locationId)?.boundary_point_id, boundaryEdge: baseFrameGeometries.get(proxy.locationId)?.edge, boundaryOffset: baseFrameGeometries.get(proxy.locationId)?.offset, locationId: proxy.locationId, label: proxy.label, hiddenObjectCount: proxy.hiddenObjectCount, traced: [...hiddenNodeProxies].some(([nodeId, targetId]) => targetId === proxyNodeId(proxy.locationId) && traceOverlay?.highlightedNodeIds.has(nodeId)), expandLabel: t('map.locationExpand', { name: proxy.label }), configureLabel: t('map.locationConfigureCollapse', { name: proxy.label }), onExpand: locationFrameInput?.onCollapse ? () => locationFrameInput.onCollapse?.(proxy.locationId, false) : undefined, onConfigure: locationFrameInput?.onConfigure ? () => locationFrameInput.onConfigure?.(proxy.locationId) : undefined } },
   });
   const edges = projectCollapsedEdges(annotationMode ? [] : projection.edges, hiddenNodeProxies).map((edge) => {
     const tracedCableId = edge.data?.cableNode
@@ -708,6 +730,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
               const collapsed = locationFrameInput?.states?.some((state) => state.location_ref.entity_id === frame.locationId && state.collapsed) ?? false;
               const toggleLabel = t(collapsed ? 'map.locationExpand' : 'map.locationCollapse', { name: frame.label });
               const configureLabel = t('map.locationConfigureCollapse', { name: frame.label });
+              const resolvedFace = faceViews?.locationFaces.get(frame.locationId);
               return <div key={frame.locationId}><LocationFrameEditor automatic={Boolean(automatic)} key={(locationFrameInput?.variantId ?? '') + (automatic ? automatic.mode ?? 'legacy' : 'manual') + frame.locationId} frame={frame} arrangementSelected={arrangement.selected === frame.locationId} onSelectLocation={arrangement.preview ? () => arrangement.select(frame.locationId) : undefined}
                 state={(() => { const state = locationFrameInput?.states?.find(state => state.location_ref.entity_id === frame.locationId); return state ? { ...state, geometry: editedFrameGeometries.get(frame.locationId)! } : undefined; })()}
                 uiScale={Math.min(1, 1 / frameUiZoom)}
@@ -718,6 +741,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
                 screenToFlowPosition={screenToFlowPosition} onSave={locationFrameInput?.onGeometry} onSaveBoundary={locationFrameInput?.onBoundaryPlacement}
                 actions={<span className="location-frame__actions">
                   <button type="button" className="location-action" aria-label={toggleLabel} title={toggleLabel} onClick={() => locationFrameInput?.onCollapse?.(frame.locationId, !collapsed)}>{collapsed ? '+' : '−'}</button>
+                  {resolvedFace && <PhysicalFaceIndicator resolved={resolvedFace} />}
                   <button type="button" className="location-action" aria-label={configureLabel} title={configureLabel} onClick={() => locationFrameInput?.onConfigure?.(frame.locationId)}>⚙</button>
                 </span>} /></div>;
             })}

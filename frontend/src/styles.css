@@ -1101,3 +1101,8 @@ a { color: inherit; }
 .cable-route-popup { box-sizing: border-box; width: max-content; min-width: 0; max-width: min(320px, calc(100vw - 16px)); max-height: min(260px, calc(100vh - 16px)); overflow: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
 .cable-route-popup small { display: block; margin-top: 2px; color: #91a5a5; font-weight: 400; }
 .cable-route-popup--tooltip { padding: 6px 9px; color: #d7e8e4; font-size: 12px; pointer-events: none; }
+
+.physical-face { position: relative; display: inline-grid; place-items: center; align-self: start; width: 1.35em; flex: 0 0 auto; border: 1px dashed currentColor; border-radius: 3px; color: #a6bab8; font: 700 9px/1.15 ui-monospace, monospace; }
+.physical-face--explicit { border-style: solid; color: #dff7ef; background: #225d51; }
+.physical-face select { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; opacity: 0; cursor: pointer; }
+.physical-face:focus-within { outline: 2px solid #54e3b4; }

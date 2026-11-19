@@ -6,7 +6,7 @@ const objectId = '00000000-0000-4000-8000-000000000002';
 const annotationWrite = { text: 'Line one\nLine two', position: { x: 3, y: 4 }, text_color: '#123456', font_size: 18 };
 const annotation = { annotation_ref: { entity_type: 'MapTextAnnotation' as const, entity_id: '00000000-0000-4000-8000-000000000004' }, ...annotationWrite };
 const variantId = '00000000-0000-4000-8000-000000000005';
-const body = { map_ref: { entity_type: 'SavedMap', entity_id: mapId }, name: 'First', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, name: 'Основной' }], location_states: [], placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: objectId }, positions: { 'L1/PHYSICAL_OBJECT': { x: 12, y: 34, locked: false } } }], text_annotations: [annotation] };
+const body = { map_ref: { entity_type: 'SavedMap', entity_id: mapId }, name: 'First', created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, variants: [{ variant_ref: { entity_type: 'MapPresentationVariant', entity_id: variantId }, name: 'Основной', default_face: 'FRONT' }], location_states: [], placements: [{ physical_object_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'PhysicalObject', entity_id: objectId }, positions: { 'L1/PHYSICAL_OBJECT': { x: 12, y: 34, locked: false } } }], text_annotations: [annotation] };
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 
 describe('ApiSavedMapDataSource', () => {
@@ -29,7 +29,7 @@ describe('ApiSavedMapDataSource', () => {
   it('parses list, create and detail responses strictly', async () => { fetchMock.mockResolvedValueOnce(response({ maps: [body] })).mockResolvedValueOnce(response(body)).mockResolvedValueOnce(response(body)); const source = new ApiSavedMapDataSource(); await expect(source.listMaps()).resolves.toHaveLength(1); await expect(source.createMap('First')).resolves.toMatchObject({ name: 'First' }); await expect(source.loadMap(mapId)).resolves.toMatchObject({ placements: [{ positions: { 'L1/PHYSICAL_OBJECT': { x: 12, y: 34, locked: false } } }] }); });
   it('preserves the complete variant catalog while parsing different active variants', async () => {
     const copyId = '00000000-0000-4000-8000-000000000006';
-    const variants = [...body.variants, { variant_ref: { entity_type: 'MapPresentationVariant', entity_id: copyId }, name: 'A' }];
+    const variants = [...body.variants, { variant_ref: { entity_type: 'MapPresentationVariant', entity_id: copyId }, name: 'A', default_face: 'REAR' }];
     fetchMock.mockResolvedValueOnce(response({ ...body, variants })).mockResolvedValueOnce(response({ ...body, variants, active_variant_ref: { entity_type: 'MapPresentationVariant', entity_id: copyId } }));
     const source = new ApiSavedMapDataSource();
     const primary = await source.loadMap(mapId, variantId);
@@ -38,6 +38,17 @@ describe('ApiSavedMapDataSource', () => {
     expect(primary.variants.map((variant) => variant.name)).toEqual(['Основной', 'A']);
     expect(primary.active_variant_ref.entity_id).toBe(variantId);
     expect(copy.active_variant_ref.entity_id).toBe(copyId);
+  });
+  it('writes a scoped face override and parses the persisted value', async () => {
+    const position = { ...body.placements[0].positions['L1/PHYSICAL_OBJECT'], face_override: 'REAR' };
+    fetchMock.mockResolvedValueOnce(response({
+      ...body, placements: [{ ...body.placements[0], positions: { 'L1/PHYSICAL_OBJECT': position } }],
+    }));
+    const source = new ApiSavedMapDataSource();
+    const map = await source.setFace(mapId, variantId, 'REAR', { kind: 'objects', id: objectId });
+    expect(map.placements[0].positions['L1/PHYSICAL_OBJECT']?.face_override).toBe('REAR');
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/maps/' + mapId + '/presentation-variants/' + variantId + '/face/objects/' + objectId,
+      expect.objectContaining({ method: 'PUT', body: JSON.stringify({ face: 'REAR' }) }));
   });
   it('deletes an exact canonical SavedMap UUID', async () => { fetchMock.mockImplementation(async () => response({})); await new ApiSavedMapDataSource().deleteMap(mapId); expect(fetchMock).toHaveBeenCalledWith(`/api/v1/maps/${mapId}`, { method: 'DELETE' }); await expect(new ApiSavedMapDataSource().deleteMap('not-a-uuid')).rejects.toThrow('mapId must be a UUID'); });
   it('deletes an exact presentation variant UUID on its SavedMap', async () => { fetchMock.mockImplementation(async () => response({})); const source = new ApiSavedMapDataSource(); await source.deletePresentationVariant(mapId, variantId); expect(fetchMock).toHaveBeenCalledWith(`/api/v1/maps/${mapId}/presentation-variants/${variantId}`, { method: 'DELETE' }); await expect(source.deletePresentationVariant('not-a-uuid', variantId)).rejects.toThrow('mapId must be a UUID'); await expect(source.deletePresentationVariant(mapId, 'not-a-uuid')).rejects.toThrow('variantId must be a UUID'); });

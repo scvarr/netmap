@@ -70,7 +70,7 @@ ENTITIES = (
     ("authoring", "BaseTemplateDraft", "BaseTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "BaseTemplateCandidate", "BaseTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "BaseTemplatePublication", "BaseTemplatePublication", "id revision_id"),
-    ("authoring", "PresentationPanel", "PresentationPanel", "id base_revision_id panel_key panel_number display_name x y width height"),
+    ("authoring", "PresentationPanel", "PresentationPanel", "id base_revision_id panel_key panel_number display_name x y width height face"),
     ("authoring", "BuiltInEndpointDefinition", "BuiltInEndpointDefinition", "id base_revision_id slot_key display_name kind panel_key position_x position_y port_type_id cardinality"),
     ("authoring", "BaseInternalLink", "BaseInternalLink", "id base_revision_id slot_a_id slot_b_id member_mappings"),
     ("authoring", "ObjectConfiguration", "ObjectConfiguration", "id base_revision_id physical_object_id"),
@@ -85,10 +85,10 @@ ENTITIES = (
     ("authoring", "ModuleInstallation", "ModuleInstallation", "id configuration_id module_revision_id bay_key orientation layout"),
     ("authoring", "ModuleEndpointMapping", "ModuleEndpointMapping", "id installation_id definition_id connection_point_id network_interface_id"),
     ("presentation", "SavedMap", "SavedMap", "id name created_at updated_at"),
-    ("presentation", "MapPresentationVariant", "MapPresentationVariant", "id map_id name automatic_layout"),
+    ("presentation", "MapPresentationVariant", "MapPresentationVariant", "id map_id name automatic_layout default_face"),
     ("presentation", "MapPlacement", "MapPlacement", "id map_id physical_object_id"),
-    ("presentation", "MapViewPosition", "MapViewPosition", "id placement_id variant_id view_key x y locked display_width"),
-    ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements geometry manual_bounds"),
+    ("presentation", "MapViewPosition", "MapViewPosition", "id placement_id variant_id view_key x y locked display_width face_override"),
+    ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements geometry manual_bounds face_override"),
     ("presentation", "MapTextAnnotation", "MapTextAnnotation", "id map_id text position text_color font_size"),
     ("settings", "PortType", "PortType", "id name description color is_active"),
     ("settings", "CableLabelSettings", "CableLabelSettings", "id unique_labels"),
@@ -201,6 +201,11 @@ def validate_package(package: object) -> dict:
                 if name == "MapPresentationVariant":
                     # Historical workspace snapshots preserve manual variants.
                     record.setdefault("automatic_layout", None)
+                    record.setdefault("default_face", "FRONT")
+                elif name == "PresentationPanel":
+                    record.setdefault("face", None)
+                elif name in {"MapLocationState", "MapViewPosition"}:
+                    record.setdefault("face_override", None)
                 if name == "BuiltInEndpointDefinition":
                     record.setdefault("cardinality", 1)
                 elif name == "BaseInternalLink":
@@ -366,7 +371,7 @@ def _validate_template_reviews(rows):
         actual = {
             "name": revision["name"], "default_physical_object_class": revision["default_physical_object_class"],
             "body": {"kind": revision["body_kind"], "width": revision["width"], "height": revision["height"], "fill_color": revision["fill_color"]},
-            "panels": [{k: p[k] for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height")} for p in rows["presentation_panels"] if p["base_revision_id"] == revision["id"]],
+            "panels": [{k: p[k] for k in ("panel_key", "panel_number", "display_name", "x", "y", "width", "height", "face")} for p in rows["presentation_panels"] if p["base_revision_id"] == revision["id"]],
             "slots": [{"key": s["slot_key"], "display_name": s["display_name"], "kind": s["kind"], "cardinality": s["cardinality"], "port_type_id": str(s["port_type_id"]), "panel_key": s["panel_key"], "rendered_position": {"x": s["position_x"], "y": s["position_y"]}} for s in rows["built_in_endpoint_definitions"] if s["base_revision_id"] == revision["id"]],
             "bays": [{k: b[k] for k in ("bay_key", "display_name", "compatibility", "panel_key", "kind", "x", "y", "width", "height")} for b in rows["module_bays"] if b["base_revision_id"] == revision["id"]],
         }

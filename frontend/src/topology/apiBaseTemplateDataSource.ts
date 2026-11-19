@@ -52,7 +52,9 @@ const parsePanel = (value: unknown, path: string): PresentationPanel => {
   if (!Number.isInteger(panel.panel_number) || (panel.panel_number as number) < 1) malformed(`${path}.panel_number is invalid.`);
   for (const field of ['x', 'y', 'width', 'height'] as const) if (typeof panel[field] !== 'number' || !Number.isFinite(panel[field])) malformed(`${path}.${field} is invalid.`);
   if ((panel.width as number) <= 0 || (panel.height as number) <= 0) malformed(`${path} dimensions must be positive.`);
-  return { panel_key: requireString(panel.panel_key, `${path}.panel_key`), panel_number: panel.panel_number as number, display_name: requireString(panel.display_name, `${path}.display_name`), x: panel.x as number, y: panel.y as number, width: panel.width as number, height: panel.height as number };
+  const face = panel.face;
+  if (face != null && face !== 'FRONT' && face !== 'REAR') return malformed(path + '.face is invalid.');
+  return { ...(face === undefined ? {} : { face }), panel_key: requireString(panel.panel_key, `${path}.panel_key`), panel_number: panel.panel_number as number, display_name: requireString(panel.display_name, `${path}.display_name`), x: panel.x as number, y: panel.y as number, width: panel.width as number, height: panel.height as number };
 };
 
 const parseLink = (value: unknown, path: string): BaseInternalLink => {

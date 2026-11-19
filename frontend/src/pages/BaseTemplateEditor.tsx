@@ -6,6 +6,7 @@ import { useI18n } from '../i18n';
 import { PageHeader } from '../components/PageChrome';
 import { PortTypeNotice, PortTypeSelect, usePortTypes } from '../components/PortTypeSelect';
 import { BlueprintCompositionCanvas } from '../components/BlueprintCompositionCanvas';
+import { PhysicalFaceSelect } from '../components/PhysicalFaceControls';
 import { addEndpoints, addPanel, alignSelectionLine, compositionBounds, copySelectionError, copySelectionToPanel, createBlueprintRequest, deleteActivePanel, distributeSelection, layoutSelectionRow, layoutSelectionTwoRows, positionSelection, positionSelectionAt, removeEndpoints, renameActivePanel, selectionPosition, setPanelRectangle, translateSelection, type BlueprintEditorState, type BlueprintValidationError, type PanelDirection } from '../blueprints/editorModel';
 import type { BlueprintSlot, BlueprintSlotKind } from '../topology/baseTemplateTypes';
 import { isPlacedBay, type PlacedModuleBay as ModuleBay } from '../topology/hardwareModules';
@@ -244,6 +245,10 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         <div className="blueprint-composer__panels" role="group" aria-label={t('blueprint.panel.list')}>{[...editor.panels].sort((a, b) => a.panel_number - b.panel_number).map((panel) => <button key={panel.panel_key} type="button" aria-pressed={panel.panel_key === panelKey} onClick={() => activatePanel(panel.panel_key)}>{panel.display_name}</button>)}</div>
         <div className="blueprint-composer__panel-actions">
           <label>{t('blueprint.panel.name')}<input value={activePanel.display_name} onChange={(event) => setEditor((old) => renameActivePanel(old, event.target.value))} /></label>
+          <PhysicalFaceSelect unassigned value={activePanel.face ?? 'INHERIT'} onChange={face => setEditor(old => ({
+            ...old, panels: old.panels.map(panel => panel.panel_key === old.activePanelKey
+              ? { ...panel, face: face === 'INHERIT' ? null : face } : panel),
+          }))} />
           {editor.panels.length > 1 && (['width', 'height'] as const).map((axis) => <label key={`${panelKey}:${axis}`}>{t(`blueprint.panel.${axis}`)}<input type="number" step="0.1" value={shownPanelSize(axis)}
             onChange={(event) => draftPanelSize(axis, event.target.value)}
             onBlur={(event) => commitPanelSize(axis, event.currentTarget.value)}

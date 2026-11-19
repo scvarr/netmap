@@ -169,6 +169,14 @@ class SetMapViewLockRequest(BaseModel):
     locked: bool
 
 
+PhysicalFace = Literal["FRONT", "REAR"]
+
+
+class SetMapFaceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    face: Literal["FRONT", "REAR", "INHERIT"]
+
+
 class MapViewPositionDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -176,6 +184,7 @@ class MapViewPositionDocument(BaseModel):
     y: FiniteFloat
     locked: bool = False
     display_width: FiniteFloat | None = Field(default=None, gt=0)
+    face_override: PhysicalFace | None = None
 
 
 class MapPlacementDocument(BaseModel):
@@ -254,6 +263,7 @@ class MapPresentationVariantDocument(BaseModel):
     variant_ref: MapPresentationVariantRef
     name: str
     automatic_layout: AutomaticLocationLayout | None = None
+    default_face: PhysicalFace
 
 
 class MapLocationDirectElementRef(BaseModel):
@@ -285,6 +295,7 @@ class SetMapLocationStateRequest(BaseModel):
 
 
 class MapLocationStateDocument(SetMapLocationStateRequest):
+    face_override: PhysicalFace | None = None
     manual_bounds: GroupMoveRectangle | None = None
     location_ref: LocationRef
     geometry: MapLocationGeometry
@@ -723,6 +734,7 @@ class BuiltInEndpointDefinitionRequest(BaseModel):
 
 
 class PresentationPanelRequest(BaseModel):
+    face: PhysicalFace | None = None
     model_config = ConfigDict(extra="forbid")
 
     panel_key: str = Field(min_length=1, max_length=255)
