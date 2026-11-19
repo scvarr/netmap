@@ -1,0 +1,677 @@
+{
+  "head": "7c75401430bf70f44111bab8cb4f79fd0434f544",
+  "chromium": "145.0.7632.6",
+  "viewport": [
+    1440,
+    1000
+  ],
+  "trace": {
+    "reachable": {
+      "schema_version": 1,
+      "query": {
+        "from_physical_object_id": "0d4f1e21-6518-49e3-833e-61c6f1fe0880",
+        "to_physical_object_id": "27564606-2f82-4641-82d2-1da7b0e2a37b",
+        "from_connection_point_id": "ac9efff2-3698-4cb7-b1f8-e6358f8c0e59",
+        "to_connection_point_id": "6a902770-71e8-43ee-a61a-960a37e374e0"
+      },
+      "evaluation_view": {
+        "mode": "CONFIGURED"
+      },
+      "resolver_version": "physical-object-l1/1.0",
+      "verdict": "REACHABLE",
+      "source_candidates": [
+        {
+          "point_id": "ac9efff2-3698-4cb7-b1f8-e6358f8c0e59",
+          "member_index": 1
+        }
+      ],
+      "target_candidates": [
+        {
+          "point_id": "6a902770-71e8-43ee-a61a-960a37e374e0",
+          "member_index": 1
+        }
+      ],
+      "branches": [
+        {
+          "branch_id": "physical-object-branch:ac9efff2-3698-4cb7-b1f8-e6358f8c0e59:1:6a902770-71e8-43ee-a61a-960a37e374e0:1",
+          "source": {
+            "point_id": "ac9efff2-3698-4cb7-b1f8-e6358f8c0e59",
+            "member_index": 1
+          },
+          "target": {
+            "point_id": "6a902770-71e8-43ee-a61a-960a37e374e0",
+            "member_index": 1
+          },
+          "edge_ids": [
+            "l1-edge:aaa70f9e-6e94-4e0c-95ea-1a2fcd9633fd",
+            "l1-edge:0836ac77-f9ea-48be-8b67-b1c3fac2080f",
+            "l1-edge:5e38ae25-eb02-47a8-bd28-9aedfd063d57"
+          ],
+          "evidence_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "Connection",
+              "entity_id": "24e13c7c-bc42-49b1-b160-7c93244c42ad"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionMember",
+              "entity_id": "aaa70f9e-6e94-4e0c-95ea-1a2fcd9633fd"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "Connection",
+              "entity_id": "3c141aaa-c7a9-4fc9-8e2a-bcb27cb24513"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionMember",
+              "entity_id": "0836ac77-f9ea-48be-8b67-b1c3fac2080f"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "Connection",
+              "entity_id": "2ee4957b-2133-4de2-8c13-6a4ab4ce082d"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionMember",
+              "entity_id": "5e38ae25-eb02-47a8-bd28-9aedfd063d57"
+            }
+          ]
+        }
+      ],
+      "cycles": [],
+      "nodes": [
+        {
+          "id": "l1-state:ac9efff2-3698-4cb7-b1f8-e6358f8c0e59:1",
+          "kind": "STATE",
+          "layer": "L1",
+          "payload": {
+            "point_id": "ac9efff2-3698-4cb7-b1f8-e6358f8c0e59",
+            "member_index": 1
+          },
+          "canonical_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionPoint",
+              "entity_id": "ac9efff2-3698-4cb7-b1f8-e6358f8c0e59"
+            }
+          ]
+        },
+        {
+          "id": "l1-state:fe1884f2-5afa-4e13-b5f8-2fb7e484cb75:1",
+          "kind": "STATE",
+          "layer": "L1",
+          "payload": {
+            "point_id": "fe1884f2-5afa-4e13-b5f8-2fb7e484cb75",
+            "member_index": 1
+          },
+          "canonical_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionPoint",
+              "entity_id": "fe1884f2-5afa-4e13-b5f8-2fb7e484cb75"
+            }
+          ]
+        },
+        {
+          "id": "l1-state:6e9889d2-b376-4714-bead-f6319993a207:1",
+          "kind": "STATE",
+          "layer": "L1",
+          "payload": {
+            "point_id": "6e9889d2-b376-4714-bead-f6319993a207",
+            "member_index": 1
+          },
+          "canonical_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionPoint",
+              "entity_id": "6e9889d2-b376-4714-bead-f6319993a207"
+            }
+          ]
+        },
+        {
+          "id": "l1-state:6a902770-71e8-43ee-a61a-960a37e374e0:1",
+          "kind": "STATE",
+          "layer": "L1",
+          "payload": {
+            "point_id": "6a902770-71e8-43ee-a61a-960a37e374e0",
+            "member_index": 1
+          },
+          "canonical_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionPoint",
+              "entity_id": "6a902770-71e8-43ee-a61a-960a37e374e0"
+            }
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "l1-edge:aaa70f9e-6e94-4e0c-95ea-1a2fcd9633fd",
+          "from_node_id": "l1-state:ac9efff2-3698-4cb7-b1f8-e6358f8c0e59:1",
+          "to_node_id": "l1-state:fe1884f2-5afa-4e13-b5f8-2fb7e484cb75:1",
+          "transition_kind": "L1_TRAVERSE",
+          "layer": "L1",
+          "evidence_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "Connection",
+              "entity_id": "24e13c7c-bc42-49b1-b160-7c93244c42ad"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionMember",
+              "entity_id": "aaa70f9e-6e94-4e0c-95ea-1a2fcd9633fd"
+            }
+          ]
+        },
+        {
+          "id": "l1-edge:0836ac77-f9ea-48be-8b67-b1c3fac2080f",
+          "from_node_id": "l1-state:fe1884f2-5afa-4e13-b5f8-2fb7e484cb75:1",
+          "to_node_id": "l1-state:6e9889d2-b376-4714-bead-f6319993a207:1",
+          "transition_kind": "L1_TRAVERSE",
+          "layer": "L1",
+          "evidence_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "Connection",
+              "entity_id": "3c141aaa-c7a9-4fc9-8e2a-bcb27cb24513"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionMember",
+              "entity_id": "0836ac77-f9ea-48be-8b67-b1c3fac2080f"
+            }
+          ]
+        },
+        {
+          "id": "l1-edge:5e38ae25-eb02-47a8-bd28-9aedfd063d57",
+          "from_node_id": "l1-state:6e9889d2-b376-4714-bead-f6319993a207:1",
+          "to_node_id": "l1-state:6a902770-71e8-43ee-a61a-960a37e374e0:1",
+          "transition_kind": "L1_TRAVERSE",
+          "layer": "L1",
+          "evidence_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "Connection",
+              "entity_id": "2ee4957b-2133-4de2-8c13-6a4ab4ce082d"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionMember",
+              "entity_id": "5e38ae25-eb02-47a8-bd28-9aedfd063d57"
+            }
+          ]
+        }
+      ],
+      "evidence_refs": [
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "ConnectionPoint",
+          "entity_id": "ac9efff2-3698-4cb7-b1f8-e6358f8c0e59"
+        },
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "ConnectionPoint",
+          "entity_id": "6a902770-71e8-43ee-a61a-960a37e374e0"
+        },
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "Connection",
+          "entity_id": "24e13c7c-bc42-49b1-b160-7c93244c42ad"
+        },
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "ConnectionMember",
+          "entity_id": "aaa70f9e-6e94-4e0c-95ea-1a2fcd9633fd"
+        },
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "Connection",
+          "entity_id": "3c141aaa-c7a9-4fc9-8e2a-bcb27cb24513"
+        },
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "ConnectionMember",
+          "entity_id": "0836ac77-f9ea-48be-8b67-b1c3fac2080f"
+        },
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "Connection",
+          "entity_id": "2ee4957b-2133-4de2-8c13-6a4ab4ce082d"
+        },
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "ConnectionMember",
+          "entity_id": "5e38ae25-eb02-47a8-bd28-9aedfd063d57"
+        }
+      ],
+      "gaps": [],
+      "warnings": []
+    },
+    "missingInternalMapping": {
+      "schema_version": 1,
+      "query": {
+        "from_physical_object_id": "0d4f1e21-6518-49e3-833e-61c6f1fe0880",
+        "to_physical_object_id": "27564606-2f82-4641-82d2-1da7b0e2a37b",
+        "from_connection_point_id": "2980fa20-f301-4ea5-bc7d-699065117c21",
+        "to_connection_point_id": "ff5b0b78-58b0-449c-8e03-7d49264635ab"
+      },
+      "evaluation_view": {
+        "mode": "CONFIGURED"
+      },
+      "resolver_version": "physical-object-l1/1.0",
+      "verdict": "UNKNOWN",
+      "source_candidates": [
+        {
+          "point_id": "2980fa20-f301-4ea5-bc7d-699065117c21",
+          "member_index": 1
+        }
+      ],
+      "target_candidates": [
+        {
+          "point_id": "ff5b0b78-58b0-449c-8e03-7d49264635ab",
+          "member_index": 1
+        }
+      ],
+      "branches": [],
+      "cycles": [],
+      "nodes": [],
+      "edges": [],
+      "evidence_refs": [
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "ConnectionPoint",
+          "entity_id": "2980fa20-f301-4ea5-bc7d-699065117c21"
+        },
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "ConnectionPoint",
+          "entity_id": "ff5b0b78-58b0-449c-8e03-7d49264635ab"
+        }
+      ],
+      "gaps": [
+        {
+          "code": "L1_TOPOLOGY_INCOMPLETE",
+          "node_id": "l1-state:2980fa20-f301-4ea5-bc7d-699065117c21:1",
+          "evidence_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionPoint",
+              "entity_id": "2980fa20-f301-4ea5-bc7d-699065117c21"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionPoint",
+              "entity_id": "ff5b0b78-58b0-449c-8e03-7d49264635ab"
+            }
+          ]
+        }
+      ],
+      "warnings": []
+    },
+    "activeTransit": {
+      "schema_version": 1,
+      "query": {
+        "from_physical_object_id": "0d4f1e21-6518-49e3-833e-61c6f1fe0880",
+        "to_physical_object_id": "bfbf02a4-ab59-412c-abd6-ded67aeb736b",
+        "from_connection_point_id": "e8839cf0-0f60-4794-9674-6d516053de0c",
+        "to_connection_point_id": "6e9889d2-b376-4714-bead-f6319993a207"
+      },
+      "evaluation_view": {
+        "mode": "CONFIGURED"
+      },
+      "resolver_version": "physical-object-l1/1.0",
+      "verdict": "UNKNOWN",
+      "source_candidates": [
+        {
+          "point_id": "e8839cf0-0f60-4794-9674-6d516053de0c",
+          "member_index": 1
+        }
+      ],
+      "target_candidates": [
+        {
+          "point_id": "6e9889d2-b376-4714-bead-f6319993a207",
+          "member_index": 1
+        }
+      ],
+      "branches": [],
+      "cycles": [],
+      "nodes": [],
+      "edges": [],
+      "evidence_refs": [
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "ConnectionPoint",
+          "entity_id": "e8839cf0-0f60-4794-9674-6d516053de0c"
+        },
+        {
+          "ref_type": "CANONICAL_FACT",
+          "entity_type": "ConnectionPoint",
+          "entity_id": "6e9889d2-b376-4714-bead-f6319993a207"
+        }
+      ],
+      "gaps": [
+        {
+          "code": "L1_TOPOLOGY_INCOMPLETE",
+          "node_id": "l1-state:e8839cf0-0f60-4794-9674-6d516053de0c:1",
+          "evidence_refs": [
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionPoint",
+              "entity_id": "e8839cf0-0f60-4794-9674-6d516053de0c"
+            },
+            {
+              "ref_type": "CANONICAL_FACT",
+              "entity_type": "ConnectionPoint",
+              "entity_id": "6e9889d2-b376-4714-bead-f6319993a207"
+            }
+          ]
+        }
+      ],
+      "warnings": []
+    },
+    "sameAfterRenameAndReopen": true,
+    "sameInGrid": true,
+    "sameAfterImport": true,
+    "cablesForExternalHops": [
+      {
+        "id": "08b18999-cbc9-4b41-b13c-bdffdffe412f",
+        "connection_id": "2ee4957b-2133-4de2-8c13-6a4ab4ce082d",
+        "label": "C-front-audit"
+      },
+      {
+        "id": "1342a4e3-e044-4e22-b3cf-1cc3d29e6e6f",
+        "connection_id": "24e13c7c-bc42-49b1-b160-7c93244c42ad",
+        "label": "C-back"
+      }
+    ]
+  },
+  "reconnect": {
+    "before": {
+      "id": "25bc5ae1-cb7a-4e78-ad24-428db3ad6c32",
+      "connection_id": "4a806209-bce8-4e49-a917-814ee0398521",
+      "label": "C-race-winner"
+    },
+    "after": {
+      "id": "25bc5ae1-cb7a-4e78-ad24-428db3ad6c32",
+      "connection_id": "4a806209-bce8-4e49-a917-814ee0398521",
+      "label": "C-race-winner"
+    },
+    "membersBefore": [
+      {
+        "id": "ea9b2f96-ff6a-4a90-a2aa-906b36724d57",
+        "connection_id": "4a806209-bce8-4e49-a917-814ee0398521",
+        "index": 1,
+        "point_a_member": 1,
+        "point_b_member": 1
+      }
+    ],
+    "membersAfter": [
+      {
+        "id": "ea9b2f96-ff6a-4a90-a2aa-906b36724d57",
+        "connection_id": "4a806209-bce8-4e49-a917-814ee0398521",
+        "index": 1,
+        "point_a_member": 1,
+        "point_b_member": 1
+      }
+    ],
+    "connectionBefore": {
+      "id": "4a806209-bce8-4e49-a917-814ee0398521",
+      "point_a_id": "e8839cf0-0f60-4794-9674-6d516053de0c",
+      "point_b_id": "cd14bd50-b4dd-410a-9382-0fac97b3f0bf",
+      "cardinality": 1
+    },
+    "connectionAfter": {
+      "id": "4a806209-bce8-4e49-a917-814ee0398521",
+      "point_a_id": "e8839cf0-0f60-4794-9674-6d516053de0c",
+      "point_b_id": "95832dac-ce80-4454-ad78-96733060641b",
+      "cardinality": 1
+    }
+  },
+  "workspace": {
+    "version": 8,
+    "counts": {
+      "canonical": {
+        "Location": 9,
+        "PhysicalObject": 4,
+        "ConnectionPoint": 103,
+        "NetworkInterface": 99,
+        "NetworkInterfacePhysicalOwner": 99,
+        "InterfacePhysicalBinding": 99,
+        "Connection": 6,
+        "ConnectionMember": 6,
+        "Cable": 5,
+        "EntityMetadata": 210
+      },
+      "authoring": {
+        "BaseTemplate": 3,
+        "BaseTemplateRevision": 3,
+        "PresentationPanel": 4,
+        "BuiltInEndpointDefinition": 53,
+        "BaseInternalLink": 1,
+        "ObjectConfiguration": 4,
+        "BuiltInEndpointMapping": 101,
+        "ModuleBay": 1,
+        "ModuleTemplate": 1,
+        "ModuleTemplateRevision": 1,
+        "ModuleEndpointDefinition": 2,
+        "ModuleInstallation": 1,
+        "ModuleEndpointMapping": 2
+      },
+      "presentation": {
+        "SavedMap": 1,
+        "MapPresentationVariant": 2,
+        "MapPlacement": 3,
+        "MapViewPosition": 6,
+        "MapLocationState": 16
+      },
+      "settings": {
+        "PortType": 1,
+        "CableLabelSettings": 1,
+        "CableLabelHistory": 6
+      }
+    },
+    "sameRowsAndNestedOrder": {
+      "canonical": true,
+      "authoring": true,
+      "presentation": true,
+      "settings": true
+    },
+    "cancelKeptRows": true,
+    "afterReset": {},
+    "afterInvalid": {},
+    "invalidMsg": "Файл NetMap повреждён, неполон или имеет неподдерживаемую версию."
+  },
+  "conflicts": {
+    "ordinaryCableRace": {
+      "alert": "Не удалось создать физическое подключение.",
+      "stalePort": "1-4",
+      "retryEnabled": true,
+      "afterReload": "C-race-winner",
+      "server": [
+        [
+          422,
+          {
+            "error": {
+              "code": "VALIDATION_ERROR",
+              "message": "ConnectionPoint member is already occupied",
+              "details": {
+                "reason": "CONNECTION_POINT_MEMBER_OCCUPIED",
+                "connection_point_ids": [
+                  "cd14bd50-b4dd-410a-9382-0fac97b3f0bf",
+                  "e8839cf0-0f60-4794-9674-6d516053de0c"
+                ]
+              }
+            }
+          }
+        ],
+        [
+          422,
+          {
+            "error": {
+              "code": "VALIDATION_ERROR",
+              "message": "ConnectionPoint member is already occupied",
+              "details": {
+                "reason": "CONNECTION_POINT_MEMBER_OCCUPIED",
+                "connection_point_ids": [
+                  "cd14bd50-b4dd-410a-9382-0fac97b3f0bf",
+                  "e8839cf0-0f60-4794-9674-6d516053de0c"
+                ]
+              }
+            }
+          }
+        ]
+      ]
+    },
+    "moduleRemoval": [
+      "DELETE",
+      "/api/v1/topology/physical-objects/0d4f1e21-6518-49e3-833e-61c6f1fe0880/module-installations/90fd4f5a-f3a8-4d5f-9e85-148c6c646104",
+      409,
+      {
+        "error": {
+          "code": "MODEL_ERROR",
+          "message": "ModuleInstallation cannot be removed because its endpoints are in use",
+          "details": {
+            "reason": "MODULE_INSTALLATION_IN_USE",
+            "installation_id": "90fd4f5a-f3a8-4d5f-9e85-148c6c646104",
+            "blockers": {
+              "CONNECTION": 2
+            }
+          }
+        }
+      }
+    ],
+    "locationSeries": "        - radio \"Audit Peer Здание\":\n          - strong: Audit Peer\n          - text: Здание\n  - text: Шаблон\n  - textbox \"Шаблон\": Audit-RU-##\n  - text: От\n  - spinbutton \"От\": \"2\"\n  - text: До\n  - spinbutton \"До\": \"4\"\n  - text: Шаг\n  - spinbutton \"Шаг\": \"1\"\n  - text: Тип (необязательно)\n  - textbox \"Тип (необязательно)\"\n  - button \"Отменить\"\n  - button \"Показать предварительный просмотр\"\n  - button \"Создать серию\" [disabled]\n  - heading \"Местоположения к созданию (3)\" [level=3]\n  - list \"Имена серии\":\n    - listitem: Audit-RU-02 — уже существует\n    - listitem: Audit-RU-03 — уже существует\n    - listitem: Audit-RU-04\n  - alert: Есть конфликты. Создание недоступно."
+  },
+  "map": {
+    "gridCollapsed": [
+      "      - text: SRV-01 F",
+      "      - text: SW-02 F",
+      "      - text: PP-02 F",
+      "    - text: Audit HQ",
+      "    - button \"Развернуть Audit HQ\": +",
+      "    - button \"Настроить сворачивание Audit HQ\": ⚙"
+    ],
+    "resize": {
+      "requested": [
+        480,
+        620
+      ],
+      "persisted": [
+        533.3333333333334,
+        620
+      ]
+    },
+    "blankMenu": "- menu:\n  - menuitem \"Добавить на карту…\"",
+    "portReady": "- menu:\n  - paragraph: 1-11\n  - menuitem \"Соединить от этого порта…\"",
+    "quickInspector": [
+      "  - complementary \"Быстрый инспектор\":",
+      "    - button \"Закрыть инспектор\": ×",
+      "    - link \"Открыть объект\":",
+      "    - group: Технические сведения"
+    ],
+    "sharedPlacement": [
+      {
+        "id": "1e6fa6ab-a199-4cd8-b125-6a6a0fb2546a",
+        "map_id": "16dc4e48-27a7-49af-a2cc-902b8e41d00d",
+        "physical_object_id": "bfbf02a4-ab59-412c-abd6-ded67aeb736b"
+      },
+      {
+        "id": "25f7469f-d45b-4a84-b578-1840c34d856d",
+        "map_id": "6605a918-d585-4111-83aa-3cebcd6f549d",
+        "physical_object_id": "bfbf02a4-ab59-412c-abd6-ded67aeb736b"
+      }
+    ],
+    "afterOverlayDelete": {
+      "maps": 1,
+      "canonicalIdentical": true
+    },
+    "gridExtra": {
+      "partialGrid": {
+        "visibleF02": 1,
+        "visiblePP": 1
+      },
+      "collapsedState": [
+        200,
+        {
+          "collapsed": true,
+          "visible_direct_elements": [],
+          "face_override": null,
+          "manual_bounds": null,
+          "location_ref": {
+            "ref_type": "CANONICAL_FACT",
+            "entity_type": "Location",
+            "entity_id": "3d2b82e2-6683-43c3-a4f6-0aae09983432"
+          },
+          "geometry": {
+            "x": 0,
+            "y": 0,
+            "width": 745.3333333333334,
+            "height": 1247,
+            "edge": "right",
+            "offset": 0.5
+          },
+          "boundary_point_id": "6cbe9384-49b1-5a74-a129-a2d5c8b40563"
+        }
+      ],
+      "reopenedGrid": {
+        "PP": 1,
+        "SW": 1,
+        "warnings": [
+          "    - group: \"Подключений без маршрута: 5\""
+        ]
+      }
+    }
+  },
+  "template": {
+    "inspectorChangedRows": 48,
+    "impact": [
+      "  - group: Потенциально безопасное автоматическое обновление · 2",
+      "  - group: Актуален · 2"
+    ],
+    "sidebarHit": {
+      "controlBounds": {
+        "x": 143,
+        "y": 312.40625,
+        "width": 14,
+        "height": 14
+      },
+      "interceptor": "Основная навигация"
+    },
+    "copy": {
+      "basePort": 1,
+      "draftPort": 0,
+      "cancelText": "Удалить локальный черновик? Несохранённые изменения будут потеряны.",
+      "templates": [
+        {
+          "id": "7102c27b-b22c-4c3a-905c-73f9439886a2",
+          "name": "Audit Copy Saved"
+        },
+        {
+          "id": "71ecc978-1461-4940-a2f4-3057af6eacfc",
+          "name": "Audit Switch 48"
+        }
+      ]
+    },
+    "reconcile": {
+      "status": "- region \"Состояние публикации\":\n  - paragraph: \"Текущая опубликованная ревизия: 2\"\n  - paragraph: \"Объектов на прежних ревизиях: 0\"\n  - paragraph: \"Ожидают обновления: 0\"\n  - paragraph: \"Требуют вмешательства: 0\"\n  - button \"Обновить совместимые объекты\"",
+      "traceIdentical": true
+    }
+  },
+  "browserPageErrors": [],
+  "objectTabs": {
+    "tabsEvidence": [
+      "    - text: SRV-01",
+      "  - heading \"SRV-01\" [level=1]",
+      "    - link \"Интерфейсы\":",
+      "  - region \"Интерфейсы\":",
+      "    - heading \"Интерфейсы\" [level=3]"
+    ],
+    "interfacesURL": "http://127.0.0.1:5191/infrastructure/objects/0d4f1e21-6518-49e3-833e-61c6f1fe0880/interfaces",
+    "previewAfter": 1
+  }
+}
