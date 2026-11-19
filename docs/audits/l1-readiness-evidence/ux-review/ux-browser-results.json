@@ -1,0 +1,2729 @@
+{
+  "empty": {
+    "map": "- main:\n  - text: \"Карты:\"\n  - button \"Карты\": —\n  - button \"+ Новая карта\"\n  - button \"Удалить карту\" [disabled]\n  - button \"Логическая\" [pressed]\n  - button \"Физическая\"\n  - heading \"Создайте первую карту\" [level=2]\n  - button \"Создать\"\n  - text: \"0\"",
+    "inventory": "- main:\n  - navigation \"Инфраструктура\": Инфраструктура Объекты\n  - text: Инфраструктура\n  - heading \"Каталог\" [level=1]\n  - paragraph: Оборудование, кабели, физические порты и размещение на картах.\n  - link \"Создать объект\":\n    - /url: /infrastructure/objects/new\n  - tablist \"Разделы каталога\":\n    - tab \"Оборудование (0)\" [selected]\n    - tab \"Кабели (0)\"\n  - region \"Поиск и фильтры\":\n    - text: Поиск\n    - textbox \"Поиск\"\n    - text: Тип\n    - combobox \"Тип\":\n      - option \"Все\" [selected]\n      - option \"Без типа\"\n    - text: Карта\n    - combobox \"Карта\":\n      - option \"Все карты\" [selected]\n      - option \"Без карты\"\n    - text: Порты\n    - combobox \"Порты\":\n      - option \"Все\" [selected]\n      - option \"Есть подключения\"\n      - option \"Есть свободные порты\"\n      - option \"Все порты заняты\"\n      - option \"Состояние неизвестно\"\n  - region \"Список каталога\":\n    - paragraph: Каталог пока пуст.",
+    "locations": "- main:\n  - navigation \"Хлебные крошки\": Инфраструктура Местоположения\n  - text: Инфраструктура\n  - heading \"Местоположения\" [level=1]\n  - paragraph: \"Физические места в гибкой иерархии: например, здание, этаж или стойка.\"\n  - button \"Создать местоположение\"\n  - paragraph: Местоположений пока нет.",
+    "labels": "- main:\n  - navigation \"Инфраструктура\":\n    - text: Инфраструктура\n    - link \"Объекты\":\n      - /url: /infrastructure/objects\n    - text: Шаблоны имён кабелей\n  - text: Инфраструктура\n  - heading \"Шаблоны имён кабелей\" [level=1]\n  - paragraph: Сохранённые правила генерации имён кабелей.\n  - button \"Создать шаблон\"\n  - region \"Требовать глобально уникальные имена кабелей\":\n    - checkbox \"Требовать глобально уникальные имена кабелей\"\n    - text: Требовать глобально уникальные имена кабелей# — цифра, @ — буква A–Z. Шаблон генерирует имя и не проверяет ручной ввод.\n  - paragraph: Шаблонов пока нет.",
+    "ports": "- main:\n  - navigation \"Типы портов\": Справочники Типы портов\n  - text: Справочники\n  - heading \"Типы портов\" [level=1]\n  - group \"Новый тип порта\":\n    - text: Новый тип порта Название\n    - textbox \"Название\"\n    - text: Описание\n    - textbox \"Описание\"\n    - text: Палитра\n    - textbox \"Палитра\": \"#64748b\"\n    - text: HEX\n    - textbox \"HEX\": \"#64748B\"\n    - button \"Сохранить\"\n  - paragraph: Типы портов ещё не созданы.",
+    "data": "- main:\n  - navigation \"Данные NetMap\"\n  - text: Настройки\n  - heading \"Данные NetMap\" [level=1]\n  - paragraph: Сохранение, восстановление и полная очистка текущего набора данных.\n  - region \"Данные NetMap\":\n    - heading \"Экспортировать данные\" [level=2]\n    - paragraph: Скачать снимок текущих данных в формате NetMap JSON.\n    - text: Имя файла\n    - textbox \"Имя файла\": netmap-workspace\n    - button \"Экспортировать данные\"\n    - heading \"Импортировать данные\" [level=2]\n    - paragraph: Восстановление возможно только в полностью пустой набор данных. Идентификаторы сохраняются.\n    - button \"Выбрать файл\"\n    - text: Файл не выбран\n    - heading \"Полностью удалить данные\" [level=2]\n    - paragraph: Будут удалены все сетевые объекты, карты, шаблоны и настройки текущего набора данных.\n    - button \"Полностью удалить данные\"",
+    "library": "- main:\n  - text: Библиотека\n  - heading \"Шаблоны оборудования и модулей\" [level=1]\n  - link \"Создать базовый шаблон\":\n    - /url: /library/base-templates/new\n  - tablist \"Шаблоны оборудования и модулей\":\n    - tab \"Объекты\" [selected]\n    - tab \"Модули\"\n  - tabpanel \"Объекты\":\n    - paragraph: Создайте первый шаблон в визуальном редакторе.",
+    "newObject": "- main:\n  - navigation \"Хлебные крошки\":\n    - text: Инфраструктура\n    - link \"Объекты\":\n      - /url: /infrastructure/objects\n    - text: Создать\n  - text: Инфраструктура\n  - heading \"Создать объект\" [level=1]\n  - paragraph: Физический объект\n  - region \"Шаблоны объектов\":\n    - heading \"Сначала создайте шаблон\" [level=2]\n    - paragraph: Объект создаётся по шаблону, который задаёт его структуру и состав портов.\n    - link \"Создать первый шаблон\":\n      - /url: /library/base-templates/new",
+    "newModule": "- main:\n  - text: Шаблоны оборудования и модулей\n  - heading \"Создать шаблон модуля\" [level=1]\n  - group:\n    - complementary:\n      - text: Название\n      - textbox \"Название\"\n      - text: Совместимость\n      - textbox \"Совместимость\"\n      - heading \"Конечные точки модуля\" [level=2]\n      - status: \"Выбрано: 0\"\n      - status:\n        - text: В справочнике нет активных типов портов.\n        - link \"Справочники → Типы портов\":\n          - /url: /catalogs/port-types\n      - text: Вид точки\n      - combobox \"Вид точки\":\n        - option \"Сетевой порт\" [selected]\n        - option \"Точка подключения\"\n      - text: Тип порта\n      - combobox \"Тип порта\":\n        - option \"Выберите тип порта\" [disabled] [selected]\n      - text: Количество\n      - spinbutton \"Количество\": \"1\"\n      - button \"Добавить конечную точку\" [disabled]\n    - region \"Геометрия модуля\":\n      - group \"Корпус\":\n        - text: Ширина\n        - spinbutton \"Ширина\": \"240\"\n        - text: Высота\n        - spinbutton \"Высота\": \"80\"\n        - text: Цвет корпуса\n        - textbox \"Цвет корпуса\": \"#64748b\"\n      - group \"Выравнивание и распределение\":\n        - button \"Выровнять по горизонтали\" [disabled]: Выровнять ↔\n        - button \"Выровнять по вертикали\" [disabled]: Выровнять ↕\n        - button \"Распределить по горизонтали\" [disabled]: Распределить ↔\n        - button \"Распределить по вертикали\" [disabled]: Распределить ↕\n      - group \"Масштаб\":\n        - button \"Приблизить\": +\n        - button \"Отдалить\": −\n        - button \"Общий вид\"\n        - text: 100%\n      - paragraph: Shift / Ctrl + щелчок — выбор нескольких портов. Перетаскивание — перемещение выделенных портов.\n      - img \"Геометрия модуля\"\n  - button \"Создать шаблон\" [disabled]"
+  },
+  "views": {
+    "map": {
+      "720": {
+        "viewport": [
+          720,
+          800
+        ],
+        "document": [
+          720,
+          800
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "map-page",
+          "name": "Карты: UX Audit ⌄ + Новая карта Удалить карту Логическая Физическ",
+          "w": 650,
+          "sw": 650,
+          "h": 800,
+          "sh": 800
+        },
+        "sidebar": 70,
+        "headings": [
+          "Поиск объекта"
+        ],
+        "active": [
+          "NNetMap",
+          "◇Карта"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "map-page",
+          "name": "Карты: UX Audit ⌄ + Новая карта Удалить карту Логическая Физическ",
+          "w": 776,
+          "sw": 776,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [
+          "Поиск объекта"
+        ],
+        "active": [
+          "NNetMap",
+          "◇Карта"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "map-page",
+          "name": "Карты: UX Audit ⌄ + Новая карта Удалить карту Логическая Физическ",
+          "w": 1192,
+          "sw": 1192,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Поиск объекта"
+        ],
+        "active": [
+          "NNetMap",
+          "◇Карта"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "smallExpanded": {
+        "viewport": [
+          720,
+          800
+        ],
+        "document": [
+          720,
+          800
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "map-page",
+          "name": "Карты: UX Audit ⌄ + Новая карта Удалить карту Логическая Физическ",
+          "w": 650,
+          "sw": 650,
+          "h": 800,
+          "sh": 800
+        },
+        "sidebar": 70,
+        "headings": [
+          "Поиск объекта"
+        ],
+        "active": [
+          "NNetMap",
+          "◇Карта"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "logical": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "map-page",
+          "name": "Карты: UX Audit ⌄ + Новая карта Удалить карту Логическая Физическ",
+          "w": 776,
+          "sw": 776,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [],
+        "active": [
+          "NNetMap",
+          "◇Карта"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "map-page",
+          "name": "Карты: UX Audit ⌄ + Новая карта Удалить карту Логическая Физическ",
+          "w": 1192,
+          "sw": 1192,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [],
+        "active": [
+          "NNetMap",
+          "◇Карта"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "inventory": {
+      "720": {
+        "viewport": [
+          720,
+          800
+        ],
+        "document": [
+          720,
+          1417
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Инфраструктура / Объекты ИНФРАСТРУКТУРА Каталог Оборудование, каб",
+          "w": 650,
+          "sw": 650,
+          "h": 1417,
+          "sh": 1417
+        },
+        "sidebar": 70,
+        "headings": [
+          "Каталог"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 12
+      },
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          1205
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Инфраструктура / Объекты ИНФРАСТРУКТУРА Каталог Оборудование, каб",
+          "w": 776,
+          "sw": 776,
+          "h": 1205,
+          "sh": 1205
+        },
+        "sidebar": 248,
+        "headings": [
+          "Каталог"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 12
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1207
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Инфраструктура / Объекты ИНФРАСТРУКТУРА Каталог Оборудование, каб",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1207,
+          "sh": 1207
+        },
+        "sidebar": 248,
+        "headings": [
+          "Каталог"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 12
+      }
+    },
+    "locations": {
+      "720": {
+        "viewport": [
+          720,
+          800
+        ],
+        "document": [
+          720,
+          800
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page locations-page",
+          "name": "Инфраструктура / Местоположения ИНФРАСТРУКТУРА Местоположения Физ",
+          "w": 650,
+          "sw": 650,
+          "h": 800,
+          "sh": 800
+        },
+        "sidebar": 70,
+        "headings": [
+          "Местоположения"
+        ],
+        "active": [
+          "⌖Местоположения"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page locations-page",
+          "name": "Инфраструктура / Местоположения ИНФРАСТРУКТУРА Местоположения Физ",
+          "w": 776,
+          "sw": 776,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [
+          "Местоположения"
+        ],
+        "active": [
+          "⌖Местоположения"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page locations-page",
+          "name": "Инфраструктура / Местоположения ИНФРАСТРУКТУРА Местоположения Физ",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Местоположения"
+        ],
+        "active": [
+          "⌖Местоположения"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "expanded": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          9302
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page locations-page",
+          "name": "Инфраструктура / Местоположения ИНФРАСТРУКТУРА Местоположения Физ",
+          "w": 776,
+          "sw": 776,
+          "h": 9302,
+          "sh": 9302
+        },
+        "sidebar": 248,
+        "headings": [
+          "Местоположения"
+        ],
+        "active": [
+          "⌖Местоположения"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "labels": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Инфраструктура / Объекты / Шаблоны имён кабелей ИНФРАСТРУКТУРА Ша",
+          "w": 776,
+          "sw": 776,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [
+          "Шаблоны имён кабелей"
+        ],
+        "active": [
+          "⌁Шаблоны имён кабелей"
+        ],
+        "scrollers": [],
+        "rows": 1
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Инфраструктура / Объекты / Шаблоны имён кабелей ИНФРАСТРУКТУРА Ша",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Шаблоны имён кабелей"
+        ],
+        "active": [
+          "⌁Шаблоны имён кабелей"
+        ],
+        "scrollers": [],
+        "rows": 1
+      }
+    },
+    "ports": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page port-types-page",
+          "name": "Справочники / Типы портов СПРАВОЧНИКИ Типы портов Новый тип порта",
+          "w": 776,
+          "sw": 776,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [
+          "Типы портов"
+        ],
+        "active": [
+          "▣Типы портов"
+        ],
+        "scrollers": [],
+        "rows": 1
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page port-types-page",
+          "name": "Справочники / Типы портов СПРАВОЧНИКИ Типы портов Новый тип порта",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Типы портов"
+        ],
+        "active": [
+          "▣Типы портов"
+        ],
+        "scrollers": [],
+        "rows": 1
+      }
+    },
+    "data": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          802
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Данные NetMap НАСТРОЙКИ Данные NetMap Сохранение, восстановление ",
+          "w": 776,
+          "sw": 776,
+          "h": 802,
+          "sh": 802
+        },
+        "sidebar": 248,
+        "headings": [
+          "Данные NetMap",
+          "Экспортировать данные",
+          "Импортировать данные",
+          "Полностью удалить данные"
+        ],
+        "active": [
+          "⚙Данные NetMap"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Данные NetMap НАСТРОЙКИ Данные NetMap Сохранение, восстановление ",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Данные NetMap",
+          "Экспортировать данные",
+          "Импортировать данные",
+          "Полностью удалить данные"
+        ],
+        "active": [
+          "⚙Данные NetMap"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "library": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page blueprint-library-page",
+          "name": "БИБЛИОТЕКА Шаблоны оборудования и модулей Создать базовый шаблон ",
+          "w": 776,
+          "sw": 776,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [
+          "Шаблоны оборудования и модулей"
+        ],
+        "active": [
+          "▤Шаблоны объектов"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page blueprint-library-page",
+          "name": "БИБЛИОТЕКА Шаблоны оборудования и модулей Создать базовый шаблон ",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Шаблоны оборудования и модулей"
+        ],
+        "active": [
+          "▤Шаблоны объектов"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "newObject": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page create-object-page",
+          "name": "Инфраструктура / Объекты / Создать ИНФРАСТРУКТУРА Создать объект ",
+          "w": 776,
+          "sw": 776,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [
+          "Создать объект"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [
+          {
+            "el": "DIV",
+            "cls": "create-blueprint-table-wrap",
+            "name": "НАЗВАНИЕ ТИП ОБЪЕКТА ПОРТЫ ВНУТРЕННИЕ СВЯЗИ ДЕЙСТВИЯ UX Chassis С",
+            "w": 622,
+            "sw": 690,
+            "h": 191,
+            "sh": 191
+          }
+        ],
+        "rows": 3
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page create-object-page",
+          "name": "Инфраструктура / Объекты / Создать ИНФРАСТРУКТУРА Создать объект ",
+          "w": 900,
+          "sw": 900,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Создать объект"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 3
+      }
+    },
+    "newBase": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          1368
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page blueprint-editor-page",
+          "name": "Библиотека / Библиотека / Новый шаблон Не сохранено Создать базов",
+          "w": 776,
+          "sw": 776,
+          "h": 1368,
+          "sh": 1368
+        },
+        "sidebar": 248,
+        "headings": [
+          "Создать базовый шаблон",
+          "Внутренние связи"
+        ],
+        "active": [
+          "▤Шаблоны объектов"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page blueprint-editor-page",
+          "name": "Библиотека / Библиотека / Новый шаблон Не сохранено Создать базов",
+          "w": 1192,
+          "sw": 1192,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Создать базовый шаблон",
+          "Внутренние связи"
+        ],
+        "active": [
+          "▤Шаблоны объектов"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "editBase": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          1615
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page blueprint-editor-page base-template-edit-page",
+          "name": "Библиотека Текущая опубликованная ревизия: 1 Объектов на прежних ",
+          "w": 776,
+          "sw": 776,
+          "h": 1615,
+          "sh": 1615
+        },
+        "sidebar": 248,
+        "headings": [
+          "Изменить шаблон",
+          "Внутренние связи"
+        ],
+        "active": [
+          "▤Шаблоны объектов"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1126
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page blueprint-editor-page base-template-edit-page",
+          "name": "Библиотека Текущая опубликованная ревизия: 1 Объектов на прежних ",
+          "w": 1192,
+          "sw": 1192,
+          "h": 1126,
+          "sh": 1126
+        },
+        "sidebar": 248,
+        "headings": [
+          "Изменить шаблон",
+          "Внутренние связи"
+        ],
+        "active": [
+          "▤Шаблоны объектов"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "newModule": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          850
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "ШАБЛОНЫ ОБОРУДОВАНИЯ И МОДУЛЕЙ Создать шаблон модуля Название Сов",
+          "w": 776,
+          "sw": 776,
+          "h": 850,
+          "sh": 850
+        },
+        "sidebar": 248,
+        "headings": [
+          "Создать шаблон модуля",
+          "Конечные точки модуля"
+        ],
+        "active": [],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "ШАБЛОНЫ ОБОРУДОВАНИЯ И МОДУЛЕЙ Создать шаблон модуля Название Сов",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Создать шаблон модуля",
+          "Конечные точки модуля"
+        ],
+        "active": [],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "editModule": {
+      "720": {
+        "viewport": [
+          720,
+          800
+        ],
+        "document": [
+          720,
+          2120
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Библиотека ШАБЛОН МОДУЛЯ Изменить шаблон Изменения сохраняются в ",
+          "w": 650,
+          "sw": 650,
+          "h": 2120,
+          "sh": 2120
+        },
+        "sidebar": 70,
+        "headings": [
+          "Изменить шаблон",
+          "Конечные точки модуля"
+        ],
+        "active": [],
+        "scrollers": [
+          {
+            "el": "DIV",
+            "cls": "module-template-editor__ports",
+            "name": "1 Сетевой порт 2 Сетевой порт 3 Сетевой порт 4 Сетевой порт 5 Сет",
+            "w": 580,
+            "sw": 580,
+            "h": 220,
+            "sh": 720
+          }
+        ],
+        "rows": 0
+      },
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          1602
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Библиотека ШАБЛОН МОДУЛЯ Изменить шаблон Изменения сохраняются в ",
+          "w": 776,
+          "sw": 776,
+          "h": 1602,
+          "sh": 1602
+        },
+        "sidebar": 248,
+        "headings": [
+          "Изменить шаблон",
+          "Конечные точки модуля"
+        ],
+        "active": [],
+        "scrollers": [
+          {
+            "el": "DIV",
+            "cls": "module-template-editor__ports",
+            "name": "1 Сетевой порт 2 Сетевой порт 3 Сетевой порт 4 Сетевой порт 5 Сет",
+            "w": 246,
+            "sw": 246,
+            "h": 220,
+            "sh": 720
+          }
+        ],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1583
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Библиотека ШАБЛОН МОДУЛЯ Изменить шаблон Изменения сохраняются в ",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1583,
+          "sh": 1583
+        },
+        "sidebar": 248,
+        "headings": [
+          "Изменить шаблон",
+          "Конечные точки модуля"
+        ],
+        "active": [],
+        "scrollers": [
+          {
+            "el": "DIV",
+            "cls": "module-template-editor__ports",
+            "name": "1 Сетевой порт 2 Сетевой порт 3 Сетевой порт 4 Сетевой порт 5 Сет",
+            "w": 246,
+            "sw": 246,
+            "h": 220,
+            "sh": 720
+          }
+        ],
+        "rows": 0
+      }
+    },
+    "overview": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page object-detail-page",
+          "name": "Инфраструктура / Объекты / UX-SRV ФИЗИЧЕСКИЙ ОБЪЕКТ UX-SRV Обзор ",
+          "w": 776,
+          "sw": 776,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [
+          "UX-SRV"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page object-detail-page",
+          "name": "Инфраструктура / Объекты / UX-SRV ФИЗИЧЕСКИЙ ОБЪЕКТ UX-SRV Обзор ",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "UX-SRV"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "physical": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          1795
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page object-detail-page",
+          "name": "Инфраструктура / Объекты / UX-SRV ФИЗИЧЕСКИЙ ОБЪЕКТ UX-SRV Обзор ",
+          "w": 776,
+          "sw": 776,
+          "h": 1795,
+          "sh": 1795
+        },
+        "sidebar": 248,
+        "headings": [
+          "UX-SRV",
+          "Отсеки модулей"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 20
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1853
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page object-detail-page",
+          "name": "Инфраструктура / Объекты / UX-SRV ФИЗИЧЕСКИЙ ОБЪЕКТ UX-SRV Обзор ",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1853,
+          "sh": 1853
+        },
+        "sidebar": 248,
+        "headings": [
+          "UX-SRV",
+          "Отсеки модулей"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 20
+      }
+    },
+    "interfaces": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          3560
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page object-detail-page",
+          "name": "Инфраструктура / Объекты / UX-SRV ФИЗИЧЕСКИЙ ОБЪЕКТ UX-SRV Обзор ",
+          "w": 776,
+          "sw": 776,
+          "h": 3560,
+          "sh": 3560
+        },
+        "sidebar": 248,
+        "headings": [
+          "UX-SRV"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          2719
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page object-detail-page",
+          "name": "Инфраструктура / Объекты / UX-SRV ФИЗИЧЕСКИЙ ОБЪЕКТ UX-SRV Обзор ",
+          "w": 1180,
+          "sw": 1180,
+          "h": 2719,
+          "sh": 2719
+        },
+        "sidebar": 248,
+        "headings": [
+          "UX-SRV"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    },
+    "cables": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1024,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Инфраструктура / Объекты ИНФРАСТРУКТУРА Каталог Оборудование, каб",
+          "w": 776,
+          "sw": 776,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [
+          "Каталог"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 4
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page",
+          "name": "Инфраструктура / Объекты ИНФРАСТРУКТУРА Каталог Оборудование, каб",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Каталог"
+        ],
+        "active": [
+          "▦Объекты"
+        ],
+        "scrollers": [],
+        "rows": 4
+      }
+    },
+    "modules": {
+      "1024": {
+        "viewport": [
+          1024,
+          768
+        ],
+        "document": [
+          1091,
+          768
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page blueprint-library-page",
+          "name": "БИБЛИОТЕКА Шаблоны оборудования и модулей Создать шаблон модуля О",
+          "w": 776,
+          "sw": 843,
+          "h": 768,
+          "sh": 768
+        },
+        "sidebar": 248,
+        "headings": [
+          "Шаблоны оборудования и модулей"
+        ],
+        "active": [
+          "▤Шаблоны объектов"
+        ],
+        "scrollers": [],
+        "rows": 0
+      },
+      "1440": {
+        "viewport": [
+          1440,
+          1000
+        ],
+        "document": [
+          1440,
+          1000
+        ],
+        "main": {
+          "el": "MAIN",
+          "cls": "page-shell catalog-page blueprint-library-page",
+          "name": "БИБЛИОТЕКА Шаблоны оборудования и модулей Создать шаблон модуля О",
+          "w": 1180,
+          "sw": 1180,
+          "h": 1000,
+          "sh": 1000
+        },
+        "sidebar": 248,
+        "headings": [
+          "Шаблоны оборудования и модулей"
+        ],
+        "active": [
+          "▤Шаблоны объектов"
+        ],
+        "scrollers": [],
+        "rows": 0
+      }
+    }
+  },
+  "dialogs": {
+    "map1024OpenNav": {
+      "selector": {
+        "rect": [
+          437,
+          26,
+          148,
+          31
+        ],
+        "hit": "<section class=\"map-object-search nodrag nopan nowheel\" aria-label=\"Поиск объекта\" style=\"left: 16px; top: 16px;\"><h2 class=\"map-object-search__handle\">Поиск объекта</h2><label><input aria-l",
+        "owns": false
+      },
+      "trace": {
+        "rect": [
+          924,
+          720,
+          84,
+          32
+        ],
+        "hit": "<button type=\"button\" class=\"trace-command__open\" aria-expanded=\"false\">Трассировка</button>",
+        "owns": true
+      }
+    },
+    "map1024Rail": {
+      "selector": {
+        "rect": [
+          349,
+          26,
+          148,
+          31
+        ],
+        "hit": "<button type=\"button\" value=\"6717d019-c356-4b73-9c2a-6091526e2e7f\" class=\"map-toolbar-dropdown__trigger map-page__select\" aria-label=\"Карты\" aria-haspopup=\"listbox\" aria-expanded=\"false\"><sp",
+        "owns": true
+      },
+      "trace": {
+        "rect": [
+          924,
+          720,
+          84,
+          32
+        ],
+        "hit": "<button type=\"button\" class=\"trace-command__open\" aria-expanded=\"false\">Трассировка</button>",
+        "owns": true
+      }
+    },
+    "bulk": {
+      "1024": {
+        "metrics": {
+          "viewport": [
+            1024,
+            768
+          ],
+          "document": [
+            1024,
+            768
+          ],
+          "main": {
+            "el": "MAIN",
+            "cls": "map-page",
+            "name": "Карты: UX Audit ⌄ + Новая карта Удалить карту Логическая Физическ",
+            "w": 952,
+            "sw": 952,
+            "h": 768,
+            "sh": 768
+          },
+          "sidebar": 72,
+          "headings": [
+            "Поиск объекта",
+            "Массовое подключение",
+            "UX-SW"
+          ],
+          "active": [
+            "NNetMap",
+            "◇Карта"
+          ],
+          "scrollers": [
+            {
+              "el": "DIV",
+              "cls": "map-dialog__surface map-dialog__surface--bulk-create",
+              "name": "Массовое подключение Целевой физический объект Выберите объект UX",
+              "w": 982,
+              "sw": 982,
+              "h": 726,
+              "sh": 875
+            },
+            {
+              "el": "DIV",
+              "cls": "catalog-table-wrap map-dialog-table bulk-create-ports",
+              "name": "ВЫБОР ПОРТ СОСТОЯНИЕ ВНЕШНЕЕ ПОДКЛЮЧЕНИЕ 1-1 UX Copper Подключён ",
+              "w": 459,
+              "sw": 459,
+              "h": 307,
+              "sh": 1558
+            }
+          ],
+          "rows": 53
+        },
+        "preview": {
+          "rect": [
+            851,
+            833,
+            130,
+            41
+          ],
+          "owns": false
+        }
+      },
+      "1440": {
+        "metrics": {
+          "viewport": [
+            1440,
+            1000
+          ],
+          "document": [
+            1440,
+            1000
+          ],
+          "main": {
+            "el": "MAIN",
+            "cls": "map-page",
+            "name": "Карты: UX Audit ⌄ + Новая карта Удалить карту Логическая Физическ",
+            "w": 1368,
+            "sw": 1368,
+            "h": 1000,
+            "sh": 1000
+          },
+          "sidebar": 72,
+          "headings": [
+            "Поиск объекта",
+            "Массовое подключение",
+            "UX-SW"
+          ],
+          "active": [
+            "NNetMap",
+            "◇Карта"
+          ],
+          "scrollers": [
+            {
+              "el": "DIV",
+              "cls": "map-dialog__surface map-dialog__surface--bulk-create",
+              "name": "Массовое подключение Целевой физический объект Выберите объект UX",
+              "w": 1038,
+              "sw": 1038,
+              "h": 958,
+              "sh": 968
+            },
+            {
+              "el": "DIV",
+              "cls": "catalog-table-wrap map-dialog-table bulk-create-ports",
+              "name": "ВЫБОР ПОРТ СОСТОЯНИЕ ВНЕШНЕЕ ПОДКЛЮЧЕНИЕ 1-1 UX Copper Подключён ",
+              "w": 487,
+              "sw": 487,
+              "h": 400,
+              "sh": 1558
+            }
+          ],
+          "rows": 53
+        },
+        "preview": {
+          "rect": [
+            1087,
+            926,
+            130,
+            41
+          ],
+          "hit": "<button type=\"button\">Предпросмотр</button>",
+          "owns": true
+        }
+      }
+    },
+    "reconnect": {
+      "1024": {
+        "rect": [
+          443,
+          557,
+          256,
+          41
+        ],
+        "hit": "<button type=\"button\">Подтвердить переподключение</button>",
+        "owns": true
+      },
+      "1440": {
+        "rect": [
+          651,
+          673,
+          256,
+          41
+        ],
+        "hit": "<button type=\"button\">Подтвердить переподключение</button>",
+        "owns": true
+      }
+    },
+    "endpointWorkspace": {
+      "1024": {
+        "firstCheckbox": {
+          "rect": [
+            49,
+            158,
+            14,
+            14
+          ],
+          "hit": "<aside class=\"sidebar\" aria-label=\"Основная навигация\"><div class=\"sidebar__header\"><a aria-label=\"NetMap — Карта\" class=\"sidebar__brand\" href=\"/map\" data-discover=\"true\"><span class=\"sideba",
+          "owns": false
+        },
+        "close": {
+          "rect": [
+            893,
+            669,
+            82,
+            37
+          ],
+          "hit": "<button type=\"button\">Закрыть</button>",
+          "owns": true
+        },
+        "metrics": {
+          "viewport": [
+            1024,
+            768
+          ],
+          "document": [
+            1024,
+            1615
+          ],
+          "main": {
+            "el": "MAIN",
+            "cls": "page-shell catalog-page blueprint-editor-page base-template-edit-page",
+            "name": "Библиотека Текущая опубликованная ревизия: 1 Объектов на прежних ",
+            "w": 776,
+            "sw": 776,
+            "h": 1615,
+            "sh": 1615
+          },
+          "sidebar": 248,
+          "headings": [
+            "Изменить шаблон",
+            "Внутренние связи",
+            "Порты и внутренние связи"
+          ],
+          "active": [
+            "▤Шаблоны объектов"
+          ],
+          "scrollers": [
+            {
+              "el": "DIV",
+              "cls": "catalog-dialog__surface endpoint-workspace",
+              "name": "Порты и внутренние связи Порты и операции Существующие связи · 0 ",
+              "w": 971,
+              "sw": 971,
+              "h": 689,
+              "sh": 839
+            },
+            {
+              "el": "DIV",
+              "cls": "endpoint-workspace__list",
+              "name": "1-1 ▣ ↔ — 1-2 ▣ ↔ — 1-3 ▣ ↔ — 1-4 ▣ ↔ — 1-5 ▣ ↔ — 1-6 ▣ ↔ — 1-7 ▣",
+              "w": 453,
+              "sw": 453,
+              "h": 292,
+              "sh": 1632
+            },
+            {
+              "el": "DIV",
+              "cls": "endpoint-workspace__list",
+              "name": "1-1 ▣ ↔ — 1-2 ▣ ↔ — 1-3 ▣ ↔ — 1-4 ▣ ↔ — 1-5 ▣ ↔ — 1-6 ▣ ↔ — 1-7 ▣",
+              "w": 453,
+              "sw": 453,
+              "h": 292,
+              "sh": 1632
+            }
+          ],
+          "rows": 0
+        }
+      },
+      "1440": {
+        "firstCheckbox": {
+          "rect": [
+            143,
+            312,
+            14,
+            14
+          ],
+          "hit": "<aside class=\"sidebar\" aria-label=\"Основная навигация\"><div class=\"sidebar__header\"><a aria-label=\"NetMap — Карта\" class=\"sidebar__brand\" href=\"/map\" data-discover=\"true\"><span class=\"sideba",
+          "owns": false
+        },
+        "close": {
+          "rect": [
+            1215,
+            912,
+            82,
+            37
+          ],
+          "hit": "<button type=\"button\">Закрыть</button>",
+          "owns": true
+        },
+        "metrics": {
+          "viewport": [
+            1440,
+            1000
+          ],
+          "document": [
+            1440,
+            1126
+          ],
+          "main": {
+            "el": "MAIN",
+            "cls": "page-shell catalog-page blueprint-editor-page base-template-edit-page",
+            "name": "Библиотека Текущая опубликованная ревизия: 1 Объектов на прежних ",
+            "w": 1192,
+            "sw": 1192,
+            "h": 1126,
+            "sh": 1126
+          },
+          "sidebar": 248,
+          "headings": [
+            "Изменить шаблон",
+            "Внутренние связи",
+            "Порты и внутренние связи"
+          ],
+          "active": [
+            "▤Шаблоны объектов"
+          ],
+          "scrollers": [
+            {
+              "el": "DIV",
+              "cls": "catalog-dialog__surface endpoint-workspace",
+              "name": "Порты и внутренние связи Порты и операции Существующие связи · 0 ",
+              "w": 1198,
+              "sw": 1198,
+              "h": 898,
+              "sh": 927
+            },
+            {
+              "el": "DIV",
+              "cls": "endpoint-workspace__list",
+              "name": "1-1 ▣ ↔ — 1-2 ▣ ↔ — 1-3 ▣ ↔ — 1-4 ▣ ↔ — 1-5 ▣ ↔ — 1-6 ▣ ↔ — 1-7 ▣",
+              "w": 567,
+              "sw": 567,
+              "h": 380,
+              "sh": 1632
+            },
+            {
+              "el": "DIV",
+              "cls": "endpoint-workspace__list",
+              "name": "1-1 ▣ ↔ — 1-2 ▣ ↔ — 1-3 ▣ ↔ — 1-4 ▣ ↔ — 1-5 ▣ ↔ — 1-6 ▣ ↔ — 1-7 ▣",
+              "w": 567,
+              "sw": 567,
+              "h": 380,
+              "sh": 1632
+            }
+          ],
+          "rows": 0
+        }
+      },
+      "rail1024": {
+        "rect": [
+          49,
+          158,
+          14,
+          14
+        ],
+        "hit": "<aside class=\"sidebar\" aria-label=\"Основная навигация\"><div class=\"sidebar__header\"><a aria-label=\"NetMap — Карта\" class=\"sidebar__brand\" href=\"/map\" data-discover=\"true\"><span class=\"sideba",
+        "owns": false
+      },
+      "rail1440": {
+        "rect": [
+          143,
+          312,
+          14,
+          14
+        ],
+        "hit": "<input type=\"checkbox\">",
+        "owns": true
+      }
+    },
+    "locationPicker": {
+      "1024": {
+        "options": [
+          "            - radio \"UX HQ Здание\":",
+          "                - radio \"UX Floor Этаж\":",
+          "                    - radio \"UX Room Помещение\":",
+          "                        - radio \"UX Rack Стойка\":",
+          "                            - radio \"UX-RU-096\":"
+        ],
+        "create": {
+          "rect": [
+            324,
+            873,
+            81,
+            40
+          ],
+          "owns": false
+        }
+      },
+      "1440": {
+        "options": [
+          "            - radio \"UX HQ Здание\":",
+          "                - radio \"UX Floor Этаж\":",
+          "                    - radio \"UX Room Помещение\":",
+          "                        - radio \"UX Rack Стойка\":",
+          "                            - radio \"UX-RU-096\":"
+        ],
+        "create": {
+          "rect": [
+            341,
+            875,
+            81,
+            40
+          ],
+          "hit": "<button type=\"button\" class=\"primary-action\" disabled=\"\">Создать</button>",
+          "owns": true
+        }
+      }
+    },
+    "collapse": {
+      "1024": {
+        "text": [
+          "- 'dialog \"Настройки: UX Room\"':",
+          "  - 'heading \"Настройки: UX Room\" [level=2]'",
+          "  - 'tablist \"Настройки: UX Room\"':",
+          "    - tab \"Сворачивание\" [selected]",
+          "  - tabpanel \"Сворачивание\":",
+          "    - text: Физический вид",
+          "    - combobox \"Физический вид\":",
+          "      - option \"Наследовать\" [selected]",
+          "      - option \"Спереди\"",
+          "      - option \"Сзади\"",
+          "    - paragraph: \"Оставить видимыми при сворачивании:\"",
+          "    - paragraph: Загрузка…",
+          "    - button \"Отмена\"",
+          "    - button \"Сохранить\" [disabled]",
+          "  - button \"Закрыть\""
+        ],
+        "save": {
+          "rect": [
+            702,
+            443,
+            97,
+            41
+          ],
+          "hit": "<button type=\"button\" disabled=\"\">Сохранить</button>",
+          "owns": true
+        }
+      },
+      "1440": {
+        "text": [
+          "- 'dialog \"Настройки: UX Room\"':",
+          "  - 'heading \"Настройки: UX Room\" [level=2]'",
+          "  - 'tablist \"Настройки: UX Room\"':",
+          "    - tab \"Сворачивание\" [selected]",
+          "  - tabpanel \"Сворачивание\":",
+          "    - text: Физический вид",
+          "    - combobox \"Физический вид\":",
+          "      - option \"Наследовать\" [selected]",
+          "      - option \"Спереди\"",
+          "      - option \"Сзади\"",
+          "    - paragraph: \"Оставить видимыми при сворачивании:\"",
+          "    - paragraph: Загрузка…",
+          "    - button \"Отмена\"",
+          "    - button \"Сохранить\" [disabled]",
+          "  - button \"Закрыть\""
+        ],
+        "save": {
+          "rect": [
+            910,
+            567,
+            97,
+            41
+          ],
+          "hit": "<button type=\"button\">Сохранить</button>",
+          "owns": true
+        }
+      }
+    },
+    "smallMap": {
+      "selector": {
+        "rect": [
+          196,
+          26,
+          148,
+          31
+        ],
+        "hit": "<section class=\"map-object-search nodrag nopan nowheel\" aria-label=\"Поиск объекта\" style=\"left: 16px; top: 16px;\"><h2 class=\"map-object-search__handle\">Поиск объекта</h2><label><input aria-l",
+        "owns": false
+      },
+      "newMap": {
+        "rect": [
+          304,
+          20,
+          81,
+          42
+        ],
+        "hit": "<section class=\"map-object-search nodrag nopan nowheel\" aria-label=\"Поиск объекта\" style=\"left: 16px; top: 16px;\"><h2 class=\"map-object-search__handle\">Поиск объекта</h2><label><input aria-l",
+        "owns": false
+      }
+    }
+  },
+  "keyboard": {
+    "locationModal": [
+      {
+        "tag": "INPUT",
+        "name": "",
+        "inside": true,
+        "outline": "auto",
+        "border": "rgb(42, 68, 72)"
+      },
+      {
+        "tag": "INPUT",
+        "name": "",
+        "inside": true,
+        "outline": "auto",
+        "border": "rgb(42, 68, 72)"
+      },
+      {
+        "tag": "BUTTON",
+        "name": "Корневое местоположение",
+        "inside": true,
+        "outline": "auto",
+        "border": "rgb(53, 87, 91)"
+      },
+      {
+        "tag": "BUTTON",
+        "name": "Свернуть UX HQ",
+        "inside": true,
+        "outline": "solid",
+        "border": "rgb(134, 166, 162)"
+      },
+      {
+        "tag": "BUTTON",
+        "name": "UX HQЗдание",
+        "inside": true,
+        "outline": "solid",
+        "border": "rgb(53, 87, 91)"
+      },
+      {
+        "tag": "BUTTON",
+        "name": "Свернуть UX Floor",
+        "inside": true,
+        "outline": "solid",
+        "border": "rgb(134, 166, 162)"
+      },
+      {
+        "tag": "BUTTON",
+        "name": "UX FloorЭтаж",
+        "inside": true,
+        "outline": "solid",
+        "border": "rgb(53, 87, 91)"
+      },
+      {
+        "tag": "BUTTON",
+        "name": "UX DeskРабочая зона",
+        "inside": true,
+        "outline": "solid",
+        "border": "rgb(53, 87, 91)"
+      }
+    ],
+    "locationEscape": {
+      "visible": true,
+      "focus": {
+        "tag": "BUTTON",
+        "name": "UX DeskРабочая зона",
+        "inside": true,
+        "outline": "solid",
+        "border": "rgb(53, 87, 91)"
+      }
+    },
+    "location": {
+      "start": {
+        "tag": "INPUT",
+        "name": "",
+        "inside": true,
+        "outline": "auto",
+        "border": "rgb(42, 68, 72)"
+      },
+      "next": {
+        "tag": "BODY",
+        "name": "NNetMap«◇КартаИнфраструктура▦Объекты⌖Местоположения⌁Шаблоны имён кабелейБиблиоте",
+        "inside": false,
+        "outline": "none",
+        "border": "rgb(234, 245, 241)"
+      },
+      "afterEsc": {
+        "visible": true,
+        "focus": {
+          "tag": "BODY",
+          "name": "NNetMap«◇КартаИнфраструктура▦Объекты⌖Местоположения⌁Шаблоны имён кабелейБиблиоте",
+          "inside": false,
+          "outline": "none",
+          "border": "rgb(234, 245, 241)"
+        }
+      },
+      "afterClose": {
+        "tag": "BODY",
+        "name": "NNetMap«◇КартаИнфраструктура▦Объекты⌖Местоположения⌁Шаблоны имён кабелейБиблиоте",
+        "inside": false,
+        "outline": "none",
+        "border": "rgb(234, 245, 241)"
+      }
+    },
+    "labels": {
+      "start": {
+        "tag": "INPUT",
+        "name": "",
+        "inside": true,
+        "outline": "auto",
+        "border": "rgb(42, 68, 72)"
+      },
+      "next": {
+        "tag": "BUTTON",
+        "name": "Сохранить",
+        "inside": true,
+        "outline": "auto",
+        "border": "rgb(58, 121, 104)"
+      },
+      "afterEsc": {
+        "visible": true,
+        "focus": {
+          "tag": "BUTTON",
+          "name": "Сохранить",
+          "inside": true,
+          "outline": "auto",
+          "border": "rgb(58, 121, 104)"
+        }
+      },
+      "afterClose": {
+        "tag": "BODY",
+        "name": "NNetMap«◇КартаИнфраструктура▦Объекты⌖Местоположения⌁Шаблоны имён кабелейБиблиоте",
+        "inside": false,
+        "outline": "none",
+        "border": "rgb(234, 245, 241)"
+      }
+    },
+    "map": {
+      "start": {
+        "tag": "INPUT",
+        "name": "",
+        "inside": true,
+        "outline": "auto",
+        "border": "rgb(42, 68, 72)"
+      },
+      "next": {
+        "tag": "BUTTON",
+        "name": "Создать",
+        "inside": true,
+        "outline": "auto",
+        "border": "rgb(42, 68, 72)"
+      },
+      "afterEsc": {
+        "visible": true,
+        "focus": {
+          "tag": "BUTTON",
+          "name": "Создать",
+          "inside": true,
+          "outline": "auto",
+          "border": "rgb(42, 68, 72)"
+        }
+      },
+      "afterClose": {
+        "tag": "BODY",
+        "name": "NNetMap«◇КартаИнфраструктура▦Объекты⌖Местоположения⌁Шаблоны имён кабелейБиблиоте",
+        "inside": false,
+        "outline": "none",
+        "border": "rgb(234, 245, 241)"
+      }
+    },
+    "behindLocation": {
+      "tag": "A",
+      "name": "NetMap — Карта",
+      "inside": false,
+      "outline": "auto",
+      "border": "rgb(234, 245, 241)"
+    },
+    "nav": {
+      "tabs": [
+        {
+          "tag": "A",
+          "name": "NetMap — Карта",
+          "inside": false,
+          "outline": "auto",
+          "border": "rgb(234, 245, 241)"
+        },
+        {
+          "tag": "BUTTON",
+          "name": "Свернуть боковую панель",
+          "inside": false,
+          "outline": "none",
+          "border": "rgb(43, 69, 72)"
+        },
+        {
+          "tag": "A",
+          "name": "◇Карта",
+          "inside": false,
+          "outline": "none",
+          "border": "rgb(43, 69, 72)"
+        },
+        {
+          "tag": "A",
+          "name": "▦Объекты",
+          "inside": false,
+          "outline": "none",
+          "border": "rgb(43, 69, 72)"
+        },
+        {
+          "tag": "A",
+          "name": "⌖Местоположения",
+          "inside": false,
+          "outline": "none",
+          "border": "rgb(43, 69, 72)"
+        },
+        {
+          "tag": "A",
+          "name": "⌁Шаблоны имён кабелей",
+          "inside": false,
+          "outline": "none",
+          "border": "rgb(43, 69, 72)"
+        },
+        {
+          "tag": "A",
+          "name": "▤Шаблоны объектов",
+          "inside": false,
+          "outline": "none",
+          "border": "rgb(43, 69, 72)"
+        },
+        {
+          "tag": "A",
+          "name": "▣Типы портов",
+          "inside": false,
+          "outline": "none",
+          "border": "rgb(43, 69, 72)"
+        },
+        {
+          "tag": "A",
+          "name": "⚙Данные NetMap",
+          "inside": false,
+          "outline": "none",
+          "border": "rgb(43, 69, 72)"
+        },
+        {
+          "tag": "BUTTON",
+          "name": "Язык: Русский",
+          "inside": false,
+          "outline": "solid",
+          "border": "rgb(223, 247, 239)"
+        }
+      ],
+      "collapseAriaExpanded": null,
+      "railFocus": {
+        "tag": "A",
+        "name": "▤Шаблоны объектов",
+        "inside": false,
+        "outline": "none",
+        "border": "rgb(43, 69, 72)"
+      },
+      "railName": "    - link \"Шаблоны объектов Шаблоны объектов\":",
+      "tooltip": "\"Шаблоны объектов\"",
+      "afterRoute": {
+        "tag": "A",
+        "name": "▤Шаблоны объектов",
+        "inside": false,
+        "outline": "none",
+        "border": "rgb(43, 69, 72)"
+      }
+    },
+    "mapContext": {
+      "shortcut": "- menu:\n  - menuitem \"Открыть объект\"\n  - menuitem \"Изменить размер…\"\n  - menuitem \"Копировать размер\"\n  - menuitem \"Применить этот размер ко всем объектам шаблона…\"\n  - menuitem \"Зафиксировать положение\"\n  - menuitem \"Убрать с карты\"\n  - menuitem \"Удалить объект из NetMap…\"\n  - menuitem \"Массовое подключение\"\n  - menuitem \"Массовое удаление кабелей\"",
+      "afterShortcut": {
+        "tag": "DIV",
+        "name": "UX-SWFНаследоватьСпередиСзади1-251-61-461-191-31-301-181-431-201-411-151-51-21-2",
+        "inside": false,
+        "outline": "none",
+        "border": "rgb(234, 245, 241)"
+      },
+      "afterPointer": {
+        "tag": "DIV",
+        "name": "UX-SWFНаследоватьСпередиСзади1-251-61-461-191-31-301-181-431-201-411-151-51-21-2",
+        "inside": false,
+        "outline": "none",
+        "border": "rgb(234, 245, 241)"
+      },
+      "afterArrow": {
+        "tag": "DIV",
+        "name": "UX-SWFНаследоватьСпередиСзади1-251-61-461-191-31-301-181-431-201-411-151-51-21-2",
+        "inside": false,
+        "outline": "none",
+        "border": "rgb(234, 245, 241)"
+      },
+      "afterTab": {
+        "tag": "SELECT",
+        "name": "Физический вид / Выбранная сторона: Спереди. Источник: компоновка карты",
+        "inside": false,
+        "outline": "auto",
+        "border": "rgb(118, 118, 118)"
+      }
+    },
+    "libraryTabs": {
+      "moduleSelected": "true",
+      "focus": {
+        "tag": "BUTTON",
+        "name": "Модули",
+        "inside": false,
+        "outline": "solid",
+        "border": "rgb(85, 229, 181)"
+      }
+    }
+  },
+  "menus": {
+    "object": "- menu:\n  - menuitem \"Открыть объект\"\n  - menuitem \"Изменить размер…\"\n  - menuitem \"Копировать размер\"\n  - menuitem \"Применить этот размер ко всем объектам шаблона…\"\n  - menuitem \"Зафиксировать положение\"\n  - menuitem \"Убрать с карты\"\n  - menuitem \"Удалить объект из NetMap…\"\n  - menuitem \"Массовое подключение\"\n  - menuitem \"Массовое удаление кабелей\"",
+    "busyPort": "- menu:\n  - paragraph: 1-1\n  - menuitem \"Разъединить…\"",
+    "freePort": "- menu:\n  - paragraph: 1-4\n  - menuitem \"Соединить от этого порта…\"",
+    "location": "(нет меню NetMap)",
+    "pane": "- menu:\n  - menuitem \"Добавить на карту…\"",
+    "cable": "- menu:\n  - menuitem \"Переподключить\"\n  - menuitem \"Переименовать кабель\"\n  - menuitem \"Удалить кабель и разорвать физическое соединение…\"",
+    "removePlacement": "(нет диалога)",
+    "deleteObject": {
+      "type": "confirm",
+      "message": "Удалить объект «UX-SW» из NetMap?"
+    },
+    "sharedCount": 47,
+    "sharedSelection": [
+      "      - button \"UX-front · UX-PP / 1-1 → UX-SW / 1-1\"",
+      "      - button \"UX-front · UX-PP / 1-1 → UX-SW / 1-1\"",
+      "      - button \"UX-front · UX-PP / 1-1 → UX-SW / 1-1\"",
+      "      - button \"UX-front · UX-PP / 1-1 → UX-SW / 1-1\""
+    ],
+    "cableContextAfterBulk": "- menu:\n  - menuitem \"Переподключить\"\n  - menuitem \"Переименовать кабель\"\n  - menuitem \"Удалить кабель и разорвать физическое соединение…\"",
+    "annotation": "(нет меню NetMap)",
+    "boundaryInTextMode": "(нет меню NetMap)",
+    "boundary": "(нет меню NetMap)",
+    "sharedChooser": [
+      "      - button \"Cable b4c01c8a · UX-PP / 1-3 → UX-SW / 1-3\"",
+      "      - button \"Cable c789035f · UX-PP / 1-2 → UX-SW / 1-2\"",
+      "      - button \"Cable b4c01c8a · UX-PP / 1-3 → UX-SW / 1-3\"",
+      "      - button \"Cable c789035f · UX-PP / 1-2 → UX-SW / 1-2\"",
+      "- dialog \"Выбрать кабель на участке\":",
+      "  - button \"Cable b4c01c8a UX-PP / 1-3 → UX-SW / 1-3\":",
+      "    - strong: Cable b4c01c8a",
+      "  - button \"Cable c789035f UX-PP / 1-2 → UX-SW / 1-2\":",
+      "    - strong: Cable c789035f"
+    ],
+    "workspaceReset": {
+      "type": "confirm",
+      "message": "Полностью удалить все данные NetMap? Это действие нельзя отменить. Сначала экспортируйте снимок, если данные нужны."
+    },
+    "bulkDeletePreview": [
+      "  - status: Будут удалены кабели (3) и их физические соединения (3).",
+      "  - button \"Отмена\"",
+      "  - button \"Подтвердить удаление\""
+    ],
+    "disconnect": {
+      "type": "confirm",
+      "message": "Разорвать физическое подключение порта «1-1»?"
+    },
+    "locationTitle": "(нет меню NetMap)"
+  },
+  "states": {
+    "labelSaved": [
+      "    - rowgroup:",
+      "      - row \"Название Описание Шаблон Начать с Действия\":",
+      "        - columnheader \"Название\"",
+      "        - columnheader \"Описание\"",
+      "        - columnheader \"Шаблон\"",
+      "        - columnheader \"Начать с\"",
+      "        - columnheader \"Действия\"",
+      "    - rowgroup:",
+      "      - row \"UX Patch cord — UX-### 0 Изменить Удалить UX Patch cord\":",
+      "        - cell \"UX Patch cord\"",
+      "        - cell \"—\"",
+      "        - cell \"UX-###\":",
+      "          - code: UX-###",
+      "        - cell \"0\"",
+      "        - cell \"Изменить Удалить UX Patch cord\":",
+      "          - button \"Изменить\"",
+      "          - button \"Удалить UX Patch cord\": ⌫"
+    ],
+    "duplicateTargets": {
+      "options": [
+        {
+          "name": "UX-SW",
+          "value": "9b5f7bb3-3333-4014-ae34-e80f0e48998e"
+        },
+        {
+          "name": "UX-SW",
+          "value": "ab818763-6f02-48ad-adcc-ba89631e7b91"
+        }
+      ],
+      "canonicalPaths": [
+        "/infrastructure/objects/ab818763-6f02-48ad-adcc-ba89631e7b91",
+        "/infrastructure/objects/9b5f7bb3-3333-4014-ae34-e80f0e48998e"
+      ],
+      "selectedForm": [
+        "        - 'row \"1-2 UX Copper Свободен — — — Подключить порт Подключить порт кабелем Поиск объекта Целевой физический объект UX-SW Свободный физический порт Выберите порт Дополнительно: подключить к свободному интерфейсу Способ задания имени Отменить Подключить\"':",
+        "          - 'cell \"Подключить порт Подключить порт кабелем Поиск объекта Целевой физический объект UX-SW Свободный физический порт Выберите порт Дополнительно: подключить к свободному интерфейсу Способ задания имени Отменить Подключить\"':",
+        "            - text: Целевой физический объект",
+        "            - combobox \"Целевой физический объект\":",
+        "              - option \"UX-SW\"",
+        "              - option \"UX-SW\" [selected]",
+        "            - text: Свободный физический порт",
+        "            - combobox \"Свободный физический порт\":"
+      ]
+    },
+    "bulkPreview": "- dialog \"Массовое подключение\":\n  - heading \"Массовое подключение\" [level=2]\n  - heading \"Кабели к созданию (2)\" [level=3]\n  - table:\n    - rowgroup:\n      - row \"Источник Назначение Кабель\":\n        - columnheader \"Источник\"\n        - columnheader \"Назначение\"\n        - columnheader \"Кабель\"\n    - rowgroup:\n      - row \"UX-SW / Панель 1 / 1-2 UX-PP / Front · Спереди / 1-2 Без имён\":\n        - cell \"UX-SW / Панель 1 / 1-2\"\n        - cell \"UX-PP / Front · Спереди / 1-2\"\n        - cell \"Без имён\"\n      - row \"UX-SW / Панель 1 / 1-3 UX-PP / Front · Спереди / 1-3 Без имён\":\n        - cell \"UX-SW / Панель 1 / 1-3\"\n        - cell \"UX-PP / Front · Спереди / 1-3\"\n        - cell \"Без имён\"\n  - text: Имена кабелей\n  - combobox \"Имена кабелей\":\n    - option \"Без имён\" [selected]\n    - option \"UX Patch cord\"\n  - button \"Отмена\"\n  - button \"Назад\"\n  - button \"Подтвердить создание\"",
+    "trace": [
+      "    - option \"UX-SW\"",
+      "    - option \"UX-SW\" [selected]",
+      "    - option \"UX-SW\"",
+      "    - option \"UX-SW\"",
+      "  - button \"Трассировать\"",
+      "  - strong: Физический L1-путь доказан",
+      "    - option \"Маршрут 1\" [selected]"
+    ],
+    "contrast": {
+      ".shell-nav__group-label": {
+        "foreground": "rgb(100, 121, 123)",
+        "background": "rgba(7, 16, 18, 0.96)",
+        "contrast": 4.18,
+        "pixels": "9px",
+        "display": "block",
+        "outline": "none",
+        "border": "rgb(100, 121, 123)"
+      },
+      ".shell-nav__link--active": {
+        "foreground": "rgb(223, 247, 239)",
+        "background": "rgb(18, 48, 41)",
+        "contrast": 12.62,
+        "pixels": "13px",
+        "display": "flex",
+        "outline": "none",
+        "border": "rgb(49, 87, 79)"
+      },
+      ".shell-nav__link:not(.shell-nav__link--active)": {
+        "foreground": "rgb(143, 163, 164)",
+        "background": "rgba(7, 16, 18, 0.96)",
+        "contrast": 7.27,
+        "pixels": "13px",
+        "display": "flex",
+        "outline": "none",
+        "border": "rgba(0, 0, 0, 0)"
+      },
+      "h1": {
+        "foreground": "rgb(234, 245, 241)",
+        "background": "rgb(7, 16, 18)",
+        "contrast": 17.25,
+        "pixels": "22px",
+        "display": "block",
+        "outline": "none",
+        "border": "rgb(234, 245, 241)"
+      },
+      "main label": {
+        "foreground": "rgb(145, 165, 165)",
+        "background": "rgb(10, 23, 25)",
+        "contrast": 7.07,
+        "pixels": "10px",
+        "display": "block",
+        "outline": "none",
+        "border": "rgb(145, 165, 165)"
+      },
+      "main tbody td": {
+        "foreground": "rgb(168, 188, 186)",
+        "background": "rgb(10, 23, 25)",
+        "contrast": 9.19,
+        "pixels": "12px",
+        "display": "table-cell",
+        "outline": "none",
+        "border": "rgb(168, 188, 186)"
+      }
+    },
+    "readFailure": {
+      "inventory": {
+        "load": [
+          "    - status:",
+          "      - heading \"Загружаем каталог\" [level=2]"
+        ],
+        "failure": [
+          "    - alert:",
+          "      - heading \"Не удалось загрузить каталог\" [level=2]",
+          "      - paragraph: Catalog inventory request failed with status 503.",
+          "      - button \"Повторить\""
+        ],
+        "hasRetry": 1,
+        "recovered": [
+          "- main:",
+          "  - navigation \"Инфраструктура\": Инфраструктура Объекты",
+          "  - text: Инфраструктура",
+          "  - heading \"Каталог\" [level=1]",
+          "  - paragraph: Оборудование, кабели, физические порты и размещение на картах.",
+          "  - link \"Создать объект\":",
+          "    - /url: /infrastructure/objects/new",
+          "  - tablist \"Разделы каталога\":",
+          "    - tab \"Оборудование (0)\" [selected]",
+          "    - tab \"Кабели (0)\"",
+          "  - region \"Поиск и фильтры\":",
+          "    - text: Поиск",
+          "    - textbox \"Поиск\"",
+          "    - text: Тип",
+          "    - combobox \"Тип\":",
+          "      - option \"Все\" [selected]"
+        ],
+        "requestCount": 2
+      },
+      "library": {
+        "load": [
+          "    - status: Загружаем шаблоны…"
+        ],
+        "failure": [
+          "    - alert:",
+          "      - text: \"Не удалось выполнить операцию: Error: HTTP 503 Service Unavailable while loading object blueprints.\"",
+          "      - button \"Повторить\""
+        ],
+        "hasRetry": 1,
+        "recovered": [
+          "- main:",
+          "  - text: Библиотека",
+          "  - heading \"Шаблоны оборудования и модулей\" [level=1]",
+          "  - link \"Создать базовый шаблон\":",
+          "    - /url: /library/base-templates/new",
+          "  - tablist \"Шаблоны оборудования и модулей\":",
+          "    - tab \"Объекты\" [selected]",
+          "    - tab \"Модули\"",
+          "  - tabpanel \"Объекты\":",
+          "    - alert:",
+          "      - text: \"Не удалось выполнить операцию: Error: HTTP 503 Service Unavailable while loading object blueprints.\"",
+          "      - button \"Повторить\""
+        ],
+        "requestCount": 2
+      },
+      "ports": {
+        "load": [
+          "  - status: Выполняется…"
+        ],
+        "failure": [
+          "  - alert: Не удалось выполнить запрос."
+        ],
+        "hasRetry": 0,
+        "recovered": [
+          "- main:",
+          "  - navigation \"Типы портов\": Справочники Типы портов",
+          "  - text: Справочники",
+          "  - heading \"Типы портов\" [level=1]",
+          "  - group \"Новый тип порта\":",
+          "    - text: Новый тип порта Название",
+          "    - textbox \"Название\"",
+          "    - text: Описание",
+          "    - textbox \"Описание\"",
+          "    - text: Палитра",
+          "    - textbox \"Палитра\": \"#64748b\"",
+          "    - text: HEX",
+          "    - textbox \"HEX\": \"#64748B\"",
+          "    - button \"Сохранить\"",
+          "  - region \"Типы портов\":",
+          "    - table:"
+        ],
+        "requestCount": 2
+      }
+    },
+    "moduleBack": {
+      "controls": [
+        "  - link \"Библиотека\":"
+      ],
+      "selected": "- tablist \"Шаблоны оборудования и модулей\":\n  - tab \"Объекты\" [selected]\n  - tab \"Модули\"",
+      "route": "http://127.0.0.1:5192/library/base-templates"
+    },
+    "locationTask": {
+      "rack": "- button \"Свернуть UX Rack\" [expanded]: −\n- strong: UX Rack\n- text: Стойка\n- 'button \"Развернуть ветку: UX Rack\"': ⊞\n- 'button \"Свернуть ветку: UX Rack\"': ⊟\n- button \"Добавить дочернее\"\n- button \"Создать серию дочерних\"\n- button \"Изменить\"\n- button \"Изменить родителя\"\n- button \"Удалить\"",
+      "searchboxes": 0,
+      "mainTextboxes": 0,
+      "inventorySearch": [
+        "  - region \"Поиск и фильтры\":",
+        "    - text: Поиск",
+        "    - textbox \"Поиск\": UX Rack"
+      ],
+      "inventoryResult": [
+        "    - textbox \"Поиск\": UX Rack",
+        "    - paragraph: По заданным условиям ничего не найдено."
+      ],
+      "sameNameRows": [
+        "НазваниеТипПортыКартыДействия",
+        "UX-SWКоммутатор0 / 4848 свободноНет→Переименовать⌫",
+        "UX-SWКоммутатор3 / 4845 свободноUX Audit→Переименовать⌫"
+      ]
+    },
+    "tools": [
+      "- main:",
+      "  - text: \"Карты:\"",
+      "  - button \"Карты\": UX Audit",
+      "  - button \"+ Новая карта\"",
+      "  - button \"Удалить карту\"",
+      "  - button \"Логическая\"",
+      "  - button \"Физическая\" [pressed]",
+      "  - complementary \"Служебные инструменты карты\":",
+      "    - button \"Компоновка · Основной\"",
+      "    - button \"Инструменты\" [expanded]",
+      "    - button \"Соединить порты\"",
+      "    - button \"Текст\"",
+      "    - button \"Показать все кабельные каналы\"",
+      "  - region \"Поиск объекта\":",
+      "    - heading \"Поиск объекта\" [level=2]",
+      "    - searchbox \"Поиск объекта\"",
+      "  - button \"Трассировка\"",
+      "  - application:",
+      "    - img:",
+      "      - img \"Edge from l1-physical-object:068e4907-0982-4c58-b1e5-a482e05c0be6 to l1-physical-object:ab818763-6f02-48ad-adcc-ba89631e7b91\"",
+      "    - img:",
+      "      - img \"Edge from l1-physical-object:068e4907-0982-4c58-b1e5-a482e05c0be6 to l1-physical-object:ab818763-6f02-48ad-adcc-ba89631e7b91\"",
+      "    - img:",
+      "      - img \"Edge from l1-physical-object:068e4907-0982-4c58-b1e5-a482e05c0be6 to l1-physical-object:ab818763-6f02-48ad-adcc-ba89631e7b91\"",
+      "    - img:"
+    ],
+    "annotation": {
+      "fill": "rgb(31, 41, 55)",
+      "sample": [
+        [
+          610,
+          145,
+          13,
+          33,
+          35,
+          255
+        ],
+        [
+          615,
+          141,
+          13,
+          33,
+          35,
+          255
+        ],
+        [
+          580,
+          150,
+          13,
+          33,
+          35,
+          255
+        ]
+      ],
+      "ratios": [
+        1.1363687326972276,
+        1.1363687326972276,
+        1.1363687326972276
+      ]
+    },
+    "entry": {
+      "map": {
+        "pending": [
+          "  - button \"Удалить карту\" [disabled]"
+        ],
+        "requests": [
+          "/api/v1/locations",
+          "/api/v1/maps",
+          "/api/v1/maps/6717d019-c356-4b73-9c2a-6091526e2e7f",
+          "/api/v1/port-types",
+          "/api/v1/catalog/inventory",
+          "/api/v1/topology/projection"
+        ]
+      },
+      "logical": {
+        "pending": [
+          "  - button \"Удалить карту\" [disabled]"
+        ],
+        "requests": [
+          "/api/v1/locations",
+          "/api/v1/maps",
+          "/api/v1/maps/6717d019-c356-4b73-9c2a-6091526e2e7f",
+          "/api/v1/port-types",
+          "/api/v1/catalog/inventory",
+          "/api/v1/topology/projection"
+        ]
+      },
+      "inventory": {
+        "pending": [
+          "  - heading \"Каталог\" [level=1]",
+          "    - status:",
+          "      - heading \"Загружаем каталог\" [level=2]"
+        ],
+        "requests": [
+          "/api/v1/catalog/inventory"
+        ]
+      },
+      "locations": {
+        "pending": [
+          "  - heading \"Местоположения\" [level=1]",
+          "  - paragraph: Загружаем местоположения…"
+        ],
+        "requests": [
+          "/api/v1/locations"
+        ]
+      },
+      "labels": {
+        "pending": [
+          "  - heading \"Шаблоны имён кабелей\" [level=1]"
+        ],
+        "requests": [
+          "/api/v1/cable-label-templates",
+          "/api/v1/cable-label-settings"
+        ]
+      },
+      "ports": {
+        "pending": [
+          "  - heading \"Типы портов\" [level=1]",
+          "  - status: Выполняется…",
+          "    - textbox \"Название\" [disabled]",
+          "    - textbox \"Описание\" [disabled]",
+          "    - textbox \"Палитра\" [disabled]: \"#64748b\"",
+          "    - textbox \"HEX\" [disabled]: \"#64748B\"",
+          "    - button \"Сохранить\" [disabled]"
+        ],
+        "requests": [
+          "/api/v1/port-types"
+        ]
+      },
+      "data": {
+        "pending": [
+          "  - heading \"Данные NetMap\" [level=1]",
+          "    - heading \"Экспортировать данные\" [level=2]",
+          "    - heading \"Импортировать данные\" [level=2]",
+          "    - heading \"Полностью удалить данные\" [level=2]"
+        ],
+        "requests": []
+      },
+      "library": {
+        "pending": [
+          "  - heading \"Шаблоны оборудования и модулей\" [level=1]",
+          "    - status: Загружаем шаблоны…"
+        ],
+        "requests": [
+          "/api/v1/port-types",
+          "/api/v1/library/base-templates",
+          "/api/v1/library/module-templates"
+        ]
+      },
+      "newObject": {
+        "pending": [
+          "  - heading \"Создать объект\" [level=1]",
+          "    - paragraph: Загружаем шаблоны…"
+        ],
+        "requests": [
+          "/api/v1/library/base-templates",
+          "/api/v1/locations"
+        ]
+      },
+      "newBase": {
+        "pending": [
+          "    - heading \"Создать базовый шаблон\" [level=1]",
+          "    - heading \"Внутренние связи\" [level=2]",
+          "    - combobox \"Тип порта\" [disabled]:",
+          "      - option \"Выберите тип порта\" [disabled] [selected]",
+          "    - button \"Добавить порты / точки\" [disabled]",
+          "    - button \"Удалить пустую панель\" [disabled]",
+          "      - button \"Уменьшить\" [disabled]: −"
+        ],
+        "requests": [
+          "/api/v1/port-types"
+        ]
+      },
+      "editBase": {
+        "pending": [],
+        "requests": [
+          "/api/v1/library/base-templates/b469db5b-cb6a-4663-a201-c551b035ef86/draft",
+          "/api/v1/port-types"
+        ]
+      },
+      "newModule": {
+        "pending": [
+          "  - heading \"Создать шаблон модуля\" [level=1]",
+          "      - heading \"Конечные точки модуля\" [level=2]",
+          "      - status: \"Выбрано: 0\"",
+          "      - combobox \"Тип порта\" [disabled]:",
+          "        - option \"Выберите тип порта\" [disabled] [selected]",
+          "      - button \"Добавить конечную точку\" [disabled]",
+          "        - button \"Выровнять по горизонтали\" [disabled]: Выровнять ↔",
+          "        - button \"Выровнять по вертикали\" [disabled]: Выровнять ↕",
+          "        - button \"Распределить по горизонтали\" [disabled]: Распределить ↔",
+          "        - button \"Распределить по вертикали\" [disabled]: Распределить ↕",
+          "  - button \"Создать шаблон\" [disabled]"
+        ],
+        "requests": [
+          "/api/v1/port-types"
+        ]
+      },
+      "editModule": {
+        "pending": [
+          "  - heading \"Изменить шаблон\" [level=1]"
+        ],
+        "requests": [
+          "/api/v1/library/module-templates/7d3e2998-1534-4c35-aa18-12aee548abcc/draft",
+          "/api/v1/port-types"
+        ]
+      },
+      "overview": {
+        "pending": [
+          "    - text: Загрузка…",
+          "  - heading \"Загружаем объект…\" [level=1]",
+          "    - paragraph: Загружаем точки подключения…"
+        ],
+        "requests": [
+          "/api/v1/topology/physical-objects/e3122c04-648c-4f37-b8dd-17cfa89b07bc",
+          "/api/v1/catalog/inventory",
+          "/api/v1/topology/physical-objects/e3122c04-648c-4f37-b8dd-17cfa89b07bc/location",
+          "/api/v1/locations",
+          "/api/v1/library/base-templates"
+        ]
+      },
+      "physical": {
+        "pending": [
+          "    - text: Загрузка…",
+          "  - heading \"Загружаем объект…\" [level=1]",
+          "    - heading \"Отсеки модулей\" [level=2]",
+          "    - paragraph: Загружаем шаблоны…",
+          "    - paragraph: Загружаем точки подключения…"
+        ],
+        "requests": [
+          "/api/v1/topology/physical-objects/e3122c04-648c-4f37-b8dd-17cfa89b07bc/configuration",
+          "/api/v1/library/module-templates",
+          "/api/v1/port-types",
+          "/api/v1/topology/physical-objects/e3122c04-648c-4f37-b8dd-17cfa89b07bc",
+          "/api/v1/topology/projection"
+        ]
+      },
+      "interfaces": {
+        "pending": [
+          "    - text: Загрузка…",
+          "  - heading \"Загружаем объект…\" [level=1]",
+          "    - heading \"Интерфейсы\" [level=3]",
+          "    - paragraph: Загружаем интерфейсы…"
+        ],
+        "requests": [
+          "/api/v1/topology/devices/e3122c04-648c-4f37-b8dd-17cfa89b07bc",
+          "/api/v1/topology/physical-objects/e3122c04-648c-4f37-b8dd-17cfa89b07bc",
+          "/api/v1/topology/projection"
+        ]
+      }
+    },
+    "dataInvalid": "Файл NetMap повреждён, неполон или имеет неподдерживаемую версию.",
+    "moreReadFailures": {
+      "map": {
+        "path": "/api/v1/maps",
+        "requests": 1,
+        "observed": [
+          "  - alert: Не удалось загрузить карту."
+        ]
+      },
+      "logical": {
+        "path": "/api/v1/maps",
+        "requests": 1,
+        "observed": [
+          "  - alert: Не удалось загрузить карту."
+        ]
+      },
+      "locations": {
+        "path": "/api/v1/locations",
+        "requests": 1,
+        "observed": [
+          "  - alert:",
+          "    - text: \"Не удалось загрузить местоположения: Location request failed with status 503.\"",
+          "    - button \"Повторить\""
+        ]
+      },
+      "labels": {
+        "path": "/api/v1/cable-label-templates",
+        "requests": 1,
+        "observed": [
+          "  - alert: Historical Cable label response is invalid"
+        ]
+      },
+      "newObject": {
+        "path": "/api/v1/library/base-templates",
+        "requests": 1,
+        "observed": [
+          "    - alert:",
+          "      - text: Не удалось загрузить шаблоны.",
+          "      - button \"Повторить\""
+        ]
+      },
+      "editBase": {
+        "path": "/api/v1/library/base-templates/b469db5b-cb6a-4663-a201-c551b035ef86/draft",
+        "requests": 1,
+        "observed": [
+          "  - alert: \"Error: HTTP 503 Service Unavailable while loading object blueprints.\""
+        ]
+      },
+      "editModule": {
+        "path": "/api/v1/library/module-templates/7d3e2998-1534-4c35-aa18-12aee548abcc/draft",
+        "requests": 1,
+        "observed": [
+          "  - alert: \"Error: HTTP 503\""
+        ]
+      },
+      "overview": {
+        "path": "/api/v1/topology/physical-objects/e3122c04-648c-4f37-b8dd-17cfa89b07bc",
+        "requests": 1,
+        "observed": [
+          "    - paragraph: Не удалось загрузить физический объект.",
+          "    - button \"Повторить\""
+        ]
+      },
+      "physical": {
+        "path": "/api/v1/topology/physical-objects/e3122c04-648c-4f37-b8dd-17cfa89b07bc/configuration",
+        "requests": 1,
+        "observed": [
+          "    - alert:",
+          "      - text: \"Не удалось выполнить операцию: Error: HTTP 503\"",
+          "      - button \"Повторить\""
+        ]
+      },
+      "interfaces": {
+        "path": "/api/v1/topology/devices/e3122c04-648c-4f37-b8dd-17cfa89b07bc",
+        "requests": 1,
+        "observed": [
+          "    - paragraph: Не удалось загрузить интерфейсы. HTTP 503 Service Unavailable while loading device details.",
+          "    - button \"Повторить\""
+        ]
+      }
+    },
+    "labelPendingEmpty": [
+      "  - paragraph: Шаблонов пока нет."
+    ],
+    "redirects": {
+      "/": "/map",
+      "/ux-audit-missing": "/map",
+      "/infrastructure/objects/e3122c04-648c-4f37-b8dd-17cfa89b07bc/ux-invalid-section": "/infrastructure/objects/e3122c04-648c-4f37-b8dd-17cfa89b07bc"
+    },
+    "finalPageErrors": [],
+    "bulkDeleteCancel": {
+      "afterCancelCableTab": "Кабели (4)"
+    }
+  },
+  "context": {
+    "reviewed": "fd97cad72a04982caa1164c2ba257bd181133ff8",
+    "browser": "145.0.7632.6",
+    "viewports": [
+      [
+        1440,
+        1000
+      ],
+      [
+        1024,
+        768
+      ],
+      [
+        720,
+        800
+      ]
+    ],
+    "locations": 102,
+    "objects": 12,
+    "savedMapObjects": 3,
+    "baseTemplates": 3,
+    "moduleTemplates": 1,
+    "cables": 4,
+    "maxPortsPerObject": 48,
+    "installedModulePorts": 16,
+    "consolePageErrors": [],
+    "readSimulation": "Playwright delayed or fulfilled selected reads in the isolated tab. 503 is simulated."
+  }
+}
