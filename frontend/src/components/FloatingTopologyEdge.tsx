@@ -10,7 +10,7 @@ import {
   type InternalNode,
   type XYPosition,
 } from '@xyflow/react';
-import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useId, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
 import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
@@ -181,6 +181,7 @@ function ForegroundPortMarkers(props: ForegroundPortMarkersProps) {
 
 function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers, endpointEmphasis, zoom }: ForegroundPortMarkersProps & { nodeId: string }) {
   const portTypes = useRuntimePortTypes();
+  const maskId = useId();
   const node = useInternalNode<DeviceFlowNode>(nodeId);
   // A collapsed Location proxy is a presentation anchor, never a PhysicalObject with ports.
   if (!node || node.data.locationProxy || !node.data.projection || node.data.projection.kind !== 'PHYSICAL_OBJECT') return null;
@@ -193,35 +194,47 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers
   const box = rectangle(node);
   const portStroke = blueprint ? BLUEPRINT_PORT_STROKE : 1.25;
   const radius = blueprint ? (BLUEPRINT_PORT_SIZE - portStroke) / 2 : 3.5;
-  const portOuterRadius = radius + portStroke / 2;
-  // Leave space between the smallest supported Blueprint pitch and the halo.
-  const preferredHaloWidth = Math.min(1.25 / zoom, 1.75);
-  const haloOutset = blueprint ? preferredHaloWidth
-    : Math.min(preferredHaloWidth, Math.max(0, box.height / (ports.length + 1) / 2 - portOuterRadius));
-  // A crowded Generic endpoint can reuse its outline without expanding into the next port.
-  const haloWidth = Math.min(preferredHaloWidth, haloOutset + portStroke);
-  const haloRadius = portOuterRadius + haloOutset - haloWidth / 2;
+  const visiblePorts = ports.flatMap(port => {
+    const endpoint = getRenderedConnectionPoint(projection, box, port.id);
+    return endpoint ? [{ ...port, endpoint }] : [];
+  });
+  // React Flow scales the viewport via CSS. Convert screen pixels before painting.
+  const unit = 1 / zoom;
+  const haloRadius = radius + portStroke / 2 + unit;
+  const haloBounds = haloRadius + 4 * unit;
+  const exclusionRadius = radius + portStroke / 2 + .5 * unit;
   return <g className="cable-route-port-markers" aria-hidden="true" pointerEvents="none">
-    {ports.map((port) => {
-      const endpoint = getRenderedConnectionPoint(projection, box, port.id);
-      if (!endpoint) return null;
+    {visiblePorts.map((port, index) => {
+      const { endpoint } = port;
       const state = physicalPortStates?.[port.id];
       const { fill, outline } = physicalPortPaint(portTypes?.find(type => type.id === port.portTypeId)?.color,
         node.data.cableOccupiedPortIds?.has(port.id) ?? false, tracedPorts.has(port.id), state);
       const className = `cable-route-port-marker${blueprint ? ' cable-route-port-marker--blueprint' : ''}${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
       const style = { fill, stroke: outline, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined };
       const emphasis = state === 'source' || state === 'destination' ? undefined : endpointEmphasis.get(port.id);
+      const neighbours = emphasis ? visiblePorts.filter(other => other !== port &&
+        Math.abs(other.endpoint.x - endpoint.x) < haloBounds + exclusionRadius &&
+        Math.abs(other.endpoint.y - endpoint.y) < haloBounds + exclusionRadius) : [];
+      const cutoutId = neighbours.length ? `${maskId}-${index}` : undefined;
       const halo = {
         'data-cable-endpoint': port.id, 'data-emphasis': emphasis, className: 'cable-endpoint-halo',
-        fill: 'none', strokeWidth: haloWidth, opacity: state === 'unavailable' ? .35 : undefined,
+        fill: 'none', strokeWidth: 2 * unit, opacity: state === 'unavailable' ? .35 : undefined,
       };
       return <g key={port.id}>
+        {cutoutId && <mask id={cutoutId} maskUnits="userSpaceOnUse"
+          x={endpoint.x - haloBounds} y={endpoint.y - haloBounds} width={2 * haloBounds} height={2 * haloBounds}>
+          <rect x={endpoint.x - haloBounds} y={endpoint.y - haloBounds} width={2 * haloBounds} height={2 * haloBounds} fill="white" />
+          {neighbours.map(other => <rect key={other.id} x={other.endpoint.x - exclusionRadius} y={other.endpoint.y - exclusionRadius}
+            width={2 * exclusionRadius} height={2 * exclusionRadius} fill="black" />)}
+        </mask>}
+        {emphasis && <g mask={cutoutId ? `url(#${cutoutId})` : undefined}>
+          {port.network
+            ? <rect {...halo} x={endpoint.x - haloRadius} y={endpoint.y - haloRadius} width={2 * haloRadius} height={2 * haloRadius} />
+            : <circle {...halo} cx={endpoint.x} cy={endpoint.y} r={haloRadius} />}
+        </g>}
         {port.network
           ? <rect className={className} style={style} data-connection-point-id={port.id} x={endpoint.x - radius} y={endpoint.y - radius} width={radius * 2} height={radius * 2} rx={0} pointerEvents="none" />
           : <circle className={className} style={style} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={radius} pointerEvents="none" />}
-        {emphasis && (port.network
-          ? <rect {...halo} x={endpoint.x - haloRadius} y={endpoint.y - haloRadius} width={2 * haloRadius} height={2 * haloRadius} />
-          : <circle {...halo} cx={endpoint.x} cy={endpoint.y} r={haloRadius} />)}
         {bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}
       </g>;
     })}

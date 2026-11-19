@@ -18,7 +18,9 @@ const panel = (id: string) => ({
       body: { kind: 'RECTANGLE' as const, width: 180, height: 32 },
       panels: [{ panel_key: 'front', panel_number: 1, display_name: 'Front', x: 0, y: 0, width: 180, height: 32 }],
       slots: Array.from({ length: 10 }, (_, index) => {
-        const position = { x: (12 + index * 14) / 180, y: .125 };
+        // Two free ports sit one minimum pitch below the second and third leads.
+        const secondRow = index === 5 || index === 6;
+        const position = { x: (12 + (secondRow ? index - 4 : index) * 14) / 180, y: secondRow ? 14 / 32 : .125 };
         return {
           slot_key: `p${index + 1}`, panel_key: 'front', kind: 'NETWORK_PORT' as const,
           display_name: `P${index + 1}`, connection_point_id: `${id}-p${index + 1}`,

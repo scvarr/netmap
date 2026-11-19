@@ -1,10 +1,48 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const pointOn = (segment: Locator, fraction = .5) => segment.evaluate((path: SVGPathElement, ratio) => {
   const local = path.getPointAtLength(path.getTotalLength() * ratio);
   const screen = local.matrixTransform(path.getScreenCTM()!);
   return { x: screen.x, y: screen.y };
 }, fraction);
+
+async function expectPaintedHalo(page: Page, halo: Locator, neighbour: Locator, color: number[]) {
+  const { left, top, right, bottom } = (await neighbour.evaluate(element => {
+    const { left, top, right, bottom } = element.getBoundingClientRect();
+    return { left, top, right, bottom };
+  }));
+  const bounds = (await halo.boundingBox())!;
+  const x = Math.floor(Math.min(bounds.x - 4, left)), y = Math.floor(Math.min(bounds.y - 4, top));
+  const clip = { x, y, width: Math.ceil(Math.max(bounds.x + bounds.width + 4, right)) - x,
+    height: Math.ceil(Math.max(bounds.y + bounds.height + 4, bottom)) - y };
+  const shown = (await page.screenshot({ clip, scale: 'css' })).toString('base64');
+  const hidden = (await page.screenshot({ clip, scale: 'css', style: '.cable-endpoint-halo { visibility: hidden !important; }' })).toString('base64');
+  const pixels = await page.evaluate(async ({ shown, hidden, clip, colour, neighbour }) => {
+    async function rgba(png: string) {
+      const image = await createImageBitmap(new Blob([Uint8Array.from(atob(png), byte => byte.charCodeAt(0))], { type: 'image/png' }));
+      const canvas = new OffscreenCanvas(image.width, image.height).getContext('2d')!;
+      canvas.drawImage(image, 0, 0);
+      return canvas.getImageData(0, 0, image.width, image.height).data;
+    }
+    const [withHalo, withoutHalo] = await Promise.all([rgba(shown), rgba(hidden)]);
+    let bright = 0, neighbourPixels = 0, covered = 0;
+    for (let offset = 0; offset < withHalo.length; offset += 4) {
+      const x = clip.x + offset / 4 % clip.width + .5;
+      const y = clip.y + Math.floor(offset / 4 / clip.width) + .5;
+      const changed = colour.reduce((sum, _, channel) => sum + Math.abs(withHalo[offset + channel] - withoutHalo[offset + channel]), 0);
+      const distance = colour.reduce((sum, expected, channel) => sum + Math.abs(withHalo[offset + channel] - expected), 0);
+      if (changed > 70 && distance < 80) bright++;
+      if (x >= neighbour.left && x <= neighbour.right && y >= neighbour.top && y <= neighbour.bottom) {
+        neighbourPixels++;
+        if (changed > 12) covered++;
+      }
+    }
+    return { bright, neighbourPixels, covered };
+  }, { shown, hidden, clip, colour: color, neighbour: { left, top, right, bottom } });
+  expect(pixels.bright).toBeGreaterThan(5);
+  expect(pixels.neighbourPixels).toBeGreaterThan(0);
+  expect(pixels.covered).toBe(0);
+}
 
 test('selects Cable leads and shared routes on a dense L1 panel', async ({ page }) => {
   await page.setViewportSize({ width: 1360, height: 750 });
@@ -17,6 +55,7 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   const inspector = page.getByRole('complementary', { name: 'Быстрый инспектор' });
   const hoveredEnds = page.locator('.cable-endpoint-halo[data-emphasis="hovered"]');
   const selectedEnds = page.locator('.cable-endpoint-halo[data-emphasis="selected"]');
+  const portGlyph = (port: number) => page.locator(`.cable-route-port-marker[data-connection-point-id="PP1-p${port}"]`);
   const endpoints = (ends: Locator) => ends.evaluateAll(elements => elements.map(element => element.getAttribute('data-cable-endpoint')).sort());
 
   await expect(lead(2)).toBeAttached();
@@ -33,13 +72,10 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
       const halo = hoveredEnds.first();
       await expect(halo).toHaveCSS('stroke', 'rgb(141, 226, 200)');
       await expect(halo).toHaveCSS('pointer-events', 'none');
-      const { width, stroke } = await halo.evaluate((shape: SVGRectElement) => {
-        const scale = shape.getScreenCTM()!.a;
-        const stroke = parseFloat(getComputedStyle(shape).strokeWidth) * scale;
-        return { width: shape.getBoundingClientRect().width + stroke, stroke };
-      });
-      expect(stroke).toBeGreaterThan(.5);
-      expect(width).toBeLessThan(14 * zoom);
+      const screenStroke = await halo.evaluate((shape: SVGRectElement) =>
+        parseFloat(getComputedStyle(shape).strokeWidth) * shape.getScreenCTM()!.a);
+      expect(screenStroke).toBeCloseTo(2, 2);
+      if (port === 2) await expectPaintedHalo(page, halo, portGlyph(6), [141, 226, 200]);
     }
     expect(await lead(2).evaluate(element => getComputedStyle(element).cursor)).toBe('crosshair');
     const port = page.locator('.blueprint-map-node__port[data-connection-point-id="PP1-p2"]');
@@ -53,6 +89,9 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   await page.mouse.move(short.x, short.y);
   await expect(tooltip).toContainText('PP1 / P2');
   await expect(page.locator('.cable-route-foreground--hovered').first()).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(hoveredEnds).toHaveCount(0);
+  await expect(tooltip).toHaveCount(0);
   await expect(inspector).toHaveCount(0);
   await page.mouse.click(short.x, short.y);
   await expect(inspector.getByRole('heading', { name: 'Patch' })).toBeVisible();
@@ -99,11 +138,13 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   await inspector.locator('summary').click();
   await expect(inspector.getByText('cable:cable-3', { exact: true })).toBeVisible();
   expect(await endpoints(selectedEnds)).toEqual(['PP1-p3', 'SW1-p3']);
-  for (const zoom of [0.35, 1]) {
+  for (const zoom of [0.35, 0.6, 1, 2]) {
     await page.getByRole('button', { name: `zoom ${zoom}`, exact: true }).click();
     await expect(selectedEnds).toHaveCount(2);
     await expect(selectedEnds.first()).toHaveCSS('stroke', 'rgb(255, 230, 0)');
+    await expectPaintedHalo(page, selectedEnds.first(), portGlyph(7), [255, 230, 0]);
   }
+  await page.getByRole('button', { name: 'zoom 1', exact: true }).click();
 
   await page.getByRole('button', { name: 'Trace Cable 1' }).click();
   const traced = page.locator('.cable-route-foreground--traced');
