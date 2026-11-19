@@ -166,7 +166,7 @@ describe('temporary physical views', () => {
     }
     for (const [verdict, id] of [['UNKNOWN', 'internal'], ['REACHABLE', 'missing']] as const) {
       const trace = physicalTraceOverlayFor({ ...artifact, verdict }, document, id);
-      expect(temporaryFacesFor(document, configured, 'same-object', trace.highlightedConnectionPointIds).size).toBe(0);
+      expect(trace.highlightedConnectionPointIds.size).toBe(0);
     }
   });
 });

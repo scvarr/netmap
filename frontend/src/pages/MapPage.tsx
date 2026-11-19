@@ -1614,6 +1614,10 @@ function MapPageContent({
     () => physicalTraceOverlayFor(traceArtifact, document, selectedTraceBranchId),
     [traceArtifact, document, selectedTraceBranchId],
   );
+  const traceOwnsFaces = !physicalAnnotationMode &&
+    traceArtifact?.verdict === "REACHABLE" &&
+    selectedTraceBranchId !== null &&
+    traceArtifact.branches.some(branch => branch.branch_id === selectedTraceBranchId);
   const defaultFace = activeVariant?.default_face;
   const faceViews = useMemo(() => defaultFace && activeMap && locations
     ? resolveFaces(defaultFace, locations, activeMap.location_states ?? [], activeMap.placements)
@@ -2010,7 +2014,7 @@ function MapPageContent({
                   }
                   disableAutoLayout={!legacy}
                   traceOverlay={traceOverlay}
-                  traceOwnsFaces={Boolean(traceArtifact) && !physicalAnnotationMode}
+                  traceOwnsFaces={traceOwnsFaces}
                   viewportFitRevision={viewportFitRevision}
                   wiringRoute={!physicalAnnotationMode && (wiring.status === "selecting-target" || wiring.status === "confirming" || wiring.status === "creating") ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target } : undefined}
                   physicalPortStates={physicalAnnotationMode ? undefined : physicalPortStates}

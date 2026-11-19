@@ -8,8 +8,17 @@ import { createMapPageHarness } from './MapPage.testHarness';
 import type { SavedMapDataSource } from '../topology/savedMapTypes';
 import type { TopologyDataSource, TopologyProjectionDocument } from '../topology/types';
 
-vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => { useEffect(() => { props.onViewportCenterReady?.(() => ({ x: 123, y: 456 })); }, [props.onViewportCenterReady]); return <div data-testid="canvas" data-layer={props.document.layer} data-scene={props.sceneKey} data-focus={props.focusPhysicalObjectId ?? ''} data-position={JSON.stringify(props.positionOverrides)} data-display-widths={JSON.stringify(props.displayWidthOverrides)} data-locked={JSON.stringify([...props.lockedNodeIds ?? []])} data-location-frames={JSON.stringify(props.locationFrameInput ?? null)}>{!props.annotationMode && props.document.nodes.map((node: any) => <button key={node.id} onClick={() => props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}{props.locationFrameInput && <button onClick={() => props.locationFrameInput.onConfigure('room')}>configure room</button>}<button onClick={() => props.onSelectionChange(null)}>clear selection</button><button onClick={() => props.onPhysicalNodeDragStop?.(PP, { x: 77, y: 88 })}>drag</button><button onClick={() => props.onBlueprintDisplayResize?.(PP, 320)}>resize</button><button onClick={() => props.onPhysicalPaneContextMenu?.({ x: 12, y: 34 }, { x: 120, y: 340 })}>pane context</button></div>; } }));
-vi.mock('../components/TraceCommandBar', () => ({ TraceCommandBar: (props: any) => <div data-testid="trace-logical" data-branch={props.selectedBranchId ?? ''} data-artifact={props.traceArtifact?.verdict ?? ''}>{props.logicalDocument?.nodes.map((node: any) => node.label).join(',')}<button onClick={() => props.onTraceArtifact({ verdict: 'REACHABLE', nodes: [], edges: [], branches: [{ branch_id: 'branch-a', edge_ids: [], evidence_refs: [] }] })}>reachable</button></div> }));
+vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => { useEffect(() => { props.onViewportCenterReady?.(() => ({ x: 123, y: 456 })); }, [props.onViewportCenterReady]); return <div data-testid="canvas" data-layer={props.document.layer} data-trace-owns-faces={String(props.traceOwnsFaces)} data-configured-face={props.faceViews?.objectFaces.get(PP)?.face} data-scene={props.sceneKey} data-focus={props.focusPhysicalObjectId ?? ''} data-position={JSON.stringify(props.positionOverrides)} data-display-widths={JSON.stringify(props.displayWidthOverrides)} data-locked={JSON.stringify([...props.lockedNodeIds ?? []])} data-location-frames={JSON.stringify(props.locationFrameInput ?? null)}>{!props.annotationMode && props.document.nodes.map((node: any) => <button key={node.id} onClick={() => props.onSelectionChange({ type: 'node', item: node })}>{node.label}</button>)}{props.locationFrameInput && <button onClick={() => props.locationFrameInput.onConfigure('room')}>configure room</button>}<button onClick={() => props.onSelectionChange(null)}>clear selection</button><button onClick={() => props.onPhysicalNodeDragStop?.(PP, { x: 77, y: 88 })}>drag</button><button onClick={() => props.onBlueprintDisplayResize?.(PP, 320)}>resize</button><button onClick={() => props.onPhysicalPaneContextMenu?.({ x: 12, y: 34 }, { x: 120, y: 340 })}>pane context</button></div>; } }));
+vi.mock('../components/TraceCommandBar', () => ({ TraceCommandBar: (props: any) => (
+  <div data-testid="trace-logical" data-branch={props.selectedBranchId ?? ''} data-artifact={props.traceArtifact?.verdict ?? ''}>
+    {props.logicalDocument?.nodes.map((node: any) => node.label).join(',')}
+    <button onClick={() => props.onTraceArtifact({ verdict: 'REACHABLE', nodes: [], edges: [], branches: [{ branch_id: 'branch-a', edge_ids: [], evidence_refs: [] }] })}>reachable</button>
+    <button onClick={() => props.onTraceArtifact({ verdict: 'UNKNOWN', branches: [] })}>unknown trace</button>
+    <button onClick={() => props.onSelectedBranchId(null)}>clear branch</button>
+    <button onClick={() => props.onSelectedBranchId('stale-branch')}>select stale branch</button>
+    <button onClick={() => props.onTraceArtifact(null)}>clear trace</button>
+  </div>
+) }));
 vi.mock('../components/QuickInspector', () => ({ QuickInspector: (props: any) => props.selection ? <div data-testid="inspector" data-selected={props.selection.item.label}><button onClick={() => props.onRemoveFromMap?.(PP)}>remove</button><button onClick={() => props.onDeletePhysicalObject?.(PP)}>delete</button></div> : null }));
 const renderMapPage = createMapPageHarness(MapPage);
 
@@ -50,6 +59,52 @@ describe('MapPage SavedMap scope', () => {
       else expect(screen.queryByTestId('inspector')).not.toBeInTheDocument();
     });
   });
+  it('gives face priority only to a confirmed branch of the current trace', async () => {
+    const base = saved(A, [[PP, 10, 20], [SW, 300, 20]]);
+    const primary = { ...base, variants: base.variants.map(variant => ({ ...variant, default_face: 'FRONT' })) };
+    const projection = physical(PP, SW);
+    const cableRef = { ref_type: 'CANONICAL_FACT', entity_type: 'Cable', entity_id: 'rear-cable' };
+    projection.nodes.push({ id: 'cable:rear-cable', kind: 'CABLE', label: 'Rear Cable', source_refs: [cableRef], attributes: {} });
+    projection.edges.push({
+      id: 'physical-link', kind: 'L1_PHYSICAL_LINK', aggregate: true, from_node_id: projection.nodes[0].id,
+      to_node_id: projection.nodes[1].id, source_refs: [cableRef],
+      attributes: { endpoint_pairs: [{
+        cable_ref: cableRef, connection_id: 'connection', connection_member_id: 'member',
+        from_connection_point_id: 'front-port', from_member_index: 1,
+        to_connection_point_id: 'rear-port', to_member_index: 1,
+      }] },
+    });
+    renderMapPage({
+      dataSource: { loadProjection: vi.fn().mockResolvedValue(projection) },
+      savedMapDataSource: { listMaps: vi.fn().mockResolvedValue([primary]), loadMap: vi.fn().mockResolvedValue(primary) } as unknown as SavedMapDataSource,
+      locationDataSource: { loadLocations: vi.fn().mockResolvedValue([]) } as any,
+    }, '/map?map=' + A + '&view=physical');
+
+    const canvas = await screen.findByTestId('canvas');
+    const click = (name: string) => fireEvent.click(screen.getByRole('button', { name, exact: true }));
+    const priority = (ownsFaces: boolean) => expect(canvas).toHaveAttribute('data-trace-owns-faces', String(ownsFaces));
+    click('unknown trace');
+    click('Rear Cable');
+    expect(screen.getByTestId('inspector')).toHaveAttribute('data-selected', 'Rear Cable');
+    priority(false);
+
+    click('reachable');
+    priority(true);
+    click('clear branch');
+    priority(false);
+    click('select stale branch');
+    priority(false);
+    click('reachable');
+    priority(true);
+
+    click('clear trace');
+    priority(false);
+    expect(screen.getByTestId('inspector')).toHaveAttribute('data-selected', 'Rear Cable');
+    click('clear selection');
+    expect(screen.queryByTestId('inspector')).not.toBeInTheDocument();
+    expect(canvas).toHaveAttribute('data-configured-face', 'FRONT');
+  });
+
   it('clears a selected trace branch when changing variant or leaving physical view', async () => {
     const primary = saved(A, [[PP, 10, 20]]);
     const copy = { ...primary, active_variant_ref: { ...primary.active_variant_ref, entity_id: 'copy' } };
