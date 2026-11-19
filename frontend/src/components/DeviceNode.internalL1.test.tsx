@@ -38,9 +38,34 @@ describe('DeviceNode internal L1 overlay', () => {
     const card = screen.getByTestId('blueprint-map-node');
     const footprint = nodeFootprint({ id: 'pp24', position: { x: 0, y: 0 }, width: width + 92, data: { projection: pp24, compositionDisplayWidth: width } } as any);
     expect(card).toHaveStyle({ width: `${footprint.width}px`, height: `${footprint.height}px` });
-    expect(footprint.height).toBe(width * 44 / 480);
+    expect(footprint.height).toBe(Math.max(24, width * 44 / 480));
 
   });
+  it('centers several visible panels and their internal L1 overlay as one composition', () => {
+    const blueprint = projection.attributes.blueprint_presentation;
+    const compact = { ...projection, attributes: { ...projection.attributes, blueprint_presentation: {
+      ...blueprint, panels: [
+        { ...blueprint.panels[0], width: 50, height: 12 },
+        { ...blueprint.panels[1], x: 50, y: 2, width: 50, height: 12 },
+      ],
+    } } };
+    render(<DeviceNode {...({ data: {
+      projection: compact, compositionDisplayWidth: 100,
+      traceHighlightedConnectionMemberIds: new Set(['member-1']),
+    }, selected: false, width: 192 } as any)} />);
+    const card = screen.getByTestId('blueprint-map-node');
+    const composition = card.querySelector('.blueprint-map-node__body')!;
+    expect(card).toHaveStyle({ height: '24px' });
+    expect(composition).toHaveStyle({ top: '5px', height: '14px' });
+    expect(screen.getByTestId('blueprint-panel-front')).toHaveStyle({ top: '0%' });
+    expect(screen.getByTestId('blueprint-panel-rear')).toHaveStyle({ top: (2 / 14 * 100) + '%' });
+    const line = screen.getByTestId('internal-l1-line-member-1');
+    expect(composition).toContainElement(line);
+    expect(line).toHaveAttribute('y1', '3');
+    expect(line).toHaveAttribute('y2', '11');
+    expect(line).toHaveClass('internal-l1-continuity__line--trace-highlighted');
+  });
+
   it('uses local module names in spatial markers even when detached point names are contextual', () => {
     const slots = [1, 2].flatMap(installation => [1, 2].map(port => ({
       ...projection.attributes.blueprint_presentation.slots[0],

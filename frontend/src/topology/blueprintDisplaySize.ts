@@ -88,8 +88,13 @@ export const blueprintObjectLabelFontSize = (
   );
 };
 
+export const blueprintVerticalPlacement = (compositionHeight: number) => {
+  const frameHeight = Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, compositionHeight);
+  return { frameHeight, offsetY: (frameHeight - compositionHeight) / 2 };
+};
+
 /** Complete three-zone footprint; displayWidth always describes the composition. */
 export const blueprintRenderedNodeDimensions = (presentation: BlueprintPresentation, displayWidth: number | undefined, frameWidth?: number) => {
   const body = blueprintNodeDisplayDimensions(presentation, displayWidth);
-  return { width: Math.max(frameWidth ?? 0, body.width + OBJECT_SIDE_ZONES_WIDTH), height: Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, body.height) };
+  return { width: Math.max(frameWidth ?? 0, body.width + OBJECT_SIDE_ZONES_WIDTH), height: blueprintVerticalPlacement(body.height).frameHeight };
 };

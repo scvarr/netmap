@@ -1,5 +1,5 @@
 import type { XYPosition } from '@xyflow/react';
-import { blueprintNodeDisplayDimensions, MIN_BLUEPRINT_FRAME_HEIGHT, OBJECT_NAME_ZONE_WIDTH, OBJECT_SIDE_ZONES_WIDTH } from './blueprintDisplaySize';
+import { blueprintNodeDisplayDimensions, blueprintVerticalPlacement, OBJECT_NAME_ZONE_WIDTH, OBJECT_SIDE_ZONES_WIDTH } from './blueprintDisplaySize';
 import type { BlueprintPresentation } from './types';
 
 export const OBJECT_CHANNEL_RAIL_OFFSET = 8;
@@ -19,7 +19,7 @@ export interface ObjectVirtualChannels {
 }
 
 export function objectVirtualChannelExit(body: { width: number; height: number }, frameWidth: number): XYPosition {
-  return { x: Math.max(frameWidth, body.width + OBJECT_SIDE_ZONES_WIDTH), y: Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, body.height) / 2 };
+  return { x: Math.max(frameWidth, body.width + OBJECT_SIDE_ZONES_WIDTH), y: blueprintVerticalPlacement(body.height).frameHeight / 2 };
 }
 
 /** Object-local directed segments. A port points to its first segment and every
@@ -30,6 +30,7 @@ export function objectVirtualChannels(
   frameWidth: number,
 ): ObjectVirtualChannels {
   const body = blueprintNodeDisplayDimensions(presentation, compositionDisplayWidth);
+  const { frameHeight, offsetY } = blueprintVerticalPlacement(body.height);
   const exit = objectVirtualChannelExit(body, frameWidth);
   const junction = { x: exit.x - OBJECT_CHANNEL_RAIL_OFFSET, y: exit.y };
   const segments: VirtualChannelSegment[] = [];
@@ -42,14 +43,14 @@ export function objectVirtualChannels(
   const ports = presentation.slots.map(slot => ({
     id: slot.connection_point_id,
     x: OBJECT_NAME_ZONE_WIDTH + body.width * slot.rendered_position.x,
-    y: body.height * slot.rendered_position.y,
+    y: offsetY + body.height * slot.rendered_position.y,
   }));
   if (!ports.length) return { exit, segments, paths };
   const outlet = add(junction, exit, null);
   for (const top of [true, false]) {
     const side = ports.filter(port => (port.y <= exit.y) === top);
     if (!side.length) continue;
-    const railY = top ? -OBJECT_CHANNEL_RAIL_OFFSET : Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, body.height) + OBJECT_CHANNEL_RAIL_OFFSET;
+    const railY = top ? -OBJECT_CHANNEL_RAIL_OFFSET : frameHeight + OBJECT_CHANNEL_RAIL_OFFSET;
     let railPoint = { x: junction.x, y: railY };
     let rail = add(railPoint, junction, outlet);
     const leadByX = new Map<number, VirtualChannelSegment>();

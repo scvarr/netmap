@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, blueprintNodeDisplayDimensions, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth, panelCompositionBounds } from './blueprintDisplaySize';
+import { DEFAULT_BLUEPRINT_DISPLAY_WIDTH, blueprintNodeDisplayDimensions, clampBlueprintDisplayWidth, minimumBlueprintDisplayWidth, panelCompositionBounds, blueprintVerticalPlacement } from './blueprintDisplaySize';
 import type { BlueprintPresentation } from './types';
 
 const presentation = (panels: BlueprintPresentation['panels'], positions: Array<{ x: number; y: number }> = []): BlueprintPresentation => ({
@@ -11,6 +11,12 @@ const presentation = (panels: BlueprintPresentation['panels'], positions: Array<
 const first = { panel_key: 'a', panel_number: 1, display_name: 'Panel 1', x: 0, y: 0, width: 8, height: 1 };
 
 describe('Blueprint composition display dimensions', () => {
+  it.each([[12, 24, 6], [24, 24, 0], [48, 48, 0]])(
+    'places a composition of height %s in a frame of height %s', (height, frameHeight, offsetY) => {
+      expect(blueprintVerticalPlacement(height)).toEqual({ frameHeight, offsetY });
+    },
+  );
+
   it('sizes one panel from its composition aspect ratio', () => {
     expect(blueprintNodeDisplayDimensions(presentation([first]), undefined)).toEqual({ width: DEFAULT_BLUEPRINT_DISPLAY_WIDTH, height: 30 });
   });

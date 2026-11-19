@@ -1,7 +1,7 @@
 import { fireEvent, render, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { blueprintFace } from '../topology/physicalFaces';
-import { ForegroundCableRoutes } from './FloatingTopologyEdge';
+import { ForegroundCableRoutes, getConnectionPointEndpoint } from './FloatingTopologyEdge';
 import { blueprintRenderedNodeDimensions } from '../topology/blueprintDisplaySize';
 import type { BlueprintPresentation } from '../topology/types';
 
@@ -88,17 +88,23 @@ describe('cable route edge interaction', () => {
 
   it('ends at a hidden port object boundary and keeps canonical Cable selection and trace', () => {
     const entry = (id: string, x: number) => blueprintNode(id, x, id, {
-      connectionPointId: id + '-port', kind: 'CONNECTION_POINT', renderedX: .15, attachmentX: 0, side: 'LEFT',
+      connectionPointId: id + '-port', kind: 'CONNECTION_POINT', renderedX: .25, attachmentX: 0, side: 'LEFT',
     });
     const left = entry('left', 0), right = entry('right', 420);
     const blueprint = left.data.projection.attributes.blueprint_presentation as BlueprintPresentation;
     blueprint.panels[0].face = 'REAR';
-    blueprint.panels.push({ ...blueprint.panels[0], panel_key: 'front', panel_number: 2, y: 100, height: 50, face: 'FRONT' });
+    blueprint.panels[0].height = 37.5;
+    blueprint.slots[0].panel_local_position.y = .25;
+    blueprint.panels.push({ ...blueprint.panels[0], panel_key: 'front', panel_number: 2, y: 37.5, height: 100, face: 'FRONT' });
     const rearFace = blueprintFace(blueprint, 'REAR')!;
     const frontFace = blueprintFace(blueprint, 'FRONT')!;
     left.measured = blueprintRenderedNodeDimensions(rearFace.visibleBlueprint, 32);
     right.measured = blueprintRenderedNodeDimensions(right.data.projection.attributes.blueprint_presentation, 32);
     const hiddenDimensions = blueprintRenderedNodeDimensions(frontFace.visibleBlueprint, 32);
+    expect(getConnectionPointEndpoint(left.data.projection, {
+      x: 0, y: 0, ...left.measured, compositionDisplayWidth: 32,
+    }, 'left-port', rearFace.visibleBlueprint)).toMatchObject({ x: 72, y: 9 });
+
     const member = (id: string, x: number, dimensions: typeof left.measured) => ({
       id: 'PhysicalObject:' + id, kind: 'blueprint-object' as const, edge: 'right' as const,
       bounds: { x, y: 0, ...dimensions }, point: { x: x + dimensions.width, y: dimensions.height / 2 },
@@ -119,6 +125,8 @@ describe('cable route edge interaction', () => {
       const paths = (selector: string) => [...view.container.querySelectorAll(selector)].map(path => path.getAttribute('d')).sort();
       const preview = paths('path[data-preview]');
       expect(preview.length).toBeGreaterThan(2);
+      expect(preview.some(path => path?.startsWith('M 80 9 L '))).toBe(true);
+      expect(view.container.querySelector('circle[data-connection-point-id="left-port"]')).toHaveAttribute('cy', '9');
       view.rerender(<ForegroundCableRoutes edges={[edge]} virtualChannels locationInputs={inputs()} onCableSelect={onSelect} />);
       expect(paths('path[data-cable-ids*="canonical"]')).toEqual(preview);
 

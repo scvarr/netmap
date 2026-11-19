@@ -9,7 +9,7 @@ import { internalL1Segments } from '../topology/internalL1Presentation';
 import { physicalPortPaint, tracedPortIds } from '../topology/physicalPortPresentation';
 import { PhysicalFaceIndicator } from './PhysicalFaceControls';
 import { InternalL1Continuity } from './InternalL1Continuity';
-import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, OBJECT_SIDE_ZONES_WIDTH, MIN_BLUEPRINT_FRAME_HEIGHT, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
+import { BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, OBJECT_SIDE_ZONES_WIDTH, blueprintVerticalPlacement, blueprintNodeDisplayDimensions, minimumBlueprintDisplayWidth, panelCompositionBounds } from '../topology/blueprintDisplaySize';
 
 type DeviceFlowNode = Node<DeviceNodeData, 'device'>;
 
@@ -32,7 +32,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
   };
   if (physical && blueprint) {
     const { width: displayWidth, height: displayHeight } = blueprintNodeDisplayDimensions(blueprint, data.compositionDisplayWidth);
-    const frameHeight = Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, displayHeight);
+    const { frameHeight, offsetY } = blueprintVerticalPlacement(displayHeight);
     const frameWidth = Math.max(width ?? 0, displayWidth + OBJECT_SIDE_ZONES_WIDTH);
     const cableWidth = frameWidth - OBJECT_NAME_ZONE_WIDTH - displayWidth;
     const bounds = panelCompositionBounds(blueprint.panels);
@@ -43,8 +43,8 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       style={{ display: selected && data.blueprintResizeEnabled && blueprint.panels.length > 0 ? undefined : "none" }}
       minWidth={minimumBlueprintDisplayWidth(blueprint) + OBJECT_SIDE_ZONES_WIDTH}
       maxWidth={960 + OBJECT_SIDE_ZONES_WIDTH}
-      minHeight={Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, blueprintNodeDisplayDimensions(blueprint, minimumBlueprintDisplayWidth(blueprint)).height)}
-      maxHeight={Math.max(MIN_BLUEPRINT_FRAME_HEIGHT, blueprintNodeDisplayDimensions(blueprint, 960).height)}
+      minHeight={blueprintVerticalPlacement(blueprintNodeDisplayDimensions(blueprint, minimumBlueprintDisplayWidth(blueprint)).height).frameHeight}
+      maxHeight={blueprintVerticalPlacement(blueprintNodeDisplayDimensions(blueprint, 960).height).frameHeight}
 
       className="blueprint-map-node__resizer-handle"
       onResizeStart={() => { resizeStart.current = { frameWidth, displayWidth }; }}
@@ -60,7 +60,7 @@ export function DeviceNode({ data, selected, width }: NodeProps<DeviceFlowNode>)
       {faceIndicator}
       {data.locationPresentationPath && <span className="blueprint-map-node__location">{data.locationPresentationPath}</span>}
     </strong>
-    <div className="blueprint-map-node__body" style={{ height: displayHeight }}>
+    <div className="blueprint-map-node__body" style={{ height: displayHeight, top: offsetY }}>
     <div className="blueprint-map-node__panels">
       {blueprint.panels.map((panel) => {
         return <section key={panel.panel_key} className="blueprint-map-node__panel" data-testid={`blueprint-panel-${panel.panel_key}`} style={{ left: `${(panel.x - bounds.x) / bounds.width * 100}%`, top: `${(panel.y - bounds.y) / bounds.height * 100}%`, width: `${panel.width / bounds.width * 100}%`, height: `${panel.height / bounds.height * 100}%`, background: blueprint.body.fill_color ?? '#18383a' }}>

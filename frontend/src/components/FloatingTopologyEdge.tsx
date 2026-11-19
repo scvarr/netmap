@@ -16,7 +16,7 @@ import {
   type LogicalFlowEdge,
 } from '../topology/layout';
 import { genericConnectionPoints, genericEndpointOffset } from '../topology/genericEndpointPresentation';
-import { BLUEPRINT_PORT_HIT_SIZE, BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, blueprintNodeDisplayDimensions } from '../topology/blueprintDisplaySize';
+import { BLUEPRINT_PORT_HIT_SIZE, BLUEPRINT_PORT_SIZE, BLUEPRINT_PORT_STROKE, OBJECT_NAME_ZONE_WIDTH, blueprintNodeDisplayDimensions, blueprintVerticalPlacement } from '../topology/blueprintDisplaySize';
 import { cableIdForNode, physicalObjectIdForNode } from '../topology/projection';
 import { objectVirtualChannels, type ObjectVirtualChannels, type VirtualChannelSegment } from '../topology/objectVirtualChannels';
 import { buildHierarchicalCableChannels, hierarchicalLocationPath, type LocationChannelInput } from '../topology/hierarchicalCableRoutes';
@@ -95,7 +95,7 @@ export const getConnectionPointEndpoint = (
     const composition = blueprintNodeDisplayDimensions(presentation, box.compositionDisplayWidth);
     return {
       x: box.x + OBJECT_NAME_ZONE_WIDTH + composition.width * slot.external_attachment.x,
-      y: box.y + composition.height * slot.external_attachment.y,
+      y: box.y + blueprintVerticalPlacement(composition.height).offsetY + composition.height * slot.external_attachment.y,
       side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
     };
   }
@@ -116,7 +116,7 @@ export const getRenderedConnectionPoint = (
   const side = slot.external_attachment.side;
   return {
     x: box.x + OBJECT_NAME_ZONE_WIDTH + composition.width * slot.rendered_position.x,
-    y: box.y + composition.height * slot.rendered_position.y,
+    y: box.y + blueprintVerticalPlacement(composition.height).offsetY + composition.height * slot.rendered_position.y,
     side: side === 'LEFT' ? Position.Left : side === 'RIGHT' ? Position.Right : side === 'TOP' ? Position.Top : Position.Bottom,
   };
 };
@@ -336,9 +336,10 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
     const blueprint = node.data.facePresentation?.visibleBlueprint ?? projection.attributes.blueprint_presentation;
     if (blueprint) {
       const body = blueprintNodeDisplayDimensions(blueprint, box.compositionDisplayWidth);
+      const { offsetY } = blueprintVerticalPlacement(body.height);
       return blueprint.slots.map(slot => ({
         x: box.x + OBJECT_NAME_ZONE_WIDTH + body.width * slot.rendered_position.x,
-        y: box.y + body.height * slot.rendered_position.y,
+        y: box.y + offsetY + body.height * slot.rendered_position.y,
         radius: BLUEPRINT_PORT_HIT_SIZE / 2,
       }));
     }
