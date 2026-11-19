@@ -19,6 +19,7 @@ import type { FaceOverride, FaceTarget } from '../topology/savedMapTypes';
 import { QuickInspector } from "../components/QuickInspector";
 import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
 import { CableRenameDialog } from "../components/CableRenameDialog";
+import { BulkCableCreateDialog } from "../components/BulkCableCreateDialog";
 import { BulkCableDeleteDialog } from "../components/BulkCableDeleteDialog";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
@@ -154,13 +155,6 @@ interface WiringEndpoint { physicalObjectId: string; connectionPointId: string; 
 interface WiringDraft { mapId: string; source: WiringEndpoint; }
 interface WiringOperation extends WiringDraft { target: WiringEndpoint; naming: CableNamingInput; error: string | null; }
 type WiringState = { status: "idle" } | { status: "selecting-source"; mapId: string } | ({ status: "selecting-target" } & WiringDraft) | ({ status: "confirming" | "creating" | "refresh-failed" } & WiringOperation);
-interface BulkWiringState {
-  mapId: string; sourceObjectId: string; source: WiringEndpoint[]; destination: WiringEndpoint[];
-  stage: 'source' | 'destination' | 'preview' | 'creating' | 'refresh-failed';
-  templateId: string | null; labels: { label: string; historical: boolean }[];
-  confirmedHistorical: string[]; error: string | null;
-}
-
 const view = (value: string | null): TopologyViewMode =>
   value === "physical" ? "physical" : "logical";
 const savedMapViewKey = (value: SavedMapView): SavedMapViewKey =>
@@ -168,8 +162,6 @@ const savedMapViewKey = (value: SavedMapView): SavedMapViewKey =>
 const natural = (left: string, right: string) =>
   left.localeCompare(right, undefined, { numeric: true, sensitivity: "base" });
 const errorMessage = (_reason: unknown, fallback: string) => fallback;
-const isInteractiveKeyboardTarget = (target: EventTarget | null) =>
-  target instanceof Element && Boolean(target.closest('input, textarea, select, button, [contenteditable="true"], [role="textbox"], [role="combobox"], [role="listbox"], [role="menu"], [role="menuitem"], [role="dialog"]'));
 const emptyPhysicalDocument: TopologyProjectionDocument = {
   schema_version: "1.0",
   layer: "L1",
@@ -310,10 +302,10 @@ function MapPageContent({
   const [wiringHistoricalCandidate, setWiringHistoricalCandidate] = useState<string | null>(null);
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
   const [showAllVirtualChannels, setShowAllVirtualChannels] = useState(false);
-  const [bulkWiring, setBulkWiring] = useState<BulkWiringState | null>(null);
+  const [bulkSourceId, setBulkSourceId] = useState<string | null>(null);
+  useLayoutEffect(() => setBulkSourceId(null), [traceScope]);
   const [bulkDeleteSourceId, setBulkDeleteSourceId] = useState<string | null>(null);
   useLayoutEffect(() => setBulkDeleteSourceId(null), [traceScope]);
-  const [bulkTemplates, setBulkTemplates] = useState<{ id: string; name: string }[]>([]);
   const [annotationMode, setAnnotationMode] = useState(false);
   const [selectedTextAnnotationId, setSelectedTextAnnotationId] = useState<string | null>(null);
   const [textAnnotationEdit, setTextAnnotationEdit] = useState<TextAnnotationOperation | null>(null);
@@ -430,7 +422,7 @@ function MapPageContent({
       setContinuationAnchor(null);
       setMapOperation(null);
       setWiring({ status: "idle" });
-      setBulkWiring(null);
+      setBulkSourceId(null);
       setParams((current) => {
         const next = new URLSearchParams(current);
         next.set("map", id);
@@ -455,7 +447,7 @@ function MapPageContent({
     setContinuationAnchor(null);
     setMapOperation(null);
     setWiring({ status: "idle" });
-    setBulkWiring(null);
+    setBulkSourceId(null);
     setParams((current) => {
       const next = new URLSearchParams(current);
       next.delete("map");
@@ -885,7 +877,7 @@ function MapPageContent({
   const setViewMode = (nextView: TopologyViewMode) => {
     setContextAnchor(null);
     if (nextView !== "physical") setWiring({ status: "idle" });
-    if (nextView !== "physical") setBulkWiring(null);
+    if (nextView !== "physical") setBulkSourceId(null);
     setParams((current) => {
       const next = new URLSearchParams(current);
       next.set("view", nextView);
@@ -901,29 +893,19 @@ function MapPageContent({
     return { physicalObjectId: candidate.physicalObjectId, connectionPointId: point.connection_point_id, objectLabel: node.label, portLabel: point.display_name || candidate.label };
   };
   const physicalPortStates = useMemo(() => {
-    if (wiring.status === "idle" && !bulkWiring) return undefined;
+    if (wiring.status === "idle") return undefined;
     const states: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'> = {};
     for (const node of document?.nodes ?? []) {
       if (node.kind !== "PHYSICAL_OBJECT" || node.attributes.class === "cable") continue;
       for (const point of node.attributes.connection_points ?? []) states[point.connection_point_id] = isAvailablePhysicalPort(point) ? "eligible" : "unavailable";
       for (const slot of node.attributes.blueprint_presentation?.slots ?? []) if (!states[slot.connection_point_id]) states[slot.connection_point_id] = "unavailable";
     }
-    if (bulkWiring) {
-      for (const node of document?.nodes ?? []) for (const point of node.attributes.connection_points ?? []) {
-        const owner = physicalObjectIdForNode(node);
-        if (bulkWiring.stage === 'source' && owner !== bulkWiring.sourceObjectId) states[point.connection_point_id] = 'unavailable';
-        if ((bulkWiring.stage === 'destination' || bulkWiring.stage === 'preview') && (owner === bulkWiring.sourceObjectId || (bulkWiring.destination[0] && owner !== bulkWiring.destination[0].physicalObjectId))) states[point.connection_point_id] = 'unavailable';
-      }
-      for (const point of bulkWiring.source) states[point.connectionPointId] = 'source';
-      for (const point of bulkWiring.destination) states[point.connectionPointId] = 'destination';
-      return states;
-    }
-    const source = wiring.status !== "idle" && wiring.status !== "selecting-source" ? wiring.source : null;
-    const target = wiring.status !== "idle" && wiring.status !== "selecting-source" && wiring.status !== "selecting-target" ? wiring.target : null;
+    const source = wiring.status !== "selecting-source" ? wiring.source : null;
+    const target = wiring.status !== "selecting-source" && wiring.status !== "selecting-target" ? wiring.target : null;
     if (source) states[source.connectionPointId] = "source";
     if (target) states[target.connectionPointId] = "destination";
     return states;
-  }, [document, wiring, bulkWiring]);
+  }, [document, wiring]);
   const wiringInternalContinuity = useMemo(() => {
     if (wiring.status === "idle" || wiring.status === "selecting-source") return { members: new Set<string>(), points: new Set<string>() };
     const node = (document?.nodes ?? []).find((item) => physicalObjectIdForNode(item) === wiring.source.physicalObjectId);
@@ -935,73 +917,9 @@ function MapPageContent({
     return { members, points };
   }, [document, wiring]);
   const onPhysicalPortClick = (candidate: { physicalObjectId: string; connectionPointId: string; label: string }) => {
-    if (bulkWiring) {
-      if (bulkWiring.stage !== 'source' && bulkWiring.stage !== 'destination' && bulkWiring.stage !== 'preview') return;
-      const endpoint = endpointFor(candidate);
-      if (!endpoint) return;
-      if (bulkWiring.stage === 'source') {
-        if (endpoint.physicalObjectId !== bulkWiring.sourceObjectId) return;
-        const source = bulkWiring.source.some((point) => point.connectionPointId === endpoint.connectionPointId)
-          ? bulkWiring.source.filter((point) => point.connectionPointId !== endpoint.connectionPointId)
-          : [...bulkWiring.source, endpoint];
-        setBulkWiring({ ...bulkWiring, source });
-      } else {
-        if (endpoint.physicalObjectId === bulkWiring.sourceObjectId || (bulkWiring.destination[0] && endpoint.physicalObjectId !== bulkWiring.destination[0].physicalObjectId)) return;
-        const already = bulkWiring.destination.some((point) => point.connectionPointId === endpoint.connectionPointId);
-        if (!already && bulkWiring.destination.length >= bulkWiring.source.length) return;
-        const destination = already ? bulkWiring.destination.filter((point) => point.connectionPointId !== endpoint.connectionPointId) : [...bulkWiring.destination, endpoint];
-        setBulkWiring({ ...bulkWiring, destination, stage: destination.length === bulkWiring.source.length ? 'preview' : 'destination', templateId: null, labels: [], confirmedHistorical: [] });
-      }
-      return;
-    }
     if (wiring.status === "selecting-source") { const source = endpointFor(candidate); if (source) setWiring({ status: "selecting-target", mapId: wiring.mapId, source }); }
     else if (wiring.status === "selecting-target") { const target = endpointFor(candidate, wiring.source.connectionPointId); if (target) setWiring({ ...wiring, status: "confirming", target, naming: { cable_label: null, cable_label_template_id: null, generate_cable_label: false }, error: null }); }
   };
-  const loadBulkLabels = async (operation: BulkWiringState, templateId: string | null) => {
-    if (!templateId) { setBulkWiring({ ...operation, templateId: null, labels: [], confirmedHistorical: [], error: null }); return; }
-    try {
-      const preview = await physicalEndpointConnectionWriteDataSource?.previewBulkCableLabels?.(templateId, operation.source.length);
-      if (!preview) throw new Error('Preview unavailable');
-      setBulkWiring((current) => current?.mapId === operation.mapId ? { ...current, templateId, labels: preview.labels, confirmedHistorical: [], error: null } : current);
-    } catch { setBulkWiring((current) => current?.mapId === operation.mapId ? { ...current, templateId, labels: [], error: t('map.bulk.previewFailed') } : current); }
-  };
-  const refreshBulkProjection = async (operation: BulkWiringState) => {
-    const currentMap = latestActiveMap.current;
-    if (!currentMap || currentMap.map_ref.entity_id !== operation.mapId) throw new Error('Map unavailable for refresh');
-    const next = await dataSource.loadProjection(projectionRequestFor('physical', currentMap.placements.map((item) => item.physical_object_ref.entity_id), true));
-    if (selectedMapId.current === operation.mapId && viewMode === 'physical') { setSceneDocument({ sceneKey: `${operation.mapId}/physical`, document: next }); setBulkWiring(null); }
-  };
-  const createBulkWiring = async (operation: BulkWiringState) => {
-    if (operation.stage !== 'preview' || !physicalEndpointConnectionWriteDataSource?.createBulkPhysicalConnections || (operation.templateId && operation.labels.length !== operation.source.length)) return;
-    if (operation.labels.some((item) => item.historical && !operation.confirmedHistorical.includes(item.label))) return;
-    setBulkWiring({ ...operation, stage: 'creating', error: null });
-    try {
-      await physicalEndpointConnectionWriteDataSource.createBulkPhysicalConnections({
-        pairs: operation.source.map((source, index) => ({ source: { kind: 'CONNECTION_POINT', connection_point_id: source.connectionPointId, member_index: 1 }, target: { kind: 'CONNECTION_POINT', connection_point_id: operation.destination[index].connectionPointId, member_index: 1 } })),
-        template_id: operation.templateId, expected_generated_labels: operation.labels.map((item) => item.label), confirmed_historical_labels: operation.confirmedHistorical,
-      });
-    } catch (reason) {
-      const stale = reason instanceof Error && reason.message.includes('BULK_LABEL_PREVIEW_STALE');
-      setBulkWiring({ ...operation, error: stale ? t('map.bulk.stale') : t('map.connectFailed') });
-      if (stale) void loadBulkLabels(operation, operation.templateId);
-      return;
-    }
-    try { await refreshBulkProjection(operation); }
-    catch { setBulkWiring({ ...operation, stage: 'refresh-failed', error: t('map.bulk.refreshFailed') }); }
-  };
-  useEffect(() => {
-    if (!bulkWiring) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (bulkWiring.stage === 'creating' || bulkWiring.stage === 'refresh-failed') return;
-      if (event.isComposing) return;
-      if (event.key === 'Escape') { event.preventDefault(); setBulkWiring(null); }
-      else if (isInteractiveKeyboardTarget(event.target)) return;
-      else if (event.key === 'Enter' && bulkWiring.stage === 'source' && bulkWiring.source.length > 0) { event.preventDefault(); setBulkWiring({ ...bulkWiring, stage: 'destination' }); }
-      else if (event.key === 'Enter' && bulkWiring.stage === 'preview') { event.preventDefault(); void createBulkWiring(bulkWiring); }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [bulkWiring]);
   const refreshWiringProjection = async (operation: WiringOperation): Promise<boolean> => {
     const currentMap = latestActiveMap.current;
     if (!currentMap || currentMap.map_ref.entity_id !== operation.mapId) return false;
@@ -1545,7 +1463,7 @@ function MapPageContent({
     },
     [],
   );
-  const contextBusy = wiring.status !== "idle" || Boolean(bulkWiring) || Boolean(bulkDeleteSourceId) || Boolean(insertion) || Boolean(mapDeletion) || Boolean(mapOperation);
+  const contextBusy = wiring.status !== "idle" || Boolean(bulkSourceId) || Boolean(bulkDeleteSourceId) || Boolean(insertion) || Boolean(mapDeletion) || Boolean(mapOperation);
   const refreshBulkCableDelete = async () => {
     if (!activeMap || !savedMapDataSource || !mapId || currentTraceScope.current !== traceScope) return;
     const request = ++mapDetailRequest.current;
@@ -1566,11 +1484,6 @@ function MapPageContent({
     setSceneDocument({ sceneKey: presentationSceneKey, document: next });
     setSelection(null);
     clearTrace();
-  };
-  const startBulkWiring = (sourceObjectId: string) => {
-    if (!activeMap || !physicalEndpointConnectionWriteDataSource?.createBulkPhysicalConnections || !document?.nodes.some((node) => physicalObjectIdForNode(node) === sourceObjectId)) return;
-    setBulkWiring({ mapId: activeMap.map_ref.entity_id, sourceObjectId, source: [], destination: [], stage: 'source', templateId: null, labels: [], confirmedHistorical: [], error: null });
-    void cableLabelDataSource?.loadCableLabelTemplates().then((value) => setBulkTemplates(value.templates), () => setBulkTemplates([]));
   };
   const openPortContext = (port: { physicalObjectId: string; connectionPointId: string; label: string }, screen: XYPosition) => {
     if (contextBusy || !physicalObjectDetailsDataSource) return;
@@ -1748,7 +1661,7 @@ function MapPageContent({
               <button type="button" onClick={() => setWiring({ status: "selecting-source", mapId: activeMap.map_ref.entity_id })} disabled={!document || !physicalEndpointConnectionWriteDataSource}>{t("map.connectPorts")}</button>
               <button type="button" aria-pressed={physicalAnnotationMode} onClick={() => { setAnnotationMode((active) => !active); setUtilitySection(null); }}>{t("map.textAnnotation")}</button>
               <button type="button" aria-pressed={showAllVirtualChannels}
-                disabled={!document || physicalAnnotationMode || wiring.status !== "idle" || Boolean(bulkWiring)}
+                disabled={!document || physicalAnnotationMode || wiring.status !== "idle" || Boolean(bulkSourceId)}
                 onClick={() => setShowAllVirtualChannels(value => !value)}>{t("map.virtualChannels")}</button>
             </div>}
           </section>
@@ -1881,15 +1794,21 @@ function MapPageContent({
           requestedObjectId={insertion.requestedObjectId}
         />
       )}
-      {bulkWiring?.mapId === mapId && <aside className="map-wiring-panel" aria-label={t('map.bulk.action')}>
-        <h3>{t('map.bulk.action')}</h3>
-        {bulkWiring.stage === 'source' && <><p>{t('map.bulk.source')}</p><ol>{bulkWiring.source.map((point) => <li key={point.connectionPointId}>{point.portLabel}</li>)}</ol><button disabled={!bulkWiring.source.length} onClick={() => setBulkWiring({ ...bulkWiring, stage: 'destination' })}>{t('map.bulk.next')}</button></>}
-        {bulkWiring.stage === 'destination' && <><p>{t('map.bulk.destination', { count: bulkWiring.source.length })}</p><ol>{bulkWiring.destination.map((point) => <li key={point.connectionPointId}>{point.portLabel}</li>)}</ol><button onClick={() => setBulkWiring({ ...bulkWiring, stage: 'source', destination: [], templateId: null, labels: [], confirmedHistorical: [] })}>{t('map.back')}</button></>}
-        {(bulkWiring.stage === 'preview' || bulkWiring.stage === 'creating') && <><p>{t('map.bulk.preview')}</p><ol>{bulkWiring.source.map((source, index) => <li key={source.connectionPointId}>{source.portLabel} → {bulkWiring.destination[index].portLabel}{bulkWiring.labels[index] && <> · {bulkWiring.labels[index].label}{bulkWiring.labels[index].historical && <strong> ({t('map.bulk.historical')})</strong>}</>}</li>)}</ol><label>{t('map.bulk.naming')} <select value={bulkWiring.templateId ?? ''} disabled={bulkWiring.stage === 'creating'} onChange={(event) => void loadBulkLabels(bulkWiring, event.target.value || null)}><option value="">{t('map.bulk.noNames')}</option>{bulkTemplates.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{bulkWiring.labels.filter((item) => item.historical).map((item) => <label key={item.label}><input type="checkbox" checked={bulkWiring.confirmedHistorical.includes(item.label)} onChange={(event) => setBulkWiring({ ...bulkWiring, confirmedHistorical: event.target.checked ? [...bulkWiring.confirmedHistorical, item.label] : bulkWiring.confirmedHistorical.filter((label) => label !== item.label) })} />{t('map.bulk.confirmHistorical', { name: item.label })}</label>)}<button disabled={bulkWiring.stage === 'creating' || Boolean(bulkWiring.templateId && bulkWiring.labels.length !== bulkWiring.source.length) || bulkWiring.labels.some((item) => item.historical && !bulkWiring.confirmedHistorical.includes(item.label))} onClick={() => void createBulkWiring(bulkWiring)}>{t('map.createCable')}</button><button disabled={bulkWiring.stage === 'creating'} onClick={() => setBulkWiring({ ...bulkWiring, stage: 'destination', destination: [], templateId: null, labels: [], confirmedHistorical: [] })}>{t('map.back')}</button></>}
-        {bulkWiring.stage === 'refresh-failed' && <><p role="alert">{t('map.bulk.refreshFailed')}</p><button onClick={() => void refreshBulkProjection(bulkWiring).catch(() => setBulkWiring(bulkWiring))}>{t('map.retryRefresh')}</button></>}
-        {bulkWiring.error && bulkWiring.stage !== 'refresh-failed' && <p role="alert">{bulkWiring.error}</p>}
-        {bulkWiring.stage !== 'refresh-failed' && <button disabled={bulkWiring.stage === 'creating'} onClick={() => setBulkWiring(null)}>{t('map.cancel')}</button>}
-      </aside>}
+      {bulkSourceId && activeMap && document && physicalObjectDetailsDataSource &&
+        physicalEndpointConnectionWriteDataSource?.createBulkPhysicalConnections &&
+        <BulkCableCreateDialog sourceId={bulkSourceId} nodes={document.nodes}
+          details={physicalObjectDetailsDataSource} writer={physicalEndpointConnectionWriteDataSource}
+          labelCatalog={cableLabelDataSource}
+          refresh={async () => {
+            const next = await dataSource.loadProjection(projectionRequestFor(
+              'physical', activeMap.placements.map(item => item.physical_object_ref.entity_id), true,
+            ));
+            if (currentTraceScope.current === traceScope) {
+              setSceneDocument({ sceneKey: presentationSceneKey, document: next });
+              clearTrace();
+            }
+          }}
+          close={() => { if (currentTraceScope.current === traceScope) setBulkSourceId(null); }} />}
       {(wiring.status === "selecting-source" || wiring.status === "selecting-target") && wiring.mapId === mapId && <aside className="map-wiring-panel" aria-label={t("map.connectPorts")}>
         {wiring.status === "selecting-source" && <p role="status">{t("map.wiring.source")}</p>}
         {wiring.status === "selecting-target" && <><p role="status">{t("map.wiring.target")}</p><p>{t("map.wiring.sourceLabel", { object: wiring.source.objectLabel, port: wiring.source.portLabel })}</p></>}
@@ -1923,7 +1842,7 @@ function MapPageContent({
         onApplyBlueprintSizeToSameBlueprint={(id) => void applySizeToSameBlueprint(id).catch((reason) => setError(errorMessage(reason, t("map.sizeFailed"))))}
         onRenameCable={catalogInventoryDataSource && cableLabelDataSource ? (id, label) => void beginCableRename(id, label) : undefined}
         onConnectFromPort={connectFromPort}
-        onBulkConnect={physicalEndpointConnectionWriteDataSource?.createBulkPhysicalConnections ? startBulkWiring : undefined}
+        onBulkConnect={activeMap && physicalObjectDetailsDataSource && physicalEndpointConnectionWriteDataSource?.createBulkPhysicalConnections ? setBulkSourceId : undefined}
         onBulkDeleteCables={activeMap && cableDeleteDataSource?.previewBulkDelete && cableDeleteDataSource.bulkDelete ? setBulkDeleteSourceId : undefined}
         onDisconnect={(connectionId, label) => void disconnectPort(connectionId, label).catch((reason) => setError(errorMessage(reason, t("map.disconnectFailed"))))}
         onDeleteObject={(id, label) => { if (window.confirm(t("map.context.deleteObjectConfirm", { name: label }))) void deletePhysicalObject(id).catch((reason) => setError(errorMessage(reason, t("map.deleteObjectFailed")))); }}
@@ -2049,11 +1968,9 @@ function MapPageContent({
                   viewportFitRevision={viewportFitRevision}
                   wiringRoute={!physicalAnnotationMode && (wiring.status === "selecting-target" || wiring.status === "confirming" || wiring.status === "creating") ? { source: wiring.source, target: wiring.status === "selecting-target" ? undefined : wiring.target } : undefined}
                   physicalPortStates={physicalAnnotationMode ? undefined : physicalPortStates}
-                  bulkPairs={bulkWiring?.stage === 'preview' || bulkWiring?.stage === 'creating' ? bulkWiring.source.map((source, index) => ({ source, target: bulkWiring.destination[index] })) : undefined}
-                  bulkPortNumbers={bulkWiring ? Object.fromEntries([...bulkWiring.source.map((point, index) => [point.connectionPointId, index + 1] as const), ...bulkWiring.destination.map((point, index) => [point.connectionPointId, index + 1] as const)]) : undefined}
                   wiringHighlightedConnectionMemberIds={wiringInternalContinuity.members}
                   wiringContinuationConnectionPointIds={wiringInternalContinuity.points}
-                  onPhysicalPortClick={!physicalAnnotationMode && (bulkWiring?.stage === 'source' || bulkWiring?.stage === 'destination' || bulkWiring?.stage === 'preview' || wiring.status === "selecting-source" || wiring.status === "selecting-target") ? onPhysicalPortClick : undefined}
+                  onPhysicalPortClick={!physicalAnnotationMode && (wiring.status === "selecting-source" || wiring.status === "selecting-target") ? onPhysicalPortClick : undefined}
                   onViewportCenterReady={
                     viewMode === "physical" ? receiveViewportCenter : undefined
                   }

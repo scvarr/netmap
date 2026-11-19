@@ -110,8 +110,6 @@ interface TopologyCanvasProps {
     anchor: XYPosition,
   ) => void;
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;
-  bulkPortNumbers?: Record<string, number>;
-  bulkPairs?: readonly { source: { physicalObjectId: string; connectionPointId: string }; target: { physicalObjectId: string; connectionPointId: string } }[];
   onPhysicalPortClick?: (port: { physicalObjectId: string; connectionPointId: string; label: string }) => void;
   wiringRoute?: { source: { physicalObjectId: string; connectionPointId: string }; target?: { physicalObjectId: string; connectionPointId: string } };
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
@@ -166,8 +164,6 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   onPaneClick,
   onContinuationClickAnchor,
   physicalPortStates,
-  bulkPortNumbers,
-  bulkPairs,
   onPhysicalPortClick,
   wiringRoute,
   wiringHighlightedConnectionMemberIds,
@@ -815,7 +811,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
         {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels}
           locationInputs={showLocationPresentation || (physicalObjectView && requireLocationChannels) ? [...locationChannels.values()] : undefined}
           zoom={frameUiZoom} showChannelTerminals={showChannelTerminals}
-          showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
+          showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
       </ReactFlow>
     </div>
   );

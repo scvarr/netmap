@@ -52,7 +52,7 @@ const physicalObjectIdentity = (node: TopologyProjectionNode): string | null => 
   return refs.length === 1 ? refs[0].entity_id : null;
 };
 
-const displayPointLabel = (point: ConnectionPointDetails, fallback: string): string => {
+export const displayPointLabel = (point: ConnectionPointDetails, fallback: string): string => {
   const technical = /^ConnectionPoint\s+(.+)$/i.exec(point.label.trim());
   if (point.panel_context) {
     return [point.panel_context.bay_name, point.panel_context.port_name].filter(Boolean).join(' / ');
@@ -194,7 +194,7 @@ interface PortRowProps {
   cableLabelDataSource?: CableLabelDataSource;
 }
 
-const attachmentLabel = (attachment: NonNullable<ConnectionPointDetails['external_physical_attachments']>[number], t: ReturnType<typeof useI18n>['t']): string => {
+export const attachmentLabel = (attachment: NonNullable<ConnectionPointDetails['external_physical_attachments']>[number], t: ReturnType<typeof useI18n>['t']): string => {
   const remote = [
     attachment.remote_physical_object_label,
     attachment.remote_panel_name,

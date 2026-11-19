@@ -114,7 +114,7 @@ export function BulkCableDeleteDialog({ sourceId, nodes, preview, remove, refres
         </div>}
         {chosen.length > maxBatch && <p role="alert">{t('map.bulkDelete.limit', { count: maxBatch })}</p>}
         {confirming && <p role="status">{t('map.bulkDelete.summary', { cables: chosen.length, connections: connectionCount })}</p>}
-        {stage !== 'choose' && sortedRows.length > 0 && <div className="catalog-table-wrap map-bulk-delete-table">
+        {stage !== 'choose' && sortedRows.length > 0 && <div className="catalog-table-wrap map-dialog-table">
           <table className="catalog-table">
             <thead><tr>
               {!confirming && <th scope="col">{t('map.bulkDelete.selected')}</th>}

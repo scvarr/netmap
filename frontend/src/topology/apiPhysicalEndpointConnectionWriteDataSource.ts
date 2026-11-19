@@ -5,6 +5,20 @@ import type {
 } from './physicalEndpointConnectionWriteTypes';
 import { historicalCableLabelError } from './historicalCableLabelReuse';
 
+export class BulkPhysicalConnectionError extends Error {
+  constructor(readonly status: number, readonly reason: string | undefined) {
+    super(reason ?? `HTTP ${status} while creating physical connections.`);
+  }
+}
+
+async function readBulkError(response: Response) {
+  const body: unknown = await response.json().catch(() => null);
+  const details = isObject(body) && isObject(body.error) ? body.error.details : null;
+  return new BulkPhysicalConnectionError(
+    response.status, isObject(details) && typeof details.reason === 'string' ? details.reason : undefined,
+  );
+}
+
 const DEFAULT_ENDPOINT = '/api/v1/topology/physical-connections';
 
 const isObject = (value: unknown): value is Record<string, unknown> => (
@@ -69,7 +83,6 @@ const readBackendError = async (response: Response): Promise<Error> => {
       && typeof body.error.code === 'string'
       && typeof body.error.message === 'string'
     ) {
-      if (isObject(body.error.details) && body.error.details.reason === 'BULK_LABEL_PREVIEW_STALE') return new Error('BULK_LABEL_PREVIEW_STALE');
       return historicalCableLabelError(body);
     }
   } catch {
@@ -92,7 +105,7 @@ implements PhysicalEndpointConnectionWriteDataSource {
 
   async createBulkPhysicalConnections(request: Parameters<NonNullable<PhysicalEndpointConnectionWriteDataSource['createBulkPhysicalConnections']>>[0]): Promise<{ created: { connection_id: string; cable_id: string }[] }> {
     const response = await fetch(`${this.endpoint}/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
-    if (!response.ok) throw await readBackendError(response);
+    if (!response.ok) throw await readBulkError(response);
     const body: unknown = await response.json();
     if (!isObject(body) || !Array.isArray(body.created) || body.created.length !== request.pairs.length || body.created.some((item: unknown) => !isObject(item) || typeof item.connection_id !== 'string' || typeof item.cable_id !== 'string')) malformed('invalid bulk creation response.');
     return { created: (body as Record<string, unknown>).created as { connection_id: string; cable_id: string }[] };

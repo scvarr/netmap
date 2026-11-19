@@ -119,7 +119,6 @@ button { font: inherit; }
 .cable-route-foreground--selected { stroke: #ffe600; }
 .cable-route-foreground--traced { stroke: #f0bd66; }
 .wiring-route-preview { stroke: #8d7aff; }
-.wiring-bulk-preview { stroke: #ffca66; stroke-dasharray: 7 5; }
 .cable-route-port-marker { fill: #18383a; stroke: #e6fffb; stroke-width: 1.25; }
 .cable-route-port-marker--wiring-eligible { stroke: #7be6ff; stroke-width: 2; filter: drop-shadow(0 0 2px #147d94); }.cable-route-port-marker--wiring-source { stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 3px #d65cff); }.cable-route-port-marker--wiring-destination { stroke: #fff; stroke-width: 2; filter: drop-shadow(0 0 3px #54e3b4); }.cable-route-port-marker--wiring-unavailable { opacity: .35; }
 .device-node:hover, .device-node--selected { border-color: #55e5b5; box-shadow: 0 0 0 2px rgba(85, 229, 181, .12), 0 14px 32px rgba(0, 0, 0, .3);  }
@@ -455,9 +454,14 @@ a { color: inherit; }
 .catalog-table tbody tr:last-child td { border-bottom: 0; }
 .catalog-table tbody tr:hover { background: #0d1d20; }
 .map-dialog__surface--bulk-delete { box-sizing: border-box; width: min(100%, 760px); }
-.map-bulk-delete-table { overflow: auto; min-height: 0; }
-.map-bulk-delete-table th, .map-bulk-delete-table td { padding: 6px 10px; overflow-wrap: anywhere; }
-.map-bulk-delete-table thead { position: sticky; top: 0; }
+.map-dialog-table { overflow: auto; min-height: 0; }
+.map-dialog-table th, .map-dialog-table td { padding: 6px 10px; overflow-wrap: anywhere; }
+.map-dialog-table thead { position: sticky; top: 0; }
+.map-dialog__surface--bulk-create { box-sizing: border-box; width: min(100%, 1040px); max-height: calc(100dvh - 40px); }
+.bulk-create-ports { max-height: min(40dvh, 440px); margin-block: 8px; }
+.bulk-create-pairs { max-height: min(52dvh, 560px); }
+.bulk-create-controls { margin-block: 8px; justify-content: flex-start; align-items: end; }
+.bulk-create-controls select, .bulk-create-pairs select { max-width: 100%; }
 .catalog-table td:first-child a { color: #e0eeeb; font: 700 13px ui-monospace, "Cascadia Code", monospace; text-decoration: none; }
 .catalog-table td:nth-child(2) strong { display: block; color: #b8cbc8; font-size: 10px; }
 .catalog-table td:nth-child(2) code { display: block; margin-top: 4px; color: #647b7d; font-size: 9px; }

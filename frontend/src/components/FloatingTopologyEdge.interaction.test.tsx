@@ -72,8 +72,6 @@ describe('cable route edge interaction', () => {
         .map(path => path.dataset.routeSegment).sort();
       const preview = keys('path[data-preview]');
       expect(preview.length).toBeGreaterThan(2);
-      view.rerender(<ForegroundCableRoutes edges={[a]} virtualChannels locationInputs={[input]} bulkPairs={[wiring]} />);
-      expect(keys('path[data-testid="bulk-pair-preview"]')).toEqual(preview);
       view.rerender(<ForegroundCableRoutes edges={[a, b]} virtualChannels locationInputs={[input]} showAllVirtualChannels />);
       expect(keys('path[data-cable-ids*="canonical-b"]')).toEqual(preview);
       const shared = keys('path[data-cable-ids*="canonical-a"][data-cable-ids*="canonical-b"]');
@@ -286,28 +284,6 @@ describe('cable route edge interaction', () => {
     for (const state of ['eligible', 'source', 'destination', 'unavailable']) {
       expect(container.querySelector(`.cable-route-port-marker--wiring-${state}`)).toBeInTheDocument();
     }
-  });
-
-  it('centers compact bulk numbers above both marker shapes', () => {
-    const blueprintSource = blueprintNode('source', 0, 'source-object', { connectionPointId: 'source-port', kind: 'NETWORK_PORT', renderedX: .25, attachmentX: 1, side: 'RIGHT' });
-    const blueprintTarget = blueprintNode('target', 300, 'target-object', { connectionPointId: 'target-port', kind: 'CONNECTION_POINT', renderedX: .75, attachmentX: 0, side: 'LEFT' });
-    withNodes({ source: blueprintSource, target: blueprintTarget }, () => {
-      const { container } = render(<ForegroundCableRoutes edges={[]} bulkPortNumbers={{ 'source-port': 1, 'target-port': 12 }} />);
-      for (const [number, shape] of [['1', 'rect'], ['12', 'circle']] as const) {
-        const label = [...container.querySelectorAll('text')].find((item) => item.textContent === number);
-        const marker = label?.parentElement?.querySelector(shape);
-        expect(label).toBeInTheDocument();
-        expect(marker).toBeInTheDocument();
-        const centerX = shape === 'rect' ? Number(marker?.getAttribute('x')) + Number(marker?.getAttribute('width')) / 2 : Number(marker?.getAttribute('cx'));
-        const centerY = shape === 'rect' ? Number(marker?.getAttribute('y')) + Number(marker?.getAttribute('height')) / 2 : Number(marker?.getAttribute('cy'));
-        expect(Number(label?.getAttribute('x'))).toBe(centerX);
-        expect(Number(label?.getAttribute('y'))).toBe(centerY - 8);
-        expect(label).toHaveAttribute('text-anchor', 'middle');
-        expect(label).toHaveAttribute('font-size', '8');
-        expect(label).toHaveAttribute('font-weight', '700');
-        expect(label).toHaveAttribute('stroke-width', '1');
-      }
-    });
   });
 
   it('uses Blueprint rendered ports directly when virtual channels are disabled', () => {
