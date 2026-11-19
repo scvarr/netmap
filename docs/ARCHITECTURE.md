@@ -20,6 +20,22 @@ endpoint. Exactly-once write: после успешной mutation и ошибк
 
 ## PhysicalObject, endpoints, Cable и Connection
 
+Массовое удаление Cable запускается из контекстного меню PhysicalObject
+на физической карте. Второй объект выбирается из объектов текущей карты.
+`GET /v1/cables/bulk-delete-preview` читает прямые канонические подключения
+указанной пары. Лицевая сторона в таблице определяется по сопоставлению
+ConnectionPoint с панелью опубликованного оборудования. Выбор и подтверждение
+хранят идентификаторы Cable и показывают точное число их Connection.
+
+`POST /v1/cables/bulk-delete` принимает пару объектов и от 1 до 256 уникальных
+Cable с ожидаемыми Connection, ConnectionPoint, ConnectionMember и label.
+Сервер блокирует затронутые строки PostgreSQL, проверяет весь набор и в одной
+транзакции выполняет штатное удаление Cable вместе с его Connection,
+освобождая занятость и имя с сохранением истории имени. При изменении состава
+или конфликте запрос отклоняется целиком с HTTP 409. После HTTP 204 карта
+перечитывает проекцию, текущий вариант и связанные данные. Повтор обновления
+после ошибки чтения выполняет только чтение.
+
 PhysicalObject — физический объект, ConnectionPoint — физическая точка;
 NetworkInterface — отдельная сетевая сущность. CONNECTION_POINT materializes
 point; NETWORK_PORT materializes point и interface с ownership/binding.

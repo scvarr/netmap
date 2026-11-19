@@ -1134,6 +1134,44 @@ class CreateBulkPhysicalConnectionsRequest(BaseModel):
     confirmed_historical_labels: list[str] = Field(default_factory=list)
 
 
+class BulkCableDeleteMember(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: uuid.UUID
+    index: int = Field(ge=1)
+    point_a_member: int = Field(ge=1)
+    point_b_member: int = Field(ge=1)
+
+
+class BulkCableDeleteExpectation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    cable_id: uuid.UUID
+    connection_id: uuid.UUID
+    point_a_id: uuid.UUID
+    point_b_id: uuid.UUID
+    cardinality: int = Field(ge=1)
+    members: list[BulkCableDeleteMember] = Field(min_length=1)
+    label: str | None = Field(max_length=255)
+
+
+class BulkCableDeleteCandidate(BaseModel):
+    expected: BulkCableDeleteExpectation
+    display_label: str
+    source_point_label: str
+    target_point_label: str
+    source_is_point_a: bool
+
+
+class BulkCableDeletePreview(BaseModel):
+    cables: list[BulkCableDeleteCandidate]
+
+
+class BulkCableDeleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    source_object_id: uuid.UUID
+    target_object_id: uuid.UUID
+    cables: list[BulkCableDeleteExpectation] = Field(min_length=1, max_length=256)
+
+
 class BulkCableLabelPreviewItem(BaseModel):
     label: str
     historical: bool

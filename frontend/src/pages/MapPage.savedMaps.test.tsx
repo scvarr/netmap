@@ -81,7 +81,7 @@ describe('MapPage SavedMap scope', () => {
     }, '/map?map=' + A + '&view=physical');
 
     const canvas = await screen.findByTestId('canvas');
-    const click = (name: string) => fireEvent.click(screen.getByRole('button', { name, exact: true }));
+    const click = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
     const priority = (ownsFaces: boolean) => expect(canvas).toHaveAttribute('data-trace-owns-faces', String(ownsFaces));
     click('unknown trace');
     click('Rear Cable');

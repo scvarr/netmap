@@ -18,6 +18,7 @@ interface MapContextMenuProps {
   onRenameCable?: (id: string, label: string) => void; onDeleteCable?: (id: string, label: string) => void;
   onConnectFromPort?: (objectId: string, connectionPointId: string) => void; onDisconnect?: (connectionId: string, label: string) => void;
   onBulkConnect?: (objectId: string) => void;
+  onBulkDeleteCables?: (objectId: string) => void;
 }
 export function MapContextMenu({ target, onClose, ...actions }: MapContextMenuProps) {
   const { t } = useI18n(); const ref = useRef<HTMLDivElement>(null); const [position, setPosition] = useState(target.screen);
@@ -31,5 +32,6 @@ export function MapContextMenu({ target, onClose, ...actions }: MapContextMenuPr
     {target.kind === "cable" && <>{actions.onRenameCable && <button role="menuitem" onClick={() => run(() => actions.onRenameCable?.(target.id, target.label))}>{t("catalog.renameCable")}</button>}<button role="menuitem" className="map-context-menu__danger" onClick={() => run(() => actions.onDeleteCable?.(target.id, target.label))}>{t("inspector.deleteCable")}&hellip;</button></>}
     {target.kind === "port" && <><p>{target.label}</p>{target.action === "loading" && <p>{t("map.context.loadingPort")}</p>}{target.action === "connect" && <button role="menuitem" onClick={() => run(() => actions.onConnectFromPort?.(target.objectId, target.connectionPointId))}>{t("map.context.connectFrom")}&hellip;</button>}{portAction && <button role="menuitem" className="map-context-menu__danger" onClick={() => run(() => actions.onDisconnect?.(portAction.disconnectConnectionId, target.label))}>{t("map.context.disconnect")}&hellip;</button>}{target.action === "unavailable" && <p>{t("map.context.portUnavailable")}</p>}</>}
     {target.kind === "object" && actions.onBulkConnect && <button role="menuitem" onClick={() => run(() => actions.onBulkConnect?.(target.id))}>{t("map.bulk.action")}</button>}
+    {target.kind === "object" && actions.onBulkDeleteCables && <button role="menuitem" className="map-context-menu__danger" onClick={() => run(() => actions.onBulkDeleteCables?.(target.id))}>{t("map.bulkDelete.title")}</button>}
   </div>;
 }

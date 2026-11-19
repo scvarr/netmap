@@ -454,6 +454,10 @@ a { color: inherit; }
 .catalog-table td { padding: 15px 16px; border-bottom: 1px solid #192a2d; color: #a8bcba; font-size: 12px; }
 .catalog-table tbody tr:last-child td { border-bottom: 0; }
 .catalog-table tbody tr:hover { background: #0d1d20; }
+.map-dialog__surface--bulk-delete { box-sizing: border-box; width: min(100%, 760px); }
+.map-bulk-delete-table { overflow: auto; min-height: 0; }
+.map-bulk-delete-table th, .map-bulk-delete-table td { padding: 6px 10px; overflow-wrap: anywhere; }
+.map-bulk-delete-table thead { position: sticky; top: 0; }
 .catalog-table td:first-child a { color: #e0eeeb; font: 700 13px ui-monospace, "Cascadia Code", monospace; text-decoration: none; }
 .catalog-table td:nth-child(2) strong { display: block; color: #b8cbc8; font-size: 10px; }
 .catalog-table td:nth-child(2) code { display: block; margin-top: 4px; color: #647b7d; font-size: 9px; }

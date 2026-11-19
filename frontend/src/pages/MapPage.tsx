@@ -19,6 +19,7 @@ import type { FaceOverride, FaceTarget } from '../topology/savedMapTypes';
 import { QuickInspector } from "../components/QuickInspector";
 import { MapContextMenu, type MapContextTarget } from "../components/MapContextMenu";
 import { CableRenameDialog } from "../components/CableRenameDialog";
+import { BulkCableDeleteDialog } from "../components/BulkCableDeleteDialog";
 import { TraceCommandBar } from "../components/TraceCommandBar";
 import { TopologyCanvas } from "../components/TopologyCanvas";
 import { MapObjectSearchPanel } from "../components/MapObjectSearchPanel";
@@ -310,6 +311,8 @@ function MapPageContent({
   const [wiring, setWiring] = useState<WiringState>({ status: "idle" });
   const [showAllVirtualChannels, setShowAllVirtualChannels] = useState(false);
   const [bulkWiring, setBulkWiring] = useState<BulkWiringState | null>(null);
+  const [bulkDeleteSourceId, setBulkDeleteSourceId] = useState<string | null>(null);
+  useLayoutEffect(() => setBulkDeleteSourceId(null), [traceScope]);
   const [bulkTemplates, setBulkTemplates] = useState<{ id: string; name: string }[]>([]);
   const [annotationMode, setAnnotationMode] = useState(false);
   const [selectedTextAnnotationId, setSelectedTextAnnotationId] = useState<string | null>(null);
@@ -1542,7 +1545,28 @@ function MapPageContent({
     },
     [],
   );
-  const contextBusy = wiring.status !== "idle" || Boolean(bulkWiring) || Boolean(insertion) || Boolean(mapDeletion) || Boolean(mapOperation);
+  const contextBusy = wiring.status !== "idle" || Boolean(bulkWiring) || Boolean(bulkDeleteSourceId) || Boolean(insertion) || Boolean(mapDeletion) || Boolean(mapOperation);
+  const refreshBulkCableDelete = async () => {
+    if (!activeMap || !savedMapDataSource || !mapId || currentTraceScope.current !== traceScope) return;
+    const request = ++mapDetailRequest.current;
+    const variant = activeMap.active_variant_ref.entity_id;
+    const [detail, inventory] = await Promise.all([
+      savedMapDataSource.loadMap(mapId, variant),
+      catalogInventoryDataSource?.loadCatalogInventory(),
+    ]);
+    const next = await dataSource.loadProjection(projectionRequestFor(
+      'physical', detail.placements.map(item => item.physical_object_ref.entity_id), true,
+    ));
+    if (currentTraceScope.current !== traceScope) return;
+    if (!acceptsMapDetail(mapId, request) || detail.active_variant_ref.entity_id !== variant) {
+      throw new Error('Map refresh was superseded');
+    }
+    setMap(detail);
+    if (inventory) setCatalogInventory(inventory);
+    setSceneDocument({ sceneKey: presentationSceneKey, document: next });
+    setSelection(null);
+    clearTrace();
+  };
   const startBulkWiring = (sourceObjectId: string) => {
     if (!activeMap || !physicalEndpointConnectionWriteDataSource?.createBulkPhysicalConnections || !document?.nodes.some((node) => physicalObjectIdForNode(node) === sourceObjectId)) return;
     setBulkWiring({ mapId: activeMap.map_ref.entity_id, sourceObjectId, source: [], destination: [], stage: 'source', templateId: null, labels: [], confirmedHistorical: [], error: null });
@@ -1875,6 +1899,12 @@ function MapPageContent({
         {(wiring.status === "confirming" || wiring.status === "creating") && <><p>{t("map.wiring.endpointSummary", { sourceObject: wiring.source.objectLabel, sourcePort: wiring.source.portLabel, targetObject: wiring.target.objectLabel, targetPort: wiring.target.portLabel })}</p><CableNamingFields dataSource={cableLabelDataSource} disabled={wiring.status === "creating"} value={wiring.naming} onChange={(naming) => { setWiringHistoricalCandidate(null); setWiring((current) => current.status === "confirming" ? { ...current, naming } : current); }} />{wiringHistoricalCandidate && wiring.status === "confirming" && <div className="map-wiring-historical-warning" role="alert"><strong>{t("map.wiring.historicalReuse", { name: wiringHistoricalCandidate })}</strong><small>{t("map.wiring.historicalReuseHint")}</small><div><button type="button" onClick={() => setWiringHistoricalCandidate(null)}>{t("map.wiring.historicalReuseNo")}</button><button type="button" onClick={() => { const candidate = wiringHistoricalCandidate; setWiringHistoricalCandidate(null); void createWiring(candidate); }}>{t("map.wiring.historicalReuseYes")}</button></div></div>}{wiring.error && <p role="alert">{wiring.error}</p>}<div className="map-dialog__actions map-dialog__actions--wiring"><button type="button" disabled={wiring.status === "creating"} onClick={() => { setWiringHistoricalCandidate(null); setWiring({ status: "selecting-target", mapId: wiring.mapId, source: wiring.source }); }}>{t("map.back")}</button><button type="button" disabled={wiring.status === "creating"} onClick={() => { setWiringHistoricalCandidate(null); setWiring({ status: "idle" }); }}>{t("map.cancel")}</button><button type="button" disabled={wiring.status === "creating" || Boolean(wiringHistoricalCandidate) || (wiring.naming.generate_cable_label === true && !wiring.naming.cable_label_template_id)} onClick={() => void createWiring()}>{wiring.status === "creating" ? t("map.creating") : wiring.error ? t("action.retry") : t("map.createCable")}</button></div></>}
         {wiring.status === "refresh-failed" && <><p role="alert">{t("map.cableCreatedRefreshFailed")}</p><button type="button" onClick={() => void retryWiringRefresh()}>{t("map.retryRefresh")}</button></>}
       </div></section>}
+      {bulkDeleteSourceId && document && cableDeleteDataSource?.previewBulkDelete && cableDeleteDataSource.bulkDelete &&
+        <BulkCableDeleteDialog sourceId={bulkDeleteSourceId} nodes={document.nodes}
+          preview={pair => cableDeleteDataSource.previewBulkDelete!(pair)}
+          remove={(pair, cables) => cableDeleteDataSource.bulkDelete!(pair, cables)}
+          refresh={refreshBulkCableDelete}
+          close={() => { if (currentTraceScope.current === traceScope) setBulkDeleteSourceId(null); }} />}
       {contextAnchor && viewMode === "physical" && !contextBusy && <MapContextMenu
         target={contextAnchor}
         onClose={() => setContextAnchor(null)}
@@ -1894,6 +1924,7 @@ function MapPageContent({
         onRenameCable={catalogInventoryDataSource && cableLabelDataSource ? (id, label) => void beginCableRename(id, label) : undefined}
         onConnectFromPort={connectFromPort}
         onBulkConnect={physicalEndpointConnectionWriteDataSource?.createBulkPhysicalConnections ? startBulkWiring : undefined}
+        onBulkDeleteCables={activeMap && cableDeleteDataSource?.previewBulkDelete && cableDeleteDataSource.bulkDelete ? setBulkDeleteSourceId : undefined}
         onDisconnect={(connectionId, label) => void disconnectPort(connectionId, label).catch((reason) => setError(errorMessage(reason, t("map.disconnectFailed"))))}
         onDeleteObject={(id, label) => { if (window.confirm(t("map.context.deleteObjectConfirm", { name: label }))) void deletePhysicalObject(id).catch((reason) => setError(errorMessage(reason, t("map.deleteObjectFailed")))); }}
         onDeleteCable={(id, label) => { if (window.confirm(t("map.context.deleteCableConfirm", { name: label }))) void deleteCable(id).catch((reason) => setError(errorMessage(reason, t("map.deleteCableFailed")))); }}

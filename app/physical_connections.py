@@ -2,12 +2,15 @@ import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import and_, or_, select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session, aliased, joinedload
 
-from app.errors import ValidationError
-from app.cable_labels import CableLabelCatalog
+from app.errors import NetMapError, ValidationError
+from app.cable_labels import CableLabelCatalog, resolved_cable_label
+from app.module_endpoint_names import EndpointNames
 from app.models import Cable, Connection, ConnectionMember, ConnectionPoint, NetworkInterface
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from app.schemas import BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember
 
 
 @dataclass(frozen=True)
@@ -379,6 +382,107 @@ class PhysicalConnectionCatalog:
             raise ValidationError(
                 "Cable refers to a missing Connection", {"cable_id": str(cable_id)}
             )
+        self._delete_connected_cable(cable, connection)
+
+    def preview_bulk_cable_delete(
+        self, source_id: uuid.UUID, target_id: uuid.UUID,
+    ) -> list[BulkCableDeleteCandidate]:
+        a, b, query = self._cables_between_objects(source_id, target_id)
+        rows = self.session.execute(query.options(joinedload(Connection.members))).unique().all()
+        names = EndpointNames(self.session).connection_points({
+            point_id for _, connection, _ in rows
+            for point_id in (connection.point_a_id, connection.point_b_id)
+        })
+
+        def point_label(point_id: uuid.UUID) -> str:
+            return names[point_id].value if point_id in names else f"ConnectionPoint {point_id}"
+
+        result = []
+        for cable, connection, owner_a in rows:
+            if not connection.members:
+                continue
+            source_is_a = owner_a == source_id
+            source, target = connection.point_a_id, connection.point_b_id
+            if not source_is_a:
+                source, target = target, source
+            result.append(BulkCableDeleteCandidate(
+                expected=self._cable_delete_expectation(cable, connection),
+                display_label=resolved_cable_label(cable)[0],
+                source_point_label=point_label(source),
+                target_point_label=point_label(target),
+                source_is_point_a=source_is_a,
+            ))
+        return result
+
+    def bulk_delete_cables(
+        self, source_id: uuid.UUID, target_id: uuid.UUID,
+        expected: list[BulkCableDeleteExpectation],
+    ) -> None:
+        if not 1 <= len(expected) <= 256:
+            raise ValidationError("Bulk Cable deletion requires 1 to 256 Cables")
+        by_id = {row.cable_id: row for row in expected}
+        if len(by_id) != len(expected):
+            raise ValidationError("Duplicate Cable ID in bulk deletion")
+        a, b, query = self._cables_between_objects(source_id, target_id)
+        try:
+            rows = self.session.execute(
+                query.where(Cable.id.in_(by_id)).with_for_update(of=(Cable, Connection, a, b), nowait=True)
+            ).all()
+            # Lock the Connection before reading its members. Its FK lock prevents
+            # a concurrently inserted member from committing before this deletion.
+            self.session.scalars(
+                select(ConnectionMember)
+                .where(ConnectionMember.connection_id.in_([connection.id for _, connection, _ in rows]))
+                .order_by(ConnectionMember.id)
+                .with_for_update(nowait=True)
+            ).all()
+            missing = by_id.keys() - {cable.id for cable, _, _ in rows}
+            if missing:
+                raise NetMapError("BULK_CABLE_DELETE_STALE", "Cable missing or no longer connects the selected PhysicalObjects",
+                                  {"cable_ids": sorted(map(str, missing))})
+            for cable, connection, _ in rows:
+                if not connection.members or self._cable_delete_expectation(cable, connection) != by_id[cable.id]:
+                    raise NetMapError("BULK_CABLE_DELETE_STALE", "Cable or its Connection changed after preview",
+                                      {"cable_ids": [str(cable.id)]})
+            for cable, connection, _ in rows:
+                self._delete_connected_cable(cable, connection)
+        except OperationalError as error:
+            if getattr(error.orig, "sqlstate", None) in ("55P03", "40P01", "40001"):
+                raise NetMapError("BULK_CABLE_DELETE_CONFLICT", "Concurrent topology or label update. Reload the Cable list.") from error
+            raise
+
+    @staticmethod
+    def _cables_between_objects(source_id: uuid.UUID, target_id: uuid.UUID):
+        if source_id == target_id:
+            raise ValidationError("Bulk Cable deletion requires two different PhysicalObjects")
+        a, b = aliased(ConnectionPoint), aliased(ConnectionPoint)
+        query = (
+            select(Cable, Connection, a.physical_object_id)
+            .join(Connection, Cable.connection_id == Connection.id)
+            .join(a, a.id == Connection.point_a_id)
+            .join(b, b.id == Connection.point_b_id)
+            .where(or_(
+                and_(a.physical_object_id == source_id, b.physical_object_id == target_id),
+                and_(b.physical_object_id == source_id, a.physical_object_id == target_id),
+            ))
+            .order_by(Cable.id)
+        )
+        return a, b, query
+
+    @staticmethod
+    def _cable_delete_expectation(cable: Cable, connection: Connection) -> BulkCableDeleteExpectation:
+        return BulkCableDeleteExpectation(
+            cable_id=cable.id, connection_id=connection.id, label=cable.label,
+            point_a_id=connection.point_a_id, point_b_id=connection.point_b_id,
+            cardinality=connection.cardinality,
+            members=[
+                BulkCableDeleteMember(id=member.id, index=member.index,
+                                      point_a_member=member.point_a_member, point_b_member=member.point_b_member)
+                for member in sorted(connection.members, key=lambda member: member.index)
+            ],
+        )
+
+    def _delete_connected_cable(self, cable: Cable, connection: Connection) -> None:
         CableLabelCatalog(self.session).release_cable_label(cable)
         self.session.delete(connection)
         self.session.flush()
