@@ -52,6 +52,7 @@ import { nodeFootprint, type FlowRectangle } from "../topology/nodeFootprint";
 import { layoutLocationFrames, editLocationFrames, locationBoundaryPoint } from '../topology/locationFrameGeometry';
 import { LocationFrameEditor } from "./LocationFrameEditor";
 import type { LocationChannelInput } from '../topology/hierarchicalCableRoutes';
+import { cableOccupiedPortIds } from '../topology/physicalPortPresentation';
 import { deriveLocationPresentation, projectCollapsedEdges } from "../topology/locationFrames";
 import type { LocationDocument } from "../topology/locationTypes";
 import type { MapLocationState, MapPlacement } from "../topology/savedMapTypes";
@@ -187,6 +188,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
   const viewKey = topologyLayoutViewKey(document);
   const presentationSceneKey = sceneKey ?? viewKey;
   const presentationScene = useMemo(() => presentationSceneDocument(document), [document]);
+  const occupiedPorts = useMemo(() => cableOccupiedPortIds(document), [document]);
 
   currentDocument.current = document;
 
@@ -368,6 +370,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
 
   const physicalObjectView = document.layer === "L1" && document.detail_level === "PHYSICAL_OBJECT";
   const useVirtualChannels = physicalObjectView;
+  const showChannelTerminals = frameUiZoom >= 0.6;
   const cableTraceActive = Boolean(traceOverlay && (
     traceOverlay.highlightedCableIds.size || traceOverlay.highlightedConnectionMemberIds.size || traceOverlay.highlightedEdgeIds.size
   ));
@@ -415,6 +418,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
       locationPresentationPath: locationPathsByObjectId.get(physicalObjectIdForNode(node.data.projection) ?? ""),
       traceHighlighted: traceOverlay?.highlightedNodeIds.has(node.id) ?? false,
       traceHighlightedConnectionMemberIds: traceOverlay?.highlightedConnectionMemberIds ?? new Set<string>(),
+      cableOccupiedPortIds: occupiedPorts,
       wiringHighlightedConnectionMemberIds,
       wiringContinuationConnectionPointIds,
       physicalPortStates,
@@ -620,7 +624,7 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
 
   return (
     <div
-      className="topology-canvas"
+      className={`topology-canvas${showChannelTerminals ? '' : ' topology-canvas--reduced-terminals'}`}
       style={{ '--location-terminal-scale': Math.min(1, 1 / frameUiZoom) } as CSSProperties}
       aria-label={
         document.layer === "L1"
@@ -741,7 +745,8 @@ export function TopologyCanvas({ arrangement: sharedArrangement,
         />
         <Controls showInteractive={false} position="bottom-left" />
         {!annotationMode && <ForegroundCableRoutes edges={edges} virtualChannels={useVirtualChannels}
-          locationInputs={showLocationPresentation || (physicalObjectView && requireLocationChannels) ? [...locationChannels.values()] : undefined} zoom={frameUiZoom}
+          locationInputs={showLocationPresentation || (physicalObjectView && requireLocationChannels) ? [...locationChannels.values()] : undefined}
+          zoom={frameUiZoom} showChannelTerminals={showChannelTerminals}
           showAllVirtualChannels={showAllVirtualChannels} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} bulkPairs={bulkPairs} wiringRoute={wiringRoute} traceActive={cableTraceActive} onCableSelect={selectCable} onCableContextMenu={(event, edge) => onEdgeContextMenu(event, edge)} />}
       </ReactFlow>
     </div>

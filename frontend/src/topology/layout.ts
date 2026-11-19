@@ -31,6 +31,7 @@ export interface DeviceNodeData extends Record<string, unknown> {
   /** Temporary MapPage authoring state; deliberately separate from topology selection. */
   traceHighlighted?: boolean;
   traceHighlightedConnectionMemberIds?: ReadonlySet<string>;
+  cableOccupiedPortIds?: ReadonlySet<string>;
   wiringHighlightedConnectionMemberIds?: ReadonlySet<string>;
   wiringContinuationConnectionPointIds?: ReadonlySet<string>;
   physicalPortStates?: Record<string, 'eligible' | 'source' | 'destination' | 'unavailable'>;

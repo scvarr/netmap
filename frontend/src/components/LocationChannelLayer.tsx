@@ -2,11 +2,12 @@ import type { CSSProperties } from 'react';
 import { ViewportPortal, type XYPosition } from '@xyflow/react';
 import type { HierarchicalCableChannels } from '../topology/hierarchicalCableRoutes';
 
-export function LocationChannelLayer({ channels, used, occupiedOutlets, zoom }: {
+export function LocationChannelLayer({ channels, used, occupiedOutlets, zoom, showTerminals }: {
   channels: HierarchicalCableChannels;
   used: ReadonlyMap<string, unknown>;
   occupiedOutlets: ReadonlyMap<string, XYPosition>;
   zoom: number;
+  showTerminals: boolean;
 }) {
   return <ViewportPortal>
     <div style={{ '--location-channel-unit': `${1 / zoom}px` } as CSSProperties}>
@@ -22,11 +23,11 @@ export function LocationChannelLayer({ channels, used, occupiedOutlets, zoom }: 
             {path && <path d={path} />}
           </g>;
         })}
-        <ChannelOutlets channels={channels} kind="generic-object" occupiedOutlets={occupiedOutlets} />
+        {showTerminals && <ChannelOutlets channels={channels} kind="generic-object" occupiedOutlets={occupiedOutlets} />}
       </svg>
-      <svg className="location-channel-layer location-channel-layer--outlets" aria-hidden="true">
+      {showTerminals && <svg className="location-channel-layer location-channel-layer--outlets" aria-hidden="true">
         <ChannelOutlets channels={channels} kind="blueprint-object" occupiedOutlets={occupiedOutlets} />
-      </svg>
+      </svg>}
     </div>
   </ViewportPortal>;
 }

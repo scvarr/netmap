@@ -210,12 +210,13 @@ it('resolves current archived types for base and module glyphs while preserving 
   const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => [{ id: 'type', name: 'Archived copper', color: '#123456', is_active: false }] } as Response);
   const click = vi.fn();
   const slots = projection.attributes.blueprint_presentation.slots.map((slot, index) => ({ ...slot, port_type_id: 'type', slot_key: index ? 'installation:port' : slot.slot_key, kind: index ? 'NETWORK_PORT' : 'CONNECTION_POINT' }));
-  const props = { data: { projection: { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots } } }, physicalPortStates: { 'front-01': 'source', 'rear-01': 'unavailable' }, onPhysicalPortClick: click }, selected: true, width: 392 } as any;
+  const props = { data: { projection: { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots } } }, cableOccupiedPortIds: new Set(['front-01']), physicalPortStates: { 'front-01': 'source', 'rear-01': 'unavailable' }, onPhysicalPortClick: click }, selected: true, width: 392 } as any;
   const view = render(<RuntimePortTypes><DeviceNode {...props} /></RuntimePortTypes>);
   const circle = await screen.findByTitle('Front 01 · Archived copper');
   const square = screen.getByTitle('Rear 01 · Archived copper');
-  expect(circle).toHaveStyle({ backgroundColor: '#123456' });
-  expect(square).toHaveStyle({ backgroundColor: '#123456' });
+  expect(getComputedStyle(circle).backgroundColor).toBe('rgb(18, 52, 86)');
+  expect(getComputedStyle(square).backgroundColor).toBe('rgb(10, 21, 24)');
+  expect(getComputedStyle(square).borderTopColor).toBe('rgb(18, 52, 86)');
   expect(circle).toHaveClass('blueprint-map-node__port--connection_point', 'blueprint-map-node__port--wiring-source');
   expect(square).toHaveClass('blueprint-map-node__port--network_port', 'blueprint-map-node__port--wiring-unavailable');
   fireEvent.keyDown(circle, { key: 'Enter' });
@@ -225,7 +226,7 @@ it('resolves current archived types for base and module glyphs while preserving 
   view.unmount();
   fetchMock.mockResolvedValue({ ok: true, json: async () => [{ id: 'type', name: 'Renamed', color: '#ABCDEF', is_active: false }] } as Response);
   render(<RuntimePortTypes><DeviceNode {...props} /></RuntimePortTypes>);
-  expect(await screen.findByTitle('Front 01 · Renamed')).toHaveStyle({ backgroundColor: '#ABCDEF' });
+  expect(getComputedStyle(await screen.findByTitle('Front 01 · Renamed')).backgroundColor).toBe('rgb(171, 205, 239)');
   fetchMock.mockRestore();
 });
 

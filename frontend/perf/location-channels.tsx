@@ -112,7 +112,7 @@ function Fixture() {
     <output data-testid="picked-port">{pickedPort}</output>
     <button onClick={() => setLayouts(current => current.map((layout, i) => i === index ? { ...layout, hide_empty: !layout.hide_empty } : layout))}>Hide empty</button>
     <button onClick={() => { setCollapsed(true); setPartial(true); }}>Partial collapse</button>
-    {[0.35, 1, 2].map(zoom => <button key={zoom} onClick={() => void flow.setViewport({ x: 65, y: 75, zoom })}>zoom {zoom}</button>)}
+    {[0.35, 0.6, 1, 2].map(zoom => <button key={zoom} onClick={() => void flow.setViewport({ x: 65, y: 75, zoom })}>zoom {zoom}</button>)}
     <div style={{ width: 1350, height: 1000 }}>
       <TopologyCanvas document={topology} selection={null} onSelectionChange={() => {}}
         sceneKey={String(index)} layoutEngine={engine} layoutStore={store} disableAutoLayout showAllVirtualChannels={show}

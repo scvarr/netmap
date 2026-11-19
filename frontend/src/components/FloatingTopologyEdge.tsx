@@ -23,6 +23,7 @@ import { cableIdForNode, physicalObjectIdForNode } from '../topology/projection'
 import { objectVirtualChannels, type ObjectVirtualChannels, type VirtualChannelSegment } from '../topology/objectVirtualChannels';
 import { buildHierarchicalCableChannels, hierarchicalLocationPath, type LocationChannelInput } from '../topology/hierarchicalCableRoutes';
 import { LocationChannelLayer, locationSegmentKey } from './LocationChannelLayer';
+import { physicalPortPaint, tracedPortIds } from '../topology/physicalPortPresentation';
 import { useI18n } from '../i18n';
 import { displayNodeLabelForLocale } from '../topology/presentation';
 import { CableRouteInteraction, cableHitClip, type CablePortBounds, type CableTarget } from './CableRouteInteraction';
@@ -177,21 +178,22 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers
   if (!node || node.data.locationProxy || !node.data.projection || node.data.projection.kind !== 'PHYSICAL_OBJECT') return null;
   const projection = node.data.projection;
   const blueprint = projection.attributes.blueprint_presentation;
+  const tracedPorts = tracedPortIds(projection, node.data.traceHighlightedConnectionMemberIds);
   const ports = blueprint
     ? blueprint.slots.map((slot) => ({ id: slot.connection_point_id, network: slot.kind === 'NETWORK_PORT', portTypeId: slot.port_type_id }))
     : genericConnectionPoints(projection).map((point) => ({ id: point.connection_point_id, network: false, portTypeId: undefined }));
   return <g className="cable-route-port-markers" aria-hidden="true" pointerEvents="none">
     {ports.map((port) => {
       const endpoint = getRenderedConnectionPoint(projection, rectangle(node), port.id);
-      const fill = portTypes?.find((type) => type.id === port.portTypeId)?.color ?? '#18383a';
       const state = physicalPortStates?.[port.id];
-      const traced = (projection.attributes.internal_l1_links ?? []).some(link => node.data.traceHighlightedConnectionMemberIds?.has(link.connection_member_id) && [link.from_connection_point_id, link.to_connection_point_id].includes(port.id));
-      const stroke = state === 'source' || state === 'destination' ? '#fff' : state === 'eligible' ? '#7be6ff' : traced ? '#fff2bc' : '#e6fffb';
+      const { fill, outline } = physicalPortPaint(portTypes?.find(type => type.id === port.portTypeId)?.color,
+        node.data.cableOccupiedPortIds?.has(port.id) ?? false, tracedPorts.has(port.id), state);
       const radius = blueprint ? (BLUEPRINT_PORT_SIZE - BLUEPRINT_PORT_STROKE) / 2 : 3.5;
       const className = `cable-route-port-marker${blueprint ? ' cable-route-port-marker--blueprint' : ''}${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
+      const style = { fill, stroke: outline, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined };
       return endpoint && <g key={port.id}>{port.network
-        ? <rect className={className} style={{ fill, stroke: blueprint ? stroke : undefined, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined }} data-connection-point-id={port.id} x={endpoint.x - radius} y={endpoint.y - radius} width={radius * 2} height={radius * 2} rx={0} pointerEvents="none" />
-        : <circle className={className} style={{ fill, stroke: blueprint ? stroke : undefined, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined }} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={radius} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
+        ? <rect className={className} style={style} data-connection-point-id={port.id} x={endpoint.x - radius} y={endpoint.y - radius} width={radius * 2} height={radius * 2} rx={0} pointerEvents="none" />
+        : <circle className={className} style={style} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={radius} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
     })}
   </g>;
 }
@@ -243,11 +245,12 @@ function genericChannelPaths(node: DeviceFlowNode): ObjectVirtualChannels {
   return { exit, paths, segments };
 }
 
-export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, zoom = 1, showAllVirtualChannels, physicalPortStates, bulkPortNumbers, bulkPairs, wiringRoute, traceActive, onCableSelect, onCableContextMenu }: {
+export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, zoom = 1, showChannelTerminals = true, showAllVirtualChannels, physicalPortStates, bulkPortNumbers, bulkPairs, wiringRoute, traceActive, onCableSelect, onCableContextMenu }: {
   edges: readonly LogicalFlowEdge[];
   virtualChannels?: boolean;
   locationInputs?: readonly LocationChannelInput[];
   zoom?: number;
+  showChannelTerminals?: boolean;
   showAllVirtualChannels?: boolean;
   physicalPortStates?: Record<string, ForegroundPortState>;
   bulkPortNumbers?: Record<string, number>;
@@ -557,7 +560,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
   };
   return <>
     {locationChannels && showAllVirtualChannels && <LocationChannelLayer channels={locationChannels}
-      used={locationSegments} occupiedOutlets={occupiedOutlets} zoom={zoom} />}
+      used={locationSegments} occupiedOutlets={occupiedOutlets} zoom={zoom} showTerminals={showChannelTerminals} />}
     {failures.length > 0 && <details className="map-cable-route-diagnostics">
       <summary>{t('map.cableRoute.unavailable', { count: failures.length })}</summary>
       <ul>{failures.map(({ id, reason }, index) => <li key={index}>{id} · {reason}</li>)}</ul>
@@ -569,8 +572,8 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
         const edge = emphasisFor(segment)!;
         return <g key={segment.key} data-testid={`foreground-cable-${edge.id}`} data-emphasis={cableEmphasis(edge)}>{visiblePath(segment, false)}</g>;
       })}
-      {[...occupiedOutlets].map(([id, point]) => <circle key={id} className="location-channel-outlet" cx={point.x} cy={point.y} />)}
-      {boundaries.map(([id, { x, y }]) => terminalPoints.has(`${x},${y}`) &&
+      {showChannelTerminals && [...occupiedOutlets].map(([id, point]) => <circle key={id} className="location-channel-outlet" cx={point.x} cy={point.y} />)}
+      {showChannelTerminals && boundaries.map(([id, { x, y }]) => terminalPoints.has(`${x},${y}`) &&
         <circle key={id} cx={x} cy={y} r={6 * boundaryScale} fill="var(--location-terminal-fill)" aria-hidden="true" />)}
       {(interactive || markers.size > 0) && <CableRouteInteraction targets={targets}
         clip={clip}

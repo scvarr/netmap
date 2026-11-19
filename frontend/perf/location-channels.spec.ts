@@ -80,13 +80,15 @@ test('shows free channels on a cable-free L1 map and composes the active variant
   await expectTerminalPaint(page, serverOutlet);
 
   const original = await rack.getAttribute('d');
-  for (const zoom of [0.35, 2, 1]) {
+  for (const zoom of [0.35, 0.6, 2, 1]) {
     await page.getByRole('button', { name: `zoom ${zoom}`, exact: true }).click();
     await expect(rack).toBeVisible();
     await expect(rack).toHaveAttribute('d', original!);
     expect(await rack.evaluate((path: SVGPathElement) =>
       parseFloat(getComputedStyle(path).strokeWidth) * path.getScreenCTM()!.a)).toBeCloseTo(1, 2);
     await expectScreenTerminal(rack, rackMarker, frame('rack'));
+    await expect(rackMarker).toHaveCSS('opacity', zoom < 0.6 ? '0' : '1');
+    await expect(outlets).toHaveCount(zoom < 0.6 ? 0 : 4);
   }
   async function dragBoundary() {
     const marker = center((await rackMarker.boundingBox())!);
@@ -97,7 +99,15 @@ test('shows free channels on a cable-free L1 map and composes the active variant
     await page.mouse.up();
   }
   const parentBefore = await parent.getAttribute('d');
+  await page.getByRole('button', { name: 'zoom 0.35', exact: true }).click();
+  await frame('rack').locator('.location-frame__heading').hover();
+  await expect(rackMarker).toHaveCSS('opacity', '1');
+  await rackMarker.focus();
+  await page.mouse.move(10, 900);
+  await expect(rackMarker).toHaveCSS('opacity', '1');
   await dragBoundary();
+  await page.mouse.move(10, 900);
+  await expect(rackMarker).toHaveCSS('opacity', '1');
   await expect(rack).not.toHaveAttribute('d', original!);
   await expect(parent).not.toHaveAttribute('d', parentBefore!);
   await expectScreenTerminal(rack, rackMarker, frame('rack'));
@@ -117,6 +127,7 @@ test('shows free channels on a cable-free L1 map and composes the active variant
   await frame('rack').getByRole('button', { name: 'Сохранить', exact: true }).click();
   await expect(rack).toHaveAttribute('d', draft!);
   await expect(frame('rack').locator('.location-boundary-point')).toHaveAttribute('data-boundary-point-id', 'point-rack');
+  await page.getByRole('button', { name: 'zoom 1', exact: true }).click();
 
   await page.getByRole('button', { name: 'Reflow' }).click();
   await expect(rack).not.toHaveAttribute('d', draft!);
@@ -193,11 +204,12 @@ test('renders one terminal per exit in a dense nested rack', async ({ page }) =>
   await expect(page.locator('.location-frame[data-location-id="rack"]')).toBeVisible();
   await page.getByRole('button', { name: 'zoom 0.35', exact: true }).click();
   await page.getByRole('button', { name: 'Показать все кабельные каналы' }).click();
-  await expect(page.locator('.location-channel-outlet')).toHaveCount(43);
+  await expect(page.locator('.location-channel-outlet')).toHaveCount(0);
   await expect(page.locator('.location-channel-layer desc')).toHaveCount(0);
   const marker = page.locator('[data-boundary-point-id="point-rack"]');
   const frame = page.locator('.location-frame[data-location-id="rack"]');
   await expect(marker).toHaveCount(1);
+  await expect(marker).toHaveCSS('opacity', '0');
   await expectScreenTerminal(page.locator('[data-channel-location="building"] path'), marker, frame);
   const rack = page.locator('[data-channel-location="rack"] path');
   await expectScreenTerminal(rack, marker, frame);

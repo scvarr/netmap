@@ -640,6 +640,7 @@ a { color: inherit; }
   .blueprint-composer__chooser, .blueprint-composer__instance, .blueprint-composer__link, .blueprint-composer__selected { grid-template-columns: 1fr; }.blueprint-composer__instance p { grid-column: auto; }
   .quick-inspector { top: auto; bottom: 14px; max-height: 48%; }
 }
+.blueprint-map-node__port--trace-highlighted, .generic-map-node__endpoint--trace-highlighted { box-shadow: 0 0 0 1px #f0bd66; }
 .blueprint-map-node__port--wiring-eligible, .generic-map-node__endpoint--wiring-eligible { cursor: pointer; border-color: #7be6ff; box-shadow: 0 0 0 2px #147d94; }
 .blueprint-map-node__port--wiring-eligible:hover, .generic-map-node__endpoint--wiring-eligible:hover { box-shadow: 0 0 0 4px #7be6ff; }
 .blueprint-map-node__port--wiring-source, .generic-map-node__endpoint--wiring-source { border-color: #fff; box-shadow: 0 0 0 4px #d65cff; }
@@ -946,6 +947,12 @@ a { color: inherit; }
 .location-proxy { position: relative; }
 .location-proxy-anchor { width: 1px; height: 1px; visibility: hidden; pointer-events: none; }
 .location-boundary-point--compact { pointer-events: none; }
+/* Keep the expanded boundary button in hit testing and the tab order at low zoom. */
+.topology-canvas--reduced-terminals .location-boundary-point { opacity: 0; }
+.topology-canvas--reduced-terminals :is(
+  .location-frame:hover, .location-frame:focus-within, .location-frame--selected, .location-frame--arrangement-selected,
+  .location-proxy:hover, .location-proxy:focus-within, .location-proxy--arrangement-selected, .location-proxy--traced
+) .location-boundary-point { opacity: 1; }
 
 .automatic-location-controls { display: grid; gap: 7px; min-width: 0; margin: 0; padding: 7px 0; border: 0; }
 .automatic-location-controls label { display: flex; gap: 6px; align-items: center; font-size: 11px; }
@@ -972,7 +979,7 @@ a { color: inherit; }
 .blueprint-map-node__port--wiring-eligible, .blueprint-map-node__port--wiring-eligible:hover { box-shadow: 0 0 0 1px #147d94; }
 .blueprint-map-node__port--wiring-source { box-shadow: 0 0 0 1px #d65cff; }
 .blueprint-map-node__port--wiring-destination { box-shadow: 0 0 0 1px #54e3b4; }
-.blueprint-map-node__port--trace-highlighted { box-shadow: 0 0 0 1px #f0bd66; }
+.generic-map-node__endpoint:focus-visible { outline: 1px solid #fff; outline-offset: 1px; }
 .blueprint-map-node__port--wiring-continuation { box-shadow: 0 0 0 1px #8d7aff; }
 .cable-route-port-marker--blueprint { filter: none; }
 .blueprint-map-node__port--wiring-unavailable { cursor: not-allowed; }
