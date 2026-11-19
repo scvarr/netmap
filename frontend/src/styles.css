@@ -1092,6 +1092,8 @@ a { color: inherit; }
 .cable-route-hit:focus { outline: none; }
 .cable-route-hit:focus-visible { stroke: rgb(141 226 200 / .55); }
 .cable-route-foreground--hovered { stroke: #8de2c8; }
+.cable-endpoint-halo { stroke: #8de2c8; pointer-events: none; }
+.cable-endpoint-halo[data-emphasis="selected"] { stroke: #ffe600; }
 .map-cable-route-diagnostics { position: absolute; z-index: 5; top: 8px; right: 8px; max-width: min(440px, 90%); max-height: 40%; overflow: auto; padding: 5px 8px; background: #172629; color: #ffca66; overflow-wrap: anywhere; }
 .map-cable-route-diagnostics summary { cursor: pointer; }
 .cable-route-marker { fill: #ffe600; stroke: #0b181b; pointer-events: none; }

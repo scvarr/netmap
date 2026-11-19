@@ -15,20 +15,37 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   const tooltip = page.getByRole('tooltip');
   const chooser = page.getByRole('dialog', { name: 'Выбрать кабель на участке' });
   const inspector = page.getByRole('complementary', { name: 'Быстрый инспектор' });
+  const hoveredEnds = page.locator('.cable-endpoint-halo[data-emphasis="hovered"]');
+  const selectedEnds = page.locator('.cable-endpoint-halo[data-emphasis="selected"]');
+  const endpoints = (ends: Locator) => ends.evaluateAll(elements => elements.map(element => element.getAttribute('data-cable-endpoint')).sort());
 
-  for (const zoom of [0.35, 1, 2]) {
+  await expect(lead(2)).toBeAttached();
+  await expect.poll(() => lead(2).evaluate((path: SVGPathElement) => path.getScreenCTM()!.a)).toBeGreaterThan(1.2);
+  for (const zoom of [0.35, 0.6, 1, 2]) {
     await page.getByRole('button', { name: `zoom ${zoom}`, exact: true }).click();
-    await expect(lead(2)).toHaveCount(1);
+    await expect.poll(() => lead(2).evaluate((path: SVGPathElement) => path.getScreenCTM()!.a)).toBeCloseTo(zoom, 3);
     for (const port of [1, 2, 3, 4]) {
       const point = await pointOn(lead(port));
       // At low zoom, neighbouring leads are less than five screen pixels apart.
-      await page.mouse.move(point.x + (zoom === .35 ? 1 : 5), point.y);
+      await page.mouse.move(point.x + Math.min(5 * zoom, 5), point.y);
       await expect(tooltip).toContainText(`PP1 / P${port}`);
+      expect(await endpoints(hoveredEnds)).toEqual([`PP1-p${port}`, `SW1-p${port}`]);
+      const halo = hoveredEnds.first();
+      await expect(halo).toHaveCSS('stroke', 'rgb(141, 226, 200)');
+      await expect(halo).toHaveCSS('pointer-events', 'none');
+      const { width, stroke } = await halo.evaluate((shape: SVGRectElement) => {
+        const scale = shape.getScreenCTM()!.a;
+        const stroke = parseFloat(getComputedStyle(shape).strokeWidth) * scale;
+        return { width: shape.getBoundingClientRect().width + stroke, stroke };
+      });
+      expect(stroke).toBeGreaterThan(.5);
+      expect(width).toBeLessThan(14 * zoom);
     }
     expect(await lead(2).evaluate(element => getComputedStyle(element).cursor)).toBe('crosshair');
     const port = page.locator('.blueprint-map-node__port[data-connection-point-id="PP1-p2"]');
     await port.click();
     await expect(page.getByTestId('clicked-port')).toHaveText('PP1-p2');
+    await expect(hoveredEnds).toHaveCount(0);
   }
 
   await page.getByRole('button', { name: 'zoom 1', exact: true }).click();
@@ -39,12 +56,14 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   await expect(inspector).toHaveCount(0);
   await page.mouse.click(short.x, short.y);
   await expect(inspector.getByRole('heading', { name: 'Patch' })).toBeVisible();
+  expect(await endpoints(selectedEnds)).toEqual(['PP1-p2', 'SW1-p2']);
   await expect(page.locator('.cable-route-marker:not(.cable-route-marker--hovered)')).toHaveCount(1);
 
   const localShared = hits.and(page.locator('[data-cable-count="4"][d="M 264 16 L 272 16"]'));
   const outlet = await pointOn(localShared);
   await page.mouse.move(outlet.x, outlet.y);
   await expect(tooltip).toHaveText('Кабелей на участке: 4');
+  await expect(hoveredEnds).toHaveCount(0);
   await page.mouse.click(outlet.x, outlet.y);
   await expect(chooser.getByRole('button')).toHaveCount(4);
   await page.keyboard.press('Escape');
@@ -79,6 +98,12 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   await expect(chooser).toHaveCount(0);
   await inspector.locator('summary').click();
   await expect(inspector.getByText('cable:cable-3', { exact: true })).toBeVisible();
+  expect(await endpoints(selectedEnds)).toEqual(['PP1-p3', 'SW1-p3']);
+  for (const zoom of [0.35, 1]) {
+    await page.getByRole('button', { name: `zoom ${zoom}`, exact: true }).click();
+    await expect(selectedEnds).toHaveCount(2);
+    await expect(selectedEnds.first()).toHaveCSS('stroke', 'rgb(255, 230, 0)');
+  }
 
   await page.getByRole('button', { name: 'Trace Cable 1' }).click();
   const traced = page.locator('.cable-route-foreground--traced');
@@ -88,6 +113,8 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   await page.mouse.move(other.x, other.y);
   await expect(tooltip).toContainText('PP1 / P4');
   await expect(page.locator('.cable-route-foreground--hovered')).toHaveCount(0);
+  await expect(hoveredEnds).toHaveCount(0);
+  expect(await endpoints(selectedEnds)).toEqual(['PP1-p3', 'SW1-p3']);
   expect(await traced.evaluateAll(paths => paths.map(path => path.getAttribute('d')))).toEqual(geometry);
   await expect(inspector.getByText('cable:cable-3', { exact: true })).toBeVisible();
 
@@ -97,6 +124,8 @@ test('selects Cable leads and shared routes on a dense L1 panel', async ({ page 
   await expect(hits).toHaveCount(0);
   await page.locator('.blueprint-map-node__port[data-connection-point-id="PP1-p5"]').click();
   await expect(page.getByTestId('clicked-port')).toHaveText('PP1-p5');
+  await inspector.getByRole('button', { name: 'Закрыть инспектор' }).click();
+  await expect(selectedEnds).toHaveCount(0);
 });
 
 test('shows keyboard focus on the Cable segment without an SVG bounding box outline', async ({ page }) => {

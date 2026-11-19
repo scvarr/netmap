@@ -57,7 +57,7 @@ function Fixture() {
   const flow = useReactFlow();
   return <>
     <div style={{ height: 40 }}>
-      {[0.35, 1, 2].map(zoom => <button key={zoom} onClick={() => void flow.setViewport({ x: 35, y: 115, zoom })}>zoom {zoom}</button>)}
+      {[0.35, 0.6, 1, 2].map(zoom => <button key={zoom} onClick={() => void flow.setViewport({ x: 35, y: 115, zoom })}>zoom {zoom}</button>)}
       <button onClick={() => setTrace(value => !value)}>Trace Cable 1</button>
       <button onClick={() => setFree(value => !value)}>Free channels</button>
       <button onClick={() => setWiring(value => !value)}>Wiring mode</button>

@@ -10,7 +10,7 @@ import {
   type InternalNode,
   type XYPosition,
 } from '@xyflow/react';
-import { useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type MouseEvent } from 'react';
 import {
   LAYOUT_NODE_HEIGHT,
   LAYOUT_NODE_WIDTH,
@@ -166,12 +166,20 @@ export function FloatingTopologyEdge({
 
 export type ForegroundPortState = 'eligible' | 'source' | 'destination' | 'unavailable';
 
-function ForegroundPortMarkers({ physicalPortStates, bulkPortNumbers }: { physicalPortStates?: Record<string, ForegroundPortState>; bulkPortNumbers?: Record<string, number> }) {
-  const nodes = useNodes<DeviceFlowNode>();
-  return <>{nodes.map((node) => <ForegroundNodePortMarkers key={node.id} nodeId={node.id} physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} />)}</>;
+type EndpointEmphasis = 'hovered' | 'selected';
+interface ForegroundPortMarkersProps {
+  physicalPortStates?: Record<string, ForegroundPortState>;
+  bulkPortNumbers?: Record<string, number>;
+  endpointEmphasis: ReadonlyMap<string, EndpointEmphasis>;
+  zoom: number;
 }
 
-function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers }: { nodeId: string; physicalPortStates?: Record<string, ForegroundPortState>; bulkPortNumbers?: Record<string, number> }) {
+function ForegroundPortMarkers(props: ForegroundPortMarkersProps) {
+  const nodes = useNodes<DeviceFlowNode>();
+  return <>{nodes.map(node => <ForegroundNodePortMarkers key={node.id} nodeId={node.id} {...props} />)}</>;
+}
+
+function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers, endpointEmphasis, zoom }: ForegroundPortMarkersProps & { nodeId: string }) {
   const portTypes = useRuntimePortTypes();
   const node = useInternalNode<DeviceFlowNode>(nodeId);
   // A collapsed Location proxy is a presentation anchor, never a PhysicalObject with ports.
@@ -182,18 +190,40 @@ function ForegroundNodePortMarkers({ nodeId, physicalPortStates, bulkPortNumbers
   const ports = blueprint
     ? blueprint.slots.map((slot) => ({ id: slot.connection_point_id, network: slot.kind === 'NETWORK_PORT', portTypeId: slot.port_type_id }))
     : genericConnectionPoints(projection).map((point) => ({ id: point.connection_point_id, network: false, portTypeId: undefined }));
+  const box = rectangle(node);
+  const portStroke = blueprint ? BLUEPRINT_PORT_STROKE : 1.25;
+  const radius = blueprint ? (BLUEPRINT_PORT_SIZE - portStroke) / 2 : 3.5;
+  const portOuterRadius = radius + portStroke / 2;
+  // Leave space between the smallest supported Blueprint pitch and the halo.
+  const preferredHaloWidth = Math.min(1.25 / zoom, 1.75);
+  const haloOutset = blueprint ? preferredHaloWidth
+    : Math.min(preferredHaloWidth, Math.max(0, box.height / (ports.length + 1) / 2 - portOuterRadius));
+  // A crowded Generic endpoint can reuse its outline without expanding into the next port.
+  const haloWidth = Math.min(preferredHaloWidth, haloOutset + portStroke);
+  const haloRadius = portOuterRadius + haloOutset - haloWidth / 2;
   return <g className="cable-route-port-markers" aria-hidden="true" pointerEvents="none">
     {ports.map((port) => {
-      const endpoint = getRenderedConnectionPoint(projection, rectangle(node), port.id);
+      const endpoint = getRenderedConnectionPoint(projection, box, port.id);
+      if (!endpoint) return null;
       const state = physicalPortStates?.[port.id];
       const { fill, outline } = physicalPortPaint(portTypes?.find(type => type.id === port.portTypeId)?.color,
         node.data.cableOccupiedPortIds?.has(port.id) ?? false, tracedPorts.has(port.id), state);
-      const radius = blueprint ? (BLUEPRINT_PORT_SIZE - BLUEPRINT_PORT_STROKE) / 2 : 3.5;
       const className = `cable-route-port-marker${blueprint ? ' cable-route-port-marker--blueprint' : ''}${port.network ? ' cable-route-port-marker--network' : ''}${state ? ` cable-route-port-marker--wiring-${state}` : ''}`;
       const style = { fill, stroke: outline, strokeWidth: blueprint ? BLUEPRINT_PORT_STROKE : undefined };
-      return endpoint && <g key={port.id}>{port.network
-        ? <rect className={className} style={style} data-connection-point-id={port.id} x={endpoint.x - radius} y={endpoint.y - radius} width={radius * 2} height={radius * 2} rx={0} pointerEvents="none" />
-        : <circle className={className} style={style} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={radius} pointerEvents="none" />}{bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}</g>;
+      const emphasis = state === 'source' || state === 'destination' ? undefined : endpointEmphasis.get(port.id);
+      const halo = {
+        'data-cable-endpoint': port.id, 'data-emphasis': emphasis, className: 'cable-endpoint-halo',
+        fill: 'none', strokeWidth: haloWidth, opacity: state === 'unavailable' ? .35 : undefined,
+      };
+      return <g key={port.id}>
+        {port.network
+          ? <rect className={className} style={style} data-connection-point-id={port.id} x={endpoint.x - radius} y={endpoint.y - radius} width={radius * 2} height={radius * 2} rx={0} pointerEvents="none" />
+          : <circle className={className} style={style} data-connection-point-id={port.id} cx={endpoint.x} cy={endpoint.y} r={radius} pointerEvents="none" />}
+        {emphasis && (port.network
+          ? <rect {...halo} x={endpoint.x - haloRadius} y={endpoint.y - haloRadius} width={2 * haloRadius} height={2 * haloRadius} />
+          : <circle {...halo} cx={endpoint.x} cy={endpoint.y} r={haloRadius} />)}
+        {bulkPortNumbers?.[port.id] && <text x={endpoint.x} y={endpoint.y - 8} textAnchor="middle" fontSize={8} fontWeight={700} fill="#ffca66" stroke="#172629" strokeWidth={1} paintOrder="stroke">{bulkPortNumbers[port.id]}</text>}
+      </g>;
     })}
   </g>;
 }
@@ -264,6 +294,25 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
   const { locale, t } = useI18n();
   const [hoveredCable, setHoveredCable] = useState<string | null>(null);
   const interactive = !physicalPortStates && !bulkPortNumbers && !bulkPairs && !wiringRoute && Boolean(onCableSelect || onCableContextMenu);
+  useEffect(() => { if (!interactive) setHoveredCable(null); }, [interactive]);
+  const activeHover = interactive && !traceActive ? hoveredCable : null;
+  const endpointEmphasis = useMemo(() => {
+    const result = new Map<string, EndpointEmphasis>();
+    for (const edge of edges) {
+      const { cableNode, endpointPair, continuation } = edge.data ?? {};
+      const selected = cableEmphasis(edge) === 'selected';
+      if (selected && continuation) {
+        result.set(continuation.local_connection_point_ref.entity_id, 'selected');
+      }
+      if (!cableNode || !endpointPair) continue;
+      const cableId = cableIdForNode(cableNode);
+      if (!cableId || (!selected && activeHover !== cableId)) continue;
+      for (const portId of [endpointPair.from_connection_point_id, endpointPair.to_connection_point_id]) {
+        if (result.get(portId) !== 'selected') result.set(portId, selected ? 'selected' : 'hovered');
+      }
+    }
+    return result;
+  }, [edges, activeHover]);
   const nodeById = useMemo(() => new Map(nodes.map(node => [node.id, node])), [nodes]);
   const locationSnapshot = locationInputs && JSON.stringify(locationInputs);
   const locationChannels = useMemo(() => locationSnapshot === undefined ? undefined
@@ -486,7 +535,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
     return edge;
   };
   const connectorSegments = [...connectors.values()];
-  const hovered = (segment: RouteSegment) => interactive && !traceActive && hoveredCable !== null && segment.cables.has(hoveredCable);
+  const hovered = (segment: RouteSegment) => activeHover !== null && segment.cables.has(activeHover);
   const visiblePath = (segment: RouteSegment, channel: boolean) => {
     const edge = emphasisFor(segment);
     const emphasis = cableEmphasis(edge);
@@ -541,7 +590,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
       return label;
     };
   }, [nodeById, locale, edges]);
-  if (!locationChannels && !connectors.size && !channels.length && !wiringRoute && !physicalPortStates && !bulkPortNumbers && !bulkPairs) return null;
+  if (!locationChannels && !connectors.size && !channels.length && !wiringRoute && !physicalPortStates && !bulkPortNumbers && !bulkPairs && !endpointEmphasis.size) return null;
 
   const markers = new Map<string, RouteSegment>();
   const visibleSegments = [...connectorSegments, ...locationSegments.values(), ...channels];
@@ -579,7 +628,7 @@ export function ForegroundCableRoutes({ edges, virtualChannels, locationInputs, 
         clip={clip}
         selectedMarkers={[...new Set(markers.values())]} labelFor={labelFor} onHover={setHoveredCable}
         onSelect={onCableSelect} onContextMenu={onCableContextMenu} />}
-      <ForegroundPortMarkers physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} />
+      <ForegroundPortMarkers physicalPortStates={physicalPortStates} bulkPortNumbers={bulkPortNumbers} endpointEmphasis={endpointEmphasis} zoom={zoom} />
       {bulkLines}
       {wiringRoute && <g data-testid="foreground-wiring-route">
         {wiringSource && wiringTarget && <path className="wiring-route-preview" d={`M ${wiringSource.x} ${wiringSource.y} L ${wiringTarget.x} ${wiringTarget.y}`} fill="none" pointerEvents="none" />}
