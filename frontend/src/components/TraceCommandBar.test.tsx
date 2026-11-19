@@ -64,7 +64,7 @@ it.each([false, true])('qualifies both selectors from panel context and preserve
   const loadDetails = vi.fn((id: string) => {
     const document = details(id, entries.map(([key]) => [key, 'unqualified']));
     return Promise.resolve({ ...document, connection_points: [
-      ...document.connection_points.map((port, index) => ({ ...port, panel_context: {
+      ...document.connection_points.map((port, index) => ({ ...port, panel_context: { panel_key: String(index),
         panel_name: entries[index][1], port_name: entries[index][2], bay_name: entries[index][3], module_name: entries[index][4],
       } })), ...details(id, [['loose', 'Loose 7']]).connection_points,
     ] });

@@ -54,6 +54,9 @@ const physicalObjectIdentity = (node: TopologyProjectionNode): string | null => 
 
 const displayPointLabel = (point: ConnectionPointDetails, fallback: string): string => {
   const technical = /^ConnectionPoint\s+(.+)$/i.exec(point.label.trim());
+  if (point.panel_context) {
+    return [point.panel_context.bay_name, point.panel_context.port_name].filter(Boolean).join(' / ');
+  }
   if (point.label_source !== 'TECHNICAL_FALLBACK' && !technical) return point.label;
   return `${fallback} ${shortId(technical?.[1] ?? point.connection_point_ref.entity_id)}`;
 };
@@ -191,20 +194,22 @@ interface PortRowProps {
   cableLabelDataSource?: CableLabelDataSource;
 }
 
-const attachmentLabel = (point: ConnectionPointDetails, t: ReturnType<typeof useI18n>['t']): string => {
-  const attachments = point.external_physical_attachments ?? [];
-  if (!attachments.length) return '—';
-  return attachments.map((attachment) => {
-    const remote = [attachment.remote_physical_object_label, attachment.remote_connection_point_label].filter(Boolean).join(' · ');
-    return attachment.kind === 'CABLE'
-      ? `${remote || t('physical.remoteEndpoint')}${attachment.cable_label ? ` · ${attachment.cable_label}` : ''}`
-      : remote || t('physical.connection');
-  }).join('; ');
+const attachmentLabel = (attachment: NonNullable<ConnectionPointDetails['external_physical_attachments']>[number], t: ReturnType<typeof useI18n>['t']): string => {
+  const remote = [
+    attachment.remote_physical_object_label,
+    attachment.remote_panel_name,
+    attachment.remote_connection_point_label,
+  ].filter(Boolean).join(' / ');
+  const connection = attachment.kind === 'CABLE' ? attachment.cable_label || t('physical.cable') : t('physical.directConnection');
+  return `${connection} · ${remote || t('physical.remoteEndpoint')}`;
 };
 
 const statusLabel = (point: ConnectionPointDetails, t: ReturnType<typeof useI18n>['t']): string => {
-  if (point.cardinality !== 1) return t('physical.connections', { count: point.incident_connection_count, external: point.external_connection_count ?? 0 });
-  return (point.external_physical_attachments ?? []).length ? t('physical.connected') : t('physical.free');
+  const externalCount = new Set(
+    point.external_physical_attachments?.map((attachment) => attachment.connection_ref.entity_id),
+  ).size;
+  if (externalCount > 1) return t('physical.externalConnectionCount', { count: externalCount });
+  return externalCount ? t('physical.connected') : t('physical.free');
 };
 
 const interfaceLabel = (point: ConnectionPointDetails): string => (
@@ -257,27 +262,20 @@ const PortRow = ({
 }: PortRowProps) => {
   const { t } = useI18n(); return <tr>
     <th scope="row"><RuntimePortLabel point={point} label={displayPointLabel(point, t('physical.point', { id: '' }).trim())} /></th>
-    <td>{statusLabel(point, t)}</td><td>{attachmentLabel(point, t)}</td><td>{interfaceLabel(point)}</td>
+    <td>{statusLabel(point, t)}</td>
+    <td>{point.external_physical_attachments?.length ? point.external_physical_attachments.map((attachment, index) => (
+      <div key={attachment.evidence_refs.find((ref) => ref.entity_type === 'ConnectionMember')?.entity_id ?? index}>
+        {attachmentLabel(attachment, t)}
+      </div>
+    )) : '—'}</td>
+    <td>{point.internal_physical_counterparts?.length ? point.internal_physical_counterparts.map((peer, index) => (
+      <div key={peer.evidence_refs.find((ref) => ref.entity_type === 'ConnectionMember')?.entity_id ?? index}>
+        {[peer.panel_name, peer.label].filter(Boolean).join(' / ')}
+      </div>
+    )) : '—'}</td>
+    <td>{interfaceLabel(point)}</td>
     <td><PortActions point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={physicalDetailsDataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={onConnected} cableLabelDataSource={cableLabelDataSource} /></td>
   </tr>;
-};
-
-const pairedChannels = (points: ConnectionPointDetails[]): Array<[ConnectionPointDetails, ConnectionPointDetails]> | null => {
-  if (!points.length || points.some((point) => (
-    (point.internal_physical_counterparts ?? []).length !== 1
-    || (point.direct_interface_bindings ?? []).length > 0
-    || point.blueprint_slot?.kind === 'NETWORK_PORT'
-  ))) return null;
-  const byId = new Map(points.map((point) => [point.connection_point_ref.entity_id, point]));
-  const seen = new Set<string>(); const pairs: Array<[ConnectionPointDetails, ConnectionPointDetails]> = [];
-  for (const point of points) {
-    if (seen.has(point.connection_point_ref.entity_id)) continue;
-    const peerId = point.internal_physical_counterparts?.[0].connection_point_ref.entity_id;
-    const peer = peerId ? byId.get(peerId) : undefined;
-    if (!peerId || !peer || peer.internal_physical_counterparts?.[0].connection_point_ref.entity_id !== point.connection_point_ref.entity_id) return null;
-    seen.add(point.connection_point_ref.entity_id); seen.add(peerId); pairs.push([point, peer]);
-  }
-  return seen.size === points.length ? pairs : null;
 };
 
 export const PhysicalBaseTemplateOverview = ({ provenance, baseTemplateDataSource }: { physicalObjectId: string; provenance: NonNullable<PhysicalObjectDetailsDocument['blueprint_provenance']>; baseTemplateDataSource?: BaseTemplateDataSource; refresh: () => Promise<void> }) => {
@@ -310,12 +308,36 @@ function PhysicalObjectDetailsContent({
       ? { kind: 'loading' }
       : { kind: 'unavailable', message: t('physical.noCanonicalRef') }
   ));
+  const [panelChoice, setPanelChoice] = useState<string>();
+  const activeDocument = state.kind === 'loaded' ? state.document : undefined;
+  const panels = activeDocument?.panels ?? [];
+  const panelKeys = new Set(panels.map((panel) => panel.panel_key));
+  const unassigned = activeDocument?.connection_points.filter((point) => (
+    !point.panel_context || !panelKeys.has(point.panel_context.panel_key)
+  )) ?? [];
+  const showUnassigned = panels.length > 0 && unassigned.length > 0;
+  const panelOptions = panels.map((panel) => ({
+    value: panel.panel_key,
+    label: panel.face ? `${panel.display_name} · ${t(panel.face === 'FRONT' ? 'face.front' : 'face.rear')}` : panel.display_name,
+  }));
+  if (showUnassigned) panelOptions.push({ value: '', label: t('physical.unassignedPanel') });
+  const selectedPanel = panelOptions.find((option) => option.value === panelChoice)?.value ?? panelOptions[0]?.value;
+
+  useEffect(() => {
+    if (activeDocument && panelChoice !== selectedPanel) setPanelChoice(selectedPanel);
+  }, [activeDocument, panelChoice, selectedPanel]);
+
+  const visiblePoints = selectedPanel
+    ? activeDocument?.connection_points.filter((point) => point.panel_context?.panel_key === selectedPanel) ?? []
+    : unassigned;
+  const sortedPoints = sortedConnectionPoints(visiblePoints, t('physical.point', { id: '' }).trim());
+
   const onDocumentChangeRef = useRef(onDocumentChange);
   onDocumentChangeRef.current = onDocumentChange;
 
   useEffect(() => {
     if (document !== undefined) {
-      setState(document ? { kind: 'loaded', document } : loadFailed
+      setState(document?.physical_object.source_ref.entity_id === physicalObjectId && document ? { kind: 'loaded', document } : loadFailed
         ? { kind: 'error', message: t('physical.loadFailed') }
         : { kind: 'loading' });
       return undefined;
@@ -378,15 +400,38 @@ function PhysicalObjectDetailsContent({
           {state.document.blueprint_provenance && (
             <>{mode !== 'physical' && physicalObjectId && <PhysicalBaseTemplateOverview physicalObjectId={physicalObjectId} provenance={state.document.blueprint_provenance} baseTemplateDataSource={baseTemplateDataSource} refresh={async () => { const document = await dataSource.loadPhysicalObjectDetails(physicalObjectId); setState({ kind: 'loaded', document }); onDocumentChange(document); }} />}</>
           )}
-          <><h3 id="connection-points-heading">{t('physical.ports')} <span>{state.document.connection_points.length}</span></h3>
+          <><h3 id="connection-points-heading">{t('physical.ports')} <span>{sortedPoints.length}</span></h3>
           {!state.document.blueprint_provenance && connectionPointWriteDataSource && physicalObjectId && (
             <div className="manual-point-action"><strong>{t('physical.manualStructure')}</strong><CreateConnectionPoint physicalObjectId={physicalObjectId} dataSource={connectionPointWriteDataSource} onCreated={(document) => { setState({ kind: 'loaded', document }); onDocumentChange(document); onConnectionPointCreated(); }} /></div>
           )}
-          {state.document.connection_points.length ? (() => {
-            const points = sortedConnectionPoints(state.document.connection_points, t('physical.point', { id: '' }).trim()); const channels = pairedChannels(points);
-            if (channels) return <div className="ports-table-wrap"><h4>{t('physical.channels')}</h4><table className="ports-table"><thead><tr><th>{t('physical.channel')}</th><th>{t('physical.port')} A</th><th>{t('physical.connectionA')}</th><th>{t('physical.actionsA')}</th><th>{t('physical.port')} B</th><th>{t('physical.connectionB')}</th><th>{t('physical.actionsB')}</th></tr></thead><tbody>{channels.map(([left, right], index) => <tr key={left.connection_point_ref.entity_id}><th scope="row">{index + 1}</th><td><RuntimePortLabel point={left} label={displayPointLabel(left, t('physical.point', { id: '' }).trim())} /></td><td>{attachmentLabel(left, t)}</td><td><PortActions point={left} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td><td><RuntimePortLabel point={right} label={displayPointLabel(right, t('physical.point', { id: '' }).trim())} /></td><td>{attachmentLabel(right, t)}</td><td><PortActions point={right} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} /></td></tr>)}</tbody></table></div>;
-            return <div className="ports-table-wrap"><table className="ports-table"><thead><tr><th>{t('physical.port')}</th><th>{t('physical.status')}</th><th>{t('physical.connectedTo')}</th><th>{t('physical.interface')}</th><th>{t('physical.actions')}</th></tr></thead><tbody>{points.map((point) => <PortRow key={point.connection_point_ref.entity_id} point={point} topologyNodes={topologyNodes} physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource} writeDataSource={writeDataSource} cableLabelDataSource={cableLabelDataSource} onConnected={() => { setRetryKey((key) => key + 1); onConnected(); }} />)}</tbody></table></div>;
-          })() : <p className="device-details-state">{t('physical.noPoints')}</p>}
+          {selectedPanel !== undefined && (
+            <label className="physical-panel-picker">
+              {t('physical.panel')}
+              <select value={selectedPanel} onChange={(event) => setPanelChoice(event.target.value)}>
+                {panelOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+          )}
+          {sortedPoints.length ? (
+            <div className="ports-table-wrap">
+              <table className="ports-table">
+                <thead><tr>
+                  <th scope="col">{t('physical.port')}</th>
+                  <th scope="col">{t('physical.status')}</th>
+                  <th scope="col">{t('physical.externalConnection')}</th>
+                  <th scope="col">{t('physical.internalConnections')}</th>
+                  <th scope="col">{t('physical.interface')}</th>
+                  <th scope="col">{t('physical.actions')}</th>
+                </tr></thead>
+                <tbody>{sortedPoints.map((point) => (
+                  <PortRow key={point.connection_point_ref.entity_id} point={point} topologyNodes={topologyNodes}
+                    physicalDetailsDataSource={dataSource} deviceDetailsDataSource={deviceDetailsDataSource}
+                    writeDataSource={writeDataSource} cableLabelDataSource={cableLabelDataSource}
+                    onConnected={() => { if (document === undefined) setRetryKey((key) => key + 1); onConnected(); }} />
+                ))}</tbody>
+              </table>
+            </div>
+          ) : <p className="device-details-state">{t('physical.noPoints')}</p>}
           <details className="technical-details physical-object-details__technical">
             <summary>{t('physical.objectTechnical')}</summary>
             <SourceRefs refs={[state.document.physical_object.source_ref]} />
@@ -399,5 +444,5 @@ function PhysicalObjectDetailsContent({
 }
 
 export function PhysicalObjectDetailsSection(props: PhysicalObjectDetailsSectionProps) {
-  return <RuntimePortTypes><PhysicalObjectDetailsContent {...props} /></RuntimePortTypes>;
+  return <RuntimePortTypes><PhysicalObjectDetailsContent key={physicalObjectIdentity(props.node)} {...props} /></RuntimePortTypes>;
 }

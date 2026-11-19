@@ -15,16 +15,16 @@ const renderDetails = (value: PhysicalObjectDetailsDocument, props = {}) => rend
 const deferred = <T,>() => { let resolve!: (value: T) => void; return { promise: new Promise<T>((next) => { resolve = next; }), resolve }; };
 
 describe('PhysicalObjectDetailsSection ports', () => {
-  it('refreshes derived channel names while keeping canonical aliases in technical details', async () => {
+  it('refreshes derived port names while keeping canonical aliases in technical details', async () => {
     const a = point('Renamed A', 'a', { canonical_label: '2-1', internal_physical_counterparts: [{ connection_point_ref: ref('ConnectionPoint', 'b'), label: 'Renamed B', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }] });
     const b = point('Renamed B', 'b', { canonical_label: '3-1', internal_physical_counterparts: [{ connection_point_ref: ref('ConnectionPoint', 'a'), label: 'Renamed A', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }] });
     const source = { loadPhysicalObjectDetails: vi.fn() };
     const view = render(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={source} document={document([a, b])} /></MemoryRouter>);
-    expect(await screen.findByRole('cell', { name: 'Renamed A' })).toBeInTheDocument();
+    expect(await screen.findByRole('rowheader', { name: 'Renamed A' })).toBeInTheDocument();
     expect(screen.getByText(/2-1/)).toBeInTheDocument();
     view.rerender(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={source} document={document([{ ...a, label: 'Updated A' }, b])} /></MemoryRouter>);
-    expect(await screen.findByRole('cell', { name: 'Updated A' })).toBeInTheDocument();
-    expect(screen.queryByRole('cell', { name: 'Renamed A' })).not.toBeInTheDocument();
+    expect(await screen.findByRole('rowheader', { name: 'Updated A' })).toBeInTheDocument();
+    expect(screen.queryByRole('rowheader', { name: 'Renamed A' })).not.toBeInTheDocument();
   });
   it('renders module contextual names for physical ports, bound interfaces and remote attachments', async () => {
     const first = 'Back / PCIe1 / feth1'; const second = 'Back / PCIe2 / feth1';
@@ -36,18 +36,18 @@ describe('PhysicalObjectDetailsSection ports', () => {
     expect(await screen.findByRole('rowheader', { name: first })).toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: second })).toBeInTheDocument();
     expect(within(screen.getByRole('rowheader', { name: first }).closest('tr')!).getAllByText(first)).toHaveLength(2);
-    expect(screen.getByText('Other object · Front / Slot 1 / feth1')).toBeInTheDocument();
+    expect(screen.getByText('Прямое соединение · Other object / Front / Slot 1 / feth1')).toBeInTheDocument();
     expect(screen.getByRole('rowheader', { name: 'MGMT' })).toBeInTheDocument();
   });
   it('renders active ports in natural display-label ordering with factual status, neighbour, cable, interface and icon actions', async () => {
-    const cable = point('A10', 'a10', { ordering_key: '000', direct_interface_bindings: [{ interface_ref: ref('NetworkInterface', 'ni'), label: 'Eth1', evidence_refs: [] }], external_physical_attachments: [{ kind: 'CABLE', connection_ref: ref('Connection', 'c'), cable_ref: ref('Cable', 'cable'), evidence_refs: [], cable_label: 'CAB-1', remote_physical_object_label: 'SW2', remote_connection_point_label: 'Eth2' }] });
+    const cable = point('A10', 'a10', { ordering_key: '000', direct_interface_bindings: [{ interface_ref: ref('NetworkInterface', 'ni'), label: 'Eth1', evidence_refs: [] }], external_physical_attachments: [{ kind: 'CABLE', connection_ref: ref('Connection', 'c'), cable_ref: ref('Cable', 'cable'), evidence_refs: [], cable_label: 'CAB-1', remote_physical_object_label: 'SW2', remote_panel_name: 'Front-1', remote_connection_point_label: 'Eth2' }] });
     const direct = point('A02', 'a02', { ordering_key: 'zzz', external_physical_attachments: [{ kind: 'DIRECT_CONNECTION', connection_ref: ref('Connection', 'd'), evidence_refs: [], remote_physical_object_label: 'PP1', remote_connection_point_label: 'B01' }] });
     renderDetails(document([cable, direct, point('A01')]), { deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, writeDataSource: { createPhysicalEndpointConnection: vi.fn(), deleteExternalPhysicalConnection: vi.fn() } });
     await screen.findByRole('rowheader', { name: 'A01' });
     expect(screen.getAllByRole('row').slice(1).map((row) => within(row).getByRole('rowheader').textContent)).toEqual(['A01', 'A02', 'A10']);
     expect(screen.getByText('Свободен')).toBeInTheDocument();
-    expect(screen.getByText(/SW2 · Eth2 · CAB-1/)).toBeInTheDocument();
-    expect(screen.getByText('PP1 · B01')).toBeInTheDocument();
+    expect(screen.getByText('CAB-1 · SW2 / Front-1 / Eth2')).toBeInTheDocument();
+    expect(screen.getByText('Прямое соединение · PP1 / B01')).toBeInTheDocument();
     expect(screen.getByText('Eth1')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Подключить порт' })).toHaveAttribute('title', 'Подключить порт');
     expect(screen.getAllByRole('button', { name: 'Разорвать физическое подключение' })).toHaveLength(2);
@@ -55,23 +55,56 @@ describe('PhysicalObjectDetailsSection ports', () => {
   });
 
 
-  it('renders exact symmetric internal pairs once as channels and falls back for ambiguous topology', async () => {
-    const a = point('A01', 'a'); const b = point('B01', 'b');
-    a.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'b'), label: 'B01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
-    b.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'a'), label: 'A01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
-    const { rerender } = renderDetails(document([a, b]));
-    expect(await screen.findByRole('heading', { name: 'Каналы' })).toBeInTheDocument();
-    expect(screen.getAllByRole('row')).toHaveLength(2);
-    rerender(<MemoryRouter><PhysicalObjectDetailsSection node={node()} dataSource={{ loadPhysicalObjectDetails: vi.fn().mockResolvedValue(document([{ ...a, internal_physical_counterparts: [] }, b])) }} /></MemoryRouter>);
-    expect(await screen.findByRole('columnheader', { name: 'Порт' })).toBeInTheDocument();
+  it('selects panels by key with duplicate names, preserves refresh selection, and resets on object change', async () => {
+    const panels: NonNullable<PhysicalObjectDetailsDocument['panels']> = [
+      { panel_key: 'z', display_name: 'Коммутация', panel_number: 1, face: 'FRONT' },
+      { panel_key: 'a', display_name: 'Коммутация', panel_number: 2, face: 'REAR' },
+      { panel_key: 'service', display_name: 'Диагностика', panel_number: 3 },
+    ];
+    const port = (panel: typeof panels[number], n: number) => point(`${panel.display_name} / ${n}`, `${panel.panel_key}-${n}`, {
+      panel_context: { panel_key: panel.panel_key, panel_name: panel.display_name, port_name: String(n) },
+    });
+    const source = { loadPhysicalObjectDetails: vi.fn() };
+    const front = Array.from({ length: 48 }, (_, i) => port(panels[0], 48 - i));
+    front[47].internal_physical_counterparts = [
+      { connection_point_ref: ref('ConnectionPoint', 'a-1'), panel_name: 'Коммутация', label: '1', connection_ref: ref('Connection', 'first'), evidence_refs: [] },
+      { connection_point_ref: ref('ConnectionPoint', 'a-10'), panel_name: 'Коммутация', label: '10', connection_ref: ref('Connection', 'second'), evidence_refs: [] },
+    ];
+    const value = { ...document([...front, port(panels[1], 1), port(panels[2], 2), point('Без привязки')]), panels };
+    const view = (data: PhysicalObjectDetailsDocument | null, id = 'object') => (
+      <MemoryRouter><PhysicalObjectDetailsSection node={node(id)} dataSource={source} document={data} /></MemoryRouter>
+    );
+    const { rerender } = render(view(value));
+    const picker = await screen.findByRole('combobox', { name: 'Панель' });
+    expect(within(picker).getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Коммутация · Спереди', 'Коммутация · Сзади', 'Диагностика', 'Без панели',
+    ]);
+    expect(screen.getAllByRole('rowheader').map((header) => header.textContent)).toEqual(
+      Array.from({ length: 48 }, (_, i) => String(i + 1)),
+    );
+    expect(screen.getByText('Коммутация / 1')).toBeInTheDocument();
+    expect(screen.getByText('Коммутация / 10')).toBeInTheDocument();
+    await userEvent.selectOptions(picker, 'a');
+    expect(screen.getAllByRole('rowheader').map((header) => header.textContent)).toEqual(['1']);
+    rerender(view(null));
+    rerender(view({ ...value, panels: [panels[0], { ...panels[1], display_name: 'Новое имя' }, panels[2]] }));
+    expect(await screen.findByRole('combobox', { name: 'Панель' })).toHaveValue('a');
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Панель' }), 'service');
+    expect(screen.getByRole('rowheader', { name: '2' })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Панель' }), '');
+    expect(screen.getByRole('rowheader', { name: 'Без привязки' })).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Панель' }), 'a');
+    rerender(view({ ...value, physical_object: { ...value.physical_object, source_ref: ref('PhysicalObject', 'next') } }, 'next'));
+    expect(await screen.findByRole('combobox', { name: 'Панель' })).toHaveValue('z');
   });
 
-  it('keeps free channel endpoints connectable without per-port technical refs', async () => {
+  it('keeps ports with internal continuity connectable without per-port technical refs', async () => {
     const a = point('A01', 'a'); const b = point('B01', 'b');
     a.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'b'), label: 'B01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
     b.internal_physical_counterparts = [{ connection_point_ref: ref('ConnectionPoint', 'a'), label: 'A01', connection_ref: ref('Connection', 'ab'), evidence_refs: [] }];
     renderDetails(document([a, b]), { deviceDetailsDataSource: { loadDeviceDetails: vi.fn() }, writeDataSource: { createPhysicalEndpointConnection: vi.fn() } });
-    await screen.findByRole('heading', { name: 'Каналы' });
+    await screen.findByRole('columnheader', { name: 'Порт' });
+    expect(screen.queryByRole('combobox', { name: 'Панель' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Подключить порт' })).toHaveLength(2);
     expect(screen.queryByText('Технические данные')).not.toBeInTheDocument();
   });

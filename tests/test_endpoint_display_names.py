@@ -31,7 +31,11 @@ def test_pinned_names_reconciliation_and_detached_reads():
         assert point['direct_interface_bindings'][0]['label'] == 'Renamed port'
         assert point['external_physical_attachments'][0]['cable_label'] == 'User cable'
         remote = client.get(f'/v1/topology/physical-objects/{remote_id}').json()['connection_points'][0]
-        assert remote['external_physical_attachments'][0]['remote_connection_point_label'] == 'Renamed port'
+        attachment = remote['external_physical_attachments'][0]
+        assert attachment['remote_connection_point_label'] == 'Renamed port'
+        assert attachment['remote_panel_name'] == point['panel_context']['panel_name']
+        assert attachment['remote_connection_point_ref']['entity_id'] == str(point_id)
+        assert 'remote_panel_name' not in point['external_physical_attachments'][0]
         assert remote['label_source'] == 'TECHNICAL_FALLBACK'
         projection = client.post('/v1/topology/projection', json={
             'layer': 'L1', 'detail_level': 'PHYSICAL_OBJECT',

@@ -1,5 +1,5 @@
 import { ModuleInstallationSection } from '../components/ModuleInstallationSection';
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router-dom";
 import { DeviceInterfacesSection } from "../components/DeviceInterfacesSection";
 import { PhysicalBaseTemplateOverview, PhysicalObjectClassEditor, PhysicalObjectDetailsSection } from "../components/PhysicalObjectDetailsSection";
@@ -76,9 +76,11 @@ export function InfrastructureObjectDetailPage({
   const { collator, locale, t } = useI18n();
   const { physicalObjectId = "", section } = useParams();
   const activeSection = section ?? "overview";
-  const [details, setDetails] = useState<PhysicalObjectDetailsDocument | null>(
+  const [detailsDocument, setDetails] = useState<PhysicalObjectDetailsDocument | null>(
     null,
   );
+  const details = detailsDocument?.physical_object.source_ref.entity_id === physicalObjectId ? detailsDocument : null;
+  const detailsRequest = useRef({ objectId: physicalObjectId, revision: 0 });
   const [detailsFailed, setDetailsFailed] = useState(false);
   const [projection, setProjection] =
     useState<TopologyProjectionDocument | null>(null);
@@ -95,13 +97,25 @@ export function InfrastructureObjectDetailPage({
   } | null>(null);
 
   const refreshDetails = useCallback(async () => {
-    if (!physicalObjectDetailsDataSource || !physicalObjectId) return;
+    const scope = detailsRequest.current;
+    if (!physicalObjectDetailsDataSource || !physicalObjectId || scope.objectId !== physicalObjectId) return;
+    const revision = ++scope.revision;
+    const isCurrent = () => detailsRequest.current === scope && revision === scope.revision;
     setDetailsFailed(false);
-    try { setDetails(await physicalObjectDetailsDataSource.loadPhysicalObjectDetails(physicalObjectId)); }
-    catch { setDetailsFailed(true); }
+    try {
+      const nextDetails = await physicalObjectDetailsDataSource.loadPhysicalObjectDetails(physicalObjectId);
+      if (isCurrent()) setDetails(nextDetails);
+    } catch {
+      if (isCurrent()) setDetailsFailed(true);
+    }
   }, [physicalObjectDetailsDataSource, physicalObjectId]);
 
-  useEffect(() => { void refreshDetails(); }, [refreshDetails]);
+  useEffect(() => {
+    const scope = { objectId: physicalObjectId, revision: 0 };
+    detailsRequest.current = scope;
+    void refreshDetails();
+    return () => { scope.revision++; };
+  }, [physicalObjectId, refreshDetails]);
 
   useEffect(() => {
     if (activeSection !== "physical" && activeSection !== "interfaces") return;

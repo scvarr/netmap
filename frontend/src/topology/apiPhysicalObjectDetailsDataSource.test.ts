@@ -65,7 +65,7 @@ describe('ApiPhysicalObjectDetailsDataSource', () => {
 
 
 it('preserves factual panel context and rejects malformed context', () => {
-  const panel_context = { panel_name: 'REAR', port_name: '1', bay_name: 'PCIe2', module_name: 'NIC' };
+  const panel_context = { panel_key: 'panel', panel_name: 'REAR', port_name: '1', bay_name: 'PCIe2', module_name: 'NIC' };
   const document = { ...physicalObjectDocument, connection_points: [{ ...physicalObjectDocument.connection_points[0], panel_context }] };
   expect(parsePhysicalObjectDetailsDocument(document).connection_points[0].panel_context).toEqual(panel_context);
   expect(() => parsePhysicalObjectDetailsDocument({ ...document, connection_points: [{ ...document.connection_points[0], panel_context: { ...panel_context, panel_name: 1 } }] })).toThrow(/panel_name/);

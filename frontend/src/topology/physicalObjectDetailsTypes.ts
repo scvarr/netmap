@@ -9,7 +9,7 @@ export interface PhysicalObjectDetails {
 }
 
 export interface ConnectionPointDetails {
-  panel_context?: { panel_name: string; port_name: string; module_name?: string; bay_name?: string };
+  panel_context?: { panel_name: string; panel_key: string; port_name: string; module_name?: string; bay_name?: string };
   canonical_label?: string;
   connection_point_ref: ProjectionSourceRef;
   label: string;
@@ -21,8 +21,8 @@ export interface ConnectionPointDetails {
   ordering_key?: string;
   blueprint_slot?: { port_type_id: string; slot_key: string; kind: BlueprintSlotKind };
   direct_interface_bindings?: Array<{ interface_ref: ProjectionSourceRef; label: string; label_source?: 'TECHNICAL_FALLBACK'; evidence_refs: ProjectionSourceRef[] }>;
-  internal_physical_counterparts?: Array<{ connection_point_ref: ProjectionSourceRef; label: string; label_source?: 'TECHNICAL_FALLBACK'; connection_ref: ProjectionSourceRef; evidence_refs: ProjectionSourceRef[] }>;
-  external_physical_attachments?: Array<{ kind: 'DIRECT_CONNECTION' | 'CABLE'; connection_ref: ProjectionSourceRef; evidence_refs: ProjectionSourceRef[]; remote_physical_object_ref?: ProjectionSourceRef; remote_physical_object_label?: string; remote_connection_point_ref?: ProjectionSourceRef; remote_connection_point_label?: string; cable_ref?: ProjectionSourceRef; cable_label?: string }>;
+  internal_physical_counterparts?: Array<{ connection_point_ref: ProjectionSourceRef; label: string; panel_name?: string; label_source?: 'TECHNICAL_FALLBACK'; connection_ref: ProjectionSourceRef; evidence_refs: ProjectionSourceRef[] }>;
+  external_physical_attachments?: Array<{ kind: 'DIRECT_CONNECTION' | 'CABLE'; connection_ref: ProjectionSourceRef; evidence_refs: ProjectionSourceRef[]; remote_physical_object_ref?: ProjectionSourceRef; remote_physical_object_label?: string; remote_panel_name?: string; remote_connection_point_ref?: ProjectionSourceRef; remote_connection_point_label?: string; cable_ref?: ProjectionSourceRef; cable_label?: string }>;
   source_refs: ProjectionSourceRef[];
 }
 
@@ -30,6 +30,7 @@ export interface PhysicalObjectDetailsDocument {
   schema_version: '1.0';
   physical_object: PhysicalObjectDetails;
   blueprint_provenance?: { blueprint_ref: LibraryRef; version_ref: LibraryRef; version_number: number };
+  panels?: Array<{ panel_key: string; display_name: string; panel_number: number; face?: 'FRONT' | 'REAR' }>;
   connection_points: ConnectionPointDetails[];
   owned_interface_count: number;
   gaps: string[];

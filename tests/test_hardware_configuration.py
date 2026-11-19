@@ -191,7 +191,9 @@ def test_two_installations_in_one_object_have_distinct_definition_mappings_and_p
     })
     assert connection.status_code == 201, connection.text
     remote_details = client.get(f'/v1/topology/physical-objects/{remote_id}').json()
-    assert remote_details['connection_points'][0]['external_physical_attachments'][0]['remote_connection_point_label'] == source['contextual_display_name']
+    attachment = remote_details['connection_points'][0]['external_physical_attachments'][0]
+    assert attachment['remote_panel_name'] == source['panel_display_name']
+    assert attachment['remote_connection_point_label'] == f"{source['bay_display_name']} / {source['local_display_name']}"
     inventory = client.get('/v1/catalog/inventory').json()
     assert source['contextual_display_name'] in {e['remote_connection_point_label'] for c in inventory['cables'] for e in (c['endpoint_a'], c['endpoint_b'])}
     scoped = client.post('/v1/topology/projection', json={
@@ -299,15 +301,16 @@ def test_runtime_port_types_follow_pinned_base_and_module_without_port_queries()
 def test_trace_panel_context_uses_configured_panels_and_installed_modules_without_map():
     payload = base_payload()
     front = payload['panels'][0]
-    front['display_name'] = 'FRONT'
-    rear = {**front, 'panel_key': str(uuid.uuid4()), 'panel_number': 2, 'display_name': 'REAR'}
-    payload['panels'].append(rear)
+    front.update(display_name='Custom', face='FRONT')
+    rear = {**front, 'panel_key': str(uuid.uuid4()), 'panel_number': 2, 'face': 'REAR'}
+    payload['panels'].insert(0, rear)
     payload['slots'][0]['display_name'] = '1'
     payload['slots'].append({**payload['slots'][0], 'key': str(uuid.uuid4()), 'panel_key': rear['panel_key']})
     payload['bays'][0]['display_name'] = 'PCIe1'
     payload['bays'].append({**payload['bays'][0], 'bay_key': str(uuid.uuid4()), 'display_name': 'PCIe2'})
     template_id, _ = create_base(payload)
-    object_id = create_object(template_id)['physical_object_ref']['entity_id']
+    configured = create_object(template_id)
+    object_id = configured['physical_object_ref']['entity_id']
     module = create_module(names=('1', '10', '2'))
     installed_ids = set()
     for bay in payload['bays']:
@@ -319,11 +322,19 @@ def test_trace_panel_context_uses_configured_panels_and_installed_modules_withou
     points = response.json()['connection_points']
     assert len(points) == 8
     built_in = [p for p in points if p['connection_point_ref']['entity_id'] not in installed_ids]
-    assert {p['panel_context']['panel_name'] for p in built_in} == {'FRONT', 'REAR'}
+    assert response.json()['panels'] == [
+        {key: panel[key] for key in ('panel_key', 'display_name', 'panel_number', 'face')}
+        for panel in (front, rear)
+    ]
+    key_by_slot = {slot['key']: slot['panel_key'] for slot in payload['slots']}
+    assert {p['connection_point_ref']['entity_id']: p['panel_context']['panel_key'] for p in built_in} == {
+        slot['connection_point_ref']['entity_id']: key_by_slot[slot['slot_key']] for slot in configured['slots']
+    }
+    assert {p['panel_context']['panel_name'] for p in built_in} == {'Custom'}
     assert {p['panel_context']['port_name'] for p in built_in} == {'1'}
     modules = [p for p in points if p['connection_point_ref']['entity_id'] in installed_ids]
     assert len(modules) == 6
     assert {p['panel_context']['bay_name'] for p in modules} == {'PCIe1', 'PCIe2'}
     assert {p['panel_context']['module_name'] for p in modules} == {module['name']}
     assert {p['panel_context']['port_name'] for p in modules} == {'1', '2', '10'}
-    assert all(p['panel_context']['panel_name'] == 'FRONT' for p in modules)
+    assert all(p['panel_context']['panel_key'] == front['panel_key'] for p in modules)

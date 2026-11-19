@@ -1,9 +1,10 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InfrastructureObjectDetailPage } from './InfrastructureObjectDetailPage';
 import type { CatalogInventoryDocument } from '../topology/catalogInventoryTypes';
+import { hardwareModuleDataSource } from '../topology/hardwareModules';
 import type { PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 
 const objectId = '00000000-0000-0000-0000-000000000101';
@@ -40,6 +41,10 @@ const renderPage = (objectDetails = details(), catalog = { loadCatalogInventory:
 };
 
 describe('InfrastructureObjectDetailPage Saved Map membership', () => {
+  beforeEach(() => {
+    vi.spyOn(hardwareModuleDataSource, 'loadConfiguration').mockResolvedValue({ configuration_id: null, bays: [] });
+  });
+  afterEach(() => vi.restoreAllMocks());
   it('uses an addressable physical section', async () => {
     renderPage(details(), undefined, undefined, `/infrastructure/objects/${objectId}/physical`);
     expect(await screen.findByRole('link', { name: 'Физика' })).toHaveAttribute('aria-current', 'page');

@@ -229,8 +229,8 @@ button { font: inherit; }
 .physical-class-editor__current { margin: 0 0 10px; color: #d6e6e2; font-size: 11px; font-weight: 700; }
 .physical-class-editor label { display: block; margin-top: 8px; }
 .physical-class-editor label > span { display: block; margin-bottom: 5px; color: #809596; font-size: 9px; }
-.physical-class-editor select, .physical-class-editor input { width: 100%; padding: 8px 9px; border: 1px solid #2a4448; border-radius: 6px; color: #e7f4f1; background: #081315; outline: none; }
-.physical-class-editor select:focus, .physical-class-editor input:focus { border-color: #55e5b5; }
+.physical-panel-picker select, .physical-class-editor select, .physical-class-editor input { width: 100%; padding: 8px 9px; border: 1px solid #2a4448; border-radius: 6px; color: #e7f4f1; background: #081315; outline: none; }
+.physical-panel-picker select:focus, .physical-class-editor select:focus, .physical-class-editor input:focus { border-color: #55e5b5; }
 .physical-class-editor button { margin-top: 10px; padding: 7px 10px; border: 1px solid #3a7968; border-radius: 6px; color: #dff7ef; background: #15372f; cursor: pointer; font-size: 10px; }
 .physical-class-editor button:disabled { cursor: not-allowed; opacity: .45; }
 .physical-class-editor__error { margin: 8px 0 0; color: #e0aaa5; font-size: 10px; }
@@ -245,7 +245,7 @@ button { font: inherit; }
 .manual-point-action { margin: 10px 0; padding: 9px; border: 1px dashed #315256; border-radius: 7px; color: #9eb2b0; font-size: 10px; }
 .manual-point-action > strong { display: block; margin-bottom: 7px; color: #cfe1de; }
 .ports-table-wrap { overflow-x: auto; border: 1px solid #294145; border-radius: 9px; background: #0d1c1f; }
-.ports-table-wrap h4 { margin: 0; padding: 10px 12px 0; color: #dcebe8; font-size: 12px; }
+.physical-panel-picker { display: grid; gap: 4px; width: min(100%, 280px); margin-bottom: 10px; }
 .ports-table { width: 100%; border-collapse: collapse; font-size: 11px; }
 .ports-table th, .ports-table td { padding: 6px 8px; border-bottom: 1px solid #20373a; text-align: left; vertical-align: middle; color: #b9ceca; }
 .ports-table thead th { color: #809596; font-size: 9px; letter-spacing: .05em; text-transform: uppercase; }

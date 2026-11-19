@@ -1,14 +1,14 @@
 import re
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 
 from app.module_endpoint_names import EndpointNames
 from app.device_catalog import DeviceCatalog, DisplayAliasRecord
 from app.cable_labels import resolved_cable_label
-from app.models import BuiltInEndpointDefinition, ObjectConfiguration, BuiltInEndpointMapping, Cable, InterfacePhysicalBinding, BaseTemplate, BaseTemplateRevision
+from app.models import BuiltInEndpointDefinition, ObjectConfiguration, BuiltInEndpointMapping, Cable, InterfacePhysicalBinding, BaseTemplate, BaseTemplateRevision, PresentationPanel
 from app.repository import CanonicalRepository, PhysicalBindingRecord
-from app.schemas import ObjectConfigurationProvenance, BlueprintLibraryRef, BlueprintSlotMetadata, ConnectionPointDetails, DirectInterfaceBindingDetails, ExternalPhysicalAttachmentDetails, InternalPhysicalCounterpartDetails, PhysicalObjectDetails, PhysicalObjectDetailsDocument, ProjectionSourceRef
+from app.schemas import ObjectConfigurationProvenance, BlueprintLibraryRef, BlueprintSlotMetadata, ConnectionPointDetails, DirectInterfaceBindingDetails, ExternalPhysicalAttachmentDetails, InternalPhysicalCounterpartDetails, PhysicalObjectDetails, PhysicalObjectDetailsDocument, ProjectionSourceRef, PhysicalPanelDetails, EndpointPanelContext
 
 
 class ConfiguredPhysicalObjectDetailsResolver:
@@ -27,7 +27,7 @@ class ConfiguredPhysicalObjectDetailsResolver:
         endpoint_ids = {endpoint for member in incident for endpoint in (member.point_a_id, member.point_b_id)}
         cables_by_connection = {
             cable.connection_id: cable
-            for cable in self.repository.session.scalars(select(Cable))
+            for cable in self.repository.session.scalars(select(Cable).where(Cable.connection_id.in_({member.connection_id for member in incident})))
         }
         canonical_aliases = catalog.connection_point_display_aliases(list(point_ids))
         point_aliases = EndpointNames(self.repository.session).connection_points(list(endpoint_ids | point_ids))
@@ -39,16 +39,25 @@ class ConfiguredPhysicalObjectDetailsResolver:
             bindings_by_point[binding.point_id].append(PhysicalBindingRecord(binding.id, binding.interface_id, binding.point_id, binding.point_member))
         interface_ids = {binding.interface_id for values in bindings_by_point.values() for binding in values}
         interface_aliases = EndpointNames(self.repository.session).network_interfaces(list(interface_ids))
-        provenance, slots, contexts = self._blueprint_instance(physical_object_id)
-        details = [self._point_details(point, point_aliases.get(point.point_id), incident, point_by_id, point_aliases, object_aliases, bindings_by_point[point.point_id], interface_aliases, slots.get(point.point_id), cables_by_connection, canonical_aliases.get(point.point_id)) for point in points]
+        built_in = self._built_in_panel_contexts(endpoint_ids | point_ids)
+        provenance, slots, contexts, panels = self._blueprint_instance(physical_object_id, built_in, point_ids)
+        details = [
+            self._point_details(
+                point, point_aliases.get(point.point_id), incident, point_by_id,
+                point_aliases, object_aliases, bindings_by_point[point.point_id],
+                interface_aliases, slots.get(point.point_id), cables_by_connection,
+                canonical_aliases.get(point.point_id), built_in,
+            )
+            for point in points
+        ]
         for detail in details:
             detail.panel_context = contexts.get(detail.connection_point_ref.entity_id)
         details.sort(key=lambda value: self._natural_key(value.ordering_key))
         owners = tuple(owner for owner in self.repository.get_network_interface_physical_owners() if owner.physical_object_id == physical_object_id)
         object_alias = object_aliases.get(physical_object_id)
-        return PhysicalObjectDetailsDocument(physical_object=PhysicalObjectDetails(source_ref=self._ref("PhysicalObject", physical_object_id), label=self._label(object_alias, "PhysicalObject", physical_object_id), label_source=None if object_alias else "TECHNICAL_FALLBACK", class_=(object_class.value if object_class else None)), blueprint_provenance=provenance, connection_points=details, owned_interface_count=len(owners), gaps=[], warnings=[])
+        return PhysicalObjectDetailsDocument(physical_object=PhysicalObjectDetails(source_ref=self._ref("PhysicalObject", physical_object_id), label=self._label(object_alias, "PhysicalObject", physical_object_id), label_source=None if object_alias else "TECHNICAL_FALLBACK", class_=(object_class.value if object_class else None)), blueprint_provenance=provenance, panels=panels, connection_points=details, owned_interface_count=len(owners), gaps=[], warnings=[])
 
-    def _point_details(self, point, alias, incident, point_by_id, point_aliases, object_aliases, bindings, interface_aliases, slot, cables_by_connection, canonical_alias):
+    def _point_details(self, point, alias, incident, point_by_id, point_aliases, object_aliases, bindings, interface_aliases, slot, cables_by_connection, canonical_alias, built_in):
         point_members = [member for member in incident if point.point_id in (member.point_a_id, member.point_b_id)]
         refs = [self._ref("ConnectionPoint", point.point_id)]
         if alias and alias.metadata_id: refs.append(self._ref("EntityMetadata", alias.metadata_id))
@@ -64,9 +73,17 @@ class ConfiguredPhysicalObjectDetailsResolver:
             peer_object_id = point_by_id[peer_point_id].physical_object_id
             evidence = [self._ref("Connection", member.connection_id), self._ref("ConnectionMember", member.connection_member_id)]
             refs.extend(evidence)
+            peer_alias = point_aliases.get(peer_point_id)
+            module_context = getattr(peer_alias, "context", {})
+            peer_panel_name = (
+                built_in[peer_point_id][1].display_name if peer_point_id in built_in
+                else module_context.get("panel_display_name")
+            )
+            peer_label = self._label(peer_alias, "ConnectionPoint", peer_point_id)
+            if module_context:
+                peer_label = f"{module_context['bay_display_name']} / {module_context['local_display_name']}"
             if peer_object_id == point.physical_object_id:
-                peer_alias = point_aliases.get(peer_point_id)
-                internal.append(InternalPhysicalCounterpartDetails(connection_point_ref=self._ref("ConnectionPoint", peer_point_id), label=self._label(peer_alias, "ConnectionPoint", peer_point_id), label_source=None if peer_alias else "TECHNICAL_FALLBACK", connection_ref=self._ref("Connection", member.connection_id), evidence_refs=evidence))
+                internal.append(InternalPhysicalCounterpartDetails(connection_point_ref=self._ref("ConnectionPoint", peer_point_id), label=peer_label, panel_name=peer_panel_name, label_source=None if peer_alias else "TECHNICAL_FALLBACK", connection_ref=self._ref("Connection", member.connection_id), evidence_refs=evidence))
                 continue
             external_connections.add(member.connection_id)
             cable = cables_by_connection.get(member.connection_id)
@@ -81,36 +98,66 @@ class ConfiguredPhysicalObjectDetailsResolver:
                 remote_physical_object_ref=self._ref("PhysicalObject", peer_object_id),
                 remote_physical_object_label=self._label(object_aliases.get(peer_object_id), "PhysicalObject", peer_object_id),
                 remote_connection_point_ref=self._ref("ConnectionPoint", peer_point_id),
-                remote_connection_point_label=self._label(point_aliases.get(peer_point_id), "ConnectionPoint", peer_point_id),
+                remote_panel_name=peer_panel_name,
+                remote_connection_point_label=peer_label,
             ))
         return ConnectionPointDetails(canonical_label=(canonical_alias.value if canonical_alias else None), connection_point_ref=self._ref("ConnectionPoint", point.point_id), label=self._label(alias, "ConnectionPoint", point.point_id), label_source=None if alias else "TECHNICAL_FALLBACK", cardinality=point.cardinality, incident_connection_count=len({member.connection_id for member in point_members}), external_connection_count=len(external_connections), direct_interface_binding_count=len(bindings), ordering_key=slot.slot_key if slot else self._label(alias, "ConnectionPoint", point.point_id), blueprint_slot=slot, direct_interface_bindings=direct_bindings, internal_physical_counterparts=internal, external_physical_attachments=external, source_refs=self._dedupe_refs(refs))
 
-    def _blueprint_instance(self, object_id):
+    def _built_in_panel_contexts(self, point_ids):
+        rows = self.repository.session.execute(
+            select(BuiltInEndpointMapping.connection_point_id, BuiltInEndpointDefinition, PresentationPanel)
+            .select_from(BuiltInEndpointMapping)
+            .join(BuiltInEndpointDefinition, BuiltInEndpointDefinition.id == BuiltInEndpointMapping.definition_id)
+            .join(ObjectConfiguration, and_(
+                ObjectConfiguration.id == BuiltInEndpointMapping.configuration_id,
+                ObjectConfiguration.base_revision_id == BuiltInEndpointDefinition.base_revision_id,
+            ))
+            .join(PresentationPanel, and_(
+                PresentationPanel.base_revision_id == ObjectConfiguration.base_revision_id,
+                PresentationPanel.panel_key == BuiltInEndpointDefinition.panel_key,
+            ))
+            .where(BuiltInEndpointMapping.connection_point_id.in_(point_ids))
+        )
+        return {point_id: (slot, panel) for point_id, slot, panel in rows}
+
+    def _blueprint_instance(self, object_id, built_in, point_ids):
         row = self.repository.session.execute(select(ObjectConfiguration, BaseTemplateRevision, BaseTemplate).join(BaseTemplateRevision, BaseTemplateRevision.id == ObjectConfiguration.base_revision_id).join(BaseTemplate, BaseTemplate.id == BaseTemplateRevision.template_id).where(ObjectConfiguration.physical_object_id == object_id)).one_or_none()
-        if row is None: return None, {}, {}
-        instance, version, blueprint = row
-        mappings = self.repository.session.execute(select(BuiltInEndpointMapping, BuiltInEndpointDefinition).join(BuiltInEndpointDefinition, BuiltInEndpointDefinition.id == BuiltInEndpointMapping.definition_id).where(BuiltInEndpointMapping.configuration_id == instance.id)).all()
-        slots = {mapping.connection_point_id: BlueprintSlotMetadata(slot_key=slot.slot_key, kind=slot.kind, port_type_id=slot.port_type_id) for mapping, slot in mappings}
+        if row is None:
+            return None, {}, {}, []
+        _, version, blueprint = row
+        panels = [
+            PhysicalPanelDetails(
+                panel_key=panel.panel_key, display_name=panel.display_name,
+                panel_number=panel.panel_number, face=panel.face,
+            )
+            for panel in self.repository.session.scalars(
+                select(PresentationPanel).where(PresentationPanel.base_revision_id == version.id)
+                .order_by(PresentationPanel.panel_number)
+            )
+        ]
+        slots = {}
+        contexts = {}
+        for point_id in point_ids & built_in.keys():
+            slot, panel = built_in[point_id]
+            slots[point_id] = BlueprintSlotMetadata(slot_key=slot.slot_key, kind=slot.kind, port_type_id=slot.port_type_id)
+            contexts[point_id] = EndpointPanelContext(
+                panel_key=panel.panel_key, panel_name=panel.display_name, port_name=slot.display_name,
+            )
         from app.hardware_catalog import HardwareCatalog
-        from app.schemas import EndpointPanelContext
         configuration = HardwareCatalog(self.repository.session).configuration_document(object_id)
-        panels = {panel["panel_key"]: panel["display_name"] for panel in configuration["panels"]}
-        contexts = {mapping.connection_point_id: EndpointPanelContext(
-            panel_name=panels[slot.panel_key], port_name=slot.display_name,
-        ) for mapping, slot in mappings}
         for bay in configuration["bays"]:
             installation = bay["installation"]
             if installation:
                 for endpoint in installation["endpoints"]:
                     contexts[uuid.UUID(endpoint["connection_point_id"])] = EndpointPanelContext(
-                        panel_name=endpoint["panel_display_name"], port_name=endpoint["local_display_name"],
+                        panel_key=endpoint["panel_key"], panel_name=endpoint["panel_display_name"], port_name=endpoint["local_display_name"],
                         module_name=installation["name"], bay_name=endpoint["bay_display_name"],
                     )
                     slots[uuid.UUID(endpoint["connection_point_id"])] = BlueprintSlotMetadata(
                         slot_key=f"{installation['id']}:{endpoint['key']}", kind=endpoint["kind"],
                         port_type_id=endpoint["port_type_id"],
                     )
-        return ObjectConfigurationProvenance(blueprint_ref=BlueprintLibraryRef(entity_type="BaseTemplate", entity_id=blueprint.id), version_ref=BlueprintLibraryRef(entity_type="BaseTemplateRevision", entity_id=version.id), version_number=version.version_number), slots, contexts
+        return ObjectConfigurationProvenance(blueprint_ref=BlueprintLibraryRef(entity_type="BaseTemplate", entity_id=blueprint.id), version_ref=BlueprintLibraryRef(entity_type="BaseTemplateRevision", entity_id=version.id), version_number=version.version_number), slots, contexts, panels
 
     @staticmethod
     def _label(alias: DisplayAliasRecord | None, entity_type: str, entity_id: uuid.UUID) -> str: return alias.value if alias else f"{entity_type} {str(entity_id)[:8]}"

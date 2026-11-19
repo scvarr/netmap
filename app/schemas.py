@@ -607,6 +607,7 @@ class InternalPhysicalCounterpartDetails(BaseModel):
 
     connection_point_ref: ProjectionSourceRef
     label: str = Field(min_length=1)
+    panel_name: str | None = None
     label_source: Literal["TECHNICAL_FALLBACK"] | None = None
     connection_ref: ProjectionSourceRef
     evidence_refs: list[ProjectionSourceRef]
@@ -620,6 +621,7 @@ class ExternalPhysicalAttachmentDetails(BaseModel):
     evidence_refs: list[ProjectionSourceRef]
     remote_physical_object_ref: ProjectionSourceRef | None = None
     remote_physical_object_label: str | None = None
+    remote_panel_name: str | None = None
     remote_connection_point_ref: ProjectionSourceRef | None = None
     remote_connection_point_label: str | None = None
     cable_ref: ProjectionSourceRef | None = None
@@ -630,6 +632,7 @@ class EndpointPanelContext(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     panel_name: str = Field(min_length=1)
+    panel_key: str = Field(min_length=1)
     port_name: str = Field(min_length=1)
     module_name: str | None = None
     bay_name: str | None = None
@@ -655,12 +658,20 @@ class ConnectionPointDetails(BaseModel):
     source_refs: list[ProjectionSourceRef]
 
 
+class PhysicalPanelDetails(BaseModel):
+    panel_key: str
+    display_name: str
+    panel_number: int
+    face: Literal["FRONT", "REAR"] | None = None
+
+
 class PhysicalObjectDetailsDocument(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: Literal["1.0"] = "1.0"
     physical_object: PhysicalObjectDetails
     blueprint_provenance: ObjectConfigurationProvenance | None = None
+    panels: list[PhysicalPanelDetails] = Field(default_factory=list)
     connection_points: list[ConnectionPointDetails]
     owned_interface_count: int = Field(ge=0)
     gaps: list[str]

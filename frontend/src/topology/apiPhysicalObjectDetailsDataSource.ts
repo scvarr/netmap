@@ -81,6 +81,17 @@ export const parsePhysicalObjectDetailsDocument = (
     validateLibraryRef(value.blueprint_provenance.version_ref, 'blueprint_provenance.version_ref', 'BaseTemplateRevision');
     requireCount(value.blueprint_provenance.version_number, 'blueprint_provenance.version_number', 1);
   }
+  if (value.panels !== undefined) {
+    if (!Array.isArray(value.panels)) malformed('panels must be an array.');
+    (value.panels as unknown[]).forEach((panel, index) => {
+      const path = `panels[${index}]`;
+      requireObject(panel, path);
+      requireString(panel.panel_key, `${path}.panel_key`);
+      requireString(panel.display_name, `${path}.display_name`);
+      requireCount(panel.panel_number, `${path}.panel_number`, 1);
+      if (panel.face !== undefined && panel.face !== 'FRONT' && panel.face !== 'REAR') malformed(`${path}.face is invalid.`);
+    });
+  }
   if (!Array.isArray(value.connection_points)) malformed('connection_points must be an array.');
   const connectionPoints = value.connection_points as unknown[];
   connectionPoints.forEach((item, index) => {
@@ -90,7 +101,7 @@ export const parsePhysicalObjectDetailsDocument = (
     validateLabel(item, path);
     if (item.panel_context !== undefined) {
       requireObject(item.panel_context, `${path}.panel_context`);
-      for (const key of ['panel_name', 'port_name']) requireString(item.panel_context[key], `${path}.panel_context.${key}`);
+      for (const key of ['panel_key', 'panel_name', 'port_name']) requireString(item.panel_context[key], `${path}.panel_context.${key}`);
       for (const key of ['module_name', 'bay_name']) validateOptionalLabel(item.panel_context[key], `${path}.panel_context.${key}`);
     }
     requireCount(item.cardinality, `${path}.cardinality`, 1);
@@ -104,8 +115,8 @@ export const parsePhysicalObjectDetailsDocument = (
     }
     const validateItems = (items: unknown, name: string, validate: (entry: Record<string, unknown>, entryPath: string) => void): void => { if (items !== undefined) { if (!Array.isArray(items)) malformed(`${path}.${name} must be an array.`); (items as unknown[]).forEach((entry, entryIndex) => { const entryPath = `${path}.${name}[${entryIndex}]`; requireObject(entry, entryPath); validate(entry, entryPath); }); } };
     validateItems(item.direct_interface_bindings, 'direct_interface_bindings', (entry, entryPath) => { validateRef(entry.interface_ref, `${entryPath}.interface_ref`); validateLabel(entry, entryPath); validateRefs(entry.evidence_refs, `${entryPath}.evidence_refs`); });
-    validateItems(item.internal_physical_counterparts, 'internal_physical_counterparts', (entry, entryPath) => { validateRef(entry.connection_point_ref, `${entryPath}.connection_point_ref`); validateLabel(entry, entryPath); validateRef(entry.connection_ref, `${entryPath}.connection_ref`); validateRefs(entry.evidence_refs, `${entryPath}.evidence_refs`); });
-    validateItems(item.external_physical_attachments, 'external_physical_attachments', (entry, entryPath) => { if (!['DIRECT_CONNECTION', 'CABLE'].includes(String(entry.kind))) malformed(`${entryPath}.kind is invalid.`); validateRef(entry.connection_ref, `${entryPath}.connection_ref`); validateRefs(entry.evidence_refs, `${entryPath}.evidence_refs`); for (const key of ['remote_physical_object_ref', 'remote_connection_point_ref']) if (entry[key] !== undefined) validateRef(entry[key], `${entryPath}.${key}`); for (const key of ['remote_physical_object_label', 'remote_connection_point_label', 'cable_label']) validateOptionalLabel(entry[key], `${entryPath}.${key}`); if (entry.kind === 'CABLE') { const cable = validateRef(entry.cable_ref, `${entryPath}.cable_ref`); if (cable.entity_type !== 'Cable') malformed(`${entryPath}.cable_ref must be a Cable ref.`); } else if (entry.cable_ref !== undefined) malformed(`${entryPath}.cable_ref is only valid for CABLE.`); });
+    validateItems(item.internal_physical_counterparts, 'internal_physical_counterparts', (entry, entryPath) => { validateRef(entry.connection_point_ref, `${entryPath}.connection_point_ref`); validateLabel(entry, entryPath); validateOptionalLabel(entry.panel_name, `${entryPath}.panel_name`); validateRef(entry.connection_ref, `${entryPath}.connection_ref`); validateRefs(entry.evidence_refs, `${entryPath}.evidence_refs`); });
+    validateItems(item.external_physical_attachments, 'external_physical_attachments', (entry, entryPath) => { if (!['DIRECT_CONNECTION', 'CABLE'].includes(String(entry.kind))) malformed(`${entryPath}.kind is invalid.`); validateRef(entry.connection_ref, `${entryPath}.connection_ref`); validateRefs(entry.evidence_refs, `${entryPath}.evidence_refs`); for (const key of ['remote_physical_object_ref', 'remote_connection_point_ref']) if (entry[key] !== undefined) validateRef(entry[key], `${entryPath}.${key}`); for (const key of ['remote_physical_object_label', 'remote_connection_point_label', 'remote_panel_name', 'cable_label']) validateOptionalLabel(entry[key], `${entryPath}.${key}`); if (entry.kind === 'CABLE') { const cable = validateRef(entry.cable_ref, `${entryPath}.cable_ref`); if (cable.entity_type !== 'Cable') malformed(`${entryPath}.cable_ref must be a Cable ref.`); } else if (entry.cable_ref !== undefined) malformed(`${entryPath}.cable_ref is only valid for CABLE.`); });
     validateRefs(item.source_refs, `${path}.source_refs`);
   });
   requireCount(value.owned_interface_count, 'owned_interface_count');
