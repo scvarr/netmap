@@ -1,252 +1,258 @@
 # Действующие архитектурные контракты
 
-Состояние реализации отделено в [PROJECT_STATE](PROJECT_STATE.md), будущие
-решения — в [OPEN_DECISIONS](OPEN_DECISIONS.md). Этот документ не расширяет scope.
+**CURRENT** описывает доступную реализацию и её границы. **DECIDED TARGET**
+фиксирует принятые требования. **OPEN** отмечает нерешённую семантику, реализацию
+или проверку в указанном объёме.
+
+Физический контракт и L1-O1–L1-O10 ведутся в [L1_CONNECTIVITY](L1_CONNECTIVITY.md),
+взаимодействие и IA — в [UX_IA_CONTRACT](UX_IA_CONTRACT.md), итоговый стенд и
+переносимость — в [L1_REFERENCE_NETWORK](L1_REFERENCE_NETWORK.md).
+[PROJECT_STATE](PROJECT_STATE.md) фиксирует состояние, [BACKLOG](BACKLOG.md) —
+очередь и gates, [OPEN_DECISIONS](OPEN_DECISIONS.md) — вопросы к следующим этапам.
 
 ## Источники истины и identity
 
 Canonical topology — runtime source of truth. Canonical facts, presentation
-state и derived read context — три разные категории. Projection, scene geometry,
-layout, cache и trace artifact не становятся canonical input. Blueprint и Port
-Block — authoring/provenance/presentation, не runtime topology entities; obsolete
-авторские API не сохраняются ради исторической читаемости.
+state и derived read context разделены. Projection, scene geometry, layout,
+cache и trace artifact не становятся canonical input. Blueprint и Port Block
+служат authoring, provenance и presentation.
 
-Identity задают стабильные canonical IDs и opaque definition keys, никогда
-имя, номер, порядок, координаты или layout. Публикуемые ревизии и сохранённые
-immutable snapshots не редактируются. Перемещение/переименование не пересоздаёт
-endpoint. Exactly-once write: после успешной mutation и ошибки refresh повторяют
-только read. Canonical aggregate locks и повторная проверка защищают от races.
+Identity задают стабильные canonical IDs и opaque definition keys независимо
+от имени, номера, порядка, координат и layout. Перемещение и переименование
+сохраняют endpoints. Опубликованные ревизии и сохранённые immutable snapshots
+не редактируются. Runtime topology после materialization authoritative,
+provenance закрепляет происхождение и не пересчитывает topology при чтении.
 Строгие DTO и finite coordinates не допускают тихой подмены повреждённых данных.
 
-## PhysicalObject, endpoints, Cable и Connection
-
-Массовое удаление Cable запускается из контекстного меню PhysicalObject
-на физической карте. Второй объект выбирается из объектов текущей карты.
-`GET /v1/cables/bulk-delete-preview` читает прямые канонические подключения
-указанной пары. Лицевая сторона в таблице определяется по сопоставлению
-ConnectionPoint с панелью опубликованного оборудования. Выбор и подтверждение
-хранят идентификаторы Cable и показывают точное число их Connection.
-
-`POST /v1/cables/bulk-delete` принимает пару объектов и от 1 до 256 уникальных
-Cable с ожидаемыми Connection, ConnectionPoint, ConnectionMember и label.
-Сервер блокирует затронутые строки PostgreSQL, проверяет весь набор и в одной
-транзакции выполняет штатное удаление Cable вместе с его Connection,
-освобождая занятость и имя с сохранением истории имени. При изменении состава
-или конфликте запрос отклоняется целиком с HTTP 409. После HTTP 204 карта
-перечитывает проекцию, текущий вариант и связанные данные. Повтор обновления
-после ошибки чтения выполняет только чтение.
-
-PhysicalObject — физический объект, ConnectionPoint — физическая точка;
-NetworkInterface — отдельная сетевая сущность. CONNECTION_POINT materializes
-point; NETWORK_PORT materializes point и interface с ownership/binding.
-Passive object может иметь points без interfaces. Interface realization graph
-описывает составные/логические интерфейсы и не заменяет physical connectivity.
-
-Location — canonical физическое место с optional parent; циклы запрещены.
-PhysicalObject имеет не более одного непосредственного Location, unknown/null
-допустим. Location hierarchy и физическая вложенность оборудования не одно
-дерево; Location не выводится из карты, panel/bay или координат.
-
-Connection — недирективная continuity между двумя различными points; один
-Connection имеет cardinality и уникальные member mappings в обе стороны.
-Cable имеет уникальный connection_id: одному Connection соответствует не более
-одного Cable; Cable ID и Connection ID — разные identity.
-Connection — continuity между points; ConnectionMember — точный mapping
-адресуемых членов. Point cardinality — число независимо трассируемых members,
-а не число проводников по справочнику. Member indices должны быть в диапазоне;
-неполный mapping не дополняется предположениями. Trace state включает point и
-member; разные members не сливаются только из-за общего endpoint.
-
-Cable — самостоятельная optional domain relation к Connection, а не
-PhysicalObject с двумя выдуманными ports. Обычный Cable соединяет разные
-PhysicalObjects; internal continuity не требует Cable. Create/delete внешней
-связи сохраняет Cable/Connection/member lifecycle атомарно; Cable label не
-меняет identity, endpoints, route или evidence. Cable-specific label/history
-не является generic application activity journal.
-
-Переподключение обычного Cable на сохранённой L1-карте обновляет одну ссылку
-на ConnectionPoint. `GET /v1/cables/{cable_id}/reconnect` возвращает ожидаемое
-состояние Cable и его Connection. `POST` на тот же адрес сверяет это состояние
-под блокировками, проверяет свободный внешний member=1 нового порта и сохраняет
-ID Cable, Connection, ConnectionMember, label, историю маркировки и второе
-окончание. Создание и переподключение сериализуются через блокировки
-ConnectionPoint. После записи редактор перечитывает L1-проекцию текущего
-варианта карты. Повтор обновления выполняет только чтение.
-
-Ordinary UI write поддерживает cardinality=1/member=1; общий member-aware core
-не выдаётся за multichannel authoring. C-CAP-01 не закрывается 24 фиктивными
-кабелями/входами или линиями без member identity. Технологии/connector/speed
-не определяют автоматически cardinality или continuity.
+Location задаёт каноническое физическое место с необязательным parent.
+Циклы запрещены. PhysicalObject имеет не более одного непосредственного
+Location, null допустим. Location hierarchy и вложенность оборудования
+независимы. Назначение меняется явной операцией, координаты его не определяют.
 
 ## Шаблоны, ревизии и установки
 
-BaseTemplate задаёт базовое оборудование; ModuleTemplate — устанавливаемый
-модуль. Конфигурация конкретного PhysicalObject не является отдельным assembled
-шаблоном. ModuleInstallation принадлежит объекту, имеет собственную identity;
-definition keys endpoints интерпретируются внутри installation. Две установки
-одного шаблона имеют разные canonical endpoints.
+Persisted server draft → frozen candidate с impact analysis → publication.
+Возврат к редактированию инвалидирует analysis. Publish сохраняет pinned
+конфигурации экземпляров. Reconcile повторно проверяет фактические зависимости
+под locks, сохраняет IDs неизменённых definitions, user data, connections и
+bindings. Удаление допустимо для endpoints без зависимостей, включая зависимости
+помимо внешних Cable. Если требуется intervention или не хватает совместимой
+вместимости, прежняя конфигурация сохраняется целиком.
 
-Persisted server draft -> frozen candidate + impact analysis -> publication.
-Возврат к редактированию инвалидирует прежний analysis; stale analysis не
-авторизует потерю данных. Публикация не переписывает pinned конфигурации
-экземпляров. Reconcile повторно проверяет фактические зависимости под locks.
+При допустимом переносе модуля сначала сохраняются совместимые позиции, затем
+opaque keys задают детерминированный выбор остальных мест. Installation и
+endpoints сохраняют identity. Графический bay rectangle задаёт размещение,
+логические module places задают вместимость. Pinned historical composition
+сохраняется независимо от mutable preview.
 
-Сохраняются IDs неизменённых logical definitions, user data, connections и
-bindings. Добавления и удаление неиспользуемых endpoints допустимы; наличие
-зависимостей требует intervention и оставляет старую конфигурацию. «Неиспользуемый»
-не означает только отсутствие внешнего кабеля. Недостаточная compatible capacity
-не допускает частичной потери установок. Перемещение в совместимое место сохраняет
-installation и endpoints. Сначала сохраняются допустимые позиции, затем opaque
-keys определяют deterministic relocation; labels/coordinates не определяют выбор.
+## Транзакции и согласование записей
 
-Логические module places имеют count/capacity и stable identity; графический
-bay rectangle — presentation placement. Open compatibility value задаёт
-совместимые места, не PCIe lanes/power/mechanical/port technology. Module geometry
-и composition layout отделены от installation identity; pinned historical
-composition не заменяется текущим mutable preview. Runtime topology после
-materialization authoritative; provenance не является повторным resolver.
+Успешная mutation и refresh имеют разные состояния. После ошибки refresh
+клиент повторяет только read. Canonical aggregate locks и повторная проверка
+ожидаемого состояния защищают от races. Preview фиксирует ожидаемое состояние для проверки при подтверждении.
+Конфликт batch отклоняет его целиком. Location series создаёт только Locations,
+в одной транзакции после проверки диапазона, шага и единой серии символов `#`
+в шаблоне.
 
-## Справочники
-
-Пользовательские классификации открыты, не фиксируются vendor taxonomy в code.
-PortType — reusable identity, name/color/archive status. Направление развития
-структуры типа и серверной валидации описано в
-[OPEN_DECISIONS](OPEN_DECISIONS.md#porttype-и-физическая-совместимость).
-Template endpoint
-требует существующий активный тип; использованный архивный тип остаётся читаемым.
-Текущие name/color применяются без новой публикации immutable template revision.
-State highlight и hit target независимы от цвета/формы. NETWORK_PORT квадратный,
-CONNECTION_POINT круглый; manual untyped points нейтральны.
-
-Классификация, техническая capability, compatibility и canonical connectivity
-не взаимозаменяемы. Технические поля, immutable-field locking и остальные
-справочники не считаются реализованными; решения перечислены отдельно.
-
-CURRENT. PortType — реализованный справочник. PhysicalObject class хранится
-строкой, BaseTemplate может задавать default class. Location.type — optional
-пользовательская строка. CableType — DECIDED TARGET / OPEN. Формы оборудования
-предлагают hardcoded presets и произвольное значение. От строковых классов
-зависят подписи, акценты и фильтры списка оборудования. Presets обслуживают
-эти сценарии интерфейса и не образуют самостоятельный справочник.
-
-TARGET. Пользовательские типы PhysicalObject и Location без закрытой taxonomy.
-Типы отделены от canonical identity. Тип Location не ограничивает parent/children.
-Тип оборудования не задаёт connectivity, endpoints или member mappings.
-
-[Открытые решения по типам](OPEN_DECISIONS.md#справочники-и-техническая-совместимость).
+Записи physical position/add, geometry и group move блокируют hierarchy
+`FOR SHARE` в порядке Location ID, затем свой variant `FOR UPDATE`, затем
+presentation rows. Shared hierarchy lock позволяет независимые variant writes.
+Canonical assignment блокирует hierarchy `FOR UPDATE`, затем PhysicalObject,
+затронутые variants в UUID order и зависимые presentation rows. Locks берутся
+до position DML/flush. Canonical create/series/reparent/delete согласуют
+затронутые сохранённые структуры в той же транзакции.
 
 ## SavedMap, варианты и spatial isolation
 
-SavedMap — presentation scope в implicit workspace. Placement задаёт membership
-PhysicalObject в карте. MapPresentationVariant принадлежит одной карте и хранит
-именованную компоновку: позиции по view, locks и Location state.
-Membership общий для вариантов; topology и canonical Location assignment не
-меняются переключением варианта. Physical и Logical scene coordinates независимы.
-MapTextAnnotation — отдельная presentation capability.
+**CURRENT.** SavedMap — presentation scope над общей canonical topology
+implicit workspace. Placement задаёт membership объекта в карте, все canonical
+Locations доступны каждой SavedMap. MapPresentationVariant принадлежит одной
+карте и хранит именованную компоновку, позиции по view, locks и Location state.
+Варианты разделяют membership, topology и Location assignment. Physical и
+Logical scene coordinates независимы. Copy variant копирует настройки и
+presentation state независимо. MapTextAnnotation — отдельная presentation
+capability. Persisted NetworkWorkspace и полная изоляция сетей не реализованы.
 
-C-UX-10-01: все canonical Locations доступны в каждой SavedMap, без membership
-и map isolation. Каждый Location имеет самостоятельный прямоугольный frame,
-включая пустой и unary; каждый дочерний frame находится внутри непосредственного
-canonical parent с отступом 20 и местом для заголовка 40. В заголовке непосредственное имя; полный canonical path доступен в tooltip.
-MapLocationState.geometry хранит x/y/width/height и edge/offset обязательной
-виртуальной точки отдельно для variant. Nullable manual_bounds хранит явно
-заданный resize прямоугольник как нижнюю границу занимаемой области; копируется
-с variant и переносится вместе с контейнером. Автоматические bounds пересчитываются
-по содержимому и могут сокращаться, сохраняя manual_bounds, детей и оборудование.
-До первого сохранения чтение возвращает
-детерминированную иерархическую компоновку (порядок по immutable ID), без записи
-в БД и без зависимости от количества оборудования. Пустой Location — компактный
-горизонтальный frame высотой 64; ширина 140..360 учитывает имя и controls.
-Соседи при инициализации не пересекаются.
-Новый ребёнок размещается после существующих детей; предки расширяются,
-соседние ветви при необходимости получают место без пересечений. Это разрешённое
-начальное presentation размещение, а не canonical containment из координат.
-Create/series/reparent canonical Location согласуют уже сохранённые variant layouts:
-выделение места переносит затронутые соседние рамки вместе с оборудованием
-в той же транзакции; locked конфликт не оставляет частичных canonical/presentation writes.
-Boundary identity — UUIDv5(namespace=SavedMap ID, name=Location ID), одна на пару
-map/Location, не зависит от variant/геометрии. Отдельного create/delete точки нет.
-Geometry PUT валидирует finite coordinates, положительные размеры и perimeter,
-Location и ownership variant до записи. Copy variant копирует геометрию;
-FK CASCADE удаляет presentation state при удалении variant/Location.
-Geometry PUT блокирует canonical hierarchy и variant, переносит ветвь рамок
-вместе со всеми существующими L1 placements её subtree (включая скрытые).
-Physical position/add, geometry и group move берут hierarchy `FOR SHARE`
-(Location ID order), затем свой variant `FOR UPDATE`, затем зависимые
-placements/positions и frame state. Это не сериализует layout writes
-разных variants на hierarchy. Canonical assignment сохраняет hierarchy
-`FOR UPDATE` → PhysicalObject → все затронутые variants в UUID order →
-presentation rows. Hierarchy/variant locks получаются до position DML/flush;
-поздний повторный lock не заменяет предварительную блокировку.
-Расширение дочерней рамки/содержимого увеличивает предков, в том числе влево/вверх,
-не сжимая вручную увеличенные границы. При пересечении соседний контейнер получает
-место ниже вместе с содержимым; неподвижные объекты сохраняют позиции, когда это
-возможно. Locked placements и object collisions отклоняют всю транзакцию. Недопустимый parent shrink не обрезает содержимое:
-размер сохраняется достаточным для детей и оборудования.
-Сохранение фиксирует frames и positions одной транзакцией и возвращает
-SavedMapDocument. UI: единый drag заголовка создаёт preview рамок и оборудования,
-resize и drag точки также создают draft; Save явно сохраняет, Cancel отменяет.
-Отдельная кнопка group move убрана; core/API group move сохранён. Controls используют
-локальный NetMap style с radius=0; увеличение масштаба не раздувает кнопки/подписи.
+**DECIDED TARGET.** Карта владеет самостоятельной физической сетью, включая
+объекты, Location, интерфейсы, окончания, соединения, members и Cable.
+Cross-map canonical references запрещены. Одинаковые имена допустимы.
+Общие библиотеки BaseTemplate, ModuleTemplate и типов не объединяют сети. MapPresentationVariant
+остаётся компоновкой одной сети. NetworkWorkspace отвечает за application
+isolation, доступ и организацию работы. Fixture проверяет эти границы.
+[L1-REFERENCE-01](L1_REFERENCE_NETWORK.md#независимые-карты).
 
-Назначение PhysicalObject Location согласует все существующие физические позиции
-этого объекта во всех SavedMaps/variants одной транзакцией. Добавление уже назначенного
-объекта и создание его physical variant position также размещают его в canonical
-Location. Размер объекта определяется pinned composition panels и display_width,
-включая фактически отрисованный nameplate (max(14, 12% высоты наименьшей панели));
-frontend collision/layout и backend используют полный footprint
-(обычный объект 212x144); свободное место выбирается детерминированно с учётом
-объектов/дочерних рамок, предки расширяются согласованно. Missing placements/positions
-не создаются назначением.
-Canonical assignment задаётся только явной операцией, никогда координатами.
-Cable/Connection/endpoints не пересоздаются и не переподключаются.
-Position PUT возвращает полный authoritative SavedMapDocument с positions и frames. Клиент применяет его только к исходным map/variant; ошибка восстанавливает
-подтверждённые позиции, без повторного write. Выход объекта за прежние bounds
-согласует рамки и соседние ветви атомарно, не меняя canonical assignment.
-Полный collapse показывает один компактный proxy с той же boundary identity,
-скрывая expanded frame, все дочерние frames, proxies и оборудование, включая
-пустые subtree. Expand восстанавливает persisted expanded geometry: compact bounds
-производны и не записываются. При partial collapse выбранные direct elements
-остаются видимыми внутри frame; скрытые endpoints используют невидимый route target
-без второго подписанного proxy. Direct children доступны и без оборудования.
-Внешний полный collapse приоритетен. Внешний путь Cable заканчивается на видимой обязательной точке свёрнутого Location.
-MapComposite/MapRegion не поддерживаются.
+**OPEN.** До соответствующих write changes согласуются ownership boundaries и
+сохранение существующих canonical identities. Schema/FK, API и стратегия
+перехода открыты. Полноценные auth, ACL, sharing и activity входят в продуктовый
+gate, их готовность не является общей предпосылкой для всех L1 engineering
+milestones. Копирование фрагментов сетей с remapping identities — отдельный scope.
 
-Group move переносит одинаковым delta все имеющиеся L1 позиции canonical
-subtree в активном variant, включая скрытые. Сервер заново разрешает subtree,
-сверяет geometry evidence, locks и collision со внешними placements. Locked
-member или collision отклоняет всё; отсутствующие позиции не создаются.
-Positions сохраняются атомарно, без automatic re-layout.
+### Ручная компоновка и согласование с topology
+
+В manual mode у каждого Location свой frame, включая пустой и unary. Frame
+непосредственного ребёнка находится внутри canonical parent. До первого
+сохранения чтение выдаёт детерминированные непересекающиеся рамки по immutable
+ID без записи. Ручная начальная раскладка оставляет 20 flow units отступа и 40
+под заголовок. Пустой frame имеет высоту 64, ширина 140–360 учитывает подпись. Manual bounds — сохраняемая нижняя граница размера, переносимая
+вместе с ветвью. Расчётные bounds расширяются для children и equipment,
+включая рост влево и вверх, и могут сокращаться с сохранением manual bounds.
+Parent resize не обрезает содержимое.
+
+Перенос frame перемещает существующие позиции всей canonical subtree одним
+delta, включая скрытые элементы. Сервер повторно разрешает subtree и сверяет
+geometry evidence. Canonical create/series/reparent выделяют место и при
+необходимости сдвигают соседние ветви вместе с оборудованием. Assignment
+согласует все существующие physical positions объекта во всех картах и
+вариантах. Добавление размещения или позиции учитывает текущее назначение.
+Отсутствующие позиции не создаются назначением или групповым переносом.
+Locked placement или недопустимая коллизия отклоняют транзакцию целиком.
+Выход за прежние bounds согласует frames и соседей, сохраняя назначение.
+
+Geometry write валидирует конечные координаты, положительные размеры, perimeter,
+Location и владение variant. Подтверждённый SavedMapDocument содержит связанные
+frames и positions. Клиент применяет результат только к исходным map/variant.
+Черновик, Save, Cancel и rollback описаны в [UX](UX_IA_CONTRACT.md).
+
+## DOC-LOC-03 — TARGET структурной компоновки Location
+
+**CURRENT.** L1 Physical variant выбирает manual, automatic sequence или
+uniform grid. Automatic layout выводит размеры снизу вверх и размещает
+содержимое сверху вниз из измеренных footprints. Ручные X/Y и bounds
+не служат входом, сервер отклоняет ручные frame/position writes в automatic
+mode. Технический root — presentation container.
+
+- Automatic sequence использует направление и упорядоченный список
+  непосредственных Location и PhysicalObject. По умолчанию вертикаль и порядок
+  по immutable ID. Поперечное выравнивание локально группе, панели сохраняют
+  размеры. Вложенные группы измеряются независимо. Пустая рамка имеет минимум
+  100×32 с поправкой на подпись. Основной отступ и вертикальный интервал — 12,
+  между вложенными заголовками — 24, между горизонтальными соседями — 20.
+- Uniform grid хранит в variant `automatic_layout` с `mode: uniform_grid`,
+  `version: 1`, `hide_empty` и `tables`. Таблица каждого canonical parent или
+  root содержит прямых детей по адресам строк/столбцов в ячейках UUID/null.
+  Новая сетка начинается с одного столбца в порядке UUID. Видимые занятые
+  ячейки делят максимальные ширину и высоту своей таблицы. Наполненность
+  учитывает оборудование в потомках, включая свёрнутых. Пустые рамки
+  участвуют в размере дорожек, сохраняя компактность. Невидимые дорожки
+  опускаются при отрисовке, дыры активных дорожек сохраняют место.
+- Direct PhysicalObject образуют отдельную упорядоченную горизонтальную или
+  вертикальную последовательность в Location или root, сохранённую в
+  `object_sequences` как `direction` и упорядоченный список UUID. По умолчанию
+  вертикаль по UUID. Child Location table измеряется независимо и начинается ниже.
+  Membership берётся из placements, контейнер — из canonical assignment.
+  Ориентация пустого контейнера сохраняется до его удаления.
+- Read-time reconciliation сохраняет адреса и порядок surviving элементов,
+  очищает отсутствующие ссылки и добавляет новых в порядке UUID. В таблице
+  используется первая свободная ячейка либо новая строка. В object sequence
+  используется конец списка. Чтение не меняет storage. Затронутые grid variants
+  согласуются при canonical hierarchy changes, placement add/remove и canonical
+  reassignment/deletion в транзакции записи. Save и import проверяют duplicates,
+  foreign children/objects, containers, ячейки и циклы. Copy и workspace
+  export/import сохраняют настройки.
+
+**CURRENT.** Hide-empty убирает место пустых subtree по placements карты.
+Collapse использует производные размеры, сохранённые таблицы и expanded geometry
+сохраняются. Partial collapse оставляет выбранные direct elements, доступные
+даже без оборудования. Скрытое окончание использует route target без второго
+подписанного proxy. Expand восстанавливает представление из исходной структуры.
+
+**DECIDED TARGET.** Полный collapse показывает один компактный proxy с той же
+boundary identity и скрывает все дочерние frames, proxies и оборудование.
+Внешний полный collapse имеет приоритет, внешний Cable route заканчивается на
+видимой точке свёрнутого Location.
+
+**OPEN / RECHECK.** В ручной карте сценарий полного collapse прошёл, в uniform
+grid с пустым набором видимых элементов часть оборудования осталась видимой.
+Исправление не подтверждено. Grid-specific UI выбора при partial collapse
+остаётся OPEN. [L1A-01](audits/L1_READINESS_AUDIT.md#l1a-01--полный-collapse-в-uniform-grid-оставляет-дочернее-оборудование) ·
+[GitHub issue #2](https://github.com/scvarr/netmap/issues/2).
+
+## Виды и компоновка карты L1
+
+### Трёхзонная геометрия PhysicalObject
+
+**CURRENT.** Для объекта с опубликованной композицией рамка горизонтальная.
+Левая зона identity занимает 72 flow units, средняя — композиция, правая —
+кабельный резерв минимум 20. Подпись в левой зоне ограничена по ширине,
+полное имя доступно при наведении. `display_width` задаёт ширину композиции.
+Полный footprint включает обе боковые зоны, высота определяется пропорциями видимой
+композиции с учётом минимальной высоты корпуса 24. Панели и внешний контур
+отрисовываются без смещения портов.
+
+В manual layout используется минимальный кабельный резерв, resize меняет
+composition width на запрошенную дельту. В automatic sequence после
+выравнивания Location остаток внутренней ширины может получить объект с
+композицией, если он единственный видимый элемент Location. Вся добавленная ширина идёт в правый резерв.
+Несколько объектов и сами панели не растягиваются. Это derived allocation
+активного варианта, без записи `display_width` или Cable geometry.
+
+Эффективный минимум ширины композиции учитывает 32 flow units, высоту каждой
+видимой панели не менее 12 и расстояние между центрами портов не менее 10
+хотя бы по одной оси. Footprint, packing, collision, явный resize и серверные
+size writes применяют общую политику плотности. Совпадающие центры либо
+требуемый минимум выше 960 дают явную ошибку. Read-time floor не меняет
+сохранённый SavedMap. Физический marker занимает 6 flow units со stroke 0,5,
+hit square — 8, внешний highlight не выступает более чем на 1 flow unit.
+NETWORK_PORT квадратный, CONNECTION_POINT круглый.
+Панели, внутренние связи, HTML-порт, foreground маркер и cable endpoint используют одну систему
+координат с общим composition width и offset, в том числе при смене стороны.
+Zoom не участвует в геометрии, identity или сохранении размеров.
+
+### FACE-VIEW-01 — физические виды карты L1
+
+**CURRENT.** Опубликованная панель может иметь сторону FRONT или REAR. Панель
+без стороны видна в обоих видах, единственная панель видна всегда. Сторона
+разрешается по override объекта, ближайшему canonical Location override и
+`default_face` варианта (по умолчанию FRONT). Null означает наследование.
+Измерение и нормализация относятся к видимым панелям и портам. Низкая
+композиция центрируется внутри минимальной высоты корпуса, отсутствие видимых
+панелей даёт компактный корпус. Смена стороны меняет derived dimensions:
+grid пересчитывает ячейки, manual позиции сохраняются, Location frame может
+расшириться в представлении.
+
+Скрытый порт использует правый терминал объекта. При совпадении двух скрытых окончаний отметка на границе
+остаётся доступной для выбора Cable. Временный показ точных
+окончаний Cable или выбранной ветви trace меняет вид и derived footprint
+без записи настроек или collapse. Trace имеет приоритет. Если нужны обе
+стороны, полная композиция показывает каждый порт и панель один раз.
+Снятие выбора, завершение trace, смена карты, варианта или слоя возвращают
+обычное наследование.
 
 ## C-UX-10 — виртуальная инфраструктура
 
-**CURRENT.** [Основной контракт](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
-остаётся OPEN для общих межобъектных жгутов и других незавершённых возможностей. Каждый Location, включая пустой, получает ровно
-одну обязательную виртуальную точку со стабильной identity; это не ConnectionPoint.
-Маршрут следует граничным точкам последовательных уровней Location hierarchy.
-В одном непосредственном Location переход через другие Location не требуется.
-Прямой Channel произвольной пары без иерархического пути не принят. Инфраструктура не разделяется между картами; геометрия
-принадлежит presentation variant. Foundation frames/points реализован в C-UX-10-01.
-LOC-CHAN-01 реализует производный локальный граф. LOC-ROUTE-01
-составляет путь Cable из участков графов Location и COMB-01. SavedMap и
-MapPresentationVariant хранят presentation state. Графы вычисляются по текущей
-компоновке, persisted Channel отсутствует.
+**CURRENT.** Каждый Location, включая пустой, имеет одну derived boundary point
+с UUIDv5 от SavedMap ID и Location ID. Это presentation терминал, без
+отдельного create/delete. Identity не зависит от variant или geometry.
+Variant хранит edge/offset относительно отображаемого frame. Boundary write блокирует hierarchy, variant,
+затем state и возвращает authoritative SavedMapDocument. Automatic mode
+разрешает запись только boundary placement с finite offset в [0,1], сохраняя
+manual bounds и позиции. Удаление Location или variant удаляет его state.
 
-Cable сохраняет реальные окончания и canonical identity. Его путь динамически
-составляется из индивидуальных подводов и общих участков иерархического пути без копирования.
-Preview предшествует подтверждению canonical create. При создании и удалении Cable меняется занятость
-участков графа. Перемещение оборудования сохраняет окончания и пересчитывает
-маршрут для новых непосредственных Location. Collapse скрывает структурные
-участки; проекция внешних каналов на общего родителя не создаёт persisted Channels.
-Expand восстанавливает геометрию без перезаписи. Пустой Location получает видимую
-presentation область. Exact L1 evidence определяется canonical topology. Общая геометрия сегмента
-и пересечение линий не создают физической связности между Cable.
+COMB-01 выводит локальные подводы от портов к верхней/нижней магистрали и правому
+выходу объекта. Grid учитывает место под магистрали при измерении.
+Для объекта без композиции подводы идут вдоль правого края. LOC-CHAN-01
+вычисляет ортогональные деревья по отображаемой геометрии Location, включая
+черновик. Входы — выходы прямого оборудования и точки видимых детей, корень —
+boundary point Location или вход технического root. Маршрут учитывает препятствия
+и коридоры, недоступный терминал или путь диагностируется с Cable ID и участком.
 
-## Массовые операции
+LOC-ROUTE-01 составляет путь реального Cable по canonical окончаниям: от объекта
+через последовательные Location к ближайшему общему предку и обратно вниз.
+Для одного Location используется его дерево, без общего Location — технический
+root. Один снимок геометрии задаёт ordered segment refs для Cable и wiring
+preview. Совпадающий участок рисуется один раз и хранит derived набор Cable IDs.
+Persisted Channel и записи индивидуальной route geometry отсутствуют.
+Перемещение, visibility и variant меняют геометрию, сохраняя Cable и endpoints.
+Совместный участок и пересечение линий не дают continuity или evidence.
 
-Bulk pairing требует ordered preview и atomic canonical batch validation,
-независимую от SavedMap. Создаёт отдельные Cables/Connections, которые отображаются через COMB-01. Location series имеет один contiguous # pattern, range/step,
-preview и проверку conflicts до all-or-nothing write; создаёт только Locations.
+**OPEN.** Межобъектные жгуты требуют отдельного решения.
+[C-UX-10](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels).
+
+## Кабельные операции и панели CURRENT
+
+Физический lifecycle определён в [L1_CONNECTIVITY](L1_CONNECTIVITY.md#принципиальные-границы),
+работа с панелями и Cable — в [UX_IA_CONTRACT](UX_IA_CONTRACT.md#физическая-карта-и-кабельные-операции).
+Границы приёмки зафиксированы в [PROJECT_STATE](PROJECT_STATE.md#кабельные-milestones).
 
 ## Resolver, evidence и L1/L2/L3 boundaries
 
@@ -272,15 +278,14 @@ view fingerprint и resolver/compiler version входят в ключ; invalida
 commit, старый artifact не источник актуальной truth. Query memo не меняет semantics.
 
 L2/L3 backend core существует; полный пользовательский продукт остаётся будущим.
-L1 PRODUCT COMPLETE обязателен до продуктового L2; архитектурный контракт не
-является утверждением о доступности UI.
+[L1 PRODUCT COMPLETE](L1_CONNECTIVITY.md#назначение-canonical-truth-и-готовность)
+обязателен до продуктового L2. Продуктовый L3 следует после продуктового L2.
 
 ## Runtime, данные и миграции
 
 Docker-only runtime, pinned dependencies, migrations до startup; PostgreSQL.
 Тестовая БД изолирована от runtime. UI по умолчанию RU, EN через typed i18n.
-API-first core не зависит от React state, user/ACL semantics не протекают в network core.
-Persisted NetworkWorkspace/auth/sharing ещё не реализованы.
+API-first core независим от React state. User/ACL semantics принадлежат application layer.
 
 Применённые Alembic revisions immutable: исправления только forward migration.
 Сохраняются canonical user/network data, stable identity и retained immutable
@@ -330,565 +335,10 @@ handoff local metadata не переносится как packet facts. Повр
 
 ## Принятые L1 инварианты — L1-CONTRACT-02
 
-Продуктовый контракт L1-CONTRACT-02 от 11.11.2026. Это target, а не
-подтверждение соответствия текущих API, materialization, reconcile или trace.
-Доказательная инвентаризация выше сохраняет отдельные статусы реализации.
-
-- **L1-O1:** L1 охватывает сетевые кабельные соединения меди и оптики.
-  Для меди канал — независимо подключаемая сетевая линия, для оптики — волокно.
-  Проводники RJ45 отдельно не моделируются. Количество каналов задаётся данными.
-- **L1-O2:** единый механизм соответствий для внутренних связей и внешних кабелей:
-  автоматическое прямое, обратное или заданное упорядочивание, обязательный preview,
-  ручная корректировка, частичные mappings, проверка занятости и атомарное сохранение.
-- **L1-O3:** member имеет не более одного внешнего и одного внутреннего соединения.
-  Разные members одного ConnectionPoint независимы. Конфликт не удаляет старую
-  связь автоматически. Исключения настоящих разветвителей вне базовой модели.
-- **L1-O4:** PON splitter остаётся в предметной области, но требует отдельного этапа.
-  Обычные ConnectionMember не имитируют деление. Оптический бюджет вне C-CAP-01.
-- **L1-O5:** физический кабель имеет одну Cable identity, включая несколько окончаний
-  с разным числом каналов. Многоконцевые сборки требуют расширения текущей
-  двухточечной модели; фиктивные Cable недопустимы. Пересмотр этого принятого
-  критерия остаётся [OPEN](OPEN_DECISIONS.md#cabletype-и-member-aware-модель).
-- **L1-O6:** BaseTemplate определяет физическую конструкцию и внутреннюю разводку.
-  Физическая переделка требует нового BaseTemplate и нового PhysicalObject;
-  индивидуальная переделка внутренней конструкции экземпляра не поддерживается.
-  Исправления описаний, имён и геометрии представления этим не ограничиваются.
-- **L1-O7:** изменение физической конструкции модуля требует нового ModuleTemplate.
-  Internal continuity модулей — отдельная задача реализации, не готовая возможность.
-- **L1-O8:** активное оборудование завершает L1 trace; автоматического transit между
-  портами нет. Пассивное продолжение требует явных внутренних связей.
-  L2 forwarding и active conversion не подменяют L1.
-- **L1-O9:** изменение физической конструкции создаёт новую identity оборудования;
-  внешняя перекоммутация сохраняет identity. Старые подключения автоматически
-  не переносятся. Исправления ошибочных данных — отдельный случай; частичная
-  потеря canonical dependencies недопустима.
-- **L1-O10:** отдельный канал возвращает точный подтверждённый canonical evidence путь.
-  Группа независимо оценивает members; полнота считается относительно явно заданных
-  ожидаемых соответствий. Резервные каналы автоматически не ошибка.
-  REACHABLE не означает измеренную исправность физической линии.
-
-Нет фиксированной hardware taxonomy и специальных схем 1x24/1x48.
-PortType не определяет connectivity; presentation state не canonical topology.
-C-CAP-01 остаётся OPEN Phase D; L1 PRODUCT COMPLETE обязателен до L2/L3.
-
+Действующая редакция всех L1-O1–L1-O10 находится в
+[L1-CONTRACT-03](L1_CONNECTIVITY.md#принятые-решения-l1-o1l1-o10--decided).
 
 ## C-CAP-01-01 — definitions и materialization
 
-BaseTemplate endpoint definition хранит положительную `cardinality` (по умолчанию
-1; NETWORK_PORT только 1, верхний технический предел PostgreSQL int: 2147483647).
-Internal link хранит `member_mappings`: явные пары `from_member_index` /
-`to_member_index` относительно `from_slot_key` / `to_slot_key`. Отсутствующие
-mappings исторических 1:1 definitions означают пару 1→1. Порядок пар не задаёт
-связность. Повторная внутренняя занятость member запрещена во всём definition.
-Материализация создаёт canonical ConnectionPoint/Connection/ConnectionMember
-без Cable, в savepoint; resolver использует сохранённые индексы.
-
-Опубликованная физическая конструкция неизменна: endpoint keys/kind/cardinality,
-внутренняя разводка и keys/kind/compatibility module places требуют копии
-BaseTemplate. Сервер отклоняет structural publication независимо от наличия
-экземпляров. Reconcile разрешённых описательных/presentation изменений сохраняет
-canonical identities и connections; физическая миграция старых экземпляров
-запрещена. Координаты, цвет, подписи не входят в физическую сигнатуру.
-
-Существующий графический редактор блокирует edit/copy multichannel definitions
-с объяснением; API сохраняет mappings и cardinality, archive сохраняет их
-roundtrip. Генератора mappings нет. C-CAP-01 остаётся **OPEN Phase D**;
-C-CAP-01-02/03/04 не реализованы этим этапом. Внешний multichannel write,
-occupancy lifecycle, ModuleTemplate continuity и splitter вне scope.
-
-
-C-CAP-01-01 corrective: `draft/check` сравнивает physical structure с опубликованной
-ревизией до создания candidate. Физические изменения возвращают
-`PHYSICAL_STRUCTURE_IMMUTABLE` с предложением создать копию; независимая защита
-в publish сохраняется для ранее выданных candidates и прямых API-вызовов.
-
-Историческая внутренняя разводка с повторной занятостью одного member несовместима
-с O3. Чтение/review/materialization возвращают доменную ошибку
-`INTERNAL_MEMBER_OCCUPANCY`; reconcile сообщает эту причину без изменения объекта.
-Импорт такого архива явно отклоняется до восстановления данных, в том числе при
-отсутствующих полях cardinality/mappings старого 1:1 формата. Links не удаляются,
-continuity не синтезируется, автоматической коррекции и splitter support нет.
-Корректные исторические 1:1 definitions остаются поддержаны. C-CAP-01 — OPEN Phase D.
-
-## L1-REFERENCE-01 — DECIDED TARGET
-
-[Reference Network & Portability Contracts](L1_REFERENCE_NETWORK.md) закрепляет
-независимые карты, переносимые определения, CableType и безопасную demo initialization.
-Это TARGET, не IMPLEMENTED: текущий SavedMap остаётся presentation scope общей
-topology implicit workspace. Общие библиотеки не означают общую topology карт.
-MapPresentationVariant остаётся компоновкой одной сети. NetworkWorkspace отвечает
-за application isolation/права, не отменяя map ownership. Schema/FK/API не выбраны.
-
-### AUTO-LOC-01 — automatic Location composition
-
-**CURRENT.** Следующий DOC-LOC-03 описывает частично реализованный TARGET.
-
-L1 Physical variants explicitly opt into `automatic_layout` (nullable JSONB on
-MapPresentationVariant). Null retains the existing manual contract and data.
-Settings contain `hide_empty` and per-container direction plus an ordered mixed
-sequence of `Location:<id>` / `PhysicalObject:<id>`. `root` is a technical
-presentation container, never a canonical Location. Missing entries default to
-VERTICAL; unspecified/new children follow immutable-ID order. Copying a variant
-copies settings and collapse state independently.
-
-The frontend measures full rendered equipment footprints including nameplates,
-then composes frames bottom-up and places contents top-down with header/padding.
-Manual x/y/frame sizes are not automatic position inputs. Empty subtree detection
-uses current SavedMap placements; hiding removes its entire space. Full collapse
-uses a compact rectangle; partial-collapse visibility semantics remain unchanged.
-Boundary identity stays map/Location UUIDv5; edge/offset anchors resolve against
-current displayed frames. Drag/resize/free movement
-are disabled in automatic mode; server rejects explicit geometry/position writes.
-Canonical assignment and connectivity remain independent of presentation.
-
-### AUTO-LOC-02 — compact automatic geometry
-
-**CURRENT.**
-
-Automatic composition measures visible direct children bottom-up. VERTICAL
-aligns Location widths to the group's maximum required width; HORIZONTAL aligns
-Location heights to its maximum required height. Direct equipment participates
-in that maximum with its complete rendered footprint (including nameplate),
-but retains its own dimensions. Main-axis dimensions remain content-sized.
-Each nested group is measured independently, including full/partial collapse;
-hidden empty subtrees reserve no space. Empty frames have a 100-unit minimum
-width (increased for their label) and a 32-unit minimum height.
-
-Automatic-only spacing uses 12 flow units for side/bottom clearance and vertical
-sequence gaps, 24 only between nested border headings, and 20 between
-horizontal siblings, retaining the existing container interval. Equipment starts
-12 units below the border; no separate header row is reserved. The technical
-root has no heading. Geometry does not depend on viewport zoom. Frames alone
-stretch; contents are not scaled or distributed into spare space. Location boundary points retain their identity and resolve their saved edge/offset
-against the resulting frames.
-
-
-Automatic Location boundary editing uses the variant-owned MapLocationState:
-`PUT .../locations/{location_id}/boundary-placement` accepts only edge/offset,
-validates finite offset in [0,1], and returns authoritative SavedMap state.
-It locks hierarchy, then variant, then state; only the boundary placement is
-updated. An absent geometry is materialized from its existing effective bounds;
-Manual bounds and equipment positions are retained.
-Automatic frames remain derived; the geometry endpoint still rejects automatic
-frame edits. Point preview has Save/Cancel and error rollback. The point retains its map-scoped identity.
-
-
-## DOC-LOC-03 — TARGET структурной компоновки Location
-
-**PARTIAL.** AUTO-LOC-01/02 и SLOC-01–04 в main: uniform-grid, стрелочная
-расстановка и сортировка дочерних Location. SLOC-05 в main добавляет
-порядок и ориентацию непосредственных PhysicalObject. Grid-specific partial-collapse
-UX остаётся OPEN. Объектная кабельная геометрия реализована в COMB-01.
-[Открытые вопросы](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
-
-Location допускают строки, столбцы и комбинированную плиточную структуру внутри
-одного родителя: здание с этажами, этаж с кабинетами плиткой, серверная с группами
-стоек и несколькими рядами. Location остаётся универсальным: фиксированной
-taxonomy «стойка», «этаж», «кабинет», «U» не вводится.
-
-Пользователь включает режим «Расстановка», выбирает Location и перемещает его
-стрелками вверх/вниз/влево/вправо по адресам соседних ячеек таблицы.
-Соседство локально соответствующей строке или столбцу: размещение справа от
-элемента не растягивает его на высоту всей группы. Ручной ввод абсолютных X/Y
-и обязательный выбор HORIZONTAL/VERTICAL технического root не требуются.
-Root допустим как presentation-контейнер, но не canonical Location.
-
-Непосредственные PhysicalObject одного Location образуют простую горизонтальную
-либо вертикальную последовательность с изменяемым порядком; смешанное двумерное
-дерево для них не требуется. Например, стойка содержит вертикальную
-последовательность Location U, а один U — три устройства горизонтально.
-
-Размеры прямоугольников определяет дочернее содержимое: строка согласует высоту,
-столбец — ширину; более крупный элемент расширяет соответствующую группу.
-Выравнивание локально группе, не глобально карте. Дополнительное пространство
-не масштабирует физическую панель BaseTemplate; в трёхзонном PhysicalObject
-ширина может отдаваться правой кабельной зоне согласно [OBJECT-UX-01](OBJECT-UX-01.md).
-
-Структура размещения и визуальные группы принадлежат MapPresentationVariant.
-Группы стоек/кабинетов не создают автоматически canonical Location. Canonical
-hierarchy, PhysicalObject assignment и connectivity не выводятся из геометрии.
-Перемещение внутри одного Location меняет только presentation; перенос
-PhysicalObject в другой canonical Location — отдельная явная операция.
-Скрытие пустых Location и collapse/expand сохраняют существующую смысловую
-разницу; перекомпоновка видимых элементов не уничтожает сохранённую структуру.
-
-### COMB-01 — объектные виртуальные кабельные каналы
-
-**IMPLEMENTED / MERGED.** В физическом виде L1 каждый видимый
-Blueprint-backed PhysicalObject получает производный локальный граф по
-отображаемым координатам портов и размерам рамки. Короткие вертикальные
-подводы ведут к ближайшей верхней или нижней магистрали. Магистрали сходятся
-в правой зоне рамки и заканчиваются на её правой границе. От каждого
-ConnectionPoint граф хранит ссылку на начало пути, а совпадающие участки
-представлены общими сегментами.
-
-На SavedMap COMB-01 соединяет отображаемый ConnectionPoint с терминалом
-PhysicalObject в дереве Location. По умолчанию видны занятые сегменты,
-переключатель карты добавляет свободные. Выделение и L1 trace применяются
-по canonical Cable ID.
-Hover использует тот же набор сегментов и меняет только их отображение. При
-активном trace декоративная подсветка отключается. Выбор из списка общего
-участка передаёт существующему инспектору тот же Cable, что и клик по
-индивидуальному подводу.
-
-Создание Cable на карте включает выбор двух портов, preview по тому же графу
-и подтверждение canonical create. ROUTE-UX-01 удалил ручное редактирование и
-persistence индивидуальной геометрии. После создания клиент обновляет карту
-и физическую проекцию. Повтор refresh перечитывает состояние.
-
-Геометрия вычисляется из активного представления. Uniform-grid резервирует
-вертикальный зазор при измерении ячеек без изменения размеров панелей.
-COMB-01 не добавляет записей или API. [C-UX-10](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels)
-остаётся OPEN для общих межобъектных жгутов и других возможностей.
-DOC-LOC-03 остаётся PARTIAL.
-
-#### CABLE-SELECT-01 — взаимодействие на карте L1
-
-**IMPLEMENTED / MERGED / MANUALLY ACCEPTED.**
-
-Подсказка индивидуального подвода показывает название и доступные окончания
-Cable. Общий участок показывает число Cable и открывает список, отсортированный
-по названию, окончаниям и canonical ID. При совпадении названия и окончаний
-в списке отображается ID. Enter и Space активируют сфокусированный участок.
-Список закрывается после выбора, по Escape либо кликом снаружи.
-
-Прозрачный SVG-штрих рассчитан на 12 экранных пикселей. У соседних подводов
-ширина ограничена расстоянием между ними, а вырезы сохраняют попадание в
-порты. Перетаскивание с участка панорамирует карту. Во время выбора портов
-для создания Cable области выбора трассы отключены. Preview использует
-те же сегменты COMB-01 и LOC-CHAN-01, что и созданный Cable. Маркеры
-видны при наведении и выборе.
-
-### LOC-CHAN-01 — локальные виртуальные каналы Location
-
-L1 вычисляет дерево отдельно для каждого отображаемого раскрытого Location
-и технического корня по геометрии активного MapPresentationVariant, включая
-черновик компоновки. Входы дерева — выходы непосредственных PhysicalObject
-и обязательные точки непосредственных видимых детей. У раскрытого Location
-корень дерева — его обязательная точка. Технический корень начинает дерево
-от одного из входов. Пустой Location сохраняет свою точку, а полностью
-свёрнутый ребёнок подключается через точку на компактном представлении.
-
-Поиск проходит по сжатой ортогональной сетке с отступом от препятствий.
-Для общих магистралей он предпочитает центральные оси свободных коридоров
-между фактическими прямоугольниками и вдоль рамки. К терминалам ведут
-ортогональные ответвления. При прерывании оси допускается обход с отступом.
-Каждое ответвление заканчивается в явном узле существующего дерева. Стоимость
-учитывает длину и изгибы. Заблокированные входы, отсутствие коридора и исчерпание
-лимита поиска диагностируются по входам. Геометрия существует в контексте
-представления и пересчитывается при изменении рамок, оборудования, положения
-точек, назначений или активного варианта.
-
-Переключатель «Показать все кабельные каналы» добавляет свободные сегменты
-этих деревьев. C-UX-10 остаётся OPEN, DOC-LOC-03 — PARTIAL.
-
-### LOC-ROUTE-01 — иерархический путь Cable
-
-**IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** Отображение SavedMap L1 берёт окончания
-из canonical Cable evidence. Между объектными подводами маршрут поднимается
-от терминала PhysicalObject через обязательные точки Location до ближайшего
-общего предка и спускается к другому объекту. Для одного непосредственного
-Location используется путь внутри его дерева. Если общего canonical
-Location нет, используется дерево технического корня. Generic PhysicalObject
-соединяет видимые endpoints с терминалом вдоль правого края объекта.
-
-Индекс локального дерева строится один раз на снимок геометрии. Cable и preview
-используют упорядоченные ссылки на сегменты. Карта рисует общий сегмент один
-раз и хранит набор canonical Cable ID в производном состоянии. Выбор, hover
-и L1 trace работают с этим набором. Пересечения и совместные участки
-не дают L1 evidence. Обычный штрих #49E5A7, выбранный #FFE600, ширина — один
-экранный пиксель. Свободные участки видны голубым пунктиром.
-
-При zoom ниже 0.6 карта скрывает декоративные круги выходов объектов и
-границ Location. Наведение на заголовок или компактный Location, фокус,
-выбор и редактирование возвращают его граничный маркер. Кнопка границы
-сохраняет hit area и доступ с клавиатуры. Терминалы графа и пути Cable
-используются при любом zoom.
-
-Физический ConnectionPoint занят, если L1-проекция содержит хотя бы один
-canonical Cable с этим окончанием, в том числе через off-map continuation.
-У свободного порта тёмная середина и контур PortType, у занятого — заливка
-PortType и контрастный контур. HTML и передний SVG-слой используют одни
-цвета. Preview занятость не меняет. После создания или удаления она
-обновляется из проекции независимо от zoom, компоновки и collapse.
-
-Hover индивидуального участка подсвечивает бирюзовым внешним контуром
-видимые физические окончания Cable из canonical endpoint pair. Выбор Cable,
-в том числе из списка общего участка, удерживает жёлтые контуры его окончаний
-до смены выбора. Контуры сохраняют форму и заливку порта. Wiring source и
-destination имеют приоритет, активный L1 trace подавляет декоративный hover.
-Для выбранного off-map continuation подсвечивается локальное окончание.
-
-Внешний путь свёрнутого subtree заканчивается в видимой обязательной точке.
-При частичном сворачивании оставшиеся видимые элементы сохраняют локальные
-пути. После раскрытия маршрут вычисляется по текущей компоновке. Если
-терминал или путь недоступны, карта показывает диагностику с Cable ID и
-неудавшимся участком. Путь вычисляется только для представления, без записи
-геометрии в canonical Cable, Connection или variant.
-
-## Кабельные операции и панели CURRENT
-
-Статусы реализации, включения в main и ручной приёмки приведены в
-[PROJECT_STATE](PROJECT_STATE.md#кабельные-milestones).
-
-Canonical Cable ID и связанный Connection ID определяют идентичность
-независимо от маркировки, порядка, панели, геометрии и SavedMap. Внешние
-окончания адресуются по ConnectionPoint ID. SavedMap хранит представление
-канонической сети. Карта и wiring preview используют общий производный
-расчёт Cable routes по текущей компоновке и видимости, включая граничные
-терминалы. Геометрия не записывается в Cable или Connection.
-
-### CABLE-BULK-DELETE-01 — массовое удаление
-
-Пользователь выбирает Cable между двумя PhysicalObject по preview.
-Сервер блокирует затронутые записи и проверяет все ожидаемые Cable,
-Connection и окончания до удаления. Устаревший preview или конфликт
-отклоняет весь пакет. Удаление Cable, его внешнего Connection и обработка
-маркировки выполняются в одной транзакции. Внутренняя continuity сохраняется.
-
-### CABLE-RECONNECT-01 — замена одного окончания
-
-Для внешнего Cable с mapping 1↔1 и cardinality=1 заменяется одно окончание
-по ConnectionPoint ID. Cable, Connection, ConnectionMember, маркировка и
-второе окончание сохраняются. Сервер под блокировками сверяет preview,
-проверяет допустимость нового окончания, разных владельцев и внешнюю
-занятость member=1, затем атомарно меняет связь. При конфликте интерфейс
-перечитывает актуальные сведения. Новый маршрут вычисляется из обновлённой
-проекции.
-
-### PORT-CHANNEL-UX-01 — физические подключения объекта
-
-Карточка группирует ConnectionPoint по `panel_key` закреплённой опубликованной
-ревизии BaseTemplate, включая порты установленных модулей. Панели перечисляются
-в порядке `panel_number`. Сторона Front/Rear служит подписью, названия панелей
-могут совпадать. Выбор хранится в состоянии карточки и сохраняется при
-обновлении сведений об объекте, пока выбранный ключ присутствует. Порты без
-панели доступны отдельной группой. Для объекта без шаблона селектор отсутствует.
-
-Сведения о панелях выводятся из точных привязок endpoint и загружаются одним
-пакетом для затронутых встроенных портов и одним пакетом для модульных портов.
-Удалённое окончание показывается в формате «объект / панель / порт». Название
-панели добавляется при подтверждённой привязке. Внутренняя continuity и внешние
-подключения отображаются отдельно. Топология по-прежнему определяется
-каноническими Connection и ConnectionMember.
-
-### CABLE-BULK-UX-01 — массовое подключение с карты L1
-
-Действие «Массовое подключение» в меню PhysicalObject открывает редактор
-для двух объектов текущей карты. Таблицы получают порты, внешние подключения
-и привязки `panel_key` из сведений о физических объектах. У каждой таблицы
-свой выбор панели и естественная сортировка названий по возрастанию или
-убыванию. Порты без панели образуют отдельную группу. Занятые окончания
-видны в списке, выбор доступен только для свободных окончаний member=1
-с cardinality=1.
-
-«Сопоставить» фиксирует порядок выбранных canonical ConnectionPoint ID.
-Сортировка таблиц не меняет пары. В списке пар можно заменить порт назначения,
-поменять два назначения местами или исключить строку. Смена панели или
-объекта сбрасывает сопоставления. Перед записью пользователь проверяет
-полные подписи окончаний, число кабелей и ожидаемые имена. Для исторических
-имён нужно отдельное подтверждение.
-
-Редактор передаёт проверенный порядок в существующий атомарный bulk API.
-Сервер проверяет занятость, допустимость окончаний и маркировку. При конфликте
-портов редактор предлагает перечитать сведения и заново сопоставить порты.
-После создания обновляется L1-проекция текущей карты. Повтор обновления
-после ошибки чтения выполняет только запрос проекции.
-
-## Виды и компоновка карты L1
-
-### FACE-VIEW-01 — физические виды карты L1
-
-Панель BaseTemplate имеет необязательную сторону `FRONT` или `REAR`.
-Сторона сохраняется в определении ревизии через штатный цикл черновика и
-публикации. Названия панелей произвольны. Панели без стороны видны в обоих
-видах. Единственная панель всегда видна, а её назначенная сторона задаёт
-букву индикатора. Карта измеряет композицию по границам видимых панелей
-и нормализует координаты их портов относительно этих границ. Для видимой
-композиции применяется сохранённый `display_width` с минимумом по видимым
-панелям и портам. Композиция ниже минимальной высоты корпуса центрируется
-по вертикали целиком. Панели, внутренние связи L1, маркеры портов и
-кабельные подводы используют один производный отступ. Если видимых панелей
-нет, отображается компактный корпус с названием и индикатором.
-При смене стороны применяются только производные
-размеры. Автоматическая сетка пересчитывает ячейки, а в ручной компоновке
-объекты сохраняют сохранённые позиции. Рамка Location при необходимости
-расширяется в представлении, чтобы вместить новый габарит объекта.
-
-Вариант хранит `default_face` с начальным значением `FRONT`. У Location
-и у позиции PhysicalObject в L1 есть nullable `face_override`. Пустое
-значение соответствует `INHERIT`. Карта вычисляет сторону по override
-объекта, ближайшему override в canonical цепочке Location, затем по
-default варианта. Копирование варианта переносит явные настройки. Иерархия
-и назначение объекта читаются из текущих canonical данных.
-
-Вид варианта меняется в разделе компоновки, override Location — через
-его настройки. Индикатор под названием PhysicalObject открывает выбор
-стороны объекта. Подсказки показывают эффективную сторону и её источник.
-
-COMB-01 строит подводы к видимым портам. Скрытое окончание использует
-правый граничный терминал своего PhysicalObject, от которого продолжается
-маршрут по LOC-CHAN-01 и LOC-ROUTE-01. Preview использует тот же расчёт.
-Когда два скрытых окончания одного Cable совпадают на границе одного
-объекта, короткая отметка на границе позволяет выбрать Cable.
-Свёрнутые Location используют свои граничные точки. Выбор, hover и L1 trace
-опираются на canonical Cable ID и topology evidence.
-
-Выбор Cable временно показывает стороны его точных окончаний. Подтверждённая
-выбранная ветвь L1 trace имеет приоритет и использует ConnectionMember и
-точные точки пути. Две требуемые стороны одного объекта показывают полную
-композицию (F+R), со всеми панелями и портами в единственном экземпляре.
-Location сохраняет исходные настройки и состояние сворачивания. Временные
-габариты участвуют в автоматической компоновке и маршрутизации. При завершении
-trace или снятии выбора снова применяется обычное наследование. Смена карты,
-варианта или ручное переключение слоя завершает временное представление.
-
-### SLOC-01 — isolated uniform Location table core
-
-`frontend/src/topology/locationGridLayout.ts` implements a pure, typed measurement
-core used by the SLOC-02 runtime adapter.
-Its ephemeral input supplies canonical direct children as a sparse row/column
-table, canonical direct object footprints, minimum frame sizes and collapse.
-This is not a persistent schema. All populated visible cells share the maximum
-required width AND height across their entire table. Population includes objects
-in any canonical descendant, even collapsed ones; empty descendants alone do not
-count. Empty frames do not contribute to uniform maxima. Track extents include
-compact empty frames to prevent overlaps. Wholly invisible tracks are omitted;
-holes in active tracks retain their slot. Collapse uses minimum measured size
-before parent-table equalization. Nested tables retain independent inner sizes.
-Equipment footprints are retained without scaling; only Location frames expand.
-Coordinates are parent-local flow units, with no zoom or prior positions.
-AUTO-LOC-01/02 remain unchanged. DOC-LOC-03 remains PARTIAL. Manual acceptance is OPEN.
-
-### SLOC-02 — uniform grid runtime integration
-
-**IMPLEMENTED / MERGED.** L1 variants explicitly
-select manual, legacy sequence or uniform grid in the existing controls.
-The base JSONB contract is `{mode: "uniform_grid", version: 1, hide_empty, tables}`.
-`tables` maps canonical parent UUIDs (or technical `root`) to arrays of rows of
-Location UUID/null cells. Legacy direction/order JSON and null manual settings
-retain their contract. Switching to grid initializes an ID-sorted single column,
-without interpreting legacy direction/order. No migration is required.
-
-Runtime reconciliation retains surviving direct-child addresses, clears stale
-references, then inserts new direct children in immutable-ID order into the first
-free cell or appends a row. Reconciliation never mutates stored settings; the next
-settings save materializes the reconciled structure. Canonical create/series,
-reparent and empty-Location delete also reconcile every stored grid variant in
-the canonical transaction, under hierarchy then UUID-ordered variant locks.
-Surviving cells retain addresses; stale cells become null, deleted-parent tables
-are removed, and missing children fill the first free cell or append a row.
-Manual and legacy settings are untouched; user saves remain strictly validated. Equipment defaults to an
-ID-sorted vertical sequence within its canonical Location. Complete rendered
-footprints feed SLOC-01; panels and objects retain dimensions. Populated siblings
-share both maxima; nested tables measure independently.
-
-Hide-empty/full collapse preserve stored cells. Partial collapse filters existing
-visible_direct_elements without changing legacy semantics; a grid-specific
-selection editor remains OPEN. The Location boundary point uses frame-relative edge/offset. Grid changes retain
-placements and boundary identity. Variant copies deep-copy JSON. Server save and
-workspace validation reject duplicate/foreign children, invalid cells and cycles
-before writes. SLOC-03 interactive insertion is described below.
-
-### SLOC-03 — uniform-grid arrangement mode
-
-**IMPLEMENTED / MERGED; manual acceptance отдельно.**
-L1 uniform grid has an explicit «Расстановка» / Arrange mode in the existing
-«Компоновка» panel, off by default; Done and Cancel sit beside it. MapPage owns
-one arrangement draft shared by that panel and TopologyCanvas.
-Select a Location heading (including a collapsed label) to show four compact
-arrows for that Location only. The toolbar measures the rendered heading and
-actions, sits on the selected frame top edge to their right, and uses a compact
-outside-corner placement when space is insufficient. It follows geometry and
-zoom in the foreground layer, with rectangular styling. Collapse/configure and boundary editing remain
-separate. Manual and legacy sequence behavior is unchanged. Structural pointer
-drag, ghost and coordinate hit testing have been removed.
-
-`moveGridLocation` uses the canonical parent's table address, never screen
-proximity. An arrow swaps with an occupied neighbor or moves into a free cell.
-At an outer edge it adds a row/column only if the normalized result differs;
-otherwise that arrow is disabled. Selection survives successive operations.
-`normalizeLocationTable` removes all wholly empty rows and columns, retaining
-nonempty track order and interior holes. This includes older empty tracks.
-Entering arrangement reconciles and normalizes a client working copy of the
-variant's tables; ordinary reads and variant switches do not normalize storage.
-Hidden/collapsed Location identities and cells survive, hide_empty is unchanged.
-Nested tables and equipment retain contents and independent layout sizing.
-
-Every arrow updates only the working copy, rendered via uniformGridPresentation
-and SLOC-01, with no separate geometry, fitView or per-arrow API writes.
-«Готово» / Done saves the complete working settings through the existing active
-variant automatic-layout API once, blocks repeat requests until confirmation,
-and exits. Even entry-only cleanup is persisted only by Done. Cancel discards
-all changes. Variant, layout/settings or scene changes discard the draft without
-saving; drafts cannot cross variants. API failure restores authoritative settings
-and displays an error. Server confirmation supplies the authoritative display.
-Boundary identity/edge/offset, canonical hierarchy/assignments and Cable
-are untouched. Manual acceptance remains OPEN;
-Direct PhysicalObject arrangement is covered by SLOC-05. Object-local cable geometry is covered by COMB-01.
-
-### SLOC-04 — child Location sorting
-
-**IMPLEMENTED / MERGED.** Uniform-grid Location
-settings expose a Layout section alongside the unchanged collapse controls.
-The Layout panel exposes the technical root table. R1/C1 headers select indexed
-rows/columns; Entire table selects row-major or column-major traversal.
-Empty cells are explicit. Natural numeric name comparison uses the fixed Russian
-collation locale and immutable UUID ties; both ascending and descending are supported.
-Names remain arbitrary strings. No row/cell identities or taxonomy are introduced.
-
-A row/column sort changes only its region and sends nulls to its end. Whole-table
-sorting permutes occupied addresses only, retaining shape and the empty mask.
-All canonical children participate, including hidden/collapsed children; nested
-tables, assignments and geometry contracts remain unchanged. Sorting never runs
-on rename. The first sort atomically creates and updates the shared MapPage draft
-without entry normalization; subsequent sorts include arrow edits. Closing
-Location settings leaves the shared preview active. Cancel and save failure
-restore authoritative settings.
-
-Validation: targeted computational, hook, controls and canvas tests plus Chromium
-smoke on the tiled canvas fixture with in-memory persistence.
-Manual acceptance remains OPEN.
-
-SLOC-04 corrective UI: Location settings use separate Collapse/Layout tabs under
-“Settings: <Location name>”. Switching tabs retains mounted controls and the shared
-draft. Compact sort actions stay above a bounded table viewport with independent
-vertical/horizontal scrolling and sticky R/C headers. The dialog is constrained to
-the viewport. Collapse save handles direct visibility references independently.
-Chromium fixture checks cover 42 direct children,
-single/multiple columns at 1024×768 and 1600×900, including measured scroll offsets,
-visible actions, tab switching, close/preview, Cancel without writes and Done once.
-
-SLOC-04-SAVE adds Save layout to the Location settings Layout tab. It is enabled
-when the shared draft differs from the authoritative layout. Save layout and the
-map panel's Done use the same operation to write the active variant's entire draft,
-including sorts and arrow moves. While a save is pending, duplicate submissions
-are blocked. A successful response updates the map and closes the dialog. On
-failure the dialog stays open and reports the rollback. Layout and Collapse
-settings save independently. No backend/API/schema changes.
-
-SLOC-04-SAVE was verified in Chromium against the Docker backend and PostgreSQL.
-One successful save retained sorted order and empty cells for 42 direct children
-after reload. A second variant retained its original order.
-
-### SLOC-05 — direct PhysicalObject sequences
-
-Version 1 accepts optional `object_sequences`, keyed by canonical Location UUID
-or technical `root`. Each value is `{direction, order}`: `HORIZONTAL` or
-`VERTICAL` and an ordered list of PhysicalObject UUIDs. Absent entries use
-vertical UUID order. Map placements determine eligibility, and each placed
-object's canonical Location assignment determines its container. Save and
-workspace import reject duplicates, unknown containers and foreign objects.
-Variant copy and workspace export/import carry the JSON settings.
-
-Placement creation/removal and canonical reassignment/deletion reconcile
-affected variants in the same transaction. Surviving objects keep their order,
-stale IDs are removed, and missing members are appended in UUID order.
-Empty containers retain configured direction until their Location is deleted.
-The direct-object sequence uses full rendered footprints on its own axis.
-The independently measured child Location table starts below the sequence.
-
-The Layout panel and the Location settings Layout tab show the direct equipment
-list, up/down actions and orientation. These controls share the draft with
-Location moves and sorts. Save layout and Done submit the draft once, Cancel
-and a failed save restore the authoritative settings. Manual acceptance is OPEN.
+Действующая семантика BaseTemplate находится в
+[L1_CONNECTIVITY](L1_CONNECTIVITY.md#c-cap-01-01--definitions-и-materialization).
