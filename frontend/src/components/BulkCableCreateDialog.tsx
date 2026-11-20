@@ -1,8 +1,9 @@
+import { CableSpecificationFields } from "./CableSpecificationFields";
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import { BulkPhysicalConnectionError } from '../topology/apiPhysicalEndpointConnectionWriteDataSource';
 import type { CableLabelDataSource, CableLabelTemplate } from '../topology/cableLabelTypes';
-import type { PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
+import type { CableSpecification, PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDataSource, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import { isAvailablePhysicalPort } from '../topology/physicalPortAvailability';
 import { physicalObjectIdForNode } from '../topology/projection';
@@ -149,6 +150,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const [target, setTarget] = useState(emptySide);
   const [revision, setRevision] = useState(0);
   const [pairs, setPairs] = useState<Pair[]>([]);
+  const [cableSpec, setCableSpec] = useState<CableSpecification>({ cable_type_id: "" });
   const [stage, setStage] = useState<'edit' | 'preview' | 'refresh-failed'>('edit');
   const [templates, setTemplates] = useState<CableLabelTemplate[]>([]);
   const [templateId, setTemplateId] = useState('');
@@ -224,7 +226,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     try { await refresh(); close(); }
     catch { setStage('refresh-failed'); }
   };
-  const ready = pairs.length > 0 && !conflict && (!templateId || labels.length === pairs.length)
+  const ready = Boolean(cableSpec.cable_type_id) && pairs.length > 0 && !conflict && (!templateId || labels.length === pairs.length)
     && labels.every(label => !label.historical || confirmed.includes(label.label));
   const submit = () => run(async () => {
     if (stage !== 'preview' || !ready || !writer.createBulkPhysicalConnections) return;
@@ -232,6 +234,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     setSubmitting(true);
     try {
       await writer.createBulkPhysicalConnections({
+        ...cableSpec,
         pairs: pairs.map(pair => ({ source: endpoint(pair.source), target: endpoint(pair.target) })),
         template_id: templateId || null,
         expected_generated_labels: labels.map(label => label.label),
@@ -323,6 +326,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
             </table>
           </div>
         </>}
+        {!editing && <CableSpecificationFields value={cableSpec} onChange={setCableSpec} disabled={busy || conflict} />}
         {!editing && labelCatalog && writer.previewBulkCableLabels && <>
           <label className="physical-panel-picker">{t('map.bulk.naming')}
             <select value={templateId} disabled={busy || conflict} onChange={event => {

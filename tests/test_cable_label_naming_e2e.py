@@ -5,6 +5,7 @@ from app.main import app
 from app.cable_labels import sequence_value
 from app.database import SessionLocal
 from app.models import Cable, CableLabelHistory, Connection
+from tests.cable_type_fixtures import copper_cable_fields
 from tests.l1_builders import create_object_with_point
 
 client = TestClient(app)
@@ -12,7 +13,7 @@ client = TestClient(app)
 def cable_pair(name: str, **naming):
     left_object, left = create_object_with_point(client, f"{name}-left")
     _, right = create_object_with_point(client, f"{name}-right")
-    response = client.post("/v1/topology/physical-connections", json={"source": {"kind": "CONNECTION_POINT", "connection_point_id": left, "member_index": 1}, "target": {"kind": "CONNECTION_POINT", "connection_point_id": right, "member_index": 1}, **naming})
+    response = client.post("/v1/topology/physical-connections", json={**copper_cable_fields(), "source": {"kind": "CONNECTION_POINT", "connection_point_id": left, "member_index": 1}, "target": {"kind": "CONNECTION_POINT", "connection_point_id": right, "member_index": 1}, **naming})
     return response, left_object
 
 def catalog_cable(cable_id: str):

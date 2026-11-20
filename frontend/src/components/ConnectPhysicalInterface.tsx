@@ -5,6 +5,8 @@ import type {
   DeviceInterfaceDetails,
 } from '../topology/deviceDetailsTypes';
 import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
+import type { CableSpecification } from '../topology/physicalEndpointConnectionWriteTypes';
+import { CableSpecificationFields } from './CableSpecificationFields';
 import { CableNamingFields } from './CableNamingFields';
 import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
 import { HistoricalCableLabelReuseDialog } from './HistoricalCableLabelReuseDialog';
@@ -45,6 +47,7 @@ export function ConnectPhysicalInterface({
   const [targetRetryKey, setTargetRetryKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cableSpec, setCableSpec] = useState<CableSpecification>({ cable_type_id: "" });
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   const [historicalCandidate, setHistoricalCandidate] = useState<string | null>(null);
 
@@ -80,17 +83,19 @@ export function ConnectPhysicalInterface({
   ), [sourceInterface.interface_ref.entity_id, targetState]);
 
   const submit = async (confirmedHistoricalLabel?: string) => {
-    if (!targetInterfaceId || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
+    if (!targetInterfaceId || !cableSpec.cable_type_id || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
     setSubmitting(true);
     setError(null);
     try {
       await writeDataSource.createPhysicalLink({
         source_interface_id: sourceInterface.interface_ref.entity_id,
         target_interface_id: targetInterfaceId,
+        ...cableSpec,
         ...cableNaming,
         confirmed_historical_label: confirmedHistoricalLabel ?? null,
       });
       setOpen(false);
+      setCableSpec({ cable_type_id: "" });
       setTargetDeviceId('');
       setTargetInterfaceId('');
       onConnected();
@@ -166,12 +171,13 @@ export function ConnectPhysicalInterface({
               Не удалось подключить интерфейс. {error}
             </p>
           )}
+          <CableSpecificationFields value={cableSpec} onChange={setCableSpec} disabled={submitting} />
           <CableNamingFields dataSource={cableLabelDataSource} disabled={submitting} value={cableNaming} onChange={setCableNaming} />
           <div className="connect-interface__actions">
             <button type="button" onClick={() => setOpen(false)} disabled={submitting}>
               Отмена
             </button>
-            <button type="submit" disabled={!targetInterfaceId || submitting || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)}>
+            <button type="submit" disabled={!targetInterfaceId || !cableSpec.cable_type_id || submitting || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)}>
               {submitting ? 'Подключаем…' : error ? 'Повторить' : 'Подключить'}
             </button>
           </div>

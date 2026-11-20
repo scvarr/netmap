@@ -1076,7 +1076,13 @@ class BaseTemplateRevisionDocument(BaseModel):
     bays: list[ModuleBayRequest]
 
 
-class CreatePhysicalLinkRequest(BaseModel):
+class CableSpecification(BaseModel):
+    cable_type_id: uuid.UUID
+    connector_a_type_id: uuid.UUID | None = None
+    connector_b_type_id: uuid.UUID | None = None
+
+
+class CreatePhysicalLinkRequest(CableSpecification):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     source_interface_id: uuid.UUID
@@ -1120,7 +1126,7 @@ PhysicalEndpointRequest = Annotated[
 ]
 
 
-class CreatePhysicalEndpointConnectionRequest(BaseModel):
+class CreatePhysicalEndpointConnectionRequest(CableSpecification):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     source: PhysicalEndpointRequest
@@ -1137,7 +1143,7 @@ class BulkPhysicalPointPair(BaseModel):
     target: ConnectionPointPhysicalEndpointRequest
 
 
-class CreateBulkPhysicalConnectionsRequest(BaseModel):
+class CreateBulkPhysicalConnectionsRequest(CableSpecification):
     model_config = ConfigDict(extra="forbid")
     pairs: list[BulkPhysicalPointPair] = Field(min_length=1, max_length=256)
     template_id: uuid.UUID | None = None

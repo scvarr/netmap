@@ -8,7 +8,8 @@ test('deletes a selected Cable and refreshes the same map after a failed read', 
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const portType = await post('/port-types', { name, color: '#336699' });
+  const portType = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'] });
+  const cableType = await post('/cable-types', { name, color: '#336699', medium: 'COPPER', construction: 'TWISTED_PAIR' });
   const blueprint = await post('/library/base-templates', {
     name,
     body: { kind: 'RECTANGLE', width: 160, height: 70 },
@@ -28,6 +29,7 @@ test('deletes a selected Cable and refreshes the same map after a failed read', 
     object.slots.find((slot: { slot_key: string }) => slot.slot_key === key).connection_point_ref.entity_id;
   const endpoint = (connection_point_id: string) => ({ connection_point_id, kind: 'CONNECTION_POINT', member_index: 1 });
   const created = await post('/topology/physical-connections/bulk', {
+    cable_type_id: cableType.id,
     pairs: ['p1', 'p2'].map(key => ({ source: endpoint(point(source, key)), target: endpoint(point(target, key)) })),
   });
   const map = await post('/maps', { name });

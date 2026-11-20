@@ -8,7 +8,8 @@ test('matches 48 physical ports in both directions and creates the exact reviewe
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const portType = await post('/port-types', { name, color: '#336699' });
+  const portType = await post('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'] });
+  const cableType = await post('/cable-types', { name, color: '#336699', medium: 'COPPER', construction: 'TWISTED_PAIR' });
   const numbers = Array.from({ length: 48 }, (_, index) => index + 1);
   const blueprint = await post('/library/base-templates', {
     name,
@@ -84,11 +85,14 @@ test('matches 48 physical ports in both directions and creates the exact reviewe
     if (req.method() === 'POST' && req.url().endsWith('/physical-connections/bulk')) creates++;
   });
   await page.route('**/api/v1/topology/projection', route => route.abort(), { times: 1 });
+  await expect(dialog.getByRole('button', { name: 'Подтвердить создание' })).toBeDisabled();
+  await dialog.getByLabel('Тип кабеля').selectOption(cableType.id);
   const mutation = page.waitForResponse(response => response.url().endsWith('/physical-connections/bulk'));
   await dialog.getByRole('button', { name: 'Подтвердить создание' }).click();
   const response = await mutation;
   expect(response.status()).toBe(201);
   const endpoint = (connection_point_id: string) => ({ kind: 'CONNECTION_POINT', connection_point_id, member_index: 1 });
+  expect(response.request().postDataJSON().cable_type_id).toBe(cableType.id);
   expect(response.request().postDataJSON().pairs).toEqual(numbers.map(number => ({
     source: endpoint(point(source, number)), target: endpoint(point(target, 49 - number)),
   })));

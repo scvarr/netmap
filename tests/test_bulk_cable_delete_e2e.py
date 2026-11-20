@@ -11,6 +11,7 @@ from app.main import app
 from app.models import Cable, CableLabelHistory, Connection, ConnectionMember
 from app.physical_connections import PhysicalConnectionCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from tests.cable_type_fixtures import copper_cable_fields
 from tests.l1_builders import create_endpoint_cable, point_endpoint
 
 client = TestClient(app)
@@ -35,7 +36,7 @@ def seed(count, *, labelled=False):
         )
         internal_id = internal.id
     unrelated = create_endpoint_cable(client, str(ap[-1]), str(cp[0]))
-    body = {"pairs": [
+    body = {**copper_cable_fields(), "pairs": [
         {"source": point_endpoint(str(source)), "target": point_endpoint(str(target))}
         for source, target in zip(ap[:count], reversed(bp[:count]))
     ]}
@@ -89,8 +90,8 @@ def test_deletes_selected_cables_and_releases_their_resources(delete_all):
     freed = selected[0]
     recreate = {"source": point_endpoint(freed["point_a_id"]), "target": point_endpoint(freed["point_b_id"]),
                 "cable_label": freed["label"]}
-    assert client.post("/v1/topology/physical-connections", json=recreate).status_code == 409
-    response = client.post("/v1/topology/physical-connections", json={**recreate, "confirmed_historical_label": freed["label"]})
+    assert client.post("/v1/topology/physical-connections", json={**copper_cable_fields(), **recreate}).status_code == 409
+    response = client.post("/v1/topology/physical-connections", json={**copper_cable_fields(), **recreate, "confirmed_historical_label": freed["label"]})
     assert response.status_code == 201, response.text
 
 

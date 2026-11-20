@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import get_session
 from app.errors import ValidationError
 from app.models import (
-    BaseTemplateCandidate, BaseTemplateDraft, BuiltInEndpointDefinition, CableType,
+    BaseTemplateCandidate, BaseTemplateDraft, BuiltInEndpointDefinition, Cable, CableType,
     ConnectorType, ModuleEndpointDefinition, ModuleTemplateCandidate, ModuleTemplateDraft, PortType,
 )
 
@@ -138,8 +138,12 @@ def _used(session, model, item_id):
         revisions, snapshots = _port_type_usage(item_id)
         return session.scalar(select(or_(*revisions, *snapshots)))
     if model is ConnectorType:
-        return session.scalar(select(select(PortType.id).where(PortType.connector_type_id == item_id).exists()))
-    return False
+        return session.scalar(select(or_(
+            select(PortType.id).where(PortType.connector_type_id == item_id).exists(),
+            select(Cable.id).where(Cable.connector_a_type_id == item_id).exists(),
+            select(Cable.id).where(Cable.connector_b_type_id == item_id).exists(),
+        )))
+    return session.scalar(select(select(Cable.id).where(Cable.cable_type_id == item_id).exists()))
 
 
 def _validate_connector(session, connector_id):

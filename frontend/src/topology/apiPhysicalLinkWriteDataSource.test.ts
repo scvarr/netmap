@@ -26,6 +26,7 @@ describe('ApiPhysicalLinkWriteDataSource', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
     const request = {
+      cable_type_id: 'copper',
       source_interface_id: 'source-interface',
       target_interface_id: 'target-interface',
     };
@@ -47,6 +48,7 @@ describe('ApiPhysicalLinkWriteDataSource', () => {
     }), { status: 201 })));
 
     await expect(new ApiPhysicalLinkWriteDataSource().createPhysicalLink({
+      cable_type_id: 'copper',
       source_interface_id: 'source-interface',
       target_interface_id: 'target-interface',
     })).rejects.toThrow('connection_ref.entity_type must be "Connection"');
@@ -61,8 +63,9 @@ describe('ApiPhysicalLinkWriteDataSource', () => {
     }), { status: 422 })));
 
     await expect(new ApiPhysicalLinkWriteDataSource().createPhysicalLink({
+      cable_type_id: 'copper',
       source_interface_id: 'source-interface',
       target_interface_id: 'target-interface',
-    })).rejects.toThrow('VALIDATION_ERROR: NetworkInterface already has');
+    })).rejects.toThrow('NetworkInterface already has');
   });
 });

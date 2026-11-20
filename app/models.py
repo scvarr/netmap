@@ -237,7 +237,7 @@ class Connection(Base):
 
 
 class Cable(Base):
-    """Optional identity for one point-to-point canonical Connection."""
+    """One independently documented physical line."""
 
     __tablename__ = "cables"
     __table_args__ = (
@@ -248,6 +248,15 @@ class Cable(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     connection_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("connections.id", ondelete="CASCADE"), nullable=False
+    )
+    cable_type_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cable_types.id", ondelete="RESTRICT"), index=True,
+    )
+    connector_a_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("connector_types.id", ondelete="RESTRICT"), index=True,
+    )
+    connector_b_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("connector_types.id", ondelete="RESTRICT"), index=True,
     )
     # Mutable user-facing metadata.  It is deliberately not identity or topology.
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)

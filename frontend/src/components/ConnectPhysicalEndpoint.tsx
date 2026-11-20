@@ -1,9 +1,11 @@
+import { CableSpecificationFields } from "./CableSpecificationFields";
 import { useEffect, useMemo, useState } from "react";
 import type {
   DeviceDetailsDataSource,
   DeviceDetailsDocument,
 } from "../topology/deviceDetailsTypes";
 import type {
+  CableSpecification,
   PhysicalEndpointConnectionWriteDataSource,
   PhysicalEndpointRequest,
 } from "../topology/physicalEndpointConnectionWriteTypes";
@@ -86,6 +88,7 @@ export function ConnectPhysicalEndpoint({
   const [retry, setRetry] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cableSpec, setCableSpec] = useState<CableSpecification>({ cable_type_id: "" });
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   const [historicalCandidate, setHistoricalCandidate] = useState<string | null>(null);
   const reset = () => {
@@ -96,6 +99,7 @@ export function ConnectPhysicalEndpoint({
     setQuery("");
     setTargetState({ kind: "idle" });
     setError(null);
+    setCableSpec({ cable_type_id: "" });
     setCableNaming({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
   };
   const candidates = useMemo(
@@ -204,7 +208,7 @@ export function ConnectPhysicalEndpoint({
         )
       : [];
   const submit = async (confirmedHistoricalLabel?: string) => {
-    if (!targetEntityId || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
+    if (!targetEntityId || !cableSpec.cable_type_id || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
     setSubmitting(true);
     setError(null);
     const target: PhysicalEndpointRequest =
@@ -223,6 +227,7 @@ export function ConnectPhysicalEndpoint({
           member_index: 1,
         },
         target,
+        ...cableSpec,
         ...cableNaming,
         confirmed_historical_label: confirmedHistoricalLabel ?? null,
       });
@@ -397,6 +402,7 @@ export function ConnectPhysicalEndpoint({
               {error}
             </p>
           )}
+          <CableSpecificationFields value={cableSpec} onChange={setCableSpec} disabled={submitting} />
           <CableNamingFields dataSource={cableLabelDataSource} disabled={submitting} value={cableNaming} onChange={setCableNaming} />
           <div className="connect-interface__actions">
             <button type="button" disabled={submitting} onClick={reset}>
@@ -405,7 +411,7 @@ export function ConnectPhysicalEndpoint({
             <button
               type="submit"
               disabled={
-                !targetEntityId || !selectedObjectIsVisible || submitting || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)
+                !targetEntityId || !cableSpec.cable_type_id || !selectedObjectIsVisible || submitting || (cableNaming.generate_cable_label === true && !cableNaming.cable_label_template_id)
               }
             >
               {submitting ? t("connect.connecting") : error ? t("action.retry") : t("connect.connect")}

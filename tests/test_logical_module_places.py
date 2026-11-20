@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 from app.schemas import ModuleBayRequest
 from app.workspace_portability import validate_package, PackageError
+from tests.cable_type_fixtures import copper_cable_fields
 from tests.test_hardware_configuration import base_payload, create_base, create_object, create_module, install, client
 from tests.test_module_reconciliation import package
 from tests.test_module_layout import setup, revision, reconcile
@@ -28,6 +29,7 @@ def test_logical_configuration_atomic_install_and_archive():
     source = bays[payload['bays'][1]['bay_key']]['installation']['endpoints'][0]
     remote = create_object(base)
     connection = client.post('/v1/topology/physical-connections', json={
+        **copper_cable_fields(),
         'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_point_id'], 'member_index': 1},
         'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': remote['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1},
     })
@@ -169,20 +171,24 @@ def test_workspace_rejects_invalid_bays_before_import(damage):
     assert package() == before
 
 
-def test_workspace_accepts_logical_missing_or_null_coordinates():
+def test_workspace_requires_explicit_null_coordinates_for_logical_bays():
     create_base()
     archive = package()
     bay = archive['authoring']['ModuleBay'][0]
     bay['kind'] = 'LOGICAL'
-    for coordinate in ('x', 'y', 'width', 'height'): bay.pop(coordinate)
+    for coordinate in ('x', 'y', 'width', 'height'):
+        del bay[coordinate]
     original = copy.deepcopy(archive)
-    assert validate_package(archive)['module_bays'][0]['x'] is None
+    with pytest.raises(PackageError, match="ModuleBay has incomplete"):
+        validate_package(archive)
     assert archive == original
+
+    for coordinate in ('x', 'y', 'width', 'height'):
+        bay[coordinate] = None
+    assert validate_package(archive)['module_bays'][0]['kind'] == 'LOGICAL'
     assert client.delete('/v1/workspace/dataset').status_code == 204
     assert client.post('/v1/workspace/package', json=archive).status_code == 204
-    assert package()['authoring']['ModuleBay'][0]['kind'] == 'LOGICAL'
-    for coordinate in ('x', 'y', 'width', 'height'): bay[coordinate] = None
-    assert validate_package(archive)['module_bays'][0]['kind'] == 'LOGICAL'
+    assert package()['authoring']['ModuleBay'][0] == bay
 
 
 def test_placed_archive_restores_saved_layout_and_frozen_snapshots():

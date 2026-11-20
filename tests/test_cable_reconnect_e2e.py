@@ -12,6 +12,7 @@ from app.models import CableLabelHistory, Connection, ConnectionMember, Connecti
 from app.physical_connections import ConnectionPointEndpoint, PhysicalConnectionCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.schemas import CableReconnectRequest
+from tests.cable_type_fixtures import copper_cable_fields, copper_cable_spec
 from tests.l1_builders import create_object_with_point, point_endpoint
 
 
@@ -20,7 +21,7 @@ CREATE = "/v1/topology/physical-connections"
 
 
 def create(a, b, **naming):
-    return client.post(CREATE, json={"source": point_endpoint(a), "target": point_endpoint(b), **naming})
+    return client.post(CREATE, json={**copper_cable_fields(), "source": point_endpoint(a), "target": point_endpoint(b), **naming})
 
 
 def preview(url):
@@ -169,7 +170,7 @@ def test_reconnect_and_create_serialize_on_new_point(cable, first_writer):
             catalog = PhysicalConnectionCatalog(session)
             if first_writer == "create":
                 catalog.create_endpoint_link(ConnectionPointEndpoint(uuid.UUID(destination)),
-                                             ConnectionPointEndpoint(uuid.UUID(peer)))
+                                             ConnectionPointEndpoint(uuid.UUID(peer)), cable_spec=copper_cable_spec())
                 competing = worker.submit(client.post, url, json=payload).result(timeout=5)
                 assert competing.status_code == 409
                 assert competing.json()["error"]["code"] == "CABLE_RECONNECT_CONFLICT"

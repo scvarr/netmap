@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { selectCableType, stubCableCatalog } from '../testCableCatalog';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { BulkPhysicalConnectionError } from '../topology/apiPhysicalEndpointConnectionWriteDataSource';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import type { TopologyProjectionDocument } from '../topology/types';
 import { MapPage } from './MapPage';
 import { createMapPageHarness } from './MapPage.testHarness';
+
+beforeEach(stubCableCatalog);
+afterEach(() => vi.unstubAllGlobals());
 
 vi.mock('../components/TopologyCanvas', () => ({ TopologyCanvas: (props: any) => <div data-testid="bulk-canvas">
   <button onClick={() => props.onPhysicalNodeContextMenu?.(nodes[0], { x: 20, y: 20 })}>source object menu</button>
@@ -76,11 +80,12 @@ async function start() {
   await right().findByRole('checkbox', { name: 'P48' });
 }
 
-function selectOne() {
+async function selectOne() {
   check(left(), 1);
   check(right(), 1);
   match();
   review();
+  await selectCableType();
 }
 
 describe('MapPage bulk cable editor', () => {
@@ -100,6 +105,7 @@ describe('MapPage bulk cable editor', () => {
     select(left().getByLabelText('Сортировка'), 'descending');
     select(right().getByLabelText('Сортировка'), reverse ? 'ascending' : 'descending');
     review();
+    await selectCableType();
     expect(screen.getByText('Кабели к созданию (48)')).toBeVisible();
     expect(screen.getByText(`B / Без панели / P${firstTarget}`)).toBeVisible();
     expect(create).not.toHaveBeenCalled();
@@ -126,6 +132,7 @@ describe('MapPage bulk cable editor', () => {
     expect(screen.getByRole('combobox', { name: /Назначение для A .* P8$/ })).toHaveValue('b4');
     fireEvent.click(screen.getAllByRole('button', { name: 'Исключить' })[2]);
     review();
+    await selectCableType();
     expect(screen.getByText('Кабели к созданию (11)')).toBeVisible();
     await waitFor(() => expect(button('Подтвердить создание')).toBeEnabled());
     confirm();
@@ -163,7 +170,7 @@ describe('MapPage bulk cable editor', () => {
     preview.mockResolvedValueOnce({ labels: [{ label: 'B001', historical: true }] })
       .mockResolvedValueOnce({ labels: [{ label: 'B009', historical: true }] });
     await start();
-    selectOne();
+    await selectOne();
     await screen.findByRole('option', { name: 'Bulk' });
     select(screen.getByLabelText('Имена кабелей'), 'template');
     expect(await screen.findByText('B001')).toBeVisible();
@@ -183,7 +190,7 @@ describe('MapPage bulk cable editor', () => {
     const { create, loadDetails } = setup();
     create.mockRejectedValueOnce(new BulkPhysicalConnectionError(422, 'CONNECTION_POINT_MEMBER_OCCUPIED'));
     await start();
-    selectOne();
+    await selectOne();
     loadDetails.mockImplementation(async id => {
       const document = details(id);
       if (id === 'b') {
@@ -208,7 +215,7 @@ describe('MapPage bulk cable editor', () => {
   it('retries only the projection read after acknowledged creation', async () => {
     const { create, projection } = setup();
     await start();
-    selectOne();
+    await selectOne();
     projection.mockRejectedValueOnce(new Error('refresh failed'));
     await waitFor(() => expect(button('Подтвердить создание')).toBeEnabled());
     confirm();

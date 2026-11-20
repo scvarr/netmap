@@ -13,6 +13,7 @@ from app.models import (
     RoutingPolicy, RoutingPolicyRule, RoutingTable, SecurityPolicy, SecurityPolicyAttachment,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from tests.cable_type_fixtures import copper_cable_fields
 from tests.test_hardware_configuration import base_payload, client, create_base, create_module, create_object, install
 
 
@@ -93,7 +94,7 @@ def test_dependencies_block_entire_uninstall_without_any_changes(dependency, rea
     built_in = uuid.UUID(obj['slots'][0]['connection_point_ref']['entity_id'])
     if dependency == 'cable':
         other = create_object(obj['blueprint_ref']['entity_id'])
-        response = client.post('/v1/topology/physical-connections', json={'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': str(point_id), 'member_index': 1}, 'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': other['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1}})
+        response = client.post('/v1/topology/physical-connections', json={**copper_cable_fields(), 'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': str(point_id), 'member_index': 1}, 'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': other['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1}})
         assert response.status_code == 201, response.text
     else:
         with SessionLocal.begin() as session:

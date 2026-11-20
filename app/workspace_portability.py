@@ -1,4 +1,4 @@
-"""Version 8 exchange contract for the current implicit workspace dataset.
+"""Version 10 exchange contract for the current implicit workspace dataset.
 
 The public names and fields below are deliberately fixed independently of table
 names. A storage change must adapt this mapping or introduce a new format version.
@@ -7,6 +7,7 @@ names. A storage change must adapt this mapping or introduce a new format versio
 import json
 import math
 import uuid
+from collections import defaultdict
 from datetime import datetime
 from enum import Enum
 
@@ -24,7 +25,7 @@ from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 9
+FORMAT_VERSION = 10
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -38,7 +39,7 @@ ENTITIES = (
     ("canonical", "InterfacePhysicalBinding", "InterfacePhysicalBinding", "id interface_id point_id point_member"),
     ("canonical", "Connection", "Connection", "id point_a_id point_b_id cardinality"),
     ("canonical", "ConnectionMember", "ConnectionMember", "id connection_id index point_a_member point_b_member"),
-    ("canonical", "Cable", "Cable", "id connection_id label"),
+    ("canonical", "Cable", "Cable", "id connection_id cable_type_id connector_a_type_id connector_b_type_id label"),
     ("canonical", "EntityMetadata", "EntityMetadata", "id physical_object_id network_interface_id connection_point_id key value"),
     ("canonical", "L2ForwardingContext", "L2ForwardingContext", "id"),
     ("canonical", "L2Binding", "L2Binding", "id interface_id forwarding_context_id"),
@@ -196,22 +197,6 @@ def validate_package(package: object) -> dict:
         ids = set()
         expected_fields = set(fields)
         for record in records:
-            if model is models.ModuleBay and isinstance(record, dict) and record.get("kind") == "LOGICAL":
-                record = {"x": None, "y": None, "width": None, "height": None, **record}
-            if isinstance(record, dict):
-                record = dict(record)
-                if name == "MapPresentationVariant":
-                    # Historical workspace snapshots preserve manual variants.
-                    record.setdefault("automatic_layout", None)
-                    record.setdefault("default_face", "FRONT")
-                elif name == "PresentationPanel":
-                    record.setdefault("face", None)
-                elif name in {"MapLocationState", "MapViewPosition"}:
-                    record.setdefault("face_override", None)
-                if name == "BuiltInEndpointDefinition":
-                    record.setdefault("cardinality", 1)
-                elif name == "BaseInternalLink":
-                    record.setdefault("member_mappings", [{"from_member_index": 1, "to_member_index": 1}])
             if not isinstance(record, dict) or set(record) != expected_fields:
                 raise PackageError(f"{name} has incomplete or unknown fields")
             row = {field: _decode(record[field], columns[field], f"{name}.{field}") for field in fields}
@@ -253,6 +238,7 @@ def validate_package(package: object) -> dict:
                 for fk in column.foreign_keys:
                     if row[column.key] is not None and row[column.key] not in values_by_column[(fk.column.table.name, fk.column.key)]:
                         raise PackageError(f"{name}.{column.key} refers to a missing entity")
+    _validate_cable_connections(result)
     panel_memberships = {(row["base_revision_id"], row["panel_key"]) for row in result["presentation_panels"]}
     if any((row["base_revision_id"], row["panel_key"]) not in panel_memberships for row in result["built_in_endpoint_definitions"]):
         raise PackageError("BuiltInEndpointDefinition.panel_key refers to a panel in another version")
@@ -489,6 +475,26 @@ def _validate_hardware_configuration(rows):
         raise PackageError("Configuration is missing a built-in endpoint mapping")
     if any((i["id"], d["id"]) not in module_pairs for i in installations.values() for d in module_definitions.values() if i["module_revision_id"] == d["module_revision_id"]):
         raise PackageError("Installation is missing a module endpoint mapping")
+
+
+def _validate_cable_connections(rows):
+    connections = {row["id"]: row for row in rows["connections"]}
+    points = {row["id"]: row for row in rows["connection_points"]}
+    members_by_connection = defaultdict(list)
+    for member in rows["connection_members"]:
+        members_by_connection[member["connection_id"]].append(member)
+    for cable in rows["cables"]:
+        connection = connections[cable["connection_id"]]
+        members = members_by_connection[connection["id"]]
+        point_a = points[connection["point_a_id"]]
+        point_b = points[connection["point_b_id"]]
+        if (connection["cardinality"] != 1 or len(members) != 1
+                or point_a["physical_object_id"] == point_b["physical_object_id"]):
+            raise PackageError("Cable requires one external ConnectionMember")
+        member = members[0]
+        if (member["index"] != 1 or not 1 <= member["point_a_member"] <= point_a["cardinality"]
+                or not 1 <= member["point_b_member"] <= point_b["cardinality"]):
+            raise PackageError("Cable ConnectionMember is outside its endpoint cardinality")
 
 
 def _tables_in_dependency_order():

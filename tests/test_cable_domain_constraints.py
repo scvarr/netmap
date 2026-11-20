@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+from tests.cable_type_fixtures import copper_cable_spec
 from app.database import SessionLocal
 from app.errors import ValidationError
 from app.models import Cable, Connection, ConnectionPoint, InterfacePhysicalBinding
@@ -29,11 +30,11 @@ def test_cable_connection_uniqueness_is_a_database_constraint():
         repository = CanonicalRepository(session)
         left, right = points(repository)
         connection, _ = repository.add_connection(left.id, right.id, 1, [ConnectionMemberInput(1, 1, 1)])
-        session.add(Cable(connection_id=connection.id))
+        session.add(Cable(connection_id=connection.id, cable_type_id=copper_cable_spec().cable_type_id))
 
     with pytest.raises(IntegrityError):
         with SessionLocal.begin() as session:
-            session.add(Cable(connection_id=connection.id))
+            session.add(Cable(connection_id=connection.id, cable_type_id=copper_cable_spec().cable_type_id))
             session.flush()
 
 
@@ -45,18 +46,18 @@ def test_endpoint_link_domain_rejects_invalid_or_occupied_endpoints_without_new_
         ownerless_interface = repository.add_network_interface()
         unsupported = repository.add_connection_point(repository.add_physical_object().id, 2)
         catalog = PhysicalConnectionCatalog(session)
-        catalog.create_endpoint_link(ConnectionPointEndpoint(left.id), ConnectionPointEndpoint(right.id))
+        catalog.create_endpoint_link(ConnectionPointEndpoint(left.id), ConnectionPointEndpoint(right.id), cable_spec=copper_cable_spec())
 
         with pytest.raises(ValidationError, match="already occupied"):
-            catalog.create_endpoint_link(ConnectionPointEndpoint(left.id), NetworkInterfaceEndpoint(interface))
+            catalog.create_endpoint_link(ConnectionPointEndpoint(left.id), NetworkInterfaceEndpoint(interface), cable_spec=copper_cable_spec())
         with pytest.raises(ValidationError, match="two different endpoints"):
-            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(right.id))
+            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(right.id), cable_spec=copper_cable_spec())
         with pytest.raises(ValidationError, match="does not exist"):
-            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(uuid.uuid4()))
+            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(uuid.uuid4()), cable_spec=copper_cable_spec())
         with pytest.raises(ValidationError, match="cardinality=1"):
-            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(unsupported.id))
+            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), ConnectionPointEndpoint(unsupported.id), cable_spec=copper_cable_spec())
         with pytest.raises(ValidationError, match="no physical owner"):
-            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), NetworkInterfaceEndpoint(ownerless_interface.id))
+            catalog.create_endpoint_link(ConnectionPointEndpoint(right.id), NetworkInterfaceEndpoint(ownerless_interface.id), cable_spec=copper_cable_spec())
 
         assert session.scalar(select(func.count()).select_from(Connection)) == 1
         assert session.scalar(select(func.count()).select_from(Cable)) == 1
@@ -77,7 +78,7 @@ def test_endpoint_link_failure_rolls_back_connection_cable_and_interface_materia
     monkeypatch.setattr(CanonicalRepository, "add_connection", fail_after_connection)
     with pytest.raises(RuntimeError, match="injected failure"):
         with SessionLocal.begin() as session:
-            PhysicalConnectionCatalog(session).create_atomic_link(source, target)
+            PhysicalConnectionCatalog(session).create_atomic_link(source, target, cable_spec=copper_cable_spec())
 
     with SessionLocal() as session:
         assert session.scalar(select(func.count()).select_from(Connection)) == 0

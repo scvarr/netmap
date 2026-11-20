@@ -27,7 +27,7 @@
   маршрутизируется по Location hierarchy. Preview, выбор и подсветка используют
   соответствующий маршрут и видимые окончания.
 - **Данные.** Export/reset/import текущего implicit workspace через Workspace
-  JSON v8. SavedMap пока хранит представление общей канонической сети.
+  JSON v10. SavedMap пока хранит представление общей канонической сети.
 
 ## Реализовано только в core/API
 
@@ -37,7 +37,7 @@
   определений блокируются безопасно.
 - **Exact L1 resolver foundation.** Resolver обходит пары point/member и
   возвращает ссылки на точные Connection/ConnectionMember. Object trace
-  показывает отдельные ветви. Пользовательский цикл для внешнего trunk,
+  показывает отдельные ветви. Пользовательский цикл выбора внешних members,
   отдельного member и полноты группы остаётся OPEN.
 - **L2/L3.** Серверное ядро содержит forwarding contexts, bindings,
   encapsulation, FDB, routing contexts, next-hop/reachability и packet-flow.
@@ -63,9 +63,11 @@
 
 ## Открытые инженерные ограничения
 
-- CAT-D-02, типизация экземпляров Cable, а также
-  полная серверная физическая совместимость остаются OPEN.
-- Внешний multichannel lifecycle, member occupancy, полный member authoring
+- **CAT-D-02 IMPLEMENTED.** Обычное и пакетное создание физических линий
+  требует CableType. Типы разъёмов A/B необязательны. Workspace сохраняет
+  атрибуты, историю маркировки и topology. Внешняя проверка diff ожидается.
+- Полная серверная физическая совместимость остаётся OPEN.
+- Внешний lifecycle для выбора members, member occupancy, полный member authoring
   и exact member trace с Cable evidence и проверкой полноты группы
   (C-CAP-01-02/03/04 OPEN).
 - Независимые канонические сети карт, persisted NetworkWorkspace, auth,

@@ -8,11 +8,11 @@ from sqlalchemy.orm import Session, aliased, joinedload
 from app.errors import NetMapError, ValidationError
 from app.cable_labels import CableLabelCatalog, resolved_cable_label
 from app.module_endpoint_names import EndpointNames
-from app.models import Cable, Connection, ConnectionMember, ConnectionPoint, NetworkInterface
+from app.models import Cable, CableType, ConnectorType, Connection, ConnectionMember, ConnectionPoint, NetworkInterface
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.schemas import (
     BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember,
-    CableReconnectExpectation, CableReconnectRequest, CableReconnectSnapshot,
+    CableReconnectExpectation, CableReconnectRequest, CableReconnectSnapshot, CableSpecification,
 )
 
 
@@ -66,6 +66,7 @@ class PhysicalConnectionCatalog:
         source_interface_id: uuid.UUID,
         target_interface_id: uuid.UUID,
         *,
+        cable_spec: CableSpecification,
         cable_label: str | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
@@ -79,6 +80,7 @@ class PhysicalConnectionCatalog:
         created = self.create_endpoint_link(
             NetworkInterfaceEndpoint(source_interface_id),
             NetworkInterfaceEndpoint(target_interface_id),
+            cable_spec=cable_spec,
             cable_label=cable_label,
             cable_label_template_id=cable_label_template_id,
             generate_cable_label=generate_cable_label,
@@ -100,6 +102,7 @@ class PhysicalConnectionCatalog:
         source: PhysicalEndpoint,
         target: PhysicalEndpoint,
         *,
+        cable_spec: CableSpecification,
         cable_label: str | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
@@ -111,6 +114,7 @@ class PhysicalConnectionCatalog:
                 {"endpoint": self._endpoint_description(source)},
             )
 
+        self._validate_cable_spec(cable_spec)
         interface_ids = tuple(
             sorted(
                 {
@@ -242,9 +246,7 @@ class PhysicalConnectionCatalog:
             cardinality=1,
             members=member,
         )
-        cable = Cable(connection_id=connection.id)
-        self.session.add(cable)
-        self.session.flush()
+        cable = self._add_cable(connection.id, cable_spec)
         CableLabelCatalog(self.session).assign_new_cable(
             cable,
             label=cable_label,
@@ -264,12 +266,14 @@ class PhysicalConnectionCatalog:
         self,
         pairs: list[tuple[ConnectionPointEndpoint, ConnectionPointEndpoint]],
         *,
+        cable_spec: CableSpecification,
         template_id: uuid.UUID | None,
         expected_generated_labels: list[str],
         confirmed_historical_labels: list[str],
     ) -> list[CreatedEndpointPhysicalConnection]:
         if not 1 <= len(pairs) <= 256:
             raise ValidationError("Bulk pairing requires 1 to 256 pairs")
+        self._validate_cable_spec(cable_spec)
         ids = [endpoint.connection_point_id for pair in pairs for endpoint in pair]
         if len(set(ids)) != len(ids):
             raise ValidationError("Duplicate ConnectionPoint in bulk pairing")
@@ -323,9 +327,7 @@ class PhysicalConnectionCatalog:
                 source.connection_point_id, target.connection_point_id,
                 cardinality=1, members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
             )
-            cable = Cable(connection_id=connection.id)
-            self.session.add(cable)
-            self.session.flush()
+            cable = self._add_cable(connection.id, cable_spec)
             catalog.assign_new_cable(cable, label=label, template_id=None, generate=False,
                                      confirmed_historical_label=label if label in confirmed_historical_labels else None)
             created.append(CreatedEndpointPhysicalConnection(
@@ -334,6 +336,35 @@ class PhysicalConnectionCatalog:
                 cable_id=cable.id, connection_id=connection.id,
             ))
         return created
+
+    def _add_cable(self, connection_id: uuid.UUID, spec: CableSpecification) -> Cable:
+        cable = Cable(
+            connection_id=connection_id,
+            cable_type_id=spec.cable_type_id,
+            connector_a_type_id=spec.connector_a_type_id,
+            connector_b_type_id=spec.connector_b_type_id,
+        )
+        self.session.add(cable)
+        self.session.flush()
+        return cable
+
+    def _validate_cable_spec(self, spec: CableSpecification) -> None:
+        connector_ids = {spec.connector_a_type_id, spec.connector_b_type_id} - {None}
+        for model, ids, label in (
+            (CableType, {spec.cable_type_id}, "Cable type"),
+            (ConnectorType, connector_ids, "Connector type"),
+        ):
+            if not ids:
+                continue
+            # Serialize assignment against archive, deletion and structural updates.
+            items = list(self.session.scalars(
+                select(model).where(model.id.in_(ids)).order_by(model.id)
+                .with_for_update(read=True).execution_options(populate_existing=True)
+            ))
+            if len(items) != len(ids):
+                raise ValidationError(f"{label} not found")
+            if any(not item.is_active for item in items):
+                raise ValidationError(f"{label} is archived")
 
     def _reconnect_snapshot(
         self, cable_id: uuid.UUID, new_point_id: uuid.UUID | None = None,

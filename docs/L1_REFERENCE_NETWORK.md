@@ -32,8 +32,10 @@ module places и PortType assignments. Неподдерживаемое реда
 
 ## CableType
 
-Fixture использует типизированные внешние Cable. `backbone` — один двухточечный
-`ct-fiber24` с mappings из таблицы ниже. Правила типизации, совместимости и
+Fixture использует типизированные внешние Cable. Backbone состоит из 20
+независимых Cable типа `ct-fiber1` с отдельными Connections и mappings из
+таблицы ниже. Метки `CAB01/1/24` … `CAB01/20/24` документируют общую оболочку
+и номера волокон для оператора. Правила типизации, совместимости и
 границы реализации определены в [L1-CONTRACT-03](L1_CONNECTIVITY.md#справочники-и-совместимость).
 
 ## Синтетический стенд и локальные ключи
@@ -59,8 +61,8 @@ site → F01 → serverroom → F01-R01, F01-R02, F01-R03.
 NetworkInterface; пассивные endpoints — CONNECTION_POINT без interface.
 Пассивные ODF, патч-панели и кроссы проводят только через явно заданные internal
 mappings. PortType keys: pt-rj45, pt-fiber, pt-multipair, pt-pair-terminal, pt-fc.
-CableType keys: ct-rj45 (4 пары, одна сетевая линия), ct-fiber24 (24 волокна),
-ct-fiber1 (одно волокно), ct-pair4 (4 пары с независимыми пассивными окончаниями),
+CableType keys: ct-rj45 (4 пары, одна сетевая линия), ct-fiber1 (одномодовая оптическая линия),
+ct-pair (одна документируемая медная пара с пассивными окончаниями),
 ct-fc-line (синтетическая FC линия; не спецификация duplex optics).
 
 | BaseTemplate / ModuleTemplate | Порты, места и явная внутренняя continuity |
@@ -107,11 +109,11 @@ evidence.
 | access.i (1..3) | patch02.front i → access.eth i; ct-rj45 |
 | ap-link | ap.eth → patch02.rear4; ct-rj45 |
 | ap-patch | patch02.front4 → access.eth4; ct-rj45 |
-| backbone | odf02.rear → odf01.rear; один ct-fiber24, mappings 1→2, 2→1, i→i для 3..20; 21..24 не подключены |
+| backbone.i (1..20) | odf02.rear/i → odf01.rear/j; j=2 для i=1, j=1 для i=2, j=i для 3..20; ct-fiber1 |
 | uplink02.i (1..2) | access.opt i → odf02.front i; ct-fiber1 |
 | uplink01.i (1..2) | odf01.front i → optical.in i; ct-fiber1 |
 | core-opt.i (1..2) | optical.out i → core.opt i; ct-fiber1 |
-| multipair | pair02.rear → pair01.rear; один ct-pair4, 1→3, 3→1; members 2,4 свободны |
+| multipair.i (i=1,3) | pair02.rear/i → pair01.rear/(4−i); ct-pair; members 2,4 свободны |
 | optical-switch-in | core.opt3 → opticalSwitch.opt1; ct-fiber1 |
 | optical-switch-out | opticalSwitch.opt2 → core.opt4; ct-fiber1 |
 | srv-eth.i (1..2) | srv i.nic.eth1 → patch01.rear i; ct-rj45 |
@@ -154,16 +156,16 @@ Backbone 3..20 подключены как резервные волокна б�
 - Повторная внешняя занятость member, индекс вне capacity, повтор member внутри
   mapping, cross-map связь отклоняются атомарно, прежние связи сохраняются.
 - Внешний lifecycle: preview create/edit permutation/subset, конфликт без частичной
-  записи; disconnect backbone удаляет только внешний Cable/continuity, сохраняет
-  internal ODF mapping; создание нового Cable после disconnect даёт новую identity.
+  записи. Disconnect `backbone.1` удаляет его Cable и внешнюю continuity,
+  сохраняя соседние волокна и internal ODF mappings. Повторное создание даёт
+  новой линии собственную identity.
 - Save/reload сохраняет IDs, capacities, mappings, установки, типы и evidence;
   variants меняют только компоновку. Две карты с одинаковыми labels независимы.
 - Portable roundtrip сохраняет все определения; неизвестный тип требует решения,
   неподдерживаемый editor/version явно отклоняет файл, ошибка не оставляет записей.
 
 Полный стенд запускается для итоговой интеграционной приёмки после появления
-необходимых инженерных и продуктовых возможностей, включая authoring, typed
-Cable, exact trace, изоляцию карт и переносимые определения. До этого используются
+необходимых инженерных и продуктовых возможностей, включая выбор внешних members, exact trace, изоляцию карт и переносимые определения. До этого используются
 небольшие targeted fixtures. Недоступный пользовательский шаг фиксируется как
 blocker. Подготовка данных через API или fixture builder сама по себе не
 подтверждает пользовательский authoring/write.

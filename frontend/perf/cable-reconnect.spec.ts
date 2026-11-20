@@ -9,7 +9,8 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
     expect(response.ok(), await response.text()).toBe(true);
     return response.json();
   };
-  const portType = await api('/port-types', { name, color: '#336699' });
+  const portType = await api('/port-types', { name, color: '#336699', medium: 'COPPER', members: ['1'] });
+  const cableType = await api('/cable-types', { name, color: '#336699', medium: 'COPPER', construction: 'TWISTED_PAIR' });
   const numbers = Array.from({ length: 48 }, (_, index) => index + 1);
   const shuffled = numbers.map((_, index) => numbers[(index * 17 + 12) % numbers.length]);
   const slotKey = (index: number) => `slot-${String(index + 1).padStart(2, '0')}`;
@@ -31,7 +32,7 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
     };
   }));
   const endpoint = (connection_point_id: string) => ({ kind: 'CONNECTION_POINT', connection_point_id, member_index: 1 });
-  const cable = await api('/topology/physical-connections', { source: endpoint(a.ports[0]), target: endpoint(b.ports[0]), cable_label: name });
+  const cable = await api('/topology/physical-connections', { cable_type_id: cableType.id, source: endpoint(a.ports[0]), target: endpoint(b.ports[0]), cable_label: name });
   const cableId = cable.cable_ref.entity_id;
   const reconnectUrl = `/cables/${cableId}/reconnect`;
   const before = await api(reconnectUrl);

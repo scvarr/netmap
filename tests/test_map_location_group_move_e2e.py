@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from tests.cable_type_fixtures import copper_cable_spec
 from app.database import SessionLocal
 from app.main import app
 from app.models import Cable, Connection, ConnectionPoint, Location, MapLocationState, MapPlacement, MapPresentationVariant, MapViewKey, MapViewPosition, PhysicalObject, SavedMap
@@ -38,7 +39,7 @@ def scene():
             session.add_all([a, b]); session.flush()
             connection = Connection(point_a_id=a.id, point_b_id=b.id, cardinality=1)
             session.add(connection); session.flush()
-            identity = Cable(connection_id=connection.id)
+            identity = Cable(connection_id=connection.id, cable_type_id=copper_cable_spec().cable_type_id)
             session.add(identity); session.flush()
             return identity.id
         crossing = cable("direct", "external")

@@ -5,7 +5,13 @@ export type PhysicalEndpointRequest =
   | { kind: 'NETWORK_INTERFACE'; network_interface_id: string }
   | { kind: 'CONNECTION_POINT'; connection_point_id: string; member_index: 1 };
 
-export interface CreatePhysicalEndpointConnectionRequest extends CableNamingInput {
+export interface CableSpecification {
+  cable_type_id: string;
+  connector_a_type_id?: string | null;
+  connector_b_type_id?: string | null;
+}
+
+export interface CreatePhysicalEndpointConnectionRequest extends CableNamingInput, CableSpecification {
   source: PhysicalEndpointRequest;
   target: PhysicalEndpointRequest;
 }
@@ -32,7 +38,7 @@ export interface PhysicalEndpointConnectionWriteDataSource {
   ): Promise<PhysicalEndpointConnectionCreationDocument>;
   deleteExternalPhysicalConnection?(connectionId: string): Promise<void>;
   previewBulkCableLabels?(templateId: string, count: number): Promise<{ labels: { label: string; historical: boolean }[] }>;
-  createBulkPhysicalConnections?(request: {
+  createBulkPhysicalConnections?(request: CableSpecification & {
     pairs: { source: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }>; target: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }> }[];
     template_id: string | null;
     expected_generated_labels: string[];

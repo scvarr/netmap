@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   DeviceDetailsDataSource,
   DeviceDetailsDocument,
@@ -10,6 +10,7 @@ import type {
   PhysicalConnectionCreationDocument,
   PhysicalLinkWriteDataSource,
 } from '../topology/physicalLinkWriteTypes';
+import { selectCableType, stubCableCatalog } from '../testCableCatalog';
 import { ConnectPhysicalInterface } from './ConnectPhysicalInterface';
 
 const interfaceDetails = (
@@ -58,6 +59,9 @@ const creationDocument: PhysicalConnectionCreationDocument = {
   connection_ref: { ref_type: 'CANONICAL_FACT', entity_type: 'Connection', entity_id: 'connection' },
 };
 
+beforeEach(stubCableCatalog);
+afterEach(() => vi.unstubAllGlobals());
+
 describe('ConnectPhysicalInterface', () => {
   it('loads target interfaces through Device Details and submits once without bound targets', async () => {
     let resolveRequest!: (value: PhysicalConnectionCreationDocument) => void;
@@ -82,7 +86,7 @@ describe('ConnectPhysicalInterface', () => {
     await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), 'fw-device');
     expect(await screen.findByRole('option', { name: 'eth0' })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'already-bound' })).not.toBeInTheDocument();
-    await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0');
+    await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0'); await selectCableType();
     const submit = screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!;
     await userEvent.click(submit);
     await userEvent.click(submit);
@@ -90,6 +94,7 @@ describe('ConnectPhysicalInterface', () => {
     expect(detailsDataSource.loadDeviceDetails).toHaveBeenCalledWith('fw-device');
     expect(createPhysicalLink).toHaveBeenCalledTimes(1);
     expect(createPhysicalLink).toHaveBeenCalledWith({
+      cable_type_id: 'copper',
       source_interface_id: 'core-eth0',
       target_interface_id: 'fw-eth0',
       cable_label: null,
@@ -123,7 +128,7 @@ describe('ConnectPhysicalInterface', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Подключить' }));
     await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), 'fw-device');
     await screen.findByRole('option', { name: 'eth0' });
-    await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0');
+    await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0'); await selectCableType();
     await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('already bound');
@@ -158,7 +163,7 @@ describe('ConnectPhysicalInterface', () => {
   it('submits an authoritative generated Cable naming intent', async () => {
     const createPhysicalLink = vi.fn().mockResolvedValue(creationDocument);
     render(<ConnectPhysicalInterface sourceInterface={interfaceDetails('core-eth0', 'eth0')} targetDevices={[{ physicalObjectId: 'fw-device', label: 'FW' }]} detailsDataSource={{ loadDeviceDetails: vi.fn().mockResolvedValue(targetDocument) }} writeDataSource={{ createPhysicalLink }} cableLabelDataSource={{ loadCableLabelTemplates: vi.fn().mockResolvedValue({ schema_version: '1.0', templates: [{ id: 'template', name: 'FC', pattern: 'FC####', start_at: 1 }] }) } as any} onConnected={vi.fn()} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Подключить' })); await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), 'fw-device'); await screen.findByRole('option', { name: 'eth0' }); await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0'); await userEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template'); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
+    await userEvent.click(screen.getByRole('button', { name: 'Подключить' })); await userEvent.selectOptions(screen.getByLabelText('Куда: устройство'), 'fw-device'); await screen.findByRole('option', { name: 'eth0' }); await userEvent.selectOptions(screen.getByLabelText('Куда: интерфейс'), 'fw-eth0'); await selectCableType(); await userEvent.click(screen.getByRole('radio', { name: 'Сгенерировать по шаблону' })); await userEvent.selectOptions(screen.getByLabelText('Шаблон'), 'template'); await userEvent.click(screen.getAllByRole('button', { name: 'Подключить' }).at(-1)!);
     expect(createPhysicalLink).toHaveBeenCalledWith(expect.objectContaining({ cable_label_template_id: 'template', generate_cable_label: true }));
   });
 });
