@@ -51,7 +51,7 @@ describe('module persisted draft and review', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Ниже' })[0]);
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     fireEvent.change(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], { target: { value: 'test-type' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     const inputs = screen.getAllByRole('textbox');
     fireEvent.change(inputs[inputs.length - 1], { target: { value: 'P3' } });
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();

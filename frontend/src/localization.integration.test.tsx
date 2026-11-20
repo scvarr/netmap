@@ -16,7 +16,7 @@ const renderLocalized = (ui: React.ReactNode) => render(<I18nProvider><LocaleCon
 const canonicalRef = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
 
 beforeEach(() => window.localStorage.clear());
-afterEach(() => window.localStorage.clear());
+afterEach(() => { window.localStorage.clear(); vi.unstubAllGlobals(); });
 
 describe('RU/EN localization integration', () => {
   it('switches the Map surface to English and restores Russian without translating a map name', async () => {
@@ -46,15 +46,27 @@ describe('RU/EN localization integration', () => {
   });
 
   it('localizes the composition editor while submitting canonical Blueprint values', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json([
+      { id: 'copper', name: 'Copper', color: '#336699', is_active: true, cardinality: 1 },
+    ])));
     const createBaseTemplate = vi.fn().mockResolvedValue({});
     renderLocalized(<MemoryRouter><NewBaseTemplatePage dataSource={{ loadBaseTemplates: vi.fn(), loadBaseTemplateRevision: vi.fn(), createBaseTemplate }} /></MemoryRouter>);
 
     await userEvent.click(screen.getByRole('button', { name: 'English' }));
-    expect(screen.getByRole('heading', { name: 'Create object blueprint' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Create base template' })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Blueprint name'), 'Карта');
-    await userEvent.click(screen.getByRole('button', { name: 'Add ports / points' }));
+    await userEvent.selectOptions(await screen.findByLabelText('Port type'), 'copper');
+    await userEvent.click(screen.getByRole('button', { name: /^Add$/ }));
+    await userEvent.selectOptions(screen.getAllByLabelText('Endpoint kind')[0], 'MODULE_PORT');
+    await userEvent.type(screen.getByLabelText('Module port compatibility'), 'Custom / 42');
+    await userEvent.click(screen.getByRole('button', { name: /^Add$/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Save blueprint' }));
 
-    expect(createBaseTemplate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Карта', panels: [expect.objectContaining({ panel_number: 1, display_name: 'Панель 1' })], slots: [expect.objectContaining({ kind: 'NETWORK_PORT', display_name: '1-1', panel_key: expect.any(String) })] }));
+    await waitFor(() => expect(createBaseTemplate).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'Карта',
+      panels: [expect.objectContaining({ panel_number: 1, display_name: 'Панель 1' })],
+      slots: [expect.objectContaining({ kind: 'NETWORK_PORT', display_name: '1-1', port_type_id: 'copper' })],
+      bays: [expect.objectContaining({ kind: 'PLACED', display_name: 'Module port 1', compatibility: 'Custom / 42' })],
+    })));
   });
 });

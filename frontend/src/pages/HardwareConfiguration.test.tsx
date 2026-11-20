@@ -122,9 +122,9 @@ describe('09.6-A user path', () => {
     await userEvent.type(screen.getByLabelText('Совместимость'), 'OCP3');
     await screen.findByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getByLabelText('Тип порта'), 'copper');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     await userEvent.selectOptions(screen.getAllByLabelText('Вид точки')[0], 'CONNECTION_POINT');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     await userEvent.click(screen.getByRole('button', { name: '#1' }));
     await userEvent.type(within(screen.getByRole('group', { name: 'Свойства выбранного порта' })).getByLabelText('Название'), 'P1');
     await userEvent.click(screen.getByRole('button', { name: '#2' }));
@@ -151,10 +151,10 @@ describe('09.6-A user path', () => {
     const source = bases(); show(<NewBaseTemplatePage dataSource={source} />);
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Server base');
     await userEvent.selectOptions(screen.getByLabelText('Вид точки'), 'MODULE_PORT');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить модульный порт' }));
+    await userEvent.type(screen.getByLabelText('Совместимость модульного порта'), 'OCP3');
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     const bay = screen.getByRole('region', { name: 'Отсеки модулей' });
     await userEvent.clear(within(bay).getByLabelText('Название')); await userEvent.type(within(bay).getByLabelText('Название'), 'OCP bay');
-    await userEvent.type(within(bay).getByLabelText('Совместимость'), 'OCP3');
     await userEvent.clear(within(bay).getByLabelText('x')); await userEvent.type(within(bay).getByLabelText('x'), '0.2');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
     await waitFor(() => expect(source.createBaseTemplate).toHaveBeenCalledWith(expect.objectContaining({ bays: [expect.objectContaining({ bay_key: expect.any(String), display_name: 'OCP bay', compatibility: 'OCP3', x: .2, width: .3 })] })));

@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { PortTypeNotice, PortTypeSelect, usePortTypes } from './PortTypeSelect';
-import { TemplateElementKindSelect, type TemplateElementKind } from './TemplateElementKindSelect';
+import { PortTypeSelect, usePortTypes } from './PortTypeSelect';
+import { TemplateElementCreator } from './TemplateElementKindSelect';
 import { bayNumericGeometry, minimumBaySize } from '../blueprints/moduleBayGeometry';
+import { placeModulePorts } from '../blueprints/modulePortPlacement';
 import { useI18n } from '../i18n';
 import { ModuleGeometryEditor } from './ModuleGeometryEditor';
 import { moduleEndpointPositions, type ModulePortDefinition, type ModuleTemplateInput } from '../topology/hardwareModules';
@@ -28,9 +29,6 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
 }) {
   const { t } = useI18n();
   const catalog = usePortTypes();
-  const [portTypeId, setPortTypeId] = useState('');
-  const [kind, setKind] = useState<TemplateElementKind>('NETWORK_PORT');
-  const [count, setCount] = useState(1);
   const modulePorts = value.module_ports ?? [];
   const [selection, setSelection] = useState<Set<string>>(() => new Set([...value.endpoints, ...modulePorts].slice(0, 1).map(e => e.key)));
   const selected = new Set(value.endpoints.filter(e => selection.has(e.key)).map(e => e.key));
@@ -46,26 +44,22 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
       <label>{t('hardware.compatibility')}<input required value={value.compatibility} onChange={e => onChange({ ...value, compatibility: e.target.value })} /></label>
       <h2>{t('blueprint.endpoint.elements')}</h2>
       <p role="status">{t('blueprint.layout.selected', { count: activeModulePort ? 1 : selected.size })}</p>
-      <TemplateElementKindSelect value={kind} onChange={setKind} />
-      {kind === 'MODULE_PORT' ? <button type="button" className="secondary-action" onClick={() => {
-        const port = { key: crypto.randomUUID(), display_name: t('blueprint.endpoint.modulePort'), compatibility: '',
-          x: .25, y: .25, width: .3, height: .3 };
-        onChange({ ...value, module_ports: [...modulePorts, port] });
-        setSelection(new Set([port.key]));
-      }}>{t('blueprint.endpoint.addModulePort')}</button> : <>
-      <PortTypeNotice {...catalog} />
-      <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} singleMember={kind === 'NETWORK_PORT'} />
-      <label>{t('blueprint.endpoint.count')}<input type="number" min={1} max={256} value={count} onChange={event => setCount(Number(event.target.value))} /></label>
-      <button type="button" className="secondary-action" disabled={
-        !catalog.types?.some(type => type.id === portTypeId && type.is_active && (kind !== 'NETWORK_PORT' || type.cardinality === 1)) || !Number.isInteger(count) || count < 1 || count > 256
-      } onClick={() => {
-        const added = Array.from({ length: count }, (_, index) => ({
-          key: crypto.randomUUID(), display_name: count === 1 ? '' : String(value.endpoints.length + index + 1), kind, port_type_id: portTypeId,
-        }));
-        changeEndpoints([...value.endpoints, ...added]);
-        setSelection(new Set(added.map(endpoint => endpoint.key)));
-      }}>{t('hardware.addEndpoint')}</button>
-      </>}
+      <TemplateElementCreator catalog={catalog}
+        onAddModulePorts={(count, compatibility) => {
+          const added = placeModulePorts(count, compatibility, t('blueprint.endpoint.modulePort'),
+            modulePorts.map(port => port.display_name), modulePorts, Object.values(value.geometry.endpoints));
+          if (!added) return false;
+          onChange({ ...value, module_ports: [...modulePorts, ...added] });
+          setSelection(new Set([added[0].key]));
+          return true;
+        }}
+        onAddEndpoints={(kind, count, portTypeId) => {
+          const added = Array.from({ length: count }, (_, index) => ({
+            key: crypto.randomUUID(), display_name: count === 1 ? '' : String(value.endpoints.length + index + 1), kind, port_type_id: portTypeId,
+          }));
+          changeEndpoints([...value.endpoints, ...added]);
+          setSelection(new Set(added.map(endpoint => endpoint.key)));
+        }} />
       {selected.size > 1 && <PortTypeSelect bulk types={catalog.types} value=""
         singleMember={value.endpoints.some(endpoint => selected.has(endpoint.key) && endpoint.kind === 'NETWORK_PORT')} onChange={id =>
         changeEndpoints(value.endpoints.map(endpoint => selected.has(endpoint.key) ? { ...endpoint, port_type_id: id } : endpoint))

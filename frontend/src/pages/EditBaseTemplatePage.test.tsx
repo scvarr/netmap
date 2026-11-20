@@ -314,7 +314,7 @@ describe('persisted base template review', () => {
     fireEvent.change(screen.getByDisplayValue('Сохранённый черновик'), { target: { value: 'Changed draft' } });
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     expect(screen.getByRole('button', { name: 'Проверить изменения' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Сохранить черновик' }));
     expect(await screen.findByText('Черновик сохранён')).toBeInTheDocument();

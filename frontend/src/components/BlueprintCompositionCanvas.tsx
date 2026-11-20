@@ -179,9 +179,10 @@ export function BlueprintCompositionCanvas({ zoom = 1, portTypes, body, panels, 
       }}><title>{panel.display_name}</title></rect>
       {bays.filter(bay => bay.panel_key === panel.panel_key).map(bay => <g key={bay.bay_key} data-bay-key={bay.bay_key} data-selected={bay.bay_key === selectedBayKey} className="blueprint-composition-canvas__bay" onPointerDown={event => startBayGesture(event, bay, 'move')}>
         <rect x={rect.x + bay.x * rect.width} y={rect.y + bay.y * rect.height} width={bay.width * rect.width} height={bay.height * rect.height} vectorEffect="non-scaling-stroke"><title>{bay.display_name}</title></rect>
-        <svg x={rect.x + bay.x * rect.width} y={rect.y + bay.y * rect.height} width={bay.width * rect.width} height={bay.height * rect.height} pointerEvents="none">
+        {bay.width * rect.width * presentationScale >= bay.display_name.length * 7 + 16 &&
+          bay.height * rect.height * presentationScale >= 20 && <svg x={rect.x + bay.x * rect.width} y={rect.y + bay.y * rect.height} width={bay.width * rect.width} height={bay.height * rect.height} pointerEvents="none">
           <text x={8 / presentationScale} y={18 / presentationScale} fontSize={11 / presentationScale}>{bay.display_name}</text>
-        </svg>
+        </svg>}
       </g>)}
     </g>; })}
     <rect data-panel-move-border={activePanelKey} className="blueprint-composition-canvas__move-border" x={activeRect.x} y={activeRect.y} width={activeRect.width} height={activeRect.height} strokeWidth={10 / presentationScale} onPointerDown={(event) => startPanelGesture(event, activePanel, 'move')} />

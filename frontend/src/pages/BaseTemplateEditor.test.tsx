@@ -302,7 +302,7 @@ describe('copy selection controls', () => {
     const view = render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Slots" saveLabel="Save" initialState={initial} onSave={vi.fn()} /></MemoryRouter></I18nProvider>);
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     expect(screen.queryByRole('group', { name: 'Копировать выделение' })).toBeNull(); view.unmount();
     const state = fixture(2); const destination = state.panels[1].panel_key;
     const populated = addEndpoints({ ...state, activePanelKey: destination }, 'NETWORK_PORT', 256, destination, 'test-type');
@@ -453,7 +453,7 @@ describe('minimal direct endpoint editor', () => {
     render(<I18nProvider><MemoryRouter><BaseTemplateEditor title="Blueprint" description="Direct slots" saveLabel="Save" initialState={initial} onSave={save} /></MemoryRouter></I18nProvider>);
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(1);
     await userEvent.click(screen.getByRole('button', { name: 'Добавить слева' }));
     expect(document.querySelectorAll('[data-panel-key]')).toHaveLength(2);
@@ -462,7 +462,7 @@ describe('minimal direct endpoint editor', () => {
     expect(document.querySelectorAll('[data-endpoint-name]')).toHaveLength(1);
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     expect(screen.getByRole('button', { name: 'Удалить пустую панель' })).toBeDisabled();
     await userEvent.click(screen.getByRole('button', { name: /Порты и внутренние связи ·/ }));
     const aSide = within(screen.getByRole('region', { name: 'A' }));
@@ -486,7 +486,7 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     expect(document.querySelectorAll('[data-slot-key]')).toHaveLength(2);
     const keys = [...document.querySelectorAll('[data-slot-key]')].map((node) => node.getAttribute('data-slot-key'));
     expect(new Set(keys).size).toBe(2);
@@ -523,7 +523,7 @@ describe('minimal direct endpoint editor', () => {
     await userEvent.selectOptions(screen.getByLabelText('Вид точки'), 'CONNECTION_POINT');
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     const request = createBlueprintRequest(save.mock.calls[0][0]).request!;
     expect(request.slots).toEqual([expect.objectContaining({ port_type_id: 'test-type', kind: 'CONNECTION_POINT', panel_key: request.panels[0].panel_key, display_name: '1-1' })]);
@@ -549,7 +549,7 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     expect(nodes.map((node) => node.getAttribute('data-selected'))).toEqual(['true', 'true', 'true']);
     expect(screen.queryByLabelText('Название')).toBeNull();
@@ -577,7 +577,7 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     await userEvent.click(screen.getByRole('button', { name: /Порты и внутренние связи ·/ }));
     const aSide = within(screen.getByRole('region', { name: 'A' }));
     const bSide = within(screen.getByRole('region', { name: 'B' }));
@@ -616,7 +616,7 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     fireEvent.contextMenu(document.querySelector('[data-slot-key]')!);
     expect(screen.getByRole('menuitem', { name: 'В одну горизонтальную линию' }).hasAttribute('disabled')).toBe(false);
     expect(screen.getByRole('menuitem', { name: 'По горизонтали' }).hasAttribute('disabled')).toBe(true);
@@ -641,7 +641,7 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     fireEvent.contextMenu(nodes[0]);
     expect(document.querySelectorAll('[data-selected="true"]')).toHaveLength(3);
@@ -674,7 +674,7 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '2' } });
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
     Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 1000, height: 375 }) });
@@ -731,7 +731,7 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '14' } });
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     const nodes = [...document.querySelectorAll('[data-slot-key]')];
     const centers = () => nodes.map((node) => {
       const marker = node.querySelector('[data-endpoint-hit-target]')!;
@@ -752,7 +752,7 @@ describe('minimal direct endpoint editor', () => {
     fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '4' } });
     await screen.findAllByRole('option', { name: 'Copper · #336699' });
     await userEvent.selectOptions(screen.getAllByRole('combobox', { name: 'Тип порта' })[0], 'test-type');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     const canvas = document.querySelector('.blueprint-composition-canvas')!;
     Object.defineProperty(canvas, 'getBoundingClientRect', { value: () => ({ left: 0, top: 0, width: 850, height: 550 }) });
     fireEvent.contextMenu(document.querySelector('[data-slot-key]')!);
@@ -846,7 +846,7 @@ it('assigns one catalog type to a batch and updates its markers without changing
   await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Тип порта' }), 'test-type');
   await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Вид точки' }), 'CONNECTION_POINT');
   fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
-  await userEvent.click(screen.getByRole('button', { name: 'Добавить порты / точки' }));
+  await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
   const markers = () => [...container.querySelectorAll('[data-endpoint-marker]')];
   expect(markers().map(marker => [marker.tagName, marker.getAttribute('fill')])).toEqual(
     Array.from({ length: 3 }, () => ['circle', '#336699']),
@@ -868,7 +868,7 @@ it('links to the catalog and disables adding endpoints when all port types are a
     <BaseTemplateEditor title="Switch" description="" saveLabel="Save" initialState={newBlueprintEditorState()} onSave={vi.fn()} />
   </MemoryRouter></I18nProvider>);
   expect(await screen.findByRole('link', { name: 'Справочники → Типы портов' })).toHaveAttribute('href', '/catalogs/port-types');
-  expect(screen.getByRole('button', { name: 'Добавить порты / точки' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: /^Добавить$/ })).toBeDisabled();
 });
 
 

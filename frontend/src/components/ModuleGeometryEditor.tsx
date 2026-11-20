@@ -48,13 +48,16 @@ export function ModuleGeometryEditor({ portTypes, geometry, endpoints, modulePor
  {modulePorts.map(port => {
   const active = (selectedKeys ?? localSelected).has(port.key);
   const choose = () => { if (onChange) select(new Set([port.key])); };
+  const x = port.x * geometry.width, y = port.y * geometry.height;
+  const width = port.width * geometry.width, height = port.height * geometry.height;
   return <g key={port.key} className="blueprint-composition-canvas__bay" data-selected={active} data-module-port-key={port.key}
     role="button" aria-label={port.display_name} aria-pressed={active} tabIndex={onChange ? 0 : undefined}
     onClick={choose} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } }}>
-    <rect x={port.x * geometry.width} y={port.y * geometry.height} width={port.width * geometry.width}
-      height={port.height * geometry.height} vectorEffect="non-scaling-stroke"><title>{port.display_name}</title></rect>
-    <text x={(port.x + port.width / 2) * geometry.width} y={(port.y + port.height / 2) * geometry.height}
-      fontSize={12 / scale} textAnchor="middle" dominantBaseline="central">{port.display_name}</text>
+    <rect x={x} y={y} width={width} height={height} vectorEffect="non-scaling-stroke"><title>{port.display_name}</title></rect>
+    {width * scale >= port.display_name.length * 7 + 8 && height * scale >= 16 && <svg x={x} y={y} width={width} height={height} pointerEvents="none">
+      <text x={width / 2} y={height / 2} fontSize={12 / scale} textAnchor="middle"
+        dominantBaseline="central">{port.display_name}</text>
+    </svg>}
   </g>;
  })}
  {endpoints.map(e => {const p=geometry.endpoints[e.key]; return p && <g key={e.key} className={onChange ? "module-geometry__port" : undefined} role="button" aria-label={e.display_name} aria-pressed={selected.has(e.key)} tabIndex={onChange ? 0 : undefined} onKeyDown={event => { if (!onChange || !['Enter', ' '].includes(event.key)) return; event.preventDefault(); const keys = event.shiftKey ? new Set(selected) : new Set<string>(); if (keys.has(e.key)) keys.delete(e.key); else keys.add(e.key); select(keys); }} onPointerDown={event => {

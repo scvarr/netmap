@@ -5,6 +5,7 @@ import { I18nProvider } from '../i18n';
 import { BaseTemplateEditor, newBlueprintEditorState } from './BaseTemplateEditor';
 import type { BlueprintEditorState } from '../blueprints/editorModel';
 import type { PlacedModuleBay as ModuleBay } from '../topology/hardwareModules';
+import { isPlacedBay } from '../topology/hardwareModules';
 
 const bay: ModuleBay = { bay_key: 'bay', display_name: 'OCP', compatibility: 'OCP3', panel_key: 'one', x: .2, y: .2, width: .3, height: .3 };
 const panel = { panel_key: 'one', panel_number: 1, display_name: 'Front', x: 0, y: 0, width: 100, height: 40 };
@@ -131,6 +132,58 @@ describe('bay edge snapping and hundredth precision', () => {
 });
 
 describe('bay on the existing authoring canvas', () => {
+  it.each([1, 2, 48])('adds %i distinct placed ports with one compatibility value', count => {
+    const logical = { ...bay, kind: 'LOGICAL' as const, bay_key: 'logical', x: null, y: null, width: null, height: null };
+    const { container, field, save, unmount } = show({ bays: [bay, logical] });
+    const chooser = within(container.querySelector('.template-element-creator')! as HTMLElement);
+    const kind = chooser.getByLabelText('Вид точки');
+    const quantity = chooser.getByLabelText('Количество');
+    const add = chooser.getByRole('button', { name: /^Добавить$/ });
+    for (const option of ['CONNECTION_POINT', 'NETWORK_PORT', 'MODULE_PORT']) {
+      fireEvent.change(kind, { target: { value: option } });
+      expect(chooser.getByLabelText('Количество')).toBe(quantity);
+      expect(chooser.getByRole('button', { name: /^Добавить$/ })).toBe(add);
+      expect(chooser.queryByLabelText('Тип порта') !== null).toBe(option !== 'MODULE_PORT');
+    }
+    expect(add).toBeDisabled();
+    fireEvent.change(quantity, { target: { value: count } });
+    fireEvent.change(chooser.getByLabelText('Совместимость модульного порта'), { target: { value: 'Lab / Custom' } });
+    fireEvent.click(add);
+    expect(field('Название')).toHaveValue('Модульный порт 1');
+    fireEvent.change(field('Название'), { target: { value: 'Renamed bay' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const saved = save.mock.calls[0][0] as BlueprintEditorState;
+    const added = saved.bays!.slice(2).filter(isPlacedBay);
+    expect(saved.bays!.slice(0, 2)).toEqual([bay, logical]);
+    expect(added).toHaveLength(count);
+    expect(new Set(added.map(item => item.bay_key)).size).toBe(count);
+    expect(added.map(item => item.display_name)).toEqual(Array.from({ length: count }, (_, i) => i ? `Модульный порт ${i + 1}` : 'Renamed bay'));
+    expect(added.every(item => item.compatibility === 'Lab / Custom')).toBe(true);
+    const rectangles = [bay, ...added];
+    rectangles.forEach((a, i) => rectangles.slice(i + 1).forEach(b => {
+      expect(a.x + a.width <= b.x + 1e-9 || b.x + b.width <= a.x + 1e-9 ||
+        a.y + a.height <= b.y + 1e-9 || b.y + b.height <= a.y + 1e-9).toBe(true);
+    }));
+    const positions = () => Array.from(document.querySelectorAll('[data-bay-key] > rect'), rect => rect.outerHTML);
+    const before = positions();
+    unmount();
+    show(saved);
+    expect(positions()).toEqual(before);
+  });
+
+  it('leaves the draft intact when the selected panel has no room for the batch', () => {
+    const fullBay = { ...bay, x: 0, y: 0, width: 1, height: 1 };
+    const { container, save } = show({ bays: [fullBay] });
+    fireEvent.change(screen.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
+    fireEvent.change(screen.getByLabelText('Количество'), { target: { value: 48 } });
+    fireEvent.change(screen.getByLabelText('Совместимость модульного порта'), { target: { value: 'Custom' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Недостаточно свободного места');
+    expect(container.querySelectorAll('[data-bay-key]')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(save.mock.calls[0][0].bays).toEqual([fullBay]);
+  });
+
   it('duplicates properties with a fresh key, selects and draws the copy, then drags and saves both bays', () => {
     const original = Object.freeze({ ...bay });
     const { choose, container, field, rectangle, gesture, canvas, save } = show({ bays: [original] }); choose();
@@ -183,7 +236,8 @@ describe('bay on the existing authoring canvas', () => {
   it('adds a small selected bay to the active panel and immediately draws it', () => {
     const { container } = show({ panels: [panel, rear], activePanelKey: 'two', bays: [] });
     fireEvent.change(screen.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить модульный порт' }));
+    fireEvent.change(screen.getByLabelText('Совместимость модульного порта'), { target: { value: 'Open spec' } });
+    fireEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
     const area = container.querySelector('[data-bay-key]')!;
     expect(area.closest('[data-panel-key]')).toHaveAttribute('data-panel-key', 'two');
     expect(area).toHaveAttribute('data-selected', 'true');
@@ -267,6 +321,6 @@ describe('bay on the existing authoring canvas', () => {
     expect(within(properties).getByRole('button', { name: 'Удалить' })).toHaveClass('text-action');
     expect(within(properties).getByRole('button', { name: 'Дублировать отсек' })).toHaveClass('secondary-action');
     fireEvent.change(screen.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
-    expect(screen.getByRole('button', { name: 'Добавить модульный порт' })).toHaveClass('secondary-action');
+    expect(screen.getByRole('button', { name: /^Добавить$/ })).toHaveClass('secondary-action');
   });
 });
