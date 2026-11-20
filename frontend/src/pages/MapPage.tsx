@@ -81,7 +81,8 @@ import type {
   TopologyProjectionDocument,
   TopologySelection,
 } from "../topology/types";
-import type { CableSpecification, PhysicalEndpointConnectionWriteDataSource } from "../topology/physicalEndpointConnectionWriteTypes";
+import type { CableSpecification, CreatePhysicalEndpointConnectionRequest, PhysicalEndpointConnectionWriteDataSource } from "../topology/physicalEndpointConnectionWriteTypes";
+import { confirmPhysicalCompatibility, PhysicalCompatibilityError } from "../topology/physicalCompatibility";
 import type { CableLabelDataSource, CableNamingInput } from "../topology/cableLabelTypes";
 import { isHistoricalCableLabelReuseConfirmationStale, isHistoricalCableLabelReuseRequired } from "../topology/historicalCableLabelReuse";
 import { CableNamingFields } from "../components/CableNamingFields";
@@ -946,8 +947,37 @@ function MapPageContent({
     const operation = wiring;
     if (!endpointFor({ physicalObjectId: operation.source.physicalObjectId, connectionPointId: operation.source.connectionPointId, label: operation.source.portLabel }) || !endpointFor({ physicalObjectId: operation.target.physicalObjectId, connectionPointId: operation.target.connectionPointId, label: operation.target.portLabel }, operation.source.connectionPointId)) { setWiring({ ...operation, error: t("map.wiring.source") }); return; }
     setWiring({ ...operation, status: "creating", error: null });
-    try { await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection({ ...operation.cableSpec, source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: 1 }, target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: 1 }, cable_label: operation.naming.cable_label?.trim() || null, cable_label_template_id: operation.naming.cable_label_template_id ?? null, generate_cable_label: operation.naming.generate_cable_label === true, confirmed_historical_label: confirmedHistoricalLabel ?? null }); }
-    catch (reason) { if (isHistoricalCableLabelReuseRequired(reason)) { setWiringHistoricalCandidate(reason.candidate); setWiring(operation); } else if (confirmedHistoricalLabel && isHistoricalCableLabelReuseConfirmationStale(reason)) { setWiringHistoricalCandidate(null); setWiring(operation); setTimeout(() => void createWiring(), 0); } else if (selectedMapId.current === operation.mapId && viewMode === "physical") setWiring({ ...operation, error: errorMessage(reason, t("map.connectFailed")) }); return; }
+    try {
+      const request: CreatePhysicalEndpointConnectionRequest = {
+        ...operation.cableSpec,
+        source: { kind: "CONNECTION_POINT", connection_point_id: operation.source.connectionPointId, member_index: 1 },
+        target: { kind: "CONNECTION_POINT", connection_point_id: operation.target.connectionPointId, member_index: 1 },
+        cable_label: operation.naming.cable_label?.trim() || null,
+        cable_label_template_id: operation.naming.cable_label_template_id ?? null,
+        generate_cable_label: operation.naming.generate_cable_label === true,
+        confirmed_historical_label: confirmedHistoricalLabel ?? null,
+      };
+      if (physicalEndpointConnectionWriteDataSource.previewPhysicalEndpointConnection) {
+        const result = await physicalEndpointConnectionWriteDataSource.previewPhysicalEndpointConnection(request);
+        if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
+        const compatibility = confirmPhysicalCompatibility(result, t);
+        if (!compatibility) { setWiring({ ...operation, error: null }); return; }
+        request.compatibility = compatibility;
+      }
+      await physicalEndpointConnectionWriteDataSource.createPhysicalEndpointConnection(request);
+    } catch (reason) {
+      if (isHistoricalCableLabelReuseRequired(reason)) {
+        setWiringHistoricalCandidate(reason.candidate);
+        setWiring(operation);
+      } else if (confirmedHistoricalLabel && isHistoricalCableLabelReuseConfirmationStale(reason)) {
+        setWiringHistoricalCandidate(null);
+        setWiring(operation);
+        setTimeout(() => void createWiring(), 0);
+      } else if (selectedMapId.current === operation.mapId && viewMode === "physical") {
+        setWiring({ ...operation, error: reason instanceof PhysicalCompatibilityError ? reason.message : t("map.connectFailed") });
+      }
+      return;
+    }
     if (selectedMapId.current !== operation.mapId || viewMode !== "physical") return;
     await refreshCreatedWiring(operation);
   };

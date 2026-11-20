@@ -1,3 +1,4 @@
+from tests.l1_builders import post_confirmed_physical
 from tests.cable_type_fixtures import copper_cable_fields
 from tests.port_type_fixtures import ensure_port_type_id
 import copy
@@ -186,7 +187,7 @@ def test_two_installations_in_one_object_have_distinct_definition_mappings_and_p
     remote = create_object(template_id)
     remote_id = remote['physical_object_ref']['entity_id']
     source = endpoints[0]
-    connection = client.post('/v1/topology/physical-connections', json={
+    connection = post_confirmed_physical(client,'/v1/topology/physical-connections', json={
         **copper_cable_fields(),
         'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_point_id'], 'member_index': 1},
         'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': remote['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1},

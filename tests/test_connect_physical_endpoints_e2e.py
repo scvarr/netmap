@@ -1,5 +1,5 @@
 from tests.cable_type_fixtures import copper_cable_fields
-from tests.l1_builders import create_device as build_device, create_object_details
+from tests.l1_builders import create_device as build_device, create_object_details, post_confirmed_physical
 import uuid
 
 from fastapi.testclient import TestClient
@@ -48,7 +48,7 @@ def point_endpoint(point_id: str) -> dict[str, str | int]:
 
 
 def connect(source: dict, target: dict, cable_name: str = "cable"):
-    return client.post(
+    return post_confirmed_physical(client,
         "/v1/topology/physical-connections",
         json={
             **copper_cable_fields(),

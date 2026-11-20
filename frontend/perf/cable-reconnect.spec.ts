@@ -32,7 +32,11 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
     };
   }));
   const endpoint = (connection_point_id: string) => ({ kind: 'CONNECTION_POINT', connection_point_id, member_index: 1 });
-  const cable = await api('/topology/physical-connections', { cable_type_id: cableType.id, source: endpoint(a.ports[0]), target: endpoint(b.ports[0]), cable_label: name });
+  const wiring = { cable_type_id: cableType.id, source: endpoint(a.ports[0]), target: endpoint(b.ports[0]), cable_label: name };
+  const compatibility = await api('/topology/physical-connections?preview=true', wiring);
+  const cable = await api('/topology/physical-connections', {
+    ...wiring, compatibility: { token: compatibility.token, accept_unknown: true },
+  });
   const cableId = cable.cable_ref.entity_id;
   const reconnectUrl = `/cables/${cableId}/reconnect`;
   const before = await api(reconnectUrl);
@@ -89,6 +93,7 @@ test('moves an existing cable on a saved physical variant and rereads after a pr
   let writes = 0;
   page.on('request', req => { if (req.method() === 'POST' && req.url().endsWith(reconnectUrl)) writes++; });
   await page.route('**/api/v1/topology/projection', route => route.abort(), { times: 1 });
+  await dialog.getByRole('checkbox', { name: 'Продолжить с неподтверждённой совместимостью' }).check();
   await dialog.getByRole('button', { name: 'Подтвердить переподключение' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Кабель переподключён');
   await dialog.getByRole('button', { name: 'Повторить обновление' }).click();

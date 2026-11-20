@@ -1,3 +1,4 @@
+from tests.l1_builders import post_confirmed_physical
 import uuid
 
 import pytest
@@ -94,7 +95,7 @@ def test_dependencies_block_entire_uninstall_without_any_changes(dependency, rea
     built_in = uuid.UUID(obj['slots'][0]['connection_point_ref']['entity_id'])
     if dependency == 'cable':
         other = create_object(obj['blueprint_ref']['entity_id'])
-        response = client.post('/v1/topology/physical-connections', json={**copper_cable_fields(), 'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': str(point_id), 'member_index': 1}, 'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': other['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1}})
+        response = post_confirmed_physical(client,'/v1/topology/physical-connections', json={**copper_cable_fields(), 'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': str(point_id), 'member_index': 1}, 'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': other['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1}})
         assert response.status_code == 201, response.text
     else:
         with SessionLocal.begin() as session:

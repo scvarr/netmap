@@ -1,5 +1,6 @@
 import type { ProjectionSourceRef } from './types';
 import type { CableNamingInput } from './cableLabelTypes';
+import type { PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview } from './physicalCompatibility';
 
 export type PhysicalEndpointRequest =
   | { kind: 'NETWORK_INTERFACE'; network_interface_id: string }
@@ -14,6 +15,7 @@ export interface CableSpecification {
 export interface CreatePhysicalEndpointConnectionRequest extends CableNamingInput, CableSpecification {
   source: PhysicalEndpointRequest;
   target: PhysicalEndpointRequest;
+  compatibility?: PhysicalCompatibilityConfirmation;
 }
 
 export interface PhysicalEndpointMaterialization {
@@ -32,16 +34,21 @@ export interface PhysicalEndpointConnectionCreationDocument {
   connection_ref: ProjectionSourceRef;
 }
 
+export interface CreateBulkPhysicalConnectionsRequest extends CableSpecification {
+  pairs: { source: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }>; target: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }> }[];
+  template_id: string | null;
+  expected_generated_labels: string[];
+  confirmed_historical_labels: string[];
+  compatibility?: PhysicalCompatibilityConfirmation;
+}
+
 export interface PhysicalEndpointConnectionWriteDataSource {
+  previewPhysicalEndpointConnection?(request: CreatePhysicalEndpointConnectionRequest): Promise<PhysicalCompatibilityPreview>;
+  previewBulkPhysicalConnections?(request: CreateBulkPhysicalConnectionsRequest): Promise<PhysicalCompatibilityPreview>;
   createPhysicalEndpointConnection(
     request: CreatePhysicalEndpointConnectionRequest,
   ): Promise<PhysicalEndpointConnectionCreationDocument>;
   deleteExternalPhysicalConnection?(connectionId: string): Promise<void>;
   previewBulkCableLabels?(templateId: string, count: number): Promise<{ labels: { label: string; historical: boolean }[] }>;
-  createBulkPhysicalConnections?(request: CableSpecification & {
-    pairs: { source: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }>; target: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }> }[];
-    template_id: string | null;
-    expected_generated_labels: string[];
-    confirmed_historical_labels: string[];
-  }): Promise<{ created: { connection_id: string; cable_id: string }[] }>;
+  createBulkPhysicalConnections?(request: CreateBulkPhysicalConnectionsRequest): Promise<{ created: { connection_id: string; cable_id: string }[] }>;
 }

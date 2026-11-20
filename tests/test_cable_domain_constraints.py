@@ -10,6 +10,11 @@ from app.errors import ValidationError
 from app.models import Cable, Connection, ConnectionPoint, InterfacePhysicalBinding
 from app.physical_connections import ConnectionPointEndpoint, NetworkInterfaceEndpoint, PhysicalConnectionCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
+from app.schemas import PhysicalCompatibilityConfirmation
+
+
+def confirm(preview):
+    return PhysicalCompatibilityConfirmation(token=preview.token, accept_unknown=True)
 
 
 def points(repository: CanonicalRepository) -> tuple[ConnectionPoint, ConnectionPoint]:
@@ -46,7 +51,10 @@ def test_endpoint_link_domain_rejects_invalid_or_occupied_endpoints_without_new_
         ownerless_interface = repository.add_network_interface()
         unsupported = repository.add_connection_point(repository.add_physical_object().id, 2)
         catalog = PhysicalConnectionCatalog(session)
-        catalog.create_endpoint_link(ConnectionPointEndpoint(left.id), ConnectionPointEndpoint(right.id), cable_spec=copper_cable_spec())
+        endpoints = ConnectionPointEndpoint(left.id), ConnectionPointEndpoint(right.id)
+        spec = copper_cable_spec()
+        preview = catalog.create_endpoint_link(*endpoints, cable_spec=spec, preview=True)
+        catalog.create_endpoint_link(*endpoints, cable_spec=spec, compatibility=confirm(preview))
 
         with pytest.raises(ValidationError, match="already occupied"):
             catalog.create_endpoint_link(ConnectionPointEndpoint(left.id), NetworkInterfaceEndpoint(interface), cable_spec=copper_cable_spec())
@@ -78,7 +86,10 @@ def test_endpoint_link_failure_rolls_back_connection_cable_and_interface_materia
     monkeypatch.setattr(CanonicalRepository, "add_connection", fail_after_connection)
     with pytest.raises(RuntimeError, match="injected failure"):
         with SessionLocal.begin() as session:
-            PhysicalConnectionCatalog(session).create_atomic_link(source, target, cable_spec=copper_cable_spec())
+            catalog = PhysicalConnectionCatalog(session)
+            spec = copper_cable_spec()
+            preview = catalog.create_atomic_link(source, target, cable_spec=spec, preview=True)
+            catalog.create_atomic_link(source, target, cable_spec=spec, compatibility=confirm(preview))
 
     with SessionLocal() as session:
         assert session.scalar(select(func.count()).select_from(Connection)) == 0

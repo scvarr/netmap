@@ -4,6 +4,7 @@ import type {
   PhysicalLinkWriteDataSource,
 } from './physicalLinkWriteTypes';
 import { historicalCableLabelError } from './historicalCableLabelReuse';
+import { requestPhysicalCompatibility } from './physicalCompatibility';
 
 const DEFAULT_ENDPOINT = '/api/v1/topology/physical-links';
 
@@ -67,6 +68,10 @@ const readBackendError = async (response: Response): Promise<Error> => {
 
 export class ApiPhysicalLinkWriteDataSource implements PhysicalLinkWriteDataSource {
   constructor(private readonly endpoint = DEFAULT_ENDPOINT) {}
+
+  previewPhysicalLink(request: CreatePhysicalLinkRequest) {
+    return requestPhysicalCompatibility(`${this.endpoint}?preview=true`, request, readBackendError);
+  }
 
   async createPhysicalLink(
     request: CreatePhysicalLinkRequest,

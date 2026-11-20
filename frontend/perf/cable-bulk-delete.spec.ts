@@ -28,9 +28,13 @@ test('deletes a selected Cable and refreshes the same map after a failed read', 
   const point = (object: typeof source, key: string): string =>
     object.slots.find((slot: { slot_key: string }) => slot.slot_key === key).connection_point_ref.entity_id;
   const endpoint = (connection_point_id: string) => ({ connection_point_id, kind: 'CONNECTION_POINT', member_index: 1 });
-  const created = await post('/topology/physical-connections/bulk', {
+  const wiring = {
     cable_type_id: cableType.id,
     pairs: ['p1', 'p2'].map(key => ({ source: endpoint(point(source, key)), target: endpoint(point(target, key)) })),
+  };
+  const compatibility = await post('/topology/physical-connections/bulk?preview=true', wiring);
+  const created = await post('/topology/physical-connections/bulk', {
+    ...wiring, compatibility: { token: compatibility.token, accept_unknown: true },
   });
   const map = await post('/maps', { name });
   const mapId = map.map_ref.entity_id;

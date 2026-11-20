@@ -1,3 +1,5 @@
+import { requestPhysicalCompatibility, type PhysicalCompatibilityConfirmation, type PhysicalCompatibilityPreview } from './physicalCompatibility';
+
 export type CableEnd = 'A' | 'B';
 
 export interface CableReconnectSnapshot {
@@ -15,7 +17,8 @@ export interface CableReconnectSnapshot {
 
 export interface CableReconnectDataSource {
   preview(cableId: string): Promise<CableReconnectSnapshot>;
-  reconnect(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string): Promise<void>;
+  previewCompatibility?(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string): Promise<PhysicalCompatibilityPreview>;
+  reconnect(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string, compatibility?: PhysicalCompatibilityConfirmation): Promise<void>;
 }
 
 export class CableReconnectError extends Error {
@@ -37,11 +40,19 @@ export class ApiCableReconnectDataSource implements CableReconnectDataSource {
     return (await this.request(cableId)).json();
   }
 
-  async reconnect(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string) {
+  previewCompatibility(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string) {
+    return requestPhysicalCompatibility(
+      `${this.endpoint}/${encodeURIComponent(cableId)}/reconnect/compatibility-preview`,
+      { expected, side, new_point_id: newPointId },
+      async response => new CableReconnectError(response.status),
+    );
+  }
+
+  async reconnect(cableId: string, expected: CableReconnectSnapshot['expected'], side: CableEnd, newPointId: string, compatibility?: PhysicalCompatibilityConfirmation) {
     await this.request(cableId, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ expected, side, new_point_id: newPointId }),
+      body: JSON.stringify({ expected, side, new_point_id: newPointId, compatibility }),
     });
   }
 }

@@ -6,7 +6,7 @@ import pytest
 from app.database import SessionLocal
 from app.device_catalog import DeviceCatalog
 from app.repository import CanonicalRepository
-from tests.l1_builders import create_object_with_point, point_endpoint
+from tests.l1_builders import create_object_with_point, point_endpoint, post_confirmed_physical
 from tests.test_workspace_portability import client, isolated_workspace, snapshot
 
 
@@ -47,7 +47,7 @@ def test_requires_active_type_before_single_or_bulk_writes():
         **pair, "cable_type_id": copper["id"], "connector_b_type_id": archived_plug["id"],
     }).status_code == 422
     assert snapshot() == before
-    response = client.post(CREATE, json={**pair, "cable_type_id": copper["id"]})
+    response = post_confirmed_physical(client, CREATE, json={**pair, "cable_type_id": copper["id"]})
     assert response.status_code == 201, response.text
     graph = snapshot()["canonical"]
     cable, = graph["Cable"]
@@ -70,7 +70,7 @@ def test_independent_fibers_keep_ids_types_and_history_after_reconnect_and_impor
 
     ids = []
     for index in range(2):
-        response = client.post(CREATE, json={
+        response = post_confirmed_physical(client, CREATE, json={
             "source": point_endpoint(str(a[index])), "target": point_endpoint(str(b[index])),
             "cable_type_id": fiber["id"], "connector_a_type_id": plug["id"],
             "cable_label": f"CAB01/{index + 1}/24",
@@ -104,7 +104,7 @@ def test_independent_fibers_keep_ids_types_and_history_after_reconnect_and_impor
     assert renamed["canonical"]["ConnectionMember"] == graph["ConnectionMember"]
     reconnect_url = f"{cable_url}/reconnect"
     expected = client.get(reconnect_url).json()["expected"]
-    assert client.post(reconnect_url, json={"expected": expected, "side": "B", "new_point_id": str(b[2])}).status_code == 204
+    assert post_confirmed_physical(client, reconnect_url, json={"expected": expected, "side": "B", "new_point_id": str(b[2])}).status_code == 204
     reloaded = snapshot()
     assert reloaded["canonical"]["Cable"] == renamed["canonical"]["Cable"]
     assert reloaded["canonical"]["ConnectionMember"] == graph["ConnectionMember"]

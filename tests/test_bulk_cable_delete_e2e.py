@@ -12,7 +12,7 @@ from app.models import Cable, CableLabelHistory, Connection, ConnectionMember
 from app.physical_connections import PhysicalConnectionCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from tests.cable_type_fixtures import copper_cable_fields
-from tests.l1_builders import create_endpoint_cable, point_endpoint
+from tests.l1_builders import create_endpoint_cable, point_endpoint, post_confirmed_physical
 
 client = TestClient(app)
 DELETE = "/v1/cables/bulk-delete"
@@ -43,7 +43,7 @@ def seed(count, *, labelled=False):
     if labelled:
         template = client.post("/v1/cable-label-templates", json={"name": "Panel", "pattern": "P###", "start_at": 1}).json()
         body.update(template_id=template["id"], expected_generated_labels=[f"P{i:03}" for i in range(1, count + 1)])
-    response = client.post(CREATE, json=body)
+    response = post_confirmed_physical(client, CREATE, json=body)
     assert response.status_code == 201, response.text
     return {"source_object_id": str(a), "target_object_id": str(b)}, response.json()["created"], internal_id, unrelated
 
@@ -90,8 +90,8 @@ def test_deletes_selected_cables_and_releases_their_resources(delete_all):
     freed = selected[0]
     recreate = {"source": point_endpoint(freed["point_a_id"]), "target": point_endpoint(freed["point_b_id"]),
                 "cable_label": freed["label"]}
-    assert client.post("/v1/topology/physical-connections", json={**copper_cable_fields(), **recreate}).status_code == 409
-    response = client.post("/v1/topology/physical-connections", json={**copper_cable_fields(), **recreate, "confirmed_historical_label": freed["label"]})
+    assert post_confirmed_physical(client,"/v1/topology/physical-connections", json={**copper_cable_fields(), **recreate}).status_code == 409
+    response = post_confirmed_physical(client,"/v1/topology/physical-connections", json={**copper_cable_fields(), **recreate, "confirmed_historical_label": freed["label"]})
     assert response.status_code == 201, response.text
 
 

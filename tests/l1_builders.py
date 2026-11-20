@@ -28,8 +28,20 @@ def interface_endpoint(interface_id: str) -> dict[str, str]:
     return {"kind": "NETWORK_INTERFACE", "network_interface_id": interface_id}
 
 
+def confirmed_payload(result: dict, payload: dict) -> dict:
+    return {**payload, "compatibility": {"token": result["token"], "accept_unknown": result["verdict"] == "UNKNOWN"}}
+
+
+def post_confirmed_physical(client, url, *, json):
+    preview_url = f"{url}/compatibility-preview" if url.endswith("/reconnect") else f"{url}?preview=true"
+    preview = client.post(preview_url, json=json)
+    if preview.status_code == 200 and preview.json()["token"] is not None:
+        json = confirmed_payload(preview.json(), json)
+    return client.post(url, json=json)
+
+
 def create_endpoint_cable(client: TestClient, source_point_id: str, target_point_id: str) -> dict:
-    response = client.post(
+    response = post_confirmed_physical(client,
         "/v1/topology/physical-connections",
         json={**copper_cable_fields(), "source": point_endpoint(source_point_id), "target": point_endpoint(target_point_id)},
     )
@@ -40,7 +52,7 @@ def create_endpoint_cable(client: TestClient, source_point_id: str, target_point
 def create_interface_cable(client: TestClient, source_name: str = "A", target_name: str = "B") -> dict:
     source = create_device(client, source_name)
     target = create_device(client, target_name)
-    response = client.post(
+    response = post_confirmed_physical(client,
         "/v1/topology/physical-links",
         json={**copper_cable_fields(), "source_interface_id": interface_id(source), "target_interface_id": interface_id(target)},
     )

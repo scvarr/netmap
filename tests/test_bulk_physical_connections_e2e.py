@@ -8,7 +8,7 @@ from app.main import app
 from app.models import Cable, CableLabelHistory, Connection, ConnectionMember
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from tests.cable_type_fixtures import copper_cable_fields
-from tests.l1_builders import create_object_with_point, point_endpoint
+from tests.l1_builders import create_object_with_point, point_endpoint, post_confirmed_physical
 
 
 client = TestClient(app)
@@ -36,7 +36,7 @@ def counts():
 
 def test_ordered_reverse_batch_creates_independent_connections_and_cables():
     source, target = points("source", 3), points("target", 3)
-    response = client.post(URL, json=request(source, list(reversed(target))))
+    response = post_confirmed_physical(client, URL, json=request(source, list(reversed(target))))
     assert response.status_code == 201, response.text
     rows = response.json()["created"]
     assert [(row["source_connection_point_id"], row["target_connection_point_id"]) for row in rows] == list(zip(source, reversed(target)))
@@ -47,14 +47,14 @@ def test_ordered_reverse_batch_creates_independent_connections_and_cables():
 def test_occupied_duplicate_and_missing_point_reject_entire_batch():
     source, target = points("source", 2), points("target", 2)
     other = points("other", 1)[0]
-    assert client.post("/v1/topology/physical-connections", json={**copper_cable_fields(), "source": point_endpoint(source[1]), "target": point_endpoint(other)}).status_code == 201
+    assert post_confirmed_physical(client,"/v1/topology/physical-connections", json={**copper_cable_fields(), "source": point_endpoint(source[1]), "target": point_endpoint(other)}).status_code == 201
     before = counts()
     for body in (
         request(source, target),
         request([source[0], source[0]], target),
         request([source[0], str(uuid.uuid4())], target),
     ):
-        assert client.post(URL, json=body).status_code == 422
+        assert post_confirmed_physical(client, URL, json=body).status_code == 422
         assert counts() == before
 
 
@@ -66,10 +66,10 @@ def test_generated_preview_order_stale_and_historical_confirmation():
     assert preview.status_code == 200
     assert preview.json()["labels"] == [{"label": "B001", "historical": False}, {"label": "B002", "historical": False}]
     before = counts()
-    stale = client.post(URL, json=request(source, target, template_id=template, expected_generated_labels=["B002", "B001"]))
+    stale = post_confirmed_physical(client, URL, json=request(source, target, template_id=template, expected_generated_labels=["B002", "B001"]))
     assert stale.status_code == 422 and stale.json()["error"]["details"]["reason"] == "BULK_LABEL_PREVIEW_STALE"
     assert counts() == before
-    created = client.post(URL, json=request(source, target, template_id=template, expected_generated_labels=["B001", "B002"]))
+    created = post_confirmed_physical(client, URL, json=request(source, target, template_id=template, expected_generated_labels=["B001", "B002"]))
     assert created.status_code == 201, created.text
     with SessionLocal() as session:
         assert [session.get(Cable, uuid.UUID(row["cable_id"])).label for row in created.json()["created"]] == ["B001", "B002"]
@@ -78,9 +78,9 @@ def test_generated_preview_order_stale_and_historical_confirmation():
     refreshed = client.get(preview_url).json()["labels"]
     assert refreshed == [{"label": "B001", "historical": True}, {"label": "B002", "historical": True}]
     before = counts()
-    unconfirmed = client.post(URL, json=request(source, target, template_id=template, expected_generated_labels=["B001", "B002"]))
+    unconfirmed = post_confirmed_physical(client, URL, json=request(source, target, template_id=template, expected_generated_labels=["B001", "B002"]))
     assert unconfirmed.status_code == 422 and counts() == before
-    confirmed = client.post(URL, json=request(source, target, template_id=template, expected_generated_labels=["B001", "B002"], confirmed_historical_labels=["B001", "B002"]))
+    confirmed = post_confirmed_physical(client, URL, json=request(source, target, template_id=template, expected_generated_labels=["B001", "B002"], confirmed_historical_labels=["B001", "B002"]))
     assert confirmed.status_code == 201, confirmed.text
 
 
@@ -92,6 +92,6 @@ def test_internal_connection_does_not_consume_external_capacity():
             uuid.UUID(source[0]), uuid.UUID(source[1]), cardinality=1,
             members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
         )
-    created = client.post(URL, json=request([source[0]], target))
+    created = post_confirmed_physical(client, URL, json=request([source[0]], target))
     assert created.status_code == 201, created.text
     assert counts() == (2, 2, 1, 0)

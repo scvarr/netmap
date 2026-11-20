@@ -89,6 +89,10 @@ test('matches 48 physical ports in both directions and creates the exact reviewe
   await dialog.getByLabel('Тип кабеля').selectOption(cableType.id);
   const mutation = page.waitForResponse(response => response.url().endsWith('/physical-connections/bulk'));
   await dialog.getByRole('button', { name: 'Подтвердить создание' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Пара 48');
+  expect(creates).toBe(0);
+  await dialog.getByRole('checkbox', { name: 'Продолжить с неподтверждённой совместимостью' }).check();
+  await dialog.getByRole('button', { name: 'Подтвердить создание' }).click();
   const response = await mutation;
   expect(response.status()).toBe(201);
   const endpoint = (connection_point_id: string) => ({ kind: 'CONNECTION_POINT', connection_point_id, member_index: 1 });

@@ -1,5 +1,5 @@
 from tests.cable_type_fixtures import copper_cable_fields, copper_cable_spec
-from tests.l1_builders import create_device as build_device
+from tests.l1_builders import create_device as build_device, post_confirmed_physical
 import uuid
 
 from fastapi.testclient import TestClient
@@ -47,7 +47,7 @@ def interface_id(document: dict) -> str:
 def create_w3_link() -> tuple[dict, dict, dict]:
     core = create_device("CORE")
     firewall = create_device("FW")
-    response = client.post(
+    response = post_confirmed_physical(client,
         "/v1/topology/physical-links",
         json={
             **copper_cable_fields(),
@@ -206,7 +206,7 @@ def test_switch_blueprint_exposes_network_port_mapping_without_self_edge():
 
 def test_cable_backed_direct_connection_projects_between_physical_objects():
     core, firewall = create_device("CORE"), create_device("FW")
-    created = client.post("/v1/topology/physical-links", json={**copper_cable_fields(), "source_interface_id": core["interfaces"][0]["interface_ref"]["entity_id"], "target_interface_id": firewall["interfaces"][0]["interface_ref"]["entity_id"]})
+    created = post_confirmed_physical(client,"/v1/topology/physical-links", json={**copper_cable_fields(), "source_interface_id": core["interfaces"][0]["interface_ref"]["entity_id"], "target_interface_id": firewall["interfaces"][0]["interface_ref"]["entity_id"]})
     assert created.status_code == 201
     cable_id = created.json()["cable_ref"]["entity_id"]
     projected = client.post("/v1/topology/projection", json=projection_query()).json()

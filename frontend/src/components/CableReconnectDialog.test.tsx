@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { expect, it, vi } from 'vitest';
 import { CableReconnectError } from '../topology/apiCableReconnectDataSource';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
+import type { CableReconnectDataSource } from '../topology/apiCableReconnectDataSource';
 import { CableReconnectDialog } from './CableReconnectDialog';
 
 const ref = (entity_type: string, entity_id: string) => ({ ref_type: 'CANONICAL_FACT' as const, entity_type, entity_id });
@@ -28,7 +29,7 @@ const docs = {
 const select = (name: string, value: string) => fireEvent.change(screen.getByLabelText(name), { target: { value } });
 const click = (name: string) => fireEvent.click(screen.getByRole('button', { name }));
 
-async function open(documents = docs) {
+async function open(documents = docs, previewCompatibility?: CableReconnectDataSource['previewCompatibility']) {
   const preview = vi.fn().mockResolvedValue({ expected, object_a_id: 'A', object_b_id: 'B', display_label: 'Cable 12' });
   const reconnect = vi.fn().mockResolvedValue(undefined);
   const refresh = vi.fn().mockResolvedValue(undefined);
@@ -36,10 +37,40 @@ async function open(documents = docs) {
   const loadDetails = vi.fn(async (id: string) => documents[id as keyof typeof docs]);
   render(<CableReconnectDialog cableId="cable" objects={Object.keys(documents).map(id => ({ id, label: id }))}
     details={{ loadPhysicalObjectDetails: loadDetails }}
-    writer={{ preview, reconnect }} refresh={refresh} close={close} />);
+    writer={{ preview, previewCompatibility, reconnect }} refresh={refresh} close={close} />);
   await screen.findByText('B / Без панели / b1');
   return { preview, loadDetails, reconnect, refresh, close };
 }
+
+it.each(['DENY', 'UNKNOWN'] as const)('gates reconnect confirmation for %s', async verdict => {
+  const check = vi.fn().mockResolvedValue({
+    verdict, token: verdict === 'UNKNOWN' ? 'preview-token' : null,
+    ends: [{ pair: 1, side: 'B', verdict, reasons: [verdict === 'DENY' ? 'PROFILE_MISMATCH' : 'PORT_TYPE_UNRESOLVED'] }],
+  });
+  const { reconnect } = await open(docs, check);
+  select('Переносимое окончание', 'B');
+  select('Целевой физический объект', 'C');
+  await screen.findByRole('option', { name: 'Patch · Сзади · #3' });
+  select('Панель', 'rear');
+  select('Порт', 'c1');
+  click('Предпросмотр');
+  const warning = await screen.findByRole('alert');
+  const submit = screen.getByRole('button', { name: 'Подтвердить переподключение' });
+  expect(check).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1');
+  expect(submit).toBeDisabled();
+  expect(reconnect).not.toHaveBeenCalled();
+  if (verdict === 'DENY') {
+    expect(warning).toHaveTextContent('профили разъёмов не совпадают');
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  } else {
+    expect(warning).toHaveTextContent('достоверный тип порта отсутствует');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Продолжить с неподтверждённой совместимостью' }));
+    fireEvent.click(submit);
+    await waitFor(() => expect(reconnect).toHaveBeenCalledExactlyOnceWith('cable', expected, 'B', 'c1', {
+      token: 'preview-token', accept_unknown: true,
+    }));
+  }
+});
 
 it('chooses the endpoint, object, panel key and free point and reviews both connections', async () => {
   const { reconnect, close } = await open();

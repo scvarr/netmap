@@ -1,9 +1,11 @@
 import type {
   CreatePhysicalEndpointConnectionRequest,
+  CreateBulkPhysicalConnectionsRequest,
   PhysicalEndpointConnectionCreationDocument,
   PhysicalEndpointConnectionWriteDataSource,
 } from './physicalEndpointConnectionWriteTypes';
 import { historicalCableLabelError } from './historicalCableLabelReuse';
+import { requestPhysicalCompatibility } from './physicalCompatibility';
 
 export class BulkPhysicalConnectionError extends Error {
   constructor(readonly status: number, readonly reason: string | undefined) {
@@ -95,6 +97,14 @@ export class ApiPhysicalEndpointConnectionWriteDataSource
 implements PhysicalEndpointConnectionWriteDataSource {
   constructor(private readonly endpoint = DEFAULT_ENDPOINT) {}
 
+  previewPhysicalEndpointConnection(request: CreatePhysicalEndpointConnectionRequest) {
+    return requestPhysicalCompatibility(`${this.endpoint}?preview=true`, request, readBackendError);
+  }
+
+  previewBulkPhysicalConnections(request: CreateBulkPhysicalConnectionsRequest) {
+    return requestPhysicalCompatibility(`${this.endpoint}/bulk?preview=true`, request, readBulkError);
+  }
+
   async previewBulkCableLabels(templateId: string, count: number): Promise<{ labels: { label: string; historical: boolean }[] }> {
     const response = await fetch(`${this.endpoint}/bulk-label-preview?template_id=${encodeURIComponent(templateId)}&count=${count}`);
     if (!response.ok) throw await readBackendError(response);
@@ -103,7 +113,7 @@ implements PhysicalEndpointConnectionWriteDataSource {
     return { labels: (body as Record<string, unknown>).labels as { label: string; historical: boolean }[] };
   }
 
-  async createBulkPhysicalConnections(request: Parameters<NonNullable<PhysicalEndpointConnectionWriteDataSource['createBulkPhysicalConnections']>>[0]): Promise<{ created: { connection_id: string; cable_id: string }[] }> {
+  async createBulkPhysicalConnections(request: CreateBulkPhysicalConnectionsRequest): Promise<{ created: { connection_id: string; cable_id: string }[] }> {
     const response = await fetch(`${this.endpoint}/bulk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request) });
     if (!response.ok) throw await readBulkError(response);
     const body: unknown = await response.json();

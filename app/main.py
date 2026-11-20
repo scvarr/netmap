@@ -66,6 +66,7 @@ from app.schemas import (
     BulkCableDeletePreview,
     BulkCableDeleteRequest,
     CableReconnectRequest,
+    PhysicalCompatibilityPreview,
     CableReconnectSnapshot,
     BulkCableLabelPreviewDocument,
     BulkCableLabelPreviewItem,
@@ -1060,12 +1061,13 @@ def create_l2_forwarding_context(
     "/v1/topology/physical-links",
     response_model=PhysicalConnectionCreationDocument,
     status_code=201,
-    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    responses={200: {"model": PhysicalCompatibilityPreview}, 422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
 )
 def create_physical_link(
     query: CreatePhysicalLinkRequest,
+    preview: bool = False,
     session: Session = Depends(get_session),
-) -> PhysicalConnectionCreationDocument:
+) -> PhysicalConnectionCreationDocument | Response:
     with session.begin():
         created = PhysicalConnectionCatalog(session).create_atomic_link(
             query.source_interface_id,
@@ -1075,7 +1077,11 @@ def create_physical_link(
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
             confirmed_historical_label=query.confirmed_historical_label,
+            preview=preview,
+            compatibility=query.compatibility,
         )
+        if isinstance(created, PhysicalCompatibilityPreview):
+            return JSONResponse(created.model_dump(mode="json"))
 
         def ref(entity_type: str, entity_id: uuid.UUID) -> dict[str, object]:
             return {
@@ -1103,12 +1109,13 @@ def create_physical_link(
     response_model=PhysicalEndpointConnectionCreationDocument,
     response_model_exclude_none=True,
     status_code=201,
-    responses={422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    responses={200: {"model": PhysicalCompatibilityPreview}, 422: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
 )
 def create_physical_endpoint_connection(
     query: CreatePhysicalEndpointConnectionRequest,
+    preview: bool = False,
     session: Session = Depends(get_session),
-) -> PhysicalEndpointConnectionCreationDocument:
+) -> PhysicalEndpointConnectionCreationDocument | Response:
     def endpoint(value: object) -> NetworkInterfaceEndpoint | ConnectionPointEndpoint:
         if value.kind == "NETWORK_INTERFACE":
             return NetworkInterfaceEndpoint(value.network_interface_id)
@@ -1152,7 +1159,11 @@ def create_physical_endpoint_connection(
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
             confirmed_historical_label=query.confirmed_historical_label,
+            preview=preview,
+            compatibility=query.compatibility,
         )
+        if isinstance(created, PhysicalCompatibilityPreview):
+            return JSONResponse(created.model_dump(mode="json"))
         return PhysicalEndpointConnectionCreationDocument(
             source=materialization(created.source),
             target=materialization(created.target),
@@ -1172,11 +1183,13 @@ def preview_bulk_cable_labels(
         return BulkCableLabelPreviewDocument(labels=[BulkCableLabelPreviewItem(label=label, historical=historical) for label, historical in labels])
 
 
-@app.post("/v1/topology/physical-connections/bulk", response_model=BulkPhysicalConnectionCreationDocument, status_code=201)
+@app.post("/v1/topology/physical-connections/bulk", response_model=BulkPhysicalConnectionCreationDocument, status_code=201,
+          responses={200: {"model": PhysicalCompatibilityPreview}, 409: {"model": ErrorResponse}})
 def create_bulk_physical_connections(
     query: CreateBulkPhysicalConnectionsRequest,
+    preview: bool = False,
     session: Session = Depends(get_session),
-) -> BulkPhysicalConnectionCreationDocument:
+) -> BulkPhysicalConnectionCreationDocument | Response:
     pairs = [
         (ConnectionPointEndpoint(pair.source.connection_point_id, pair.source.member_index),
          ConnectionPointEndpoint(pair.target.connection_point_id, pair.target.member_index))
@@ -1187,7 +1200,10 @@ def create_bulk_physical_connections(
             pairs, cable_spec=query, template_id=query.template_id,
             expected_generated_labels=query.expected_generated_labels,
             confirmed_historical_labels=query.confirmed_historical_labels,
+            preview=preview, compatibility=query.compatibility,
         )
+        if isinstance(created, PhysicalCompatibilityPreview):
+            return JSONResponse(created.model_dump(mode="json"))
         return BulkPhysicalConnectionCreationDocument(created=[BulkPhysicalConnectionItem(
             source_connection_point_id=item.source.connection_point_id,
             target_connection_point_id=item.target.connection_point_id,
@@ -1230,6 +1246,17 @@ def reconnect_cable(
 ) -> None:
     with session.begin():
         PhysicalConnectionCatalog(session).reconnect_cable(cable_id, request)
+
+
+@app.post("/v1/cables/{cable_id}/reconnect/compatibility-preview", response_model=PhysicalCompatibilityPreview,
+          responses={409: {"model": ErrorResponse}})
+def preview_reconnect_compatibility(
+    cable_id: uuid.UUID, request: CableReconnectRequest, session: Session = Depends(get_session),
+) -> PhysicalCompatibilityPreview:
+    with session.begin():
+        result = PhysicalConnectionCatalog(session).reconnect_cable(cable_id, request, preview=True)
+        assert result is not None
+        return result
 
 
 @app.delete(

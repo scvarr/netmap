@@ -6,6 +6,7 @@ import type {
 } from "../topology/deviceDetailsTypes";
 import type {
   CableSpecification,
+  CreatePhysicalEndpointConnectionRequest,
   PhysicalEndpointConnectionWriteDataSource,
   PhysicalEndpointRequest,
 } from "../topology/physicalEndpointConnectionWriteTypes";
@@ -18,6 +19,7 @@ import { displayNodeLabel, numericAttribute } from "../topology/presentation";
 import type { TopologyProjectionNode } from "../topology/types";
 import { isAvailablePhysicalPort } from "../topology/physicalPortAvailability";
 import { useI18n } from "../i18n";
+import { confirmPhysicalCompatibility, PhysicalCompatibilityError } from '../topology/physicalCompatibility';
 import { CableNamingFields } from './CableNamingFields';
 import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
 import { HistoricalCableLabelReuseDialog } from './HistoricalCableLabelReuseDialog';
@@ -220,7 +222,7 @@ export function ConnectPhysicalEndpoint({
           }
         : { kind: "NETWORK_INTERFACE", network_interface_id: targetEntityId };
     try {
-      await writeDataSource.createPhysicalEndpointConnection({
+      const request: CreatePhysicalEndpointConnectionRequest = {
         source: {
           kind: "CONNECTION_POINT",
           connection_point_id: sourcePoint.connection_point_ref.entity_id,
@@ -230,13 +232,19 @@ export function ConnectPhysicalEndpoint({
         ...cableSpec,
         ...cableNaming,
         confirmed_historical_label: confirmedHistoricalLabel ?? null,
-      });
+      };
+      if (writeDataSource.previewPhysicalEndpointConnection) {
+        const compatibility = confirmPhysicalCompatibility(await writeDataSource.previewPhysicalEndpointConnection(request), t);
+        if (!compatibility) return;
+        request.compatibility = compatibility;
+      }
+      await writeDataSource.createPhysicalEndpointConnection(request);
       reset();
       onConnected();
     } catch (reason) {
       if (isHistoricalCableLabelReuseRequired(reason)) setHistoricalCandidate(reason.candidate);
       else if (confirmedHistoricalLabel && isHistoricalCableLabelReuseConfirmationStale(reason)) { setHistoricalCandidate(null); queueMicrotask(() => void submit()); }
-      else setError(t('physical.connectFailed'));
+      else setError(reason instanceof PhysicalCompatibilityError ? reason.message : t('physical.connectFailed'));
     } finally {
       setSubmitting(false);
     }

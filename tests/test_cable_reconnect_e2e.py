@@ -11,9 +11,9 @@ from app.main import app
 from app.models import CableLabelHistory, Connection, ConnectionMember, ConnectionPoint
 from app.physical_connections import ConnectionPointEndpoint, PhysicalConnectionCatalog
 from app.repository import CanonicalRepository, ConnectionMemberInput
-from app.schemas import CableReconnectRequest
+from app.schemas import CableReconnectRequest, PhysicalCompatibilityConfirmation
 from tests.cable_type_fixtures import copper_cable_fields, copper_cable_spec
-from tests.l1_builders import create_object_with_point, point_endpoint
+from tests.l1_builders import confirmed_payload, create_object_with_point, point_endpoint, post_confirmed_physical
 
 
 client = TestClient(app)
@@ -21,13 +21,19 @@ CREATE = "/v1/topology/physical-connections"
 
 
 def create(a, b, **naming):
-    return client.post(CREATE, json={**copper_cable_fields(), "source": point_endpoint(a), "target": point_endpoint(b), **naming})
+    return post_confirmed_physical(client, CREATE, json={**copper_cable_fields(), "source": point_endpoint(a), "target": point_endpoint(b), **naming})
 
 
 def preview(url):
     result = client.get(url)
     assert result.status_code == 200, result.text
     return result.json()["expected"]
+
+
+def reconnect_payload(url, payload):
+    response = client.post(f"{url}/compatibility-preview", json=payload)
+    assert response.status_code == 200, response.text
+    return confirmed_payload(response.json(), payload)
 
 
 @pytest.fixture
@@ -73,7 +79,7 @@ def test_reconnect_moves_one_end_preserving_identity_label_and_internal_continui
     history_before = history(cable_id)
     assert len(history_before) == 1 and history_before[0][3] is None
     payload = {"expected": expected, "side": side, "new_point_id": new_point}
-    response = client.post(url, json=payload)
+    response = post_confirmed_physical(client, url, json=payload)
     assert response.status_code == 204, response.text
     after = preview(url)
     assert after == {**expected, f"point_{side.lower()}_id": new_point}
@@ -127,6 +133,8 @@ def test_failed_transaction_rolls_back_endpoint_update(cable, monkeypatch):
     owner, destination = create_object_with_point(client, "destination")
     expected = preview(url)
     history_before = history(cable_id)
+    payload = {"expected": expected, "side": "A", "new_point_id": destination}
+    payload = reconnect_payload(url, payload)
     reconnect = PhysicalConnectionCatalog.reconnect_cable
 
     def fail_after_update(self, *args):
@@ -134,7 +142,7 @@ def test_failed_transaction_rolls_back_endpoint_update(cable, monkeypatch):
         raise NetMapError("TEST_ABORT", "abort after update")
 
     monkeypatch.setattr(PhysicalConnectionCatalog, "reconnect_cable", fail_after_update)
-    response = client.post(url, json={"expected": expected, "side": "A", "new_point_id": destination})
+    response = client.post(url, json=payload)
     assert response.status_code == 409
     assert preview(url) == expected
     assert history(cable_id) == history_before
@@ -147,7 +155,8 @@ def test_simultaneous_reconnect_rejects_competitor_then_stale_preview(cable):
     _, destination = create_object_with_point(client, "destination")
     _, other = create_object_with_point(client, "competitor")
     payload = {"expected": preview(url), "side": "A", "new_point_id": destination}
-    competitor = {**payload, "side": "B", "new_point_id": other}
+    competitor = reconnect_payload(url, {**payload, "side": "B", "new_point_id": other})
+    payload = reconnect_payload(url, payload)
     with SessionLocal.begin() as session:
         PhysicalConnectionCatalog(session).reconnect_cable(uuid.UUID(cable_id), CableReconnectRequest.model_validate(payload))
         rejected = client.post(url, json=competitor)
@@ -165,18 +174,22 @@ def test_reconnect_and_create_serialize_on_new_point(cable, first_writer):
     _, destination = create_object_with_point(client, "destination")
     _, peer = create_object_with_point(client, "peer")
     payload = {"expected": preview(url), "side": "A", "new_point_id": destination}
+    payload = reconnect_payload(url, payload)
+    create_request = {"source": point_endpoint(destination), "target": point_endpoint(peer), **copper_cable_fields()}
+    create_confirmation = confirmed_payload(client.post(f"{CREATE}?preview=true", json=create_request).json(), {})
     with ThreadPoolExecutor(max_workers=1) as worker:
         with SessionLocal.begin() as session:
             catalog = PhysicalConnectionCatalog(session)
             if first_writer == "create":
                 catalog.create_endpoint_link(ConnectionPointEndpoint(uuid.UUID(destination)),
-                                             ConnectionPointEndpoint(uuid.UUID(peer)), cable_spec=copper_cable_spec())
+                                             ConnectionPointEndpoint(uuid.UUID(peer)), cable_spec=copper_cable_spec(),
+                                             compatibility=PhysicalCompatibilityConfirmation.model_validate(create_confirmation["compatibility"]))
                 competing = worker.submit(client.post, url, json=payload).result(timeout=5)
                 assert competing.status_code == 409
                 assert competing.json()["error"]["code"] == "CABLE_RECONNECT_CONFLICT"
             else:
                 catalog.reconnect_cable(uuid.UUID(cable_id), CableReconnectRequest.model_validate(payload))
-                competing = worker.submit(create, destination, peer)
+                competing = worker.submit(client.post, CREATE, json={**create_request, **create_confirmation})
         if first_writer == "create":
             rejected = client.post(url, json=payload)
             assert rejected.status_code == 409

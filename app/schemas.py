@@ -1082,6 +1082,34 @@ class CableSpecification(BaseModel):
     connector_b_type_id: uuid.UUID | None = None
 
 
+class PhysicalCompatibilityConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=64, max_length=64)
+    accept_unknown: bool = False
+
+
+PhysicalCompatibilityVerdict = Literal["ALLOW", "DENY", "UNKNOWN"]
+PhysicalCompatibilityReason = Literal[
+    "MEDIUM_MISMATCH", "PROFILE_MISMATCH", "TERMINATION_MISMATCH",
+    "PORT_TYPE_UNRESOLVED", "CABLE_CONNECTOR_UNSPECIFIED",
+    "PORT_CONNECTOR_UNSPECIFIED", "FIBER_MODE_UNDOCUMENTED", "COMPATIBLE",
+]
+
+
+class PhysicalCompatibilityEnd(BaseModel):
+    pair: int
+    side: Literal["A", "B"]
+    verdict: PhysicalCompatibilityVerdict
+    reasons: list[PhysicalCompatibilityReason]
+
+
+class PhysicalCompatibilityPreview(BaseModel):
+    verdict: PhysicalCompatibilityVerdict
+    ends: list[PhysicalCompatibilityEnd]
+    token: str | None
+
+
 class CreatePhysicalLinkRequest(CableSpecification):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -1091,6 +1119,7 @@ class CreatePhysicalLinkRequest(CableSpecification):
     cable_label_template_id: uuid.UUID | None = None
     generate_cable_label: bool = False
     confirmed_historical_label: str | None = None
+    compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
 class PhysicalConnectionCreationDocument(BaseModel):
@@ -1135,6 +1164,7 @@ class CreatePhysicalEndpointConnectionRequest(CableSpecification):
     cable_label_template_id: uuid.UUID | None = None
     generate_cable_label: bool = False
     confirmed_historical_label: str | None = None
+    compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
 class BulkPhysicalPointPair(BaseModel):
@@ -1149,6 +1179,7 @@ class CreateBulkPhysicalConnectionsRequest(CableSpecification):
     template_id: uuid.UUID | None = None
     expected_generated_labels: list[str] = Field(default_factory=list)
     confirmed_historical_labels: list[str] = Field(default_factory=list)
+    compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
 class BulkCableDeleteMember(BaseModel):
@@ -1210,6 +1241,7 @@ class CableReconnectRequest(BaseModel):
     expected: CableReconnectExpectation
     side: Literal["A", "B"]
     new_point_id: uuid.UUID
+    compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
 class BulkCableLabelPreviewItem(BaseModel):

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useI18n } from '../i18n';
+import { confirmPhysicalCompatibility } from '../topology/physicalCompatibility';
 import type {
   DeviceDetailsDataSource,
   DeviceDetailsDocument,
   DeviceInterfaceDetails,
 } from '../topology/deviceDetailsTypes';
-import type { PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
+import type { CreatePhysicalLinkRequest, PhysicalLinkWriteDataSource } from '../topology/physicalLinkWriteTypes';
 import type { CableSpecification } from '../topology/physicalEndpointConnectionWriteTypes';
 import { CableSpecificationFields } from './CableSpecificationFields';
 import { CableNamingFields } from './CableNamingFields';
@@ -40,6 +42,7 @@ export function ConnectPhysicalInterface({
   onConnected,
   cableLabelDataSource,
 }: ConnectPhysicalInterfaceProps) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [targetDeviceId, setTargetDeviceId] = useState('');
   const [targetInterfaceId, setTargetInterfaceId] = useState('');
@@ -87,13 +90,19 @@ export function ConnectPhysicalInterface({
     setSubmitting(true);
     setError(null);
     try {
-      await writeDataSource.createPhysicalLink({
+      const request: CreatePhysicalLinkRequest = {
         source_interface_id: sourceInterface.interface_ref.entity_id,
         target_interface_id: targetInterfaceId,
         ...cableSpec,
         ...cableNaming,
         confirmed_historical_label: confirmedHistoricalLabel ?? null,
-      });
+      };
+      if (writeDataSource.previewPhysicalLink) {
+        const compatibility = confirmPhysicalCompatibility(await writeDataSource.previewPhysicalLink(request), t);
+        if (!compatibility) return;
+        request.compatibility = compatibility;
+      }
+      await writeDataSource.createPhysicalLink(request);
       setOpen(false);
       setCableSpec({ cable_type_id: "" });
       setTargetDeviceId('');

@@ -1,3 +1,4 @@
+from tests.l1_builders import post_confirmed_physical
 """HV-01-UX-02B: individual logical places, atomic boundaries and profiles."""
 import copy
 import uuid
@@ -28,7 +29,7 @@ def test_logical_configuration_atomic_install_and_archive():
     assert bays[payload['bays'][1]['bay_key']]['x'] is None
     source = bays[payload['bays'][1]['bay_key']]['installation']['endpoints'][0]
     remote = create_object(base)
-    connection = client.post('/v1/topology/physical-connections', json={
+    connection = post_confirmed_physical(client,'/v1/topology/physical-connections', json={
         **copper_cable_fields(),
         'source': {'kind': 'CONNECTION_POINT', 'connection_point_id': source['connection_point_id'], 'member_index': 1},
         'target': {'kind': 'CONNECTION_POINT', 'connection_point_id': remote['slots'][0]['connection_point_ref']['entity_id'], 'member_index': 1},

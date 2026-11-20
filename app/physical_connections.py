@@ -8,11 +8,16 @@ from sqlalchemy.orm import Session, aliased, joinedload
 from app.errors import NetMapError, ValidationError
 from app.cable_labels import CableLabelCatalog, resolved_cable_label
 from app.module_endpoint_names import EndpointNames
-from app.models import Cable, CableType, ConnectorType, Connection, ConnectionMember, ConnectionPoint, NetworkInterface
+from app.models import (
+    Cable, CableLabelTemplate, CableType, ConnectorType, Connection, ConnectionMember,
+    ConnectionPoint, NetworkInterface, NetworkInterfacePhysicalOwner,
+)
+from app.physical_compatibility import verify_compatibility
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.schemas import (
     BulkCableDeleteCandidate, BulkCableDeleteExpectation, BulkCableDeleteMember,
     CableReconnectExpectation, CableReconnectRequest, CableReconnectSnapshot, CableSpecification,
+    PhysicalCompatibilityConfirmation, PhysicalCompatibilityPreview,
 )
 
 
@@ -71,7 +76,9 @@ class PhysicalConnectionCatalog:
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
         confirmed_historical_label: str | None = None,
-    ) -> CreatedPhysicalConnection:
+        preview: bool = False,
+        compatibility: PhysicalCompatibilityConfirmation | None = None,
+    ) -> CreatedPhysicalConnection | PhysicalCompatibilityPreview:
         if source_interface_id == target_interface_id:
             raise ValidationError(
                 "A physical link requires two different NetworkInterfaces",
@@ -85,7 +92,11 @@ class PhysicalConnectionCatalog:
             cable_label_template_id=cable_label_template_id,
             generate_cable_label=generate_cable_label,
             confirmed_historical_label=confirmed_historical_label,
+            preview=preview,
+            compatibility=compatibility,
         )
+        if isinstance(created, PhysicalCompatibilityPreview):
+            return created
         assert created.source.binding_id is not None
         assert created.target.binding_id is not None
         return CreatedPhysicalConnection(
@@ -107,7 +118,9 @@ class PhysicalConnectionCatalog:
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
         confirmed_historical_label: str | None = None,
-    ) -> CreatedEndpointPhysicalConnection:
+        preview: bool = False,
+        compatibility: PhysicalCompatibilityConfirmation | None = None,
+    ) -> CreatedEndpointPhysicalConnection | PhysicalCompatibilityPreview:
         if source == target:
             raise ValidationError(
                 "A physical connection requires two different endpoints",
@@ -144,8 +157,10 @@ class PhysicalConnectionCatalog:
         repository = CanonicalRepository(self.session)
         owners = {
             owner.interface_id: owner
-            for owner in repository.get_network_interface_physical_owners(
-                list(interface_ids)
+            for owner in self.session.scalars(
+                select(NetworkInterfacePhysicalOwner)
+                .where(NetworkInterfacePhysicalOwner.interface_id.in_(interface_ids))
+                .order_by(NetworkInterfacePhysicalOwner.id).with_for_update(read=True)
             )
         }
         ownerless_ids = [value for value in interface_ids if value not in owners]
@@ -213,29 +228,36 @@ class PhysicalConnectionCatalog:
                 {"reason": "CONNECTION_POINT_MEMBER_OCCUPIED", "connection_point_ids": [str(value) for value in occupied_points]},
             )
 
-        source_materialized = self._materialize_endpoint(
-            source, repository, owners
-        )
-        target_materialized = self._materialize_endpoint(
-            target, repository, owners
-        )
-
-        endpoint_points = tuple(
-            self.session.scalars(
-                select(ConnectionPoint)
-                .where(
-                    ConnectionPoint.id.in_(
-                        (
-                            source_materialized.connection_point_id,
-                            target_materialized.connection_point_id,
-                        )
-                    )
-                )
-                .order_by(ConnectionPoint.id)
-            )
-        )
-        if len(endpoint_points) != 2 or endpoint_points[0].physical_object_id == endpoint_points[1].physical_object_id:
+        endpoint_owners = [
+            owners[end.interface_id].physical_object_id if isinstance(end, NetworkInterfaceEndpoint)
+            else points_by_id[end.connection_point_id].physical_object_id
+            for end in (source, target)
+        ]
+        if endpoint_owners[0] == endpoint_owners[1]:
             raise ValidationError("A cable requires endpoints on two different PhysicalObjects")
+        endpoint_points = [
+            points_by_id[end.connection_point_id] if isinstance(end, ConnectionPointEndpoint) else None
+            for end in (source, target)
+        ]
+        if any(member != 1 for member in requested_members.values()):
+            raise ValidationError("Physical connections support only member 1")
+        generated = None
+        if generate_cable_label:
+            if cable_label_template_id is None:
+                raise ValidationError("Cable label template is required when generation is enabled")
+            generated = self._generated_label_preview(cable_label_template_id, 1)
+        result = verify_compatibility(
+            self.session, cable_spec, [(endpoint_points[0], endpoint_points[1])],
+            intent=["create", self._endpoint_description(source), self._endpoint_description(target),
+                    endpoint_owners, cable_label, cable_label_template_id, generate_cable_label,
+                    confirmed_historical_label, generated],
+            preview=preview, confirmation=compatibility,
+        )
+        if preview:
+            return result
+
+        source_materialized = self._materialize_endpoint(source, repository, owners)
+        target_materialized = self._materialize_endpoint(target, repository, owners)
 
         member = [
             ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)
@@ -270,7 +292,9 @@ class PhysicalConnectionCatalog:
         template_id: uuid.UUID | None,
         expected_generated_labels: list[str],
         confirmed_historical_labels: list[str],
-    ) -> list[CreatedEndpointPhysicalConnection]:
+        preview: bool = False,
+        compatibility: PhysicalCompatibilityConfirmation | None = None,
+    ) -> list[CreatedEndpointPhysicalConnection] | PhysicalCompatibilityPreview:
         if not 1 <= len(pairs) <= 256:
             raise ValidationError("Bulk pairing requires 1 to 256 pairs")
         self._validate_cable_spec(cable_spec)
@@ -310,16 +334,23 @@ class PhysicalConnectionCatalog:
             if expected_generated_labels or confirmed_historical_labels:
                 raise ValidationError("Labels require a Cable label template")
         else:
-            preview = catalog.preview_batch(template_id, len(pairs))
-            labels = [label for label, _ in preview]
+            label_preview = self._generated_label_preview(template_id, len(pairs))
+            labels = [label for label, _ in label_preview]
             if labels != expected_generated_labels:
                 raise ValidationError("Bulk label preview is stale", {"reason": "BULK_LABEL_PREVIEW_STALE"})
-            historical = {label for label, used in preview if used}
+            historical = {label for label, used in label_preview if used}
             if set(confirmed_historical_labels) - historical:
                 raise ValidationError("Historical label confirmation is stale", {"reason": "BULK_LABEL_PREVIEW_STALE"})
             unconfirmed = historical - set(confirmed_historical_labels)
             if unconfirmed:
                 raise ValidationError("Historical Cable labels require confirmation", {"reason": "HISTORICAL_CABLE_LABEL_REUSE_REQUIRED", "labels": sorted(unconfirmed)})
+        result = verify_compatibility(
+            self.session, cable_spec, [(by_id[a.connection_point_id], by_id[b.connection_point_id]) for a, b in pairs],
+            intent=["bulk", ids, template_id, labels, sorted(confirmed_historical_labels)],
+            preview=preview, confirmation=compatibility,
+        )
+        if preview:
+            return result
         repository = CanonicalRepository(self.session)
         created: list[CreatedEndpointPhysicalConnection] = []
         for (source, target), label in zip(pairs, labels):
@@ -336,6 +367,14 @@ class PhysicalConnectionCatalog:
                 cable_id=cable.id, connection_id=connection.id,
             ))
         return created
+
+    def _generated_label_preview(self, template_id: uuid.UUID, count: int) -> list[tuple[str, bool]]:
+        catalog = CableLabelCatalog(self.session)
+        catalog.settings()
+        self.session.execute(
+            select(CableLabelTemplate.id).where(CableLabelTemplate.id == template_id).with_for_update(read=True)
+        ).all()
+        return catalog.preview_batch(template_id, count)
 
     def _add_cable(self, connection_id: uuid.UUID, spec: CableSpecification) -> Cable:
         cable = Cable(
@@ -416,7 +455,9 @@ class PhysicalConnectionCatalog:
         snapshot, _, _ = self._reconnect_snapshot(cable_id)
         return snapshot
 
-    def reconnect_cable(self, cable_id: uuid.UUID, request: CableReconnectRequest) -> None:
+    def reconnect_cable(
+        self, cable_id: uuid.UUID, request: CableReconnectRequest, *, preview: bool = False,
+    ) -> PhysicalCompatibilityPreview | None:
         try:
             snapshot, connection, points = self._reconnect_snapshot(cable_id, request.new_point_id)
             if snapshot.expected != request.expected:
@@ -429,6 +470,23 @@ class PhysicalConnectionCatalog:
                 raise ValidationError("A cable requires endpoints on two different PhysicalObjects")
             if self._has_external_member_connection(new_point, 1):
                 raise NetMapError("CABLE_RECONNECT_OCCUPIED", "ConnectionPoint member is already occupied")
+            cable = self.session.get(Cable, cable_id)
+            assert cable is not None
+            spec = CableSpecification(
+                cable_type_id=cable.cable_type_id, connector_a_type_id=cable.connector_a_type_id,
+                connector_b_type_id=cable.connector_b_type_id,
+            )
+            pair = (
+                new_point if request.side == "A" else points[connection.point_a_id],
+                new_point if request.side == "B" else points[connection.point_b_id],
+            )
+            result = verify_compatibility(
+                self.session, spec, [pair],
+                intent=["reconnect", cable_id, request.expected.model_dump(mode="json"), request.side, new_point.id],
+                preview=preview, confirmation=request.compatibility,
+            )
+            if preview:
+                return result
             if request.side == "A":
                 connection.point_a_id = new_point.id
             else:
