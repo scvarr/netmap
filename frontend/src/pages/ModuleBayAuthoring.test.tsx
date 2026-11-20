@@ -182,7 +182,8 @@ describe('bay on the existing authoring canvas', () => {
   });
   it('adds a small selected bay to the active panel and immediately draws it', () => {
     const { container } = show({ panels: [panel, rear], activePanelKey: 'two', bays: [] });
-    fireEvent.click(screen.getByRole('button', { name: 'Добавить отсек' }));
+    fireEvent.change(screen.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Добавить модульный порт' }));
     const area = container.querySelector('[data-bay-key]')!;
     expect(area.closest('[data-panel-key]')).toHaveAttribute('data-panel-key', 'two');
     expect(area).toHaveAttribute('data-selected', 'true');
@@ -265,6 +266,7 @@ describe('bay on the existing authoring canvas', () => {
     expect(properties.querySelector('fieldset')).toBeNull();
     expect(within(properties).getByRole('button', { name: 'Удалить' })).toHaveClass('text-action');
     expect(within(properties).getByRole('button', { name: 'Дублировать отсек' })).toHaveClass('secondary-action');
-    expect(screen.getByRole('button', { name: 'Добавить отсек' })).toHaveClass('secondary-action');
+    fireEvent.change(screen.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
+    expect(screen.getByRole('button', { name: 'Добавить модульный порт' })).toHaveClass('secondary-action');
   });
 });

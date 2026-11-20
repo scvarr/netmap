@@ -45,6 +45,11 @@ endpoints сохраняют identity. Графический bay rectangle за
 логические module places задают вместимость. Pinned historical composition
 сохраняется независимо от mutable preview.
 
+MOD-01 хранит модульный порт BaseTemplate как существующий PLACED ModuleBay.
+В ModuleTemplate модульные порты хранятся отдельной коллекцией определений
+в draft, candidate и immutable revision. Ключи не зависят от названия и
+прямоугольника. Эти определения не участвуют в materialization endpoints.
+
 ## Транзакции и согласование записей
 
 Успешная mutation и refresh имеют разные состояния. После ошибки refresh
@@ -296,9 +301,10 @@ API-first core независим от React state. User/ACL semantics прин�
 Применённые Alembic revisions immutable: исправления только forward migration.
 Сохраняются canonical user/network data, stable identity и retained immutable
 snapshots; development-stage authoring/runtime compatibility не является целью.
-Workspace JSON v10 включает физические справочники и их ссылки по UUID,
+Workspace JSON v11 включает физические справочники и их ссылки по UUID,
 в том числе обязательный CableType и необязательные ConnectorType A/B.
-Импорт принимает пакеты v10. Исторические snapshots внутри пакета сохраняют
+Импорт принимает пакеты v11. ModuleTemplateRevision содержит `module_ports`.
+Исторические snapshots внутри пакета сохраняют
 исходные определения.
 Не добавлять old/new fallback, shadow models или translation shims ради obsolete
 API. Reset данных — явная destructive операция, не побочный эффект чтения.

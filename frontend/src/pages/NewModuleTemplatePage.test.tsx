@@ -63,3 +63,33 @@ it('bulk adds and reassigns selected module endpoints with current catalog color
     key: expect.any(String), display_name, kind: 'NETWORK_PORT', port_type_id: 'fiber',
   })));
 });
+
+it('authors a rectangular module port without assigning a PortType', async () => {
+  const createModule = vi.fn().mockResolvedValue({});
+  const { container } = render(<I18nProvider><MemoryRouter>
+    <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
+  </MemoryRouter></I18nProvider>);
+  fireEvent.change(screen.getByLabelText('Название'), { target: { value: 'Carrier' } });
+  fireEvent.change(screen.getByLabelText('Совместимость'), { target: { value: 'Parent A' } });
+  fireEvent.change(screen.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Добавить модульный порт' }));
+  expect(screen.queryByLabelText('Тип порта')).toBeNull();
+  const group = within(screen.getByRole('group', { name: 'Модульный порт' }));
+  const rectangle = container.querySelector('[data-module-port-key] > rect')!;
+  const key = rectangle.parentElement!.getAttribute('data-module-port-key');
+  expect(rectangle).not.toHaveAttribute('rx');
+  fireEvent.change(group.getByLabelText('Название'), { target: { value: 'Child bay' } });
+  fireEvent.change(group.getByLabelText('Совместимость'), { target: { value: 'Lab / custom' } });
+  for (const [label, value] of [['X (0–1)', '0.2'], ['Ширина', '0.5']]) {
+    const input = group.getByLabelText(label);
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
+  }
+  expect(rectangle).toHaveAttribute('x', '48');
+  expect(rectangle).toHaveAttribute('width', '120');
+  fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
+  await waitFor(() => expect(createModule).toHaveBeenCalledWith(expect.objectContaining({
+    endpoints: [],
+    module_ports: [{ key, display_name: 'Child bay', compatibility: 'Lab / custom', x: .2, y: .25, width: .5, height: .3 }],
+  })));
+});

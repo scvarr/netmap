@@ -1,5 +1,6 @@
 import { EndpointLinkWorkspace } from '../components/EndpointLinkWorkspace';
 import { ModuleBaysEditor } from '../components/ModuleBaysEditor';
+import { TemplateElementKindSelect, type TemplateElementKind } from '../components/TemplateElementKindSelect';
 import { LogicalModulePlacesEditor } from '../components/LogicalModulePlacesEditor';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
@@ -69,7 +70,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   const [portTypeId, setPortTypeId] = useState('');
   const selectedType = catalog.types?.find(type => type.id === portTypeId);
   const activeTypeIds = new Set(catalog.types?.filter(type => type.is_active).map(type => type.id));
-  const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
+  const [kind, setKind] = useState<TemplateElementKind>('NETWORK_PORT');
   const [count, setCount] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copyDestination, setCopyDestination] = useState('');
@@ -120,7 +121,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
     activatePanel(bay.panel_key); setSelectedBayKey(key); setSelected(new Set()); setMenu(undefined); setPositionDraft(undefined);
   };
   const addBay = () => {
-    const bay = { kind: "PLACED" as const, bay_key: crypto.randomUUID(), display_name: t('hardware.bay'), compatibility: '', panel_key: panelKey, ...normalizeBayGeometry({ x: .25, y: .25, width: .3, height: .3 }) };
+    const bay = { kind: "PLACED" as const, bay_key: crypto.randomUUID(), display_name: t('blueprint.endpoint.modulePort'), compatibility: '', panel_key: panelKey, ...normalizeBayGeometry({ x: .25, y: .25, width: .3, height: .3 }) };
     setEditor(old => ({ ...old, bays: [...old.bays ?? [], bay] }));
     setSelectedBayKey(bay.bay_key); setSelected(new Set()); setMenu(undefined);
   };
@@ -236,12 +237,14 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
       </section>
       <section className="blueprint-composer__composition blueprint-composer__surface">
         <div className="blueprint-composer__chooser">
-          <label>{t('blueprint.endpoint.kind')}<select value={kind} onChange={(e) => setKind(e.target.value as BlueprintSlotKind)}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
+          <TemplateElementKindSelect value={kind} onChange={setKind} />
+          {kind === 'MODULE_PORT' ? <button type="button" className="secondary-action" onClick={addBay}>{t('blueprint.endpoint.addModulePort')}</button> : <>
           <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
           {catalog.types && editor.slots.some(slot => !activeTypeIds.has(slot.port_type_id)) && <p role="alert">{t('templateCopy.archived')}</p>}
           <PortTypeNotice {...catalog} />
           <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} singleMember={kind === "NETWORK_PORT"} />
           <button type="button" className="secondary-action" disabled={!selectedType?.is_active || (kind === 'NETWORK_PORT' && selectedType.cardinality !== 1)} onClick={() => { const next = addEndpoints(editor, kind, count, panelKey, portTypeId, selectedType?.cardinality); if (next === editor) return; setEditor(next); setSelectedBayKey(undefined); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
+          </>}
         </div>
         <div className="blueprint-composer__panels" role="group" aria-label={t('blueprint.panel.list')}>{[...editor.panels].sort((a, b) => a.panel_number - b.panel_number).map((panel) => <button key={panel.panel_key} type="button" aria-pressed={panel.panel_key === panelKey} onClick={() => activatePanel(panel.panel_key)}>{panel.display_name}</button>)}</div>
         <div className="blueprint-composer__panel-actions">
@@ -256,7 +259,6 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
             onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); commitPanelSize(axis, event.currentTarget.value); } }}
           /></label>)}
           {(['above', 'right', 'below', 'left'] as const).map((direction) => <button key={direction} type="button" className="secondary-action" onClick={() => createPanel(direction)}>{t(`blueprint.panel.add.${direction}`)}</button>)}
-          <button type="button" className="secondary-action" onClick={addBay}>{t('hardware.addBay')}</button>
           <button type="button" className="text-action" disabled={editor.panels.length === 1 || editor.slots.some((slot) => slot.panel_key === panelKey) || editor.bays?.some(bay => bay.panel_key === panelKey)} onClick={removePanel}>{t('blueprint.panel.delete')}</button>
         </div>
         <div className="blueprint-composer__panel-actions blueprint-composer__view-tools" role="group" aria-label={t('blueprint.zoom.title')}>

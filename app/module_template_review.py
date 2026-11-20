@@ -15,13 +15,13 @@ from app.schemas import CreateModuleTemplateRequest
 
 
 def validate_definition(value):
-    return CreateModuleTemplateRequest.model_validate(value).model_dump(mode="json")
+    return CreateModuleTemplateRequest.model_validate(value).model_dump(mode="json", exclude_defaults=True)
 
 
 def published_definition(session, template_id, revision_id):
     document = HardwareCatalog(session).module_document(
         session.get(m.ModuleTemplate, template_id), session.get(m.ModuleTemplateRevision, revision_id))
-    return validate_definition({k: document[k] for k in ("name", "compatibility", "endpoints", "geometry")})
+    return validate_definition({k: document[k] for k in ("name", "compatibility", "endpoints", "module_ports", "geometry")})
 
 
 def structural_changes(before, after):
@@ -32,6 +32,12 @@ def structural_changes(before, after):
             changes.append({"section": "endpoints", "key": key,
                             "operation": "added" if key not in old else "removed" if key not in new else "changed",
                             "before": old.get(key), "after": new.get(key)})
+    old_ports, new_ports = ({p["key"]: p for p in d.get("module_ports", [])} for d in (before, after))
+    for key in sorted(old_ports.keys() | new_ports.keys()):
+        if old_ports.get(key) != new_ports.get(key):
+            changes.append({"section": "module_ports", "key": key,
+                            "operation": "added" if key not in old_ports else "removed" if key not in new_ports else "changed",
+                            "before": old_ports.get(key), "after": new_ports.get(key)})
     for key in ("name", "compatibility"):
         if before[key] != after[key]:
             changes.append({"section": "properties", "key": key, "operation": "changed", "before": before[key], "after": after[key]})
@@ -60,6 +66,8 @@ def analyze_installation(session, installation, candidate):
     rows = list(session.scalars(select(m.ModuleEndpointMapping).where(m.ModuleEndpointMapping.installation_id == installation.id)))
     mappings = {definitions[row.definition_id]: row for row in rows if row.definition_id in definitions}
     reasons = []
+    if candidate.get("module_ports"):
+        reasons.append({"code": "NESTED_MODULE_PORTS_UNSUPPORTED"})
     if any(row.definition_id not in definitions for row in rows):
         reasons.append({"code": "INVALID_ENDPOINT_MAPPING"})
     bay = session.scalar(select(m.ModuleBay).where(m.ModuleBay.base_revision_id == config.base_revision_id, m.ModuleBay.bay_key == installation.bay_key))
@@ -172,15 +180,16 @@ class ModuleTemplateReview:
         if draft.generation != expected_generation:
             raise ModelError("Draft changed; reload before checking", {"reason": "DRAFT_CONFLICT"})
         published = published_definition(self.session, template_id, draft.source_revision_id)
-        _require_retained_port_types(published, draft.definition)
+        definition = validate_definition(draft.definition)
+        _require_retained_port_types(published, definition)
         fingerprint = self._inputs()
         installations = self.session.scalars(select(m.ModuleInstallation).join(m.ModuleTemplateRevision,
             m.ModuleInstallation.module_revision_id == m.ModuleTemplateRevision.id).where(
             m.ModuleTemplateRevision.template_id == template_id).order_by(m.ModuleInstallation.id)).all()
         candidate = m.ModuleTemplateCandidate(template_id=template_id, source_revision_id=draft.source_revision_id,
             draft_generation=draft.generation, definition=copy.deepcopy(draft.definition), input_fingerprint=fingerprint,
-            result={"changes": structural_changes(published, draft.definition),
-                    "installations": [analyze_installation(self.session, i, draft.definition) for i in installations]})
+            result={"changes": structural_changes(published, definition),
+                    "installations": [analyze_installation(self.session, i, definition) for i in installations]})
         self.session.add(candidate)
         self.session.flush()
         return self.document(draft, candidate, fingerprint)

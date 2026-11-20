@@ -3,7 +3,7 @@ from datetime import datetime
 from enum import StrEnum
 
 import sqlalchemy as sa
-from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, ForeignKeyConstraint, Index, Integer, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import CIDR, INET, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -632,6 +632,7 @@ class ModuleTemplateRevision(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     compatibility: Mapped[str] = mapped_column(String(255), nullable=False)
     geometry: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    module_ports: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
 
 
 class ModuleTemplateDraft(Base):

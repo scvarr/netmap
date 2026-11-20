@@ -52,6 +52,7 @@ function ModulePreview({ module, portTypes }: { module: ModuleTemplate; portType
     return position ? [{ ...endpoint, panel_key: panel.panel_key, rendered_position: position }] : [];
   });
   return <BlueprintPreview portTypes={portTypes} label={name} panels={[panel]} slots={slots}
+    bays={module.module_ports?.map(({ key, ...port }) => ({ ...port, kind: 'PLACED', bay_key: key, panel_key: panel.panel_key }))}
     body={{ kind: 'RECTANGLE', width: geometry.width, height: geometry.height, fill_color: geometry.fill_color }} />;
 }
 
@@ -191,6 +192,10 @@ export function BaseTemplateLibraryPage({ dataSource, moduleDataSource = hardwar
                 </div>
                 <div className="template-library-actions">
                   <Link className="secondary-action" to={`/library/module-templates/${module.template_id}/edit`}>{t('review.edit')}</Link>
+                  <Link className="secondary-action" to="/library/module-templates/new" state={{ moduleCopy: {
+                    name: module.name, compatibility: module.compatibility, endpoints: module.endpoints,
+                    geometry: module.geometry, module_ports: module.module_ports,
+                  } }}>{t('templateCopy.action')}</Link>
                   <button type="button" className="text-action"
                     onClick={() => void remove(t('hardware.deleteModuleConfirm', { name: module.name }), () => moduleDataSource.deleteModule(module.template_id))}>{t('hardware.remove')}</button>
                 </div>

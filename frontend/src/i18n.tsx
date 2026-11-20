@@ -98,6 +98,10 @@ const messages = {
 
     'moduleReview.up': 'Выше', 'moduleReview.down': 'Ниже', 'moduleReview.endpoints': 'Конечные точки модуля',
     'moduleReview.compatibility': 'Совместимость не совпадает с текущим отсеком. Требуется вмешательство.',
+    'moduleReview.nestedPortsUnsupported': 'Обновление установки до ревизии с вложенными модульными портами пока не поддерживается.',
+    'blueprint.endpoint.modulePort': 'Модульный порт',
+    'blueprint.endpoint.addModulePort': 'Добавить модульный порт',
+    'blueprint.endpoint.elements': 'Размещаемые элементы',
     'moduleReview.installation': 'Установка: {id}; исходная ревизия: {revision}; отсек: {bay}',
     'moduleReview.noInstallations': 'Установок этого шаблона пока нет.',
     'reconciliation.run': 'Обновить совместимые объекты', 'reconciliation.results': 'Результаты обновления объектов',
@@ -446,6 +450,10 @@ const messages = {
 
     'moduleReview.up': 'Move up', 'moduleReview.down': 'Move down', 'moduleReview.endpoints': 'Module endpoints',
     'moduleReview.compatibility': 'Compatibility does not match the current bay. Intervention is required.',
+    'moduleReview.nestedPortsUnsupported': 'Updating an installation to a revision with nested module ports is not yet supported.',
+    'blueprint.endpoint.modulePort': 'Module port',
+    'blueprint.endpoint.addModulePort': 'Add module port',
+    'blueprint.endpoint.elements': 'Placeable elements',
     'moduleReview.installation': 'Installation: {id}; source revision: {revision}; bay: {bay}',
     'moduleReview.noInstallations': 'This template has no installations yet.',
     'reconciliation.run': 'Update compatible objects', 'reconciliation.results': 'Object update results',

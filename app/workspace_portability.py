@@ -25,7 +25,7 @@ from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 10
+FORMAT_VERSION = 11
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -79,7 +79,7 @@ ENTITIES = (
     ("authoring", "ModuleBay", "ModuleBay", "id base_revision_id bay_key display_name compatibility panel_key kind x y width height"),
     ("authoring", "ModuleTemplate", "ModuleTemplate", "id name"),
     ("authoring", "ModuleTemplatePublication", "ModuleTemplatePublication", "id revision_id"),
-    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name compatibility geometry"),
+    ("authoring", "ModuleTemplateRevision", "ModuleTemplateRevision", "id template_id version_number name compatibility geometry module_ports"),
     ("authoring", "ModuleTemplateDraft", "ModuleTemplateDraft", "id template_id source_revision_id generation definition"),
     ("authoring", "ModuleTemplateCandidate", "ModuleTemplateCandidate", "id template_id source_revision_id draft_generation definition result input_fingerprint created_at"),
     ("authoring", "ModuleEndpointDefinition", "ModuleEndpointDefinition", "id module_revision_id definition_key order_index display_name kind port_type_id"),
@@ -294,20 +294,21 @@ def _validate_module_template_reviews(rows):
     published = [r["revision_id"] for r in receipts]
     if len(published) != len(set(published)) or set(published) != {r["id"] for r in revisions.values() if r["version_number"] > 1}:
         raise PackageError("Every noninitial module revision requires one publication receipt")
+    definitions = {}
     for revision in revisions.values():
         try:
-            validate_definition({"name": revision["name"], "compatibility": revision["compatibility"], "geometry": revision["geometry"], "endpoints": [
+            definitions[revision["id"]] = validate_definition({**{k: revision[k] for k in ("name", "compatibility", "geometry", "module_ports")}, "endpoints": [
                 {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"], "port_type_id": str(e["port_type_id"])}
-                for e in rows["module_endpoint_definitions"] if e["module_revision_id"] == revision["id"]]})
+                for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]})
         except (SchemaError, TypeError) as exc:
-            raise PackageError("Invalid module revision geometry") from exc
+            raise PackageError("Invalid module revision definition") from exc
+    if any(revisions[i["module_revision_id"]]["module_ports"] for i in rows["module_installations"]):
+        raise PackageError("Installations with nested module ports are unsupported")
     for receipt in receipts:
         candidate = candidates[receipt["id"]]
         revision = revisions[receipt["revision_id"]]
         source = revisions[candidate["source_revision_id"]]
-        actual = {"name": revision["name"], "compatibility": revision["compatibility"], "geometry": revision["geometry"], "endpoints": [
-            {"key": e["definition_key"], "display_name": e["display_name"], "kind": e["kind"], "port_type_id": str(e["port_type_id"])}
-            for e in sorted(rows["module_endpoint_definitions"], key=lambda e: e["order_index"]) if e["module_revision_id"] == revision["id"]]}
+        actual = definitions[revision["id"]]
         if (revision["template_id"] != candidate["template_id"] or source["template_id"] != candidate["template_id"]
                 or revision["version_number"] != source["version_number"] + 1 or actual != candidate["definition"]):
             raise PackageError("Module publication differs from candidate ownership, source or definition")

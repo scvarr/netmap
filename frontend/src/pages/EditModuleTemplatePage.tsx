@@ -6,7 +6,7 @@ import { PageHeader, PageShell } from '../components/PageChrome';
 import { useI18n } from '../i18n';
 import { moduleReviewDataSource, type ModuleReconciliationResult, type ModuleDraftDocument, type ModuleReviewDataSource, type ModuleTemplateInput } from '../topology/hardwareModules';
 
-const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.compatibility, d.geometry, d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
+const signature = (d: ModuleTemplateInput) => JSON.stringify([d.name, d.compatibility, d.geometry, d.module_ports ?? [], d.endpoints.map(e => [e.key, e.display_name, e.kind])]);
 
 export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: { dataSource?: ModuleReviewDataSource }) {
   const { templateId = '' } = useParams(); const { t } = useI18n();
@@ -63,6 +63,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
   const reasonLabels = {
     CONCURRENT_CHANGE: 'reconciliation.concurrent', INSTALLATION_CHANGED: 'moduleReconciliation.changed',
     TARGET_REVISION_CHANGED: 'reconciliation.targetChanged', APPLY_FAILED: 'reconciliation.failed',
+    NESTED_MODULE_PORTS_UNSUPPORTED: 'moduleReview.nestedPortsUnsupported',
     BAY_COMPATIBILITY_MISMATCH: 'moduleReview.compatibility', PHYSICAL_STRUCTURE_IMMUTABLE: 'review.reason.immutable', ENDPOINT_DEPENDENCIES: 'review.reason.dependencies',
     ENDPOINT_KIND_CHANGE: 'review.reason.kind', MISSING_ENDPOINT_MAPPING: 'review.reason.mapping',
     INVALID_ENDPOINT_MAPPING: 'reconciliation.mapping', IDENTITY_AND_DATA_PRESERVED: 'review.reason.preserved',
@@ -74,7 +75,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
     {error && <p role="alert">{error}</p>}
     {definition && <form className="module-template-form" onSubmit={e => { e.preventDefault(); void run(false); }}>
       <ModuleTemplateEditor value={definition} onChange={change} disabled={busy} />
-        <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !definition.compatibility.trim() || definition.endpoints.some(e => !e.display_name.trim())}>{t('review.save')}</button>
+        <button type="submit" className="primary-action" disabled={busy || revalidating || !definition.name.trim() || !definition.compatibility.trim() || definition.endpoints.some(e => !e.display_name.trim()) || definition.module_ports?.some(port => !port.display_name.trim() || !port.compatibility.trim())}>{t('review.save')}</button>
     </form>}
     {document?.publication_state && <section aria-label={t('publication.state')}>
       <p>{t('publication.revision', { number: document.publication_state.version_number })}</p>
@@ -119,7 +120,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
         <p>{t('review.candidate', { id: review.candidate_id, time: review.created_at })}</p>
         <p>{t(review.published_revision_id ? 'publication.candidatePublished' : current ? 'review.current' : 'review.stale')}</p>
         {current && <>
-          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : 'review.section.properties')} В· {t(`review.operation.${c.operation}`)} В· {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
+          <ul>{review.result.changes.map((c, i) => <li key={i}>{t(c.section === 'endpoints' ? 'moduleReview.endpoints' : c.section === 'module_ports' ? 'blueprint.endpoint.modulePort' : 'review.section.properties')} В· {t(`review.operation.${c.operation}`)} В· {c.section === 'properties' ? t(c.key === 'name' ? 'hardware.name' : 'hardware.compatibility') : (typeof c.after === 'object' && c.after && 'display_name' in c.after && c.after.display_name) || (typeof c.before === 'object' && c.before && 'display_name' in c.before && c.before.display_name) || t('moduleGeometry.title')}</li>)}</ul>
           {!review.result.installations.length && <p>{t('moduleReview.noInstallations')}</p>}
           <ul>{review.result.installations.map(i => <li key={i.installation_id}>
             <Link to={`/infrastructure/objects/${i.physical_object_id}`}>{i.display_name}</Link>

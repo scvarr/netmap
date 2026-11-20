@@ -715,6 +715,7 @@ a { color: inherit; }
 .blueprint-composition-canvas__bay > rect { fill: #85cdbb; fill-opacity: .12; stroke: #85cdbb; stroke-width: 1.5; stroke-dasharray: 6 3; cursor: grab; }
 .blueprint-composition-canvas__bay[data-selected="true"] > rect { fill-opacity: .2; stroke: #f4d06f; stroke-width: 2; stroke-dasharray: none; }
 .blueprint-composition-canvas__bay text { fill: #e7f4f1; pointer-events: none; }
+.module-geometry--editable .blueprint-composition-canvas__bay > rect { cursor: pointer; }
 .blueprint-composer__contextual .blueprint-composer__selected--bay label:has(input[type="number"]) { width: 72px; }
 
 .blueprint-links-dialog { box-sizing: border-box; width: min(100%, 760px); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }

@@ -815,6 +815,22 @@ class ModuleEndpointPosition(BaseModel):
     y: float = Field(ge=0, le=1, allow_inf_nan=False)
 
 
+class ModulePortDefinition(ModuleEndpointPosition):
+    key: str = Field(min_length=1, max_length=255)
+    display_name: str = Field(min_length=1, max_length=255)
+    compatibility: str = Field(min_length=1, max_length=255)
+    width: FiniteFloat = Field(gt=0, le=1)
+    height: FiniteFloat = Field(gt=0, le=1)
+
+    @model_validator(mode="after")
+    def valid_module_port(self):
+        if any(not value.strip() for value in (self.key, self.display_name, self.compatibility)):
+            raise PydanticCustomError("hardware_validation", "Module port strings must not be blank")
+        if self.x + self.width > 1 or self.y + self.height > 1:
+            raise PydanticCustomError("hardware_validation", "Module port rectangle must be entirely inside the module body")
+        return self
+
+
 class ModuleGeometry(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     width: float = Field(gt=0, allow_inf_nan=False)
@@ -829,6 +845,7 @@ class CreateModuleTemplateRequest(BaseModel):
     compatibility: str = Field(min_length=1, max_length=255)
     endpoints: list[ModuleEndpointRequest]
     geometry: ModuleGeometry
+    module_ports: list[ModulePortDefinition] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def valid_definitions(self):
@@ -836,7 +853,8 @@ class CreateModuleTemplateRequest(BaseModel):
             raise PydanticCustomError("hardware_validation", "Module strings must not be blank")
         if set(self.geometry.endpoints) != {e.key for e in self.endpoints}:
             raise PydanticCustomError("hardware_validation", "Geometry must match endpoint keys")
-        if len({e.key for e in self.endpoints}) != len(self.endpoints):
+        keys = [item.key for item in [*self.endpoints, *self.module_ports]]
+        if len(set(keys)) != len(keys):
             raise PydanticCustomError("hardware_validation", "Module definition keys must be unique")
         return self
 
@@ -938,11 +956,11 @@ class ModuleEndpointSnapshot(ModuleEndpointRequest):
 
 class ModuleTemplateStructuralChange(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    section: Literal["properties", "endpoints", "geometry"]
+    section: Literal["properties", "endpoints", "module_ports", "geometry"]
     key: str
     operation: Literal["added", "removed", "changed"]
-    before: str | ModuleEndpointSnapshot | ModuleGeometry | None
-    after: str | ModuleEndpointSnapshot | ModuleGeometry | None
+    before: str | ModuleEndpointSnapshot | ModulePortDefinition | ModuleGeometry | None
+    after: str | ModuleEndpointSnapshot | ModulePortDefinition | ModuleGeometry | None
 
     @model_validator(mode="after")
     def valid_change(self):
@@ -951,6 +969,8 @@ class ModuleTemplateStructuralChange(BaseModel):
             valid = self.key == "geometry" and self.operation == "changed" and len(values) == 2 and all(isinstance(v, ModuleGeometry) for v in values)
         elif self.section == "properties":
             valid = self.key in ("name", "compatibility") and self.operation == "changed" and len(values) == 2 and all(isinstance(v, str) for v in values)
+        elif self.section == "module_ports":
+            valid = all(isinstance(v, ModulePortDefinition) and v.key == self.key for v in values)
         else:
             valid = all(isinstance(v, ModuleEndpointSnapshot) and v.key == self.key for v in values)
         if (not valid or not values or (self.operation == "added" and (self.before is not None or self.after is None))
@@ -961,7 +981,7 @@ class ModuleTemplateStructuralChange(BaseModel):
 
 
 class ModuleTemplateImpactReason(BaseTemplateImpactReason):
-    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "BAY_COMPATIBILITY_MISMATCH", "PHYSICAL_STRUCTURE_IMMUTABLE", "IDENTITY_AND_DATA_PRESERVED"]
+    code: Literal["MISSING_ENDPOINT_MAPPING", "INVALID_ENDPOINT_MAPPING", "ENDPOINT_DEPENDENCIES", "ENDPOINT_KIND_CHANGE", "BAY_COMPATIBILITY_MISMATCH", "PHYSICAL_STRUCTURE_IMMUTABLE", "IDENTITY_AND_DATA_PRESERVED", "NESTED_MODULE_PORTS_UNSUPPORTED"]
 
 
 class ModuleTemplateInstallationImpact(BaseModel):

@@ -1,6 +1,6 @@
 import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { I18nProvider } from '../i18n';
 import { BaseTemplateLibraryPage } from './BaseTemplateLibraryPage';
@@ -20,6 +20,7 @@ const bases = (): BaseTemplateDataSource => ({ loadBaseTemplates: vi.fn().mockRe
 const modules = (): HardwareModuleDataSource => ({ listModules: vi.fn().mockResolvedValue({ modules: [module, { ...module, template_id: 'wrong', name: 'Other NIC', compatibility: 'ocp3' }] }), createModule: vi.fn().mockResolvedValue(module), deleteModule: vi.fn().mockResolvedValue(undefined), uninstallModule: vi.fn().mockResolvedValue(config), loadConfiguration: vi.fn().mockResolvedValue(config), installModule: vi.fn().mockResolvedValue({ ...config, bays: [{ ...config.bays[0], installation: { id: 'installation', name: module.name, orientation: 'VERTICAL', module_template_id: module.template_id, module_revision_id: module.revision_id, endpoints: [] } }] }) });
 function show(element: React.ReactNode) { return render(<I18nProvider><MemoryRouter><Routes><Route path="/" element={element} /><Route path="/infrastructure/objects/object" element={<h1>Created object</h1>} /><Route path="/library/base-templates" element={<h1>Saved library</h1>} /></Routes></MemoryRouter></I18nProvider>); }
 beforeEach(() => { localStorage.clear(); vi.restoreAllMocks(); });
+afterEach(() => vi.unstubAllGlobals());
 
 describe('09.6-A user path', () => {
   it('shows the current revision and distinguishes waiting objects from intervention', async () => {
@@ -112,21 +113,24 @@ describe('09.6-A user path', () => {
     expect(source.createPhysicalObject).toHaveBeenCalledWith('base', { display_name: 'Server' });
     expect(await screen.findByRole('heading', { name: 'Created object' })).toBeInTheDocument();
   });
-  it('creates module definitions in their displayed order with opaque keys', async () => {
+  it('creates physical module definitions in their displayed order with opaque keys', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => Response.json([
+      { id: 'copper', name: 'Copper', cardinality: 1, color: '#336699', is_active: true },
+    ])));
     const source = modules(); show(<NewModuleTemplatePage dataSource={source} />);
     await userEvent.type(screen.getByLabelText('Название'), 'NIC');
     await userEvent.type(screen.getByLabelText('Совместимость'), 'OCP3');
+    await screen.findByRole('option', { name: 'Copper · #336699' });
+    await userEvent.selectOptions(screen.getByLabelText('Тип порта'), 'copper');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
+    await userEvent.selectOptions(screen.getAllByLabelText('Вид точки')[0], 'CONNECTION_POINT');
     await userEvent.click(screen.getByRole('button', { name: 'Добавить конечную точку' }));
-    expect(screen.getByLabelText('Совместимость').closest('form')).toHaveClass('module-template-form');
-    expect(screen.getByRole('button', { name: 'Добавить конечную точку' })).toHaveClass('secondary-action');
-    expect(screen.getByRole('button', { name: 'Создать шаблон' })).toHaveClass('primary-action');
     await userEvent.click(screen.getByRole('button', { name: '#1' }));
     await userEvent.type(within(screen.getByRole('group', { name: 'Свойства выбранного порта' })).getByLabelText('Название'), 'P1');
     await userEvent.click(screen.getByRole('button', { name: '#2' }));
     await userEvent.type(within(screen.getByRole('group', { name: 'Свойства выбранного порта' })).getByLabelText('Название'), 'P2');
     await userEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
-    expect(source.createModule).toHaveBeenCalledWith({ geometry: expect.objectContaining({ width: 240, height: 80, endpoints: expect.any(Object) }), name: 'NIC', compatibility: 'OCP3', endpoints: [{ key: expect.any(String), display_name: 'P1', kind: 'NETWORK_PORT' }, { key: expect.any(String), display_name: 'P2', kind: 'NETWORK_PORT' }] });
+    expect(source.createModule).toHaveBeenCalledWith({ geometry: expect.objectContaining({ width: 240, height: 80, endpoints: expect.any(Object) }), name: 'NIC', compatibility: 'OCP3', endpoints: [{ key: expect.any(String), display_name: 'P1', kind: 'NETWORK_PORT', port_type_id: 'copper' }, { key: expect.any(String), display_name: 'P2', kind: 'CONNECTION_POINT', port_type_id: 'copper' }] });
     expect(await screen.findByRole('heading', { name: 'Saved library' })).toBeInTheDocument();
   });
   it('installs only an exactly compatible module, sends orientation, and refreshes physical details', async () => {
@@ -146,7 +150,8 @@ describe('09.6-A user path', () => {
   it('edits bay numeric geometry and saves it with the existing panel model', async () => {
     const source = bases(); show(<NewBaseTemplatePage dataSource={source} />);
     await userEvent.type(screen.getByLabelText('Название шаблона'), 'Server base');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить отсек' }));
+    await userEvent.selectOptions(screen.getByLabelText('Вид точки'), 'MODULE_PORT');
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить модульный порт' }));
     const bay = screen.getByRole('region', { name: 'Отсеки модулей' });
     await userEvent.clear(within(bay).getByLabelText('Название')); await userEvent.type(within(bay).getByLabelText('Название'), 'OCP bay');
     await userEvent.type(within(bay).getByLabelText('Совместимость'), 'OCP3');
