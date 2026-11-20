@@ -40,13 +40,21 @@ def structural_changes(before, after):
     return changes
 
 
+def _require_retained_port_types(before, after):
+    old_types = {endpoint["key"]: endpoint["port_type_id"] for endpoint in before["endpoints"]}
+    if any(endpoint["key"] in old_types and old_types[endpoint["key"]] != endpoint["port_type_id"]
+           for endpoint in after["endpoints"]):
+        raise ModelError("Физический тип существующего окончания неизменен. Создайте новый шаблон модуля.",
+                         {"reason": "PHYSICAL_STRUCTURE_IMMUTABLE"})
+
+
 def analyze_installation(session, installation, candidate):
     config = session.get(m.ObjectConfiguration, installation.configuration_id)
     revision = session.get(m.ModuleTemplateRevision, installation.module_revision_id)
     before = published_definition(session, revision.template_id, revision.id)
     old, new = ({e["key"]: e for e in d["endpoints"]} for d in (before, candidate))
     capacities = {str(item.id): item.cardinality for item in session.scalars(select(m.PortType).where(
-        m.PortType.id.in_({uuid.UUID(endpoint["port_type_id"]) for endpoint in (*old.values(), *new.values())})
+        m.PortType.id.in_({uuid.UUID(endpoint["port_type_id"]) for endpoint in old.values()})
     ))}
     definitions = {d.id: d.definition_key for d in session.scalars(select(m.ModuleEndpointDefinition).where(m.ModuleEndpointDefinition.module_revision_id == revision.id))}
     rows = list(session.scalars(select(m.ModuleEndpointMapping).where(m.ModuleEndpointMapping.installation_id == installation.id)))
@@ -91,7 +99,7 @@ def analyze_installation(session, installation, candidate):
                 reasons.append({"code": "ENDPOINT_DEPENDENCIES", "key": key, "endpoint_name": definition["display_name"], "dependencies": blockers})
         elif definition["kind"] != new[key]["kind"]:
             reasons.append({"code": "ENDPOINT_KIND_CHANGE", "key": key, "endpoint_name": definition["display_name"]})
-        elif capacities[definition["port_type_id"]] != capacities[new[key]["port_type_id"]]:
+        elif definition["port_type_id"] != new[key]["port_type_id"]:
             reasons.append({"code": "PHYSICAL_STRUCTURE_IMMUTABLE", "key": key, "endpoint_name": definition["display_name"]})
     label = session.scalar(select(m.EntityMetadata.value).where(m.EntityMetadata.physical_object_id == config.physical_object_id, m.EntityMetadata.key == DISPLAY_ALIAS_KEY))
     return {"installation_id": str(installation.id), "physical_object_id": str(config.physical_object_id),
@@ -163,13 +171,15 @@ class ModuleTemplateReview:
         self.session.refresh(draft, with_for_update=True)
         if draft.generation != expected_generation:
             raise ModelError("Draft changed; reload before checking", {"reason": "DRAFT_CONFLICT"})
+        published = published_definition(self.session, template_id, draft.source_revision_id)
+        _require_retained_port_types(published, draft.definition)
         fingerprint = self._inputs()
         installations = self.session.scalars(select(m.ModuleInstallation).join(m.ModuleTemplateRevision,
             m.ModuleInstallation.module_revision_id == m.ModuleTemplateRevision.id).where(
             m.ModuleTemplateRevision.template_id == template_id).order_by(m.ModuleInstallation.id)).all()
         candidate = m.ModuleTemplateCandidate(template_id=template_id, source_revision_id=draft.source_revision_id,
             draft_generation=draft.generation, definition=copy.deepcopy(draft.definition), input_fingerprint=fingerprint,
-            result={"changes": structural_changes(published_definition(self.session, template_id, draft.source_revision_id), draft.definition),
+            result={"changes": structural_changes(published, draft.definition),
                     "installations": [analyze_installation(self.session, i, draft.definition) for i in installations]})
         self.session.add(candidate)
         self.session.flush()
@@ -223,6 +233,7 @@ class ModuleTemplateReview:
         if candidate.input_fingerprint != self._inputs():
             stale("REVIEW_INPUTS_CHANGED")
         query = CreateModuleTemplateRequest.model_validate(candidate.definition)
+        _require_retained_port_types(published_definition(self.session, template_id, latest.id), candidate.definition)
         revision = HardwareCatalog(self.session)._create_module_revision(template_id, latest.version_number + 1, query)
         self.session.get(m.ModuleTemplate, template_id).name = query.name
         receipt = m.ModuleTemplatePublication(id=candidate.id, revision_id=revision.id)

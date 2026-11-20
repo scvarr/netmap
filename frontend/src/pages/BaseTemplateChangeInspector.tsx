@@ -8,7 +8,7 @@ function useReasonDescription() {
   return (r: TemplateImpactReason) => {
     const labels = {
       IDENTITY_AND_DATA_PRESERVED: 'review.reason.preserved', ENDPOINT_DEPENDENCIES: 'review.reason.dependencies',
-      MISSING_ENDPOINT_MAPPING: 'review.reason.mapping', ENDPOINT_KIND_CHANGE: 'review.reason.kind',
+      MISSING_ENDPOINT_MAPPING: 'review.reason.mapping', ENDPOINT_KIND_CHANGE: 'review.reason.kind', PHYSICAL_STRUCTURE_IMMUTABLE: 'review.reason.immutable',
       INSUFFICIENT_COMPATIBLE_CAPACITY: 'review.reason.capacity', INTERNAL_LINK_CONNECTIONS: 'review.reason.links',
       INVALID_ENDPOINT_MAPPING: 'reconciliation.mapping', INTERNAL_LINK_CARDINALITY: 'reconciliation.cardinality',
       MODULE_LAYOUT_PANEL_CONFLICT: 'changeInspector.panelConflict',

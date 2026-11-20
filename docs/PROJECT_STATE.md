@@ -63,7 +63,7 @@
 
 ## Открытые инженерные ограничения
 
-- CAT-D-02, типизация экземпляров Cable и переход существующих Cable, а также
+- CAT-D-02, типизация экземпляров Cable, а также
   полная серверная физическая совместимость остаются OPEN.
 - Внешний multichannel lifecycle, member occupancy, полный member authoring
   и exact member trace с Cable evidence и проверкой полноты группы

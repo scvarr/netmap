@@ -47,7 +47,7 @@ def published_definition(session, template_id, revision_id):
 
 def physical_structure(definition):
     d = CreateBaseTemplateRequest.model_validate(definition).model_dump(mode="json")
-    slots = sorted((s["key"], s["kind"], s["cardinality"]) for s in d["slots"])
+    slots = sorted((s["key"], s["kind"], s["cardinality"], s["port_type_id"]) for s in d["slots"])
     bays = sorted((b["bay_key"], b["compatibility"], b["kind"]) for b in d["bays"])
     links = []
     for link in d["internal_links"]:
@@ -162,6 +162,8 @@ def analyze_object(session, config, candidate):
                 reasons.append({"code": "ENDPOINT_DEPENDENCIES", "key": key, "endpoint_name": old[key]["display_name"], "dependencies": blockers})
         elif old[key]["kind"] != new[key]["kind"]:
             reasons.append({"code": "ENDPOINT_KIND_CHANGE", "key": key, "endpoint_name": old[key]["display_name"]})
+        elif old[key]["port_type_id"] != new[key]["port_type_id"]:
+            reasons.append({"code": "PHYSICAL_STRUCTURE_IMMUTABLE", "key": key, "endpoint_name": old[key]["display_name"]})
         else:
             mapping = mappings[key]
             point = session.get(m.ConnectionPoint, mapping.connection_point_id)

@@ -164,7 +164,7 @@ UUID и сохраняет назначения, а новые назначен�
 Сервер разрешает известную совместимость, отклоняет известную несовместимость
 и требует предупреждения и явного подтверждения при неизвестной. Равной
 cardinality недостаточно. Проверяются задокументированные физические свойства.
-Конкретные compatibility rules и переход существующих Cable остаются OPEN. [CAT-D](OPEN_DECISIONS.md#a-cat-d).
+Конкретные compatibility rules остаются OPEN. [CAT-D](OPEN_DECISIONS.md#a-cat-d).
 
 ## Принятые решения L1-O1–L1-O10 — DECIDED
 
@@ -224,14 +224,16 @@ review, reconcile, materialization и import, без ремонта или ча�
 
 Draft check и publish независимо отклоняют изменение физической сигнатуры
 с `PHYSICAL_STRUCTURE_IMMUTABLE`, даже без экземпляров:
-endpoint keys/kind/cardinality, internal mappings и module place keys/kind/
+endpoint keys/kind/cardinality/port_type_id, internal mappings и module place keys/kind/
 compatibility. Геометрия, цвет и подписи не входят в сигнатуру. API и archive
 roundtrip сохраняют multichannel definitions, графический edit/copy блокируется
 с объяснением. Reconcile сохраняет retained IDs и разводку, без provenance
 не удаляет существующие Connections и не переписывает capacity, допустимые
 добавления internal links ограничены 1:1. ModuleTemplate materialization
 берёт cardinality точки из PortType, а NETWORK_PORT получает прежний binding
-к member 1. Пассивная continuity ModuleTemplate
+к member 1. Review и publish ModuleTemplate отклоняют смену PortType у
+сохранённого endpoint. Reconcile сравнивает PortType с закреплённой ревизией.
+Пассивная continuity ModuleTemplate
 и рекурсивная установка остаются OPEN. Демонтаж с зависимостями блокируется.
 [Materialization](../app/hardware_catalog.py) · [Reconcile](../app/object_reconciliation.py).
 

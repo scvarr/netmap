@@ -124,32 +124,25 @@ def test_assignment_lifecycle_and_workspace_round_trip(template_kind, section):
     assert saved.status_code == 200, saved.text
     assert client.get(draft_url).json()["definition"] == definition
     checked = client.post(f"{draft_url}/check", params={"expected_generation": saved.json()["generation"]})
-    assert checked.status_code == 200, checked.text
-    review = checked.json()["review"]
-    change, = review["result"]["changes"]
-    assert change["section"] == section
-    assert change["before"]["port_type_id"] == original["id"]
-    assert change["after"]["port_type_id"] == replacement["id"]
+    assert checked.status_code == 409, checked.text
+    assert checked.json()["error"]["details"]["reason"] == "PHYSICAL_STRUCTURE_IMMUTABLE"
 
     replacement_url = f"{URL}/{replacement['id']}"
     assert update_port(replacement_url, {"name": "Optical", "color": "#234567", "is_active": False}).status_code == 200
-    assert client.delete(replacement_url).status_code == 409  # Draft and frozen candidate only.
+    assert client.delete(replacement_url).status_code == 409  # Draft assignment.
     assert update_port(replacement_url, {"name": "Optical", "color": "#234567", "members": ["X"]}).status_code == 409
-    # Remove the draft assignment. The stale frozen candidate still protects the type.
-    reset_definition = copy.deepcopy(draft["definition"])
-    # Restore original briefly to make the replacement of the first assignment legal.
     assert update_port(original_url, {"name": "Twisted pair", "color": "#112233"}).status_code == 200
-    saved = client.put(draft_url, params={"expected_generation": saved.json()["generation"]}, json=reset_definition)
-    assert saved.status_code == 200, saved.text
-    assert client.delete(replacement_url).status_code == 409  # Frozen candidate only.
-    assert update_port(replacement_url, {"name": "Optical", "color": "#234567", "medium": "FIBER"}).status_code == 409
-    assert update_port(replacement_url, {"name": "Optical", "color": "#234567"}).status_code == 200
+    definition = copy.deepcopy(draft["definition"])
+    definition[section][0]["display_name"] = "Renamed P1"
     saved = client.put(draft_url, params={"expected_generation": saved.json()["generation"]}, json=definition)
     assert saved.status_code == 200, saved.text
+    assert update_port(replacement_url, {"name": "Optical", "color": "#234567", "members": ["X"], "is_active": False}).status_code == 200
+    assert client.delete(replacement_url).status_code == 204
+
     checked = client.post(f"{draft_url}/check", params={"expected_generation": saved.json()["generation"]})
     assert checked.status_code == 200, checked.text
     candidate_id = checked.json()["review"]["candidate_id"]
-    assert update_port(replacement_url, {"name": "Optical", "color": "#234567", "is_active": False}).status_code == 200
+    assert update_port(original_url, {"name": "Twisted pair", "color": "#112233", "is_active": False}).status_code == 200
     published = client.post(f"{library}/{template}/candidates/{candidate_id}/publish")
     assert published.status_code == 200, published.text
     assert client.get(draft_url).json()["definition"] == definition
@@ -168,63 +161,122 @@ def test_assignment_lifecycle_and_workspace_round_trip(template_kind, section):
     assert snapshot() == before
 
 
-def test_type_only_reconciliation_preserves_connected_base_and_module_endpoints():
-    import uuid
+@pytest.mark.parametrize("template_kind", ["base", "module"])
+@pytest.mark.parametrize("replacement_medium", ["FIBER", "COPPER"])
+def test_connected_retained_endpoint_type_is_immutable(template_kind, replacement_medium):
+    from uuid import UUID
 
     from sqlalchemy import select
+
+    from app import models as m
+    from app.base_template_review import BaseTemplateReview
     from app.database import SessionLocal
-    from app.models import ModuleEndpointMapping
-    from tests import test_module_reconciliation as module_reconciliation
-    from tests import test_object_reconciliation as object_reconciliation
-    from tests.test_module_template_review import setup_installations
+    from app.hardware_catalog import HardwareCatalog
+    from app.module_geometry import initial_geometry
+    from app.schemas import CreateBaseTemplateRequest, CreateModuleTemplateRequest
+    from tests.test_hardware_configuration import base_payload, create_base, create_object, install
+    from tests.test_module_reconciliation import apply
+    from tests.test_object_reconciliation import connect, reconcile
 
-    base, module, (installation_id,) = setup_installations(1)
-    authoring = snapshot()["authoring"]
-    builtin = authoring["BuiltInEndpointMapping"][0]
-    with SessionLocal.begin() as session:
-        module_point = session.scalar(select(ModuleEndpointMapping.connection_point_id).where(
-            ModuleEndpointMapping.installation_id == installation_id))
-        object_reconciliation.connect(session, module_point)
-        object_reconciliation.connect(session, uuid.UUID(builtin["connection_point_id"]))
-    before = snapshot()
-    new_type = create_port({"name": "Fiber", "color": "#334455"}).json()["id"]
+    port_types = []
+    for profile, medium in (("RJ45", "COPPER"), ("LC" if replacement_medium == "FIBER" else "GG45", replacement_medium)):
+        connector = client.post("/v1/connector-types", json={
+            "name": profile, "color": "#123456", "mating_profile": profile, "termination": "SOCKET",
+        })
+        assert connector.status_code == 201, connector.text
+        port = create_port({"name": profile, "color": "#123456", "medium": medium,
+                            "connector_type_id": connector.json()["id"]})
+        assert port.status_code == 201, port.text
+        port_types.append(port.json())
+    original, replacement = port_types
+    assert original["cardinality"] == replacement["cardinality"] == 1
 
-    object_reconciliation.revision(base, lambda definition: definition["slots"][0].update(port_type_id=new_type))
-    module_reconciliation.revision(module["template_id"], lambda definition: [
-        endpoint.update(port_type_id=new_type) for endpoint in definition["endpoints"]
-    ])
-    pinned = snapshot()
-    for key in ("ObjectConfiguration", "ModuleInstallation", "BuiltInEndpointMapping", "ModuleEndpointMapping"):
-        assert pinned["authoring"][key] == before["authoring"][key]
-    assert pinned["canonical"] == before["canonical"]
-    object_id = authoring["ObjectConfiguration"][0]["physical_object_id"]
+    base = base_payload()
+    base["slots"][0]["port_type_id"] = original["id"]
+    base_id, base = create_base(base)
+    obj = create_object(base_id)
+    object_id = obj["physical_object_ref"]["entity_id"]
     object_url = f"/v1/topology/physical-objects/{object_id}"
+    library = f"/v1/library/{template_kind}-templates"
+    if template_kind == "base":
+        template_id, section = base_id, "slots"
+        point_id = obj["slots"][0]["connection_point_ref"]["entity_id"]
+        candidate_model, draft_model = m.BaseTemplateCandidate, m.BaseTemplateDraft
+        schema, create_revision = CreateBaseTemplateRequest, HardwareCatalog._create_version
+        impact_section = "objects"
+    else:
+        endpoint = {"key": "port", "kind": "NETWORK_PORT", "display_name": "P1", "port_type_id": original["id"]}
+        created = client.post(library, json={"name": "Module", "compatibility": "OCP3", "endpoints": [endpoint],
+                                            "geometry": initial_geometry([endpoint["key"]])})
+        assert created.status_code == 201, created.text
+        template_id, section = created.json()["template_id"], "endpoints"
+        installed = install(object_id, template_id, base["bays"][0]["bay_key"])
+        assert installed.status_code == 201, installed.text
+        point_id = installed.json()["bays"][0]["installation"]["endpoints"][0]["connection_point_id"]
+        candidate_model, draft_model = m.ModuleTemplateCandidate, m.ModuleTemplateDraft
+        schema, create_revision = CreateModuleTemplateRequest, HardwareCatalog._create_module_revision
+        impact_section = "installations"
 
-    def assigned_types():
-        response = client.get(object_url)
-        assert response.status_code == 200, response.text
-        return {point["blueprint_slot"]["port_type_id"] for point in response.json()["connection_points"]}
+    with SessionLocal.begin() as session:
+        connect(session, UUID(point_id))
+    before = snapshot()
+    assert len(before["canonical"]["Cable"]) == 1
+    draft_url = f"{library}/{template_id}/draft"
+    draft = client.get(draft_url).json()
+    definition = copy.deepcopy(draft["definition"])
+    definition[section][0]["port_type_id"] = replacement["id"]
+    saved = client.put(draft_url, params={"expected_generation": draft["generation"]}, json=definition)
+    assert saved.status_code == 200, saved.text
+    checked = client.post(f"{draft_url}/check", params={"expected_generation": saved.json()["generation"]})
+    assert checked.status_code == 409, checked.text
+    assert checked.json()["error"]["details"]["reason"] == "PHYSICAL_STRUCTURE_IMMUTABLE"
 
-    assert assigned_types() == {module["endpoints"][0]["port_type_id"]}
-    (updated_object,) = object_reconciliation.reconcile(base).values()
-    assert updated_object["status"] == "updated"
-    assert module_reconciliation.apply(module["template_id"])[0]["status"] == "updated"
-    assert assigned_types() == {new_type}
+    # Exercise publication separately with a candidate written by the old rules.
+    with SessionLocal.begin() as session:
+        row = session.scalar(select(draft_model).where(draft_model.template_id == UUID(template_id)))
+        candidate = candidate_model(template_id=row.template_id, source_revision_id=row.source_revision_id,
+                                    draft_generation=row.generation, definition=row.definition,
+                                    input_fingerprint=BaseTemplateReview(session)._inputs(),
+                                    result={"changes": [], impact_section: []})
+        session.add(candidate)
+        session.flush()
+        candidate_id = candidate.id
+    candidate_snapshot = snapshot()
+    result = client.post(f"{library}/{template_id}/candidates/{candidate_id}/publish")
+    assert result.status_code == 409, result.text
+    assert result.json()["error"]["details"]["reason"] == "PHYSICAL_STRUCTURE_IMMUTABLE"
+    assert snapshot() == candidate_snapshot
+    restored = client.put(draft_url, params={"expected_generation": saved.json()["generation"]},
+                          json=draft["definition"])
+    assert restored.status_code == 200, restored.text
+    # Even after removing the draft reference, the frozen candidate protects its type.
+    still_used = update_port(f"{URL}/{replacement['id']}", {
+        "name": replacement["name"], "color": replacement["color"], "medium": replacement_medium,
+        "connector_type_id": replacement["connector_type_id"], "members": ["X"],
+    })
+    assert still_used.status_code == 409, still_used.text
+
+    # Exercise reconcile against a revision already persisted under the old rules.
+    with SessionLocal.begin() as session:
+        create_revision(HardwareCatalog(session), UUID(template_id), 2, schema.model_validate(definition))
+    pinned = snapshot()
+    impact, = reconcile(template_id).values() if template_kind == "base" else apply(template_id)
+    assert impact["status"] == "requires_intervention"
+    assert any(reason["code"] == "PHYSICAL_STRUCTURE_IMMUTABLE" for reason in impact["reasons"])
+    assert snapshot() == pinned
+
+    saved_type = update_port(f"{URL}/{original['id']}", {
+        "name": "Renamed RJ45", "color": "#334455", "connector_type_id": original["connector_type_id"],
+    })
+    assert saved_type.status_code == 200, saved_type.text
+    reloaded = client.get(object_url)
+    assert reloaded.status_code == 200, reloaded.text
+    point, = [item for item in reloaded.json()["connection_points"]
+              if item["connection_point_ref"]["entity_id"] == point_id]
+    assert point["blueprint_slot"]["port_type_id"] == original["id"]
     after = snapshot()
     assert after["canonical"] == before["canonical"]
-    for key, changed_field in (("ObjectConfiguration", "base_revision_id"),
-                               ("ModuleInstallation", "module_revision_id"),
-                               ("BuiltInEndpointMapping", "definition_id"),
-                               ("ModuleEndpointMapping", "definition_id")):
-        old = before["authoring"][key]
-        new = after["authoring"][key]
-        assert {r["id"]: {k: v for k, v in r.items() if k != changed_field} for r in old} == {
-            r["id"]: {k: v for k, v in r.items() if k != changed_field} for r in new
-        }
-    for definitions, mappings in (("BuiltInEndpointDefinition", "BuiltInEndpointMapping"),
-                                  ("ModuleEndpointDefinition", "ModuleEndpointMapping")):
-        assigned = {row["id"]: row["port_type_id"] for row in after["authoring"][definitions]}
-        assert all(assigned[row["definition_id"]] == new_type for row in after["authoring"][mappings])
+    assert after["authoring"] == pinned["authoring"]
 
 
 def test_connector_dependency_archiving_and_cable_catalog():
@@ -288,6 +340,8 @@ def test_structural_edit_waits_for_concurrent_template_assignment():
             deadline = monotonic() + 5
             with SessionLocal() as observer:
                 while monotonic() < deadline:
+                    # PostgreSQL caches its activity snapshot for the transaction.
+                    observer.execute(text("SELECT pg_stat_clear_snapshot()"))
                     waiting = observer.scalar(text("""
                         SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE :pid = ANY(pg_blocking_pids(pid)))
                     """), {"pid": pid})
@@ -352,7 +406,5 @@ def test_multimember_module_materializes_passive_point_but_rejects_network_port(
     saved = client.put(draft_url, params={"expected_generation": draft["generation"]}, json=changed)
     assert saved.status_code == 200, saved.text
     checked = client.post(f"{draft_url}/check", params={"expected_generation": saved.json()["generation"]})
-    assert checked.status_code == 200, checked.text
-    impact, = checked.json()["review"]["result"]["installations"]
-    assert impact["classification"] == "requires_intervention"
-    assert impact["reasons"][0]["code"] == "PHYSICAL_STRUCTURE_IMMUTABLE"
+    assert checked.status_code == 409, checked.text
+    assert checked.json()["error"]["details"]["reason"] == "PHYSICAL_STRUCTURE_IMMUTABLE"
