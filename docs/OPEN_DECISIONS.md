@@ -228,8 +228,8 @@ Location и вычисляет collapse-проекцию. Ручные инди�
 
 CURRENT. PortType — реализованный справочник. PhysicalObject class хранится
 строкой, BaseTemplate может задавать default class. Location.type — optional
-пользовательская строка. CableType — DECIDED TARGET / OPEN. Формы оборудования
-предлагают hardcoded presets и произвольное значение. От строковых классов
+пользовательская строка. ConnectorType и CableType — DECIDED TARGET, реализация
+OPEN. Формы оборудования предлагают hardcoded presets и произвольное значение. От строковых классов
 зависят подписи, акценты и фильтры списка оборудования. Presets обслуживают
 эти сценарии интерфейса и не образуют самостоятельный справочник.
 
@@ -251,51 +251,26 @@ NETWORK_PORT ограничено cardinality=1. C-CAP-01-01 уже поддер
 BaseTemplate. Внешние операции подключения и reconnect поддерживают
 cardinality=1, member=1.
 
-**TARGET.** Структура PortType задаёт cardinality порта, которую нельзя
-произвольно переопределить в отдельном порте шаблона. Cardinality означает
-число независимо адресуемых members. Названия TX/RX необязательны.
-LC Simplex (1), optical duplex (2), MPO-24 (24) и RJ45 (1) — примеры
-пользовательских типов. Системный enum для них не вводится.
-NETWORK_PORT с cardinality > 1 входит в TARGET. Материализованный
-ConnectionPoint сохраняет canonical cardinality при последующем
-редактировании визуальных свойств типа.
-
-Если хотя бы один BaseTemplate использует PortType, его структурные
-характеристики заблокированы. Учитываются черновики, опубликованные,
-архивные и другие существующие состояния шаблонов. Визуальные
-характеристики редактируются. Для другой физической структуры создаётся
-новый PortType. Автоматическое версионирование PortType не предусмотрено.
-
-**TARGET для соединений.** Сервер запрещает подтверждённо несовместимые
-соединения. При неизвестной совместимости требуется предупреждение и
-явное подтверждение, которое сервер учитывает при записи. Равенство
-cardinality само по себе не определяет совместимость. Будущий контракт
-должен поддерживать 2↔2 и 2↔1+1, включая частичную коммутацию. Отсутствие
-требуемых members определяется производной валидацией на основе
-ожидаемого и фактического mapping. Новый canonical fact для этого не нужен.
-
-**OPEN.** Физическая среда и интерфейс подключения — кандидаты на
-минимальные характеристики PortType. Точный набор полей и структурных
-характеристик, правила и taxonomy совместимости, формат подтверждения,
-DTO и API требуют отдельного решения.
+**DECIDED TARGET.** [L1-CONTRACT-03](L1_CONNECTIVITY.md#справочники-и-совместимость)
+закрепляет расширяемые PortType, ConnectorType и CableType со стандартными
+начальными определениями. PortType задаёт конструкцию и cardinality порта.
+Структурные свойства защищены при использовании, в том числе в черновых,
+опубликованных и архивных шаблонах. Для другой структуры создаётся новый тип.
+Визуальные правки не меняют canonical cardinality. NETWORK_PORT с cardinality > 1
+остаётся TARGET. Сервер разрешает известную совместимость, запрещает доказанную
+несовместимость и требует явного подтверждения при неизвестной. Совпадения
+cardinality недостаточно. Точные критерии проверки и реализация остаются OPEN.
 
 ## CableType и member-aware модель
 
-**TARGET.** CableType — будущий пользовательский справочник. Одно оптическое
-волокно образует независимо трассируемый путь. Несколько отдельных Cable
-могут использовать общую визуальную трассу, сохраняя независимую canonical
-connectivity. Физическую группировку линий в магистраль можно рассмотреть
-как отдельную необязательную возможность. Детальная иерархия
-Cable/Fiber/Termination сейчас не требуется.
-
-**OPEN.** Минимальные характеристики CableType ещё не утверждены. Требуется
-пересмотреть L1-O5 и C-CAP-01-02/03/04. Ранее принятый L1-O5 требует одну
-Cable identity для физической сборки с несколькими окончаниями, а текущие
-критерии C-CAP-01 опираются на один внешний multichannel Cable. Нужно
-согласовать, как эти критерии соотносятся с независимыми member paths,
-подключениями 2↔1+1 и необязательной физической группировкой. До явного
-решения действуют ранее согласованные обязательные gates и критерии
-приёмки. C-CAP-01 остаётся OPEN Phase D, C-CAP-01-01 — IMPLEMENTED / MERGED.
+**DECIDED TARGET.** [L1-CONTRACT-03](L1_CONNECTIVITY.md#физические-каналы-и-cable)
+отделяет Cable identity и независимые member paths от геометрии и необязательной
+группировки. Общая оболочка сама по себе не требует одной Cable identity.
+Сценарии 2↔2 и 2↔1+1 сохраняются. C-CAP-01 остаётся OPEN Phase D с обязательной
+приёмкой одного двухточечного multichannel trunk. C-CAP-01-01 —
+IMPLEMENTED / MERGED в scope BaseTemplate, C-CAP-01-02/03/04 — OPEN.
+В L1-O5 предположение об одной identity настоящей многоконцевой сборки
+сохранено как историческое. Её семантика и обязательность остаются OPEN.
 
 ## Spatial и оборудование
 
@@ -306,14 +281,17 @@ nonphysical grouping — открытые отдельные capabilities. Curre
 MapReference — будущая composition/navigation независимых SavedMaps с drill-down
 и canonical-derived crossings, не Location/containment или простой hyperlink-object.
 Scene schema/persistence, interaction и milestone placement не выбраны.
-Nested modules, CPU/RAM/disks/PSU inventory и mechanical compatibility не реализованы;
-scope/need открыты. Dense runtime map LOD остаётся отдельным измеряемым решением;
+Рекурсивные установки модулей без циклов — DECIDED TARGET
+[L1-CONTRACT-03](L1_CONNECTIVITY.md#модульная-конструкция); реализация OPEN.
+CPU/RAM/disks/PSU inventory и подробная mechanical compatibility не реализованы,
+их scope и обязательность открыты. Dense runtime map LOD остаётся отдельным измеряемым решением;
 PT-03 уже решает базовые shape/color, не требует повторного проектирования.
 
 ## Workspace, multi-user и история
 
-Согласовано: NetworkWorkspace — application isolation boundary над network core;
-SavedMap — presentation внутри dataset, EvaluationView — coherent read, не workspace.
+NetworkWorkspace — application isolation boundary над network core.
+CURRENT SavedMap — presentation внутри общего dataset. TARGET независимых сетей
+определён в L1-REFERENCE-01. EvaluationView остаётся coherent read.
 Persisted isolation/auth/access/sharing/activity нужны до L2 (Phase F), exact
 bounded decomposition открыта. Auth provider, roles/groups/ACL inheritance,
 SQLAlchemy scope и storage/schema strategy, provisioning/archive/soft-delete,
@@ -367,58 +345,44 @@ permissions источников не выбраны.
 - API-002 missing-resource semantics, performance budgets и LOD выбираются на
   текущих измерениях и контрактах, не ради старой формы тестов.
 
-Контракт [L1-CONTRACT-02](L1_CONNECTIVITY.md) закрепляет L1-O1–L1-O10 как DECIDED.
-C-CAP-01 остаётся OPEN Phase D, L1 PRODUCT COMPLETE обязателен до L2/L3.
-Решения не объявляют текущий core полным multichannel продуктом.
-
 ## Принятые решения L1-O1–L1-O10 — DECIDED
 
-Продуктовый контракт L1-CONTRACT-02 от 11.11.2026. Это target, а не
-подтверждение соответствия текущих API, materialization, reconcile или trace.
-Доказательная инвентаризация выше сохраняет отдельные статусы реализации.
+Действующие формулировки и исторический контекст сведены в
+[L1-CONTRACT-03](L1_CONNECTIVITY.md#принятые-решения-l1-o1l1-o10--decided).
+L1-O1/O2/O3/O6/O8/O10 сохраняют принятые инварианты. L1-O4 уточняет границу
+обычной парной continuity и специализированной оптики. L1-O5 уточняет
+независимые линии и двухточечный trunk. L1-O7 дополняет неизменяемую
+конструкцию модуля рекурсивными установками. L1-O9 уточняет стабильность
+NetworkInterface при замене трансивера. Эти решения описывают целевую
+семантику. Разделение L1 CONNECTIVITY COMPLETE и L1 PRODUCT COMPLETE
+не меняет Phase A–I, их gates или последовательность.
 
-- **L1-O1:** L1 охватывает сетевые кабельные соединения меди и оптики.
-  Для меди канал — независимо подключаемая сетевая линия, для оптики — волокно.
-  Проводники RJ45 отдельно не моделируются. Количество каналов задаётся данными.
-- **L1-O2:** единый механизм соответствий для внутренних связей и внешних кабелей:
-  автоматическое прямое, обратное или заданное упорядочивание, обязательный preview,
-  ручная корректировка, частичные mappings, проверка занятости и атомарное сохранение.
-- **L1-O3:** member имеет не более одного внешнего и одного внутреннего соединения.
-  Разные members одного ConnectionPoint независимы. Конфликт не удаляет старую
-  связь автоматически. Исключения настоящих разветвителей вне базовой модели.
-- **L1-O4:** PON splitter остаётся в предметной области, но требует отдельного этапа.
-  Обычные ConnectionMember не имитируют деление. Оптический бюджет вне C-CAP-01.
-- **L1-O5:** физический кабель имеет одну Cable identity, включая несколько окончаний
-  с разным числом каналов. Многоконцевые сборки требуют расширения текущей
-  двухточечной модели; фиктивные Cable недопустимы. Пересмотр этого принятого
-  критерия остаётся [OPEN](#cabletype-и-member-aware-модель).
-- **L1-O6:** BaseTemplate определяет физическую конструкцию и внутреннюю разводку.
-  Физическая переделка требует нового BaseTemplate и нового PhysicalObject;
-  индивидуальная переделка внутренней конструкции экземпляра не поддерживается.
-  Исправления описаний, имён и геометрии представления этим не ограничиваются.
-- **L1-O7:** изменение физической конструкции модуля требует нового ModuleTemplate.
-  Internal continuity модулей — отдельная задача реализации, не готовая возможность.
-- **L1-O8:** активное оборудование завершает L1 trace; автоматического transit между
-  портами нет. Пассивное продолжение требует явных внутренних связей.
-  L2 forwarding и active conversion не подменяют L1.
-- **L1-O9:** изменение физической конструкции создаёт новую identity оборудования;
-  внешняя перекоммутация сохраняет identity. Старые подключения автоматически
-  не переносятся. Исправления ошибочных данных — отдельный случай; частичная
-  потеря canonical dependencies недопустима.
-- **L1-O10:** отдельный канал возвращает точный подтверждённый canonical evidence путь.
-  Группа независимо оценивает members; полнота считается относительно явно заданных
-  ожидаемых соответствий. Резервные каналы автоматически не ошибка.
-  REACHABLE не означает измеренную исправность физической линии.
+## Открытые вопросы L1-CONTRACT-03
 
-Нет фиксированной hardware taxonomy и специальных схем 1x24/1x48.
-PortType не определяет connectivity; presentation state не canonical topology.
-C-CAP-01 остаётся OPEN Phase D; L1 PRODUCT COMPLETE обязателен до L2/L3.
+1. **Настоящие многоконцевые кабельные сборки.** Определить обязательность,
+   физическую семантику, identity сборки и её окончаний. Парные пути и общая
+   геометрия не подтверждают принадлежность одному Cable. Фиктивные Cable
+   недопустимы. Acceptance двухточечного trunk сохраняется.
+2. **Lifecycle трансивера и аппаратного режима.** Определить замену трансивера
+   при подключённом Cable, переход между аппаратными режимами и QSFP breakout
+   с зависимыми Cable, bindings и evidence. NetworkInterface родительского
+   порта сохраняется при замене трансивера. Смена режима и судьба зависимостей
+   требуют явного контракта.
+3. **Минимум справочников.** Определить точный минимальный набор структурных
+   характеристик PortType, ConnectorType и CableType, правила инициализации
+   стандартных определений и критерии распознавания известной, несовместимой
+   и неизвестной пары. CAT-D остаётся PRODUCT DECISION PENDING.
+
+Вопросы специализированной оптики, отдельного импорта и эксплуатационных gates
+сохраняют собственный scope. [L1-AUDIT-01](audits/L1_READINESS_AUDIT.md) остаётся
+свидетельством проверенного среза. Его вопросы о cable identity, типах и модулях
+уточнены принятыми правилами выше и остаточными OPEN решениями.
 
 ## Технические вопросы реализации — OPEN
 
 DTO/API, schema/storage и миграции, stable member addressing/provenance,
 internal/external role validation и concurrency occupancy, atomic lifecycle,
-безопасный reconcile и исправление ошибочных данных, ModuleTemplate continuity,
+безопасный reconcile и исправление ошибочных данных, реализация ModuleTemplate continuity,
 UX preview/editing и контракт группового результата/ожидаемых mappings открыты.
 Выбор выполняется в соответствующем implementation contract по
 [последовательности C-CAP-01](BACKLOG.md), не в этой консолидации.
@@ -457,8 +421,8 @@ NetworkWorkspace. MapReference не даёт межкартовых canonical с
 сопоставление конфликтующих типов, controlled transition исторических Cable,
 защита используемой конструкции CableType и безопасная initialization/conflict policy.
 Отдельный bounded map isolation milestone предшествует включению demo.
-MPO→LC breakout, PON splitter, SAS shelves и duplex fiber/interface realization
-остаются OPEN. C-CAP-01 OPEN Phase D; 02/03/04 не закрыты; gates A–I неизменны.
+Обязательность и семантика настоящей многоконцевой MPO→LC сборки, PON splitter,
+SAS shelves и duplex fiber/interface realization остаются OPEN. C-CAP-01 OPEN Phase D; 02/03/04 не закрыты; gates A–I неизменны.
 
 AUTO-LOC-01 adds opt-in automatic composition of these frames per variant.
 Technical root, direction, mixed order and hide-empty settings are presentation

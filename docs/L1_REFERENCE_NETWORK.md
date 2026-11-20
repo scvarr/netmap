@@ -4,6 +4,8 @@
 [Архитектура](ARCHITECTURE.md), [состояние](PROJECT_STATE.md),
 [backlog](BACKLOG.md), [решения](OPEN_DECISIONS.md), [L1](L1_CONNECTIVITY.md).
 Это воспроизводимый acceptance specification, не результат запуска стенда.
+Физическая семантика сценариев подчиняется
+[L1-CONTRACT-03](L1_CONNECTIVITY.md#l1-contract-03--decided-target).
 
 ## Независимые карты
 
@@ -13,7 +15,8 @@ TARGET: каждая карта — самостоятельная сеть. Phy
 NetworkInterface, Connection, ConnectionMember, Cable и Location принадлежат
 конкретной карте. Между картами нет общих физических объектов, соединений или
 местоположений; canonical topology изолирована. Одинаковые имена допустимы.
-Общие библиотеки: BaseTemplate, ModuleTemplate, PortType и будущий CableType.
+Общие библиотеки: BaseTemplate, ModuleTemplate, PortType и будущие ConnectorType
+и CableType. Совместное использование определений не объединяет topology карт.
 MapPresentationVariant — компоновка одной карты, не другая сеть; переключение
 не изменяет topology. NetworkWorkspace обеспечивает application isolation,
 права и организацию работы, не отменяя независимость сетей карт.
@@ -23,7 +26,8 @@ MapPresentationVariant — компоновка одной карты, не др
 ## Переносимые определения
 
 Отдельные файлы: PortType catalog, будущий CableType catalog, BaseTemplate,
-ModuleTemplate. Это определения создаваемых сущностей с необходимыми
+ModuleTemplate. Формат переноса ConnectorType и его зависимостей остаётся
+открытым. Это определения создаваемых сущностей с необходимыми
 зависимостями через локальные семантические ключи, не экспорт таблиц и не
 workspace snapshot/export-import v8. Исходные UUID не становятся identity новых записей.
 
@@ -40,15 +44,21 @@ module places и PortType assignments. Неподдерживаемое реда
 
 ## CableType
 
-CableType — общий пользовательский справочник физической конструкции кабеля.
+**DECIDED TARGET.** CableType — общий пользовательский справочник физической
+конструкции кабеля.
 Каждый новый Cable обязан ссылаться на существующий тип. Cable — identity
 конкретного физического изделия; ConnectionMember задаёт точное соответствие
 каналов. Число жил, пар или волокон не обязательно равно числу независимых
-сетевых линий. Изменение описательного имени/цвета может отражаться на всех
-связанных кабелях. Используемую физическую конструкцию нельзя менять так,
+сетевых линий. Общий маршрут или оболочка сами по себе не требуют объединения
+независимых линий в одну Cable identity. Стенд сохраняет один реальный
+двухточечный multichannel trunk backbone с независимыми mappings. Его нельзя
+заменять набором фиктивных Cable. Совместимость проверяется сервером по
+[L1-CONTRACT-03](L1_CONNECTIVITY.md#справочники-и-совместимость).
+Изменение описательного имени/цвета может отражаться на всех связанных кабелях. Используемую физическую конструкцию нельзя менять так,
 чтобы незаметно менялась физическая семантика существующих Cable.
 Исторические кабели требуют контролируемого перехода к обязательному типу.
-Vendor taxonomy, закрытый enum, schema/API здесь не задаются.
+Минимум структурных характеристик и правила начального наполнения каталогов
+остаются OPEN (CAT-D — PRODUCT DECISION PENDING).
 
 ## Синтетический стенд и локальные ключи
 
@@ -71,7 +81,8 @@ site → F01 → serverroom → F01-R01, F01-R02, F01-R03.
 
 Все неоговорённые endpoints имеют capacity 1. NETWORK_PORT активен и имеет
 NetworkInterface; пассивные endpoints — CONNECTION_POINT без interface.
-PortType keys: pt-rj45, pt-fiber, pt-multipair, pt-pair-terminal, pt-fc. Тип не доказывает continuity.
+Пассивные ODF, патч-панели и кроссы проводят только через явно заданные internal
+mappings. PortType keys: pt-rj45, pt-fiber, pt-multipair, pt-pair-terminal, pt-fc.
 CableType keys: ct-rj45 (4 пары, одна сетевая линия), ct-fiber24 (24 волокна),
 ct-fiber1 (одно волокно), ct-pair4 (4 пары с независимыми пассивными окончаниями),
 ct-fc-line (синтетическая FC линия; не спецификация duplex optics).
@@ -102,12 +113,16 @@ ct-fc-line (синтетическая FC линия; не спецификац�
 окончания пар; дополнительные Ethernet patch cords к ним не создаются.
 
 ModuleTemplate internal continuity не требуется этим активным NIC/HBA;
-его поддержка не выводится из BaseTemplate materialization.
+его поддержка не выводится из BaseTemplate materialization. NIC/HBA в стенде
+предоставляют собственные NetworkInterface. Стенд не проверяет рекурсивные
+установки, сменные трансиверы или аппаратные режимы QSFP.
 
 ### Точные внешние связи
 
 Каждая строка/элемент диапазона имеет Cable key, производный от указанного ключа
-строки и индекса. Для capacity 1 mapping всегда 1→1. Internal связи выше Cable не имеют.
+строки и индекса. Для capacity 1 mapping всегда 1→1. У внутренних связей выше
+нет Cable. REACHABLE ниже означает задокументированную continuity по canonical
+evidence.
 
 | Cable key | Endpoints / mapping / CableType |
 |---|---|
@@ -164,7 +179,7 @@ Backbone 3..20 подключены как резервные волокна б�
   mapping, cross-map связь отклоняются атомарно, прежние связи сохраняются.
 - Внешний lifecycle: preview create/edit permutation/subset, конфликт без частичной
   записи; disconnect backbone удаляет только внешний Cable/continuity, сохраняет
-  internal ODF mapping; reconnect — новая явно созданная Cable identity.
+  internal ODF mapping; создание нового Cable после disconnect даёт новую identity.
 - Save/reload сохраняет IDs, capacities, mappings, установки, типы и evidence;
   variants меняют только компоновку. Две карты с одинаковыми labels независимы.
 - Portable roundtrip сохраняет все определения; неизвестный тип требует решения,
@@ -176,11 +191,19 @@ blocker, не обходятся API/DB writes при пользовательс
 
 ## Future / OPEN
 
-Многоконцевой MPO→LC breakout требует одной Cable identity и настоящих окончаний;
-PON splitter — отдельной семантики деления; физическая SAS-связность полок —
-отдельного контракта. Duplex optics: соответствие двух физических волокон одному
-NetworkInterface остаётся OPEN; синтетические fiber1/FC endpoints не решают его.
-Эти сценарии не инициализируются фиктивными портами, Cable или connections.
+Обязательность и семантика настоящей многоконцевой MPO→LC сборки остаются OPEN.
+Историческое предположение L1-O5 об одной Cable identity для такой сборки
+отмечено в [L1-CONTRACT-03](L1_CONNECTIVITY.md#принятые-решения-l1-o1l1-o10--decided).
+Пассивный fanout ODF и двухточечный backbone не проверяют многоконцевую сборку.
+
+PON splitter, CWDM/DWDM и физическая SAS-связность полок требуют отдельных
+контрактов. Duplex optics: соответствие двух волокон одному NetworkInterface
+остаётся OPEN; синтетические fiber1/FC endpoints его не определяют.
+MPO→LC сборка отличается от аппаратного режима QSFP breakout. Lifecycle
+замены подключённого трансивера и смены режима остаётся
+[OPEN](OPEN_DECISIONS.md#открытые-вопросы-l1-contract-03).
+Неподдерживаемые сценарии не инициализируются фиктивными портами, Cable
+или connections.
 
 ## Будущая demo initialization
 
