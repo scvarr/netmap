@@ -1,0 +1,312 @@
+{
+  "1024/overview": {
+    "url": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f",
+    "active": [
+      "▦Объекты"
+    ],
+    "heading": [
+      "AUD-SW-A"
+    ],
+    "crumbs": [
+      "Инфраструктура/",
+      "Объекты/",
+      "AUD-SW-A"
+    ],
+    "links": [
+      "Объекты"
+    ],
+    "eyebrow": [
+      "Физический объект"
+    ],
+    "section": [
+      "AUD-SW-A",
+      "Обзор"
+    ],
+    "table": [],
+    "rows": 0
+  },
+  "1024/physical": {
+    "url": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f/physical",
+    "active": [
+      "▦Объекты"
+    ],
+    "heading": [
+      "AUD-SW-A"
+    ],
+    "crumbs": [
+      "Инфраструктура/",
+      "Объекты/",
+      "AUD-SW-A"
+    ],
+    "links": [
+      "Объекты"
+    ],
+    "eyebrow": [
+      "Физический объект"
+    ],
+    "section": [
+      "AUD-SW-A",
+      "Физика"
+    ],
+    "table": [
+      "ПортСостояниеВнешнее подключениеВнутренние связиИнтерфейсДействия"
+    ],
+    "rows": 48
+  },
+  "1024/interfaces": {
+    "url": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f/interfaces",
+    "active": [
+      "▦Объекты"
+    ],
+    "heading": [
+      "AUD-SW-A"
+    ],
+    "crumbs": [
+      "Инфраструктура/",
+      "Объекты/",
+      "AUD-SW-A"
+    ],
+    "links": [
+      "Объекты"
+    ],
+    "eyebrow": [
+      "Физический объект"
+    ],
+    "section": [
+      "AUD-SW-A",
+      "Интерфейсы"
+    ],
+    "table": [],
+    "rows": 0
+  },
+  "1024/logical": {
+    "url": "/map?view=logical&map=2aec0107-ac6e-48c6-b73d-1236f7f2c74a",
+    "active": [
+      "◇Карта"
+    ],
+    "heading": [],
+    "crumbs": [],
+    "links": [],
+    "eyebrow": [],
+    "section": [],
+    "table": [],
+    "rows": 0
+  },
+  "1024/baseEdit": {
+    "url": "/library/base-templates/27f959f9-c921-4f3e-993a-fb50c7119280/edit",
+    "heading": [
+      "Изменить шаблон"
+    ],
+    "active": [
+      "▤Шаблоны объектов"
+    ],
+    "eyebrow": [],
+    "links": [
+      "Библиотека"
+    ]
+  },
+  "1024/moduleEdit": {
+    "url": "/library/module-templates/9e7c81e0-ef7c-42a4-b8cf-55e26cc21bcf/edit",
+    "heading": [
+      "Изменить шаблон"
+    ],
+    "active": [],
+    "eyebrow": [
+      "Шаблон модуля"
+    ],
+    "links": [
+      "Библиотека"
+    ]
+  },
+  "1024/moduleBack": {
+    "url": "/library/base-templates",
+    "tab": "Объекты",
+    "rowVisible": false
+  },
+  "1024/moduleDirect": {
+    "url": "/library/module-templates/9e7c81e0-ef7c-42a4-b8cf-55e26cc21bcf/edit",
+    "active": [],
+    "heading": [
+      "Изменить шаблон"
+    ],
+    "crumbs": [],
+    "links": [],
+    "eyebrow": [
+      "Шаблон модуля"
+    ],
+    "section": [],
+    "table": [],
+    "rows": 0
+  },
+  "1440/overview": {
+    "url": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f",
+    "active": [
+      "▦Объекты"
+    ],
+    "heading": [
+      "AUD-SW-A"
+    ],
+    "crumbs": [
+      "Инфраструктура/",
+      "Объекты/",
+      "AUD-SW-A"
+    ],
+    "links": [
+      "Объекты"
+    ],
+    "eyebrow": [
+      "Физический объект"
+    ],
+    "section": [
+      "AUD-SW-A",
+      "Обзор"
+    ],
+    "table": [],
+    "rows": 0
+  },
+  "1440/physical": {
+    "url": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f/physical",
+    "active": [
+      "▦Объекты"
+    ],
+    "heading": [
+      "AUD-SW-A"
+    ],
+    "crumbs": [
+      "Инфраструктура/",
+      "Объекты/",
+      "AUD-SW-A"
+    ],
+    "links": [
+      "Объекты"
+    ],
+    "eyebrow": [
+      "Физический объект"
+    ],
+    "section": [
+      "AUD-SW-A",
+      "Физика"
+    ],
+    "table": [
+      "ПортСостояниеВнешнее подключениеВнутренние связиИнтерфейсДействия"
+    ],
+    "rows": 48
+  },
+  "1440/interfaces": {
+    "url": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f/interfaces",
+    "active": [
+      "▦Объекты"
+    ],
+    "heading": [
+      "AUD-SW-A"
+    ],
+    "crumbs": [
+      "Инфраструктура/",
+      "Объекты/",
+      "AUD-SW-A"
+    ],
+    "links": [
+      "Объекты"
+    ],
+    "eyebrow": [
+      "Физический объект"
+    ],
+    "section": [
+      "AUD-SW-A",
+      "Интерфейсы"
+    ],
+    "table": [],
+    "rows": 0
+  },
+  "1440/logical": {
+    "url": "/map?view=logical&map=2aec0107-ac6e-48c6-b73d-1236f7f2c74a",
+    "active": [
+      "◇Карта"
+    ],
+    "heading": [],
+    "crumbs": [],
+    "links": [],
+    "eyebrow": [],
+    "section": [],
+    "table": [],
+    "rows": 0
+  },
+  "1440/baseEdit": {
+    "url": "/library/base-templates/27f959f9-c921-4f3e-993a-fb50c7119280/edit",
+    "heading": [
+      "Изменить шаблон"
+    ],
+    "active": [
+      "▤Шаблоны объектов"
+    ],
+    "eyebrow": [],
+    "links": [
+      "Библиотека"
+    ]
+  },
+  "1440/moduleEdit": {
+    "url": "/library/module-templates/9e7c81e0-ef7c-42a4-b8cf-55e26cc21bcf/edit",
+    "heading": [
+      "Изменить шаблон"
+    ],
+    "active": [],
+    "eyebrow": [
+      "Шаблон модуля"
+    ],
+    "links": [
+      "Библиотека"
+    ]
+  },
+  "1440/moduleBack": {
+    "url": "/library/base-templates",
+    "tab": "Объекты",
+    "rowVisible": false
+  },
+  "1440/moduleDirect": {
+    "url": "/library/module-templates/9e7c81e0-ef7c-42a4-b8cf-55e26cc21bcf/edit",
+    "active": [],
+    "heading": [
+      "Изменить шаблон"
+    ],
+    "crumbs": [],
+    "links": [],
+    "eyebrow": [
+      "Шаблон модуля"
+    ],
+    "section": [],
+    "table": [],
+    "rows": 0
+  },
+  "reparent": {
+    "selected": [
+      "AUD-Room"
+    ],
+    "self": 0,
+    "child": 0,
+    "moved": true
+  },
+  "objectBreadcrumbReturn": {
+    "url": "/infrastructure/objects",
+    "active": [
+      "▦Объекты"
+    ],
+    "heading": [
+      "Каталог"
+    ],
+    "crumbs": [
+      "Инфраструктура/",
+      "Объекты"
+    ],
+    "links": [],
+    "eyebrow": [
+      "Инфраструктура"
+    ],
+    "section": [
+      "Объекты"
+    ],
+    "table": [
+      "НазваниеТипПортыКартыДействия"
+    ],
+    "rows": 2
+  }
+}

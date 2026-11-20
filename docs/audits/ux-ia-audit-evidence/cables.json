@@ -1,0 +1,102 @@
+{
+  "matched": 48,
+  "rackSearch1440": ".\n\nСоздать объект\nОборудование (2)\nКабели (48)\nПоиск\nТип\nВсе\nБез типа\nКарта\nВсе карты\nБез карты\nAUD-Map\nПорты\nВсе\nЕсть подключения\nЕсть свободные порты\nВсе порты заняты\nСостояние неизвестно\n\nПо заданным условиям ничего не найдено.",
+  "cables1440": {
+    "count": 48,
+    "headers": [
+      "Название",
+      "Конец A",
+      "Конец B",
+      "Состояние",
+      "Действия"
+    ],
+    "headerButtons": 0,
+    "filters": [
+      "Все",
+      "Разрешён"
+    ],
+    "height": 3259,
+    "target": "Cable fb853b70",
+    "byLabel": 1,
+    "byObject": 48,
+    "first": [
+      "Cable 1e957b3b",
+      "AUD-SW-A / 1-27",
+      "AUD-SW-B / 1-27",
+      "Разрешён",
+      "Переименовать⌫"
+    ],
+    "byPort": 1,
+    "combined": 0,
+    "endpointUrl": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f",
+    "backSearch": "",
+    "backTabAtInitialRender": "Оборудование (0)"
+  },
+  "rackSearch1024": ".\n\nСоздать объект\nОборудование (2)\nКабели (48)\nПоиск\nТип\nВсе\nБез типа\nКарта\nВсе карты\nБез карты\nAUD-Map\nПорты\nВсе\nЕсть подключения\nЕсть свободные порты\nВсе порты заняты\nСостояние неизвестно\n\nПо заданным условиям ничего не найдено.",
+  "cables1024": {
+    "count": 48,
+    "headers": [
+      "Название",
+      "Конец A",
+      "Конец B",
+      "Состояние",
+      "Действия"
+    ],
+    "headerButtons": 0,
+    "filters": [
+      "Все",
+      "Разрешён"
+    ],
+    "height": 3257,
+    "target": "Cable fb853b70",
+    "byLabel": 1,
+    "byObject": 48,
+    "first": [
+      "Cable 1e957b3b",
+      "AUD-SW-A / 1-27",
+      "AUD-SW-B / 1-27",
+      "Разрешён",
+      "Переименовать⌫"
+    ],
+    "byPort": 1,
+    "combined": 0,
+    "endpointUrl": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f",
+    "backSearch": "",
+    "backTabAtInitialRender": "Оборудование (0)"
+  },
+  "endpoints": [
+    {
+      "side": 0,
+      "objectName": "AUD-SW-A",
+      "overview": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f",
+      "physical": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f/physical",
+      "row": "1-27\tПодключён\t\nAUD-C-00 · AUD-SW-B / Панель 1 / 1-27\n\t—\t1-27\t×",
+      "remoteCellLinks": 0,
+      "rowTop": 1670.5,
+      "backSelected": "Оборудование (2)",
+      "backSearch": ""
+    },
+    {
+      "side": 1,
+      "objectName": "AUD-SW-B",
+      "overview": "/infrastructure/objects/9229a579-f4e0-442b-a6c2-02d18fa82536",
+      "physical": "/infrastructure/objects/9229a579-f4e0-442b-a6c2-02d18fa82536/physical",
+      "row": "1-27\nAUD-RJ45\tПодключён\t\nAUD-C-00 · AUD-SW-A / Панель 1 / 1-27\n\t—\t1-27\t×",
+      "remoteCellLinks": 0,
+      "rowTop": 1739.5,
+      "backSelected": "Оборудование (2)",
+      "backSearch": ""
+    }
+  ],
+  "unnamedDialog": "Переименовать кабель\nСпособ задания имени\nВвести вручную\nСгенерировать по шаблону\nИмя кабеля\nТехническое имя: Cable fb853b70\nОтмена\nСохранить",
+  "initialInput": "",
+  "manualFound": 1,
+  "generated": "AUD-C-00",
+  "generatedEnds": [
+    "AUD-C-00",
+    "AUD-SW-A / 1-27",
+    "AUD-SW-B / 1-27",
+    "Разрешён",
+    "Переименовать⌫"
+  ]
+}

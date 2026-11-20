@@ -1,0 +1,149 @@
+{
+  "seriesPreview": [
+    "AUD-Shelf-01",
+    "AUD-Shelf-02",
+    "AUD-Shelf-03",
+    "AUD-Shelf-04",
+    "AUD-Shelf-05",
+    "AUD-Shelf-06",
+    "AUD-Shelf-07",
+    "AUD-Shelf-08",
+    "AUD-Shelf-09",
+    "AUD-Shelf-10",
+    "AUD-Shelf-11",
+    "AUD-Shelf-12",
+    "AUD-Shelf-13",
+    "AUD-Shelf-14",
+    "AUD-Shelf-15",
+    "AUD-Shelf-16",
+    "AUD-Shelf-17",
+    "AUD-Shelf-18",
+    "AUD-Shelf-19",
+    "AUD-Shelf-20",
+    "AUD-Shelf-21",
+    "AUD-Shelf-22",
+    "AUD-Shelf-23",
+    "AUD-Shelf-24",
+    "AUD-Shelf-25",
+    "AUD-Shelf-26",
+    "AUD-Shelf-27",
+    "AUD-Shelf-28"
+  ],
+  "create1024": {
+    "selected": [
+      "AUD-Rack"
+    ],
+    "radios": 35,
+    "tree": {
+      "x": 325,
+      "y": 245.40625,
+      "width": 374,
+      "height": 424.59375,
+      "bottom": 670,
+      "scrollHeight": 1681,
+      "clientHeight": 425
+    },
+    "save": {
+      "x": 597.671875,
+      "y": 686,
+      "width": 101.328125,
+      "height": 39,
+      "bottom": 725,
+      "scrollHeight": 37,
+      "clientHeight": 37
+    },
+    "hit": "Сохранить",
+    "active": "<input value=\"AUD-Tray\">"
+  },
+  "escapeCloses": false,
+  "changedParent": {
+    "selected": [
+      "AUD-Annex"
+    ],
+    "radios": 35,
+    "tree": {
+      "x": 325,
+      "y": 245.40625,
+      "width": 374,
+      "height": 424.59375,
+      "bottom": 670,
+      "scrollHeight": 1681,
+      "clientHeight": 425
+    },
+    "save": {
+      "x": 597.671875,
+      "y": 686,
+      "width": 101.328125,
+      "height": 39,
+      "bottom": 725,
+      "scrollHeight": 37,
+      "clientHeight": 37
+    },
+    "hit": "Сохранить",
+    "active": "<button type=\"button\" role=\"radio\" aria-checked=\"true\" class=\"object-location-picker-tree__choice\"><strong>AUD-Annex</strong></button>"
+  },
+  "createdUnderRack": true,
+  "create1440": {
+    "selected": [
+      "AUD-Rack"
+    ],
+    "radios": 36,
+    "tree": {
+      "x": 533,
+      "y": 245.40625,
+      "width": 374,
+      "height": 656.59375,
+      "bottom": 902,
+      "scrollHeight": 1737,
+      "clientHeight": 657
+    },
+    "save": {
+      "x": 805.671875,
+      "y": 918,
+      "width": 101.328125,
+      "height": 39,
+      "bottom": 957,
+      "scrollHeight": 37,
+      "clientHeight": 37
+    },
+    "hit": "Сохранить",
+    "active": "<input value=\"AUD-Tray\">"
+  },
+  "moduleAfterCreate": "Объекты",
+  "seriesWideTree": {
+    "selected": [
+      "AUD-Room"
+    ],
+    "radios": 35,
+    "tree": {
+      "x": 55,
+      "y": 94.90625,
+      "width": 470.515625,
+      "height": 1672,
+      "bottom": 1766.90625,
+      "scrollHeight": 1657,
+      "clientHeight": 1672
+    },
+    "save": {
+      "x": 391.734375,
+      "y": 2118.90625,
+      "width": 133.78125,
+      "height": 39,
+      "bottom": 2157.90625,
+      "scrollHeight": 37,
+      "clientHeight": 37
+    },
+    "active": "<button type=\"button\">Создать серию дочерних</button>"
+  },
+  "seriesParentChange": {
+    "previewVisible": false,
+    "createEnabled": false
+  },
+  "seriesCancelPointer": {
+    "viewport": "1024×768",
+    "attempt": "Click Отменить after scrolling footer into view",
+    "interceptor": "aside.sidebar and .sidebar__health",
+    "result": "Playwright click timed out after retries",
+    "diagnostic": "\u001b[2m    - <aside class=\"sidebar\" aria-label=\"Основная навигация\">…</aside> intercepts pointer events\u001b[22m"
+  }
+}

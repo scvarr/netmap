@@ -1,0 +1,52 @@
+{
+  "AUD-SW-A": {
+    "url": "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f",
+    "main": "Инфраструктура\n/\nОбъекты\n/\nAUD-SW-A\nФИЗИЧЕСКИЙ ОБЪЕКТ\nAUD-SW-A\nОбзор\nФизика\nИнтерфейсы\nТип объекта\nФИЗИЧЕСКИЙ ОБЪЕКТ\n✎\nРасположение\n\nAUD-Campus / AUD-Building / AUD-Floor / AUD-Room / AUD-Rack\n\n✎\nШаблон\nAUD-48\nНа картах\n\nНа картах: нет\n\nДобавить на карту",
+    "tabs": [],
+    "links": [
+      [
+        "Объекты",
+        "/infrastructure/objects"
+      ],
+      [
+        "Обзор",
+        "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f"
+      ],
+      [
+        "Физика",
+        "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f/physical"
+      ],
+      [
+        "Интерфейсы",
+        "/infrastructure/objects/81c82ee0-8a61-4132-9cc6-21b8dbae689f/interfaces"
+      ]
+    ],
+    "back": {
+      "url": "/infrastructure/objects",
+      "search": ""
+    }
+  },
+  "AUD-SW-B": {
+    "url": "/infrastructure/objects/9229a579-f4e0-442b-a6c2-02d18fa82536",
+    "main": "Инфраструктура\n/\nОбъекты\n/\nAUD-SW-B\nФИЗИЧЕСКИЙ ОБЪЕКТ\nAUD-SW-B\nОбзор\nФизика\nИнтерфейсы\nТип объекта\nФИЗИЧЕСКИЙ ОБЪЕКТ\n✎\nРасположение\n\nМестоположение не задано.\n\n✎\nШаблон\nAUD-48\nНа картах\n\nНа картах: нет\n\nДобавить на карту",
+    "tabs": [],
+    "links": [
+      [
+        "Объекты",
+        "/infrastructure/objects"
+      ],
+      [
+        "Обзор",
+        "/infrastructure/objects/9229a579-f4e0-442b-a6c2-02d18fa82536"
+      ],
+      [
+        "Физика",
+        "/infrastructure/objects/9229a579-f4e0-442b-a6c2-02d18fa82536/physical"
+      ],
+      [
+        "Интерфейсы",
+        "/infrastructure/objects/9229a579-f4e0-442b-a6c2-02d18fa82536/interfaces"
+      ]
+    ]
+  }
+}

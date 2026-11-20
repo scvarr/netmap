@@ -1,0 +1,407 @@
+{
+  "browser": "157.0.4341.60",
+  "screens": {
+    "1440/map": {
+      "url": "/map",
+      "heading": [],
+      "eyebrow": [],
+      "crumbs": [],
+      "crumbLinks": [],
+      "active": [
+        "◇Карта"
+      ],
+      "tabs": []
+    },
+    "1440/inventory": {
+      "url": "/infrastructure/objects",
+      "heading": [
+        "Каталог"
+      ],
+      "eyebrow": [
+        "Инфраструктура"
+      ],
+      "crumbs": [
+        "Инфраструктура/",
+        "Объекты"
+      ],
+      "crumbLinks": [],
+      "active": [
+        "▦Объекты"
+      ],
+      "tabs": [
+        "Оборудование (0)",
+        "Кабели (0)"
+      ]
+    },
+    "1440/locations": {
+      "url": "/infrastructure/locations",
+      "heading": [
+        "Местоположения"
+      ],
+      "eyebrow": [
+        "Инфраструктура"
+      ],
+      "crumbs": [
+        "Инфраструктура/",
+        "Местоположения"
+      ],
+      "crumbLinks": [],
+      "active": [
+        "⌖Местоположения"
+      ],
+      "tabs": []
+    },
+    "1440/labels": {
+      "url": "/infrastructure/cable-label-templates",
+      "heading": [
+        "Шаблоны имён кабелей"
+      ],
+      "eyebrow": [
+        "Инфраструктура"
+      ],
+      "crumbs": [
+        "Инфраструктура/",
+        "Объекты/",
+        "Шаблоны имён кабелей"
+      ],
+      "crumbLinks": [
+        "Объекты"
+      ],
+      "active": [
+        "⌁Шаблоны имён кабелей"
+      ],
+      "tabs": []
+    },
+    "1440/library": {
+      "url": "/library/base-templates",
+      "heading": [
+        "Шаблоны оборудования и модулей"
+      ],
+      "eyebrow": [
+        "Библиотека"
+      ],
+      "crumbs": [],
+      "crumbLinks": [],
+      "active": [
+        "▤Шаблоны объектов"
+      ],
+      "tabs": [
+        "Объекты",
+        "Модули"
+      ]
+    },
+    "1440/ports": {
+      "url": "/catalogs/port-types",
+      "heading": [
+        "Типы портов"
+      ],
+      "eyebrow": [
+        "Справочники"
+      ],
+      "crumbs": [
+        "Справочники/",
+        "Типы портов"
+      ],
+      "crumbLinks": [],
+      "active": [
+        "▣Типы портов"
+      ],
+      "tabs": []
+    },
+    "1440/data": {
+      "url": "/settings/data",
+      "heading": [
+        "Данные NetMap"
+      ],
+      "eyebrow": [
+        "Настройки"
+      ],
+      "crumbs": [
+        "Данные NetMap"
+      ],
+      "crumbLinks": [],
+      "active": [
+        "⚙Данные NetMap"
+      ],
+      "tabs": []
+    },
+    "1440/newObject": {
+      "url": "/infrastructure/objects/new",
+      "heading": [
+        "Создать объект"
+      ],
+      "eyebrow": [
+        "Инфраструктура"
+      ],
+      "crumbs": [
+        "Инфраструктура/",
+        "Объекты/",
+        "Создать"
+      ],
+      "crumbLinks": [
+        "Объекты"
+      ],
+      "active": [
+        "▦Объекты"
+      ],
+      "tabs": []
+    },
+    "1440/newBase": {
+      "url": "/library/base-templates/new",
+      "heading": [
+        "Создать базовый шаблон"
+      ],
+      "eyebrow": [],
+      "crumbs": [
+        "Библиотека/",
+        "Библиотека/",
+        "Новый шаблон"
+      ],
+      "crumbLinks": [
+        "Библиотека"
+      ],
+      "active": [
+        "▤Шаблоны объектов"
+      ],
+      "tabs": []
+    },
+    "1440/newModule": {
+      "url": "/library/module-templates/new",
+      "heading": [
+        "Создать шаблон модуля"
+      ],
+      "eyebrow": [
+        "Шаблоны оборудования и модулей"
+      ],
+      "crumbs": [],
+      "crumbLinks": [],
+      "active": [],
+      "tabs": []
+    },
+    "1024/map": {
+      "url": "/map",
+      "heading": [],
+      "eyebrow": [],
+      "crumbs": [],
+      "crumbLinks": [],
+      "active": [
+        "◇Карта"
+      ],
+      "tabs": []
+    },
+    "1024/inventory": {
+      "url": "/infrastructure/objects",
+      "heading": [
+        "Каталог"
+      ],
+      "eyebrow": [
+        "Инфраструктура"
+      ],
+      "crumbs": [
+        "Инфраструктура/",
+        "Объекты"
+      ],
+      "crumbLinks": [],
+      "active": [
+        "▦Объекты"
+      ],
+      "tabs": [
+        "Оборудование (0)",
+        "Кабели (0)"
+      ]
+    },
+    "1024/locations": {
+      "url": "/infrastructure/locations",
+      "heading": [
+        "Местоположения"
+      ],
+      "eyebrow": [
+        "Инфраструктура"
+      ],
+      "crumbs": [
+        "Инфраструктура/",
+        "Местоположения"
+      ],
+      "crumbLinks": [],
+      "active": [
+        "⌖Местоположения"
+      ],
+      "tabs": []
+    },
+    "1024/labels": {
+      "url": "/infrastructure/cable-label-templates",
+      "heading": [
+        "Шаблоны имён кабелей"
+      ],
+      "eyebrow": [
+        "Инфраструктура"
+      ],
+      "crumbs": [
+        "Инфраструктура/",
+        "Объекты/",
+        "Шаблоны имён кабелей"
+      ],
+      "crumbLinks": [
+        "Объекты"
+      ],
+      "active": [
+        "⌁Шаблоны имён кабелей"
+      ],
+      "tabs": []
+    },
+    "1024/library": {
+      "url": "/library/base-templates",
+      "heading": [
+        "Шаблоны оборудования и модулей"
+      ],
+      "eyebrow": [
+        "Библиотека"
+      ],
+      "crumbs": [],
+      "crumbLinks": [],
+      "active": [
+        "▤Шаблоны объектов"
+      ],
+      "tabs": [
+        "Объекты",
+        "Модули"
+      ]
+    },
+    "1024/ports": {
+      "url": "/catalogs/port-types",
+      "heading": [
+        "Типы портов"
+      ],
+      "eyebrow": [
+        "Справочники"
+      ],
+      "crumbs": [
+        "Справочники/",
+        "Типы портов"
+      ],
+      "crumbLinks": [],
+      "active": [
+        "▣Типы портов"
+      ],
+      "tabs": []
+    },
+    "1024/data": {
+      "url": "/settings/data",
+      "heading": [
+        "Данные NetMap"
+      ],
+      "eyebrow": [
+        "Настройки"
+      ],
+      "crumbs": [
+        "Данные NetMap"
+      ],
+      "crumbLinks": [],
+      "active": [
+        "⚙Данные NetMap"
+      ],
+      "tabs": []
+    },
+    "1024/newObject": {
+      "url": "/infrastructure/objects/new",
+      "heading": [
+        "Создать объект"
+      ],
+      "eyebrow": [
+        "Инфраструктура"
+      ],
+      "crumbs": [
+        "Инфраструктура/",
+        "Объекты/",
+        "Создать"
+      ],
+      "crumbLinks": [
+        "Объекты"
+      ],
+      "active": [
+        "▦Объекты"
+      ],
+      "tabs": []
+    },
+    "1024/newBase": {
+      "url": "/library/base-templates/new",
+      "heading": [
+        "Создать базовый шаблон"
+      ],
+      "eyebrow": [],
+      "crumbs": [
+        "Библиотека/",
+        "Библиотека/",
+        "Новый шаблон"
+      ],
+      "crumbLinks": [
+        "Библиотека"
+      ],
+      "active": [
+        "▤Шаблоны объектов"
+      ],
+      "tabs": []
+    },
+    "1024/newModule": {
+      "url": "/library/module-templates/new",
+      "heading": [
+        "Создать шаблон модуля"
+      ],
+      "eyebrow": [
+        "Шаблоны оборудования и модулей"
+      ],
+      "crumbs": [],
+      "crumbLinks": [],
+      "active": [],
+      "tabs": []
+    }
+  },
+  "inventoryArrow": [
+    "Оборудование (0)"
+  ],
+  "cableDirect": {
+    "url": "/infrastructure/objects",
+    "heading": [
+      "Каталог"
+    ],
+    "eyebrow": [
+      "Инфраструктура"
+    ],
+    "crumbs": [
+      "Инфраструктура/",
+      "Объекты"
+    ],
+    "crumbLinks": [],
+    "active": [
+      "▦Объекты"
+    ],
+    "tabs": [
+      "Оборудование (0)",
+      "Кабели (0)"
+    ]
+  },
+  "cableReload": {
+    "url": "/infrastructure/objects",
+    "heading": [
+      "Каталог"
+    ],
+    "eyebrow": [
+      "Инфраструктура"
+    ],
+    "crumbs": [
+      "Инфраструктура/",
+      "Объекты"
+    ],
+    "crumbLinks": [],
+    "active": [
+      "▦Объекты"
+    ],
+    "tabs": [
+      "Оборудование (0)",
+      "Кабели (0)"
+    ]
+  },
+  "libraryArrow": [
+    "Модули"
+  ]
+}
