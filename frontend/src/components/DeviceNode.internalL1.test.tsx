@@ -232,7 +232,7 @@ describe('DeviceNode internal L1 overlay', () => {
 
 it('resolves current archived types for base and module glyphs while preserving actions and states', async () => {
   const { RuntimePortTypes } = await import('./RuntimePortTypes');
-  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => [{ id: 'type', name: 'Archived copper', color: '#123456', is_active: false }] } as Response);
+  const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => [{ id: 'type', name: 'Archived copper', color: '#123456', is_active: false, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null }] } as Response);
   const click = vi.fn();
   const slots = projection.attributes.blueprint_presentation.slots.map((slot, index) => ({ ...slot, port_type_id: 'type', slot_key: index ? 'installation:port' : slot.slot_key, kind: index ? 'NETWORK_PORT' : 'CONNECTION_POINT' }));
   const props = { data: { projection: { ...projection, attributes: { ...projection.attributes, blueprint_presentation: { ...projection.attributes.blueprint_presentation, slots } } }, cableOccupiedPortIds: new Set(['front-01']), physicalPortStates: { 'front-01': 'source', 'rear-01': 'unavailable' }, onPhysicalPortClick: click }, selected: true, width: 392 } as any;
@@ -249,7 +249,7 @@ it('resolves current archived types for base and module glyphs while preserving 
   expect(click).toHaveBeenCalledTimes(1);
   expect(fetchMock).toHaveBeenCalledTimes(1);
   view.unmount();
-  fetchMock.mockResolvedValue({ ok: true, json: async () => [{ id: 'type', name: 'Renamed', color: '#ABCDEF', is_active: false }] } as Response);
+  fetchMock.mockResolvedValue({ ok: true, json: async () => [{ id: 'type', name: 'Renamed', color: '#ABCDEF', is_active: false, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null }] } as Response);
   render(<RuntimePortTypes><DeviceNode {...props} /></RuntimePortTypes>);
   expect(getComputedStyle(await screen.findByTitle('Front 01 · Renamed')).backgroundColor).toBe('rgb(171, 205, 239)');
   fetchMock.mockRestore();

@@ -119,7 +119,8 @@ class ModuleReconciliation:
         session = self.session
         repository = CanonicalRepository(session)
         catalog = HardwareCatalog(session)
-        point = repository.add_connection_point(config.physical_object_id, cardinality=1)
+        capacity = session.get(m.PortType, definition.port_type_id).cardinality
+        point = repository.add_connection_point(config.physical_object_id, cardinality=capacity)
         catalog._metadata(connection_point_id=point.id, key=DISPLAY_ALIAS_KEY, value=definition.display_name)
         interface_id = None
         if definition.kind == "NETWORK_PORT":

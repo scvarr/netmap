@@ -1,5 +1,6 @@
 """Module drafts, atomic publication and advisory installation diagnostics."""
 import copy
+import uuid
 
 from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
@@ -44,6 +45,9 @@ def analyze_installation(session, installation, candidate):
     revision = session.get(m.ModuleTemplateRevision, installation.module_revision_id)
     before = published_definition(session, revision.template_id, revision.id)
     old, new = ({e["key"]: e for e in d["endpoints"]} for d in (before, candidate))
+    capacities = {str(item.id): item.cardinality for item in session.scalars(select(m.PortType).where(
+        m.PortType.id.in_({uuid.UUID(endpoint["port_type_id"]) for endpoint in (*old.values(), *new.values())})
+    ))}
     definitions = {d.id: d.definition_key for d in session.scalars(select(m.ModuleEndpointDefinition).where(m.ModuleEndpointDefinition.module_revision_id == revision.id))}
     rows = list(session.scalars(select(m.ModuleEndpointMapping).where(m.ModuleEndpointMapping.installation_id == installation.id)))
     mappings = {definitions[row.definition_id]: row for row in rows if row.definition_id in definitions}
@@ -59,7 +63,7 @@ def analyze_installation(session, installation, candidate):
             reasons.append({"code": "MISSING_ENDPOINT_MAPPING", "key": key, "endpoint_name": definition["display_name"]})
             continue
         point = session.get(m.ConnectionPoint, mapping.connection_point_id)
-        valid = (point is not None and point.cardinality == 1 and point.physical_object_id == config.physical_object_id
+        valid = (point is not None and point.cardinality == capacities[definition["port_type_id"]] and point.physical_object_id == config.physical_object_id
                  and (definition["kind"] == "NETWORK_PORT") == (mapping.network_interface_id is not None))
         if mapping.network_interface_id is not None:
             valid = valid and session.scalar(select(m.NetworkInterfacePhysicalOwner.id).where(
@@ -80,11 +84,15 @@ def analyze_installation(session, installation, candidate):
         if not valid:
             reasons.append({"code": "INVALID_ENDPOINT_MAPPING", "key": key, "endpoint_name": definition["display_name"]})
         if key not in new:
-            blockers = endpoint_dependencies(session, config, mapping, definition)
+            blockers = endpoint_dependencies(
+                session, config, mapping, definition, expected_cardinality=capacities[definition["port_type_id"]],
+            )
             if blockers:
                 reasons.append({"code": "ENDPOINT_DEPENDENCIES", "key": key, "endpoint_name": definition["display_name"], "dependencies": blockers})
         elif definition["kind"] != new[key]["kind"]:
             reasons.append({"code": "ENDPOINT_KIND_CHANGE", "key": key, "endpoint_name": definition["display_name"]})
+        elif capacities[definition["port_type_id"]] != capacities[new[key]["port_type_id"]]:
+            reasons.append({"code": "PHYSICAL_STRUCTURE_IMMUTABLE", "key": key, "endpoint_name": definition["display_name"]})
     label = session.scalar(select(m.EntityMetadata.value).where(m.EntityMetadata.physical_object_id == config.physical_object_id, m.EntityMetadata.key == DISPLAY_ALIAS_KEY))
     return {"installation_id": str(installation.id), "physical_object_id": str(config.physical_object_id),
             "display_name": label or str(config.physical_object_id), "source_revision_id": str(revision.id),

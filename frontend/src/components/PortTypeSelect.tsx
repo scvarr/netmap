@@ -2,13 +2,25 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useI18n } from '../i18n';
 
-export type PortType = {
+export type Medium = 'COPPER' | 'FIBER';
+
+export type CatalogType = {
   id: string;
   name: string;
   description: string | null;
   color: string;
   is_active: boolean;
 };
+
+export type PortType = CatalogType & {
+  medium: Medium;
+  members: string[];
+  cardinality: number;
+  connector_type_id: string | null;
+};
+
+export type ConnectorType = CatalogType & { mating_profile: string; termination: 'PLUG' | 'SOCKET' };
+export type CableType = CatalogType & { medium: Medium; construction: string };
 
 export const portTypesUrl = '/api/v1/port-types';
 
@@ -39,18 +51,19 @@ export function PortTypeNotice({ types, failed }: ReturnType<typeof usePortTypes
   </p>;
 }
 
-export function PortTypeSelect({ types, value, onChange, bulk = false }: {
+export function PortTypeSelect({ types, value, onChange, bulk = false, singleMember = false }: {
   types: PortType[] | undefined;
   value: string;
   onChange: (id: string) => void;
   bulk?: boolean;
+  singleMember?: boolean;
 }) {
   const { t } = useI18n();
   const current = types?.find(type => type.id === value);
   return <label>{t(bulk ? 'portTypes.assignSelected' : 'portTypes.field')}
     <select value={value} disabled={!types} onChange={event => onChange(event.target.value)}>
       <option value="" disabled>{t('portTypes.select')}</option>
-      {types?.filter(type => type.is_active || type.id === value).map(type =>
+      {types?.filter(type => (type.is_active && (!singleMember || type.cardinality === 1)) || type.id === value).map(type =>
         <option key={type.id} value={type.id} disabled={!type.is_active}>
           {type.name} · {type.color}{type.is_active ? '' : ` · ${t('portTypes.archived')}`}
         </option>)}

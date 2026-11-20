@@ -19,7 +19,7 @@ from app.models import (
     BaseTemplateRevision,
     PresentationPanel,
     ModuleBay, ModuleTemplate, ModuleTemplateRevision, ModuleEndpointDefinition,
-    ModuleInstallation, ModuleEndpointMapping, PhysicalObject,
+    ModuleInstallation, ModuleEndpointMapping, PhysicalObject, PortType,
 )
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from app.module_endpoint_names import module_endpoint_contexts
@@ -444,7 +444,8 @@ class HardwareCatalog:
         self.session.flush()
         repository = CanonicalRepository(self.session)
         for definition in self.session.scalars(select(ModuleEndpointDefinition).where(ModuleEndpointDefinition.module_revision_id == revision.id).order_by(ModuleEndpointDefinition.order_index)):
-            point = repository.add_connection_point(object_id, cardinality=1)
+            capacity = self.session.get(PortType, definition.port_type_id).cardinality
+            point = repository.add_connection_point(object_id, cardinality=capacity)
             self._metadata(connection_point_id=point.id, key=DISPLAY_ALIAS_KEY, value=definition.display_name)
             interface_id = None
             if definition.kind == "NETWORK_PORT":

@@ -63,7 +63,7 @@ export function EditModuleTemplatePage({ dataSource = moduleReviewDataSource }: 
   const reasonLabels = {
     CONCURRENT_CHANGE: 'reconciliation.concurrent', INSTALLATION_CHANGED: 'moduleReconciliation.changed',
     TARGET_REVISION_CHANGED: 'reconciliation.targetChanged', APPLY_FAILED: 'reconciliation.failed',
-    BAY_COMPATIBILITY_MISMATCH: 'moduleReview.compatibility', ENDPOINT_DEPENDENCIES: 'review.reason.dependencies',
+    BAY_COMPATIBILITY_MISMATCH: 'moduleReview.compatibility', PHYSICAL_STRUCTURE_IMMUTABLE: 'review.reason.immutable', ENDPOINT_DEPENDENCIES: 'review.reason.dependencies',
     ENDPOINT_KIND_CHANGE: 'review.reason.kind', MISSING_ENDPOINT_MAPPING: 'review.reason.mapping',
     INVALID_ENDPOINT_MAPPING: 'reconciliation.mapping', IDENTITY_AND_DATA_PRESERVED: 'review.reason.preserved',
   } as const;

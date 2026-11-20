@@ -12,6 +12,7 @@ from app.base_template_review import physical_structure
 from tests.test_hardware_configuration import base_payload, create_base, create_object, client
 from tests.test_base_template_review import open_draft, save, check
 from tests.test_base_template_publication import publish
+from tests.port_type_fixtures import ensure_port_type_id
 
 
 def payload(n=4, fanout=True):
@@ -19,6 +20,8 @@ def payload(n=4, fanout=True):
     rear = d['slots'][0]
     rear.update(kind='CONNECTION_POINT', cardinality=n)
     d['slots'] = [rear] + [{**rear, 'key': str(uuid.uuid4()), 'display_name': str(i), 'cardinality': 1 if fanout else n} for i in range(n if fanout else 1)]
+    for slot in d['slots']:
+        slot['port_type_id'] = ensure_port_type_id(slot['cardinality'])
     d['internal_links'] = [{'from_slot_key': rear['key'], 'to_slot_key': s['key'], 'member_mappings': [{'from_member_index': i, 'to_member_index': 1}]} for i,s in enumerate(d['slots'][1:],1)] if fanout else [{'from_slot_key': rear['key'], 'to_slot_key': d['slots'][1]['key'], 'member_mappings': [{'from_member_index': i, 'to_member_index': n-i+1} for i in range(1,n)]}]
     return d
 
@@ -84,10 +87,9 @@ def test_immutable_publication_and_allowed_reconcile():
     before=client.get('/v1/workspace/package').json()['canonical']
     draft=open_draft(tid)
     d=copy.deepcopy(draft['definition']);d['slots'][0]['cardinality']+=1
-    saved=save(tid,draft,d)
-    response=client.post(f'/v1/library/base-templates/{tid}/draft/check', params={'expected_generation': saved['generation']})
-    assert response.status_code==409,response.text
-    draft=open_draft(tid);d=copy.deepcopy(draft['definition']);d['slots'][0]['cardinality']-=1
+    rejected = client.put(f'/v1/library/base-templates/{tid}/draft', params={'expected_generation': draft['generation']}, json=d)
+    assert rejected.status_code == 422, rejected.text
+    draft=open_draft(tid);d=copy.deepcopy(draft['definition'])
     d['name']='Presentation';d['slots'][0]['rendered_position']['x']=.3
     checked=check(tid,save(tid,draft,d))
     result=publish(tid,checked['review']['candidate_id'])
@@ -104,7 +106,9 @@ def test_physical_changes_rejected_without_instances(change):
     if change=='remove':
         removed=d['slots'].pop()['key'];d['internal_links']=[l for l in d['internal_links'] if removed not in (l['from_slot_key'],l['to_slot_key'])]
     if change=='kind': next(s for s in d['slots'] if s['cardinality']==1)['kind']='NETWORK_PORT'
-    if change=='cardinality': d['slots'][0]['cardinality']+=1
+    if change=='cardinality':
+        d['slots'][0]['cardinality']+=1
+        d['slots'][0]['port_type_id'] = ensure_port_type_id(d['slots'][0]['cardinality'])
     if change=='mapping': d['internal_links']=d['internal_links'][:1]; link=d['internal_links'][0]; field='from_member_index' if next(s for s in d['slots'] if s['key']==link['from_slot_key'])['cardinality']>1 else 'to_member_index';link['member_mappings'][0][field]=1 if link['member_mappings'][0][field]!=1 else 2
     if change=='bay': d['bays'][0]['compatibility']='different'
     saved=save(tid,draft,d)

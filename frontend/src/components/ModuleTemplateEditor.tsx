@@ -44,10 +44,10 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
         <option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option>
         <option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option>
       </select></label>
-      <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} />
+      <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} singleMember={kind === 'NETWORK_PORT'} />
       <label>{t('blueprint.endpoint.count')}<input type="number" min={1} max={256} value={count} onChange={event => setCount(Number(event.target.value))} /></label>
       <button type="button" className="secondary-action" disabled={
-        !catalog.types?.some(type => type.id === portTypeId && type.is_active) || !Number.isInteger(count) || count < 1 || count > 256
+        !catalog.types?.some(type => type.id === portTypeId && type.is_active && (kind !== 'NETWORK_PORT' || type.cardinality === 1)) || !Number.isInteger(count) || count < 1 || count > 256
       } onClick={() => {
         const added = Array.from({ length: count }, (_, index) => ({
           key: crypto.randomUUID(), display_name: count === 1 ? '' : String(value.endpoints.length + index + 1), kind, port_type_id: portTypeId,
@@ -55,7 +55,8 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
         changeEndpoints([...value.endpoints, ...added]);
         setSelection(new Set(added.map(endpoint => endpoint.key)));
       }}>{t('hardware.addEndpoint')}</button>
-      {selected.size > 1 && <PortTypeSelect bulk types={catalog.types} value="" onChange={id =>
+      {selected.size > 1 && <PortTypeSelect bulk types={catalog.types} value=""
+        singleMember={value.endpoints.some(endpoint => selected.has(endpoint.key) && endpoint.kind === 'NETWORK_PORT')} onChange={id =>
         changeEndpoints(value.endpoints.map(endpoint => selected.has(endpoint.key) ? { ...endpoint, port_type_id: id } : endpoint))
       } />}
       <div className="module-template-editor__ports">
@@ -70,10 +71,10 @@ export function ModuleTemplateEditor({ value, onChange, disabled = false }: {
       {active && (() => { const endpoint = active; const index = value.endpoints.indexOf(endpoint); return <fieldset className="endpoint-group">
           <legend>{t('moduleGeometry.portDetails')}</legend>
           <label>{t('hardware.name')}<input required value={endpoint.display_name} onChange={e => changeEndpoints(value.endpoints.map(d => d.key === endpoint.key ? { ...d, display_name: e.target.value } : d))} /></label>
-          <PortTypeSelect types={catalog.types} value={endpoint.port_type_id} onChange={id =>
+          <PortTypeSelect types={catalog.types} value={endpoint.port_type_id} singleMember={endpoint.kind === 'NETWORK_PORT'} onChange={id =>
             changeEndpoints(value.endpoints.map(item => item.key === endpoint.key ? { ...item, port_type_id: id } : item))
           } />
-          <label>{t('blueprint.endpoint.kind')}<select value={endpoint.kind} onChange={e => changeEndpoints(value.endpoints.map(d => d.key === endpoint.key ? { ...d, kind: e.target.value as typeof d.kind } : d))}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
+          <label>{t('blueprint.endpoint.kind')}<select value={endpoint.kind} onChange={e => changeEndpoints(value.endpoints.map(d => d.key === endpoint.key ? { ...d, kind: e.target.value as typeof d.kind } : d))}><option value="NETWORK_PORT" disabled={(catalog.types?.find(type => type.id === endpoint.port_type_id)?.cardinality ?? 1) > 1}>{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <div className="blueprint-editor-controls__row">{(['x', 'y'] as const).map(axis => <CoordinateInput key={`${endpoint.key}:${axis}`} label={t(axis === 'x' ? 'moduleGeometry.x' : 'moduleGeometry.y')} value={value.geometry.endpoints[endpoint.key][axis]} onCommit={coordinate => {
             onChange({ ...value, geometry: { ...value.geometry, endpoints: { ...value.geometry.endpoints,
               [endpoint.key]: { ...value.geometry.endpoints[endpoint.key], [axis]: coordinate } } } });

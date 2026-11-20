@@ -7,6 +7,7 @@ from app.database import SessionLocal
 from app.base_template_review import BaseTemplateReview
 from app.workspace_portability import export_package, import_package, reset_dataset, PackageError
 from tests.test_multichannel_definitions import payload
+from tests.port_type_fixtures import ensure_port_type_id
 from tests.test_hardware_configuration import create_base, create_object, client
 from tests.test_base_template_review import open_draft, save, check
 from tests.test_base_template_publication import publish
@@ -18,6 +19,7 @@ def test_check_rejects_structure_without_creating_candidate_and_publish_still_gu
     if with_object: create_object(tid)
     draft=open_draft(tid)
     definition=copy.deepcopy(draft['definition']);definition['slots'][0]['cardinality']+=1
+    definition['slots'][0]['port_type_id'] = ensure_port_type_id(definition['slots'][0]['cardinality'])
     saved=save(tid,draft,definition)
     before=client.get('/v1/workspace/package').json()
     response=client.post(f'/v1/library/base-templates/{tid}/draft/check',params={'expected_generation': saved['generation']})
@@ -46,11 +48,14 @@ def legacy_shared_definition(saved_draft=False):
         slots={s.id:s for s in session.scalars(select(m.BuiltInEndpointDefinition).where(m.BuiltInEndpointDefinition.base_revision_id==revision.id))}
         rear=next(s for s in slots.values() if s.cardinality==4)
         rear.cardinality=1
+        single_member_type = uuid.UUID(ensure_port_type_id())
+        rear.port_type_id = single_member_type
         for link in links: link.member_mappings=[{'from_member_index':1,'to_member_index':1}]
         if saved_draft:
             draft=session.scalar(select(m.BaseTemplateDraft).where(m.BaseTemplateDraft.template_id==uuid.UUID(tid)))
             definition=copy.deepcopy(draft.definition)
-            for slot in definition['slots']: slot['cardinality']=1
+            for slot in definition['slots']:
+                slot.update(cardinality=1, port_type_id=str(single_member_type))
             for link in definition['internal_links']: link['member_mappings']=[{'from_member_index':1,'to_member_index':1}]
             draft.definition=definition
         rid=str(revision.id)

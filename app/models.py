@@ -1289,10 +1289,50 @@ class ModuleTemplatePublication(Base):
     id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_candidates.id", ondelete="CASCADE"), primary_key=True)
     revision_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("module_template_revisions.id", ondelete="CASCADE"), unique=True, nullable=False)
 
+class ConnectorType(Base):
+    __tablename__ = "connector_types"
+    __table_args__ = (
+        Index("uq_connector_types_normalized_name", func.lower(sa.text("name")), unique=True),
+        CheckConstraint("name <> ''", name="nonempty_name"),
+        CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
+        CheckConstraint("termination IN ('PLUG', 'SOCKET')", name="termination"),
+        CheckConstraint("mating_profile <> ''", name="nonempty_profile"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(sa.Text)
+    color: Mapped[str] = mapped_column(String(7), nullable=False)
+    is_active: Mapped[bool] = mapped_column(nullable=False)
+    mating_profile: Mapped[str] = mapped_column(String(255))
+    termination: Mapped[str] = mapped_column(String(6))
+
+
+class CableType(Base):
+    __tablename__ = "cable_types"
+    __table_args__ = (
+        Index("uq_cable_types_normalized_name", func.lower(sa.text("name")), unique=True),
+        CheckConstraint("name <> ''", name="nonempty_name"),
+        CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
+        CheckConstraint("medium IN ('COPPER', 'FIBER')", name="medium"),
+        CheckConstraint("construction <> ''", name="nonempty_construction"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(sa.Text)
+    color: Mapped[str] = mapped_column(String(7), nullable=False)
+    is_active: Mapped[bool] = mapped_column(nullable=False)
+    medium: Mapped[str] = mapped_column(String(6))
+    construction: Mapped[str] = mapped_column(String(255))
+
+
 class PortType(Base):
     __tablename__ = "port_types"
     __table_args__ = (
         Index("uq_port_types_normalized_name", func.lower(sa.text("name")), unique=True),
+        CheckConstraint("medium IN ('COPPER', 'FIBER')", name="medium"),
+        CheckConstraint("jsonb_array_length(members) >= 1", name="nonempty_members"),
         CheckConstraint("name <> ''", name="nonempty_name"),
         CheckConstraint("color ~ '^#[0-9A-F]{6}$'", name="hex_color"),
     )
@@ -1302,3 +1342,12 @@ class PortType(Base):
     description: Mapped[str | None] = mapped_column(sa.Text)
     color: Mapped[str] = mapped_column(String(7), nullable=False)
     is_active: Mapped[bool] = mapped_column(nullable=False)
+    medium: Mapped[str] = mapped_column(String(6))
+    members: Mapped[list[str]] = mapped_column(JSONB)
+    connector_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("connector_types.id", ondelete="RESTRICT"), index=True,
+    )
+
+    @property
+    def cardinality(self) -> int:
+        return len(self.members)

@@ -94,7 +94,7 @@ def _contains_reference(value, ids):
     return False
 
 
-def endpoint_dependencies(session, config, mapping, definition, *, lock_rows=False):
+def endpoint_dependencies(session, config, mapping, definition, *, lock_rows=False, expected_cardinality=1):
     """Inspect every persisted direct endpoint reference, including JSON policies.
 
     Only the expected materialization rows and unchanged generated aliases may
@@ -102,7 +102,7 @@ def endpoint_dependencies(session, config, mapping, definition, *, lock_rows=Fal
     """
     reasons = set()
     point = session.get(m.ConnectionPoint, mapping.connection_point_id)
-    if point is None or point.physical_object_id != config.physical_object_id or point.cardinality != 1:
+    if point is None or point.physical_object_id != config.physical_object_id or point.cardinality != expected_cardinality:
         reasons.add("CONNECTION_POINT_DATA")
     if (definition["kind"] == "NETWORK_PORT") != (mapping.network_interface_id is not None):
         reasons.add("ENDPOINT_MAPPING_SHAPE")

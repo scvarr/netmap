@@ -74,6 +74,11 @@ export function AppShell() {
               <span className="shell-nav__icon" aria-hidden="true">▣</span>
               <span className="shell-nav__label">{t('portTypes.title')}</span>
             </NavLink>
+            {([['connector-types', 'physicalCatalog.connectorTypes', '◇'], ['cable-types', 'physicalCatalog.cableTypes', '∿']] as const).map(([path, label, icon]) =>
+              <NavLink key={path} className={navClassName} to={`/catalogs/${path}`} title={t(label)} data-tooltip={t(label)}>
+                <span className="shell-nav__icon" aria-hidden="true">{icon}</span>
+                <span className="shell-nav__label">{t(label)}</span>
+              </NavLink>)}
           </div>
           <div className="shell-nav__group">
             <span className="shell-nav__group-label">{t('workspace.section')}</span>

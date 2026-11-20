@@ -18,13 +18,13 @@ from sqlalchemy.sql.sqltypes import JSON
 
 from app.database import Base
 from app import models
-from app.port_types import PortTypeInput
+from app.port_types import CableTypeInput, ConnectorTypeInput, PortTypeInput
 from app.schemas import ModuleBayRequest, AutomaticLocationLayout
 from pydantic import ValidationError
 
 
 FORMAT = "netmap-workspace"
-FORMAT_VERSION = 8
+FORMAT_VERSION = 9
 
 # Section, public entity name, storage model, public attributes. The sections
 # keep canonical facts distinct from authoring provenance and map presentation.
@@ -90,7 +90,9 @@ ENTITIES = (
     ("presentation", "MapViewPosition", "MapViewPosition", "id placement_id variant_id view_key x y locked display_width face_override"),
     ("presentation", "MapLocationState", "MapLocationState", "id variant_id location_id collapsed visible_direct_elements geometry manual_bounds face_override"),
     ("presentation", "MapTextAnnotation", "MapTextAnnotation", "id map_id text position text_color font_size"),
-    ("settings", "PortType", "PortType", "id name description color is_active"),
+    ("settings", "ConnectorType", "ConnectorType", "id name description color is_active mating_profile termination"),
+    ("settings", "PortType", "PortType", "id name description color is_active medium members connector_type_id"),
+    ("settings", "CableType", "CableType", "id name description color is_active medium construction"),
     ("settings", "CableLabelSettings", "CableLabelSettings", "id unique_labels"),
     ("settings", "CableLabelTemplate", "CableLabelTemplate", "id name description pattern start_at"),
     ("settings", "CableLabelHistory", "CableLabelHistory", "id label cable_id assigned_at released_at"),
@@ -218,12 +220,14 @@ def validate_package(package: object) -> dict:
                     row["automatic_layout"] = TypeAdapter(AutomaticLocationLayout).validate_python(row["automatic_layout"]).model_dump(mode="json")
                 except ValidationError as error:
                     raise PackageError("Invalid MapPresentationVariant.automatic_layout settings") from error
-            if model is models.PortType:
+            catalog_schema = {models.PortType: PortTypeInput, models.ConnectorType: ConnectorTypeInput,
+                              models.CableType: CableTypeInput}.get(model)
+            if catalog_schema:
                 try:
-                    port_type = PortTypeInput.model_validate({k: v for k, v in row.items() if k != "id"})
+                    item = catalog_schema.model_validate({k: v for k, v in row.items() if k != "id"})
                 except ValidationError as error:
-                    raise PackageError("Invalid PortType record") from error
-                row.update(port_type.model_dump())
+                    raise PackageError(f"Invalid {name} record") from error
+                row.update(item.model_dump())
             if model is models.ModuleBay:
                 try:
                     ModuleBayRequest.model_validate({k: row[k] for k in ModuleBayRequest.model_fields if k in row})
@@ -280,14 +284,17 @@ def validate_package(package: object) -> dict:
     _validate_hardware_configuration(result)
     _validate_template_reviews(result)
     _validate_module_template_reviews(result)
-    port_type_ids = {row["id"] for row in result["port_types"]}
+    capacities = {row["id"]: len(row["members"]) for row in result["port_types"]}
     for prefix, section in (("base", "slots"), ("module", "endpoints")):
         for state in ("drafts", "candidates"):
             for row in result[f"{prefix}_template_{state}"]:
                 for endpoint in row["definition"][section]:
                     type_id = uuid.UUID(endpoint["port_type_id"])
-                    if type_id not in port_type_ids or str(type_id) != endpoint["port_type_id"]:
+                    if type_id not in capacities or str(type_id) != endpoint["port_type_id"]:
                         raise PackageError("Template definition requires a canonical UUID of an existing port type")
+                    if ((prefix == "base" and endpoint.get("cardinality", 1) != capacities[type_id])
+                            or (endpoint["kind"] == "NETWORK_PORT" and capacities[type_id] != 1)):
+                        raise PackageError("Template definition contradicts its port type cardinality")
     return result
 
 
@@ -410,6 +417,7 @@ def _validate_hardware_configuration(rows):
     definitions = {r["id"]: r for r in rows["built_in_endpoint_definitions"]}
     module_definitions = {r["id"]: r for r in rows["module_endpoint_definitions"]}
     points = {r["id"]: r for r in rows["connection_points"]}
+    capacities = {row["id"]: len(row["members"]) for row in rows["port_types"]}
     owners = {(r["interface_id"], r["physical_object_id"]) for r in rows["network_interface_physical_owners"]}
     bindings = {(r["interface_id"], r["point_id"], r["point_member"]) for r in rows["interface_physical_bindings"]}
     panel_keys = {(r["base_revision_id"], r["panel_key"]) for r in rows["presentation_panels"]}
@@ -421,8 +429,11 @@ def _validate_hardware_configuration(rows):
     occupied = set()
     for definition in definitions.values():
         capacity = definition["cardinality"]
-        if type(capacity) is not int or capacity < 1 or (definition["kind"] == "NETWORK_PORT" and capacity != 1):
+        if (type(capacity) is not int or capacity != capacities[definition["port_type_id"]]
+                or (definition["kind"] == "NETWORK_PORT" and capacity != 1)):
             raise PackageError("Invalid endpoint cardinality")
+    if any(d["kind"] == "NETWORK_PORT" and capacities[d["port_type_id"]] != 1 for d in module_definitions.values()):
+        raise PackageError("Invalid module endpoint cardinality")
     for link in rows["base_internal_links"]:
         if not isinstance(link["member_mappings"], list) or not link["member_mappings"]:
             raise PackageError("Internal mappings must be nonempty")
@@ -451,6 +462,8 @@ def _validate_hardware_configuration(rows):
         if point_id in seen_points or points[point_id]["physical_object_id"] != object_id:
             raise PackageError("Endpoint mapping has duplicate or foreign canonical point")
         seen_points.add(point_id)
+        if points[point_id]["cardinality"] != capacities[definition["port_type_id"]]:
+            raise PackageError("Canonical point cardinality differs from its port type")
         if definition["kind"] == "NETWORK_PORT":
             if interface_id is None or interface_id in seen_interfaces or (interface_id, object_id) not in owners or (interface_id, point_id, 1) not in bindings:
                 raise PackageError("Network port mapping has invalid canonical ownership/binding")

@@ -1,37 +1,27 @@
-"""API for the standalone user-defined port type catalog."""
+"""Physical catalogs and template assignment validation."""
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StringConstraints, field_validator
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_session
 from app.errors import ValidationError
-from app.models import BaseTemplateCandidate, BaseTemplateDraft, ModuleTemplateCandidate, ModuleTemplateDraft, PortType
+from app.models import (
+    BaseTemplateCandidate, BaseTemplateDraft, BuiltInEndpointDefinition, CableType,
+    ConnectorType, ModuleEndpointDefinition, ModuleTemplateCandidate, ModuleTemplateDraft, PortType,
+)
+
+Medium = Literal["COPPER", "FIBER"]
+StructuralLabel = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255, pattern=r"^[^\x00\r\n]+$")]
+DatabaseSession = Annotated[Session, Depends(get_session)]
 
 
-def validate_port_type_assignments(session, endpoints, previous=()):
-    retained = {(endpoint["key"], endpoint["port_type_id"]) for endpoint in previous}
-    ids = {uuid.UUID(endpoint["port_type_id"]) for endpoint in endpoints
-           if (endpoint["key"], endpoint["port_type_id"]) not in retained}
-    if not ids:
-        return
-    # Serialize new assignments with both archiving and deletion.
-    types = {item.id: item for item in session.scalars(
-        select(PortType).where(PortType.id.in_(ids)).order_by(PortType.id)
-        .with_for_update(read=True).execution_options(populate_existing=True)
-    )}
-    if ids != types.keys():
-        raise ValidationError("Port type not found")
-    if any(not item.is_active for item in types.values()):
-        raise ValidationError("An archived port type cannot be newly assigned")
-
-
-class PortTypeInput(BaseModel):
+class CatalogInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: Annotated[str, Field(min_length=1, max_length=255)]
@@ -57,80 +47,179 @@ class PortTypeInput(BaseModel):
         return value
 
 
-class PortTypeDocument(PortTypeInput):
+class PortStructure(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    medium: Medium
+    members: Annotated[list[StructuralLabel], Field(min_length=1)]
+    connector_type_id: uuid.UUID | None = None
+
+    @field_validator("members")
+    @classmethod
+    def unique_members(cls, members):
+        if len({label.casefold() for label in members}) != len(members):
+            raise ValueError("Member designations must be unique")
+        return members
+
+
+class PortTypeInput(CatalogInput, PortStructure):
+    pass
+
+
+class ConnectorTypeInput(CatalogInput):
+    mating_profile: StructuralLabel
+    termination: Literal["PLUG", "SOCKET"]
+
+
+class CableTypeInput(CatalogInput):
+    medium: Medium
+    construction: StructuralLabel
+
+
+class CatalogDocument(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
 
 
-router = APIRouter(prefix="/v1/port-types", tags=["Port types"])
-DatabaseSession = Annotated[Session, Depends(get_session)]
+class PortTypeDocument(PortTypeInput, CatalogDocument):
+    cardinality: int
 
 
-def _get(port_type_id: uuid.UUID, session: Session) -> PortType:
-    item = session.get(PortType, port_type_id)
-    if item is None:
-        raise HTTPException(404, "Port type not found")
-    return item
+class ConnectorTypeDocument(ConnectorTypeInput, CatalogDocument):
+    pass
 
 
-def _commit(session: Session) -> None:
+class CableTypeDocument(CableTypeInput, CatalogDocument):
+    pass
+
+
+SNAPSHOT_SECTIONS = (
+    (BaseTemplateDraft, "slots"), (BaseTemplateCandidate, "slots"),
+    (ModuleTemplateDraft, "endpoints"), (ModuleTemplateCandidate, "endpoints"),
+)
+
+
+def validate_port_type_assignments(session, endpoints, previous=()):
+    retained = {(endpoint["key"], endpoint["port_type_id"]) for endpoint in previous}
+    ids = {uuid.UUID(endpoint["port_type_id"]) for endpoint in endpoints}
+    if not ids:
+        return
+    # This lock also covers the structural check and holds until commit.
+    types = {item.id: item for item in session.scalars(
+        select(PortType).where(PortType.id.in_(ids)).order_by(PortType.id)
+        .with_for_update(read=True).execution_options(populate_existing=True)
+    )}
+    if ids != types.keys():
+        raise ValidationError("Port type not found")
+    for endpoint in endpoints:
+        item = types[uuid.UUID(endpoint["port_type_id"])]
+        if not item.is_active and (endpoint["key"], endpoint["port_type_id"]) not in retained:
+            raise ValidationError("An archived port type cannot be newly assigned")
+        if endpoint["kind"] == "NETWORK_PORT" and item.cardinality != 1:
+            raise ValidationError("NETWORK_PORT requires a single-member port type")
+        if "cardinality" in endpoint and endpoint["cardinality"] != item.cardinality:
+            raise ValidationError("Endpoint cardinality must match its port type")
+
+
+def _port_type_usage(item_id):
+    # One snapshot covers transitions between authoring stages and revisions.
+    return (
+        select(model.id).where(model.port_type_id == item_id).exists()
+        for model in (BuiltInEndpointDefinition, ModuleEndpointDefinition)
+    ), (
+        select(model.id).where(model.definition.contains({section: [{"port_type_id": str(item_id)}]})).exists()
+        for model, section in SNAPSHOT_SECTIONS
+    )
+
+
+def _used(session, model, item_id):
+    if model is PortType:
+        revisions, snapshots = _port_type_usage(item_id)
+        return session.scalar(select(or_(*revisions, *snapshots)))
+    if model is ConnectorType:
+        return session.scalar(select(select(PortType.id).where(PortType.connector_type_id == item_id).exists()))
+    return False
+
+
+def _validate_connector(session, connector_id):
+    if connector_id is None:
+        return
+    connector = session.scalar(select(ConnectorType).where(ConnectorType.id == connector_id)
+                               .with_for_update(read=True).execution_options(populate_existing=True))
+    if connector is None:
+        raise HTTPException(422, "Connector type not found")
+    if not connector.is_active:
+        raise HTTPException(409, "An archived connector type cannot be newly assigned")
+
+
+def _commit(session):
     try:
         session.commit()
     except IntegrityError as exc:
         session.rollback()
-        constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
-        if constraint == "uq_port_types_normalized_name":
-            raise HTTPException(409, "Port type name already exists") from exc
-        if getattr(exc.orig, "sqlstate", None) == "23503":
-            raise HTTPException(409, "Port type is in use") from exc
+        code = getattr(exc.orig, "sqlstate", None)
+        if code == "23505":
+            raise HTTPException(409, "Catalog type name already exists") from exc
+        if code == "23503":
+            raise HTTPException(409, "Catalog type is in use") from exc
         raise
 
 
-@router.get("")
-def list_port_types(session: DatabaseSession) -> list[PortTypeDocument]:
-    return list(session.scalars(select(PortType).order_by(PortType.name, PortType.id)))
+def catalog_router(path, tag, model, payload, document, structural_fields):
+    router = APIRouter(prefix=f"/v1/{path}", tags=[tag])
+
+    def get(item_id, session, *, lock=False):
+        statement = select(model).where(model.id == item_id)
+        item = session.scalar(statement.with_for_update() if lock else statement)
+        if item is None:
+            raise HTTPException(404, "Catalog type not found")
+        return item
+
+    @router.get("", response_model=list[document], name=f"list_{path}")
+    def list_items(session: DatabaseSession):
+        return list(session.scalars(select(model).order_by(model.name, model.id)))
+
+    @router.get("/{item_id}", response_model=document, name=f"get_{path}")
+    def get_item(item_id: uuid.UUID, session: DatabaseSession):
+        return get(item_id, session)
+
+    @router.post("", status_code=201, response_model=document, name=f"create_{path}")
+    def create_item(query: payload, session: DatabaseSession):
+        if model is PortType:
+            _validate_connector(session, query.connector_type_id)
+        item = model(**query.model_dump())
+        session.add(item)
+        _commit(session)
+        return item
+
+    @router.put("/{item_id}", response_model=document, name=f"update_{path}")
+    def update_item(item_id: uuid.UUID, query: payload, session: DatabaseSession):
+        item = get(item_id, session, lock=True)
+        if any(getattr(item, field) != getattr(query, field) for field in structural_fields):
+            if _used(session, model, item_id):
+                raise HTTPException(409, "Catalog type structure is in use")
+            if model is PortType and query.connector_type_id != item.connector_type_id:
+                _validate_connector(session, query.connector_type_id)
+        for field, value in query.model_dump().items():
+            setattr(item, field, value)
+        _commit(session)
+        return item
+
+    @router.delete("/{item_id}", status_code=204, name=f"delete_{path}")
+    def delete_item(item_id: uuid.UUID, session: DatabaseSession):
+        item = get(item_id, session, lock=True)
+        if item.is_active:
+            raise HTTPException(409, "Archive the catalog type before deleting it")
+        if _used(session, model, item_id):
+            raise HTTPException(409, "Catalog type is in use")
+        session.delete(item)
+        _commit(session)
+
+    return router
 
 
-@router.get("/{port_type_id}")
-def get_port_type(port_type_id: uuid.UUID, session: DatabaseSession) -> PortTypeDocument:
-    return _get(port_type_id, session)
-
-
-@router.post("", status_code=201)
-def create_port_type(query: PortTypeInput, session: DatabaseSession) -> PortTypeDocument:
-    item = PortType(**query.model_dump())
-    session.add(item)
-    _commit(session)
-    return item
-
-
-@router.put("/{port_type_id}")
-def update_port_type(port_type_id: uuid.UUID, query: PortTypeInput, session: DatabaseSession) -> PortTypeDocument:
-    item = _get(port_type_id, session)
-    for field, value in query.model_dump().items():
-        setattr(item, field, value)
-    _commit(session)
-    return item
-
-
-@router.delete("/{port_type_id}", status_code=204)
-def delete_port_type(port_type_id: uuid.UUID, session: DatabaseSession) -> None:
-    item = session.scalar(select(PortType).where(PortType.id == port_type_id).with_for_update())
-    if item is None:
-        raise HTTPException(404, "Port type not found")
-    if item.is_active:
-        raise HTTPException(409, "Archive the port type before deleting it")
-    # The catalog row lock excludes new assignments. Check all JSON snapshots
-    # in one statement so a draft-to-candidate transition cannot escape the check.
-    snapshot_usage = (
-        select(model.id).where(model.definition.contains({section: [{"port_type_id": str(port_type_id)}]})).exists()
-        for model, section in (
-            (BaseTemplateDraft, "slots"), (BaseTemplateCandidate, "slots"),
-            (ModuleTemplateDraft, "endpoints"), (ModuleTemplateCandidate, "endpoints"),
-        )
-    )
-    if session.scalar(select(or_(*snapshot_usage))):
-        raise HTTPException(409, "Port type is in use")
-    session.delete(item)
-    _commit(session)
+router = APIRouter()
+router.include_router(catalog_router("port-types", "Port types", PortType, PortTypeInput, PortTypeDocument, PortStructure.model_fields))
+router.include_router(catalog_router("connector-types", "Connector types", ConnectorType, ConnectorTypeInput, ConnectorTypeDocument, ("mating_profile", "termination")))
+router.include_router(catalog_router("cable-types", "Cable types", CableType, CableTypeInput, CableTypeDocument, ("medium", "construction")))

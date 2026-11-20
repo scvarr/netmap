@@ -62,6 +62,12 @@ Canonical assignment блокирует hierarchy `FOR UPDATE`, затем Physi
 до position DML/flush. Canonical create/series/reparent/delete согласуют
 затронутые сохранённые структуры в той же транзакции.
 
+Назначение PortType блокирует строку типа `FOR SHARE` до commit.
+Назначение ConnectorType использует такой же lock. Структурная правка,
+архивация и удаление блокируют строку `FOR UPDATE`. Проверка ссылок на
+PortType читает черновики, кандидатов и все ревизии одним SQL-запросом
+после получения lock. Смена стадии публикации сохраняет ссылку атомарно.
+
 ## SavedMap, варианты и spatial isolation
 
 **CURRENT.** SavedMap — presentation scope над общей canonical topology
@@ -290,9 +296,9 @@ API-first core независим от React state. User/ACL semantics прин�
 Применённые Alembic revisions immutable: исправления только forward migration.
 Сохраняются canonical user/network data, stable identity и retained immutable
 snapshots; development-stage authoring/runtime compatibility не является целью.
-Workspace JSON v8 исключает индивидуальные трассы из presentation. Импорт
-принимает пакеты v8;
-исторические snapshots читаются только в пределах явно реализованного контракта.
+Workspace JSON v9 включает физические справочники и их ссылки по UUID.
+Импорт принимает пакеты v9. Исторические snapshots внутри пакета сохраняют
+исходные определения.
 Не добавлять old/new fallback, shadow models или translation shims ради obsolete
 API. Reset данных — явная destructive операция, не побочный эффект чтения.
 

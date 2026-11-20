@@ -19,8 +19,8 @@ vi.mock('@xyflow/react', () => ({
 }));
 afterEach(() => vi.restoreAllMocks());
 const catalog = [
-  { id: 'active', name: 'Copper', color: '#123456', is_active: true },
-  { id: 'archived', name: 'Fiber', color: '#ab4567', is_active: false },
+  { id: 'active', name: 'Copper', color: '#123456', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
+  { id: 'archived', name: 'Fiber', color: '#ab4567', is_active: false, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
 ];
 const makeNode = () => ({
   id: 'object', position: { x: 0, y: 0 }, internals: { positionAbsolute: { x: 0, y: 0 } }, measured: { width: 200, height: 120 },

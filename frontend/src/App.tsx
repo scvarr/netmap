@@ -1,4 +1,4 @@
-import { PortTypesPage } from './pages/PortTypesPage';
+import { PhysicalCatalogPage } from './pages/PhysicalCatalogPage';
 import { NewModuleTemplatePage } from './pages/NewModuleTemplatePage';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
@@ -85,7 +85,9 @@ export function App(props: AppProps) {
         />
         <Route path="infrastructure/locations" element={props.locationDataSource ? <LocationsPage dataSource={props.locationDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="infrastructure/cable-label-templates" element={props.cableLabelDataSource ? <CableLabelTemplatesPage dataSource={props.cableLabelDataSource} /> : <Navigate replace to="/map" />} />
-        <Route path="catalogs/port-types" element={<PortTypesPage />} />
+        <Route path="catalogs/port-types" element={<PhysicalCatalogPage key="port-types" catalog="port-types" />} />
+        <Route path="catalogs/connector-types" element={<PhysicalCatalogPage key="connector-types" catalog="connector-types" />} />
+        <Route path="catalogs/cable-types" element={<PhysicalCatalogPage key="cable-types" catalog="cable-types" />} />
         <Route path="settings/data" element={<WorkspaceDataPage />} />
         <Route path="library/base-templates" element={props.baseTemplateDataSource ? <BaseTemplateLibraryPage dataSource={props.baseTemplateDataSource} /> : <Navigate replace to="/map" />} />
         <Route path="library/module-templates/new" element={<NewModuleTemplatePage />} />

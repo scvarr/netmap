@@ -6,8 +6,8 @@ import { NewModuleTemplatePage } from './NewModuleTemplatePage';
 import { hardwareModuleDataSource } from '../topology/hardwareModules';
 
 const catalog = [
-  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true },
-  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true },
+  { id: 'test-type', name: 'Copper', color: '#336699', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
+  { id: 'fiber', name: 'Fiber', color: '#FFAA00', is_active: true, medium: 'COPPER', members: ['1'], cardinality: 1, connector_type_id: null },
 ];
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json(catalog)));

@@ -67,6 +67,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
   };
   const catalog = usePortTypes();
   const [portTypeId, setPortTypeId] = useState('');
+  const selectedType = catalog.types?.find(type => type.id === portTypeId);
   const activeTypeIds = new Set(catalog.types?.filter(type => type.is_active).map(type => type.id));
   const [kind, setKind] = useState<BlueprintSlotKind>('NETWORK_PORT');
   const [count, setCount] = useState(1);
@@ -239,8 +240,8 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           <label>{t('blueprint.endpoint.count')}<input type="number" min="1" max="256" value={count} onChange={(e) => setCount(Number(e.target.value))} /></label>
           {catalog.types && editor.slots.some(slot => !activeTypeIds.has(slot.port_type_id)) && <p role="alert">{t('templateCopy.archived')}</p>}
           <PortTypeNotice {...catalog} />
-          <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} />
-          <button type="button" className="secondary-action" disabled={!activeTypeIds.has(portTypeId)} onClick={() => { const next = addEndpoints(editor, kind, count, panelKey, portTypeId); if (next === editor) return; setEditor(next); setSelectedBayKey(undefined); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
+          <PortTypeSelect types={catalog.types} value={portTypeId} onChange={setPortTypeId} singleMember={kind === "NETWORK_PORT"} />
+          <button type="button" className="secondary-action" disabled={!selectedType?.is_active || (kind === 'NETWORK_PORT' && selectedType.cardinality !== 1)} onClick={() => { const next = addEndpoints(editor, kind, count, panelKey, portTypeId, selectedType?.cardinality); if (next === editor) return; setEditor(next); setSelectedBayKey(undefined); setSelected(new Set(next.slots.slice(editor.slots.length).map((slot) => slot.key))); setMenu(undefined); }}>{t('blueprint.endpoint.add')}</button>
         </div>
         <div className="blueprint-composer__panels" role="group" aria-label={t('blueprint.panel.list')}>{[...editor.panels].sort((a, b) => a.panel_number - b.panel_number).map((panel) => <button key={panel.panel_key} type="button" aria-pressed={panel.panel_key === panelKey} onClick={() => activatePanel(panel.panel_key)}>{panel.display_name}</button>)}</div>
         <div className="blueprint-composer__panel-actions">
@@ -290,9 +291,13 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
           </div>}
         </div>
         <div className="blueprint-composer__contextual">
-          {selected.size > 1 && <section className="blueprint-composer__bulk-types"><PortTypeSelect bulk types={catalog.types} value="" onChange={id =>
-            setEditor(old => ({ ...old, slots: old.slots.map(slot => selected.has(slot.key) ? { ...slot, port_type_id: id } : slot) }))
-          } /></section>}
+          {selected.size > 1 && <section className="blueprint-composer__bulk-types"><PortTypeSelect bulk types={catalog.types} value=""
+            singleMember={editor.slots.some(slot => selected.has(slot.key) && slot.kind === 'NETWORK_PORT')}
+            onChange={id => {
+              const cardinality = catalog.types?.find(type => type.id === id)?.cardinality;
+              setEditor(old => ({ ...old, slots: old.slots.map(slot =>
+                selected.has(slot.key) ? { ...slot, port_type_id: id, cardinality } : slot) }));
+            }} /></section>}
           {selectedBay && <ModuleBaysEditor key={selectedBay.bay_key} bay={selectedBay} panels={editor.panels} onDuplicate={duplicateBay} onChange={patch => {
             changeBay(selectedBay.bay_key, patch);
             if (patch.panel_key) { activatePanel(patch.panel_key); setSelectedBayKey(selectedBay.bay_key); }
@@ -307,8 +312,9 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         </section>}
         {selectedSlot && <aside className="blueprint-composer__selected">
           <label>{t('blueprint.endpoint.name')}<input value={selectedSlot.display_name} onChange={(e) => updateSlot(selectedSlot.key, { display_name: e.target.value })} /></label>
-          <PortTypeSelect types={catalog.types} value={selectedSlot.port_type_id} onChange={id => updateSlot(selectedSlot.key, { port_type_id: id })} />
-          <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT">{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
+          <PortTypeSelect types={catalog.types} value={selectedSlot.port_type_id} singleMember={selectedSlot.kind === 'NETWORK_PORT'}
+            onChange={id => updateSlot(selectedSlot.key, { port_type_id: id, cardinality: catalog.types?.find(type => type.id === id)?.cardinality })} />
+          <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT" disabled={(selectedSlot.cardinality ?? 1) > 1}>{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>
         </aside>}
         </div>
