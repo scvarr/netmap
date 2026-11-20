@@ -596,7 +596,7 @@ class ModuleBay(Base):
     __table_args__ = (
         UniqueConstraint("base_revision_id", "bay_key"),
         ForeignKeyConstraint(["base_revision_id", "panel_key"], ["presentation_panels.base_revision_id", "presentation_panels.panel_key"], ondelete="RESTRICT"),
-        CheckConstraint("(kind = 'LOGICAL' AND x IS NULL AND y IS NULL AND width IS NULL AND height IS NULL) OR (kind = 'PLACED' AND x IS NOT NULL AND y IS NOT NULL AND width IS NOT NULL AND height IS NOT NULL)", name="bay_representation"),
+        CheckConstraint("(kind = 'LOGICAL' AND x IS NULL AND y IS NULL AND width IS NULL AND height IS NULL) OR (kind = 'PLACED' AND x BETWEEN 0 AND 1 AND y BETWEEN 0 AND 1 AND x IS NOT NULL AND y IS NOT NULL AND (width IS NULL) = (height IS NULL))", name="bay_representation"),
         CheckConstraint("x >= 0 AND y >= 0 AND width > 0 AND height > 0 AND x + width <= 1 AND y + height <= 1", name="rectangle_inside_panel"),
         CheckConstraint("char_length(btrim(bay_key)) > 0 AND char_length(btrim(display_name)) > 0 AND char_length(btrim(compatibility)) > 0", name="bay_strings_not_blank"),
     )

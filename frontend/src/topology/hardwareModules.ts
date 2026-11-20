@@ -1,9 +1,9 @@
-import type { BlueprintSlotKind, TemplateImpactReason } from './baseTemplateTypes';
+import type { BlueprintSlot, BlueprintSlotKind, TemplateImpactReason } from './baseTemplateTypes';
 
 export interface PlacedModuleBay {
   kind?: "PLACED";
   bay_key: string; display_name: string; compatibility: string; panel_key: string;
-  x: number; y: number; width: number; height: number;
+  x: number; y: number; width?: number | null; height?: number | null;
 }
 export interface LogicalModuleBay {
   kind: "LOGICAL";
@@ -15,7 +15,29 @@ export const isPlacedBay = (bay: ModuleBay): bay is PlacedModuleBay => bay.kind 
 export interface ModuleEndpoint { key: string; display_name: string; kind: BlueprintSlotKind; port_type_id: string }
 export interface ModulePortDefinition {
   key: string; display_name: string; compatibility: string;
-  x: number; y: number; width: number; height: number;
+  x: number; y: number; width?: number | null; height?: number | null;
+}
+export type ModulePortMarker = { key: string; display_name: string; kind: 'MODULE_PORT'; port_type_id?: never };
+export type BlueprintMarker = BlueprintSlot | (ModulePortMarker & Pick<BlueprintSlot, 'panel_key' | 'rendered_position'>);
+
+export function modulePortPosition({ x, y, width, height }: Pick<PlacedModuleBay, 'x' | 'y' | 'width' | 'height'>) {
+  return { x: x + (width ?? 0) / 2, y: y + (height ?? 0) / 2 };
+}
+
+export function positionModulePort<T extends Pick<PlacedModuleBay, 'x' | 'y' | 'width' | 'height'>>(
+  port: T, position: { x: number; y: number },
+) {
+  const current = modulePortPosition(port);
+  if (Math.abs(current.x - position.x) < 1e-12 && Math.abs(current.y - position.y) < 1e-12) return port;
+  const { width: _width, height: _height, ...definition } = port;
+  return { ...definition, ...position };
+}
+
+export function moduleBayMarkers(bays: ModuleBay[]) {
+  return bays.filter(isPlacedBay).map(bay => ({
+    key: bay.bay_key, display_name: bay.display_name, kind: 'MODULE_PORT' as const,
+    panel_key: bay.panel_key, rendered_position: modulePortPosition(bay),
+  }));
 }
 export interface ModuleGeometry { width: number; height: number; fill_color: string; endpoints: Record<string, { x: number; y: number }> }
 export const initialModuleGeometry = (): ModuleGeometry => ({ width: 240, height: 80, fill_color: "#64748b", endpoints: {} });
@@ -96,7 +118,7 @@ export const moduleReviewDataSource: ModuleReviewDataSource = {
 };
 
 // Allocate only missing keys; retain all authored positions exactly.
-export function moduleEndpointPositions(endpoints: ModuleEndpoint[], positions: ModuleGeometry['endpoints']): ModuleGeometry['endpoints'] {
+export function moduleEndpointPositions(endpoints: ReadonlyArray<{ key: string }>, positions: ModuleGeometry['endpoints']): ModuleGeometry['endpoints'] {
  const result: ModuleGeometry['endpoints'] = {};
  for (const e of endpoints) if (positions[e.key]) result[e.key] = positions[e.key];
  for (const e of endpoints) {

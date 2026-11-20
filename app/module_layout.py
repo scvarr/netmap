@@ -15,6 +15,13 @@ def initial_layout(bay, geometry, orientation, panel, places=()):
     width, height = geometry["width"], geometry["height"]
     if orientation == "VERTICAL":
         width, height = height, width
+    if bay["width"] is None:
+        # A point anchors the initial module body. Use the existing default
+        # 30% fit region and keep the body on-panel even at an edge anchor.
+        scale = min(.3 * panel["width"] / width, .3 * panel["height"] / height)
+        w, h = width * scale / panel["width"], height * scale / panel["height"]
+        return {"panel_key": bay["panel_key"], "x": max(0, min(1 - w, bay["x"] - w / 2)),
+                "y": max(0, min(1 - h, bay["y"] - h / 2)), "width": w, "height": h}
     scale = min(bay["width"] * panel["width"] / width, bay["height"] * panel["height"] / height)
     w, h = width * scale / panel["width"], height * scale / panel["height"]
     return {"panel_key": bay["panel_key"], "x": bay["x"] + (bay["width"] - w) / 2,

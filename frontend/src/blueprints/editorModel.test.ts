@@ -611,7 +611,7 @@ describe('BASE-UX-01 panel trim', () => {
       expect(rectangle.y + slot.rendered_position.y * rectangle.height).toBeCloseTo(state.slots[i].rendered_position.y * 60);
       expect(slot.key).toBe(state.slots[i].key); expect(slot.port_type_id).toBe('test-type');
     });
-    const bay = next.bays![0]; if (bay.kind !== 'PLACED') throw Error('placed');
+    const bay = next.bays![0]; if (bay.kind !== 'PLACED' || bay.width == null || bay.height == null) throw Error('historical footprint');
     expect(rectangle.x + bay.x * rectangle.width).toBeCloseTo(120);
     expect(bay.width * rectangle.width).toBeCloseTo(16);
     expect(bay.height * rectangle.height).toBeCloseTo(24);

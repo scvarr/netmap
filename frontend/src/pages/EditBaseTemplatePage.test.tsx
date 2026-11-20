@@ -104,7 +104,7 @@ it('authors exact logical groups and keeps their individual bays through draft r
     ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'OCP3'], ['panel', 'ocp3'], ['panel', ' OCP3 '], ['rear', 'OCP3'],
   ]);
   expect(first.slice(1).every(bay => bay.kind === 'LOGICAL' && [bay.x, bay.y, bay.width, bay.height].every(value => value === null))).toBe(true);
-  expect(view.container.querySelectorAll('[data-bay-key]')).toHaveLength(1);
+  expect(view.container.querySelectorAll('[data-module-port-marker]')).toHaveLength(1);
   view.unmount();
   mount();
   fireEvent.click(await screen.findByText('Модульные места · 4'));

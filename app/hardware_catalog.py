@@ -375,7 +375,7 @@ class HardwareCatalog:
 
     def _create_module_revision(self, template_id, version_number, query):
         revision = ModuleTemplateRevision(template_id=template_id, name=query.name, version_number=version_number, compatibility=query.compatibility, geometry=query.geometry.model_dump(mode="json"))
-        revision.module_ports = [port.model_dump(mode="json") for port in query.module_ports]
+        revision.module_ports = [port.model_dump(mode="json", exclude_none=True) for port in query.module_ports]
         self.session.add(revision)
         self.session.flush()
         for index, endpoint in enumerate(query.endpoints):

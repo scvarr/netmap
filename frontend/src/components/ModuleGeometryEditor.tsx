@@ -2,8 +2,8 @@ import type { PortType } from './PortTypeSelect';
 import { EndpointMarker } from './EndpointMarker';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
-import type { ModuleGeometry, ModuleEndpoint, ModulePortDefinition } from '../topology/hardwareModules';
-export function ModuleGeometryEditor({ portTypes, geometry, endpoints, modulePorts = [], onChange, selectedKeys, onSelectionChange }: { portTypes?: PortType[]; selectedKeys?: Set<string>; onSelectionChange?: (keys: Set<string>) => void; geometry: ModuleGeometry; endpoints: ModuleEndpoint[]; modulePorts?: ModulePortDefinition[]; onChange?: (g: ModuleGeometry) => void }) {
+import type { ModuleGeometry, ModuleEndpoint, ModulePortMarker } from '../topology/hardwareModules';
+export function ModuleGeometryEditor({ portTypes, geometry, endpoints, onChange, selectedKeys, onSelectionChange }: { portTypes?: PortType[]; selectedKeys?: Set<string>; onSelectionChange?: (keys: Set<string>) => void; geometry: ModuleGeometry; endpoints: (ModuleEndpoint | ModulePortMarker)[]; onChange?: (g: ModuleGeometry) => void }) {
  const { t } = useI18n(); const [localSelected, setLocalSelected] = useState<Set<string>>(new Set()); const selected = new Set(endpoints.filter(e => (selectedKeys ?? localSelected).has(e.key)).map(e => e.key)); const select = onSelectionChange ?? setLocalSelected; const [zoom, setZoom] = useState(1);
  const svg = useRef<SVGSVGElement>(null);
  const [viewport, setViewport] = useState({ width: 640, height: 360 });
@@ -45,25 +45,14 @@ export function ModuleGeometryEditor({ portTypes, geometry, endpoints, modulePor
  d.keys.forEach(k => { positions[k] = {x:Math.round((positions[k].x+dx)*100)/100,y:Math.round((positions[k].y+dy)*100)/100}; }); onChange({...d.geometry,endpoints:positions});
  }} onPointerUp={() => {drag.current=undefined;}} onPointerCancel={() => {drag.current=undefined;}}>
  <rect width={geometry.width} height={geometry.height} fill={geometry.fill_color} stroke="currentColor" vectorEffect="non-scaling-stroke" onPointerDown={() => select(new Set())}/>
- {modulePorts.map(port => {
-  const active = (selectedKeys ?? localSelected).has(port.key);
-  const choose = () => { if (onChange) select(new Set([port.key])); };
-  const x = port.x * geometry.width, y = port.y * geometry.height;
-  const width = port.width * geometry.width, height = port.height * geometry.height;
-  return <g key={port.key} className="blueprint-composition-canvas__bay" data-selected={active} data-module-port-key={port.key}
-    role="button" aria-label={port.display_name} aria-pressed={active} tabIndex={onChange ? 0 : undefined}
-    onClick={choose} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(); } }}>
-    <rect x={x} y={y} width={width} height={height} vectorEffect="non-scaling-stroke"><title>{port.display_name}</title></rect>
-    {width * scale >= port.display_name.length * 7 + 8 && height * scale >= 16 && <svg x={x} y={y} width={width} height={height} pointerEvents="none">
-      <text x={width / 2} y={height / 2} fontSize={12 / scale} textAnchor="middle"
-        dominantBaseline="central">{port.display_name}</text>
-    </svg>}
-  </g>;
- })}
- {endpoints.map(e => {const p=geometry.endpoints[e.key]; return p && <g key={e.key} className={onChange ? "module-geometry__port" : undefined} role="button" aria-label={e.display_name} aria-pressed={selected.has(e.key)} tabIndex={onChange ? 0 : undefined} onKeyDown={event => { if (!onChange || !['Enter', ' '].includes(event.key)) return; event.preventDefault(); const keys = event.shiftKey ? new Set(selected) : new Set<string>(); if (keys.has(e.key)) keys.delete(e.key); else keys.add(e.key); select(keys); }} onPointerDown={event => {
+ {endpoints.map(e => {const p=geometry.endpoints[e.key]; const labelFits = p && endpoints.every(other => {
+  const q = geometry.endpoints[other.key];
+  return e.key === other.key || !q || Math.abs(p.y - q.y) * geometry.height * scale >= 14
+    || Math.abs(p.x - q.x) * geometry.width * scale >= Math.max(e.display_name.length, other.display_name.length) * 7;
+ }); return p && <g key={e.key} data-slot-key={e.key} className={onChange ? "module-geometry__port" : undefined} role="button" aria-label={e.display_name} aria-pressed={selected.has(e.key)} tabIndex={onChange ? 0 : undefined} onKeyDown={event => { if (!onChange || !['Enter', ' '].includes(event.key)) return; event.preventDefault(); const keys = event.shiftKey ? new Set(selected) : new Set<string>(); if (keys.has(e.key)) keys.delete(e.key); else keys.add(e.key); select(keys); }} onPointerDown={event => {
  if (!onChange || event.button !== 0) return; event.preventDefault(); event.stopPropagation(); const toggle=event.shiftKey||event.ctrlKey||event.metaKey; const keys=toggle||selected.has(e.key)?new Set(selected):new Set<string>(); if(toggle&&keys.has(e.key)) keys.delete(e.key); else keys.add(e.key); select(keys); if(!keys.has(e.key))return; drag.current={...point(event.clientX,event.clientY),geometry,keys:[...keys]};svg.current?.setPointerCapture(event.pointerId);
  }}>
  {e.kind === 'NETWORK_PORT' && <circle cx={p.x*geometry.width} cy={p.y*geometry.height} r={5 / scale} fill="transparent" stroke="transparent" strokeWidth={1.5} vectorEffect="non-scaling-stroke"><title>{e.display_name}</title></circle>}
- <EndpointMarker fill={portTypes?.find(type => type.id === e.port_type_id)?.color} kind={e.kind} label={e.display_name} cx={p.x*geometry.width} cy={p.y*geometry.height} r={5 / scale} stroke="#152d30" strokeWidth={1.5} vectorEffect="non-scaling-stroke"/><text x={p.x*geometry.width} y={p.y*geometry.height-12 / scale} fontSize={12 / scale} fill="#e7f4f1" stroke="#071315" strokeWidth={3 / scale} paintOrder="stroke" textAnchor={p.x < .15 ? "start" : p.x > .85 ? "end" : "middle"}>{e.display_name}</text></g>;})}
+ <EndpointMarker fill={portTypes?.find(type => type.id === e.port_type_id)?.color} kind={e.kind} label={e.display_name} cx={p.x*geometry.width} cy={p.y*geometry.height} r={5 / scale} stroke="#152d30" strokeWidth={1.5} vectorEffect="non-scaling-stroke"/>{labelFits && <text x={p.x*geometry.width} y={p.y*geometry.height-12 / scale} fontSize={12 / scale} fill="#e7f4f1" stroke="#071315" strokeWidth={3 / scale} paintOrder="stroke" textAnchor={p.x < .15 ? "start" : p.x > .85 ? "end" : "middle"}>{e.display_name}</text>}</g>;})}
  </svg></div></section>;
 }

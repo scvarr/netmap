@@ -70,10 +70,15 @@ const parseBay = (value: unknown, path: string): import('./hardwareModules').Mod
     return { ...identity, kind: 'LOGICAL' };
   }
   if (bay.kind !== 'PLACED') malformed(`${path}: unknown place kind.`);
-  for (const k of ['x', 'y', 'width', 'height'] as const) if (typeof bay[k] !== 'number' || !Number.isFinite(bay[k])) malformed(`${path}.${k} must be finite.`);
-  const x = bay.x as number, y = bay.y as number, width = bay.width as number, height = bay.height as number;
-  if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > 1 || y + height > 1) malformed(`${path} must fit inside its panel.`);
-  return { bay_key: requireString(bay.bay_key, `${path}.bay_key`), panel_key: requireString(bay.panel_key, `${path}.panel_key`), display_name: requireString(bay.display_name, `${path}.display_name`), compatibility: requireString(bay.compatibility, `${path}.compatibility`), kind: "PLACED", x, y, width, height };
+  for (const k of ['x', 'y'] as const) if (typeof bay[k] !== 'number' || !Number.isFinite(bay[k])) malformed(`${path}.${k} must be finite.`);
+  const x = bay.x as number, y = bay.y as number;
+  if (x < 0 || y < 0 || x > 1 || y > 1) malformed(`${path} must fit inside its panel.`);
+  const placed = { ...identity, kind: 'PLACED' as const, x, y };
+  if (bay.width == null && bay.height == null) return placed;
+  const { width, height } = bay;
+  if (typeof width !== 'number' || typeof height !== 'number' || !Number.isFinite(width) || !Number.isFinite(height)
+    || width <= 0 || height <= 0 || x + width > 1 || y + height > 1) return malformed(`${path} has an invalid installation footprint.`);
+  return { ...placed, width, height };
 };
 
 export const parseBaseTemplateListDocument = (value: unknown): BaseTemplateListDocument => {

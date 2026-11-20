@@ -3,7 +3,7 @@ import { EndpointMarker } from './EndpointMarker';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useI18n } from '../i18n';
 import type { BlueprintBody, BaseInternalLink, BlueprintSlot, PresentationPanel } from '../topology/baseTemplateTypes';
-import { isPlacedBay, type ModuleBay } from '../topology/hardwareModules';
+import { moduleBayMarkers, type ModuleBay } from '../topology/hardwareModules';
 
 interface Props {
   portTypes?: PortType[];
@@ -39,7 +39,7 @@ export function BlueprintPreview({ portTypes, body, panels, slots, internalLinks
   }, []);
 
   const panelsByKey = new Map(panels.map(panel => [panel.panel_key, panel]));
-  const ports = slots.map(slot => {
+  const ports = [...slots, ...moduleBayMarkers(bays)].map(slot => {
     const panel = panelsByKey.get(slot.panel_key)!;
     return {
       ...slot,
@@ -48,12 +48,7 @@ export function BlueprintPreview({ portTypes, body, panels, slots, internalLinks
     };
   });
   const portsByKey = new Map(ports.map(port => [port.key, port]));
-  const placedBays = bays.filter(isPlacedBay).map(bay => {
-    const panel = panelsByKey.get(bay.panel_key)!;
-    return { ...bay, x: panel.x + bay.x * panel.width, y: panel.y + bay.y * panel.height,
-      width: bay.width * panel.width, height: bay.height * panel.height };
-  });
-  const rectangles = [...panels, ...placedBays];
+  const rectangles = panels;
   const left = Math.min(...rectangles.map(rect => rect.x), ...ports.map(port => port.x));
   const top = Math.min(...rectangles.map(rect => rect.y), ...ports.map(port => port.y));
   const width = Math.max(...rectangles.map(rect => rect.x + rect.width), ...ports.map(port => port.x)) - left;
@@ -96,9 +91,6 @@ export function BlueprintPreview({ portTypes, body, panels, slots, internalLinks
           {panels.map(panel => <rect key={panel.panel_key} data-panel-key={panel.panel_key} x={panel.x} y={panel.y}
             width={panel.width} height={panel.height} fill={body.fill_color || '#18383a'} stroke="#6ba89b"
             vectorEffect="non-scaling-stroke"><title>{panel.display_name}</title></rect>)}
-          {placedBays.map(bay => <rect key={bay.bay_key} data-bay-key={bay.bay_key} x={bay.x} y={bay.y}
-            width={bay.width} height={bay.height} fill="#85cdbb" fillOpacity=".12" stroke="#85cdbb"
-            strokeDasharray="6 3" vectorEffect="non-scaling-stroke"><title>{bay.display_name}</title></rect>)}
           {internalLinks.map(link => {
             const from = portsByKey.get(link.from_slot_key);
             const to = portsByKey.get(link.to_slot_key);
@@ -106,7 +98,7 @@ export function BlueprintPreview({ portTypes, body, panels, slots, internalLinks
               stroke="#b6dfd3" opacity=".8" vectorEffect="non-scaling-stroke" /> : null;
           })}
           {markers.map(port => <g key={port.key} data-slot-key={port.key}>
-            <EndpointMarker fill={portTypes?.find(type => type.id === port.port_type_id)?.color} kind={port.kind} label={port.display_name} cx={port.x} cy={port.y} r={port.radius / scale}
+            <EndpointMarker fill={portTypes?.find(type => port.kind !== 'MODULE_PORT' && type.id === port.port_type_id)?.color} kind={port.kind} label={port.display_name} cx={port.x} cy={port.y} r={port.radius / scale}
               stroke="#1c3135" strokeWidth={port.radius * .4 / scale} />
           </g>)}
         </svg>

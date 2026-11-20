@@ -65,7 +65,7 @@ it('bulk adds and reassigns selected module endpoints with current catalog color
   })));
 });
 
-it('authors a rectangular module port without assigning a PortType', async () => {
+it('authors a diamond-shaped module port without assigning a PortType', async () => {
   const createModule = vi.fn().mockResolvedValue({});
   const { container } = render(<I18nProvider><MemoryRouter>
     <NewModuleTemplatePage dataSource={{ ...hardwareModuleDataSource, createModule }} />
@@ -77,22 +77,20 @@ it('authors a rectangular module port without assigning a PortType', async () =>
   fireEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
   expect(screen.queryByLabelText('Тип порта')).toBeNull();
   const group = within(screen.getByRole('group', { name: 'Модульный порт' }));
-  const rectangle = container.querySelector('[data-module-port-key] > rect')!;
-  const key = rectangle.parentElement!.getAttribute('data-module-port-key');
-  expect(rectangle).not.toHaveAttribute('rx');
+  const diamond = container.querySelector('[data-module-port-marker]')!;
+  expect(diamond.tagName).toBe('polygon');
+  expect(group.queryByLabelText('Ширина')).toBeNull();
+  expect(group.queryByLabelText('Высота')).toBeNull();
   fireEvent.change(group.getByLabelText('Название'), { target: { value: 'Child bay' } });
   fireEvent.change(group.getByLabelText('Совместимость'), { target: { value: 'Lab / custom' } });
-  for (const [label, value] of [['X (0–1)', '0.2'], ['Ширина', '0.5']]) {
-    const input = group.getByLabelText(label);
-    fireEvent.change(input, { target: { value } });
-    fireEvent.blur(input);
-  }
-  expect(rectangle).toHaveAttribute('x', '48');
-  expect(rectangle).toHaveAttribute('width', '120');
+  const input = group.getByLabelText('X (0–1)');
+  fireEvent.change(input, { target: { value: '0.2' } });
+  fireEvent.blur(input);
+  expect(Number(diamond.getAttribute('points')!.split(',')[0])).toBeCloseTo(48);
   fireEvent.click(screen.getByRole('button', { name: 'Создать шаблон' }));
   await waitFor(() => expect(createModule).toHaveBeenCalledWith(expect.objectContaining({
     endpoints: [],
-    module_ports: [{ key, display_name: 'Child bay', compatibility: 'Lab / custom', x: .2, y: .35, width: .5, height: .3 }],
+    module_ports: [{ key: expect.any(String), display_name: 'Child bay', compatibility: 'Lab / custom', x: .2, y: .5 }],
   })));
 });
 
@@ -126,11 +124,9 @@ it.each([2, 48, 256])('creates and reopens %i separate module ports', async coun
   expect(new Set(ports.map(port => port.key)).size).toBe(count);
   expect(ports.map(port => port.display_name)).toEqual(Array.from({ length: count }, (_, i) => `Модульный порт ${i + 1}`));
   expect(ports.every(port => port.compatibility === 'Custom / 42')).toBe(true);
-  ports.forEach((a, i) => ports.slice(i + 1).forEach(b => {
-    expect(a.x + a.width <= b.x + 1e-9 || b.x + b.width <= a.x + 1e-9 ||
-      a.y + a.height <= b.y + 1e-9 || b.y + b.height <= a.y + 1e-9).toBe(true);
-  }));
-  const positions = () => Array.from(document.querySelectorAll('[data-module-port-key] > rect'), rect => rect.outerHTML);
+  expect(new Set(ports.map(port => `${port.x}:${port.y}`)).size).toBe(count);
+  expect(ports.every(port => !('width' in port) && !('height' in port))).toBe(true);
+  const positions = () => Array.from(document.querySelectorAll('[data-module-port-marker]'), marker => marker.getAttribute('points'));
   const before = positions();
   unmount();
   render(<I18nProvider><MemoryRouter><ModuleTemplateEditor value={saved} onChange={vi.fn()} /></MemoryRouter></I18nProvider>);

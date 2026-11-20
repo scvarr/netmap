@@ -1,29 +1,26 @@
 import type { PortType } from './PortTypeSelect';
 import { EndpointMarker } from './EndpointMarker';
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
-import type { BaseInternalLink, BlueprintSlot, PresentationPanel } from '../topology/baseTemplateTypes';
+import type { BaseInternalLink, PresentationPanel } from '../topology/baseTemplateTypes';
 import { useI18n } from '../i18n';
 import { panelGestureGeometry, snapSelectionTranslation, type PanelHandle, type PanelRectangle } from '../blueprints/editorModel';
-import { isPlacedBay, type PlacedModuleBay as ModuleBay } from '../topology/hardwareModules';
-import { bayGestureGeometry, type BayRectangle } from '../blueprints/moduleBayGeometry';
+import type { BlueprintMarker } from '../topology/hardwareModules';
 
 interface Props {
   zoom?: number;
   portTypes?: PortType[];
   body: { width: number; height: number; fillColor: string }; panels: PresentationPanel[]; activePanelKey: string;
-  slots: BlueprintSlot[]; links: BaseInternalLink[]; selectedKeys: ReadonlySet<string>;
+  slots: BlueprintMarker[]; links: BaseInternalLink[]; selectedKeys: ReadonlySet<string>;
   orderedKeys?: readonly string[]; highlightedKey?: string;
   onSelect: (key: string, toggle: boolean) => void; onMarquee: (keys: string[]) => void;
   onTranslate: (keys: ReadonlySet<string>, dx: number, dy: number) => void;
   onContextMenu: (key: string | undefined, clientX: number, clientY: number) => void;
   onActivatePanel: (key: string) => void;
   onPanelGeometry?: (key: string, rectangle: PanelRectangle, mode: 'move' | 'resize', portPadding: number) => void;
-  bays?: import('../topology/hardwareModules').ModuleBay[]; selectedBayKey?: string;
-  onSelectBay?: (key: string) => void;
-  onBayGeometry?: (key: string, rectangle: BayRectangle) => void;
+
 }
 type Point = { x: number; y: number };
-type Gesture = { kind: 'move'; key: string; keys: ReadonlySet<string>; start: Point; applied: Point; slots: BlueprintSlot[]; moved: boolean } | { kind: 'marquee'; start: Point; end: Point } | { kind: 'panel'; handle: 'move' | PanelHandle; panel: PresentationPanel; start: Point; pixelsPerUnit: number } | { kind: 'bay'; handle: 'move' | PanelHandle; bay: ModuleBay; start: Point; pixels: Point };
+type Gesture = { kind: 'move'; key: string; keys: ReadonlySet<string>; start: Point; applied: Point; slots: BlueprintMarker[]; moved: boolean } | { kind: 'marquee'; start: Point; end: Point } | { kind: 'panel'; handle: 'move' | PanelHandle; panel: PresentationPanel; start: Point; pixelsPerUnit: number };
 const clamp = (value: number) => Math.max(0, Math.min(1, value));
 const markerPixels = { regular: 5, selected: 6, hit: 11 };
 
@@ -35,8 +32,7 @@ export function endpointMarkerRadii(scale: number) {
   };
 }
 
-export function BlueprintCompositionCanvas({ zoom = 1, portTypes, body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel, onPanelGeometry, orderedKeys, highlightedKey, bays: allBays = [], selectedBayKey, onSelectBay, onBayGeometry }: Props) {
-  const bays = allBays.filter(isPlacedBay);
+export function BlueprintCompositionCanvas({ zoom = 1, portTypes, body, panels, activePanelKey, slots, links, selectedKeys, onSelect, onMarquee, onTranslate, onContextMenu, onActivatePanel, onPanelGeometry, orderedKeys, highlightedKey }: Props) {
   const { t } = useI18n();
   const svg = useRef<SVGSVGElement>(null);
   const gesture = useRef<Gesture | undefined>(undefined);
@@ -114,30 +110,9 @@ export function BlueprintCompositionCanvas({ zoom = 1, portTypes, body, panels, 
     gesture.current = { kind: 'panel', handle, panel, start: { x: event.clientX - rect.left, y: event.clientY - rect.top }, pixelsPerUnit: unit * scale };
     setFrozenView({ minX, minY, unit, height });
   };
-  const startBayGesture = (event: PointerEvent<SVGElement>, bay: ModuleBay, handle: 'move' | PanelHandle) => {
-    if (event.button !== 0) return;
-    event.preventDefault(); event.stopPropagation();
-    if (bay.panel_key !== activePanelKey) { onActivatePanel(bay.panel_key); onSelectBay?.(bay.bay_key); return; }
-    onSelectBay?.(bay.bay_key);
-    if (orderedKeys) return;
-    const rect = svg.current!.getBoundingClientRect();
-    const scale = Math.min(rect.width / 1000, rect.height / height);
-    svg.current?.setPointerCapture?.(event.pointerId);
-    gesture.current = { kind: 'bay', handle, bay, start: { x: event.clientX - rect.left, y: event.clientY - rect.top }, pixels: { x: activeRect.width * scale, y: activeRect.height * scale } };
-    setFrozenView({ minX, minY, unit, height });
-  };
   return <svg ref={svg} className="blueprint-composition-canvas" viewBox={`0 0 1000 ${height}`} preserveAspectRatio="xMidYMid meet" role="img" aria-label={t('blueprint.editor.preview')} onPointerMove={(event) => {
     const current = gesture.current;
     if (!current) return;
-    if (current.kind === 'bay') {
-      const snapped = bayGestureGeometry(current.bay, current.handle,
-        (event.clientX - svg.current!.getBoundingClientRect().left - current.start.x) / current.pixels.x, (event.clientY - svg.current!.getBoundingClientRect().top - current.start.y) / current.pixels.y,
-        bays.filter(bay => bay.bay_key !== current.bay.bay_key && bay.panel_key === current.bay.panel_key),
-        { x: 7 / current.pixels.x, y: 7 / current.pixels.y });
-      onBayGeometry?.(current.bay.bay_key, snapped.rectangle);
-      setGuides(snapped.guides);
-      return;
-    }
     if (current.kind === 'panel') {
       const { rectangle, guides: snappedGuides } = panelGestureGeometry(current.panel, panels.filter((panel) => panel.panel_key !== current.panel.panel_key), current.handle,
         (event.clientX - svg.current!.getBoundingClientRect().left - current.start.x) / current.pixelsPerUnit, (event.clientY - svg.current!.getBoundingClientRect().top - current.start.y) / current.pixelsPerUnit,
@@ -177,21 +152,9 @@ export function BlueprintCompositionCanvas({ zoom = 1, portTypes, body, panels, 
         gesture.current = { kind: 'marquee', start, end: start };
         setMarquee({ start, end: start });
       }}><title>{panel.display_name}</title></rect>
-      {bays.filter(bay => bay.panel_key === panel.panel_key).map(bay => <g key={bay.bay_key} data-bay-key={bay.bay_key} data-selected={bay.bay_key === selectedBayKey} className="blueprint-composition-canvas__bay" onPointerDown={event => startBayGesture(event, bay, 'move')}>
-        <rect x={rect.x + bay.x * rect.width} y={rect.y + bay.y * rect.height} width={bay.width * rect.width} height={bay.height * rect.height} vectorEffect="non-scaling-stroke"><title>{bay.display_name}</title></rect>
-        {bay.width * rect.width * presentationScale >= bay.display_name.length * 7 + 16 &&
-          bay.height * rect.height * presentationScale >= 20 && <svg x={rect.x + bay.x * rect.width} y={rect.y + bay.y * rect.height} width={bay.width * rect.width} height={bay.height * rect.height} pointerEvents="none">
-          <text x={8 / presentationScale} y={18 / presentationScale} fontSize={11 / presentationScale}>{bay.display_name}</text>
-        </svg>}
-      </g>)}
     </g>; })}
     <rect data-panel-move-border={activePanelKey} className="blueprint-composition-canvas__move-border" x={activeRect.x} y={activeRect.y} width={activeRect.width} height={activeRect.height} strokeWidth={10 / presentationScale} onPointerDown={(event) => startPanelGesture(event, activePanel, 'move')} />
     {links.map((link) => { const from = points.get(link.from_slot_key); const to = points.get(link.to_slot_key); return from && to ? <line key={`${link.from_slot_key}-${link.to_slot_key}`} className="blueprint-composition-canvas__link" x1={from.x} y1={from.y} x2={to.x} y2={to.y} /> : null; })}
-    {bays.filter(bay => bay.bay_key === selectedBayKey && bay.panel_key === activePanelKey).flatMap(bay => (['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw'] as const).map(handle => {
-      const x = activeRect.x + activeRect.width * (bay.x + bay.width * (handle.includes('w') ? 0 : handle.includes('e') ? 1 : .5));
-      const y = activeRect.y + activeRect.height * (bay.y + bay.height * (handle.includes('n') ? 0 : handle.includes('s') ? 1 : .5));
-      return <circle key={`${bay.bay_key}:${handle}`} data-bay-resize={handle} className={`blueprint-composition-canvas__resize blueprint-composition-canvas__resize--${handle}`} cx={x} cy={y} r={5 / presentationScale} stroke="#071315" strokeWidth={2 / presentationScale} onPointerDown={event => startBayGesture(event, bay, handle)} />;
-    }))}
     {slots.map((slot) => { const point = points.get(slot.key)!; const sequence = orderedKeys?.indexOf(slot.key); const selected = orderedKeys ? sequence !== -1 : selectedKeys.has(slot.key); return <g key={slot.key} data-slot-key={slot.key} data-highlighted={highlightedKey === slot.key} data-selected={selected} className="blueprint-composition-canvas__port" onPointerDown={(event) => {
       if (event.button !== 0) return;
       event.preventDefault(); event.stopPropagation();

@@ -245,7 +245,7 @@ it.each([[600, 1, 140], [1, 600, 360], [600, 200, 150]])('fits %s × %s panels i
   presentation.slots = [{ slot_key: 'builtin', display_name: 'Built in', kind: 'CONNECTION_POINT', panel_key: 'front', panel_local_position: { x: .5, y: .5 }, rendered_position: { x: .5, y: .5 }, external_attachment: { x: 0, y: .5, side: 'LEFT' }, connection_point_id: 'builtin' }];
   show(data, vi.fn(), presentation);
   const back = await screen.findByRole('img', { name: 'Back' });
-  expect(screen.getByRole('img', { name: 'Front' }).querySelector('[stroke-dasharray]')).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: 'Front' }).querySelector('polygon[data-module-port-marker]')).toBeInTheDocument();
   expect(document.querySelectorAll('[data-panel-key]')).toHaveLength(2);
   expect(document.querySelectorAll('[data-endpoint-id]')).toHaveLength(2);
   const preview = screen.getByRole('img', { name: 'Предпросмотр схемы' });

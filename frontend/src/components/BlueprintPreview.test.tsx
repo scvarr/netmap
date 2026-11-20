@@ -75,7 +75,7 @@ it('keeps all 48 ports and 24 links distinct on a low, two-sided CPP24-24 compos
   expect(svg.querySelectorAll('[data-endpoint-marker]')).toHaveLength(48);
 });
 
-it('fits a tall, narrow composition and draws only the placed bay in panel coordinates', () => {
+it('fits a tall, narrow composition and projects the historical bay as a marker at its center', () => {
   render(<BlueprintPreview label="Narrow" body={{ kind: 'RECTANGLE', width: 40, height: 480 }}
     panels={[panel('upper', -10, 20, 40, 200), panel('lower', -10, 260, 40, 240, 2)]} slots={[]}
     bays={[
@@ -86,10 +86,10 @@ it('fits a tall, narrow composition and draws only the placed bay in panel coord
   expect(svg).toHaveAttribute('viewBox', '-10 20 40 480');
   expect(Number(svg.getAttribute('height'))).toBeLessThan(440);
   expect(Number(svg.getAttribute('width')) / Number(svg.getAttribute('height'))).toBeCloseTo(1 / 12);
-  const bay = svg.querySelector('[data-bay-key="placed"]');
-  expect(bay).toHaveAttribute('x', '0');
-  expect(bay).toHaveAttribute('y', '380');
-  expect(bay).toHaveAttribute('width', '20');
-  expect(bay).toHaveAttribute('height', '60');
-  expect(svg.querySelector('[data-bay-key="logical"]')).toBeNull();
+  const bay = svg.querySelector('[data-slot-key="placed"] polygon')!;
+  expect(bay).toBeInTheDocument();
+  const vertices = bay.getAttribute('points')!.split(' ').map(point => point.split(',').map(Number));
+  expect(vertices[0][0]).toBeCloseTo(10);
+  expect(vertices[1][1]).toBeCloseTo(410);
+  expect(svg.querySelector('[data-slot-key="logical"]')).toBeNull();
 });

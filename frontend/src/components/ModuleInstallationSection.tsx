@@ -1,3 +1,4 @@
+import { modulePortPosition } from '../topology/hardwareModules';
 import { EndpointMarker } from './EndpointMarker';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { BlueprintPresentation } from '../topology/types';
@@ -134,7 +135,9 @@ export function ModuleInstallationSection({ objectId, onInstalled, presentation,
           gesture.current = { x: point.x/panel.width, y: point.y/panel.height, layout: l, resize };
         };
         return <g key={b.bay_key}>
-          {b.kind !== "LOGICAL" && <rect x={b.x * panel.width} y={b.y * panel.height} width={b.width * panel.width} height={b.height * panel.height} fill="none" stroke="#94a3b8" strokeDasharray="4 3" vectorEffect="non-scaling-stroke"><title>{b.display_name}</title></rect>}
+          {!i && b.kind !== "LOGICAL" && <EndpointMarker kind="MODULE_PORT" label={b.display_name}
+            cx={modulePortPosition(b).x * panel.width} cy={modulePortPosition(b).y * panel.height}
+            r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
           {i && l && <g>
             <rect data-installation-id={i.id} onPointerDown={e => begin(e, false)} x={l.x * panel.width} y={l.y * panel.height} width={l.width * panel.width} height={l.height * panel.height} fill={i.fill_color} stroke={editing && selected === i.id ? '#f59e0b' : 'none'} strokeWidth={1.5} vectorEffect="non-scaling-stroke"><title>{i.name}</title></rect>
             {i.endpoints.map(e => <EndpointMarker key={e.connection_point_id} kind={e.kind} label={e.contextual_display_name} data-endpoint-id={e.connection_point_id} pointerEvents="none" cx={(l.x + (e.x-i.layout.x)/i.layout.width*l.width)*panel.width} cy={(l.y + (e.y-i.layout.y)/i.layout.height*l.height)*panel.height} r={4 / scale} stroke="#0f172a" strokeWidth={1} vectorEffect="non-scaling-stroke" />)}

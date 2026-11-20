@@ -19,7 +19,7 @@ export function readLocalDraft(key: string): { draft?: LocalDraft; error?: 'corr
     if (!Array.isArray(s.slots) || !s.slots.every(p => object(p) && strings(p, ['key', 'display_name', 'port_type_id', 'panel_key']) && panels.has(p.panel_key) && ['NETWORK_PORT', 'CONNECTION_POINT'].includes(p.kind as string) && object(p.rendered_position) && numbers(p.rendered_position, ['x', 'y']))) throw Error();
     const slots = new Set(s.slots.map(p => p.key));
     if (slots.size !== s.slots.length || !Array.isArray(s.individualLinks) || !s.individualLinks.every(p => object(p) && strings(p, ['from_slot_key', 'to_slot_key']) && slots.has(p.from_slot_key) && slots.has(p.to_slot_key))) throw Error();
-    if (s.bays !== undefined && (!Array.isArray(s.bays) || !s.bays.every(p => object(p) && strings(p, ['bay_key', 'display_name', 'compatibility', 'panel_key']) && panels.has(p.panel_key) && (p.kind === 'LOGICAL' || (p.kind === undefined || p.kind === 'PLACED') && numbers(p, ['x', 'y', 'width', 'height']))))) throw Error();
+    if (s.bays !== undefined && (!Array.isArray(s.bays) || !s.bays.every(p => object(p) && strings(p, ['bay_key', 'display_name', 'compatibility', 'panel_key']) && panels.has(p.panel_key) && (p.kind === 'LOGICAL' || (p.kind === undefined || p.kind === 'PLACED') && numbers(p, ['x', 'y']) && (p.width == null && p.height == null || numbers(p, ['width', 'height'])))))) throw Error();
     if (s.endpointNaming !== undefined && (!Array.isArray(s.endpointNaming) || s.endpointNaming.length !== 2 || !s.endpointNaming.every(p => object(p) && typeof p.panel === 'string' && ['name','spatial','manual'].includes(p.mode as string) && ['ltr','rtl'].includes(p.horizontal as string) && ['ttb','btt'].includes(p.vertical as string) && Array.isArray(p.order) && p.order.every(k => typeof k === 'string') && object(p.naming) && strings(p.naming, ['mask','start','step'])))) throw Error();
     const draft = d as unknown as LocalDraft;
     const state = draft.state;
@@ -46,7 +46,7 @@ export function readLocalDraft(key: string): { draft?: LocalDraft; error?: 'corr
         if (!keyValid(bay.bay_key)) throw Error();
         if (bay.kind === 'LOGICAL') {
           if ([bay.x, bay.y, bay.width, bay.height].some(n => n !== null && n !== undefined)) throw Error();
-        } else if (!unit(bay.x) || !unit(bay.y) || bay.width <= 0 || bay.height <= 0 || bay.x + bay.width > 1 || bay.y + bay.height > 1) throw Error();
+        } else if (!unit(bay.x) || !unit(bay.y) || (bay.width != null && bay.height != null && (bay.width <= 0 || bay.height <= 0 || bay.x + bay.width > 1 || bay.y + bay.height > 1))) throw Error();
       }
     }
     // Preferences may legitimately outlive a deleted panel/port. The workspace

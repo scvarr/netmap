@@ -5,6 +5,7 @@ import pytest
 
 from tests.test_hardware_configuration import base_payload, client, counts, create_base, create_module, create_object, install
 from tests.test_module_template_review import check, open_draft, save
+from tests import test_base_template_review as base_review
 
 
 def module_port():
@@ -43,7 +44,8 @@ def test_module_port_revision_copy_and_workspace_roundtrip():
     draft = open_draft(template_id)
     definition = copy.deepcopy(draft["definition"])
     port = module_port()
-    definition["module_ports"] = [port]
+    marker = {"key": str(uuid.uuid4()), "display_name": "Anchor", "compatibility": "Open spec", "x": 1, "y": 0}
+    definition["module_ports"] = [port, marker]
     definition["endpoints"].append({**definition["endpoints"][0], "key": "patch", "kind": "CONNECTION_POINT", "display_name": "Patch"})
     checked = check(template_id, save(template_id, draft, definition))
     candidate = checked["review"]
@@ -70,20 +72,56 @@ def test_module_port_revision_copy_and_workspace_roundtrip():
     assert {key: current[key] for key in definition} == definition
     duplicate = client.post("/v1/library/module-templates", json={**definition, "name": "Copy"})
     assert duplicate.status_code == 201, duplicate.text
-    assert duplicate.json()["module_ports"] == [port]
+    assert duplicate.json()["module_ports"] == [port, marker]
 
     reopened = open_draft(template_id)
     renamed = {**port, "display_name": "Moved", "x": .25}
-    save(template_id, reopened, {**definition, "module_ports": [renamed]})
+    save(template_id, reopened, {**definition, "module_ports": [renamed, marker]})
     package = client.get("/v1/workspace/package").json()
     revisions = {item["id"]: item for item in package["authoring"]["ModuleTemplateRevision"]}
     assert revisions[module["revision_id"]]["module_ports"] == []
-    assert revisions[published.json()["revision_id"]]["module_ports"] == [port]
+    assert revisions[published.json()["revision_id"]]["module_ports"] == [port, marker]
     assert client.delete("/v1/workspace/dataset").status_code == 204
     imported = client.post("/v1/workspace/package", json=package)
     assert imported.status_code == 204, imported.text
     assert client.get("/v1/workspace/package").json() == package
-    assert open_draft(template_id)["definition"]["module_ports"] == [renamed]
+    assert open_draft(template_id)["definition"]["module_ports"] == [renamed, marker]
+
+
+def test_base_marker_revision_and_legacy_installation_survive_workspace_roundtrip():
+    payload = base_payload()
+    legacy = {**payload["bays"][0], "kind": "PLACED"}
+    marker = {**legacy, "bay_key": "point", "display_name": "Edit me", "x": 1, "y": 0, "width": None, "height": None}
+    payload["bays"] = [legacy, marker]
+    base, _ = create_base(payload)
+    obj = create_object(base)
+    object_id = obj["physical_object_ref"]["entity_id"]
+    module = create_module()
+    for bay in (legacy, marker):
+        response = install(object_id, module["template_id"], bay["bay_key"])
+        assert response.status_code == 201, response.text
+    configuration_url = f"/v1/topology/physical-objects/{object_id}/configuration"
+    pinned = client.get(configuration_url).json()
+    layouts = {b["bay_key"]: b["installation"]["layout"] for b in pinned["bays"]}
+    assert layouts[legacy["bay_key"]]["x"] == pytest.approx(.2)
+    assert layouts[marker["bay_key"]]["x"] + layouts[marker["bay_key"]]["width"] == pytest.approx(1)
+    assert layouts[marker["bay_key"]]["y"] == 0
+    draft = base_review.open_draft(base)
+    definition = copy.deepcopy(draft["definition"])
+    edited = next(b for b in definition["bays"] if b["bay_key"] == marker["bay_key"])
+    edited.update(x=.25, y=.75, display_name="Moved marker")
+    checked = base_review.check(base, base_review.save(base, draft, definition))
+    result = client.post(f"/v1/library/base-templates/{base}/candidates/{checked['review']['candidate_id']}/publish")
+    assert result.status_code == 200, result.text
+    assert edited in base_review.open_draft(base)["definition"]["bays"]
+    assert client.get(configuration_url).json() == pinned
+    package = client.get("/v1/workspace/package").json()
+    assert package["format_version"] == 11
+    assert client.delete("/v1/workspace/dataset").status_code == 204
+    imported = client.post("/v1/workspace/package", json=package)
+    assert imported.status_code == 204, imported.text
+    assert client.get("/v1/workspace/package").json() == package
+    assert client.get(configuration_url).json() == pinned
 
 
 @pytest.mark.parametrize("invalid", [{"compatibility": "  "}, {"x": .9}, {"width": 0}, {"port_type_id": None}, {"key": "endpoint"}])

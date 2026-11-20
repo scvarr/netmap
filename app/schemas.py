@@ -792,9 +792,11 @@ class ModuleBayRequest(BaseModel):
     @model_validator(mode="after")
     def rectangle_inside_panel(self):
         geometry = (self.x, self.y, self.width, self.height)
-        if (self.kind == "LOGICAL" and any(v is not None for v in geometry)) or (self.kind == "PLACED" and any(v is None for v in geometry)):
-            raise PydanticCustomError("hardware_validation", "Bay kind and rectangle contradict each other")
-        if self.kind == "PLACED" and (self.x + self.width > 1 or self.y + self.height > 1):
+        if (self.kind == "LOGICAL" and any(v is not None for v in geometry)) or (
+            self.kind == "PLACED" and (self.x is None or self.y is None or (self.width is None) != (self.height is None))
+        ):
+            raise PydanticCustomError("hardware_validation", "Bay kind and placement contradict each other")
+        if self.width is not None and (self.x + self.width > 1 or self.y + self.height > 1):
             raise PydanticCustomError("hardware_validation", "Bay rectangle must be entirely inside its panel")
         if any(not v.strip() for v in (self.bay_key, self.display_name, self.compatibility, self.panel_key)):
             raise PydanticCustomError("hardware_validation", "Bay strings must not be blank")
@@ -819,14 +821,16 @@ class ModulePortDefinition(ModuleEndpointPosition):
     key: str = Field(min_length=1, max_length=255)
     display_name: str = Field(min_length=1, max_length=255)
     compatibility: str = Field(min_length=1, max_length=255)
-    width: FiniteFloat = Field(gt=0, le=1)
-    height: FiniteFloat = Field(gt=0, le=1)
+    width: FiniteFloat | None = Field(default=None, gt=0, le=1)
+    height: FiniteFloat | None = Field(default=None, gt=0, le=1)
 
     @model_validator(mode="after")
     def valid_module_port(self):
         if any(not value.strip() for value in (self.key, self.display_name, self.compatibility)):
             raise PydanticCustomError("hardware_validation", "Module port strings must not be blank")
-        if self.x + self.width > 1 or self.y + self.height > 1:
+        if (self.width is None) != (self.height is None) or (
+            self.width is not None and (self.x + self.width > 1 or self.y + self.height > 1)
+        ):
             raise PydanticCustomError("hardware_validation", "Module port rectangle must be entirely inside the module body")
         return self
 

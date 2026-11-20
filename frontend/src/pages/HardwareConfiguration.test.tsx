@@ -153,10 +153,16 @@ describe('09.6-A user path', () => {
     await userEvent.selectOptions(screen.getByLabelText('Вид точки'), 'MODULE_PORT');
     await userEvent.type(screen.getByLabelText('Совместимость модульного порта'), 'OCP3');
     await userEvent.click(screen.getByRole('button', { name: /^Добавить$/ }));
-    const bay = screen.getByRole('region', { name: 'Отсеки модулей' });
-    await userEvent.clear(within(bay).getByLabelText('Название')); await userEvent.type(within(bay).getByLabelText('Название'), 'OCP bay');
-    await userEvent.clear(within(bay).getByLabelText('x')); await userEvent.type(within(bay).getByLabelText('x'), '0.2');
+    const name = screen.getByRole('textbox', { name: /^Название$/ });
+    await userEvent.clear(name);
+    await userEvent.type(name, 'OCP bay');
+    const x = screen.getByRole('spinbutton', { name: /^X$/ });
+    await userEvent.clear(x);
+    await userEvent.type(x, '0.2');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить шаблон' }));
-    await waitFor(() => expect(source.createBaseTemplate).toHaveBeenCalledWith(expect.objectContaining({ bays: [expect.objectContaining({ bay_key: expect.any(String), display_name: 'OCP bay', compatibility: 'OCP3', x: .2, width: .3 })] })));
+    await waitFor(() => expect(source.createBaseTemplate).toHaveBeenCalledWith(expect.objectContaining({
+      bays: [expect.objectContaining({ bay_key: expect.any(String), display_name: 'OCP bay', compatibility: 'OCP3', x: .2 })],
+    })));
+    expect(vi.mocked(source.createBaseTemplate!).mock.calls[0][0].bays?.[0]).not.toHaveProperty('width');
   });
 });

@@ -1,4 +1,5 @@
 import type { BaseInternalLink, BlueprintSlot, BlueprintSlotKind, CreateBaseTemplateRequest, BaseTemplateRevisionDocument, PresentationPanel } from '../topology/baseTemplateTypes';
+import { isPlacedBay, moduleBayMarkers, positionModulePort, type BlueprintMarker } from '../topology/hardwareModules';
 
 export interface EndpointNamingSide {
   panel: string; mode: 'name' | 'spatial' | 'manual'; order: string[];
@@ -38,10 +39,12 @@ export const applyPairwiseContinuity = (state: BlueprintEditorState, a: readonly
 export const cleanupLinks = (links: BaseInternalLink[], removed: Set<string>) => links.filter((link) => !removed.has(link.from_slot_key) && !removed.has(link.to_slot_key));
 export const removeEndpoints = (state: BlueprintEditorState, keys: ReadonlySet<string>): BlueprintEditorState => {
   const slots = state.slots.filter((slot) => !keys.has(slot.key));
+  const bays = state.bays?.filter(bay => !isPlacedBay(bay) || !keys.has(bay.bay_key));
   const nextLocalNumberByPanel = { ...state.nextLocalNumberByPanel };
-  for (const panel of state.panels) if (!slots.some((slot) => slot.panel_key === panel.panel_key)) nextLocalNumberByPanel[panel.panel_key] = 1;
+  for (const panel of state.panels) if (!slots.some(slot => slot.panel_key === panel.panel_key)
+    && !bays?.some(bay => isPlacedBay(bay) && bay.panel_key === panel.panel_key)) nextLocalNumberByPanel[panel.panel_key] = 1;
   return {
-    ...state, slots, nextLocalNumberByPanel,
+    ...state, slots, bays, nextLocalNumberByPanel,
     individualLinks: cleanupLinks(state.individualLinks, new Set(keys)),
   };
 };
@@ -95,16 +98,22 @@ export const setPanelRectangle = (state: BlueprintEditorState, key: string, rect
   const resized = mode !== 'move';
   const position = (x: number, y: number) => ({ x: (panel.x + x * panel.width - rectangle.x) / rectangle.width, y: (panel.y + y * panel.height - rectangle.y) / rectangle.height });
   const slots = resized ? state.slots.map(slot => slot.panel_key === key ? { ...slot, rendered_position: position(slot.rendered_position.x, slot.rendered_position.y) } : slot) : state.slots;
-  const bays = resized ? state.bays?.map(bay => bay.panel_key === key && bay.kind === 'PLACED' ? { ...bay, ...position(bay.x, bay.y), width: bay.width * panel.width / rectangle.width, height: bay.height * panel.height / rectangle.height } : bay) : state.bays;
+  const bays = resized ? state.bays?.map(bay => {
+    if (bay.panel_key !== key || !isPlacedBay(bay)) return bay;
+    const origin = position(bay.x, bay.y);
+    if (bay.width == null || bay.height == null) return { ...bay, ...clampPosition(origin) };
+    return { ...bay, ...origin, width: bay.width * panel.width / rectangle.width, height: bay.height * panel.height / rectangle.height };
+  }) : state.bays;
   // Markers are presentation geometry. The caller supplies their fit-view radius
   // in composition units. Do not worsen any pre-existing edge clipping.
-  const crossesPort = state.slots.some(slot => {
+  const crossesPort = blueprintMarkers(state).some(slot => {
     if (slot.panel_key !== key) return false;
     const x = panel.x + slot.rendered_position.x * panel.width;
     const y = panel.y + slot.rendered_position.y * panel.height;
     return rectangle.x > Math.max(panel.x, x - portPadding) + 1e-10 || rectangle.y > Math.max(panel.y, y - portPadding) + 1e-10 || rectangle.x + rectangle.width < Math.min(panel.x + panel.width, x + portPadding) - 1e-10 || rectangle.y + rectangle.height < Math.min(panel.y + panel.height, y + portPadding) - 1e-10;
   });
-  if (resized && (crossesPort || bays?.some(bay => bay.panel_key === key && bay.kind === 'PLACED' && (bay.x < -1e-10 || bay.y < -1e-10 || bay.x + bay.width > 1 + 1e-10 || bay.y + bay.height > 1 + 1e-10)))) return state;
+  if (resized && (crossesPort || bays?.some(bay => bay.panel_key === key && isPlacedBay(bay)
+    && bay.width != null && bay.height != null && (bay.x < -1e-10 || bay.y < -1e-10 || bay.x + bay.width > 1 + 1e-10 || bay.y + bay.height > 1 + 1e-10)))) return state;
   return { ...state, slots, bays, panels: state.panels.map(item => item.panel_key === key ? { ...item, ...rectangle } : item) };
 };
 export const compositionBounds = (panels: PresentationPanel[]) => ({
@@ -137,16 +146,23 @@ export const deleteActivePanel = (state: BlueprintEditorState): BlueprintEditorS
 
 type Axis = 'x' | 'y';
 type Edge = 'start' | 'center' | 'end';
-const selectedSlots = (state: BlueprintEditorState, keys: ReadonlySet<string>) => state.slots.filter((slot) => keys.has(slot.key));
+export const blueprintMarkers = (state: BlueprintEditorState): BlueprintMarker[] => [...state.slots, ...moduleBayMarkers(state.bays ?? [])];
+const selectedSlots = (state: BlueprintEditorState, keys: ReadonlySet<string>) => blueprintMarkers(state).filter((slot) => keys.has(slot.key));
 // Preflight the whole batch: an impossible transform must not damage the draft.
 const reposition = (state: BlueprintEditorState, positions: Map<string, { x: number; y: number }>): BlueprintEditorState => {
   if ([...positions.values()].some(point => [point.x, point.y].some(value => !Number.isFinite(value) || value < -1e-12 || value > 1 + 1e-12))) return state;
-  return { ...state, slots: state.slots.map(slot => {
+  return { ...state, bays: state.bays?.map(bay => {
+    const point = positions.get(bay.bay_key);
+    return point && isPlacedBay(bay) ? positionModulePort(bay, clampPosition(point)) : bay;
+  }), slots: state.slots.map(slot => {
     const point = positions.get(slot.key);
-    return point ? { ...slot, rendered_position: { x: Math.max(0, Math.min(1, point.x)), y: Math.max(0, Math.min(1, point.y)) } } : slot;
+    return point ? { ...slot, rendered_position: clampPosition(point) } : slot;
   }) };
 };
-const spatialOrder = (a: BlueprintSlot, b: BlueprintSlot) => a.rendered_position.y - b.rendered_position.y || a.rendered_position.x - b.rendered_position.x || a.key.localeCompare(b.key);
+const clampPosition = ({ x, y }: BlueprintSlot['rendered_position']) => ({
+  x: Math.max(0, Math.min(1, x)), y: Math.max(0, Math.min(1, y)),
+});
+const spatialOrder = (a: BlueprintMarker, b: BlueprintMarker) => a.rendered_position.y - b.rendered_position.y || a.rendered_position.x - b.rendered_position.x || a.key.localeCompare(b.key);
 const boundedSpan = (min: number, max: number, minimum: number, inset = 0) => {
   const center = (min + max) / 2;
   const span = Math.min(1 - 2 * inset, Math.max(max - min, minimum));
@@ -174,7 +190,7 @@ export const positionSelectionAt = (state: BlueprintEditorState, keys: ReadonlyS
   const delta = requested - current[axis];
   return translateSelection(state, activeKeys, axis === 'x' ? delta : 0, axis === 'y' ? delta : 0);
 };
-const constrainTranslation = (slots: BlueprintSlot[], dx: number, dy: number) => ({
+const constrainTranslation = (slots: BlueprintMarker[], dx: number, dy: number) => ({
   dx: Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.x)), Math.min(dx, 1 - Math.max(...slots.map((slot) => slot.rendered_position.x)))),
   dy: Math.max(-Math.min(...slots.map((slot) => slot.rendered_position.y)), Math.min(dy, 1 - Math.max(...slots.map((slot) => slot.rendered_position.y)))),
 });
@@ -210,7 +226,7 @@ export const positionSelection = (state: BlueprintEditorState, keys: ReadonlySet
 
 export interface SnapTranslation { dx: number; dy: number; guideX?: number; guideY?: number }
 /** Snap the moving bbox center to stationary centers or the body center, then clamp once for the group. */
-export const snapSelectionTranslation = (visible: BlueprintSlot[], keys: ReadonlySet<string>, rawDx: number, rawDy: number, thresholdX: number, thresholdY: number): SnapTranslation => {
+export const snapSelectionTranslation = (visible: BlueprintMarker[], keys: ReadonlySet<string>, rawDx: number, rawDy: number, thresholdX: number, thresholdY: number): SnapTranslation => {
   const moving = visible.filter((slot) => keys.has(slot.key));
   if (!moving.length) return { dx: 0, dy: 0 };
   const stationary = visible.filter((slot) => !keys.has(slot.key));
@@ -282,16 +298,16 @@ export const layoutSelectionTwoRows = (state: BlueprintEditorState, keys: Readon
 
 const panelEndpointLimit = 400;
 const hasEndpointCapacity = (state: BlueprintEditorState, panelKey: string, count: number) =>
-  state.slots.filter((slot) => slot.panel_key === panelKey).length + count <= panelEndpointLimit;
+  blueprintMarkers(state).filter((slot) => slot.panel_key === panelKey).length + count <= panelEndpointLimit;
 const nextEndpointNumber = (state: BlueprintEditorState, panel: PresentationPanel) => {
-  const maximum = Math.max(0, ...state.slots.filter((slot) => slot.panel_key === panel.panel_key).map((slot) => new RegExp(`^${panel.panel_number}-(\\d+)$`).exec(slot.display_name)).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => Number(match[1])));
+  const maximum = Math.max(0, ...blueprintMarkers(state).filter((slot) => slot.panel_key === panel.panel_key).map((slot) => new RegExp(`^${panel.panel_number}-(\\d+)$`).exec(slot.display_name)).filter((match): match is RegExpExecArray => Boolean(match)).map((match) => Number(match[1])));
   return Math.max(state.nextLocalNumberByPanel[panel.panel_key] ?? 1, maximum + 1);
 };
 
 export type CopySelectionError = 'invalidSelection' | 'invalidDestination' | 'capacity';
 export const copySelectionError = (state: BlueprintEditorState, keys: ReadonlySet<string>, destinationPanelKey: string): CopySelectionError | undefined => {
   if (destinationPanelKey === state.activePanelKey || !state.panels.some((panel) => panel.panel_key === destinationPanelKey)) return 'invalidDestination';
-  const sources = state.slots.filter((slot) => keys.has(slot.key) && slot.panel_key === state.activePanelKey);
+  const sources = selectedSlots(state, keys).filter(slot => slot.panel_key === state.activePanelKey);
   if (!sources.length || sources.length !== keys.size) return 'invalidSelection';
   if (!hasEndpointCapacity(state, destinationPanelKey, sources.length)) return 'capacity';
 };
@@ -302,41 +318,66 @@ export const copySelectionToPanel = (state: BlueprintEditorState, keys: Readonly
   if (error) return { state, copiedKeys: [], error };
   const panel = state.panels.find((item) => item.panel_key === destinationPanelKey)!;
   const next = nextEndpointNumber(state, panel);
-  const sources = state.slots.filter((slot) => keys.has(slot.key));
-  const copies = sources.map((source, index): BlueprintSlot => ({
-    key: crypto.randomUUID(), kind: source.kind, port_type_id: source.port_type_id, panel_key: destinationPanelKey,
-    display_name: `${panel.panel_number}-${next + index}`,
-    rendered_position: { ...source.rendered_position },
-  }));
+  const sources = selectedSlots(state, keys);
+  const slots: BlueprintSlot[] = [], bays: NonNullable<BlueprintEditorState['bays']> = [], links: BaseInternalLink[] = [];
+  const copiedKeys = sources.map((source, index) => {
+    const key = crypto.randomUUID();
+    const display_name = `${panel.panel_number}-${next + index}`;
+    if (source.kind === 'MODULE_PORT') {
+      const original = state.bays!.find(bay => bay.bay_key === source.key)!;
+      bays.push({ kind: 'PLACED', bay_key: key, display_name, panel_key: destinationPanelKey,
+        compatibility: original.compatibility, ...source.rendered_position });
+    } else {
+      slots.push({ ...source, key, display_name, panel_key: destinationPanelKey, rendered_position: { ...source.rendered_position } });
+      if (createContinuity) links.push({ from_slot_key: source.key, to_slot_key: key });
+    }
+    return key;
+  });
   return {
-    copiedKeys: copies.map((slot) => slot.key),
+    copiedKeys,
     state: {
-      ...state, activePanelKey: destinationPanelKey, slots: [...state.slots, ...copies],
-      nextLocalNumberByPanel: { ...state.nextLocalNumberByPanel, [destinationPanelKey]: next + copies.length },
-      individualLinks: createContinuity ? [...state.individualLinks, ...sources.map((source, index) => ({ from_slot_key: source.key, to_slot_key: copies[index].key }))] : state.individualLinks,
+      ...state, activePanelKey: destinationPanelKey, slots: [...state.slots, ...slots],
+      ...(bays.length && { bays: [...state.bays ?? [], ...bays] }),
+      nextLocalNumberByPanel: { ...state.nextLocalNumberByPanel, [destinationPanelKey]: next + copiedKeys.length },
+      individualLinks: links.length ? [...state.individualLinks, ...links] : state.individualLinks,
     },
   };
 };
 
 /** UUIDs are opaque and independent of names, position, panel, and selection. */
-export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKind, count: number, panelKey: string, portTypeId: string, cardinality = 1): BlueprintEditorState => {
-  if (panelKey !== state.activePanelKey || !Number.isInteger(count) || count < 1 || count > 256 || !hasEndpointCapacity(state, panelKey, count)) return state;
+function newPanelMarkers(state: BlueprintEditorState, count: number, panelKey: string) {
+  if (panelKey !== state.activePanelKey || !Number.isInteger(count) || count < 1 || count > 256 || !hasEndpointCapacity(state, panelKey, count)) return;
   const panel = state.panels.find((item) => item.panel_key === panelKey);
-  if (!panel) return state;
-  const existing = state.slots.filter((slot) => slot.panel_key === panelKey).length;
+  if (!panel) return;
+  const existing = blueprintMarkers(state).filter(slot => slot.panel_key === panelKey);
+  const occupied = new Set(existing.map(({ rendered_position: {x, y} }) => `${x.toFixed(10)}:${y.toFixed(10)}`));
   const next = nextEndpointNumber(state, panel);
-  const slots = Array.from({ length: count }, (_, index): BlueprintSlot => {
-    const ordinal = existing + index;
-    const column = ordinal % 20;
-    const row = Math.floor(ordinal / 20);
-    return {
-      key: crypto.randomUUID(), kind, port_type_id: portTypeId, panel_key: panelKey,
-      ...(cardinality > 1 && { cardinality }),
-      display_name: `${panel.panel_number}-${next + index}`,
-      rendered_position: { x: (column + .5) / 20, y: (row + .5) / 20 },
-    };
-  });
-  return { ...state, nextLocalNumberByPanel: { ...state.nextLocalNumberByPanel, [panelKey]: next + count }, slots: [...state.slots, ...slots] };
+  const markers = [];
+  for (let index = 0; markers.length < count && index < panelEndpointLimit; index++) {
+    const ordinal = (existing.length + index) % panelEndpointLimit;
+    const x = (ordinal % 20 + .5) / 20, y = (Math.floor(ordinal / 20) + .5) / 20;
+    if (occupied.has(`${x.toFixed(10)}:${y.toFixed(10)}`)) continue;
+    markers.push({ key: crypto.randomUUID(), display_name: `${panel.panel_number}-${next + markers.length}`,
+      panel_key: panelKey, rendered_position: { x, y } });
+  }
+  if (markers.length !== count) return;
+  return { markers, nextLocalNumberByPanel: { ...state.nextLocalNumberByPanel, [panelKey]: next + count } };
+}
+
+export const addEndpoints = (state: BlueprintEditorState, kind: BlueprintSlotKind, count: number, panelKey: string, portTypeId: string, cardinality = 1): BlueprintEditorState => {
+  const batch = newPanelMarkers(state, count, panelKey);
+  if (!batch) return state;
+  const slots = batch.markers.map(marker => ({ ...marker, kind, port_type_id: portTypeId, ...(cardinality > 1 && { cardinality }) }));
+  return { ...state, nextLocalNumberByPanel: batch.nextLocalNumberByPanel, slots: [...state.slots, ...slots] };
+};
+
+export const addModulePorts = (state: BlueprintEditorState, panelKey: string, count: number, compatibility: string): BlueprintEditorState => {
+  const batch = newPanelMarkers(state, count, panelKey);
+  if (!batch) return state;
+  const bays = batch.markers.map(({ key, rendered_position, ...marker }) => ({
+    ...marker, ...rendered_position, kind: 'PLACED' as const, bay_key: key, compatibility,
+  }));
+  return { ...state, nextLocalNumberByPanel: batch.nextLocalNumberByPanel, bays: [...state.bays ?? [], ...bays] };
 };
 export const hydrateBlueprintEditorState = (version: BaseTemplateRevisionDocument): BlueprintEditorState => ({
   bays: version.bays?.map(bay => ({ ...bay })),

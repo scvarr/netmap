@@ -66,7 +66,7 @@ describe('RU/EN localization integration', () => {
       name: 'Карта',
       panels: [expect.objectContaining({ panel_number: 1, display_name: 'Панель 1' })],
       slots: [expect.objectContaining({ kind: 'NETWORK_PORT', display_name: '1-1', port_type_id: 'copper' })],
-      bays: [expect.objectContaining({ kind: 'PLACED', display_name: 'Module port 1', compatibility: 'Custom / 42' })],
+      bays: [expect.objectContaining({ kind: 'PLACED', display_name: '1-2', compatibility: 'Custom / 42' })],
     })));
   });
 });
