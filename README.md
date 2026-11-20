@@ -1,23 +1,15 @@
 # NetMap
 
-NetMap — модель физической сети с canonical topology, L1 trace и картами
-представления. Backend содержит также L2/L3 resolver core; полноценные L2/L3
-пользовательские workflows ещё не готовы. Phase C открыта, L1 PRODUCT COMPLETE
-не достигнут.
-
-Доступны библиотеки BaseTemplate/ModuleTemplate, ревизии и безопасное обновление
-оборудования и установленных модулей, PortType справочник, дерево Locations,
-SavedMap с вариантами компоновки, collapse/group move,
-массовое соединение портов и L1 trace с exact evidence. Карта L1 автоматически
-строит маршруты Cable по производным графам объектов и Location hierarchy.
-Создание Cable использует preview на тех же сегментах. При сворачивании внешний
-путь виден до граничной точки Location. Hover и выбор подсвечивают путь и
-видимые физические окончания. Общий сегмент открывает список Cable. Настройки данных дают
-export/reset/import текущего implicit workspace в Workspace JSON v8.
+NetMap моделирует физическую инфраструктуру, показывает её на картах и
+выполняет L1 trace по каноническим данным. Доступны шаблоны оборудования,
+установка модулей, обычная коммутация 1:1 и карты с вариантами компоновки.
+Серверное ядро L2/L3 существует. Полноценные пользовательские сценарии L2/L3
+остаются будущей работой. Оба гейта готовности L1 открыты.
 
 ## Запуск
 
-Нужны Docker Engine и Docker Compose. Миграции выполняются перед запуском backend.
+Нужны Docker Engine и Docker Compose. Runtime запускается только в Docker
+с закреплёнными версиями зависимостей. Миграции выполняются до запуска backend.
 
 ```sh
 docker compose up -d --build
@@ -26,41 +18,28 @@ docker compose ps
 
 [Приложение](http://localhost:5173/map) · [Backend health](http://localhost:8000/health)
 
-Остановка с сохранением данных:
+`docker compose down` останавливает сервисы с сохранением данных.
+`docker compose down -v` удаляет том базы данных.
 
-```sh
-docker compose down
-```
+## Восстановление контекста проекта
 
-`docker compose down -v` удаляет runtime database volume.
+Начните с README и читайте рабочие документы в этом порядке.
 
-## Разработка
+1. [PROJECT_STATE](docs/PROJECT_STATE.md) — что реализовано и проверено.
+2. [BACKLOG](docs/BACKLOG.md) — оставшиеся результаты, зависимости, гейты и следующий шаг.
+3. [ARCHITECTURE](docs/ARCHITECTURE.md) — канонические и сквозные инварианты.
+4. [L1_CONNECTIVITY](docs/L1_CONNECTIVITY.md) — физический контракт.
+5. [UX_IA_CONTRACT](docs/UX_IA_CONTRACT.md) — пользовательские требования.
+6. [OPEN_DECISIONS](docs/OPEN_DECISIONS.md) — нерешённые вопросы.
+7. [L1_REFERENCE_NETWORK](docs/L1_REFERENCE_NETWORK.md) — итоговая приёмка.
 
-Runtime только Docker; зависимости pinned. Backend tests используют отдельную
-тестовую БД, никогда runtime database. Запускать проверки по затронутому контракту;
-полные suites нужны по конкретному основанию, не для изменений документации.
+Правила разработки и проверок действуют по [AGENTS.md](AGENTS.md).
+Исторические аудиты нужны для адресной проверки свидетельств. Ссылки на
+BASE-UX-01, OBJECT-UX-01 и PORT-UX-01 ведут из аудита к версиям в Git. [Workflow координатора](docs/chatgpt.md)
+используется отдельно.
 
-```sh
-docker compose -f compose.test.yaml up --build --force-recreate --abort-on-container-exit --exit-code-from test-runner test-runner
-npm --prefix frontend test
-npm --prefix frontend run build
-git diff --check
-```
+Короткий запрос для нового чата:
 
-Реализованные API и DTO: `app/main.py`, `app/models.py`, `app/schemas.py`;
-пользовательские маршруты: `frontend/src/App.tsx`.
-
-## Документация
-
-- [Текущее состояние и ограничения](docs/PROJECT_STATE.md)
-- [Действующие архитектурные контракты](docs/ARCHITECTURE.md)
-- [Незавершённая работа и Phase A–I](docs/BACKLOG.md)
-- [Открытые решения](docs/OPEN_DECISIONS.md)
-- [Правила разработки](AGENTS.md)
-
-`docs/chatgpt.md` — отдельный внутренний контракт координатора, не инструкция
-coding agent и не часть продуктового комплекта.
-
-C-CAP-01-01 multichannel materialization и AUTO-LOC-01/02 и SLOC-01–05 находятся в main;
-внешний multichannel Cable write и полный UI OPEN. Очередность и зависимости:
-[BACKLOG](docs/BACKLOG.md#направления-и-зависимости).
+> Репозиторий NetMap — https://github.com/scvarr/netmap. Сверь текущие main
+> и рабочую ветку, прочитай README и указанные в нём документы восстановления.
+> Восстанови состояние, обязательные гейты и ближайший контракт для согласования.

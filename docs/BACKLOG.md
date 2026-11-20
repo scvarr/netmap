@@ -1,384 +1,222 @@
-# Единый backlog
-
-[Текущее состояние](PROJECT_STATE.md) · [Контракты](ARCHITECTURE.md) · [Решения](OPEN_DECISIONS.md)
-
-VERIFIED — контракт реализован и принят; OPEN — отсутствует необходимая реализация; RECHECK PENDING — исправление есть,
-нужна проверка; PRODUCT DECISION PENDING — контракт ещё не выбран; BLOCKED —
-конкретная зависимость. Приоритет не задан, если явно не указан.
-Для ручных проверок зависимость — доступный Docker stand с representative data;
-критерий — сценарий в обычном UI, Save/reload и сохранение canonical identity/evidence.
-Реализованные соседние milestones не закрывают finding автоматически.
-
-## Последовательность Phase A–I
-
-| Phase | Статус и оставшаяся работа | Зависимость и критерий завершения |
-| --- | --- | --- |
-| A — known L1 correctness/workflows | Завершена; повторная реализация не нужна | Exact evidence, Cable navigation, Location UX уже реализованы |
-| B — bounded L1 families | Spatial/route scope завершён; label работает; будущие metadata отдельно | P-UX-03A–E приняты, MapComposite удалён; не вводить generic scene engine |
-| C — representative L1 acceptance | OPEN: применимые проверки ниже и clean acceptance | Обязательные fixes; закрыты findings и пройден representative UI scenario |
-| D — promoted semantic gaps | OPEN: C-CAP-01, необходимые классификации | Только доказанные Phase C gaps; truthful authoring/materialization/trace |
-| E — shared UI/UX foundation | OPEN | После C/D; audit, primitives/archetypes и bounded migration plan, включая справочники |
-| F — application productization | BLOCKED: persisted NetworkWorkspace, auth, ACL, sharing, activity | E и согласованные contracts; практически используемое изолированное multi-user приложение |
-| G — controlled UI migration/polish | BLOCKED | E/F surfaces; согласованные forms/tables/dialogs, focus/keyboard/accessibility и task-based checks |
-| H — stabilization/performance | OPEN, финальный gate после G | Все «до L2: ДА» и явно promoted blockers закрыты на representative scale |
-| I — final product acceptance | BLOCKED | A–H; workspace/login/access/sharing, writes/maps/trace, UI states, accountability и scale приняты |
-
-Только после I допустимо **L1 PRODUCT COMPLETE**, затем продуктовый L2, затем L3.
-Phase C и Phase D не завершены. Performance blocker можно исправлять раньше по
-зависимости, не меняя порядок gates.
-
-## Обязательность и очередь без изменения Phase A–I
-
-Обязательные условия **L1 PRODUCT COMPLETE**: завершить gates C/D, затем E–I;
-Phase F включает persisted NetworkWorkspace, auth/access/sharing/activity;
-Phase H — PERF-002/003/004/005 («до L2: ДА»), актуальные измерения и явно
-promoted blockers; Phase I — итоговая приёмка. Backend L2/L3 core этого не заменяет.
-
-Необходимая работа C/D: representative L1 acceptance, конкретные остатки
-RECHECK ниже, truthful multichannel C-CAP-01; CAT-D сначала требует решения
-о минимальном составе. C-CAP-01 один, его строка в C — finding для Phase D.
-C-UX-03 закрыт как NOT REQUIRED. Для C-UX-05/06/09/10, C-VIS-01/02 сохраняются findings, но обязательность каждого
-как blocker C и точный bounded scope требуют решения: список применимых C-*
-не означает автоматического MUST для любой обсуждавшейся capability.
-
-Необязательные для текущего gate улучшения: performance/maintenance пункты
-с «до L2: НЕТ», archive measurement/compression; повышение их обязательности
-требует решения. P-UX-21 имеет согласованное направление, но статус обязательного
-blocker не установлен. Для P-UX-22, дополнительных справочников и
-будущих slices контракт/обязательность уточняются отдельно. CAT-E остаётся
-работой Phase E, CAT-F зависит от Phase F; это не blockers начала Phase C.
-
-## Ближайшая очередь реализации — решение 11.11.2026
-
-Историческая очередь BT-DRAFT-01 → BT-COPY-01 → C-CAP-01-01 выполнена в main. Текущая последовательность направлений — в [BACKLOG](BACKLOG.md#направления-и-зависимости); representative acceptance остаётся OPEN.
-Это очередь реализации, не изменение последовательности gates Phase A–I.
-L1 PRODUCT COMPLETE остаётся обязательным до продуктового L2/L3.
-
-### BT-DRAFT-01 — локальное автосохранение BaseTemplate
-
-**IMPLEMENTED / ACCEPTED / MERGED.** Один локальный черновик создания
-и отдельный по template ID; localStorage, пауза 350 мс и flush при уходе.
-Новый черновик предлагается продолжить; отказ требует подтверждения.
-Существующий восстанавливается при совпадении server draft generation;
-конфликт блокирует применение и не перезаписывает сервер.
-Сохраняются параметры, панели, порты, геометрия, типы, имена, внутренние связи,
-модульные места, активная панель, счётчики и порядок/параметры именования.
-Выделение и временные состояния взаимодействия не сохраняются.
-Очистка только после успешного server save той же версии; ошибки storage
-и повреждение данных видимы. API, миграции и draft/candidate/publication без изменений.
-Без синхронизации вкладок/устройств; локальные данные зависят от профиля браузера.
-
-### BT-COPY-01 — копирование BaseTemplate
-
-**IMPLEMENTED / MERGED; manual acceptance pending.** «Создать копию» в библиотеке из опубликованной ревизии создаёт новый
-независимый BaseTemplate. Копируются определения, панели, порты, PortType refs,
-геометрия, внутренние связи и модульные места. Не копируются PhysicalObject,
-canonical endpoints, подключения и зависимости исходных экземпляров.
-Исходный шаблон не изменяется. Источник закреплён template/revision ID в URL;
-загрузка с повторной попыткой, штатный create API только при явном сохранении.
-Копия использует BT-DRAFT-01; существующий черновик требует выбора и подтверждения
-удаления. Архивные PortType сохраняются с предупреждением и ручной заменой.
-«Отмена» для создания, копии и редактирования очищает только локальное состояние
-после подтверждения; ошибка storage оставляет редактор открытым. Backend lifecycle
-не изменён. Адресные component/model tests и Docker build; ручная проверка pending.
-
-## Remaining Phase C
-
-| ID | Остаток / критерий завершения | Статус | Зависимости / приоритет |
-| --- | --- | --- | --- |
-| C-UX-01 | Проверить Location tree/create/reparent произвольной глубины | RECHECK PENDING | P-UX-18 реализован |
-| C-UX-02 | Штатное создание PhysicalObject из BaseTemplate с выбором initial Location, без обходных ручных операций | VERIFIED | Пользователь 10.11.2026 подтвердил неоднократную успешную проверку; только этот контракт |
-| C-UX-03 | Отдельная FRONT/REAR-семантика не требуется; произвольных названий панелей достаточно | NOT REQUIRED | Решение 11.11.2026; закрыто без реализации отдельной функции |
-| C-UX-04 | Rename оборудования с портами, Cable, Location и SavedMap; новое имя в списке, карточке, карте и инспекторе; поиск и L1 trace; переходы, варианты карты и reload; IDs, подключения и placements сохранены, дубли отсутствуют | VERIFIED | Пользователь прошёл все шесть ручных проверок 11.11.2026 |
-| C-UX-05 | Runtime map guides нужны; ориентиры — уже размещённые объекты | OPEN | Точный bounded UX-контракт открыт; presentation-only, отдельно от auto-layout |
-| C-UX-06 | Независимые Width/Height пока не реализовывать | OPEN | Повторно оценить необходимость после P-UX-21; не VERIFIED |
-| C-UX-09 | Раскрываемый графический preview BaseTemplate непосредственно при выборе шаблона | OPEN | Ориентир — существующий preview библиотеки; реализация открыта |
-| C-UX-10 | Автоматические Location cable channels и составной путь Cable | OPEN | [CURRENT и оставшийся scope](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels). C-UX-10-01 foundation объединён в main. LOC-CHAN-01 реализует производный локальный граф Location и технического корня. LOC-ROUTE-01 реализует составной путь, preview и видимость при collapse. Общие межобъектные жгуты остаются OPEN |
-| C-UX-12 | Проверить массовое именование, spatial order, обнаруживаемость и сохранение | RECHECK PENDING | Исправление реализовано |
-| C-UX-13 | Проверить полезную площадь BaseTemplate editor при больших данных | RECHECK PENDING | Компоновка реализована |
-| C-UX-14 | Проверить понятность Change Inspector и точность больших сводок impact | RECHECK PENDING | Реализован; HV-01 не заменяет UX recheck |
-| C-UX-15 | Natural ordering trace port selector: реальные panel/port labels и модульный контекст при совпадении; «Любой порт» первым, 1,2,…10; дубликаты отдельны | VERIFIED | Техническая реализация прошла external review (c4c04ed); пользователь 10.11.2026 подтвердил успешную ручную проверку |
-| C-COR-02 | Полный manual recheck distribute у границ панели, невозможная операция и reload | VERIFIED | Пользователь 10.11.2026 подтвердил границы панели, атомарное отклонение невозможной операции, сохранение и повторное открытие |
-| C-VIS-01 | Совпадающий общий подсвеченный участок допустим; canonical trace evidence отдельных Cables не смешивается | OPEN | Геометрическое пересечение не доказывает connectivity; реализация не объявляется завершённой |
-| C-VIS-02 | Отдельное исправление отложено; повторная проверка после изменения маркеров в P-UX-21 | OPEN | Не закрывается автоматически |
-| C-VIS-03 | Сохранение цветов PortType на физической карте при Cable create/delete, L1 trace и wiring; форма и подсветка независимы от базового цвета | VERIFIED | Foreground SVG перекрывал DeviceNode фиксированной заливкой; теперь читает общий runtime PortType catalog, включая архивные типы. Wiring использует обводку/свечение без замены заливки. Адресные автоматические проверки пройдены: оба слоя, Cable lifecycle, trace/route, wiring, порядок catalog/projection. External review реализации daff76edce19424c6ba72004ee4b41f5b0d8772d и ручная приёмка пройдены 10.11.2026; пользователь подтвердил сохранение цветов после операций с кабелями и в проверенных режимах карты |
-| C-CAP-01 | Truthful FANOUT-1x24 от authoring до одного multichannel Cable и member trace | OPEN | Promoted Phase D; не подменять 24 фиктивными входами/кабелями |
-
-C-COR-01/C-UX-08 replacement VERIFIED, C-UX-07/C-UX-11 VERIFIED,
-HV-01 PASSED, PT-01/02/03 приняты, P-UX-03E принят и merged — не backlog реализации.
-
-Дополнительное ручное покрытие (RECHECK PENDING):
-
-- P-UX-07: проверить понятность RU terminology в текущих формах и карте;
-  P-UX-08: согласованность PageShell/header/loading/error на переходах между страницами;
-  P-UX-11: только viewport ModuleTemplate и остальных редакторов, кроме BaseTemplate
-  (его большие данные и полезная площадь проверяются один раз в C-UX-13).
-- P-UX-13/14/15 не отдельная очередь: create/initial Location закрыты C-UX-02;
-  компактный picker preview — C-UX-09; rename — VERIFIED в C-UX-04.
-  Остался RECHECK PENDING переходов обзор/физика/интерфейсы карточки: правильный
-  объект, данные и возврат после reload. Obsolete Blueprint workflow не восстанавливать.
-- P-UX-19: только preview/conflicts/atomic Location series и reload; дерево/create/reparent
-  проверяются один раз в C-UX-01. Массовые endpoint naming/order — только C-UX-12;
-  viewport BaseTemplate — только C-UX-13; Change Inspector — только C-UX-14.
-- F2b composition; ModuleTemplate endpoint controls и pinned preview; адаптивная
-  высота installation table; library faithful preview. HV-01 не доказал все visual cases.
-- P-UX-10: применимость async page-chrome сценария к текущей библиотеке проверить;
-  удалённый PortBlock catalog не восстанавливать.
-
-### Clean representative L1 acceptance — OPEN
-
-После обязательных fixes пройти с пустой тестовой БД rack-first/service-path
-synthetic stand: оборудование/модули -> Locations (rack/room/floor/site) ->
-Cables и passive continuity -> SavedMap/variants/collapse -> trace exact
-members/evidence -> export/reset/import/reload. Synthetic stand не утверждает
-неизвестные факты реальной сети. Двигаться малыми UI-шагами, остановиться на
-первом существенном finding, bounded fix/review/merge, повторить тот же шаг на
-сохранённом stand. Прямые API/DB writes и fake topology не обходят missing capability.
-Закрытие: применимые C-* проверены, обязательные blockers устранены или явно
-перенесены по согласованному roadmap, все representative workflows завершены.
-
-## Открытые дефекты карты и следующий этап
-
-- **OPEN** — перегруженные контекстные меню физической карты. [GitHub Issue #1](https://github.com/scvarr/netmap/issues/1)
-- **OPEN** — при сворачивании родительского Location с пустым набором
-  видимых дочерних элементов часть содержимого остаётся видимой.
-  [GitHub Issue #2](https://github.com/scvarr/netmap/issues/2)
-
-Оба дефекта остаются открытыми после
-[кабельных milestones](PROJECT_STATE.md#кабельные-milestones).
-
-Следующий этап после DOC-CABLE-RECON-01 — отдельный независимый аудит
-готовности NetMap L1 по исходному коду, актуальной документации и реальному
-браузерному интерфейсу. Проверить целостность пользовательских сценариев,
-согласованность UX/UI, инженерную практичность, фактические OPEN
-capabilities, достоверность canonical L1, недостатки интерфейса, навигации
-и справочников и работы до L1 PRODUCT COMPLETE. Результат — отдельный
-документ со свидетельствами, severity, предложениями и порядком исправлений.
-
-## Remaining Phase D и справочники
-
-**FUTURE — структура справочников.** Перенести «Шаблоны имён кабелей» из
-«Инфраструктуры» в «Справочники». Добавить справочники производителей и
-моделей оборудования с выбором модели из списка вместо повторного ввода
-полного названия. Существующий каталог PortType сохраняется. Структура
-данных производителей здесь не определяется.
-
-Согласованные направления и открытые детали описаны в разделах
-[PortType и физическая совместимость](OPEN_DECISIONS.md#porttype-и-физическая-совместимость)
-и [CableType и member-aware модель](OPEN_DECISIONS.md#cabletype-и-member-aware-модель).
-
-C-CAP-01 (единый пункт, ссылка из Phase C) — OPEN, обязательный semantic gap Phase D.
-Canonical ConnectionPoint/Connection/ConnectionMember foundation существует, но
-C-CAP-01-01 реализует BaseTemplate multichannel definitions/materialization; внешний multichannel Cable write и полный UI остаются OPEN (02/03/04).
-Обязательный сценарий стенда: один задний многоканальный вход патч-панели,
-24 независимо адресуемых канала, 24 отдельных передних порта, exact internal
-member mapping 1..24, один физический многоканальный Cable и точный L1 trace
-отдельного канала после reload. Не создавать Fanout entity, фиктивные порты
-или 24 искусственных Cable для подмены одного физического.
-Точные DTO/API, редактирование member mappings, lifecycle/reconcile и UX — OPEN;
-foundation не означает IMPLEMENTED.
-
-CAT-D — PRODUCT DECISION PENDING: определить bounded состав необходимых
-классификаций портов/кабелей; реализовать и проверить reusable user-defined
-значения. PT-01/02/03 не переоткрываются. Открыты точные структурные поля
-PortType и CableType, правила совместимости и реализация блокировки полей.
-CAT-E — OPEN: создание типов непосредственно из форм и единый reusable UX;
-зависит от Phase E. CAT-F — BLOCKED: workspace/access scope зависит от Phase F.
-
-## Будущие product slices
-
-P-UX-21 — OPEN: реализовать согласованное расположение секций PhysicalObject;
-сначала решить label/cable collisions. Acceptance сохраняет geometry и PT-03.
-P-UX-22 — PRODUCT DECISION PENDING: согласовать pan/drag modes/cursors/hotkeys,
-затем проверить понятность доступных действий. Оба вне P-UX-03E.
-
-Ordered child layout/occupancy, reusable
-Location series, selector collapse, arbitrary grouping, MapReference,
-media/capability diagnostics, observations/Dynamic Maps — PRODUCT DECISION PENDING.
-Их наличие в обсуждениях не делает каждый пункт обязательным до L2.
-Workspace archive size/compression — OPEN: измерить текущий v8 по разделам и
-ZIP/GZIP; старый размер v5 не является current baseline.
-
-## Stabilization и performance gate
-
-PERF-001 tooling выполнен. Старый baseline около 500 объектов/4000 портов
-выявлял seconds-level endpoints и тысячи SQL queries; цифры не являются
-измерением текущего HEAD. Перед оптимизацией обновить baseline текущего Docker
-runtime, разделяя resolver/SQL/serialization/frontend и SMALL/MEDIUM/PORT_HEAVY/LARGE.
-Численные бюджеты требуют калибровки, не выдумываются в DOC-RESET.
-
-| ID | Статус / остаток | Зависимость и критерий | Приоритет / до L2 |
-| --- | --- | --- | --- |
-| PERF-002 | OPEN: bounded object details/inventory, occupancy и cable reads | Размер чтения от объекта/scope, не всей БД; query-count/latency before/after | HIGH / ДА |
-| PERF-003 | OPEN: убрать повторные object-level trace обходы | Semantic/golden equivalence verdict/branches/evidence/conflicts/cycles/order | HIGH / ДА |
-| PERF-004 | OPEN: оставшиеся scene computational hotspots и стабильные nodes/edges | Замер selection/drag, memo только где полезно; поведение сохранено | HIGH / ДА |
-| PERF-005 | OPEN: устранить eager logical read, подтверждённый эффектом MapPage | Physical view не запускает глобальную logical projection; query-count | MEDIUM / ДА |
-| PERF-006 | PRODUCT DECISION PENDING: DOM/LOD/virtualization strategy | PERF-001/004/007 и PORT_HEAVY measurements; anchors корректны | HIGH / НЕТ |
-| PERF-007 | RECHECK PENDING: saved physical layout без полного ELK | Проверить текущий authoritative path/fallback и time-to-map, не возвращать ELK | MEDIUM / НЕТ |
-| PERF-008 | OPEN: projection scope pushdown/N+1 | PERF-001; rows/parameters масштабируются scope; semantic equivalence | MEDIUM / НЕТ |
-| PERF-009 | OPEN: serialization cost/size | PERF-001; measured split, согласованный bounded response без потери evidence | MEDIUM / НЕТ |
-| PERF-010 | OPEN: точечные route subscriptions вместо O(N) | Проверить актуальный route component, доказать устранение лишних updates | LOW / НЕТ |
-| PERF-011 | OPEN: aggregate BaseTemplate counts/latest и bounded Module endpoint reads | Base list делает per-item queries; Module latest уже scalar subquery, не реализовывать повторно; измерить оставшиеся reads | LOW / НЕТ |
-| API-002 | PRODUCT DECISION PENDING: единая NOT_FOUND read семантика | Сначала контракт; не менять HTTP statuses автоматически | LOW / НЕТ |
-| FE-002 | OPEN: защита create-map от double submit отсутствует в текущем create handler/dialog | Добавить pending guard и disabled; один POST, refresh retry без повторной mutation | LOW / НЕТ |
-| FE-003 | RECHECK PENDING: scene keys layout store | Проверить изоляцию active callers; удалённые paths не восстанавливать | LOW / НЕТ |
-| MAINT-002 | BLOCKED: разбиение main.py при расширении L2 API | После L1 PRODUCT COMPLETE и конкретного L2 scope; сохранить API | LOW / НЕТ |
-
-Старые CONC-002/CORR-002/MAINT-001/DOC-001 относились к удалённому Blueprint
-upgrade/delete/slot API и не являются обязательной реализацией. Безопасность
-новых template lifecycle защищена текущим контрактом, не восстановлением старого.
-CORR-001 (глубокие passive paths) — RECHECK PENDING: проверить текущий iterative
-resolver на глубокой легальной цепи; criteria — без RecursionError и потери evidence;
-LOW, не автоматически до L2. CONC-001/API-001/FE-001/LOC-001 завершены и не возвращены.
-
-Контракт [L1-CONTRACT-02](L1_CONNECTIVITY.md) закрепляет L1-O1–L1-O10 как DECIDED.
-C-CAP-01 остаётся OPEN Phase D, L1 PRODUCT COMPLETE обязателен до L2/L3.
-Решения не объявляют текущий core полным multichannel продуктом.
-
-## Последовательность C-CAP-01 — OPEN implementation milestones
-
-C-CAP-01-01 — IMPLEMENTED / MERGED. Строки 02/03/04 сохраняют действующие
-обязательные критерии. Их пересмотр для member-aware модели и связи с L1-O5
-остаётся [OPEN](OPEN_DECISIONS.md#cabletype-и-member-aware-модель).
-
-Каждый этап требует отдельного implementation contract до выбора DTO, таблиц и
-миграций. Порядок 01 → 02 → 03 → 04 сохраняет небольшой scope каждого этапа.
-
-| Этап / цель | Границы | Зависимости | Инварианты | Минимальная приёмка |
-|---|---|---|---|---|
-| C-CAP-01-01: multichannel definitions/materialization | BaseTemplate capacity и internal mapping; ModuleTemplate continuity отдельная задача | L1-O1–O10; контракт provenance и безопасного reconcile | Stable IDs, immutable revisions, без instance overrides и потери dependencies | Data-driven N, rear-N → N front, permutation/subset после materialization и reload; конфликт reconcile атомарно отклоняется |
-| C-CAP-01-02: внешний write/occupancy/lifecycle | Один двухточечный multichannel Cable; create/edit/disconnect | 01; контракт internal/external roles | Одна Cable identity, occupancy по member, internal и external независимы; без автоматического удаления | N:N, permutation/subset; занятый member отклоняет всю операцию; свободный member того же point доступен; disconnect сохраняет internal continuity; reload |
-| C-CAP-01-03: пользовательский authoring | Общий механизм internal/external mappings и согласованный UI | 01 и 02; существующие UI patterns | Preview обязателен, сохранение атомарно, presentation не evidence | Прямой/обратный/заданный порядок, ручная коррекция, subset, conflict feedback и reload; без фиктивных портов/Cables |
-| C-CAP-01-04: exact trace и групповая приёмка | Member path/evidence, independent group evaluation; интеграционный цикл | 01–03; контракт ожидаемых соответствий | Нет неявного active transit, нет смешения members; REACHABLE не измерение | Rear-24/front-24 с одним внешним trunk, permutation, partial mapping, passive chain и active boundary после reload; резерв не ошибка, пропуск ожидаемой пары виден |
-
-Многоконцевые Cable, PON splitter и специфическая active conversion остаются
-отдельными будущими этапами с собственными контрактами, не входят в C-CAP-01.
-ModuleTemplate internal continuity также требует отдельного bounded implementation
-contract; её готовность не выводится из BaseTemplate и не закрывается этим планом.
-
-
-## C-CAP-01-01 — definitions и materialization
-
-Реализованы cardinality и exact internal member mappings BaseTemplate,
-атомарная materialization и запрет публикации изменения физической конструкции.
-Контракт хранения и границы: [ARCHITECTURE](ARCHITECTURE.md#c-cap-01-01--definitions-и-materialization).
-Графический multichannel edit/copy блокируется без потери данных; API доступен.
-C-CAP-01 остаётся **OPEN Phase D**; C-CAP-01-02/03/04 не реализованы.
-
-## L1-REFERENCE-01 — принятый target, будущая реализация
-
-[Контракт и синтетический стенд](L1_REFERENCE_NETWORK.md): независимые карты,
-CableType, переносимые файлы определений и demo initialization — DECIDED TARGET,
-не IMPLEMENTED. Map isolation требует отдельного bounded milestone до demo loader.
-Portability требует собственного implementation contract отдельно от workspace v8.
-C-CAP-01 остаётся OPEN Phase D; C-CAP-01-02/03/04 не закрыты; Phase A–I без изменений.
-CAT-D: CableType как пользовательский справочник принят; состав технических полей
-и реализация остаются OPEN, остальные классификации этим решением не утверждены.
-
-AUTO-LOC-01 — **IMPLEMENTED / MERGED**. Explicit opt-in per variant; technical root; mixed child order and HORIZONTAL/VERTICAL composition; hide empty subtrees; full/partial collapse; frame-relative Location boundary points; independent copy/reopen; manual variants preserved.
-
-
-**ROUTE-UX-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** Удалены ручное редактирование
-и хранение индивидуальных трасс. Создание Cable использует автоматический preview по графам COMB-01 и LOC-CHAN-01.
-
-## DOC-LOC-03 — реализация структурной компоновки
-
-**PARTIAL / IMPLEMENTED IN MAIN: SLOC-01–05.** Общая capability для реализации
-[согласованного TARGET](ARCHITECTURE.md#doc-loc-03--target-структурной-компоновки-location):
-структура размещения Location в variant, локальное соседство, строки/столбцы и
-плитка, простая последовательность непосредственных PhysicalObject,
-content-driven размеры без масштабирования панели, сохранение структуры при
-hide/collapse и независимость canonical assignment. Для оставшихся возможностей согласовать
-[открытые детали хранения, алгоритма и UX](OPEN_DECISIONS.md#doc-loc-03--structural-location-composition).
-После согласования открытых деталей реализация требует последующей декомпозиции
-на ограниченные последовательные milestones; их количество и техническое
-содержание этой записью не предрешаются.
-**COMB-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** Производный граф путей от
-портов Blueprint-backed оборудования до общего правого выхода используется
-реальными Cable. Переключатель карты отображает свободные сегменты. Uniform-grid
-учитывает вертикальные коридоры. DOC-LOC-03 остаётся PARTIAL.
-CABLE-SELECT-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED — выбор и hover Cable на участках L1.
-
-**LOC-CHAN-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** L1 строит локальное дерево виртуальных каналов для каждого отображаемого раскрытого Location и технического корня по текущей геометрии варианта.
-Деревья используют каноническое назначение и существующие граничные точки.
-**LOC-ROUTE-01 / IMPLEMENTED / MERGED / MANUALLY ACCEPTED.** Маршрут через Location hierarchy и preview используют одни сегменты. Collapse сохраняет внешний путь до видимой граничной точки. Выбор и hover используют canonical Cable ID, exact L1 evidence — canonical topology. C-UX-10 остаётся OPEN.
-Новых этапов Phase A–I и расширения scope эта запись не вводит.
-
-SLOC-01: isolated typed uniform-table computational core implemented, with
-recursive measurements, canonical-subtree population, compact empties and
-non-destructive hide/collapse. No runtime connection or persistence contract.
-SLOC-02: **IMPLEMENTED / MERGED** — versioned
-uniform-grid automatic_layout, server/workspace validation, L1 runtime adapter,
-explicit mode switch, live canonical reconciliation, variant copy/reload and
-targeted tests. Manual and legacy sequence contracts retained.
-SLOC-03: **IMPLEMENTED / MERGED; manual acceptance отдельно** — explicit arrangement mode replacing structural drag/drop: selected-Location arrows, address-based swaps/moves, full empty-track cleanup in a local working copy, shared geometry, variant-only Done save, Cancel/error rollback. Manual acceptance remains OPEN; other separate capabilities remain OPEN.
-Grid-specific partial-collapse selection UX remains OPEN; current semantics retained.
-
-SLOC-04: **IMPLEMENTED / MERGED** — natural numeric
-name sorting of immediate child Location rows, columns and entire tables (both
-traversals/directions); explicit holes, indexed scope UI in Location settings and
-technical-root Layout panel; atomic automatic draft entry, combined arrow/sort
-preview, common Done/Cancel/error rollback. Targeted tests and Chromium fixture
-smoke cover the implementation. DOC-LOC-03 remains PARTIAL.
-
-SLOC-04-SAVE adds Save layout to Location settings. It writes the active
-variant's shared draft through the same operation as Done. Chromium with the
-Docker backend and PostgreSQL verified save/reload of 42 children, preservation
-of empty cells and isolation of a second variant.
-
-SLOC-05: **IMPLEMENTED / MERGED; ручная приёмка OPEN** — список и
-ориентация непосредственных PhysicalObject для каждого Location и root, общий
-черновик и сохранение в variant, согласование при изменении состава, размещение
-по полным размерам. DOC-LOC-03 остаётся PARTIAL.
-
-## Направления и зависимости
-
-Единственный roadmap — существующие Phase A–I выше; их gates и критерии
-L1 PRODUCT COMPLETE сохраняются. Phase C и D остаются открытыми.
-
-- **Обязательные L1 gates:** C-CAP-01 (01 IMPLEMENTED / MERGED,
-  02/03/04 OPEN), representative acceptance, необходимые классификации с
-  согласованием минимального состава, Phase E–I. Implementation, external review
-  и manual acceptance — разные статусы; merge не доказывает ручную приёмку.
-- **Развитие пространственной карты:** AUTO-LOC-01/02 и SLOC-01–05 реализованы
-  и merged. После C-CAP-01-01 работа перешла к компоновке Location, объектной
-  кабельной расчёске и автоматической трассе через Location hierarchy.
-  DOC-LOC-03 остаётся PARTIAL, grid-specific partial-collapse UX и отдельные
-  ручные проверки компоновки открыты. Общие межобъектные жгуты, остальные
-  возможности C-UX-10, общий обзор и пошаговая L1 навигация остаются в существующей
-  очереди. Количество будущих milestones не назначено. Эти возможности не
-  становятся все blockers C/D.
-- **Справочники:** PortType реализован. PhysicalObject class — строковая
-  metadata, включая default BaseTemplate; Location.type — optional пользовательская
-  строка. Пользовательские справочники типов PhysicalObject и Location —
-  согласованное направление без закрытой taxonomy. CableType — DECIDED TARGET,
-  реализация OPEN. Дополнительные технические характеристики и compatibility —
-  отдельные решения. Тип Location не задаёт допустимых родителей/детей; тип
-  PhysicalObject не задаёт connectivity, endpoints или mappings. Тип не identity.
-  Hardcoded presentation presets workstation/switch/cable/outlet/patch_panel
-  в форме PhysicalObject — не полноценный справочник.
-- **Независимые карты и переносимость:** L1-REFERENCE-01 TARGET. CURRENT SavedMap —
-  presentation общей topology; TARGET — независимая canonical сеть каждой карты.
-  Общие библиотеки не означают общую topology; MapPresentationVariant остаётся
-  компоновкой, NetworkWorkspace — application boundary. Map isolation необходим
-  до demo loader; reference acceptance зависит от CableType, C-CAP-01 и нужных
-  пользовательских workflows. Portability определений требует отдельного
-  контракта и не равна workspace v8. Эти возможности не реализованы; стратегия
-  миграции не выбрана.
-
-OPEN для справочников: ID/reference model, перенос строк, UX выбора/создания,
-update/archive/delete, изменение используемых определений, свойства типов,
-зависимости от шаблонов и точная последовательность. Schema/API требуют отдельного
-implementation contract.
-
-Согласованный UX TARGET обзора/trace: можно отдалиться до всей инфраструктуры
-и полной трассы; подсветка различима при сильном zoom-out. Вся рассчитанная трасса
-постоянно подсвечена, текущий шаг ярче, камера фокусируется на текущем участке.
-Ручная навигация не сбрасывает trace. Камера и шаг — transient view state,
-не canonical topology. Численный minZoom не принят; LOD/virtualization требуют
-измерений, не являются заранее обязательной технологией.
-
-In-memory smoke подтверждает только проверенный fixture path; он не доказывает
-сохранение через реальный backend и reload. Новая ручная приёмка DOC-RECON-03
-не выполнялась. Geometry сохраняет отдельную Cable identity и независимые
-Connection/ConnectionMember evidence; общая линия не создаёт физической связности.
+# Дорожная карта NetMap
+
+Результаты ниже описывают зависимости. Отдельные предпосылки можно реализовать
+раньше потребляющего их этапа. Например, общий modal contract может понадобиться
+до редактора mappings. Границы владения согласуются до затрагивающих их
+канонических записей. Полный multi-user UX не требуется для каждой физической
+операции. Фактический статус ведётся в [PROJECT_STATE](PROJECT_STATE.md).
+
+## Ближайший контракт
+
+После внешней приёмки этой консолидации первым согласовать ограниченный
+**CAT-D** — минимальные PortType/ConnectorType/CableType, начальные определения,
+защиту структуры, переход существующих Cable и исходы server-side compatibility.
+До контракта реализации определить применимые границы владения. Точные
+развилки перечислены в [OPEN_DECISIONS](OPEN_DECISIONS.md#a-cat-d).
+При реализации проверять copper и fiber на малых fixtures, три вердикта
+совместимости, повторную проверку после preview, отсутствие частичных записей
+при конфликте, защиту используемых определений и сохранение существующих IDs
+после перехода и reload. Применять адресные проверки затронутого контракта
+и external review финального diff по [AGENTS.md](../AGENTS.md).
+
+## 0. Контракты физической модели и владения
+
+Цель — согласовать остающиеся границы физических операций и canonical scope.
+Физические инварианты приняты. Для предстоящих записей остаётся уточнить
+владельца, область записи и чтения, границы перехода существующих данных
+и сохранение identity. Обязательно до затрагивающих эти границы записей
+для G1/G2. Критерий — каждый соответствующий контракт реализации
+явно задаёт scope, retained IDs и ожидаемый отказ при конфликте.
+[Владение картой](ARCHITECTURE.md#savedmap-варианты-и-spatial-isolation) ·
+[Физическая модель](L1_CONNECTIVITY.md#l1-contract-03--decided-target).
+
+## 1. Справочники, типы и совместимость
+
+Цель — предоставить расширяемые физические определения и проверяемую
+коммутацию. Остаток — CAT-D, включая seed, protected structural definitions,
+переход существующих Cable и серверный вердикт. Зависит от применимых границ
+этапа 0, обязателен для G1. Завершение — пользовательские определения
+работают в медном и оптическом сценариях, используемая структура защищена,
+а сервер допускает совместимое, отклоняет несовместимое и запрашивает явное
+подтверждение неизвестного.
+[Физический контракт](L1_CONNECTIVITY.md#справочники-и-совместимость).
+
+## 2. Конструкция оборудования, модули и трансиверы
+
+Цель — выразить поддерживаемую физическую конструкцию и её безопасный lifecycle.
+Остаток — рекурсивные установки, явный LC Duplex binding, безопасная допустимая
+замена трансивера и корректный reconcile. Использует типы из этапа 1 и
+проверяет зависимости совместно с этапами 3–4. Обязательно для G1.
+Завершение — вложенная установка сохраняется и читается с теми же IDs,
+цикл и небезопасная операция отклоняются атомарно, допустимая замена сохраняет
+родительский NetworkInterface, оба волокна явно привязаны к нему.
+[Модульная конструкция](L1_CONNECTIVITY.md#модульная-конструкция).
+
+## 3. Внешняя многоканальная коммутация
+
+Цель — провести реальный двухточечный trunk с одной Cable identity через
+полный жизненный цикл. Остаток — C-CAP-01-02 и внешний authoring из
+C-CAP-01-03. Нужны серверная совместимость и применимые границы владения.
+Обязательно для G1. Завершение — оператор задаёт subset/permutation с preview,
+занятость проверяется по member и роли, create/edit/reconnect/disconnect
+работают атомарно, конфликт оставляет прежнее состояние, освобождение внешнего
+member сохраняет внутреннюю continuity. Проверить конкурентные записи и
+устаревшее preview.
+[Физические правила L1](L1_CONNECTIVITY.md#принятые-решения-l1-o1l1-o10--decided) ·
+[Транзакции](ARCHITECTURE.md#транзакции-и-согласование-записей).
+
+## 4. Пассивная continuity, exact member trace и evidence
+
+Цель — редактировать явные mappings и проверять exact trace канала и полноту
+группы. Остаток — ModuleTemplate continuity, внутренний authoring из C-CAP-01-03,
+пользовательский member trace и приёмка C-CAP-01-04. Зависит от конструкции
+этапа 2 и внешнего lifecycle этапа 3 для сквозной проверки. Обязательно для G1.
+Завершение — exact point/member, Connection, ConnectionMember и внешний Cable
+разрешаются в evidence после reload. Малая fixture проверяет задний вход на
+24 member, выбранные пары, перестановку и отсутствие пути к чужим members.
+Пассивное продолжение задаётся явно, разрыв даёт UNKNOWN, активный порт
+завершает trace.
+[Проверочные сценарии L1](L1_CONNECTIVITY.md#обязательные-проверочные-сценарии).
+
+## G1 · L1 CONNECTIVITY COMPLETE
+
+**OPEN.** Требуются завершение и адресная инженерная приёмка этапов 0–4:
+
+- Медная линия и независимо адресуемые оптические волокна.
+- Пользовательские PortType/ConnectorType/CableType, защищённые структурные
+  определения и три исхода server-side compatibility.
+- Двухточечный multichannel trunk, subset/permutation, member occupancy и
+  атомарный внешний Cable lifecycle.
+- Explicit passive continuity, в том числе ModuleTemplate, рекурсивные
+  установки, LC Duplex с явной привязкой двух волокон к одному
+  NetworkInterface и согласованный безопасный минимум lifecycle трансивера.
+- Exact member trace, полнота группы по ожидаемым mappings и сохранение
+  identities после reload.
+
+Остаток C-CAP-01 — 02/03/04. Достаточны небольшие targeted fixtures, включая
+проверки отказов и сохранения состояния.
+[Сценарии инженерной приёмки](L1_CONNECTIVITY.md#обязательные-проверочные-сценарии).
+
+## 5. Инженерный UX и исправления карты
+
+Цель — довести рабочие пользовательские сценарии до принятого UX/IA.
+Остаток — IA-01–IA-06, применимые обязательные correctives и адресные
+перепроверки. Полные сценарии используют физические возможности G1.
+Modal/table primitives могут потребоваться раньше, а итоговые проверки
+контекста доступа используют этап 6. Обязательно для G2. Завершение —
+проверены принятые требования навигации, таблиц, модалей и восстановления
+контекста, включая переход от Cable к обоим физическим окончаниям.
+
+Подтверждённый дефект полного collapse в uniform grid обязателен до G2.
+Проверить пустой набор видимых дочерних элементов, внешнюю граничную
+маршрутизацию, expand и варианты. Приёмка включает адресную регрессионную
+проверку и Chromium smoke. Перегруженное меню остаётся UX debt,
+если конкретный сценарий не нарушает действующий контракт.
+[UX/IA](UX_IA_CONTRACT.md#обязательность-и-связь-с-аудитом) ·
+[Дефект collapse #2](https://github.com/scvarr/netmap/issues/2) ·
+[Меню #1](https://github.com/scvarr/netmap/issues/1).
+
+### Проверки доступных сценариев
+
+**RECHECK REQUIRED.** Выполняются адресно по относящемуся к ним контракту.
+Обязательность исправления определяется нарушением принятого требования.
+
+- Location tree/create/reparent (C-UX-01), preview/conflicts и атомарность
+  создания серии после reload (P-UX-19), переходы вкладок карточки и возврат
+  после reload.
+- BaseTemplate naming/order/discoverability и сохранение (C-UX-12), viewport
+  на больших данных (C-UX-13), понятность и точность impact в Change Inspector
+  (C-UX-14), copy поддерживаемой опубликованной ревизии.
+- F2b, управление портами и pinned preview ModuleTemplate, высота таблицы
+  установок, fidelity library preview, viewport других редакторов (P-UX-11).
+- Терминология и PageShell/loading/error (P-UX-07/08), применимость старого
+  async page-chrome сценария к библиотеке (P-UX-10).
+- Стрелочная расстановка и сортировка grid, порядок и ориентация непосредственного
+  оборудования, трёхзонная рамка и компактные порты при resize/zoom/смене
+  варианта, восстановление обычной кабельной операции после конфликта.
+- Отдельные технические проверки без автоматической блокировки G2:
+  CORR-001 (длинный passive trace с сохранением evidence), PERF-007
+  (saved physical layout и время загрузки карты), FE-003 (изоляция ключей scene).
+
+## 6. Независимые карты, workspace и доступ
+
+Цель — изолировать канонические сети карт в persisted NetworkWorkspace с
+аутентификацией, ACL, sharing и activity/accountability. Остаток — переход
+существующих данных, scoped reads/writes, права и журналирование. Зависит от
+границ этапа 0. Инженерные сценарии G1 и UX этапа 5 используются для проверки изоляции.
+Обязательно для G2. Завершение — записи и чтения изолированы, допустимые
+операции сохраняют identity, доступ проверяется сервером, sharing соблюдает
+ACL, изменения можно связать с действующим субъектом и областью.
+[Архитектура владения](ARCHITECTURE.md#savedmap-варианты-и-spatial-isolation) ·
+[Открытые решения](OPEN_DECISIONS.md#c-карты-workspace-и-доступ).
+
+## 7. Переносимость, производительность и стабилизация
+
+Цель — переносимые пользовательские определения и рабочая производительность
+на репрезентативной нагрузке. Остаток — отдельный импорт/экспорт определений,
+обязательные PERF-002–005 и стабилизация сквозных сценариев. Переносимость
+зависит от типов, шаблонов и границ владения, проверки изоляции — от этапа 6.
+Измерять и исправлять PERF в относящихся к ним этапах, итоговый результат
+обязателен до G2. Проверить перенос определений между независимыми сетями,
+согласование конфликтов и отсутствие переноса экземпляров сети вместе с ними.
+[Контракт переносимости](L1_REFERENCE_NETWORK.md#переносимые-определения).
+
+| OPEN | Критерий завершения |
+| --- | --- |
+| PERF-002 | Object details/inventory, occupancy и Cable reads ограничены объектом или scope. Сравнить query count и latency. |
+| PERF-003 | Сокращены повторные обходы object trace. Сохранены verdict, branches, evidence, conflicts, cycles и порядок. |
+| PERF-004 | Измерены hotspots карты при selection/drag и улучшены подтверждённые узкие места. Сохранено поведение сцены. |
+| PERF-005 | Physical view не запускает глобальную logical projection. Подтвердить подсчётом запросов. |
+
+Обновить baseline на текущем Docker runtime для SMALL/MEDIUM/PORT_HEAVY/LARGE,
+различая resolver, SQL, сериализацию и клиентскую часть. Калибровать бюджеты
+по результатам измерений. [Требования L1](L1_CONNECTIVITY.md#назначение-canonical-truth-и-готовность).
+
+## G2 · L1 PRODUCT COMPLETE
+
+**OPEN.** Нужны принятый G1, устранённые IA-01–IA-06, независимые канонические
+сети карт, persisted NetworkWorkspace, authentication, ACL, sharing,
+activity/accountability, переносимые пользовательские определения,
+PERF-002–005, применимые обязательные исправления карты и сквозная приёмка.
+
+Собрать синтетическую организацию после готовности обязательных возможностей.
+Проверить рабочие места, стойки и оборудование в нескольких Location, медь,
+оптические trunk, ODF и пассивную разводку, независимые карты и scoped writes,
+exact trace, перенос определений, Save/reload, права, атрибуцию изменений и
+репрезентативную нагрузку. Отдельно проверить snapshot export/reset/import
+на тестовых данных. Fixture builder допустим для подготовки данных.
+Пользовательский authoring проверяется через доступный оператору путь.
+Автоматическая demo initialization необязательна.
+[Reference network и evidence](L1_REFERENCE_NETWORK.md#приёмка-и-evidence--будущий-запуск).
+
+## 8. Продуктовый L2
+
+Цель — пользовательские процессы L2 после G2. Серверный core существует.
+L2 получает стабильные NetworkInterface, physical realization, exact L1 evidence
+и независимый network scope. Scope этапа — forwarding contexts, bindings,
+encapsulation, forwarding eligibility, FDB/completeness и VLAN/LAG.
+Обязателен перед продуктовым L3. Завершение — согласованные L2 сценарии
+настройки и диагностики подтверждают forwarding через контекст и evidence.
+Физический Cable сам по себе не доказывает forwarding.
+[Контракт L2](ARCHITECTURE.md#сетевые-контракты-core-при-дальнейшем-развитии).
+
+## 9. Продуктовый L3
+
+Цель — пользовательские процессы routing после продуктового L2. Серверный core
+существует. L3 получает физическую основу и, где нужны, L2 adjacency/forwarding
+facts. Scope этапа — routing contexts, bindings, routes, next-hop resolution и
+полнота evidence. Обязателен для продуктовой готовности L3. Завершение —
+согласованные сценарии настройки и диагностики подтверждают routing verdict
+в заданном контексте, включая недостаточность данных. IP ownership само по
+себе не доказывает routing.
+[Контракт L3](ARCHITECTURE.md#сетевые-контракты-core-при-дальнейшем-развитии).
+
+## Отложенные направления
+
+Специализированная оптика (PON, CWDM/DWDM, optical budget), многоконцевые
+MPO→LC сборки, SNMP/SSH и real-time monitoring, rack U occupancy,
+механическая ёмкость трасс, полный рекурсивный графический редактор,
+auto demo initialization, произвольная multi-map composition и
+спекулятивный рефакторинг требуют отдельных оснований и контрактов.
+Оставшиеся UX findings и optional performance не блокируют гейты автоматически.
+[Открытые решения об объёме](OPEN_DECISIONS.md#e-будущие-направления).

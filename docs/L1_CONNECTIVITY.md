@@ -74,7 +74,7 @@ continuity оборудования и модулей, exact member trace и tar
 **L1 PRODUCT COMPLETE** дополнительно требует [IA-01–IA-06](UX_IA_CONTRACT.md#обязательность-и-связь-с-аудитом),
 [независимых карт и workspace isolation](ARCHITECTURE.md#savedmap-варианты-и-spatial-isolation),
 auth/ACL, sharing, activity, [переносимости определений](L1_REFERENCE_NETWORK.md#переносимые-определения),
-обязательных PERF-002–005 по [backlog](BACKLOG.md#stabilization-и-performance-gate)
+обязательных PERF-002–005 по [backlog](BACKLOG.md#7-переносимость-производительность-и-стабилизация)
 и итоговой [пользовательской приёмки](L1_REFERENCE_NETWORK.md#приёмка-и-evidence--будущий-запуск).
 Оба уровня пока открыты. Зависимость L2/L3 от L1 описана в
 [ARCHITECTURE](ARCHITECTURE.md#resolver-evidence-и-l1l2l3-boundaries).
@@ -161,7 +161,7 @@ connectivity или endpoints.
 и требует предупреждения и явного подтверждения при неизвестной. Равной
 cardinality недостаточно. Проверяются задокументированные физические свойства.
 Минимум полей, seed catalog, конкретные compatibility rules и переход
-существующих Cable остаются OPEN. [CAT-D](OPEN_DECISIONS.md#открытые-вопросы-l1-contract-03).
+существующих Cable остаются OPEN. [CAT-D](OPEN_DECISIONS.md#a-cat-d).
 
 ## Принятые решения L1-O1–L1-O10 — DECIDED
 
@@ -197,7 +197,7 @@ cardinality недостаточно. Проверяются задокумен�
   атомарно. Точный lifecycle для ещё открытых операций проверяется после
   согласования их контракта.
 
-## Последовательность C-CAP-01 — OPEN implementation milestones
+## C-CAP-01 — оставшиеся физические возможности
 
 C-CAP-01-01 доступен в BaseTemplate. C-CAP-01-02/03/04 остаются OPEN: внешний
 multichannel write с member occupancy и lifecycle, пользовательский mapping
@@ -206,7 +206,7 @@ editor, затем пользовательский exact member trace и гру
 addressing/provenance, concurrency, DTO, схемы и миграции для каждого этапа.
 ModuleTemplate continuity, duplex и рекурсивные установки необходимы
 инженерному gate и требуют собственных контрактов реализации.
-[Действующая очередь](BACKLOG.md#последовательность-c-cap-01--open-implementation-milestones).
+[Оставшиеся работы и приёмка](BACKLOG.md#g1--l1-connectivity-complete).
 
 ## C-CAP-01-01 — definitions и materialization
 

@@ -246,13 +246,13 @@ Persisted Channel и записи индивидуальной route geometry о
 Совместный участок и пересечение линий не дают continuity или evidence.
 
 **OPEN.** Межобъектные жгуты требуют отдельного решения.
-[C-UX-10](OPEN_DECISIONS.md#c-ux-10--automatic-location-cable-channels).
+[Открытые вопросы карты](OPEN_DECISIONS.md#d-ux-и-карта).
 
 ## Кабельные операции и панели CURRENT
 
 Физический lifecycle определён в [L1_CONNECTIVITY](L1_CONNECTIVITY.md#принципиальные-границы),
 работа с панелями и Cable — в [UX_IA_CONTRACT](UX_IA_CONTRACT.md#физическая-карта-и-кабельные-операции).
-Границы приёмки зафиксированы в [PROJECT_STATE](PROJECT_STATE.md#кабельные-milestones).
+Границы приёмки зафиксированы в [PROJECT_STATE](PROJECT_STATE.md#пользовательская-приёмка-и-перепроверки).
 
 ## Resolver, evidence и L1/L2/L3 boundaries
 
