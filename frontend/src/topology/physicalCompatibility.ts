@@ -6,7 +6,7 @@ export interface PhysicalCompatibilityConfirmation {
 }
 
 type Verdict = 'ALLOW' | 'DENY' | 'UNKNOWN';
-const reasonKeys = {
+export const compatibilityReasonKeys = {
   MEDIUM_MISMATCH: 'compatibility.medium',
   PROFILE_MISMATCH: 'compatibility.profile',
   TERMINATION_MISMATCH: 'compatibility.termination',
@@ -20,14 +20,14 @@ const reasonKeys = {
 export interface PhysicalCompatibilityPreview {
   verdict: Verdict;
   token: string | null;
-  ends: { pair: number; side: 'A' | 'B'; verdict: Verdict; reasons: (keyof typeof reasonKeys)[] }[];
+  ends: { pair: number; side: 'A' | 'B'; verdict: Verdict; reasons: (keyof typeof compatibilityReasonKeys)[] }[];
 }
 
 export class PhysicalCompatibilityError extends Error {}
 
 export function compatibilityReasons(preview: PhysicalCompatibilityPreview, t: ReturnType<typeof useI18n>['t']): string[] {
   return preview.ends.filter(end => end.verdict !== 'ALLOW').map(end => t('compatibility.end', {
-    pair: end.pair, side: end.side, reasons: end.reasons.map(reason => t(reasonKeys[reason])).join(', '),
+    pair: end.pair, side: end.side, reasons: end.reasons.map(reason => t(compatibilityReasonKeys[reason])).join(', '),
   }));
 }
 

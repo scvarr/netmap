@@ -2,6 +2,7 @@ import { selectCableType, stubCableCatalog } from '../testCableCatalog';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { BulkPhysicalConnectionError } from '../topology/apiPhysicalEndpointConnectionWriteDataSource';
+import type { PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import type { TopologyProjectionDocument } from '../topology/types';
 import { MapPage } from './MapPage';
@@ -46,16 +47,17 @@ const doc: TopologyProjectionDocument = { schema_version: '1.0', layer: 'L1', de
 const map = { map_ref: ref('SavedMap', 'map'), active_variant_ref: ref('MapPresentationVariant', 'variant'), variants: [], name: 'Map', placements: nodes.map(node => ({ physical_object_ref: ref('PhysicalObject', node.id), positions: { 'L1/PHYSICAL_OBJECT': { x: 0, y: 0 } } })) };
 const renderPage = createMapPageHarness(MapPage);
 
-function setup() {
+function setup(previewCompatibility?: PhysicalEndpointConnectionWriteDataSource['previewBulkPhysicalConnections']) {
   const projection = vi.fn().mockResolvedValue(doc);
   const create = vi.fn().mockResolvedValue({ created: [] });
-  const preview = vi.fn().mockResolvedValue({ labels: [{ label: 'B001', historical: true }] });
+  const preview = vi.fn().mockResolvedValue({ labels: ['B001'] });
   const loadDetails = vi.fn(async (id: string) => details(id));
   renderPage({
     dataSource: { loadProjection: projection },
     savedMapDataSource: { listMaps: vi.fn().mockResolvedValue([map]), loadMap: vi.fn().mockResolvedValue(map) } as any,
     physicalObjectDetailsDataSource: { loadPhysicalObjectDetails: loadDetails },
-    physicalEndpointConnectionWriteDataSource: { createPhysicalEndpointConnection: vi.fn(), createBulkPhysicalConnections: create, previewBulkCableLabels: preview },
+    physicalEndpointConnectionWriteDataSource: { createPhysicalEndpointConnection: vi.fn(), createBulkPhysicalConnections: create,
+      previewBulkCableLabels: preview, previewBulkPhysicalConnections: previewCompatibility },
     cableLabelDataSource: { loadCableLabelTemplates: vi.fn().mockResolvedValue({ templates: [{ id: 'template', name: 'Bulk' }] }) } as any,
   }, '/map?map=map&variant=variant&view=physical');
   return { create, preview, projection, loadDetails };
@@ -102,8 +104,12 @@ describe('MapPage bulk cable editor', () => {
     const firstTarget = reverse ? 48 : 1;
     expect(right().getAllByRole('checkbox')[0]).toHaveAccessibleName(`P${firstTarget}`);
     match();
-    select(left().getByLabelText('Сортировка'), 'descending');
-    select(right().getByLabelText('Сортировка'), reverse ? 'ascending' : 'descending');
+    expect(screen.getByRole('region', { name: 'Сопоставленные пары (48)' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Источник' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Назначение' })).not.toBeInTheDocument();
+    fireEvent.click(button('К выбору портов'));
+    expect(left().getByRole('checkbox', { name: 'P48' })).toBeChecked();
+    match();
     review();
     await selectCableType();
     expect(screen.getByText('Кабели к созданию (48)')).toBeVisible();
@@ -152,37 +158,76 @@ describe('MapPage bulk cable editor', () => {
     check(left(), 1);
     check(right(), 1);
     match();
-    select(panel, 'other');
+    fireEvent.click(button('К выбору портов'));
+    select(left().getByLabelText('Панель'), 'other');
     expect(left().getByRole('checkbox', { name: 'Other' })).toBeVisible();
-    expect(button('Предпросмотр')).toBeDisabled();
-    select(panel, '');
+    expect(button('Сопоставить')).toBeDisabled();
+    select(left().getByLabelText('Панель'), '');
     fireEvent.click(left().getByRole('checkbox', { name: 'Loose' }));
     match();
     expect(button('Предпросмотр')).toBeEnabled();
+    fireEvent.click(button('К выбору портов'));
     select(screen.getByLabelText('Целевой физический объект'), 'c');
-    expect(button('Предпросмотр')).toBeDisabled();
+    expect(button('Сопоставить')).toBeDisabled();
     expect(await right().findByRole('checkbox', { name: 'P1' })).not.toBeChecked();
   });
 
-  it('previews names, requires historical consent and clears consent on a stale preview', async () => {
+  it('previews reusable names and refreshes stale names before another write', async () => {
     const { create, preview } = setup();
     create.mockRejectedValueOnce(new BulkPhysicalConnectionError(422, 'BULK_LABEL_PREVIEW_STALE'));
-    preview.mockResolvedValueOnce({ labels: [{ label: 'B001', historical: true }] })
-      .mockResolvedValueOnce({ labels: [{ label: 'B009', historical: true }] });
+    preview.mockResolvedValueOnce({ labels: ['B001'] }).mockResolvedValueOnce({ labels: ['B009'] });
     await start();
     await selectOne();
     await screen.findByRole('option', { name: 'Bulk' });
     select(screen.getByLabelText('Имена кабелей'), 'template');
     expect(await screen.findByText('B001')).toBeVisible();
-    expect(button('Подтвердить создание')).toBeDisabled();
-    fireEvent.click(screen.getByLabelText('Подтвердить повторное использование B001'));
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     confirm();
     expect(await screen.findByText('B009')).toBeVisible();
-    expect(button('Подтвердить создание')).toBeDisabled();
-    fireEvent.click(screen.getByLabelText('Подтвердить повторное использование B009'));
+    expect(create).toHaveBeenCalledTimes(1);
     confirm();
     await waitFor(() => expect(create).toHaveBeenLastCalledWith(expect.objectContaining({
-      expected_generated_labels: ['B009'], confirmed_historical_labels: ['B009'],
+      expected_generated_labels: ['B009'],
+    })));
+  });
+
+  it('groups compatibility, reveals the individual denial and clears confirmation on edits', async () => {
+    const ends = [
+      { pair: 1, side: 'A', verdict: 'UNKNOWN', reasons: ['CABLE_CONNECTOR_UNSPECIFIED'] },
+      { pair: 1, side: 'B', verdict: 'DENY', reasons: ['MEDIUM_MISMATCH', 'CABLE_CONNECTOR_UNSPECIFIED'] },
+    ];
+    const compatibility = vi.fn().mockResolvedValueOnce({ verdict: 'DENY', token: null, ends })
+      .mockResolvedValueOnce({ verdict: 'UNKNOWN', token: 'first', ends: ends.slice(0, 1) })
+      .mockResolvedValueOnce({ verdict: 'UNKNOWN', token: 'second', ends: ends.slice(0, 1) });
+    const { create } = setup(compatibility);
+    await start();
+    await selectOne();
+    fireEvent.click(button('Проверить совместимость'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('DENY');
+    expect(screen.getByText(/разъём кабеля не указан.*окончаний: 2, пар: 1/)).toBeVisible();
+    expect(button('Подтвердить создание')).toBeDisabled();
+    fireEvent.click(screen.getByText('Подробности по парам'));
+    select(screen.getByLabelText('Номер пары'), '1');
+    expect(screen.getByText(/Пара 1, окончание B.*среды кабеля и порта различаются/)).toBeVisible();
+    expect(create).not.toHaveBeenCalled();
+
+    fireEvent.click(button('Назад'));
+    review();
+    await waitFor(() => expect(button('Проверить совместимость')).toBeEnabled());
+    fireEvent.click(button('Проверить совместимость'));
+    const consent = 'Продолжить с неподтверждённой совместимостью';
+    fireEvent.click(await screen.findByRole('checkbox', { name: consent }));
+    await screen.findByRole('option', { name: 'Bulk' });
+    select(screen.getByLabelText('Имена кабелей'), 'template');
+    expect(await screen.findByText('B001')).toBeVisible();
+    expect(screen.queryByRole('checkbox', { name: consent })).not.toBeInTheDocument();
+    fireEvent.click(button('Проверить совместимость'));
+    const fresh = await screen.findByRole('checkbox', { name: consent });
+    expect(fresh).not.toBeChecked();
+    fireEvent.click(fresh);
+    confirm();
+    await waitFor(() => expect(create).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      compatibility: { token: 'second', accept_unknown: true },
     })));
   });
 
@@ -208,7 +253,7 @@ describe('MapPage bulk cable editor', () => {
     fireEvent.click(button('Повторить обновление'));
     expect(await right().findByRole('checkbox', { name: 'P1' })).toBeDisabled();
     expect(right().getByText('C1 · Remote / Rear / R1')).toBeVisible();
-    expect(button('Предпросмотр')).toBeDisabled();
+    expect(button('Сопоставить')).toBeDisabled();
     expect(create).toHaveBeenCalledTimes(1);
   });
 

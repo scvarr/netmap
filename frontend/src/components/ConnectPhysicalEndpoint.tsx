@@ -22,8 +22,6 @@ import { useI18n } from "../i18n";
 import { confirmPhysicalCompatibility, PhysicalCompatibilityError } from '../topology/physicalCompatibility';
 import { CableNamingFields } from './CableNamingFields';
 import type { CableLabelDataSource, CableNamingInput } from '../topology/cableLabelTypes';
-import { HistoricalCableLabelReuseDialog } from './HistoricalCableLabelReuseDialog';
-import { isHistoricalCableLabelReuseConfirmationStale, isHistoricalCableLabelReuseRequired } from '../topology/historicalCableLabelReuse';
 
 interface ConnectPhysicalEndpointProps {
   sourcePoint: ConnectionPointDetails;
@@ -92,7 +90,6 @@ export function ConnectPhysicalEndpoint({
   const [error, setError] = useState<string | null>(null);
   const [cableSpec, setCableSpec] = useState<CableSpecification>({ cable_type_id: "" });
   const [cableNaming, setCableNaming] = useState<CableNamingInput>({ cable_label: null, cable_label_template_id: null, generate_cable_label: false });
-  const [historicalCandidate, setHistoricalCandidate] = useState<string | null>(null);
   const reset = () => {
     setOpen(false);
     setMode("PORT");
@@ -209,7 +206,7 @@ export function ConnectPhysicalEndpoint({
           (item) => item.label,
         )
       : [];
-  const submit = async (confirmedHistoricalLabel?: string) => {
+  const submit = async () => {
     if (!targetEntityId || !cableSpec.cable_type_id || submitting || (cableNaming.generate_cable_label && !cableNaming.cable_label_template_id)) return;
     setSubmitting(true);
     setError(null);
@@ -231,7 +228,6 @@ export function ConnectPhysicalEndpoint({
         target,
         ...cableSpec,
         ...cableNaming,
-        confirmed_historical_label: confirmedHistoricalLabel ?? null,
       };
       if (writeDataSource.previewPhysicalEndpointConnection) {
         const compatibility = confirmPhysicalCompatibility(await writeDataSource.previewPhysicalEndpointConnection(request), t);
@@ -242,15 +238,13 @@ export function ConnectPhysicalEndpoint({
       reset();
       onConnected();
     } catch (reason) {
-      if (isHistoricalCableLabelReuseRequired(reason)) setHistoricalCandidate(reason.candidate);
-      else if (confirmedHistoricalLabel && isHistoricalCableLabelReuseConfirmationStale(reason)) { setHistoricalCandidate(null); queueMicrotask(() => void submit()); }
-      else setError(reason instanceof PhysicalCompatibilityError ? reason.message : t('physical.connectFailed'));
+      setError(reason instanceof PhysicalCompatibilityError ? reason.message : t('physical.connectFailed'));
     } finally {
       setSubmitting(false);
     }
   };
   return (
-    <><div className="connect-interface connect-endpoint">
+    <div className="connect-interface connect-endpoint">
       <button
         type="button"
         className="connect-interface__trigger port-icon-action"
@@ -427,6 +421,6 @@ export function ConnectPhysicalEndpoint({
           </div>
         </form>
       )}
-    </div>{historicalCandidate && <HistoricalCableLabelReuseDialog candidate={historicalCandidate} pending={submitting} onCancel={() => setHistoricalCandidate(null)} onConfirm={() => void submit(historicalCandidate)} />}</>
+    </div>
   );
 }

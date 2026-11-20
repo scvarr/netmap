@@ -1118,7 +1118,6 @@ class CreatePhysicalLinkRequest(CableSpecification):
     cable_label: str | None = None
     cable_label_template_id: uuid.UUID | None = None
     generate_cable_label: bool = False
-    confirmed_historical_label: str | None = None
     compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
@@ -1163,7 +1162,6 @@ class CreatePhysicalEndpointConnectionRequest(CableSpecification):
     cable_label: str | None = None
     cable_label_template_id: uuid.UUID | None = None
     generate_cable_label: bool = False
-    confirmed_historical_label: str | None = None
     compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
@@ -1178,7 +1176,6 @@ class CreateBulkPhysicalConnectionsRequest(CableSpecification):
     pairs: list[BulkPhysicalPointPair] = Field(min_length=1, max_length=256)
     template_id: uuid.UUID | None = None
     expected_generated_labels: list[str] = Field(default_factory=list)
-    confirmed_historical_labels: list[str] = Field(default_factory=list)
     compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
@@ -1244,14 +1241,9 @@ class CableReconnectRequest(BaseModel):
     compatibility: PhysicalCompatibilityConfirmation | None = None
 
 
-class BulkCableLabelPreviewItem(BaseModel):
-    label: str
-    historical: bool
-
-
 class BulkCableLabelPreviewDocument(BaseModel):
     schema_version: Literal["1.0"] = "1.0"
-    labels: list[BulkCableLabelPreviewItem]
+    labels: list[str]
 
 
 class BulkPhysicalConnectionItem(BaseModel):
@@ -1270,14 +1262,12 @@ class SetCableLabelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     label: str | None
-    confirmed_historical_label: str | None = None
 
 
 class GenerateCableLabelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     template_id: uuid.UUID
-    confirmed_historical_label: str | None = None
 
 
 class CableLabelSettingsDocument(BaseModel):
@@ -2789,8 +2779,6 @@ class ErrorBody(BaseModel):
     code: Literal[
         "VALIDATION_ERROR",
         "MODEL_ERROR",
-        "HISTORICAL_CABLE_LABEL_REUSE_REQUIRED",
-        "HISTORICAL_CABLE_LABEL_REUSE_CONFIRMATION_STALE",
     ]
     message: str
     details: dict[str, Any]

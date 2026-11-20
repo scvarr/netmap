@@ -69,7 +69,6 @@ from app.schemas import (
     PhysicalCompatibilityPreview,
     CableReconnectSnapshot,
     BulkCableLabelPreviewDocument,
-    BulkCableLabelPreviewItem,
     BulkPhysicalConnectionCreationDocument,
     BulkPhysicalConnectionItem,
     CreatePhysicalLinkRequest,
@@ -1076,7 +1075,6 @@ def create_physical_link(
             cable_label=query.cable_label,
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
-            confirmed_historical_label=query.confirmed_historical_label,
             preview=preview,
             compatibility=query.compatibility,
         )
@@ -1158,7 +1156,6 @@ def create_physical_endpoint_connection(
             cable_label=query.cable_label,
             cable_label_template_id=query.cable_label_template_id,
             generate_cable_label=query.generate_cable_label,
-            confirmed_historical_label=query.confirmed_historical_label,
             preview=preview,
             compatibility=query.compatibility,
         )
@@ -1180,7 +1177,7 @@ def preview_bulk_cable_labels(
 ) -> BulkCableLabelPreviewDocument:
     with session.begin():
         labels = CableLabelCatalog(session).preview_batch(template_id, count)
-        return BulkCableLabelPreviewDocument(labels=[BulkCableLabelPreviewItem(label=label, historical=historical) for label, historical in labels])
+        return BulkCableLabelPreviewDocument(labels=labels)
 
 
 @app.post("/v1/topology/physical-connections/bulk", response_model=BulkPhysicalConnectionCreationDocument, status_code=201,
@@ -1199,7 +1196,6 @@ def create_bulk_physical_connections(
         created = PhysicalConnectionCatalog(session).create_bulk_point_links(
             pairs, cable_spec=query, template_id=query.template_id,
             expected_generated_labels=query.expected_generated_labels,
-            confirmed_historical_labels=query.confirmed_historical_labels,
             preview=preview, compatibility=query.compatibility,
         )
         if isinstance(created, PhysicalCompatibilityPreview):
@@ -1293,7 +1289,7 @@ def set_cable_label(
     session: Session = Depends(get_session),
 ) -> None:
     with session.begin():
-        CableLabelCatalog(session).set_label(cable_id, query.label, query.confirmed_historical_label)
+        CableLabelCatalog(session).set_label(cable_id, query.label)
 
 
 @app.post(
@@ -1307,7 +1303,7 @@ def generate_cable_label(
     session: Session = Depends(get_session),
 ) -> None:
     with session.begin():
-        CableLabelCatalog(session).generate_label_for_cable(cable_id, query.template_id, query.confirmed_historical_label)
+        CableLabelCatalog(session).generate_label_for_cable(cable_id, query.template_id)
 
 
 @app.get("/v1/cable-label-settings", response_model=CableLabelSettingsDocument)

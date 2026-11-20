@@ -8,7 +8,7 @@ from app.main import app
 from app.models import Cable, CableLabelHistory, Connection, ConnectionMember
 from app.repository import CanonicalRepository, ConnectionMemberInput
 from tests.cable_type_fixtures import copper_cable_fields
-from tests.l1_builders import create_object_with_point, point_endpoint, post_confirmed_physical
+from tests.l1_builders import confirmed_payload, create_object_with_point, point_endpoint, post_confirmed_physical
 
 
 client = TestClient(app)
@@ -58,13 +58,13 @@ def test_occupied_duplicate_and_missing_point_reject_entire_batch():
         assert counts() == before
 
 
-def test_generated_preview_order_stale_and_historical_confirmation():
+def test_generated_preview_order_stale_and_released_label_reuse():
     source, target = points("source", 2), points("target", 2)
     template = client.post("/v1/cable-label-templates", json={"name": "bulk", "pattern": "B###", "start_at": 1}).json()["id"]
     preview_url = f"{URL}-label-preview?template_id={template}&count=2"
     preview = client.get(preview_url)
     assert preview.status_code == 200
-    assert preview.json()["labels"] == [{"label": "B001", "historical": False}, {"label": "B002", "historical": False}]
+    assert preview.json()["labels"] == ["B001", "B002"]
     before = counts()
     stale = post_confirmed_physical(client, URL, json=request(source, target, template_id=template, expected_generated_labels=["B002", "B001"]))
     assert stale.status_code == 422 and stale.json()["error"]["details"]["reason"] == "BULK_LABEL_PREVIEW_STALE"
@@ -75,13 +75,29 @@ def test_generated_preview_order_stale_and_historical_confirmation():
         assert [session.get(Cable, uuid.UUID(row["cable_id"])).label for row in created.json()["created"]] == ["B001", "B002"]
     for row in created.json()["created"]:
         assert client.delete(f"/v1/cables/{row['cable_id']}").status_code == 204
-    refreshed = client.get(preview_url).json()["labels"]
-    assert refreshed == [{"label": "B001", "historical": True}, {"label": "B002", "historical": True}]
+    assert client.get(preview_url).json()["labels"] == ["B001", "B002"]
+    body = request(source, target, template_id=template, expected_generated_labels=["B001", "B002"])
+    check = client.post(f"{URL}?preview=true", json=body)
+    assert check.status_code == 200, check.text
+    other_source, other_target = points("other source", 1), points("other target", 1)
+    competitor = post_confirmed_physical(client, URL, json=request(
+        other_source, other_target, template_id=template, expected_generated_labels=["B001"],
+    ))
+    assert competitor.status_code == 201, competitor.text
     before = counts()
-    unconfirmed = post_confirmed_physical(client, URL, json=request(source, target, template_id=template, expected_generated_labels=["B001", "B002"]))
-    assert unconfirmed.status_code == 422 and counts() == before
-    confirmed = post_confirmed_physical(client, URL, json=request(source, target, template_id=template, expected_generated_labels=["B001", "B002"], confirmed_historical_labels=["B001", "B002"]))
-    assert confirmed.status_code == 201, confirmed.text
+    rejected = client.post(URL, json=confirmed_payload(check.json(), body))
+    assert rejected.status_code == 422 and rejected.json()["error"]["details"]["reason"] == "BULK_LABEL_PREVIEW_STALE"
+    assert counts() == before
+    assert client.delete(f"/v1/cables/{competitor.json()['created'][0]['cable_id']}").status_code == 204
+    recreated = post_confirmed_physical(client, URL, json=body)
+    assert recreated.status_code == 201, recreated.text
+    old_ids = {row["cable_id"] for row in created.json()["created"]}
+    new_ids = {row["cable_id"] for row in recreated.json()["created"]}
+    assert old_ids.isdisjoint(new_ids)
+    with SessionLocal() as session:
+        history = list(session.scalars(select(CableLabelHistory)))
+        assert {str(row.cable_id) for row in history if row.released_at is None} == new_ids
+        assert old_ids <= {str(row.cable_id) for row in history if row.released_at is not None}
 
 
 def test_internal_connection_does_not_consume_external_capacity():

@@ -4,7 +4,7 @@ import { useI18n } from '../i18n';
 import { BulkPhysicalConnectionError } from '../topology/apiPhysicalEndpointConnectionWriteDataSource';
 import type { CableLabelDataSource, CableLabelTemplate } from '../topology/cableLabelTypes';
 import type { CableSpecification, CreateBulkPhysicalConnectionsRequest, PhysicalEndpointConnectionWriteDataSource } from '../topology/physicalEndpointConnectionWriteTypes';
-import { compatibilityReasons, type PhysicalCompatibilityPreview } from '../topology/physicalCompatibility';
+import { compatibilityReasonKeys, type PhysicalCompatibilityPreview } from '../topology/physicalCompatibility';
 import type { ConnectionPointDetails, PhysicalObjectDetailsDataSource, PhysicalObjectDetailsDocument } from '../topology/physicalObjectDetailsTypes';
 import { isAvailablePhysicalPort } from '../topology/physicalPortAvailability';
 import { physicalObjectIdForNode } from '../topology/projection';
@@ -25,7 +25,6 @@ interface Props {
 type Sort = 'ascending' | 'descending';
 type Side = { panel: string | undefined; sort: Sort; selected: string[] };
 type Pair = { source: string; target: string };
-type Labels = { label: string; historical: boolean }[];
 const emptySide: Side = { panel: undefined, sort: 'ascending', selected: [] };
 const maxBatch = 256;
 const pointId = (point: ConnectionPointDetails) => point.connection_point_ref.entity_id;
@@ -142,6 +141,58 @@ function PortTable({ title, id, document, side, list, change, retry }: {
   </section>;
 }
 
+function BulkCompatibilitySummary({ preview, accepted, disabled, onAccept }: {
+  preview: PhysicalCompatibilityPreview;
+  accepted: boolean;
+  disabled: boolean;
+  onAccept: (accepted: boolean) => void;
+}) {
+  const { t } = useI18n();
+  const [pair, setPair] = useState<number>();
+  const reasons = new Map<keyof typeof compatibilityReasonKeys, { pairs: Set<number>; ends: number }>();
+  const affectedPairs = new Set<number>();
+  for (const end of preview.ends) {
+    if (end.verdict === 'ALLOW') continue;
+    affectedPairs.add(end.pair);
+    for (const reason of end.reasons) {
+      const counts = reasons.get(reason) ?? { pairs: new Set<number>(), ends: 0 };
+      counts.pairs.add(end.pair);
+      counts.ends++;
+      reasons.set(reason, counts);
+    }
+  }
+  return <section className="bulk-create-compatibility" aria-label={t('map.bulk.compatibility')}>
+    <p role={preview.verdict === 'DENY' ? 'alert' : 'status'}><strong>
+      {t('map.bulk.verdict', { verdict: preview.verdict })}
+    </strong></p>
+    {reasons.size > 0 && <>
+      <ul className="bulk-create-reasons">{[...reasons].map(([reason, counts]) => <li key={reason}>
+        {t('map.bulk.reasonCount', { reason: t(compatibilityReasonKeys[reason]), ends: counts.ends, pairs: counts.pairs.size })}
+      </li>)}</ul>
+      <details>
+        <summary>{t('map.bulk.compatibilityDetails')}</summary>
+        <label>{t('map.bulk.detailPair')}
+          <select value={pair ?? ''} onChange={event => setPair(Number(event.target.value) || undefined)}>
+            <option value="">{t('map.bulk.allAffectedPairs')}</option>
+            {[...affectedPairs].map(index => <option key={index} value={index}>{index}</option>)}
+          </select>
+        </label>
+        <div className="bulk-create-detail-scroll" role="region" aria-label={t('map.bulk.compatibilityDetails')} tabIndex={0}>
+          <ul>{preview.ends.filter(end => end.verdict !== 'ALLOW' && (pair === undefined || end.pair === pair)).map(end =>
+            <li key={`${end.pair}/${end.side}`}><strong>{end.verdict}</strong> · {t('compatibility.end', {
+              pair: end.pair, side: end.side, reasons: end.reasons.map(reason => t(compatibilityReasonKeys[reason])).join(', '),
+            })}</li>,
+          )}</ul>
+        </div>
+      </details>
+    </>}
+    {preview.verdict === 'UNKNOWN' && <label className="bulk-create-accept">
+      <input type="checkbox" disabled={disabled} checked={accepted} onChange={event => onAccept(event.target.checked)} />
+      {t('compatibility.accept')}
+    </label>}
+  </section>;
+}
+
 export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelCatalog, refresh, close }: Props) {
   const i18n = useI18n();
   const { t, collator } = i18n;
@@ -152,11 +203,10 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const [revision, setRevision] = useState(0);
   const [pairs, setPairs] = useState<Pair[]>([]);
   const [cableSpec, setCableSpec] = useState<CableSpecification>({ cable_type_id: "" });
-  const [stage, setStage] = useState<'edit' | 'preview' | 'refresh-failed'>('edit');
+  const [stage, setStage] = useState<'select' | 'pairs' | 'preview' | 'refresh-failed'>('select');
   const [templates, setTemplates] = useState<CableLabelTemplate[]>([]);
   const [templateId, setTemplateId] = useState('');
-  const [labels, setLabels] = useState<Labels>([]);
-  const [confirmed, setConfirmed] = useState<string[]>([]);
+  const [labels, setLabels] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [compatibilityReview, setCompatibilityReview] = useState<{
@@ -165,6 +215,10 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const [busy, setBusy] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const inFlight = useRef(false);
+  const pairTable = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (stage === 'pairs' || stage === 'preview') pairTable.current?.focus();
+  }, [stage]);
   const sourceDetails = usePortDetails(details, sourceId, revision);
   const targetDetails = usePortDetails(details, targetId, revision + targetVersion);
   const left = portList(sourceDetails, source, i18n);
@@ -185,10 +239,19 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     setTarget(current => ({ ...current, selected: [] }));
     setConflict(false);
     setError(null);
-    setStage('edit');
+    setCompatibilityReview(undefined);
+    setStage('select');
     setRevision(value => value + 1);
   };
-  const match = () => setPairs(left.selected.map((row, index) => ({ source: row.id, target: right.selected[index].id })));
+  const match = () => {
+    setPairs(left.selected.map((row, index) => ({ source: row.id, target: right.selected[index].id })));
+    setStage('pairs');
+  };
+  const editPairs = () => {
+    setCompatibilityReview(undefined);
+    setError(null);
+    setStage('pairs');
+  };
   const changeTarget = (sourceId: string, targetId: string) => {
     const previous = pairs.find(pair => pair.source === sourceId)?.target;
     if (previous === undefined) return;
@@ -210,7 +273,6 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const openPreview = () => run(async () => {
     setTemplateId('');
     setLabels([]);
-    setConfirmed([]);
     setCompatibilityReview(undefined);
     setError(null);
     setStage('preview');
@@ -222,7 +284,6 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
   const previewLabels = async (id: string) => {
     setTemplateId(id);
     setLabels([]);
-    setConfirmed([]);
     if (!id || !writer.previewBulkCableLabels) return;
     try { setLabels((await writer.previewBulkCableLabels(id, pairs.length)).labels); }
     catch { setError(t('map.bulk.previewFailed')); }
@@ -231,14 +292,12 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     try { await refresh(); close(); }
     catch { setStage('refresh-failed'); }
   };
-  const ready = Boolean(cableSpec.cable_type_id) && pairs.length > 0 && !conflict && (!templateId || labels.length === pairs.length)
-    && labels.every(label => !label.historical || confirmed.includes(label.label));
+  const ready = Boolean(cableSpec.cable_type_id) && pairs.length > 0 && !conflict && (!templateId || labels.length === pairs.length);
   const request: CreateBulkPhysicalConnectionsRequest = {
     ...cableSpec,
     pairs: pairs.map(pair => ({ source: endpoint(pair.source), target: endpoint(pair.target) })),
     template_id: templateId || null,
-    expected_generated_labels: labels.map(label => label.label),
-    confirmed_historical_labels: confirmed,
+    expected_generated_labels: labels,
   };
   const requestKey = JSON.stringify(request);
   const review = compatibilityReview?.requestKey === requestKey ? compatibilityReview : undefined;
@@ -249,23 +308,27 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     setSubmitting(true);
     try {
       let operation = request;
-      if (writer.previewBulkPhysicalConnections) {
-        const preview = review?.preview ?? await writer.previewBulkPhysicalConnections(request);
-        if (preview.verdict === 'DENY' || (preview.verdict === 'UNKNOWN' && !review?.accepted)) {
-          setCompatibilityReview({ requestKey, preview, accepted: false });
-          return;
-        }
-        if (!preview.token) throw new Error('Missing physical compatibility token');
-        operation = { ...request, compatibility: { token: preview.token, accept_unknown: preview.verdict === 'UNKNOWN' } };
+      if (writer.previewBulkPhysicalConnections && !review) {
+        const preview = await writer.previewBulkPhysicalConnections(request);
+        setCompatibilityReview({ requestKey, preview, accepted: false });
+        return;
+      }
+      if (review?.preview.token) {
+        operation = { ...request, compatibility: {
+          token: review.preview.token, accept_unknown: review.preview.verdict === 'UNKNOWN' && review.accepted,
+        } };
       }
       await writer.createBulkPhysicalConnections(operation);
       await refreshAfterCreate();
     } catch (reason) {
       setCompatibilityReview(undefined);
       if (reason instanceof BulkPhysicalConnectionError && templateId &&
-        (reason.reason === 'BULK_LABEL_PREVIEW_STALE' || reason.reason === 'HISTORICAL_CABLE_LABEL_REUSE_REQUIRED')) {
+        reason.reason === 'BULK_LABEL_PREVIEW_STALE') {
         setError(t('map.bulk.stale'));
         await previewLabels(templateId);
+      } else if (reason instanceof BulkPhysicalConnectionError &&
+        ['PHYSICAL_COMPATIBILITY_STALE', 'PHYSICAL_COMPATIBILITY_DENIED'].includes(reason.reason ?? '')) {
+        setError(t('map.bulk.compatibilityStale'));
       } else if (reason instanceof BulkPhysicalConnectionError && [400, 404, 409, 422].includes(reason.status)) {
         setConflict(true);
         setError(t('map.bulk.conflict'));
@@ -278,7 +341,8 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
     }
   });
 
-  const editing = stage === 'edit';
+  const selecting = stage === 'select';
+  const pairing = stage === 'pairs';
   const unequal = left.selected.length !== right.selected.length;
   const overLimit = left.selected.length > maxBatch || right.selected.length > maxBatch;
   return <section className="map-dialog" role="dialog" aria-modal="true" aria-label={t('map.bulk.action')} aria-busy={busy}
@@ -293,7 +357,7 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
         <p role="alert">{t('map.bulk.refreshFailed')}</p>
         <button type="button" disabled={busy} onClick={() => void run(refreshAfterCreate)}>{t('map.retryRefresh')}</button>
       </> : <>
-        {editing && <>
+        {selecting && <>
           <label className="physical-panel-picker">{t('connect.targetObject')}
             <select autoFocus value={targetId} onChange={event => {
               setTargetId(event.target.value);
@@ -313,23 +377,23 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
           </div>
           {unequal && <p role="status">{t('map.bulk.unequal')}</p>}
           {overLimit && <p role="status">{t('map.bulk.limit', { count: maxBatch })}</p>}
-          <div className="map-dialog__actions">
-            <button type="button" disabled={unequal || overLimit || !left.selected.length} onClick={match}>{t('map.bulk.match')}</button>
-          </div>
         </>}
-        {pairs.length > 0 && <>
-          <h3>{t(editing ? 'map.bulk.pairs' : 'map.bulk.preview', { count: pairs.length })}</h3>
-          {editing && <p>{t('map.bulk.adjust')}</p>}
-          <div className="catalog-table-wrap map-dialog-table bulk-create-pairs">
+        {!selecting && <>
+          <h3>{t(pairing ? 'map.bulk.pairs' : 'map.bulk.preview', { count: pairs.length })}</h3>
+          {pairing && <p>{t('map.bulk.adjust')}</p>}
+          <div className="catalog-table-wrap map-dialog-table bulk-create-pairs" ref={pairTable} tabIndex={0}
+            role="region" aria-label={t('map.bulk.pairs', { count: pairs.length })}>
             <table className="catalog-table">
               <thead><tr>
+                {!pairing && <th scope="col" className="bulk-create-pair-number">{t('map.bulk.detailPair')}</th>}
                 <th scope="col">{t('map.bulk.source')}</th>
                 <th scope="col">{t('map.bulk.destination')}</th>
-                <th scope="col">{t(editing ? 'physical.actions' : 'physical.cable')}</th>
+                <th scope="col">{t(pairing ? 'physical.actions' : 'physical.cable')}</th>
               </tr></thead>
               <tbody>{pairs.map((pair, index) => <tr key={pair.source}>
+                {!pairing && <td>{index + 1}</td>}
                 <td>{left.labels.get(pair.source)}</td>
-                <td>{editing
+                <td>{pairing
                   ? <select aria-label={t('map.bulk.destinationFor', { name: left.labels.get(pair.source) ?? '' })}
                       value={pair.target} onChange={event => changeTarget(pair.source, event.target.value)}>
                     {right.rows.filter(row => row.available).map(row => <option key={row.id} value={row.id}>
@@ -337,58 +401,50 @@ export function BulkCableCreateDialog({ sourceId, nodes, details, writer, labelC
                     </option>)}
                   </select>
                   : right.labels.get(pair.target)}</td>
-                <td>{editing
+                <td>{pairing
                   ? <button type="button" onClick={() => setPairs(current => current.filter(item => item.source !== pair.source))}>
                     {t('map.bulk.exclude')}
                   </button>
-                  : labels[index]?.label ?? (templateId ? '—' : t('map.bulk.noNames'))}</td>
+                  : labels[index] ?? (templateId ? '—' : t('map.bulk.noNames'))}</td>
               </tr>)}</tbody>
             </table>
           </div>
         </>}
-        {!editing && <CableSpecificationFields value={cableSpec}
-          onChange={value => { setCompatibilityReview(undefined); setCableSpec(value); }} disabled={busy || conflict} />}
-        {!editing && labelCatalog && writer.previewBulkCableLabels && <>
-          <label className="physical-panel-picker">{t('map.bulk.naming')}
-            <select value={templateId} disabled={busy || conflict} onChange={event => {
-              const id = event.target.value;
-              void run(async () => { setError(null); setCompatibilityReview(undefined); await previewLabels(id); });
-            }}>
-              <option value="">{t('map.bulk.noNames')}</option>
-              {templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}
-            </select>
-          </label>
-          {labels.filter(item => item.historical).map(item => <label key={item.label}>
-            <span><input type="checkbox" disabled={busy || conflict} checked={confirmed.includes(item.label)} onChange={event => {
-              setCompatibilityReview(undefined);
-              setConfirmed(event.target.checked ? [...confirmed, item.label] : confirmed.filter(id => id !== item.label));
-            }} /> {t('map.bulk.confirmHistorical', { name: item.label })}</span>
-          </label>)}
-        </>}
-        {!editing && review && <>
-          <div role="alert">
-            <p>{t(review.preview.verdict === 'DENY' ? 'compatibility.denied' : 'compatibility.unknown')}</p>
-            <div className="catalog-table-wrap map-dialog-table bulk-create-pairs">
-              <ul>{compatibilityReasons(review.preview, t).map(line => <li key={line}>{line}</li>)}</ul>
-            </div>
+        {stage === 'preview' && <>
+          <div className="bulk-create-options">
+            <CableSpecificationFields value={cableSpec}
+              onChange={value => { setCompatibilityReview(undefined); setError(null); setCableSpec(value); }} disabled={busy || conflict} />
+            {labelCatalog && writer.previewBulkCableLabels && <label className="physical-panel-picker">{t('map.bulk.naming')}
+              <select value={templateId} disabled={busy || conflict} onChange={event => {
+                const id = event.target.value;
+                void run(async () => { setError(null); setCompatibilityReview(undefined); await previewLabels(id); });
+              }}>
+                <option value="">{t('map.bulk.noNames')}</option>
+                {templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}
+              </select>
+            </label>}
           </div>
-          {review.preview.verdict === 'UNKNOWN' && <label>
-            <input type="checkbox" disabled={busy} checked={review.accepted}
-              onChange={event => setCompatibilityReview({ ...review, accepted: event.target.checked })} />
-            {t('compatibility.accept')}
-          </label>}
+          {review && <BulkCompatibilitySummary key={requestKey} preview={review.preview} accepted={review.accepted}
+            disabled={busy} onAccept={accepted => setCompatibilityReview({ ...review, accepted })} />}
         </>}
         {busy && <p role="status">{t(submitting ? 'connect.connecting' : 'object.loading')}</p>}
         {error && <p role="alert">{error}</p>}
         <div className="map-dialog__actions">
           <button type="button" disabled={busy} onClick={close}>{t('map.cancel')}</button>
-          {editing
-            ? <button type="button" disabled={!pairs.length || busy} onClick={() => void openPreview()}>{t('map.bulk.review')}</button>
+          {selecting
+            ? <button type="button" disabled={unequal || overLimit || !left.selected.length || busy} onClick={match}>{t('map.bulk.match')}</button>
+            : pairing
+              ? <>
+                <button type="button" onClick={() => setStage('select')}>{t('map.bulk.backToPorts')}</button>
+                <button type="button" disabled={!pairs.length} onClick={() => void openPreview()}>{t('map.bulk.review')}</button>
+              </>
             : conflict
               ? <button type="button" disabled={busy} onClick={reload}>{t('map.retryRefresh')}</button>
               : <>
-                <button type="button" disabled={busy} onClick={() => { setError(null); setStage('edit'); }}>{t('map.back')}</button>
-                <button type="button" disabled={busy || !canCreate} onClick={() => void submit()}>{t('map.bulk.create')}</button>
+                <button type="button" disabled={busy} onClick={editPairs}>{t('map.back')}</button>
+                <button type="button" disabled={busy || !canCreate} onClick={() => void submit()}>
+                  {t(writer.previewBulkPhysicalConnections && !review ? 'map.bulk.checkCompatibility' : 'map.bulk.create')}
+                </button>
               </>}
         </div>
       </>}

@@ -38,7 +38,6 @@ export interface CreateBulkPhysicalConnectionsRequest extends CableSpecification
   pairs: { source: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }>; target: Extract<PhysicalEndpointRequest, { kind: 'CONNECTION_POINT' }> }[];
   template_id: string | null;
   expected_generated_labels: string[];
-  confirmed_historical_labels: string[];
   compatibility?: PhysicalCompatibilityConfirmation;
 }
 
@@ -49,6 +48,6 @@ export interface PhysicalEndpointConnectionWriteDataSource {
     request: CreatePhysicalEndpointConnectionRequest,
   ): Promise<PhysicalEndpointConnectionCreationDocument>;
   deleteExternalPhysicalConnection?(connectionId: string): Promise<void>;
-  previewBulkCableLabels?(templateId: string, count: number): Promise<{ labels: { label: string; historical: boolean }[] }>;
+  previewBulkCableLabels?(templateId: string, count: number): Promise<{ labels: string[] }>;
   createBulkPhysicalConnections?(request: CreateBulkPhysicalConnectionsRequest): Promise<{ created: { connection_id: string; cable_id: string }[] }>;
 }

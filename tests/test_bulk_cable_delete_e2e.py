@@ -90,8 +90,7 @@ def test_deletes_selected_cables_and_releases_their_resources(delete_all):
     freed = selected[0]
     recreate = {"source": point_endpoint(freed["point_a_id"]), "target": point_endpoint(freed["point_b_id"]),
                 "cable_label": freed["label"]}
-    assert post_confirmed_physical(client,"/v1/topology/physical-connections", json={**copper_cable_fields(), **recreate}).status_code == 409
-    response = post_confirmed_physical(client,"/v1/topology/physical-connections", json={**copper_cable_fields(), **recreate, "confirmed_historical_label": freed["label"]})
+    response = post_confirmed_physical(client,"/v1/topology/physical-connections", json={**copper_cable_fields(), **recreate})
     assert response.status_code == 201, response.text
 
 

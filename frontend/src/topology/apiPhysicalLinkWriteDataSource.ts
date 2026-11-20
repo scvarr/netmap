@@ -3,7 +3,6 @@ import type {
   PhysicalConnectionCreationDocument,
   PhysicalLinkWriteDataSource,
 } from './physicalLinkWriteTypes';
-import { historicalCableLabelError } from './historicalCableLabelReuse';
 import { requestPhysicalCompatibility } from './physicalCompatibility';
 
 const DEFAULT_ENDPOINT = '/api/v1/topology/physical-links';
@@ -57,7 +56,7 @@ const readBackendError = async (response: Response): Promise<Error> => {
       && typeof body.error.code === 'string'
       && typeof body.error.message === 'string'
     ) {
-      return historicalCableLabelError(body);
+      return new Error(body.error.message);
     }
   } catch {
     // Non-JSON responses use the generic HTTP message.

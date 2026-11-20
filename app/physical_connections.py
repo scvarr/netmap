@@ -75,7 +75,6 @@ class PhysicalConnectionCatalog:
         cable_label: str | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
-        confirmed_historical_label: str | None = None,
         preview: bool = False,
         compatibility: PhysicalCompatibilityConfirmation | None = None,
     ) -> CreatedPhysicalConnection | PhysicalCompatibilityPreview:
@@ -91,7 +90,6 @@ class PhysicalConnectionCatalog:
             cable_label=cable_label,
             cable_label_template_id=cable_label_template_id,
             generate_cable_label=generate_cable_label,
-            confirmed_historical_label=confirmed_historical_label,
             preview=preview,
             compatibility=compatibility,
         )
@@ -117,7 +115,6 @@ class PhysicalConnectionCatalog:
         cable_label: str | None = None,
         cable_label_template_id: uuid.UUID | None = None,
         generate_cable_label: bool = False,
-        confirmed_historical_label: str | None = None,
         preview: bool = False,
         compatibility: PhysicalCompatibilityConfirmation | None = None,
     ) -> CreatedEndpointPhysicalConnection | PhysicalCompatibilityPreview:
@@ -250,7 +247,7 @@ class PhysicalConnectionCatalog:
             self.session, cable_spec, [(endpoint_points[0], endpoint_points[1])],
             intent=["create", self._endpoint_description(source), self._endpoint_description(target),
                     endpoint_owners, cable_label, cable_label_template_id, generate_cable_label,
-                    confirmed_historical_label, generated],
+                    generated],
             preview=preview, confirmation=compatibility,
         )
         if preview:
@@ -274,7 +271,6 @@ class PhysicalConnectionCatalog:
             label=cable_label,
             template_id=cable_label_template_id,
             generate=generate_cable_label,
-            confirmed_historical_label=confirmed_historical_label,
         )
 
         return CreatedEndpointPhysicalConnection(
@@ -291,7 +287,6 @@ class PhysicalConnectionCatalog:
         cable_spec: CableSpecification,
         template_id: uuid.UUID | None,
         expected_generated_labels: list[str],
-        confirmed_historical_labels: list[str],
         preview: bool = False,
         compatibility: PhysicalCompatibilityConfirmation | None = None,
     ) -> list[CreatedEndpointPhysicalConnection] | PhysicalCompatibilityPreview:
@@ -331,22 +326,15 @@ class PhysicalConnectionCatalog:
         labels: list[str | None] = [None] * len(pairs)
         catalog = CableLabelCatalog(self.session)
         if template_id is None:
-            if expected_generated_labels or confirmed_historical_labels:
+            if expected_generated_labels:
                 raise ValidationError("Labels require a Cable label template")
         else:
-            label_preview = self._generated_label_preview(template_id, len(pairs))
-            labels = [label for label, _ in label_preview]
+            labels = self._generated_label_preview(template_id, len(pairs))
             if labels != expected_generated_labels:
                 raise ValidationError("Bulk label preview is stale", {"reason": "BULK_LABEL_PREVIEW_STALE"})
-            historical = {label for label, used in label_preview if used}
-            if set(confirmed_historical_labels) - historical:
-                raise ValidationError("Historical label confirmation is stale", {"reason": "BULK_LABEL_PREVIEW_STALE"})
-            unconfirmed = historical - set(confirmed_historical_labels)
-            if unconfirmed:
-                raise ValidationError("Historical Cable labels require confirmation", {"reason": "HISTORICAL_CABLE_LABEL_REUSE_REQUIRED", "labels": sorted(unconfirmed)})
         result = verify_compatibility(
             self.session, cable_spec, [(by_id[a.connection_point_id], by_id[b.connection_point_id]) for a, b in pairs],
-            intent=["bulk", ids, template_id, labels, sorted(confirmed_historical_labels)],
+            intent=["bulk", ids, template_id, labels],
             preview=preview, confirmation=compatibility,
         )
         if preview:
@@ -359,8 +347,7 @@ class PhysicalConnectionCatalog:
                 cardinality=1, members=[ConnectionMemberInput(index=1, point_a_member=1, point_b_member=1)],
             )
             cable = self._add_cable(connection.id, cable_spec)
-            catalog.assign_new_cable(cable, label=label, template_id=None, generate=False,
-                                     confirmed_historical_label=label if label in confirmed_historical_labels else None)
+            catalog.assign_new_cable(cable, label=label, template_id=None, generate=False)
             created.append(CreatedEndpointPhysicalConnection(
                 source=MaterializedPhysicalEndpoint(source, source.connection_point_id, None),
                 target=MaterializedPhysicalEndpoint(target, target.connection_point_id, None),
@@ -368,7 +355,7 @@ class PhysicalConnectionCatalog:
             ))
         return created
 
-    def _generated_label_preview(self, template_id: uuid.UUID, count: int) -> list[tuple[str, bool]]:
+    def _generated_label_preview(self, template_id: uuid.UUID, count: int) -> list[str]:
         catalog = CableLabelCatalog(self.session)
         catalog.settings()
         self.session.execute(

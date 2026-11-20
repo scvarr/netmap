@@ -4,7 +4,6 @@ import type {
   PhysicalEndpointConnectionCreationDocument,
   PhysicalEndpointConnectionWriteDataSource,
 } from './physicalEndpointConnectionWriteTypes';
-import { historicalCableLabelError } from './historicalCableLabelReuse';
 import { requestPhysicalCompatibility } from './physicalCompatibility';
 
 export class BulkPhysicalConnectionError extends Error {
@@ -15,9 +14,11 @@ export class BulkPhysicalConnectionError extends Error {
 
 async function readBulkError(response: Response) {
   const body: unknown = await response.json().catch(() => null);
-  const details = isObject(body) && isObject(body.error) ? body.error.details : null;
+  const error = isObject(body) && isObject(body.error) ? body.error : null;
+  const details = error?.details;
   return new BulkPhysicalConnectionError(
-    response.status, isObject(details) && typeof details.reason === 'string' ? details.reason : undefined,
+    response.status,
+    isObject(details) && typeof details.reason === 'string' ? details.reason : typeof error?.code === 'string' ? error.code : undefined,
   );
 }
 
@@ -85,7 +86,7 @@ const readBackendError = async (response: Response): Promise<Error> => {
       && typeof body.error.code === 'string'
       && typeof body.error.message === 'string'
     ) {
-      return historicalCableLabelError(body);
+      return new Error(body.error.message);
     }
   } catch {
     // Non-JSON responses use the generic HTTP message.
@@ -105,12 +106,12 @@ implements PhysicalEndpointConnectionWriteDataSource {
     return requestPhysicalCompatibility(`${this.endpoint}/bulk?preview=true`, request, readBulkError);
   }
 
-  async previewBulkCableLabels(templateId: string, count: number): Promise<{ labels: { label: string; historical: boolean }[] }> {
+  async previewBulkCableLabels(templateId: string, count: number): Promise<{ labels: string[] }> {
     const response = await fetch(`${this.endpoint}/bulk-label-preview?template_id=${encodeURIComponent(templateId)}&count=${count}`);
     if (!response.ok) throw await readBackendError(response);
     const body: unknown = await response.json();
-    if (!isObject(body) || !Array.isArray(body.labels) || body.labels.length !== count || body.labels.some((item: unknown) => !isObject(item) || typeof item.label !== 'string' || typeof item.historical !== 'boolean')) malformed('invalid bulk label preview.');
-    return { labels: (body as Record<string, unknown>).labels as { label: string; historical: boolean }[] };
+    if (!isObject(body) || !Array.isArray(body.labels) || body.labels.length !== count || body.labels.some((item: unknown) => typeof item !== 'string')) malformed('invalid bulk label preview.');
+    return { labels: (body as Record<string, unknown>).labels as string[] };
   }
 
   async createBulkPhysicalConnections(request: CreateBulkPhysicalConnectionsRequest): Promise<{ created: { connection_id: string; cable_id: string }[] }> {

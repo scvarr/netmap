@@ -1,10 +1,9 @@
 from fastapi.testclient import TestClient
 import uuid
-from sqlalchemy import func, select
 from app.main import app
 from app.cable_labels import sequence_value
 from app.database import SessionLocal
-from app.models import Cable, CableLabelHistory, Connection
+from app.models import CableLabelHistory
 from tests.cable_type_fixtures import copper_cable_fields
 from tests.l1_builders import create_object_with_point, post_confirmed_physical
 
@@ -23,10 +22,6 @@ def create_template(pattern="FC####", start_at=1):
     response = client.post("/v1/cable-label-templates", json={"name": "FC", "description": "fiber", "pattern": pattern, "start_at": start_at})
     assert response.status_code == 201
     return response.json()["id"]
-
-def reuse_required(response, candidate: str):
-    assert response.status_code == 409
-    assert response.json()["error"] == {"code": "HISTORICAL_CABLE_LABEL_REUSE_REQUIRED", "message": "Cable label was used previously and requires explicit confirmation", "details": {"candidate": candidate}}
 
 def test_manual_label_uniqueness_policy_and_nulls():
     assert client.put("/v1/cable-label-settings", json={"unique_labels": False}).status_code == 200
@@ -48,12 +43,10 @@ def test_generated_create_sequence_and_gap_reuse():
     assert catalog_cable(second.json()["cable_ref"]["entity_id"])["label"] == "FC0002"
     assert client.delete(f"/v1/cables/{first.json()['cable_ref']['entity_id']}").status_code == 204
     reused, _ = cable_pair("generated-3", cable_label_template_id=template_id, generate_cable_label=True)
-    reuse_required(reused, "FC0001")
-    with SessionLocal() as session:
-        assert session.scalar(select(func.count(Connection.id))) == 1
-        assert session.scalar(select(func.count(Cable.id))) == 1
-    reused, _ = cable_pair("generated-3-confirmed", cable_label_template_id=template_id, generate_cable_label=True, confirmed_historical_label="FC0001")
+    assert reused.status_code == 201, reused.text
+    assert reused.json()["cable_ref"] != first.json()["cable_ref"]
     assert catalog_cable(reused.json()["cable_ref"]["entity_id"])["label"] == "FC0001"
+
 
 def test_generated_assignment_to_existing_cable_reuses_gaps_without_changing_topology():
     template_id = create_template("#####", 1)
@@ -73,9 +66,7 @@ def test_generated_assignment_to_existing_cable_reuses_gaps_without_changing_top
     assert catalog_cable(second_id)["label"] == "00002"
 
     assert client.put(f"/v1/cables/{first_id}/label", json={"label": None}).status_code == 204
-    reused = client.post(f"/v1/cables/{second_id}/generated-label", json={"template_id": template_id})
-    reuse_required(reused, "00001")
-    assert client.post(f"/v1/cables/{second_id}/generated-label", json={"template_id": template_id, "confirmed_historical_label": "00001"}).status_code == 204
+    assert client.post(f"/v1/cables/{second_id}/generated-label", json={"template_id": template_id}).status_code == 204
     assert catalog_cable(second_id)["label"] == "00001"
     first_after = catalog_cable(first_id)
     assert first_after["cable_ref"] == first_before["cable_ref"]
@@ -133,46 +124,17 @@ def test_history_tracks_manual_rename_clear_and_delete():
         assert session.query(CableLabelHistory).filter(CableLabelHistory.cable_id == uuid.UUID(cable_id)).count() == 2
 
 
-def test_manual_reuse_requires_exact_confirmation_and_current_duplicates_keep_policy():
+def test_manual_reuse_preserves_history_and_current_uniqueness():
     first, _ = cable_pair("manual-history-first", cable_label="TAG")
     first_id = first.json()["cable_ref"]["entity_id"]
     assert client.put(f"/v1/cables/{first_id}/label", json={"label": None}).status_code == 204
     second, _ = cable_pair("manual-history-second")
     second_id = second.json()["cable_ref"]["entity_id"]
-    reuse_required(client.put(f"/v1/cables/{second_id}/label", json={"label": "TAG"}), "TAG")
-    assert client.put(f"/v1/cables/{second_id}/label", json={"label": "TAG", "confirmed_historical_label": "TAG"}).status_code == 204
+    assert client.put(f"/v1/cables/{second_id}/label", json={"label": "TAG"}).status_code == 204
     assert client.put("/v1/cable-label-settings", json={"unique_labels": True}).status_code == 200
     assert cable_pair("manual-current-duplicate", cable_label="TAG")[0].status_code == 422
-
-
-def test_stale_generated_confirmation_never_assigns_another_candidate():
-    template_id = create_template("#", 1)
-    first, _ = cable_pair("stale-first")
-    second, _ = cable_pair("stale-second")
-    first_id = first.json()["cable_ref"]["entity_id"]
-    second_id = second.json()["cable_ref"]["entity_id"]
-    assert client.put(f"/v1/cables/{first_id}/label", json={"label": "1"}).status_code == 204
-    assert client.put(f"/v1/cables/{first_id}/label", json={"label": None}).status_code == 204
-    reuse_required(client.post(f"/v1/cables/{second_id}/generated-label", json={"template_id": template_id}), "1")
-    third, _ = cable_pair("stale-third", cable_label="1", confirmed_historical_label="1")
-    assert third.status_code == 201
-    stale = client.post(f"/v1/cables/{second_id}/generated-label", json={"template_id": template_id, "confirmed_historical_label": "1"})
-    assert stale.status_code == 409 and stale.json()["error"]["code"] == "HISTORICAL_CABLE_LABEL_REUSE_CONFIRMATION_STALE"
-    assert catalog_cable(second_id)["label_source"] == "TECHNICAL_FALLBACK"
-
-
-def test_stale_manual_confirmation_requires_the_historical_candidate_to_remain_free():
-    assert client.put("/v1/cable-label-settings", json={"unique_labels": False}).status_code == 200
-    first, _ = cable_pair("manual-stale-first", cable_label="TAG")
-    first_id = first.json()["cable_ref"]["entity_id"]
-    assert client.put(f"/v1/cables/{first_id}/label", json={"label": None}).status_code == 204
-    second, _ = cable_pair("manual-stale-second")
-    second_id = second.json()["cable_ref"]["entity_id"]
-    reuse_required(client.put(f"/v1/cables/{second_id}/label", json={"label": "TAG"}), "TAG")
-    third, _ = cable_pair("manual-stale-third")
-    third_id = third.json()["cable_ref"]["entity_id"]
-    assert client.put(f"/v1/cables/{third_id}/label", json={"label": "TAG", "confirmed_historical_label": "TAG"}).status_code == 204
-    stale = client.put(f"/v1/cables/{second_id}/label", json={"label": "TAG", "confirmed_historical_label": "TAG"})
-    assert stale.status_code == 409 and stale.json()["error"]["code"] == "HISTORICAL_CABLE_LABEL_REUSE_CONFIRMATION_STALE"
-    assert catalog_cable(second_id)["label_source"] == "TECHNICAL_FALLBACK"
-    assert catalog_cable(third_id)["label"] == "TAG"
+    with SessionLocal() as session:
+        rows = session.query(CableLabelHistory).filter_by(label="TAG").all()
+        assert {(str(row.cable_id), row.released_at is None) for row in rows} == {
+            (first_id, False), (second_id, True),
+        }

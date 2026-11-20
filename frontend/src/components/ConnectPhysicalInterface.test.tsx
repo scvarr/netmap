@@ -100,7 +100,7 @@ describe('ConnectPhysicalInterface', () => {
       cable_label: null,
       cable_label_template_id: null,
       generate_cable_label: false,
-      confirmed_historical_label: null,
+
     });
     resolveRequest(creationDocument);
     expect(await screen.findByRole('button', { name: 'Подключить' })).toHaveAttribute(
