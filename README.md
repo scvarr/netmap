@@ -36,6 +36,8 @@ docker compose ps
 7. [L1_REFERENCE_NETWORK](docs/L1_REFERENCE_NETWORK.md) — итоговая приёмка.
 
 Правила разработки и проверок действуют по [AGENTS.md](AGENTS.md).
+Замечания из практической эксплуатации и решения по ним ведутся в
+[FIELD_NOTES](docs/FIELD_NOTES.md).
 Исторические аудиты нужны для адресной проверки свидетельств. Ссылки на
 BASE-UX-01, OBJECT-UX-01 и PORT-UX-01 ведут из аудита к версиям в Git. [Workflow координатора](docs/chatgpt.md)
 используется отдельно.
