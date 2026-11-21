@@ -427,7 +427,7 @@ export const reorderOrderedKeys = (keys: readonly string[], index: number, direc
 // Row membership uses a fixed panel-local tolerance, anchored to the first Y in each row.
 // Sorting is total (Y, X, stable key); no coordinates or persisted records change.
 export const spatialOrderedKeys = (state: BlueprintEditorState, keys: readonly string[], horizontal: 'ltr' | 'rtl', vertical: 'ttb' | 'btt'): string[] => {
-  const slots = state.slots.filter(slot => keys.includes(slot.key) && slot.panel_key === state.activePanelKey)
+  const slots = blueprintMarkers(state).filter(slot => keys.includes(slot.key) && slot.panel_key === state.activePanelKey)
     .sort((a, b) => a.rendered_position.y - b.rendered_position.y || a.rendered_position.x - b.rendered_position.x || (a.key < b.key ? -1 : 1));
   const rows: typeof slots[] = [];
   for (const slot of slots) {
@@ -443,7 +443,7 @@ export const bulkNamePreview = (state: BlueprintEditorState, keys: readonly stri
   const { mask, start, step } = parameters;
   const first = Number(start); const increment = Number(step);
   if ((mask.match(/#+/g) ?? []).length !== 1 || !start.trim() || !step.trim() || !Number.isSafeInteger(first) || !Number.isSafeInteger(increment) || increment <= 0 || new Set(keys).size !== keys.length) return undefined;
-  const slots = new Map(state.slots.map((slot) => [slot.key, slot]));
+  const slots = new Map(blueprintMarkers(state).map((slot) => [slot.key, slot]));
   if (keys.some((key) => slots.get(key)?.panel_key !== state.activePanelKey || !slots.has(key))) return undefined;
   if (keys.some((_, index) => !Number.isSafeInteger(first + index * increment))) return undefined;
   return keys.map((key, index) => ({ key, currentName: slots.get(key)!.display_name, display_name: mask.replace(/#+/, (token) => { const number = first + index * increment; return (number < 0 ? '-' : '') + String(Math.abs(number)).padStart(token.length, '0'); }) }));
@@ -452,5 +452,10 @@ export const applyBulkNames = (state: BlueprintEditorState, keys: readonly strin
   const preview = bulkNamePreview(state, keys, parameters);
   if (!preview?.length) return state;
   const names = new Map(preview.map((item) => [item.key, item.display_name]));
-  return { ...state, slots: state.slots.map((slot) => names.has(slot.key) ? { ...slot, display_name: names.get(slot.key)! } : slot) };
+  return {
+    ...state,
+    slots: state.slots.map(slot => names.has(slot.key) ? { ...slot, display_name: names.get(slot.key)! } : slot),
+    ...(state.bays && { bays: state.bays.map(bay => isPlacedBay(bay) && names.has(bay.bay_key)
+      ? { ...bay, display_name: names.get(bay.bay_key)! } : bay) }),
+  };
 };

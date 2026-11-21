@@ -3,10 +3,10 @@ import { useState } from 'react';
 import { describe, it, expect } from 'vitest';
 import { I18nProvider } from '../i18n';
 import { newBlueprintEditorState } from '../pages/BaseTemplateEditor';
-import { addEndpoints, addPanel, type BlueprintEditorState } from '../blueprints/editorModel';
+import { addEndpoints, addModulePorts, addPanel, type BlueprintEditorState } from '../blueprints/editorModel';
 import { EndpointLinkWorkspace } from './EndpointLinkWorkspace';
 
-function setup(count = 2) {
+function setup(count = 2, configure = (state: BlueprintEditorState) => state) {
   let initial = newBlueprintEditorState();
   initial = addEndpoints(initial, 'CONNECTION_POINT', count, initial.activePanelKey, 'test-type');
   const first = initial.activePanelKey;
@@ -14,6 +14,7 @@ function setup(count = 2) {
   initial = addEndpoints(initial, 'CONNECTION_POINT', count, initial.activePanelKey, 'test-type');
   initial.activePanelKey = first;
   initial.slots[0].display_name = '10'; initial.slots[1].display_name = '2';
+  initial = configure(initial);
   let latest = initial;
   function Harness() { const [state,setState] = useState(initial); return <I18nProvider><EndpointLinkWorkspace state={state} onChange={(s: BlueprintEditorState) => { latest = s; setState(s); }} onClose={() => {}} /></I18nProvider>; }
   const view = render(<Harness />);
@@ -22,6 +23,37 @@ function setup(count = 2) {
   return { ...view, initial, latest: () => latest, side, selectAll };
 }
 describe('unified endpoint workspace', () => {
+  it('previews spatially ordered names across all marker kinds and keeps continuity physical', () => {
+    const s = setup(2, state => {
+      state.slots[0].kind = 'NETWORK_PORT';
+      return addModulePorts(state, state.activePanelKey, 1, 'Custom / 7');
+    });
+    const a = s.side('A');
+    fireEvent.change(a.getByLabelText('Сортировка'), { target: { value: 'spatial' } });
+    fireEvent.change(a.getByLabelText('По горизонтали'), { target: { value: 'rtl' } });
+    s.selectAll('A');
+    s.selectAll('B');
+    expect(a.getByRole('img', { name: 'Модульный порт' })).toBeInTheDocument();
+    expect(a.getByRole('img', { name: 'Точка подключения' })).toBeInTheDocument();
+    expect(a.getByRole('img', { name: 'Сетевой порт' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Создать связи' }));
+    const links = s.latest().individualLinks;
+    const bay = s.initial.bays![0];
+    expect(links).toHaveLength(2);
+    expect(links.every(link => link.from_slot_key !== bay.bay_key && link.to_slot_key !== bay.bay_key)).toBe(true);
+
+    fireEvent.change(a.getByLabelText('Маска (#, ##, GE-##)'), { target: { value: 'M-##' } });
+    fireEvent.change(a.getByLabelText('Начальный номер'), { target: { value: '3' } });
+    fireEvent.change(a.getByLabelText('Шаг'), { target: { value: '2' } });
+    expect(a.getByText('→ M-03').closest('[data-endpoint-row]')).toHaveAttribute('data-endpoint-row', bay.bay_key);
+    fireEvent.click(a.getByRole('button', { name: 'Применить имена' }));
+    expect(s.latest().bays![0]).toEqual({ ...bay, display_name: 'M-03' });
+    expect(s.latest().slots.slice(0, 2)).toEqual([
+      { ...s.initial.slots[0], display_name: 'M-07' },
+      { ...s.initial.slots[1], display_name: 'M-05' },
+    ]);
+    expect(s.latest().individualLinks).toBe(links);
+  });
   it('automatically resorts renamed endpoints while preserving selection by key',()=>{
     const s=setup();
     const first=s.side('A').getAllByRole('checkbox')[0]; fireEvent.click(first);

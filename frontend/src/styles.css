@@ -710,7 +710,9 @@ a { color: inherit; }
 .workspace-data-file-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .workspace-data-file-name { color: #91a5a5; font-size: 11px; overflow-wrap: anywhere; }
 
-.blueprint-composer__chooser input, .blueprint-composer__selected input, .blueprint-composer__panel-actions input { box-sizing: border-box; width: 100%; min-height: 34px; padding: 7px 9px; color: #e7f4f1; background: #081315; border: 1px solid #2a4448; border-radius: 6px; }
+.blueprint-composer__chooser input, .blueprint-composer__selected input, .blueprint-composer__panel-actions :is(input, select) { box-sizing: border-box; width: 100%; min-height: 34px; padding: 7px 9px; color: #e7f4f1; background: #081315; border: 1px solid #2a4448; border-radius: 6px; }
+.blueprint-composer__panel-actions :is(input, select):focus-visible { outline: 2px solid #8de2c8; outline-offset: -2px; }
+.blueprint-composer__panel-actions :is(input, select):disabled { color: #657b7b; cursor: default; }
 
 
 .blueprint-links-dialog { box-sizing: border-box; width: min(100%, 760px); max-height: calc(100dvh - 40px); display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
@@ -779,6 +781,7 @@ a { color: inherit; }
 .blueprint-order-dialog__row:nth-child(even) { background: #20383d; }
 .blueprint-order-dialog__row:hover { background: #2c4b52; }
 .blueprint-order-dialog__row[data-active="true"] { border-color: #ff7b22; background: #304a50; }
+.endpoint-workspace-dialog { z-index: 40; }
 .endpoint-workspace { box-sizing: border-box; min-width: 0; width: min(1200px, 95vw); height: 90vh; max-height: 90vh; overflow: auto; }
 .endpoint-workspace__columns { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; }
 .endpoint-workspace__tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }

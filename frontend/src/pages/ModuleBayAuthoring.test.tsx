@@ -103,3 +103,29 @@ it('keeps the draft intact if the shared panel marker limit is reached', () => {
   expect(blueprintMarkers(full)).toHaveLength(400);
   expect(addModulePorts(full, 'one', 1, 'New')).toBe(full);
 });
+
+it('opens the existing naming workspace from a selection of 48 diamonds and saves names by key', () => {
+  const original = state();
+  const view = show(original);
+  const creator = within(view.container.querySelector<HTMLElement>('.template-element-creator')!);
+  fireEvent.change(creator.getByLabelText('Вид точки'), { target: { value: 'MODULE_PORT' } });
+  fireEvent.change(creator.getByLabelText('Количество'), { target: { value: '48' } });
+  fireEvent.change(creator.getByLabelText('Совместимость модульного порта'), { target: { value: 'Custom' } });
+  fireEvent.click(creator.getByRole('button', { name: /^Добавить$/ }));
+  const selectedMarker = view.container.querySelector('[data-selected="true"] [data-module-port-marker]')!;
+  fireEvent.contextMenu(selectedMarker);
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Массовое переименование' }));
+  const a = within(screen.getByRole('region', { name: 'A' }));
+  expect(a.getAllByRole('checkbox').filter(input => (input as HTMLInputElement).checked)).toHaveLength(48);
+  fireEvent.change(a.getByLabelText('Маска (#, ##, GE-##)'), { target: { value: 'MP-##' } });
+  expect(a.getByText('→ MP-48')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Создать связи' })).toBeDisabled();
+  fireEvent.click(a.getByRole('button', { name: 'Применить имена' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  const saved = view.save.mock.calls[0][0] as BlueprintEditorState;
+  expect(saved.bays!.slice(0, 2)).toEqual(original.bays);
+  expect(saved.bays!.slice(2).map(bay => bay.display_name)).toEqual(Array.from({ length: 48 }, (_, i) => `MP-${String(i + 1).padStart(2, '0')}`));
+  expect(saved.slots).toEqual(original.slots);
+  expect(saved.individualLinks).toEqual([]);
+});

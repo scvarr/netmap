@@ -267,7 +267,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
             setMenu({ x: Math.max(0, Math.min(clientX - rect.left, rect.width - 320)), y: Math.max(0, Math.min(clientY - rect.top, rect.height - 280)) });
           }} /></div></div>
           {menu && <div className="blueprint-composer__context-menu" role="menu" style={{ left: menu.x, top: menu.y }}>
-            <button type="button" role="menuitem" disabled={!hasSelectedPhysical} onClick={() => { setWorkspaceSelection([...selected].filter(key => editor.slots.some(slot => slot.key === key))); setLinksOpen(true); setMenu(undefined); }}>{t('blueprint.naming.open')}</button>
+            <button type="button" role="menuitem" disabled={!selected.size} onClick={() => { setWorkspaceSelection([...selected]); setLinksOpen(true); setMenu(undefined); }}>{t('blueprint.naming.open')}</button>
             {menuSections.map((section) => <div key={section.label} className={`blueprint-composer__context-section blueprint-composer__context-section--${section.label}`}>
               <strong>{t(`blueprint.layout.section.${section.label}`)}</strong>
               {section.actions.map((action) => <button key={action} type="button" role="menuitem" disabled={selected.size < (action === 'distributeX' || action === 'distributeY' || action === 'twoRows' ? 3 : action === 'horizontalLine' || action === 'verticalLine' || action === 'oneRow' ? 2 : 1)} onClick={() => runMenuAction(action)}>{t(`blueprint.layout.${action}`)}</button>)}
