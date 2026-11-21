@@ -119,6 +119,8 @@ Modal/table primitives могут потребоваться раньше, а и
 [Дефект collapse #2](https://github.com/scvarr/netmap/issues/2) ·
 [Меню #1](https://github.com/scvarr/netmap/issues/1).
 
+<a name="nav-01--open"></a>
+
 ### NAV-01 · Реализовано, ожидает внешней приёмки
 
 Группы левой навигации сворачиваются независимо и по умолчанию раскрыты.

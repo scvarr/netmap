@@ -56,9 +56,7 @@ export function AppShell() {
   const [popup, setPopup] = useState<{ id: GroupId; locationKey: string } | null>(null);
   const openPopup = compact && popup?.locationKey === locationKey ? popup.id : null;
   const popupGroup = useRef<HTMLDivElement>(null);
-  const activeGroup = groups.find(({ links }) =>
-    links.some(([path]) => matchPath({ path, end: false }, pathname)),
-  )?.id;
+  const activeGroup = groups.find(({ id }) => matchPath({ path: `/${id}`, end: false }, pathname))?.id;
 
   useEffect(() => {
     const media = window.matchMedia?.(compactMediaQuery);

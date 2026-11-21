@@ -18,6 +18,8 @@ const renderShell = (initialEntry = '/map') => render(
           <Route path="/map" element={<main>Map</main>} />
           <Route path="/infrastructure/objects" element={<main>Objects</main>} />
           <Route path="/infrastructure/locations" element={<main>Locations</main>} />
+          <Route path="/library/module-templates/new" element={<main>New ModuleTemplate</main>} />
+          <Route path="/library/module-templates/:templateId/edit" element={<main>Edit ModuleTemplate</main>} />
         </Route>
       </Routes>
     </MemoryRouter>
@@ -128,6 +130,21 @@ describe('AppShell navigation groups', () => {
     expect(infrastructure).toHaveAttribute('aria-expanded', 'false');
     expect(infrastructure).toHaveClass('shell-nav__link--active');
     expect(screen.queryByRole('link', { name: 'Объекты' })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['/library/module-templates/new', 'New ModuleTemplate'],
+    ['/library/module-templates/template-1/edit', 'Edit ModuleTemplate'],
+  ])('opens and highlights Library on %s', async (path, pageContent) => {
+    const { unmount } = renderShell();
+    await userEvent.click(group('Библиотека'));
+    expect(group('Библиотека')).toHaveAttribute('aria-expanded', 'false');
+    unmount();
+
+    renderShell(path);
+    expect(screen.getByText(pageContent)).toBeInTheDocument();
+    expect(group('Библиотека')).toHaveAttribute('aria-expanded', 'true');
+    expect(group('Библиотека')).toHaveClass('shell-nav__link--active');
   });
 
   it('opens a collapsed group again on navigation within the group', async () => {
