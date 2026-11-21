@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../i18n';
-import { addEndpoints, addPanel, createBlueprintRequest, hydrateBlueprintEditorState } from '../blueprints/editorModel';
+import { addEndpoints, addModulePorts, addPanel, createBlueprintRequest, hydrateBlueprintEditorState } from '../blueprints/editorModel';
 import type { BaseTemplateRevisionDocument } from '../topology/baseTemplateTypes';
 import { newBlueprintEditorState, BaseTemplateEditor } from './BaseTemplateEditor';
 
@@ -16,6 +16,33 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => Response.json(catalog)));
 });
 afterEach(() => vi.unstubAllGlobals());
+
+it.each(['CONNECTION_POINT', 'NETWORK_PORT', 'MODULE_PORT'] as const)('uses the selected properties row for %s', async kind => {
+  const initial = newBlueprintEditorState();
+  const state = kind === 'MODULE_PORT'
+    ? addModulePorts(initial, initial.activePanelKey, 1, 'Open / 42')
+    : addEndpoints(initial, kind, 1, initial.activePanelKey, 'test-type');
+  const { container } = render(<I18nProvider><MemoryRouter>
+    <BaseTemplateEditor title="Blueprint" description="" saveLabel="Save" initialState={state} onSave={vi.fn()} />
+  </MemoryRouter></I18nProvider>);
+  await screen.findByRole('option', { name: 'Copper · #336699' });
+  fireEvent.pointerDown(container.querySelector('[data-endpoint-marker]')!, { button: 0 });
+  const row = within(container.querySelector<HTMLElement>('.blueprint-composer__selected')!);
+  expect(row.getByRole('textbox', { name: 'Название' })).toHaveValue('1-1');
+  expect(row.getByRole('button', { name: 'Удалить' })).toBeEnabled();
+  if (kind === 'MODULE_PORT') {
+    expect(row.getByRole('textbox', { name: 'Совместимость' })).toHaveValue('Open / 42');
+    expect(row.queryByRole('combobox')).toBeNull();
+    return;
+  }
+  const type = row.getByRole('combobox', { name: 'Тип порта' });
+  expect(row.getByRole('option', { name: /^Copper$/ })).toHaveTextContent(/^Copper$/);
+  expect(type.closest('.port-type-select__compact')?.querySelector('.port-types-swatch > span')).toHaveStyle({ backgroundColor: '#336699' });
+  expect(row.getByRole('combobox', { name: 'Вид точки' })).toHaveValue(kind);
+  await userEvent.selectOptions(type, 'fiber');
+  expect(type.closest('.port-type-select__compact')?.querySelector('.port-types-swatch > span')).toHaveStyle({ backgroundColor: '#FFAA00' });
+  expect(screen.getByRole('option', { name: 'Fiber · #FFAA00' })).toBeInTheDocument();
+});
 
 describe('numeric active-panel size', () => {
   const setup = (multi = true, dimensions?: { width: number; height: number }) => {

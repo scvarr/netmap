@@ -307,7 +307,7 @@ export function BaseTemplateEditor({ title, description, saveLabel, onSave, init
         </aside>}
         {selectedSlot && <aside className="blueprint-composer__selected">
           <label>{t('blueprint.endpoint.name')}<input value={selectedSlot.display_name} onChange={(e) => updateSlot(selectedSlot.key, { display_name: e.target.value })} /></label>
-          <PortTypeSelect types={catalog.types} value={selectedSlot.port_type_id} singleMember={selectedSlot.kind === 'NETWORK_PORT'}
+          <PortTypeSelect compact types={catalog.types} value={selectedSlot.port_type_id} singleMember={selectedSlot.kind === 'NETWORK_PORT'}
             onChange={id => updateSlot(selectedSlot.key, { port_type_id: id, cardinality: catalog.types?.find(type => type.id === id)?.cardinality })} />
           <label>{t('blueprint.endpoint.kind')}<select value={selectedSlot.kind} onChange={(e) => updateSlot(selectedSlot.key, { kind: e.target.value as BlueprintSlotKind })}><option value="NETWORK_PORT" disabled={(selectedSlot.cardinality ?? 1) > 1}>{t('blueprint.endpoint.networkPort')}</option><option value="CONNECTION_POINT">{t('blueprint.endpoint.connectionPoint')}</option></select></label>
           <button type="button" className="text-action" onClick={deleteSelected}>{t('blueprint.composition.remove')}</button>

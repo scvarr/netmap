@@ -51,23 +51,25 @@ export function PortTypeNotice({ types, failed }: ReturnType<typeof usePortTypes
   </p>;
 }
 
-export function PortTypeSelect({ types, value, onChange, bulk = false, singleMember = false }: {
+export function PortTypeSelect({ types, value, onChange, bulk = false, singleMember = false, compact = false }: {
   types: PortType[] | undefined;
   value: string;
   onChange: (id: string) => void;
   bulk?: boolean;
   singleMember?: boolean;
+  compact?: boolean;
 }) {
   const { t } = useI18n();
   const current = types?.find(type => type.id === value);
-  return <label>{t(bulk ? 'portTypes.assignSelected' : 'portTypes.field')}
-    <select value={value} disabled={!types} onChange={event => onChange(event.target.value)}>
+  const select = <select value={value} disabled={!types} onChange={event => onChange(event.target.value)}>
       <option value="" disabled>{t('portTypes.select')}</option>
       {types?.filter(type => (type.is_active && (!singleMember || type.cardinality === 1)) || type.id === value).map(type =>
         <option key={type.id} value={type.id} disabled={!type.is_active}>
-          {type.name} · {type.color}{type.is_active ? '' : ` · ${t('portTypes.archived')}`}
+          {type.name}{!compact && ` · ${type.color}`}{type.is_active ? '' : ` · ${t('portTypes.archived')}`}
         </option>)}
-    </select>
-    {current && <span className="port-types-swatch" aria-hidden="true"><span aria-hidden="true" style={{ backgroundColor: current.color }} /></span>}
+    </select>;
+  const swatch = current && <span className="port-types-swatch" aria-hidden="true"><span aria-hidden="true" style={{ backgroundColor: current.color }} /></span>;
+  return <label>{t(bulk ? 'portTypes.assignSelected' : 'portTypes.field')}
+    {compact ? <span className="port-type-select__compact">{select}{swatch}</span> : <>{select}{swatch}</>}
   </label>;
 }
